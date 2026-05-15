@@ -35,9 +35,10 @@ button{font-family:inherit;cursor:pointer}
 .nav-left{display:flex;align-items:center;gap:10px}
 .nav-logo{font-size:14px;font-weight:800;color:#1A6B3C;letter-spacing:2px}
 .nav-sub{font-size:13px;color:var(--dim)}
-.nav-center{display:flex;gap:4px}
-.nav-btn{padding:8px 18px;border:none;border-radius:20px;font-size:13px;font-weight:500;background:transparent;color:#777;transition:all .15s}
-.nav-btn.on{background:#1A1A1A;color:#fff}
+.nav-center{display:flex;gap:4px;position:relative}
+.nav-pill{position:absolute;height:34px;background:#1A1A1A;border-radius:20px;transition:all .3s cubic-bezier(.4,0,.2,1);z-index:0;pointer-events:none}
+.nav-btn{padding:8px 18px;border:none;border-radius:20px;font-size:13px;font-weight:500;background:transparent;color:#777;transition:color .2s;position:relative;z-index:1}
+.nav-btn.on{color:#fff}
 .nav-right{display:flex;align-items:center;gap:12px}
 .kst{font-size:12px;color:var(--dim);font-weight:500;font-variant-numeric:tabular-nums}
 .icon-btn{width:36px;height:36px;border-radius:50%;border:1px solid #E0E0E0;background:var(--surface);font-size:16px;color:#666;display:flex;align-items:center;justify-content:center}
@@ -154,7 +155,7 @@ button{font-family:inherit;cursor:pointer}
       <div class="hdr">
         <div class="month-nav">
           <button class="arrow" onclick="changeMonth(-1)">‹</button>
-          <div><span class="month-text" id="nav-month">5</span><span class="year-text" id="nav-year">2026</span><span style="font-size:16px;color:#666;margin-left:2px">월 홍보 계획</span></div>
+          <div><span class="month-text" id="nav-month">5</span><span class="year-text" id="nav-year">2026</span></div>
           <button class="arrow" onclick="changeMonth(1)">›</button>
         </div>
         <div class="chips" id="chips"></div>
@@ -304,7 +305,10 @@ function initApp(){
 function buildNav(){
   const c=document.getElementById('nav-menus');
   c.innerHTML='';
-  MENUS.forEach(m=>{
+  const pill=document.createElement('div');
+  pill.className='nav-pill';
+  c.appendChild(pill);
+  MENUS.forEach((m,i)=>{
     const b=document.createElement('button');
     b.className='nav-btn'+(m.id==='cal'?' on':'');
     b.textContent=m.label;
@@ -312,9 +316,20 @@ function buildNav(){
       if(m.id==='annual'){window.open('https://yeulmaru.github.io/yeulmaru-calandar-2026/','_blank');return;}
       document.querySelectorAll('.nav-btn').forEach(x=>x.classList.remove('on'));
       b.classList.add('on');
+      movePill(b,pill);
     };
+    b.onmouseenter=()=>movePill(b,pill);
     c.appendChild(b);
   });
+  c.onmouseleave=()=>{const active=c.querySelector('.nav-btn.on');if(active)movePill(active,pill);};
+  requestAnimationFrame(()=>{const active=c.querySelector('.nav-btn.on');if(active)movePill(active,pill);});
+}
+function movePill(btn,pill){
+  const r=btn.getBoundingClientRect();
+  const p=btn.parentElement.getBoundingClientRect();
+  pill.style.left=(r.left-p.left)+'px';
+  pill.style.width=r.width+'px';
+  pill.style.top=((r.height-34)/2)+'px';
 }
 
 function startClock(){
@@ -369,11 +384,15 @@ function render(){
 
 function renderChips(){
   const c=document.getElementById('chips');
-  const labels=['\uCE74\uCE74\uC624','\uC778\uC2A4\uD0C0','\uC720\uD29C\uBE0C','\uBE14\uB85C\uADF8','\uAE30\uD0C0'];
-  const colors=['#C8900A','#C02872','#B71C1C','#1B7A34','#2D5F8A'];
-  c.innerHTML=labels.map((l,i)=>{
-    const cnt=records.filter(r=>(r['\uD50C\uB7AB\uD3FC 1']||'').includes(l)).length;
-    return `<div class="chip"><span class="chip-dot" style="background:${colors[i]}"></span><span class="chip-label">${l}</span><span class="chip-count">${cnt}</span></div>`;
+  const groups=[
+    {label:'\uCE74\uCE74\uC624',color:'#C8900A',match:['\uCE74\uCE74\uC624']},
+    {label:'\uC778\uC2A4\uD0C0',color:'#C02872',match:['\uC778\uC2A4\uD0C0']},
+    {label:'\uBE14\uB85C\uADF8\xB7\uB9D8\uCE74\uD398',color:'#1B7A34',match:['\uBE14\uB85C\uADF8','\uB9D8\uCE74\uD398']},
+    {label:'B2B',color:'#2D5F8A',match:['B2B']},
+  ];
+  c.innerHTML=groups.map(g=>{
+    const cnt=records.filter(r=>{const p=r['\uD50C\uB7AB\uD3FC 1']||'';return g.match.some(m=>p.includes(m));}).length;
+    return `<div class="chip"><span class="chip-dot" style="background:${g.color}"></span><span class="chip-label">${g.label}</span><span class="chip-count">${cnt}</span></div>`;
   }).join('');
 }
 
