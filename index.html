@@ -276,6 +276,13 @@ const PERFS=[
 ];
 function getPerf(d){const k=dk(d);const p=PERFS.find(p=>k>=p.s&&k<=p.e);if(p){const now=new Date();now.setHours(0,0,0,0);const sd=new Date(p.s);sd.setHours(0,0,0,0);const ed=new Date(p.e);ed.setHours(0,0,0,0);if(ed<now)return Object.assign({},p,{dday:null});if(now>=sd&&now<=ed)return Object.assign({},p,{dday:0});const diff=Math.round((sd-now)/86400000);return Object.assign({},p,{dday:diff});}return null;}
 function getDdayText(dd){if(dd>0)return'D-'+dd;if(dd===0)return'D-Day';return'D+'+Math.abs(dd);}
+function renderPerfHtml(perf,td,past){
+if(!perf)return'';
+var n=perf.n,dd=perf.dday;
+if(past)return'<span style="background:rgba(0,0,0,0.05);color:rgba(0,0,0,0.22);padding:2px 7px;border-radius:6px;margin-left:6px;font-size:9px;font-weight:500">'+n+'</span>';
+if(td)return'<span style="background:rgba(255,255,255,0.85);color:#111;padding:2px 7px;border-radius:6px;margin-left:6px;font-size:9px;font-weight:700">'+n+'</span>'+(dd!==null?'<span style="margin-left:8px;font-size:9px;color:#111">'+getDdayText(dd)+'</span>':'');
+return'<span style="background:var(--accent);color:#fff;padding:2px 7px;border-radius:6px;margin-left:6px;font-size:9px;font-weight:600">'+n+'</span><span style="font-size:9px;font-weight:700;color:var(--text);margin-left:4px">'+n+'</span>'+(dd!==null?'<span style="margin-left:8px;font-size:9px;color:var(--dim)">'+getDdayText(dd)+'</span>':'');
+}
 let password='',records=[],currentYear=new Date().getFullYear(),currentMonth=new Date().getMonth()+1;
 let selected=null,editing=null,panelOpen=false;
 
@@ -384,7 +391,7 @@ function renderCal(){
       let dnCls='dn';if(nm)dnCls+=' nm';else if(past)dnCls+=' past';else if(isSat)dnCls+=' sat';else if(isSun)dnCls+=' sun';
       h+=`<div class="c cell${nm?' nm':''}${past?' past':''}${td?' today':''}${isSel?' sel':''}" data-cell data-key="${key}" onclick="clickDate('${key}')" style="background:${bg};${di<5?'border-right:1px solid var(--border)':''}${nm?'cursor:default':'cursor:pointer'}">`;
       const perf=nm?null:getPerf(d);
-      h+=`<div class="${dnCls}">${td&&!nm?`<span class="today-badge">${d.getDate()}</span>`:d.getDate()}${perf&&!nm?`<span class="perf-tag">${perf.n}${perf.dday!==null?' <span style="opacity:0.6;font-size:8px;margin-left:3px">${getDdayText(perf.dday)}</span>':''}</span>`:''}</div>`;
+      h+='<div class="'+dnCls+'">'+(td&&!nm?'<span class="today-badge">'+d.getDate()+'</span>':d.getDate())+renderPerfHtml(perf,td,past)+'</div>';
       recs.slice(0,3).forEach(r=>{
         const p=r['\uD50C\uB7AB\uD3FC 1']||'',col=platColor(p),title=r['\uCF58\uD150\uCE20 \uC81C\uBAA9']||'',pastCls=past?'past':'future',timeCol=past?'var(--past-text)':col;
         h+=`<div class="ev"><span class="ev-time" style="color:${timeCol}">${''}</span><span class="ev-plat" style="color:${timeCol}">${platShort(p)}</span><span class="ev-title ${pastCls}">${title}</span></div>`;
