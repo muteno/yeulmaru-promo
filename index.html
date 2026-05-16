@@ -277,11 +277,26 @@ const PERFS=[
 {s:'2026-12-24',e:'2026-12-25',n:'성탄 발레',f:'호두까기인형',t:'c'},
 ];
 function getPerfs(d){var k=dk(d),now=new Date();now.setHours(0,0,0,0);return PERFS.filter(function(p){return k>=p.s&&k<=p.e}).map(function(p){var sd=new Date(p.s);sd.setHours(0,0,0,0);var ed=new Date(p.e);ed.setHours(0,0,0,0);if(ed<now)return Object.assign({},p,{dday:null});if(now>=sd&&now<=ed)return Object.assign({},p,{dday:0});var diff=Math.round((sd-now)/86400000);return Object.assign({},p,{dday:diff});});}
+function getExhibitStatus(d){
+var k=dk(d),now=new Date();now.setHours(0,0,0,0);
+var exh=[{id:'7층',s:'2026-02-27',e:'2026-06-28'},{id:'장도',s:'2026-03-27',e:'2026-06-21'}];
+return exh.map(function(x){var active=k>=x.s&&k<=x.e&&new Date(x.e)>=now;return{id:x.id,on:active};});
+}
+function renderExhibitBadge(d,nm){
+if(nm)return'';
+var st=getExhibitStatus(d);
+var h='<div style="position:absolute;top:5px;right:6px;display:flex;gap:2px">';
+st.forEach(function(x){
+if(x.on)h+='<span style="font-size:7px;padding:1px 5px;border-radius:4px;background:var(--accent);color:#fff;font-weight:600;letter-spacing:0.3px">'+x.id+'</span>';
+else h+='<span style="font-size:7px;padding:1px 5px;border-radius:4px;background:rgba(0,0,0,0.04);color:rgba(0,0,0,0.15);font-weight:500">'+x.id+'</span>';
+});
+return h+'</div>';
+}
 function getDdayText(dd){if(dd>0)return'D-'+dd;if(dd===0)return'D-Day';return'D+'+Math.abs(dd);}
 function renderPerfsHtml(perfs,td,past){
 if(!perfs||!perfs.length)return'';
 var out='';
-for(var i=0;i<perfs.length;i++){var perf=perfs[i],fn=perf.f||perf.n,dd=perf.dday,lb=perf.t==='e'?'전':'공';
+var cperfs=perfs.filter(function(p){return p.t!=='e';});for(var i=0;i<cperfs.length;i++){var perf=cperfs[i],fn=perf.f||perf.n,dd=perf.dday,lb=perf.t==='e'?'전':'공';
 if(past)out+='<div style="display:flex;align-items:flex-start;margin-top:2px"><span style="display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;border-radius:50%;font-size:8px;background:rgba(0,0,0,0.05);color:rgba(0,0,0,0.22);flex-shrink:0">'+lb+'</span><span style="margin-left:4px;font-size:9px;color:rgba(0,0,0,0.18);line-height:1.4">'+fn+'</span></div>';
 else if(td)out+='<div style="display:flex;align-items:flex-start;margin-top:2px"><span style="display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;border-radius:50%;font-size:8px;font-weight:600;background:rgba(255,255,255,0.85);color:#111;flex-shrink:0">'+lb+'</span><span style="margin-left:5px;font-size:9px;font-weight:700;color:#111;line-height:1.4">'+fn+'</span></div>';
 else out+='<div style="display:flex;align-items:flex-start;margin-top:2px"><span style="display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;border-radius:50%;font-size:8px;font-weight:600;background:var(--accent);color:#fff;flex-shrink:0">'+lb+'</span><span style="margin-left:5px;font-size:9px;font-weight:700;color:var(--text);line-height:1.4">'+fn+'</span>'+(dd!==null&&dd!==0?'<span style="margin-left:8px;font-size:9px;color:var(--dim);flex-shrink:0;white-space:nowrap">'+getDdayText(dd)+'</span>':'')+'</div>';
@@ -395,7 +410,7 @@ function renderCal(){
       let dnCls='dn';if(nm)dnCls+=' nm';else if(past)dnCls+=' past';else if(isSat)dnCls+=' sat';else if(isSun)dnCls+=' sun';
       h+=`<div class="c cell${nm?' nm':''}${past?' past':''}${td?' today':''}${isSel?' sel':''}" data-cell data-key="${key}" onclick="clickDate('${key}')" style="background:${bg};${di<5?'border-right:1px solid var(--border)':''}${nm?'cursor:default':'cursor:pointer'}">`;
       var perfs=nm?[]:getPerfs(d);
-      h+='<div class="'+dnCls+'">'+(td&&!nm?'<span class="today-badge">'+d.getDate()+'</span>':d.getDate())+'</div>'+renderPerfsHtml(perfs,td,past);
+      h+=renderExhibitBadge(d,nm)+'<div class="'+dnCls+'">'+(td&&!nm?'<span class="today-badge">'+d.getDate()+'</span>':d.getDate())+'</div>'+renderPerfsHtml(perfs,td,past);
       recs.slice(0,3).forEach(r=>{
         const p=r['플랫폼 1']||'',col=platColor(p),title=r['콘텐츠 제목']||'',pastCls=past?'past':'future',timeCol=past?'var(--past-text)':col;
         h+=`<div class="ev"><span class="ev-time" style="color:${timeCol}">${''}</span><span class="ev-plat" style="color:${timeCol}">${platShort(p)}</span><span class="ev-title ${pastCls}">${title}</span></div>`;
