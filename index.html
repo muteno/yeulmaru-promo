@@ -443,15 +443,51 @@ function renderCal(){
 function clickDate(key){const[y,m,d]=key.split('-').map(Number);const dateObj=new Date(y,m-1,d);if(dateObj.getMonth()+1!==currentMonth)return;selected=key;openPanel(dateObj,getRecsForDate(dateObj));render();}
 
 function openPanel(dateObj,recs){
-  panelOpen=true;const p=document.getElementById('panel'),dn=DAY_NAMES[dateObj.getDay()];
+  panelOpen=true;var p=document.getElementById('panel'),dn=DAY_NAMES[dateObj.getDay()];
   document.getElementById('main-area').style.marginRight='360px';
-  let h=`<div class="panel-hdr"><div><div class="panel-date">${dateObj.getMonth()+1}월 ${dateObj.getDate()}일</div><div class="panel-day">${dn}요일</div></div><button class="panel-close" onclick="closePanel()">✕</button></div><div class="panel-body">`;
-  if(recs.length===0){h+=`<div class="panel-empty"><div style="font-size:32px;margin-bottom:8px">\uD83D\uDCED</div><div>등록된 콘텐츠가 없습니다</div></div>`;}
-  else{recs.forEach(r=>{const p2=r['플랫폼 1']||'',col=platColor(p2),title=r['콘텐츠 제목']||'',cat=r['콘텐츠 구분']||'',st=r['진행 상태']||'';h+=`<div class="p-card"><div class="p-card-head"><span class="p-tag" style="color:${col};border:1.5px solid ${col}">${platShort(p2)}</span></div><div class="p-title">${title}</div><div class="p-meta">${cat?`<span class="meta-chip">${cat}</span>`:''}${st?`<span class="meta-chip">${st}</span>`:''}</div></div>`;});}
-  h+=`<button class="add-btn" onclick="openModal('${dk(dateObj)}')">+ 새 콘텐츠 등록</button></div>`;
+  var h='<div class="panel-hdr"><div><div class="panel-date">'+(dateObj.getMonth()+1)+'월 '+dateObj.getDate()+'일</div><div class="panel-day">'+dn+'요일</div></div><button class="panel-close" onclick="closePanel()">✕</button></div><div class="panel-body">';
+  // 공연/전시 섹션
+  var perfs=getPerfs(dateObj);
+  var exh=getExhibitStatus(dateObj);
+  var now=new Date();now.setHours(0,0,0,0);
+  var hasSchedule=false;
+  // 공연 먼저
+  var concerts=perfs.filter(function(x){return x.t==='c';});
+  concerts.forEach(function(perf){
+    hasSchedule=true;
+    var dd=perf.dday;
+    var ddText=dd===null?'':dd===0?'D-Day':dd>0?'D-'+dd:'D+'+Math.abs(dd);
+    h+='<div style="display:flex;align-items:center;padding:10px 12px;background:rgba(74,77,231,0.06);border-radius:10px;margin-bottom:6px;gap:8px">';
+    h+='<span style="display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;border-radius:50%;font-size:8px;font-weight:700;background:var(--accent);color:#fff">공</span>';
+    h+='<span style="font-size:13px;font-weight:700;color:var(--text);flex:1">'+perf.f+'</span>';
+    h+='<span style="font-size:11px;color:var(--dim);white-space:nowrap">예울마루</span>';
+    if(ddText)h+='<span style="font-size:11px;font-weight:600;color:var(--accent);white-space:nowrap">'+ddText+'</span>';
+    h+='</div>';
+  });
+  // 전시
+  exh.forEach(function(x){
+    if(!x.on)return;
+    hasSchedule=true;
+    var eName=x.id==='7층'?'어린이미술전 <우리 SUM 타볼래?>':"기획전시 '섬냥이 in 장도'";
+    var eVenue=x.id==='7층'?'7층 전시실':'장도 전시실';
+    var eStart=x.id==='7층'?new Date(2026,1,27):new Date(2026,2,27);
+    eStart.setHours(0,0,0,0);
+    var dayNum=Math.floor((now-eStart)/86400000)+1;
+    h+='<div style="display:flex;align-items:center;padding:10px 12px;background:rgba(240,196,184,0.2);border-radius:10px;margin-bottom:6px;gap:8px">';
+    h+='<span style="display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;border-radius:50%;font-size:8px;font-weight:700;background:#F0C4B8;color:#333">전</span>';
+    h+='<span style="font-size:13px;font-weight:700;color:var(--text);flex:1">'+eName+'</span>';
+    h+='<span style="font-size:11px;color:var(--dim);white-space:nowrap">'+eVenue+'</span>';
+    h+='<span style="font-size:11px;font-weight:600;color:#C08070;white-space:nowrap">'+dayNum+'일차</span>';
+    h+='</div>';
+  });
+  // 구분자
+  if(hasSchedule)h+='<div style="border-top:1px solid var(--border);margin:12px 0;"></div>';
+  // 콘텐츠 섹션
+  if(recs.length===0){h+='<div class="panel-empty"><div style="font-size:32px;margin-bottom:8px">📭</div><div>등록된 콘텐츠가 없습니다</div></div>';}
+  else{recs.forEach(function(r){var p2=r['플랫폼 1']||'',col=platColor(p2),title=r['콘텐츠 제목']||'',cat=r['콘텐츠 구분']||'',st=r['진행 상태']||'';h+='<div class="p-card"><div class="p-card-head"><span class="p-tag" style="color:'+col+';border:1.5px solid '+col+'">'+platShort(p2)+'</span></div><div class="p-title">'+title+'</div><div class="p-meta">'+(cat?'<span class="meta-chip">'+cat+'</span>':'')+(st?'<span class="meta-chip">'+st+'</span>':'')+'</div></div>';});}
+  h+='<button class="add-btn" onclick="openModal(\''+dk(dateObj)+'\')">+ 새 콘텐츠 등록</button></div>';
   p.innerHTML=h;p.style.display='flex';
 }
-
 function closePanel(){panelOpen=false;selected=null;document.getElementById('panel').style.display='none';document.getElementById('main-area').style.marginRight='0';render();}
 function changeMonth(delta){currentMonth+=delta;if(currentMonth<1){currentMonth=12;currentYear--;}if(currentMonth>12){currentMonth=1;currentYear++;}closePanel();render();}
 
