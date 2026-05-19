@@ -327,7 +327,7 @@ else out+='<span style="display:inline-flex;align-items:center;margin-left:6px">
 }return out;
 }
 let password='',records=[],currentYear=new Date().getFullYear(),currentMonth=new Date().getMonth()+1;
-let selected=null,editing=null,panelOpen=false;
+let selected=null,editing=null,panelOpen=false,activeFilter=null;
 
 // PIN
 const pins=document.querySelectorAll('.pin');
@@ -411,6 +411,11 @@ function render(){document.getElementById('nav-month').textContent=currentMonth;
 
 
 
+
+function toggleFilter(label){
+  activeFilter=activeFilter===label?null:label;
+  render();
+}
 function renderChips(){
   const c=document.getElementById('chips');
   const groups=[
@@ -420,7 +425,7 @@ function renderChips(){
     {label:'B2B',color:'#2D5F8A',match:['B2B']},
     {label:'문자',color:'#8B5CF6',match:['문자']},
   ];
-  c.innerHTML=groups.map(g=>{const cnt=records.filter(r=>{const p=r['플랫폼 1']||'';return g.match.some(m=>p.includes(m));}).length;return`<div class="chip"><span class="chip-dot" style="background:${g.color}"></span><span class="chip-label">${g.label}</span><span class="chip-count">${cnt}</span></div>`;}).join('');
+  c.innerHTML=groups.map((g,gi)=>{const cnt=records.filter(r=>{const p=r['플랫폼 1']||'';return g.match.some(m=>p.includes(m));}).length;const isActive=activeFilter===g.label;return`<div class="chip${isActive?' chip-active':''}" onclick="toggleFilter('${g.label}')" style="cursor:pointer;${isActive?'background:'+g.color+';':''}"><span class="chip-dot" style="background:${isActive?'#fff':g.color}"></span><span class="chip-label" style="${isActive?'color:#fff':''}";>${g.label}</span><span class="chip-count" style="${isActive?'color:#fff':''}">${cnt}</span></div>`;}).join('');
 }
 
 function renderCal(){
@@ -440,9 +445,9 @@ function renderCal(){
       if(nm)bg='var(--nm-bg)';else if(td)bg='var(--today-bg)';else if(past)bg='var(--past-bg)';
       let dnCls='dn';if(nm)dnCls+=' nm';else if(past)dnCls+=' past';else if(isSat)dnCls+=' sat';else if(isSun)dnCls+=' sun';
       h+=`<div class="c cell${nm?' nm':''}${past?' past':''}${td?' today':''}${isSel?' sel':''}" data-cell data-key="${key}" onclick="clickDate('${key}')" style="background:${bg};${di<5?'border-right:1px solid var(--border)':''}${nm?'cursor:default':'cursor:pointer'}">`;
-      var perfs=nm?[]:getPerfs(d);
+      var perfs=nm?[]:getPerfs(d);var filteredRecs=recs;if(activeFilter){var fg=null;var groups=[{label:'카카오',match:['카카오']},{label:'인스타',match:['인스타']},{label:'블로그·맘카페',match:['블로그','맘카페']},{label:'B2B',match:['B2B']},{label:'문자',match:['문자']}];for(var gi=0;gi<groups.length;gi++){if(groups[gi].label===activeFilter){fg=groups[gi];break;}}if(fg)filteredRecs=recs.filter(function(r){var p=r['플랫폼 1']||'';return fg.match.some(function(m){return p.indexOf(m)>-1;});});}else{filteredRecs=recs;}
       h+='<div class="c-inner"><div class="'+dnCls+'">'+(td&&!nm?'<span style="color:var(--accent);font-weight:700">'+d.getDate()+'</span>':d.getDate())+renderPerfsHtml(perfs,td,past)+'</div>';
-      recs.forEach(r=>{
+      filteredRecs.forEach(r=>{
         var p=r['플랫폼 1']||'',title=r['콘텐츠 제목']||'',col=platColor(p),st=r['진행 상태']||'예정';
         var done=st==='완료';
         var ts=r['입력시간(KST)'],hhmm='';
