@@ -132,6 +132,8 @@ button{font-family:inherit;cursor:pointer}
 .p-title{font-size:14px;font-weight:600;color:var(--text);margin-bottom:8px}
 .p-meta{display:flex;gap:6px}
 .meta-chip{font-size:11px;padding:2px 8px;border-radius:8px;background:rgba(0,0,0,0.04);color:#777;font-weight:500}
+.p-del{width:24px;height:24px;border-radius:50%;border:none;background:transparent;color:#bbb;font-size:11px;cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;padding:0}
+.p-del:hover{background:rgba(226,75,74,0.1);color:#E24B4A}
 .add-btn{width:100%;padding:14px;border:2px dashed rgba(74,77,231,0.2);border-radius:var(--radius);background:transparent;color:var(--accent);font-size:13px;font-weight:600;margin-top:8px;transition:all .2s}
 .add-btn:hover{background:var(--accent-light);border-color:var(--accent)}
 
@@ -406,7 +408,7 @@ function _typeLoop(elId,text,speed){
 async function loadData(){
   var cal=document.getElementById('cal');
   if(cal){cal.innerHTML='<div style="text-align:center;padding:60px;color:var(--dim);font-size:14px"><span id="lt"></span></div>';_typeLoop('lt','데이터를 불러오는 중입니다... \uD83D\uDE09',65);}
-  try{const d=await api('GET','/api/records');records=d.records||[];_typingId++;render();}catch(e){console.error(e);_typingId++;if(cal)cal.innerHTML='<div style="text-align:center;padding:60px;color:#E24B4A;font-size:14px">데이터 로드 실패</div>';}}
+  try{const d=await api('GET','/api/records');records=(d.records||[]).map(function(r,i){return Object.assign({},r,{_rowIndex:(r._rowIndex!==undefined?r._rowIndex:i+2)});});_typingId++;render();}catch(e){console.error(e);_typingId++;if(cal)cal.innerHTML='<div style="text-align:center;padding:60px;color:#E24B4A;font-size:14px">데이터 로드 실패</div>';}}
 
 function excelToKey(v){if(!v)return'';if(typeof v==='number'){const d=new Date((v-25569)*86400000);return dk(d);}return String(v);}
 function dk(d){return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
@@ -528,7 +530,7 @@ function openPanel(dateObj,recs){
   if(hasSchedule)h+='<div style="border-top:1px solid var(--border);margin:12px 0;"></div>';
   // 콘텐츠 섹션
   if(recs.length===0){h+='<div class="panel-empty"><div style="font-size:32px;margin-bottom:8px">📭</div><div>등록된 콘텐츠가 없습니다</div></div>';}
-  else{recs.forEach(function(r){var p2=r['플랫폼 1']||'',col=platColor(p2),title=r['콘텐츠 제목']||'',cat=r['콘텐츠 구분']||'',st=r['진행 상태']||'';h+='<div class="p-card"><div class="p-card-head"><span class="p-tag" style="color:'+col+';border:1.5px solid '+col+'">'+platShort(p2)+'</span></div><div class="p-title">'+title+'</div><div class="p-meta">'+(cat?'<span class="meta-chip">'+cat+'</span>':'')+(st?'<span class="meta-chip">'+st+'</span>':'')+'</div></div>';});}
+  else{recs.forEach(function(r){var p2=r['플랫폼 1']||'',col=platColor(p2),title=r['콘텐츠 제목']||'',cat=r['콘텐츠 구분']||'',st=r['진행 상태']||'',ri=r._rowIndex;h+='<div class="p-card"><div class="p-card-head"><span class="p-tag" style="color:'+col+';border:1.5px solid '+col+'">'+platShort(p2)+'</span><button class="p-del" onclick="deleteRec('+ri+',\''+dk(dateObj)+'\')" title="삭제">✕</button></div><div class="p-title">'+title+'</div><div class="p-meta">'+(cat?'<span class="meta-chip">'+cat+'</span>':'')+(st?'<span class="meta-chip">'+st+'</span>':'')+'</div></div>';});}
   h+='<button class="add-btn" onclick="openModal(\''+dk(dateObj)+'\')">+ 새 콘텐츠 등록</button></div>';
   p.innerHTML=h;p.style.display='flex';
 }
@@ -597,6 +599,16 @@ async function saveEntry(){
   try{await api('POST','/api/records',{values:row});closeModal();await loadData();clickDate(editing.dateKey);}catch(e){alert('저장 실패: '+e.message);}
 }
 async function delEntry(){if(!editing?.existing)return;if(!confirm('삭제하시겠습니까?'))return;try{await api('DELETE',`/api/records/${editing.existing._rowIndex}`);closeModal();await loadData();}catch(e){alert('삭제 실패: '+e.message);}}
+
+async function deleteRec(rowIndex,dateKey){
+  if(!confirm('이 콘텐츠를 삭제하시겠습니까?'))return;
+  try{
+    await api('DELETE','/api/records/'+rowIndex);
+    await loadData();
+    const[y,m,d]=dateKey.split('-').map(Number);const dateObj=new Date(y,m-1,d);
+    openPanel(dateObj,getRecsForDate(dateObj));
+  }catch(e){alert('삭제 실패: '+e.message);}
+}
 
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeModal();closePanel();}});
 document.getElementById('modal').addEventListener('click',e=>{if(e.target.id==='modal')closeModal();});
