@@ -513,6 +513,24 @@ async function loadData(){
   if(cal){cal.innerHTML='<div style="text-align:center;padding:60px;color:var(--dim);font-size:14px"><span id="lt"></span></div>';_typeLoop('lt','데이터를 불러오는 중입니다... \uD83D\uDE09',65);}
   try{const d=await api('GET','/api/records');records=(d.records||[]).map(function(r,i){return Object.assign({},r,{_rowIndex:(r._rowIndex!==undefined?r._rowIndex:i+2)});});_typingId++;render();}catch(e){console.error(e);_typingId++;if(cal)cal.innerHTML='<div style="text-align:center;padding:60px;color:#E24B4A;font-size:14px">데이터 로드 실패</div>';}}
 
+// SharePoint Graph API 일관성 지연 회피용 - 변경 후 row 수 검증 + 자동 재시도
+async function syncReload(expectedDelta){
+  var before=records.length;
+  await new Promise(function(r){setTimeout(r,500);});
+  await loadData();
+  if(expectedDelta===undefined)return;
+  var expected=before+expectedDelta;
+  for(var i=0;i<3;i++){
+    if(records.length===expected)return;
+    console.warn('[syncReload] count mismatch (attempt '+(i+1)+'), expected:',expected,'got:',records.length,'- retrying...');
+    await new Promise(function(r){setTimeout(r,1000+i*500);});
+    await loadData();
+  }
+  if(records.length!==expected){
+    console.warn('[syncReload] final mismatch. SharePoint 일관성 안정화에 시간이 더 필요할 수 있음.');
+  }
+}
+
 function excelToKey(v){if(!v)return'';if(typeof v==='number'){const d=new Date((v-25569)*86400000);return dk(d);}return String(v);}
 function dk(d){return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
 function isToday(d){return dk(d)===dk(new Date());}
@@ -900,7 +918,7 @@ async function saveEntry(){
       catch(e){console.error('수정 후 기존 행 삭제 실패:',e);alert('저장됨. 단, 기존 행 삭제 실패로 중복이 생겼을 수 있어. 패널에서 확인해줘.');}
     }
     closeModal();
-    await loadData();
+    await syncReload(isEdit?0:1);
     clickDate(dateKey);
     showToast('저장되었습니다');
   }catch(e){alert('저장 실패: '+e.message);}
@@ -911,7 +929,7 @@ async function delEntry(){
   const dateKey=editing.dateKey;const ri=editing.existing._rowIndex;
   const ok=await showConfirm('정말로 삭제하시겠습니까?');if(!ok)return;
   showOverlayLoad();
-  try{await api('DELETE','/api/records/'+ri);closeModal();await loadData();closePanel();showToast('삭제되었습니다');}catch(e){alert('삭제 실패: '+e.message);}
+  try{await api('DELETE','/api/records/'+ri);closeModal();await syncReload(-1);closePanel();showToast('삭제되었습니다');}catch(e){alert('삭제 실패: '+e.message);}
   finally{hideOverlayLoad();}
 }
 
@@ -921,7 +939,7 @@ async function deleteRec(rowIndex,dateKey){
   showOverlayLoad();
   try{
     await api('DELETE','/api/records/'+rowIndex);
-    await loadData();
+    await syncReload(-1);
     closePanel();
     showToast('삭제되었습니다');
   }catch(e){alert('삭제 실패: '+e.message);}
@@ -972,7 +990,7 @@ async function onCellDrop(ev,toKey){
     await api('POST','/api/records',{values:row});
     try{await api('DELETE','/api/records/'+drag.rowIndex);}
     catch(e){console.error('이동 후 기존 행 삭제 실패:',e);alert('이동됨. 단, 기존 행 삭제 실패로 중복이 생겼을 수 있어.');}
-    await loadData();
+    await syncReload(0);
     closePanel();
     showToast('이동되었습니다');
   }catch(e){alert('이동 실패: '+e.message);}
