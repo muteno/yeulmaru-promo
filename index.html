@@ -138,12 +138,14 @@ button{font-family:inherit;cursor:pointer}
 /* ═══ MODAL ═══ */
 .modal-bg{display:none;position:fixed;inset:0;background:rgba(26,26,46,0.4);backdrop-filter:blur(4px);z-index:100;align-items:center;justify-content:center}
 .modal-bg.show{display:flex}
-.modal{background:var(--surface-solid);border:1px solid var(--glass-border);border-radius:var(--radius-xl);padding:28px;width:400px;max-width:92vw;box-shadow:0 24px 80px rgba(74,77,231,0.12),0 8px 24px rgba(0,0,0,0.08);animation:fadeUp .25s ease}
+.modal{background:var(--surface-solid);border:1px solid var(--glass-border);border-radius:var(--radius-xl);padding:28px;width:400px;max-width:92vw;max-height:90vh;overflow-y:auto;box-shadow:0 24px 80px rgba(74,77,231,0.12),0 8px 24px rgba(0,0,0,0.08);animation:fadeUp .25s ease}
 .modal h3{font-size:16px;font-weight:700}
 .modal .meta{font-size:12px;color:var(--dim);margin:2px 0 16px}
 .modal label{display:block;font-size:11px;color:#888;margin:14px 0 4px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px}
-.modal input,.modal select{width:100%;padding:10px 14px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:12px;color:var(--text);font-size:13px;outline:none;transition:all .2s}
-.modal input:focus,.modal select:focus{border-color:var(--accent);box-shadow:0 0 0 4px var(--accent-glow);background:#fff}
+.modal input,.modal select,.modal textarea{width:100%;padding:10px 14px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:12px;color:var(--text);font-size:13px;outline:none;transition:all .2s;font-family:inherit;box-sizing:border-box}
+.modal textarea{resize:vertical;min-height:60px;line-height:1.5}
+.modal input[readonly]{background:#EEE;cursor:not-allowed;color:#666}
+.modal input:focus,.modal select:focus,.modal textarea:focus{border-color:var(--accent);box-shadow:0 0 0 4px var(--accent-glow);background:#fff}
 .modal-acts{display:flex;gap:8px;margin-top:24px;justify-content:flex-end}
 .m-btn{padding:10px 22px;border-radius:12px;font-size:13px;font-weight:600;border:none;transition:all .2s}
 .m-btn:hover{transform:translateY(-1px)}
@@ -209,18 +211,30 @@ button{font-family:inherit;cursor:pointer}
     <div class="meta" id="m-meta"></div>
     <label>시간</label>
     <input type="time" id="f-time" value="10:00">
-    <label>플랫폼</label>
-    <select id="f-plat">
+    <label>플랫폼 1</label>
+    <select id="f-plat" onchange="onPlatChange()">
       <option value="카카오톡">카카오톡</option>
       <option value="인스타그램">인스타그램</option>
-      <option value="유튜브">유튜브</option>
-      <option value="블로그">블로그</option>
-      <option value="기타채널">기타채널</option>
+      <option value="블로그·맘카페">블로그·맘카페</option>
+      <option value="B2B">B2B</option>
+      <option value="문자">문자</option>
+      <option value="기타">기타</option>
     </select>
+    <input type="text" id="f-plat-etc" placeholder="플랫폼명 입력" style="display:none;margin-top:6px">
+    <label>플랫폼 2</label>
+    <select id="f-plat2" style="display:none"></select>
+    <input type="text" id="f-plat2-fixed" readonly value="-">
     <label>콘텐츠 제목</label>
     <input type="text" id="f-title" placeholder="입력">
     <label>콘텐츠 구분</label>
     <select id="f-cat"><option value="">선택</option><option>공연</option><option>전시</option><option>교육</option><option>기타</option></select>
+    <label>담당 부서</label>
+    <input type="text" id="f-dept" readonly value="예술사업팀">
+    <label>콘텐츠 형식 및 내용</label>
+    <select id="f-format"><option value="">선택</option><option>이미지</option><option>영상</option><option>기타</option></select>
+    <textarea id="f-content" rows="3" placeholder="내용을 설명해주세요." style="margin-top:6px"></textarea>
+    <label>게시 담당자</label>
+    <select id="f-author"><option value="">선택</option><option>황세웅</option><option>심희은</option></select>
     <label>진행 상태</label>
     <select id="f-status"><option>예정</option><option>진행중</option><option>완료</option><option>취소</option><option>보류</option></select>
     <label>비고</label>
@@ -246,7 +260,10 @@ function platShort(p){
   if(!p)return'';
   if(p.includes('카카오'))return'카카오';
   if(p.includes('인스타'))return'인스타';
-  if(p.includes('유튜브')||p.includes('블로그'))return'유튜브/블로그';
+  if(p.includes('블로그')||p.includes('맘카페'))return'블로그·맘카페';
+  if(p.includes('유튜브'))return'유튜브';
+  if(p.includes('B2B'))return'B2B';
+  if(p.includes('문자'))return'문자';
   if(p.includes('기타'))return'기타';
   return p;
 }
@@ -518,14 +535,42 @@ function openPanel(dateObj,recs){
 function closePanel(){panelOpen=false;selected=null;document.getElementById('panel').style.display='none';document.getElementById('main-area').style.marginRight='0';render();}
 function changeMonth(delta){currentMonth+=delta;if(currentMonth<1){currentMonth=12;currentYear--;}if(currentMonth>12){currentMonth=1;currentYear++;}closePanel();render();}
 
+function onPlatChange(){
+  const p=document.getElementById('f-plat').value;
+  const p2sel=document.getElementById('f-plat2');
+  const p2fix=document.getElementById('f-plat2-fixed');
+  const petc=document.getElementById('f-plat-etc');
+  petc.style.display=(p==='기타')?'block':'none';
+  if(p!=='기타')petc.value='';
+  if(p==='카카오톡'||p==='인스타그램'||p==='기타'){
+    p2sel.style.display='none';p2sel.innerHTML='';
+    p2fix.style.display='block';p2fix.value='-';
+  }else{
+    p2fix.style.display='none';
+    p2sel.style.display='block';
+    let opts=[];
+    if(p==='블로그·맘카페')opts=['블로그','맘카페'];
+    else if(p==='B2B')opts=['여수시청 홈페이지','GS칼텍스 여수공장 인트라넷','GS칼텍스 여수공장 식당'];
+    else if(p==='문자')opts=['마케팅 수신 회원','프로그램 대상 타겟 회원'];
+    p2sel.innerHTML='<option value="">선택</option>'+opts.map(o=>'<option>'+o+'</option>').join('');
+  }
+}
 function openModal(dateKey){
   const[y,m,d]=dateKey.split('-').map(Number),dateObj=new Date(y,m-1,d),dn=DAY_NAMES[dateObj.getDay()];
   editing={dateKey,existing:null};
   document.getElementById('m-title').textContent='새 콘텐츠 등록';
   document.getElementById('m-meta').textContent=`${m}월 ${d}일 (${dn}요일)`;
-  document.getElementById('f-time').value='10:00';document.getElementById('f-plat').value='카카오톡';
-  document.getElementById('f-title').value='';document.getElementById('f-cat').value='';
-  document.getElementById('f-status').value='예정';document.getElementById('f-memo').value='';
+  document.getElementById('f-time').value='10:00';
+  document.getElementById('f-plat').value='카카오톡';
+  document.getElementById('f-plat-etc').value='';
+  document.getElementById('f-title').value='';
+  document.getElementById('f-cat').value='';
+  document.getElementById('f-format').value='';
+  document.getElementById('f-content').value='';
+  document.getElementById('f-author').value='';
+  document.getElementById('f-status').value='예정';
+  document.getElementById('f-memo').value='';
+  onPlatChange();
   document.getElementById('btn-del').style.display='none';
   document.getElementById('modal').classList.add('show');
   setTimeout(()=>document.getElementById('f-title').focus(),100);
@@ -538,7 +583,17 @@ async function saveEntry(){
   const serial=Math.floor((dateObj.getTime()/86400000)+25569);
   const ft=document.getElementById('f-time').value||'10:00';
   const kstStr=`${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')} ${ft}`;
-  const row=[records.length+1,kstStr,serial,y,m,d,dn+'요일',document.getElementById('f-plat').value,'',document.getElementById('f-cat').value,'',title,'','',document.getElementById('f-status').value,document.getElementById('f-memo').value];
+  const platSel=document.getElementById('f-plat').value;
+  let plat1=platSel,plat2='';
+  if(platSel==='기타'){
+    const etc=document.getElementById('f-plat-etc').value.trim();
+    plat1=etc||'기타';plat2='-';
+  }else if(platSel==='카카오톡'||platSel==='인스타그램'){
+    plat2='-';
+  }else{
+    plat2=document.getElementById('f-plat2').value;
+  }
+  const row=[records.length+1,kstStr,serial,y,m,d,dn+'요일',plat1,plat2,document.getElementById('f-cat').value,'예술사업팀',title,document.getElementById('f-format').value,document.getElementById('f-author').value,document.getElementById('f-status').value,document.getElementById('f-memo').value,document.getElementById('f-content').value];
   try{await api('POST','/api/records',{values:row});closeModal();await loadData();clickDate(editing.dateKey);}catch(e){alert('저장 실패: '+e.message);}
 }
 async function delEntry(){if(!editing?.existing)return;if(!confirm('삭제하시겠습니까?'))return;try{await api('DELETE',`/api/records/${editing.existing._rowIndex}`);closeModal();await loadData();}catch(e){alert('삭제 실패: '+e.message);}}
