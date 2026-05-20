@@ -81,6 +81,10 @@ button{font-family:inherit;cursor:pointer}
 .prog-btn.active{background:var(--accent);color:#fff;border-color:var(--accent);box-shadow:0 4px 12px rgba(74,77,231,0.25)}
 .prog-btn .prog-count-badge{position:absolute;top:-4px;right:-4px;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:#E24B4A;color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;line-height:1}
 .prog-list{max-height:50vh;overflow-y:auto;margin:8px 0 12px;padding-right:4px}
+.prog-toggle{display:flex;gap:0;background:#F0F0F5;border-radius:10px;padding:3px;margin:14px 0 4px}
+.prog-tab{flex:1;padding:7px 12px;border:none;background:transparent;color:#888;font-size:12px;font-weight:600;cursor:pointer;border-radius:8px;transition:all .15s}
+.prog-tab:hover{color:var(--text)}
+.prog-tab.active{background:#fff;color:var(--accent);box-shadow:0 1px 4px rgba(0,0,0,0.06)}
 .prog-section{font-size:11px;color:var(--dim);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin:12px 0 6px;padding-bottom:4px;border-bottom:1px solid var(--border)}
 .prog-section:first-child{margin-top:0}
 .prog-item{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:10px;cursor:pointer;transition:background .15s;font-size:13px}
@@ -261,6 +265,8 @@ button{font-family:inherit;cursor:pointer}
     <label>플랫폼 2</label>
     <select id="f-plat2" style="display:none"></select>
     <input type="text" id="f-plat2-fixed" readonly value="-">
+    <label>프로그램</label>
+    <select id="f-program"></select>
     <label>콘텐츠 제목</label>
     <input type="text" id="f-title" placeholder="입력">
     <label>콘텐츠 구분</label>
@@ -300,7 +306,11 @@ button{font-family:inherit;cursor:pointer}
 <div class="modal-bg" id="prog-modal">
   <div class="modal" style="width:380px">
     <h3>프로그램 필터</h3>
-    <div class="meta">진행 중인 공연·전시 중 선택 (콘텐츠 제목에 풀네임 포함 매칭)</div>
+    <div class="meta">선택한 프로그램의 콘텐츠만 캘린더에 표시</div>
+    <div class="prog-toggle">
+      <button class="prog-tab active" data-scope="active" onclick="setProgScope('active')">진행 중</button>
+      <button class="prog-tab" data-scope="all" onclick="setProgScope('all')">전체</button>
+    </div>
     <div id="prog-list" class="prog-list"></div>
     <div class="modal-acts">
       <button class="m-btn del" onclick="clearProgramsModal()" style="margin-right:auto">전체 해제</button>
@@ -492,8 +502,14 @@ function toggleFilter(label){
 }
 function clearFilters(){activeFilters=[];render();}
 
-function openProgFilter(){
-  var perfs=PERFS.filter(function(p){return p.o===1;});
+let _progScope='active';
+function setProgScope(scope){
+  _progScope=scope;
+  document.querySelectorAll('.prog-tab').forEach(function(b){b.classList.toggle('active',b.dataset.scope===scope);});
+  renderProgList();
+}
+function renderProgList(){
+  var perfs=_progScope==='all'?PERFS.slice():PERFS.filter(function(p){return p.o===1;});
   var concerts=perfs.filter(function(p){return p.t==='c';});
   var exhibits=perfs.filter(function(p){return p.t==='e';});
   var html='';
@@ -513,8 +529,12 @@ function openProgFilter(){
       html+='<label class="prog-item"><input type="checkbox" value="'+p.f.replace(/"/g,'&quot;')+'" '+checked+'><span class="prog-icon e">전</span><span class="prog-name">'+p.f+'</span><span class="prog-date">'+date+'</span></label>';
     });
   }
-  if(!html)html='<div style="text-align:center;color:var(--dim);padding:20px;font-size:13px">진행 중인 프로그램이 없습니다</div>';
+  if(!html)html='<div style="text-align:center;color:var(--dim);padding:20px;font-size:13px">표시할 프로그램이 없습니다</div>';
   document.getElementById('prog-list').innerHTML=html;
+}
+function openProgFilter(){
+  document.querySelectorAll('.prog-tab').forEach(function(b){b.classList.toggle('active',b.dataset.scope===_progScope);});
+  renderProgList();
   document.getElementById('prog-modal').classList.add('show');
 }
 function closeProgFilter(){document.getElementById('prog-modal').classList.remove('show');}
@@ -559,7 +579,7 @@ function renderCal(){
       if(nm)bg='var(--nm-bg)';else if(td)bg='var(--today-bg)';else if(past)bg='var(--past-bg)';
       let dnCls='dn';if(nm)dnCls+=' nm';else if(past)dnCls+=' past';else if(isSat)dnCls+=' sat';else if(isSun)dnCls+=' sun';
       h+=`<div class="c cell${nm?' nm':''}${past?' past':''}${td?' today':''}${isSel?' sel':''}" data-cell data-key="${key}" onclick="clickDate('${key}')"${nm?'':` ondragover="onCellDragOver(event)" ondragleave="onCellDragLeave(event)" ondrop="onCellDrop(event,'${key}')"`} style="background:${bg};${di<5?'border-right:1px solid var(--border)':''}${nm?'cursor:default':'cursor:pointer'}">`;
-      var perfs=nm?[]:getPerfs(d);var filteredRecs=recs;if(activeFilters.length>0){var allGroups=[{label:'카카오',match:['카카오']},{label:'인스타',match:['인스타']},{label:'블로그·맘카페',match:['블로그','맘카페']},{label:'B2B',match:['B2B']},{label:'문자',match:['문자']}];var activeMatches=[];activeFilters.forEach(function(af){allGroups.forEach(function(g){if(g.label===af)activeMatches=activeMatches.concat(g.match);});});filteredRecs=filteredRecs.filter(function(r){var p=r['플랫폼 1']||'';return activeMatches.some(function(m){return p.indexOf(m)>-1;});});}if(activePrograms.length>0){filteredRecs=filteredRecs.filter(function(r){var t=r['콘텐츠 제목']||'';return activePrograms.some(function(f){return t.indexOf(f)>-1;});});}
+      var perfs=nm?[]:getPerfs(d);var filteredRecs=recs;if(activeFilters.length>0){var allGroups=[{label:'카카오',match:['카카오']},{label:'인스타',match:['인스타']},{label:'블로그·맘카페',match:['블로그','맘카페']},{label:'B2B',match:['B2B']},{label:'문자',match:['문자']}];var activeMatches=[];activeFilters.forEach(function(af){allGroups.forEach(function(g){if(g.label===af)activeMatches=activeMatches.concat(g.match);});});filteredRecs=filteredRecs.filter(function(r){var p=r['플랫폼 1']||'';return activeMatches.some(function(m){return p.indexOf(m)>-1;});});}if(activePrograms.length>0){filteredRecs=filteredRecs.filter(function(r){var prog=r['프로그램']||'';return activePrograms.indexOf(prog)>-1;});}
       h+='<div class="c-inner"><div class="'+dnCls+'">'+(td&&!nm?'<span style="color:var(--accent);font-weight:700">'+d.getDate()+'</span>':d.getDate())+renderPerfsHtml(perfs,td,past)+'</div>';
       filteredRecs.forEach(r=>{
         var p=r['플랫폼 1']||'',title=r['콘텐츠 제목']||'',col=platColor(p),st=r['진행 상태']||'예정';
@@ -657,6 +677,30 @@ function onPlatChange(){
     p2sel.innerHTML='<option value="">선택</option>'+opts.map(o=>'<option>'+o+'</option>').join('');
   }
 }
+function populateProgramSelect(currentValue){
+  var sel=document.getElementById('f-program');
+  var perfs=PERFS.filter(function(p){return p.o===1;});
+  var concerts=perfs.filter(function(p){return p.t==='c';});
+  var exhibits=perfs.filter(function(p){return p.t==='e';});
+  var html='<option value="">해당 없음</option>';
+  if(concerts.length>0){
+    html+='<optgroup label="공연">';
+    concerts.forEach(function(p){html+='<option value="'+p.f.replace(/"/g,'&quot;')+'">'+p.f+'</option>';});
+    html+='</optgroup>';
+  }
+  if(exhibits.length>0){
+    html+='<optgroup label="전시">';
+    exhibits.forEach(function(p){html+='<option value="'+p.f.replace(/"/g,'&quot;')+'">'+p.f+'</option>';});
+    html+='</optgroup>';
+  }
+  // 수정 모드에서 현재 값이 종료된 프로그램이면 별도 옵션 추가
+  if(currentValue&&!PERFS.some(function(p){return p.o===1&&p.f===currentValue;})){
+    html+='<optgroup label="종료/기타"><option value="'+currentValue.replace(/"/g,'&quot;')+'" selected>'+currentValue+'</option></optgroup>';
+  }
+  sel.innerHTML=html;
+  if(currentValue)sel.value=currentValue;
+}
+
 function fillModalFields(rec){
   var ts=rec['입력시간(KST)'],hhmm='10:00';
   if(typeof ts==='string'&&ts.indexOf(' ')>-1)hhmm=ts.split(' ')[1].substr(0,5);
@@ -670,6 +714,7 @@ function fillModalFields(rec){
   onPlatChange();
   var plat2=rec['플랫폼 2']||'';
   if(plat2&&plat2!=='-'){var p2sel=document.getElementById('f-plat2');if(p2sel.style.display!=='none')p2sel.value=plat2;}
+  populateProgramSelect(rec['프로그램']||'');
   document.getElementById('f-title').value=rec['콘텐츠 제목']||'';
   document.getElementById('f-cat').value=rec['콘텐츠 구분']||'';
   document.getElementById('f-format').value=rec['콘텐츠 형식']||'';
@@ -686,6 +731,7 @@ function openModal(dateKey,rec){
   document.getElementById('f-time').value='10:00';
   document.getElementById('f-plat').value='카카오톡';
   document.getElementById('f-plat-etc').value='';
+  populateProgramSelect('');
   document.getElementById('f-title').value='';
   document.getElementById('f-cat').value='';
   document.getElementById('f-format').value='';
@@ -764,7 +810,7 @@ async function saveEntry(){
   }else{
     plat2=document.getElementById('f-plat2').value;
   }
-  const row=[records.length+1,kstStr,serial,y,m,d,dn+'요일',plat1,plat2,document.getElementById('f-cat').value,'예술사업팀',title,document.getElementById('f-format').value,document.getElementById('f-content').value,document.getElementById('f-author').value,document.getElementById('f-status').value,document.getElementById('f-memo').value];
+  const row=[records.length+1,kstStr,serial,y,m,d,dn+'요일',plat1,plat2,document.getElementById('f-cat').value,'예술사업팀',title,document.getElementById('f-format').value,document.getElementById('f-content').value,document.getElementById('f-author').value,document.getElementById('f-status').value,document.getElementById('f-memo').value,document.getElementById('f-program').value];
   showOverlayLoad();
   try{
     await api('POST','/api/records',{values:row});
@@ -839,7 +885,7 @@ async function onCellDrop(ev,toKey){
   if(typeof ts==='string'&&ts.indexOf(' ')>-1)hhmm=ts.split(' ')[1].substr(0,5);
   else if(typeof ts==='number'){var tm=Math.round((ts%1)*1440),hh=Math.floor(tm/60),mm=tm%60;hhmm=String(hh).padStart(2,'0')+':'+String(mm).padStart(2,'0');}
   const kstStr=`${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')} ${hhmm}`;
-  const row=[records.length+1,kstStr,serial,y,m,d,dn+'요일',rec['플랫폼 1']||'',rec['플랫폼 2']||'',rec['콘텐츠 구분']||'',rec['담당 부서']||'예술사업팀',rec['콘텐츠 제목']||'',rec['콘텐츠 형식']||'',rec['콘텐츠 내용']||'',rec['게시 담당자']||'',rec['진행 상태']||'예정',rec['비고']||''];
+  const row=[records.length+1,kstStr,serial,y,m,d,dn+'요일',rec['플랫폼 1']||'',rec['플랫폼 2']||'',rec['콘텐츠 구분']||'',rec['담당 부서']||'예술사업팀',rec['콘텐츠 제목']||'',rec['콘텐츠 형식']||'',rec['콘텐츠 내용']||'',rec['게시 담당자']||'',rec['진행 상태']||'예정',rec['비고']||'',rec['프로그램']||''];
   showOverlayLoad();
   try{
     await api('POST','/api/records',{values:row});
