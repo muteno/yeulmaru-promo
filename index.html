@@ -131,7 +131,7 @@ button{font-family:inherit;cursor:pointer}
 .ev-dragging{opacity:0.4 !important}
 .c.drag-over{background:rgba(74,77,231,0.12) !important;box-shadow:inset 0 0 0 2px var(--accent)}
 .ev-time{font-weight:700;flex-shrink:0}
-.ev-plat{font-weight:600;flex-shrink:0}
+.ev-plat{font-weight:600;flex-shrink:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:50%}
 .ev-title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ev-title.future{color:var(--text);font-weight:600}
 .ev-title.past{color:var(--past-text)}
@@ -339,6 +339,11 @@ function platShort(p){
   if(p.includes('문자'))return'문자';
   if(p.includes('기타'))return'기타';
   return p;
+}
+function platDisplay(p1,p2){
+  // 네이밍 로직: plat2가 있으면 plat2, 없거나 "-"면 plat1의 약칭
+  if(p2&&p2!=='-'&&p2.trim()!=='')return p2;
+  return platShort(p1);
 }
 const DAYS=['화','수','목','금','토','일'];
 const DAY_NAMES=['일','월','화','수','목','금','토'];
@@ -582,7 +587,7 @@ function renderCal(){
       var perfs=nm?[]:getPerfs(d);var filteredRecs=recs;if(activeFilters.length>0){var allGroups=[{label:'카카오',match:['카카오']},{label:'인스타',match:['인스타']},{label:'블로그·맘카페',match:['블로그','맘카페']},{label:'B2B',match:['B2B']},{label:'문자',match:['문자']}];var activeMatches=[];activeFilters.forEach(function(af){allGroups.forEach(function(g){if(g.label===af)activeMatches=activeMatches.concat(g.match);});});filteredRecs=filteredRecs.filter(function(r){var p=r['플랫폼 1']||'';return activeMatches.some(function(m){return p.indexOf(m)>-1;});});}if(activePrograms.length>0){filteredRecs=filteredRecs.filter(function(r){var prog=r['프로그램']||'';return activePrograms.indexOf(prog)>-1;});}
       h+='<div class="c-inner"><div class="'+dnCls+'">'+(td&&!nm?'<span style="color:var(--accent);font-weight:700">'+d.getDate()+'</span>':d.getDate())+renderPerfsHtml(perfs,td,past)+'</div>';
       filteredRecs.forEach(r=>{
-        var p=r['플랫폼 1']||'',title=r['콘텐츠 제목']||'',col=platColor(p),st=r['진행 상태']||'예정';
+        var p=r['플랫폼 1']||'',p2=r['플랫폼 2']||'',title=r['콘텐츠 제목']||'',col=platColor(p),st=r['진행 상태']||'예정';
         var done=st==='완료';
         var ts=r['입력시간(KST)'],hhmm='';
         if(typeof ts==='string'&&ts.indexOf(' ')>-1)hhmm=ts.split(' ')[1];
@@ -593,7 +598,7 @@ function renderCal(){
         var platCol=done?'#bbb':past?'var(--past-text)':td?col:col;
         var titleCol=done?'#bbb':past?'var(--past-text)':'var(--text)';
         var deco=done?'text-decoration:line-through;':'';
-        h+='<div class="ev'+(td&&evPast?' ev-past':'')+'" draggable="true" onclick="event.stopPropagation();editRec('+(r._rowIndex)+',\''+key+'\',event)" ondragstart="onEvDragStart(event,'+(r._rowIndex)+',\''+key+'\')" ondragend="onEvDragEnd(event)" style="cursor:pointer;'+deco+'opacity:'+(done?'0.6':evPast?'0.5':'1')+'"><span class="ev-time" style="color:'+timeCol+';font-weight:600">'+hhmm+'</span><span class="ev-plat" style="color:'+platCol+';font-weight:600">'+platShort(p)+'</span><span class="ev-title" style="color:'+titleCol+'">'+title+'</span></div>';
+        h+='<div class="ev'+(td&&evPast?' ev-past':'')+'" draggable="true" onclick="event.stopPropagation();editRec('+(r._rowIndex)+',\''+key+'\',event)" ondragstart="onEvDragStart(event,'+(r._rowIndex)+',\''+key+'\')" ondragend="onEvDragEnd(event)" style="cursor:pointer;'+deco+'opacity:'+(done?'0.6':evPast?'0.5':'1')+'"><span class="ev-time" style="color:'+timeCol+';font-weight:600">'+hhmm+'</span><span class="ev-plat" style="color:'+platCol+';font-weight:600" title="'+(p2&&p2!=='-'?p2:p)+'">'+platDisplay(p,p2)+'</span><span class="ev-title" style="color:'+titleCol+'">'+title+'</span></div>';
       });
       h+='</div>';
       h+=renderExhibitBadge(d,nm,past);
@@ -650,7 +655,7 @@ function openPanel(dateObj,recs){
   if(hasSchedule)h+='<div style="border-top:1px solid var(--border);margin:12px 0;"></div>';
   // 콘텐츠 섹션
   if(recs.length===0){h+='<div class="panel-empty"><div style="font-size:32px;margin-bottom:8px">📭</div><div>등록된 콘텐츠가 없습니다</div></div>';}
-  else{recs.forEach(function(r){var p2=r['플랫폼 1']||'',col=platColor(p2),title=r['콘텐츠 제목']||'',cat=r['콘텐츠 구분']||'',st=r['진행 상태']||'',ri=r._rowIndex;var dkey=dk(dateObj);h+='<div class="p-card" onclick="editRec('+ri+',\''+dkey+'\',event)"><div class="p-card-head"><span class="p-tag" style="color:'+col+';border:1.5px solid '+col+'">'+platShort(p2)+'</span><button class="p-del" onclick="event.stopPropagation();deleteRec('+ri+',\''+dkey+'\')" title="삭제">✕</button></div><div class="p-title">'+title+'</div><div class="p-meta">'+(cat?'<span class="meta-chip">'+cat+'</span>':'')+(st?'<span class="meta-chip">'+st+'</span>':'')+'</div></div>';});}
+  else{recs.forEach(function(r){var p1=r['플랫폼 1']||'',p2=r['플랫폼 2']||'',col=platColor(p1),title=r['콘텐츠 제목']||'',cat=r['콘텐츠 구분']||'',st=r['진행 상태']||'',ri=r._rowIndex;var dkey=dk(dateObj);h+='<div class="p-card" onclick="editRec('+ri+',\''+dkey+'\',event)"><div class="p-card-head"><span class="p-tag" style="color:'+col+';border:1.5px solid '+col+'" title="'+(p2&&p2!=='-'?p2:p1)+'">'+platDisplay(p1,p2)+'</span><button class="p-del" onclick="event.stopPropagation();deleteRec('+ri+',\''+dkey+'\')" title="삭제">✕</button></div><div class="p-title">'+title+'</div><div class="p-meta">'+(cat?'<span class="meta-chip">'+cat+'</span>':'')+(st?'<span class="meta-chip">'+st+'</span>':'')+'</div></div>';});}
   h+='<button class="add-btn" onclick="openModal(\''+dk(dateObj)+'\')">+ 새 콘텐츠 등록</button></div>';
   p.innerHTML=h;p.style.display='flex';
 }
