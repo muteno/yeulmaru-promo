@@ -72,6 +72,7 @@ button{font-family:inherit;cursor:pointer}
 .save-row.dirty:hover{background:var(--accent);opacity:0.9}
 @keyframes savePulse{0%,100%{transform:scale(1);box-shadow:0 0 0 0 rgba(255,107,107,0.4)}50%{transform:scale(1.05);box-shadow:0 0 0 6px rgba(255,107,107,0)}}
 .sched-tbl tbody tr:hover{background:var(--peach-light)!important}
+.sched-tbl.readonly tbody tr:hover{background:transparent!important}
 .sched-tbl tbody td{font-size:12px}
 .nav-center{display:flex;gap:4px;position:relative;padding:4px}
 .nav-pill{position:absolute;background:var(--accent);border-radius:20px;transition:all .35s cubic-bezier(.4,0,.2,1);z-index:0;pointer-events:none;box-shadow:0 4px 12px rgba(74,77,231,0.25);top:0;bottom:0}
@@ -765,22 +766,23 @@ function renderScheduleList(){
 }
 
 function buildScheduleListHtml(rows){
+  const isAdmin=userRole==='admin';
   // 필터 옵션 추출 (전체 records 기반, 필터 무관)
   const allMonths=[...new Set(records.map(r=>String(r['월']||'')))].filter(Boolean).sort((a,b)=>Number(a)-Number(b));
   const allCats=[...new Set(records.map(r=>r['콘텐츠 구분']||''))].filter(Boolean);
   const allStatuses=[...new Set(records.map(r=>r['진행 상태']||''))].filter(Boolean);
   
-  let html='<div style="display:flex;align-items:center;margin-bottom:14px;gap:8px"><h3 style="margin:0;flex:1">일정 관리 <span style="font-size:12px;color:#888;font-weight:400">('+rows.length+'개)</span></h3>';
+  let html='<div style="display:flex;align-items:center;margin-bottom:14px;gap:8px"><h3 style="margin:0;flex:1">일정 관리 <span style="font-size:12px;color:#888;font-weight:400">('+rows.length+'개'+(isAdmin?'':' · 열람 모드')+')</span></h3>';
   html+='<button onclick="closeAdminPanel()" style="padding:8px 14px;border:1px solid rgba(0,0,0,0.08);border-radius:10px;background:#fff;cursor:pointer;font-size:13px">닫기</button></div>';
   // 필터 영역
   html+='<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center">';
-  html+='<input id="sched-q" type="text" placeholder="🔍 제목/담당자/프로그램/내용 검색" value="'+escapeHtml(_schedFilter.q)+'" oninput="setSchedQuery(this.value)" style="padding:6px 12px;border:1px solid #ddd;border-radius:8px;font-size:12px;background:#fff;min-width:240px;flex:0 1 280px">';
+  html+='<input id="sched-q" type="text" placeholder="🔍 제목/담당자/프로그램/내용 검색 (엔터 즉시)" value="'+escapeHtml(_schedFilter.q)+'" oninput="setSchedQuery(this.value)" onkeydown="handleSchedQueryKey(event)" style="padding:6px 12px;border:1px solid #ddd;border-radius:8px;font-size:12px;background:#fff;min-width:240px;flex:0 1 300px">';
   html+='<select class="sched-filter" onchange="setSchedFilter(\'month\',this.value)" style="padding:6px 10px;border:1px solid #ddd;border-radius:8px;font-size:12px;background:#fff"><option value="all"'+(_schedFilter.month==='all'?' selected':'')+'>전체 월</option>'+allMonths.map(m=>'<option value="'+m+'"'+(_schedFilter.month===m?' selected':'')+'>'+m+'월</option>').join('')+'</select>';
   html+='<select class="sched-filter" onchange="setSchedFilter(\'cat\',this.value)" style="padding:6px 10px;border:1px solid #ddd;border-radius:8px;font-size:12px;background:#fff"><option value="all"'+(_schedFilter.cat==='all'?' selected':'')+'>전체 구분</option>'+allCats.map(c=>'<option value="'+escapeHtml(c)+'"'+(_schedFilter.cat===c?' selected':'')+'>'+escapeHtml(c)+'</option>').join('')+'</select>';
   html+='<select class="sched-filter" onchange="setSchedFilter(\'status\',this.value)" style="padding:6px 10px;border:1px solid #ddd;border-radius:8px;font-size:12px;background:#fff"><option value="all"'+(_schedFilter.status==='all'?' selected':'')+'>전체 상태</option>'+allStatuses.map(s=>'<option value="'+escapeHtml(s)+'"'+(_schedFilter.status===s?' selected':'')+'>'+escapeHtml(s)+'</option>').join('')+'</select>';
   if(_schedFilter.month!=='all'||_schedFilter.cat!=='all'||_schedFilter.status!=='all'||_schedFilter.q)
     html+='<button onclick="resetSchedFilter()" style="padding:5px 12px;background:#fafafa;border:1px solid #ddd;border-radius:8px;cursor:pointer;font-size:11px;color:#666">초기화</button>';
-  html+='<span style="font-size:11px;color:#888;margin-left:auto">💡 row 클릭 = 수정</span>';
+  html+='<span style="font-size:11px;color:#888;margin-left:auto">'+(isAdmin?'💡 row 클릭 = 수정':'🔒 관리자만 수정 가능')+'</span>';
   html+='</div>';
   
   if(rows.length===0){
@@ -788,7 +790,7 @@ function buildScheduleListHtml(rows){
     return html;
   }
   
-  html+='<table class="adm-tbl sched-tbl"><thead><tr><th>날짜</th><th>요일</th><th>시간</th><th>플랫폼</th><th>콘텐츠 제목</th><th>구분</th><th>담당자</th><th>상태</th></tr></thead><tbody>';
+  html+='<table class="adm-tbl sched-tbl'+(isAdmin?'':' readonly')+'"><thead><tr><th>날짜</th><th>요일</th><th>시간</th><th>플랫폼</th><th>콘텐츠 제목</th><th>구분</th><th>담당자</th><th>상태</th></tr></thead><tbody>';
   rows.forEach(r=>{
     const ts=r['입력시간(KST)'];
     let hhmm='';
@@ -799,7 +801,11 @@ function buildScheduleListHtml(rows){
     const status=r['진행 상태']||'';
     const sColor=status==='완료'?'#0F8B4C':status==='취소'?'#888':status==='예정'?'#C97A11':'#888';
     const sBg=status==='완료'?'#E8F5EC':status==='취소'?'#f0f0f0':status==='예정'?'#FFF4DC':'#f5f5f5';
-    html+='<tr onclick="openScheduleRow(\''+dateKey+'\','+r._rowIndex+')" style="cursor:pointer">';
+    if(isAdmin){
+      html+='<tr onclick="openScheduleRow(\''+dateKey+'\','+r._rowIndex+')" style="cursor:pointer">';
+    }else{
+      html+='<tr style="cursor:default">';
+    }
     html+='<td style="white-space:nowrap">'+m+'/'+d+'</td>';
     html+='<td>'+escapeHtml(r['요일']||'')+'</td>';
     html+='<td style="white-space:nowrap;color:#666">'+hhmm+'</td>';
@@ -818,10 +824,18 @@ function setSchedFilter(key,val){_schedFilter[key]=val;renderScheduleList();}
 function setSchedQuery(val){
   _schedFilter.q=val;
   if(_schedQTimer)clearTimeout(_schedQTimer);
-  _schedQTimer=setTimeout(()=>renderScheduleList(),250);
+  _schedQTimer=setTimeout(()=>renderScheduleList(),1000);
+}
+function handleSchedQueryKey(e){
+  if(e.key==='Enter'){
+    if(_schedQTimer)clearTimeout(_schedQTimer);
+    _schedFilter.q=e.target.value;
+    renderScheduleList();
+  }
 }
 function resetSchedFilter(){_schedFilter={month:'all',cat:'all',status:'all',q:''};renderScheduleList();}
 function openScheduleRow(dateKey,rowIndex){
+  if(userRole!=='admin'){showToast('관리자만 수정 가능','error');return;}
   const rec=records.find(r=>r._rowIndex===rowIndex);
   if(!rec){alert('row를 찾을 수 없음');return;}
   _schedReturnFlag=true;
