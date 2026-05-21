@@ -230,6 +230,9 @@ button{font-family:inherit;cursor:pointer}
 .mv-nav-btn{width:32px;height:32px;border-radius:50%;border:0;background:rgba(240,196,184,0.2);cursor:pointer;font-size:18px;color:#C97A11;display:flex;align-items:center;justify-content:center;transition:background .15s,color .15s,opacity .15s;line-height:1;padding:0}
 .mv-nav-btn:hover:not(:disabled){background:rgba(240,196,184,0.45);color:#A0610A}
 .mv-nav-btn:disabled{opacity:0.3;cursor:not-allowed}
+.mini-tip{position:fixed;background:#333;color:#fff;padding:6px 12px;border-radius:6px;font-size:12px;z-index:99999;pointer-events:none;box-shadow:0 4px 12px rgba(0,0,0,0.2);white-space:nowrap}
+@keyframes mini-tip-fade{0%{opacity:0;transform:translateY(-4px)}10%{opacity:1;transform:translateY(0)}85%{opacity:1}100%{opacity:0;transform:translateY(-4px)}}
+.mini-tip{animation:mini-tip-fade 1.8s ease-out forwards}
 /* === read-only view (user) === */
 .mv-date1{font-size:14px;color:#333;font-weight:600;margin-bottom:18px}
 .mv-section{display:flex;align-items:center;gap:6px;color:var(--accent);font-size:13px;font-weight:700;margin:18px 0 8px;letter-spacing:0.3px}
@@ -2068,18 +2071,15 @@ function renderReadOnlyView(dateKey,rec,dateObj,dn){
     const ta=String(a['입력시간(KST)']||''),tb=String(b['입력시간(KST)']||'');
     return ta<tb?-1:ta>tb?1:0;
   });
-  const idx=_sortedRecs.findIndex(function(r){return r._rowIndex===rec._rowIndex;});
-  const hasPrev=idx>0;
-  const hasNext=idx>=0&&idx<_sortedRecs.length-1;
   
   document.getElementById('m-title').textContent='콘텐츠 조회';
   document.getElementById('m-meta').innerHTML='';
   
   let html='';
-  // 네비게이션 (X 아래 좌우 평행)
+  // 네비게이션 (X 아래 좌우 평행) — 항상 활성, 없으면 안내 팝업
   html+='<div class="mv-nav">';
-  html+='<button class="mv-nav-btn" onclick="navRec(-1)" title="이전 콘텐츠" '+(hasPrev?'':'disabled')+'>‹</button>';
-  html+='<button class="mv-nav-btn" onclick="navRec(1)" title="다음 콘텐츠" '+(hasNext?'':'disabled')+'>›</button>';
+  html+='<button class="mv-nav-btn" onclick="navRec(-1,event)" title="이전 콘텐츠">‹</button>';
+  html+='<button class="mv-nav-btn" onclick="navRec(1,event)" title="다음 콘텐츠">›</button>';
   html+='</div>';
   
   html+='<div class="mv-section">📍 홍보 현황</div>';
@@ -2106,13 +2106,14 @@ function renderReadOnlyView(dateKey,rec,dateObj,dn){
   const modalEl=document.querySelector('#modal .modal');
   if(modalEl)modalEl.scrollTop=0;
 }
-function navRec(dir){
+function navRec(dir,event){
   if(!editing||!editing.existing)return;
   const cur=editing.existing;
   const idx=_sortedRecs.findIndex(function(r){return r._rowIndex===cur._rowIndex;});
   if(idx<0)return;
   const newIdx=idx+dir;
-  if(newIdx<0||newIdx>=_sortedRecs.length)return;
+  if(newIdx<0){showMiniTip(event,'더 이전의 콘텐츠가 없습니다');return;}
+  if(newIdx>=_sortedRecs.length){showMiniTip(event,'다음 콘텐츠가 없습니다');return;}
   const newRec=_sortedRecs[newIdx];
   const y=newRec['연도'],m=String(newRec['월']||'').padStart(2,'0'),d=String(newRec['일']||'').padStart(2,'0');
   const dateKey=y+'-'+m+'-'+d;
@@ -2120,6 +2121,19 @@ function navRec(dir){
   const dn=DAY_NAMES[dateObj.getDay()];
   editing={dateKey:dateKey,existing:newRec};
   renderReadOnlyView(dateKey,newRec,dateObj,dn);
+}
+function showMiniTip(event,text){
+  if(!event)return;
+  const tip=document.createElement('div');
+  tip.className='mini-tip';
+  tip.textContent=text;
+  // viewport 우측 끝 넘지 않게 보정
+  const x=Math.min(event.clientX+12,window.innerWidth-200);
+  const y=Math.max(event.clientY+12,8);
+  tip.style.left=x+'px';
+  tip.style.top=y+'px';
+  document.body.appendChild(tip);
+  setTimeout(function(){if(tip.parentNode)tip.remove();},1800);
 }
 function applyModalPermission(isReadOnly){
   // 더 이상 사용 X — openModal에서 분기 처리
