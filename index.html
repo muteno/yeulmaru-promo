@@ -231,8 +231,12 @@ button{font-family:inherit;cursor:pointer}
 .mv-nav-btn:hover:not(:disabled){background:rgba(240,196,184,0.45);color:#A0610A}
 .mv-nav-btn:disabled{opacity:0.3;cursor:not-allowed}
 .mini-tip{position:fixed;background:#333;color:#fff;padding:6px 12px;border-radius:6px;font-size:12px;z-index:99999;pointer-events:none;box-shadow:0 4px 12px rgba(0,0,0,0.2);white-space:nowrap}
+.mini-tip.action{pointer-events:auto;cursor:pointer;padding:8px 14px}
+.mini-tip.action:hover{background:#222}
+.mini-tip.action .arrow{color:var(--peach);margin-left:6px;font-weight:700}
 @keyframes mini-tip-fade{0%{opacity:0;transform:translateY(-4px)}10%{opacity:1;transform:translateY(0)}85%{opacity:1}100%{opacity:0;transform:translateY(-4px)}}
 .mini-tip{animation:mini-tip-fade 1.8s ease-out forwards}
+.mini-tip.action{animation:mini-tip-fade 3s ease-out forwards}
 /* === read-only view (user) === */
 .mv-date1{font-size:14px;color:#333;font-weight:600;margin-bottom:18px}
 .mv-section{display:flex;align-items:center;gap:6px;color:var(--accent);font-size:13px;font-weight:700;margin:18px 0 8px;letter-spacing:0.3px}
@@ -2107,6 +2111,12 @@ function renderReadOnlyView(dateKey,rec,dateObj,dn){
   const modalEl=document.querySelector('#modal .modal');
   if(modalEl)modalEl.scrollTop=0;
 }
+function getWeekStartKey(dateStr){
+  const[y,m,d]=dateStr.split('-').map(Number);
+  const date=new Date(y,m-1,d);
+  date.setDate(date.getDate()-date.getDay());
+  return date.getFullYear()+'-'+String(date.getMonth()+1).padStart(2,'0')+'-'+String(date.getDate()).padStart(2,'0');
+}
 function navRec(dir,event){
   if(!editing||!editing.existing)return;
   const cur=editing.existing;
@@ -2116,6 +2126,17 @@ function navRec(dir,event){
   if(newIdx<0){showMiniTip(event,'더 이전의 콘텐츠가 없습니다');return;}
   if(newIdx>=_sortedRecs.length){showMiniTip(event,'다음 콘텐츠가 없습니다');return;}
   const newRec=_sortedRecs[newIdx];
+  // 주 경계 체크
+  const curKey=getRecDateKey(cur);
+  const newKey=getRecDateKey(newRec);
+  if(getWeekStartKey(curKey)!==getWeekStartKey(newKey)){
+    const msg=dir>0?'다음 주 일정으로 넘어갈까요?':'저번 주 일정을 확인할까요?';
+    showMiniConfirm(event,msg,function(){doNavToRec(newRec);});
+    return;
+  }
+  doNavToRec(newRec);
+}
+function doNavToRec(newRec){
   const y=newRec['연도'],m=String(newRec['월']||'').padStart(2,'0'),d=String(newRec['일']||'').padStart(2,'0');
   const dateKey=y+'-'+m+'-'+d;
   const dateObj=new Date(Number(y),Number(m)-1,Number(d));
@@ -2128,13 +2149,25 @@ function showMiniTip(event,text){
   const tip=document.createElement('div');
   tip.className='mini-tip';
   tip.textContent=text;
-  // viewport 우측 끝 넘지 않게 보정
   const x=Math.min(event.clientX+12,window.innerWidth-200);
   const y=Math.max(event.clientY+12,8);
   tip.style.left=x+'px';
   tip.style.top=y+'px';
   document.body.appendChild(tip);
   setTimeout(function(){if(tip.parentNode)tip.remove();},1800);
+}
+function showMiniConfirm(event,text,onConfirm){
+  if(!event){onConfirm();return;}
+  const tip=document.createElement('div');
+  tip.className='mini-tip action';
+  tip.innerHTML=escapeHtml(text)+' <span class="arrow">→</span>';
+  const x=Math.min(event.clientX+12,window.innerWidth-260);
+  const y=Math.max(event.clientY+12,8);
+  tip.style.left=x+'px';
+  tip.style.top=y+'px';
+  tip.onclick=function(){tip.remove();onConfirm();};
+  document.body.appendChild(tip);
+  setTimeout(function(){if(tip.parentNode)tip.remove();},3000);
 }
 function applyModalPermission(isReadOnly){
   // 더 이상 사용 X — openModal에서 분기 처리
