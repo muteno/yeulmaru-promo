@@ -56,6 +56,14 @@ button{font-family:inherit;cursor:pointer}
 .role-tag{font-size:10px;font-weight:700;letter-spacing:0.5px;padding:3px 8px;border-radius:8px;margin-right:4px}
 .role-tag.admin{background:var(--accent);color:#fff}
 .role-tag.user{background:rgba(0,0,0,0.06);color:#666}
+.adm-tbl{width:100%;border-collapse:collapse;font-size:12px}
+.adm-tbl thead th{background:#f5f5f7;padding:10px 8px;text-align:left;font-weight:700;border-bottom:1px solid #ddd;font-size:11px;color:#666;text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap}
+.adm-tbl tbody td{padding:8px;border-bottom:1px solid #f0f0f0;vertical-align:middle}
+.adm-tbl tbody tr:hover{background:#fafafa}
+.adm-btn{padding:5px 10px;background:none;border:1px solid #ddd;border-radius:6px;cursor:pointer;font-size:11px;margin-left:4px;font-family:inherit}
+.adm-btn:hover{background:#f5f5f5}
+.adm-btn-del{color:#c00;border-color:#fcc;background:#fff8f8}
+.adm-btn-del:hover{background:#fee}
 .nav-center{display:flex;gap:4px;position:relative;padding:4px}
 .nav-pill{position:absolute;background:var(--accent);border-radius:20px;transition:all .35s cubic-bezier(.4,0,.2,1);z-index:0;pointer-events:none;box-shadow:0 4px 12px rgba(74,77,231,0.25);top:0;bottom:0}
 .nav-btn{padding:9px 18px;border:none;border-radius:20px;font-size:13px;font-weight:500;background:transparent;color:#777;transition:color .2s;position:relative;z-index:1;white-space:nowrap;line-height:1}
@@ -466,6 +474,38 @@ async function loadPrograms(){
   }
 }
 
+// === 마스터 데이터 캐시 (관리자 모달용) ===
+let CONTENT_TYPES=[],MANAGERS=[],_programsCache=[];
+
+async function loadContentTypes(){
+  try{
+    const d=await api('GET','/api/sheet/content');
+    CONTENT_TYPES=(d.rows||[]).map(r=>r['콘텐츠구분']).filter(Boolean);
+  }catch(e){console.error('[loadContentTypes]',e);}
+}
+async function loadManagers(){
+  try{
+    const d=await api('GET','/api/sheet/manager');
+    MANAGERS=(d.rows||[]).filter(r=>!r['휴직여부']&&r['담당자']);
+  }catch(e){console.error('[loadManagers]',e);}
+}
+
+// ISO("YYYY-MM-DD") → Excel 시리얼
+function isoToExcelSerial(iso){
+  if(!iso)return '';
+  const d=new Date(iso+'T00:00:00Z');
+  return Math.floor(d.getTime()/86400000)+25569;
+}
+function excelDateDisplay(v){
+  if(v===''||v==null||isNaN(v))return '-';
+  return excelSerialToISO(v)||'-';
+}
+function excelDateInputValue(v){
+  if(v===''||v==null||isNaN(v))return '';
+  return excelSerialToISO(v);
+}
+function escapeHtml(s){return String(s||'').replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));}
+
 function updatePerfOpen(){
 var now=new Date();now.setHours(0,0,0,0);
 PERFS.forEach(function(p){if(p.o===1){var ed=new Date(p.e);ed.setHours(0,0,0,0);ed.setDate(ed.getDate()+1);if(now>=ed)p.o=0;}});
@@ -521,10 +561,141 @@ function openAdminPanel(){
   el.querySelectorAll('.admin-item').forEach(btn=>{
     btn.onmouseenter=()=>{btn.style.background='var(--peach-light)';btn.style.borderColor='var(--peach)';};
     btn.onmouseleave=()=>{btn.style.background='#fff';btn.style.borderColor='rgba(0,0,0,0.08)';};
-    btn.onclick=()=>{alert('['+btn.dataset.id+'] Phase 3B부터 순차 구현 예정');};
+    btn.onclick=()=>{adminRoute(btn.dataset.id);};
   });
 }
 function closeAdminPanel(){const el=document.getElementById('admin-panel');if(el)el.innerHTML='';}
+
+// 관리자 서브메뉴 라우터
+function adminRoute(id){
+  if(id==='programs')return openProgramAdmin();
+  alert('['+id+'] Phase 3B-3 이후 구현 예정');
+}
+
+// === 프로그램 관리 ===
+async function openProgramAdmin(){
+  const html='<div class="modal-bg show" onclick="if(event.target===this)closeAdminPanel()"><div class="modal" style="width:96vw;max-width:1100px;max-height:88vh;overflow:auto;padding:24px"><div id="prog-admin-body" style="text-align:center;padding:40px;color:#888">로딩 중...</div></div></div>';
+  let el=document.getElementById('admin-panel');
+  if(!el){el=document.createElement('div');el.id='admin-panel';document.body.appendChild(el);}
+  el.innerHTML=html;
+  if(!CONTENT_TYPES.length) await loadContentTypes();
+  if(!MANAGERS.length) await loadManagers();
+  await renderProgramList();
+}
+
+async function renderProgramList(){
+  try{
+    const d=await api('GET','/api/sheet/program');
+    _programsCache=(d.rows||[]).filter(r=>r['NO']!==''&&r['NO']!=null);
+    document.getElementById('prog-admin-body').innerHTML=buildProgramListHtml(_programsCache);
+  }catch(e){
+    document.getElementById('prog-admin-body').innerHTML='<div style="color:red;padding:20px">로드 실패: '+escapeHtml(e.message)+'</div>';
+  }
+}
+
+function buildProgramListHtml(programs){
+  let html='<div style="display:flex;align-items:center;margin-bottom:16px;gap:8px"><h3 style="margin:0;flex:1">프로그램 관리 <span style="font-size:12px;color:#888;font-weight:400">('+programs.length+'개)</span></h3>';
+  html+='<button onclick="openProgramForm(null)" style="padding:8px 16px;background:var(--accent);color:#fff;border:0;border-radius:10px;cursor:pointer;font-weight:600;font-size:13px">+ 등록</button>';
+  html+='<button onclick="closeAdminPanel()" style="padding:8px 14px;border:1px solid rgba(0,0,0,0.08);border-radius:10px;background:#fff;cursor:pointer;font-size:13px">닫기</button></div>';
+  html+='<table class="adm-tbl"><thead><tr><th>NO</th><th>구분</th><th>풀네임</th><th>줄임말</th><th>판매</th><th>진행</th><th>담당</th><th>장소</th><th></th></tr></thead><tbody>';
+  programs.forEach(p=>{
+    html+='<tr>';
+    html+='<td>'+escapeHtml(p['NO']||'')+'</td>';
+    html+='<td>'+escapeHtml(p['콘텐츠구분']||'')+'</td>';
+    html+='<td style="font-weight:600">'+escapeHtml(p['풀네임']||'')+'</td>';
+    html+='<td style="color:#888">'+escapeHtml(p['줄임말']||'')+'</td>';
+    html+='<td style="font-size:11px;white-space:nowrap">'+excelDateDisplay(p['판매시작일'])+'<br>'+excelDateDisplay(p['판매종료일'])+'</td>';
+    html+='<td style="font-size:11px;white-space:nowrap">'+excelDateDisplay(p['시작일'])+'<br>'+excelDateDisplay(p['종료일'])+'</td>';
+    html+='<td>'+escapeHtml(p['담당자']||'')+'</td>';
+    html+='<td>'+escapeHtml(p['장소']||'')+'</td>';
+    html+='<td style="text-align:right;white-space:nowrap">';
+    html+='<button class="adm-btn" onclick="openProgramForm('+p._rowIndex+')">수정</button>';
+    html+='<button class="adm-btn adm-btn-del" onclick="deleteProgram('+p._rowIndex+')">삭제</button>';
+    html+='</td></tr>';
+  });
+  html+='</tbody></table>';
+  return html;
+}
+
+function openProgramForm(rowIndex){
+  const existing=rowIndex?_programsCache.find(p=>p._rowIndex===rowIndex):null;
+  const nextNo=Math.max(0,..._programsCache.map(p=>Number(p['NO'])||0))+1;
+  const v={
+    NO:existing?existing['NO']:nextNo,
+    구분:existing?existing['콘텐츠구분']:(CONTENT_TYPES[0]||'공연'),
+    풀네임:existing?existing['풀네임']:'',
+    줄임말:existing?existing['줄임말']:'',
+    판매시작:existing?excelDateInputValue(existing['판매시작일']):'',
+    판매종료:existing?excelDateInputValue(existing['판매종료일']):'',
+    시작:existing?excelDateInputValue(existing['시작일']):'',
+    종료:existing?excelDateInputValue(existing['종료일']):'',
+    담당자:existing?existing['담당자']:'',
+    장소:existing?existing['장소']:'대극장'
+  };
+  let html='<div style="display:flex;align-items:center;margin-bottom:16px;gap:8px"><h3 style="margin:0;flex:1">'+(existing?'프로그램 수정':'프로그램 등록')+'</h3><button onclick="renderProgramList()" style="padding:6px 12px;border:1px solid rgba(0,0,0,0.08);border-radius:8px;background:#fff;cursor:pointer;font-size:12px">← 목록</button></div>';
+  html+='<form id="prog-form" onsubmit="event.preventDefault();saveProgram('+(rowIndex||'null')+')" style="display:grid;grid-template-columns:1fr 1fr;gap:14px">';
+  html+='<div><label>NO</label><input name="NO" type="number" value="'+v.NO+'" readonly></div>';
+  html+='<div><label>콘텐츠구분<span class="req">*</span></label><select name="콘텐츠구분" required>'+CONTENT_TYPES.map(t=>'<option value="'+escapeHtml(t)+'" '+(t===v.구분?'selected':'')+'>'+escapeHtml(t)+'</option>').join('')+'</select></div>';
+  html+='<div style="grid-column:span 2"><label>풀네임<span class="req">*</span></label><input name="풀네임" type="text" value="'+escapeHtml(v.풀네임)+'" required></div>';
+  html+='<div style="grid-column:span 2"><label>줄임말<span class="req">*</span></label><input name="줄임말" type="text" value="'+escapeHtml(v.줄임말)+'" required></div>';
+  html+='<div><label>판매시작일</label><input name="판매시작일" type="date" value="'+v.판매시작+'"></div>';
+  html+='<div><label>판매종료일</label><input name="판매종료일" type="date" value="'+v.판매종료+'"></div>';
+  html+='<div><label>시작일<span class="req">*</span></label><input name="시작일" type="date" value="'+v.시작+'" required></div>';
+  html+='<div><label>종료일<span class="req">*</span></label><input name="종료일" type="date" value="'+v.종료+'" required></div>';
+  html+='<div><label>담당자</label><select name="담당자"><option value="">(선택 안 함)</option>'+MANAGERS.map(m=>'<option value="'+escapeHtml(m['담당자'])+'" '+(m['담당자']===v.담당자?'selected':'')+'>'+escapeHtml(m['담당자'])+(m['담당부서']?' ('+escapeHtml(m['담당부서'])+')':'')+'</option>').join('')+'</select></div>';
+  html+='<div><label>장소</label><input name="장소" type="text" value="'+escapeHtml(v.장소)+'"></div>';
+  html+='<div style="grid-column:span 2;display:flex;justify-content:flex-end;gap:8px;margin-top:8px">';
+  html+='<button type="button" onclick="renderProgramList()" style="padding:10px 18px;border:1px solid rgba(0,0,0,0.08);border-radius:10px;background:#fff;cursor:pointer">취소</button>';
+  html+='<button type="submit" style="padding:10px 22px;background:var(--accent);color:#fff;border:0;border-radius:10px;cursor:pointer;font-weight:600">저장</button>';
+  html+='</div></form>';
+  document.getElementById('prog-admin-body').innerHTML=html;
+}
+
+async function saveProgram(rowIndex){
+  const form=document.getElementById('prog-form');
+  if(!form)return;
+  const fd=new FormData(form);
+  const values=[
+    Number(fd.get('NO'))||'',
+    fd.get('콘텐츠구분')||'',
+    fd.get('풀네임')||'',
+    fd.get('줄임말')||'',
+    isoToExcelSerial(fd.get('판매시작일')),
+    isoToExcelSerial(fd.get('판매종료일')),
+    isoToExcelSerial(fd.get('시작일')),
+    isoToExcelSerial(fd.get('종료일')),
+    fd.get('담당자')||'',
+    fd.get('장소')||''
+  ];
+  try{
+    if(rowIndex){
+      await api('PATCH','/api/sheet/program/'+rowIndex,{values});
+    }else{
+      await api('POST','/api/sheet/program',{values});
+    }
+    await loadPrograms();
+    updatePerfOpen();
+    renderCal();
+    await renderProgramList();
+  }catch(e){
+    alert('저장 실패: '+e.message);
+  }
+}
+
+async function deleteProgram(rowIndex){
+  const p=_programsCache.find(pp=>pp._rowIndex===rowIndex);
+  if(!p)return;
+  if(!confirm('정말 삭제하시겠습니까?\n\n['+(p['풀네임']||'')+']'))return;
+  try{
+    await api('DELETE','/api/sheet/program/'+rowIndex);
+    await loadPrograms();
+    updatePerfOpen();
+    renderCal();
+    await renderProgramList();
+  }catch(e){
+    alert('삭제 실패: '+e.message);
+  }
+}
 
 function startClock(){function tick(){const n=new Date();document.getElementById('kst').textContent=`${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}:${String(n.getSeconds()).padStart(2,'0')} KST`;}tick();setInterval(tick,1000);}
 
