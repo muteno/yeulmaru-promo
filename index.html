@@ -389,14 +389,14 @@ if(!perfs||!perfs.length)return'';
 var cperfs=perfs.filter(function(p){return p.t!=='e';});
 if(!cperfs.length)return'';
 var out='';
-for(var i=0;i<cperfs.length;i++){var perf=cperfs[i],fn=perf.f||perf.n,sn=perf.n,dd=perf.dday,lb=perf.t==='e'?'전':'공';
+for(var i=0;i<cperfs.length;i++){var perf=cperfs[i],fn=perf.f||perf.n,sn=perf.n,dd=perf.dday,lb=perf.t==='e'?'전':perf.t==='a'?'교':perf.t==='r'?'대':'공';
 var nameHtml='<span class="pf">'+fn+'</span><span class="ps">'+sn+'</span>';
 if(past)out+='<span style="display:inline-flex;align-items:center;margin-left:6px"><span style="display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;border-radius:50%;font-size:8px;background:rgba(0,0,0,0.05);color:rgba(0,0,0,0.22);flex-shrink:0">'+lb+'</span><span style="margin-left:4px;font-size:9px;color:rgba(0,0,0,0.18)">'+nameHtml+'</span></span>';
 else if(td)out+='<span style="display:inline-flex;align-items:center;margin-left:6px"><span style="display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;border-radius:50%;font-size:8px;font-weight:600;background:rgba(255,255,255,0.85);color:#111;flex-shrink:0">'+lb+'</span><span style="margin-left:5px;font-size:9px;font-weight:700;color:#111">'+nameHtml+'</span></span>';
 else out+='<span style="display:inline-flex;align-items:center;margin-left:6px"><span style="display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;border-radius:50%;font-size:8px;font-weight:600;background:var(--accent);color:#fff;flex-shrink:0">'+lb+'</span><span style="margin-left:5px;font-size:9px;font-weight:700;color:var(--text)">'+nameHtml+'</span>'+(dd!==null&&dd!==0?'<span style="margin-left:8px;font-size:9px;color:var(--dim);white-space:nowrap">'+getDdayText(dd)+'</span>':'')+'</span>';
 }return out;
 }
-let password='',records=[],currentYear=new Date().getFullYear(),currentMonth=new Date().getMonth()+1;
+let password='',userRole='user',records=[],currentYear=new Date().getFullYear(),currentMonth=new Date().getMonth()+1;
 let selected=null,editing=null,panelOpen=false,activeFilters=[],activePrograms=[];
 
 // PIN
@@ -414,11 +414,11 @@ async function tryLogin(){
   try{
     const r=await fetch(`${API}/api/auth`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pin})});
     const d=await r.json();
-    if(d.ok){password=pin;sessionStorage.setItem('pw',pin);document.getElementById('login').style.display='none';document.getElementById('app').style.display='';initApp();}
+    if(d.ok){password=pin;userRole=d.role||'user';sessionStorage.setItem('pw',pin);sessionStorage.setItem('role',userRole);document.getElementById('login').style.display='none';document.getElementById('app').style.display='';initApp();}
     else{document.getElementById('login-load').textContent='';document.getElementById('login-msg').textContent='비밀번호가 틀립니다';pins.forEach(p=>{p.value='';p.classList.add('err')});pins[0].focus();}
   }catch(e){document.getElementById('login-load').textContent='';document.getElementById('login-msg').textContent='서버 연결 실패';}
 }
-(function(){const s=sessionStorage.getItem('pw');if(s){password=s;document.getElementById('login').style.display='none';document.getElementById('app').style.display='';initApp();}})();
+(function(){const s=sessionStorage.getItem('pw');if(s){password=s;userRole=sessionStorage.getItem('role')||'user';document.getElementById('login').style.display='none';document.getElementById('app').style.display='';initApp();}})();
 
 async function api(method,path,body){
   const o={method,headers:{'Content-Type':'application/json','X-App-Password':password}};
@@ -435,12 +435,13 @@ function excelSerialToISO(serial){
 }
 // SharePoint 프로그램 시트 row → PERFS 객체
 function programToPerf(p){
+  var typeMap={'공연':'c','전시':'e','예술교육':'a','대관':'r','기타':'c'};
   return {
     s:excelSerialToISO(p['시작일']),
     e:excelSerialToISO(p['종료일']),
     n:p['줄임말']||'',
     f:p['풀네임']||'',
-    t:p['콘텐츠구분']==='전시'?'e':'c',
+    t:typeMap[p['콘텐츠구분']]||'c',
     o:1,
     ss:excelSerialToISO(p['판매시작일']),
     se:excelSerialToISO(p['판매종료일']),
@@ -467,10 +468,12 @@ async function initApp(){buildNav();startClock();await loadPrograms();updatePerf
 function buildNav(){
   const c=document.getElementById('nav-menus');c.innerHTML='';
   const pill=document.createElement('div');pill.className='nav-pill';c.appendChild(pill);
-  MENUS.forEach(m=>{
-    const b=document.createElement('button');b.className='nav-btn'+(m.id==='cal'?' on':'');b.textContent=m.label;
+  const menus=userRole==='admin'?[...MENUS,{label:'관리',id:'admin'}]:MENUS;
+  menus.forEach(m=>{
+    const b=document.createElement('button');b.className='nav-btn'+(m.id==='cal'?' on':'')+(m.id==='admin'?' nav-admin':'');b.textContent=m.label;
     b.onclick=()=>{
       if(m.id==='annual'){window.open('https://yeulmaru.github.io/yeulmaru-calandar-2026/','_blank');return;}
+      if(m.id==='admin'){openAdminPanel();return;}
       document.querySelectorAll('.nav-btn').forEach(x=>x.classList.remove('on'));b.classList.add('on');movePill(b,pill);
     };
     b.onmouseenter=()=>movePill(b,pill);
@@ -480,6 +483,26 @@ function buildNav(){
   document.fonts.ready.then(()=>{const a=c.querySelector('.nav-btn.on');if(a){pill.style.transition='none';movePill(a,pill);requestAnimationFrame(()=>pill.style.transition='');}});
 }
 function movePill(btn,pill){const r=btn.getBoundingClientRect(),p=btn.parentElement.getBoundingClientRect();pill.style.left=(r.left-p.left)+'px';pill.style.width=r.width+'px';}
+
+// 관리자 패널 (Phase 3B~3E에서 각 서브메뉴 구현 예정)
+function openAdminPanel(){
+  const items=[
+    {id:'admins',label:'관리자 관리',desc:'접속 계정 + 로그 조회'},
+    {id:'platform',label:'플랫폼 관리',desc:'플랫폼 시트 CRUD'},
+    {id:'content',label:'콘텐츠 관리',desc:'콘텐츠 시트 CRUD'},
+    {id:'users',label:'사용자 관리',desc:'담당자 + 여부 필터'},
+    {id:'programs',label:'프로그램 관리',desc:'프로그램 등록·수정·삭제'},
+    {id:'schedule',label:'일정 관리',desc:'리스트뷰 (월별/시간별)'}
+  ];
+  const html='<div class="modal" style="display:flex"><div class="modal-card" style="max-width:480px"><h3 style="margin:0 0 16px">관리자 패널</h3><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+items.map(it=>'<button class="admin-item" data-id="'+it.id+'" style="text-align:left;padding:14px;border:1px solid rgba(0,0,0,0.08);border-radius:12px;background:#fff;cursor:pointer"><div style="font-weight:700;font-size:14px;margin-bottom:4px">'+it.label+'</div><div style="font-size:11px;color:#888">'+it.desc+'</div></button>').join('')+'</div><div style="margin-top:16px;text-align:right"><button onclick="closeAdminPanel()" style="padding:8px 16px;border:1px solid rgba(0,0,0,0.08);border-radius:10px;background:#fff;cursor:pointer">닫기</button></div></div></div>';
+  let el=document.getElementById('admin-panel');
+  if(!el){el=document.createElement('div');el.id='admin-panel';document.body.appendChild(el);}
+  el.innerHTML=html;
+  el.querySelectorAll('.admin-item').forEach(btn=>{
+    btn.onclick=()=>{alert('['+btn.dataset.id+'] Phase 3B부터 순차 구현 예정');};
+  });
+}
+function closeAdminPanel(){const el=document.getElementById('admin-panel');if(el)el.innerHTML='';}
 
 function startClock(){function tick(){const n=new Date();document.getElementById('kst').textContent=`${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}:${String(n.getSeconds()).padStart(2,'0')} KST`;}tick();setInterval(tick,1000);}
 
