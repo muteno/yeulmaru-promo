@@ -1761,7 +1761,7 @@ function renderCal(){
         var platCol=done?'#bbb':past?'var(--past-text)':td?col:col;
         var titleCol=done?'#bbb':past?'var(--past-text)':'var(--text)';
         var deco=done?'text-decoration:line-through;':'';
-        h+='<div class="ev'+(td&&evPast?' ev-past':'')+'" draggable="true" onclick="event.stopPropagation();editRec('+(r._rowIndex)+',\''+key+'\',event)" ondragstart="onEvDragStart(event,'+(r._rowIndex)+',\''+key+'\')" ondragend="onEvDragEnd(event)" style="cursor:pointer;'+deco+'opacity:'+(done?'0.6':evPast?'0.5':'1')+'"><span class="ev-time" style="color:'+timeCol+';font-weight:600">'+hhmm+'</span><span class="ev-plat" style="color:'+platCol+';font-weight:600" title="'+(p2&&p2!=='-'?p2:p)+'">'+platDisplay(p,p2)+'</span><span class="ev-title" style="color:'+titleCol+'">'+title+'</span></div>';
+        h+='<div class="ev'+(td&&evPast?' ev-past':'')+'" '+(userRole==='admin'?'draggable="true" ondragstart="onEvDragStart(event,'+(r._rowIndex)+',\''+key+'\')" ondragend="onEvDragEnd(event)"':'')+' onclick="event.stopPropagation();editRec('+(r._rowIndex)+',\''+key+'\',event)" style="cursor:'+(userRole==='admin'?'grab':'pointer')+';'+deco+'opacity:'+(done?'0.6':evPast?'0.5':'1')+'"><span class="ev-time" style="color:'+timeCol+';font-weight:600">'+hhmm+'</span><span class="ev-plat" style="color:'+platCol+';font-weight:600" title="'+(p2&&p2!=='-'?p2:p)+'">'+platDisplay(p,p2)+'</span><span class="ev-title" style="color:'+titleCol+'">'+title+'</span></div>';
       });
       h+='</div>';
       h+=renderExhibitBadge(d,nm,past);
@@ -1818,8 +1818,9 @@ function openPanel(dateObj,recs){
   if(hasSchedule)h+='<div style="border-top:1px solid var(--border);margin:12px 0;"></div>';
   // 콘텐츠 섹션
   if(recs.length===0){h+='<div class="panel-empty"><div style="font-size:32px;margin-bottom:8px">📭</div><div>등록된 콘텐츠가 없습니다</div></div>';}
-  else{recs.forEach(function(r){var p1=r['플랫폼 1']||'',p2=r['플랫폼 2']||'',col=platColor(p1),title=r['콘텐츠 제목']||'',cat=r['콘텐츠 구분']||'',st=r['진행 상태']||'',ri=r._rowIndex;var dkey=dk(dateObj);h+='<div class="p-card" onclick="editRec('+ri+',\''+dkey+'\',event)"><div class="p-card-head"><span class="p-tag" style="color:'+col+';border:1.5px solid '+col+'" title="'+(p2&&p2!=='-'?p2:p1)+'">'+platDisplay(p1,p2)+'</span><button class="p-del" onclick="event.stopPropagation();deleteRec('+ri+',\''+dkey+'\')" title="삭제">✕</button></div><div class="p-title">'+title+'</div><div class="p-meta">'+(cat?'<span class="meta-chip">'+cat+'</span>':'')+(st?'<span class="meta-chip">'+st+'</span>':'')+'</div></div>';});}
-  h+='<button class="add-btn" onclick="openModal(\''+dk(dateObj)+'\')">+ 새 콘텐츠 등록</button></div>';
+  else{recs.forEach(function(r){var p1=r['플랫폼 1']||'',p2=r['플랫폼 2']||'',col=platColor(p1),title=r['콘텐츠 제목']||'',cat=r['콘텐츠 구분']||'',st=r['진행 상태']||'',ri=r._rowIndex;var dkey=dk(dateObj);h+='<div class="p-card" onclick="editRec('+ri+',\''+dkey+'\',event)"><div class="p-card-head"><span class="p-tag" style="color:'+col+';border:1.5px solid '+col+'" title="'+(p2&&p2!=='-'?p2:p1)+'">'+platDisplay(p1,p2)+'</span>'+(userRole==='admin'?'<button class="p-del" onclick="event.stopPropagation();deleteRec('+ri+',\''+dkey+'\')" title="삭제">✕</button>':'')+'</div><div class="p-title">'+title+'</div><div class="p-meta">'+(cat?'<span class="meta-chip">'+cat+'</span>':'')+(st?'<span class="meta-chip">'+st+'</span>':'')+'</div></div>';});}
+  if(userRole==='admin')h+='<button class="add-btn" onclick="openModal(\''+dk(dateObj)+'\')">+ 새 콘텐츠 등록</button>';
+  h+='</div>';
   p.innerHTML=h;p.style.display='flex';
 }
 function closePanel(){panelOpen=false;selected=null;document.getElementById('panel').style.display='none';document.getElementById('main-area').style.marginRight='0';render();}
@@ -1936,6 +1937,7 @@ function closeModal(){
 }
 
 function editRec(rowIndex,dateKey,ev){
+  if(userRole!=='admin'){showToast('관리자만 수정 가능','error');return;}
   if(ev&&ev.target&&ev.target.closest('.p-del'))return;
   var rec=records.find(function(r){return r._rowIndex===rowIndex;});
   if(!rec)return;
@@ -2070,6 +2072,7 @@ async function delEntry(){
 }
 
 async function deleteRec(rowIndex,dateKey){
+  if(userRole!=='admin'){showToast('관리자만 삭제 가능','error');return;}
   const ok=await showConfirm('정말로 삭제하시겠습니까?');
   if(!ok)return;
   showOverlayLoad();
@@ -2104,6 +2107,7 @@ function onCellDragLeave(ev){
   if(!ev.currentTarget.contains(ev.relatedTarget))ev.currentTarget.classList.remove('drag-over');
 }
 async function onCellDrop(ev,toKey){
+  if(userRole!=='admin')return;
   ev.preventDefault();
   ev.currentTarget.classList.remove('drag-over');
   if(!_drag)return;
