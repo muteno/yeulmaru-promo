@@ -224,8 +224,22 @@ button{font-family:inherit;cursor:pointer}
 .modal textarea{resize:vertical;min-height:60px;line-height:1.5}
 .modal input[readonly],.modal textarea[readonly],.modal select:disabled{background:#EEE;cursor:not-allowed;color:#666;border-color:rgba(0,0,0,0.04)}
 .modal input[readonly]:focus,.modal textarea[readonly]:focus,.modal select:disabled:focus{border-color:rgba(0,0,0,0.04);box-shadow:none;background:#EEE}
-.modal-x{position:sticky;top:0;float:right;margin:-8px -8px 0 0;width:32px;height:32px;border-radius:50%;border:0;background:rgba(0,0,0,0.05);cursor:pointer;font-size:13px;color:#666;display:flex;align-items:center;justify-content:center;z-index:10;transition:background .15s,color .15s;line-height:1}
-.modal-x:hover{background:rgba(0,0,0,0.1);color:#000}
+.modal-x{position:sticky;top:0;float:right;margin:-8px -8px 0 0;width:32px;height:32px;border-radius:50%;border:0;background:rgba(74,77,231,0.08);cursor:pointer;font-size:13px;color:var(--accent);display:flex;align-items:center;justify-content:center;z-index:10;transition:background .15s,color .15s;line-height:1}
+.modal-x:hover{background:rgba(74,77,231,0.18);color:var(--accent)}
+/* === read-only view (user) === */
+.mv-date1{font-size:14px;color:#333;font-weight:600;margin-bottom:18px}
+.mv-section{display:flex;align-items:center;gap:6px;color:var(--accent);font-size:13px;font-weight:700;margin:18px 0 8px;letter-spacing:0.3px}
+.mv-section:first-of-type{margin-top:6px}
+.mv-row{display:flex;gap:8px;font-size:13px;color:#333;margin:6px 0;line-height:1.5}
+.mv-row .lbl{color:#888;font-size:12px;min-width:64px;flex-shrink:0}
+.mv-row .val{flex:1;font-weight:500;word-break:break-all}
+.mv-row .val.muted{color:#aaa;font-weight:400;font-style:italic}
+.mv-platrow{font-size:13px;color:#555;font-weight:500;margin:6px 0}
+.mv-title{font-size:15px;color:#222;font-weight:700;margin:6px 0 4px;line-height:1.4}
+.mv-title .fmt{color:#888;font-size:12px;font-weight:500;margin-left:6px}
+.mv-content{font-size:13px;color:#444;line-height:1.55;background:#fafafa;border-radius:8px;padding:10px 12px;max-height:54px;overflow-y:auto;white-space:pre-wrap;margin-top:6px}
+.mv-content.empty{color:#aaa;font-style:italic}
+.mv-cat{display:inline-block;padding:3px 10px;border-radius:8px;background:rgba(74,77,231,0.1);color:var(--accent);font-size:11px;font-weight:600;margin:4px 0}
 .modal input:not([type="checkbox"]):not([type="radio"]):focus,.modal select:focus,.modal textarea:focus{border-color:var(--accent);box-shadow:0 0 0 4px var(--accent-glow);background:#fff}
 .modal input.field-attention:not([type="checkbox"]):not([type="radio"]),.modal select.field-attention,.modal textarea.field-attention{border-color:var(--accent)!important;box-shadow:0 0 0 3px rgba(74,77,231,0.18),0 0 14px rgba(74,77,231,0.15)!important;background:#fff!important;animation:fa-pulse 1.4s ease-out 2}
 @keyframes fa-pulse{0%{box-shadow:0 0 0 6px rgba(74,77,231,0.3),0 0 18px rgba(74,77,231,0.25)}100%{box-shadow:0 0 0 3px rgba(74,77,231,0.18),0 0 14px rgba(74,77,231,0.15)}}
@@ -298,6 +312,7 @@ button{font-family:inherit;cursor:pointer}
     <button class="modal-x" onclick="closeModal()" title="닫기" aria-label="닫기">✕</button>
     <h3 id="m-title"></h3>
     <div class="meta" id="m-meta"></div>
+    <div id="modal-form">
     <label>날짜</label>
     <input type="date" id="f-date" onchange="onDateChange()">
     <label>시간</label>
@@ -330,6 +345,8 @@ button{font-family:inherit;cursor:pointer}
       <button class="m-btn cancel" onclick="closeModal()">취소</button>
       <button class="m-btn save" onclick="saveEntry()">저장</button>
     </div>
+    </div>
+    <div id="modal-view" style="display:none"></div>
   </div>
 </div>
 
@@ -1981,7 +1998,14 @@ function openModal(dateKey,rec){
   const[y,m,d]=dateKey.split('-').map(Number),dateObj=new Date(y,m-1,d),dn=DAY_NAMES[dateObj.getDay()];
   editing={dateKey,existing:rec||null};
   const isReadOnly=userRole!=='admin';
-  document.getElementById('m-title').textContent=isReadOnly?'콘텐츠 조회':(rec?'콘텐츠 수정':'새 콘텐츠 등록');
+  if(isReadOnly&&rec){
+    renderReadOnlyView(dateKey,rec,dateObj,dn);
+    document.getElementById('modal').classList.add('show');
+    return;
+  }
+  document.getElementById('modal-form').style.display='';
+  document.getElementById('modal-view').style.display='none';
+  document.getElementById('m-title').textContent=rec?'콘텐츠 수정':'새 콘텐츠 등록';
   document.getElementById('m-meta').textContent=`${m}월 ${d}일 (${dn}요일)`;
   document.getElementById('f-date').value=dateKey;
   document.getElementById('f-time').value='10:00';
@@ -1996,18 +2020,67 @@ function openModal(dateKey,rec){
   document.getElementById('f-status').value=STATUSES[0]||'';
   document.getElementById('f-memo').value='';
   onPlatChange();
-  if(rec){fillModalFields(rec);document.getElementById('btn-del').style.display=isReadOnly?'none':'inline-block';}
+  if(rec){fillModalFields(rec);document.getElementById('btn-del').style.display='inline-block';}
   else{document.getElementById('btn-del').style.display='none';}
-  applyModalPermission(isReadOnly);
   document.getElementById('modal').classList.add('show');
-  if(!isReadOnly)setTimeout(()=>document.getElementById('f-title').focus(),100);
+  setTimeout(()=>document.getElementById('f-title').focus(),100);
+}
+function renderReadOnlyView(dateKey,rec,dateObj,dn){
+  // 시간 추출
+  const ts=rec['입력시간(KST)'];
+  let timeStr='';
+  if(typeof ts==='string'&&ts.indexOf(' ')>-1){
+    const hhmm=ts.split(' ')[1].substr(0,5);
+    const[hh,mm]=hhmm.split(':').map(Number);
+    const ampm=hh<12?'오전':'오후';
+    const h12=hh%12||12;
+    timeStr=`${ampm} ${String(h12).padStart(2,'0')}:${String(mm).padStart(2,'0')}`;
+  }else if(typeof ts==='number'){
+    const tm=Math.round((ts%1)*1440),hh=Math.floor(tm/60),mm=tm%60;
+    const ampm=hh<12?'오전':'오후';
+    const h12=hh%12||12;
+    timeStr=`${ampm} ${String(h12).padStart(2,'0')}:${String(mm).padStart(2,'0')}`;
+  }
+  const dateFull=`${rec['연도']}-${String(rec['월']||'').padStart(2,'0')}-${String(rec['일']||'').padStart(2,'0')} (${dn}요일)`;
+  const dateTimeFull=`${rec['연도']}-${String(rec['월']||'').padStart(2,'0')}-${String(rec['일']||'').padStart(2,'0')} ${timeStr}`;
+  const status=rec['진행 상태']||'-';
+  const memo=rec['비고']||'';
+  const p1=rec['플랫폼 1']||'';
+  const p2=rec['플랫폼 2']||'';
+  const prog=rec['프로그램']||'';
+  const cat=rec['콘텐츠 구분']||'';
+  const title=rec['콘텐츠 제목']||'';
+  const fmt=rec['콘텐츠 형식']||'';
+  const content=rec['콘텐츠 내용']||'';
+  const dept=rec['담당 부서']||'';
+  const author=rec['게시 담당자']||'';
+  
+  document.getElementById('m-title').textContent='콘텐츠 조회';
+  document.getElementById('m-meta').innerHTML='<div class="mv-date1">'+dateFull+'</div>';
+  
+  let html='';
+  html+='<div class="mv-section">📍 게시 현황</div>';
+  html+='<div class="mv-row"><span class="lbl">일시</span><span class="val">'+escapeHtml(dateTimeFull)+'</span></div>';
+  html+='<div class="mv-row"><span class="lbl">진행 상태</span><span class="val">'+escapeHtml(status)+'</span></div>';
+  html+='<div class="mv-row"><span class="lbl">비고</span><span class="val'+(memo?'':' muted')+'">'+(memo?escapeHtml(memo):'내용 없음')+'</span></div>';
+  
+  html+='<div class="mv-section">📍 게시 내용</div>';
+  html+='<div class="mv-platrow">'+escapeHtml(p1)+(p2&&p2!=='-'?'  ·  '+escapeHtml(p2):'')+'</div>';
+  if(prog)html+='<div class="mv-platrow" style="color:#888">'+escapeHtml(prog)+'</div>';
+  if(cat)html+='<div><span class="mv-cat">'+escapeHtml(cat)+'</span></div>';
+  html+='<div class="mv-title">'+escapeHtml(title)+(fmt?'<span class="fmt">('+escapeHtml(fmt)+')</span>':'')+'</div>';
+  html+='<div class="mv-content'+(content?'':' empty')+'">'+(content?escapeHtml(content):'내용 없음')+'</div>';
+  
+  html+='<div class="mv-section">📍 게시자</div>';
+  html+='<div class="mv-row"><span class="lbl">담당 부서</span><span class="val">'+escapeHtml(dept||'-')+'</span></div>';
+  html+='<div class="mv-row"><span class="lbl">담당자</span><span class="val">'+escapeHtml(author||'-')+'</span></div>';
+  
+  document.getElementById('modal-form').style.display='none';
+  document.getElementById('modal-view').style.display='';
+  document.getElementById('modal-view').innerHTML=html;
 }
 function applyModalPermission(isReadOnly){
-  const modal=document.getElementById('modal');
-  modal.querySelectorAll('input, textarea').forEach(function(el){el.readOnly=isReadOnly;});
-  modal.querySelectorAll('select').forEach(function(el){el.disabled=isReadOnly;});
-  const acts=modal.querySelector('.modal-acts');
-  if(acts)acts.style.display=isReadOnly?'none':'';
+  // 더 이상 사용 X — openModal에서 분기 처리
 }
 
 // f-date 변경 시 m-meta 텍스트 자동 업데이트
