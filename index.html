@@ -60,6 +60,19 @@ button{font-family:inherit;cursor:pointer}
 @keyframes role-shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-10px)}40%,80%{transform:translateX(10px)}}
 @keyframes pw-shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-5px)}40%,80%{transform:translateX(5px)}}
 .pw-shake{animation:pw-shake 0.4s ease}
+.pw-age-row .pw-age-track{position:absolute;left:0;right:0;top:50%;height:4px;background:#E0DEEC;border-radius:2px;transform:translateY(-50%);pointer-events:none}
+.pw-age-row input[type=range]{-webkit-appearance:none;appearance:none;background:transparent;pointer-events:none;height:24px;margin:0}
+.pw-age-row input[type=range]:focus{outline:none}
+.pw-age-row input[type=range]::-webkit-slider-runnable-track{background:transparent;height:4px;border:none}
+.pw-age-row input[type=range]::-moz-range-track{background:transparent;height:4px;border:none}
+.pw-age-row input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:18px;height:18px;border-radius:50%;background:var(--accent);cursor:grab;border:2px solid #fff;box-shadow:0 2px 6px rgba(74,77,231,0.35);pointer-events:auto;margin-top:-7px}
+.pw-age-row input[type=range]::-webkit-slider-thumb:active{cursor:grabbing;transform:scale(1.1)}
+.pw-age-row input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--accent);cursor:grab;border:2px solid #fff;box-shadow:0 2px 6px rgba(74,77,231,0.35);pointer-events:auto}
+.pw-age-row.disabled{opacity:0.5;pointer-events:none}
+.pw-sms-stack textarea{font-family:inherit;line-height:1.6;font-size:13px;outline:none;box-sizing:border-box;width:100%;padding:10px 14px;background:transparent;border:none;resize:none}
+.pw-sms-stack textarea:focus{outline:none}
+.pw-sms-stack textarea[readonly]{color:#666;cursor:default;background:#F0EEFA}
+.pw-sms-stack textarea.pw-sms-content{background:#fff;resize:vertical;min-height:120px;color:#222}
 .role-shake{animation:role-shake .42s ease-in-out}
 .adm-tbl{width:100%;border-collapse:collapse;font-size:12px}
 .adm-tbl thead th{background:#f5f5f7;padding:10px 8px;text-align:left;font-weight:700;border-bottom:1px solid #ddd;font-size:11px;color:#666;text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap}
@@ -1149,12 +1162,15 @@ function openPromoWizard(){
     b2bIntraText:'',            // B2B 인트라넷 텍스트 (틀 포함)
     b2bLink:'',                 // B2B 구매 링크 / 홈페이지 링크
     smsTarget:'',               // 'all'(마케팅 수신) | 'target'(프로그램 대상 타겟)
-    smsBody:'',                 // 문자 본문
+    smsBody:'',                 // 문자 본문 (사용자 작성 부분만; 헤더/푸터는 합성)
     smsCustom:'',               // 문자 기타 자유 입력
-    ageRanges:[{min:20,max:39}],// 연령대 범위 (멀티)
+    ageRanges:[{min:30,max:50}],// 연령대 범위 (멀티, 20~70)
+    ageAny:false,               // 연령대 무관
     residence:'',               // 거주지
     residenceCustom:'',         // 거주지 기타
+    residenceAny:false,         // 거주지 무관
     genre:'',                   // 관심 장르
+    genreAny:false,             // 관심 장르 무관
     applicant:'',               // 게시자
     memo:''                     // 추가 요청 (비고)
   };
@@ -1310,7 +1326,7 @@ function onPwProgSelect(sel){
     _pwData.plat1='문자';
     _pwData.plat2='마케팅 수신 회원';
     _pwData.format='텍스트';
-    _pwData.smsBody=getSmsTemplate();
+    _pwData.smsBody='';  // 본문은 비워둠 (헤더/푸터는 저장 시 자동 합성)
     _pwData.applicant='상관 없음';
     return;
   }
@@ -1841,41 +1857,64 @@ function renderPwSubB2BLink(body,next){
 // === Step 4 — 문자 타겟 (연령대 + 거주지 + 관심장르) ===
 function renderPwSubSmsTarget(body,next){
   let html='<div class="pw-question">어떤 타겟에게 보내기를 희망하나요?</div>';
-  html+='<div class="pw-hint">※ 최근 관람 횟수 등은 담당자가 효율을 고려하여 설정합니다 🙇</div>';
-  // Q1 연령대 (멀티 range)
-  html+='<label style="display:block;font-size:11px;color:#888;margin:18px 0 6px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Q1. 연령대</label>';
-  html+='<div id="pw-age-ranges">';
+  html+='<div class="pw-hint">※ 최근 관람 횟수 등은 담당자가 효율을 고려하여 설정합니다 🙇 · 무관이면 체크</div>';
+  // Q1 연령대 (멀티 range, 20~70)
+  html+='<div style="display:flex;justify-content:space-between;align-items:center;margin:18px 0 6px">';
+  html+='<label style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Q1. 연령대'+(_pwData.ageAny?'':'<span style="color:var(--peach);margin-left:3px">*</span>')+'</label>';
+  html+='<label style="display:flex;align-items:center;gap:5px;font-size:11px;color:#888;cursor:pointer;user-select:none"><input type="checkbox" id="pw-age-any" '+(_pwData.ageAny?'checked':'')+' onchange="onPwAnyToggle(\'age\',this.checked)" style="margin:0;accent-color:var(--accent)">무관</label>';
+  html+='</div>';
+  const ageDis=_pwData.ageAny?' disabled':'';
+  html+='<div id="pw-age-ranges"'+(_pwData.ageAny?' style="opacity:0.45;pointer-events:none"':'')+'>';
   (_pwData.ageRanges||[]).forEach(function(rg,i){
     html+=renderAgeRangeRow(rg,i);
   });
   html+='</div>';
-  html+='<button type="button" onclick="pwAddAgeRange()" style="margin-top:6px;padding:6px 12px;background:#F0F0F8;border:1px dashed rgba(0,0,0,0.15);border-radius:8px;font-size:11px;cursor:pointer;font-family:inherit;color:#555">+ 연령대 추가 (띄엄띄엄)</button>';
+  html+='<button type="button" onclick="pwAddAgeRange()"'+ageDis+' style="margin-top:6px;padding:6px 12px;background:#F0F0F8;border:1px dashed rgba(0,0,0,0.15);border-radius:8px;font-size:11px;cursor:'+(_pwData.ageAny?'not-allowed':'pointer')+';font-family:inherit;color:#555;opacity:'+(_pwData.ageAny?'0.45':'1')+'">+ 개별 연령대 추가</button>';
   // Q2 거주지
-  html+='<label style="display:block;font-size:11px;color:#888;margin:18px 0 4px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Q2. 거주지</label>';
-  html+='<select id="pw-residence" onchange="onPwResidenceChange()" style="width:100%;padding:10px 14px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:12px;font-size:13px;outline:none;box-sizing:border-box;font-family:inherit">';
+  html+='<div style="display:flex;justify-content:space-between;align-items:center;margin:18px 0 4px">';
+  html+='<label style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Q2. 거주지'+(_pwData.residenceAny?'':'<span style="color:var(--peach);margin-left:3px">*</span>')+'</label>';
+  html+='<label style="display:flex;align-items:center;gap:5px;font-size:11px;color:#888;cursor:pointer;user-select:none"><input type="checkbox" id="pw-residence-any" '+(_pwData.residenceAny?'checked':'')+' onchange="onPwAnyToggle(\'residence\',this.checked)" style="margin:0;accent-color:var(--accent)">무관</label>';
+  html+='</div>';
+  const resDis=_pwData.residenceAny?' disabled':'';
+  html+='<select id="pw-residence" onchange="onPwResidenceChange()"'+resDis+' style="width:100%;padding:10px 14px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:12px;font-size:13px;outline:none;box-sizing:border-box;font-family:inherit'+(_pwData.residenceAny?';opacity:0.45':'')+'">';
   html+='<option value="">선택</option>';
   ['여수·순천·광양','전남권역','영·호남권역','기타'].forEach(function(r){
-    html+='<option value="'+r+'"'+(_pwData.residence===r?' selected':'')+'>'+r+'</option>';
+    const label=r==='기타'?'거주지 직접 입력':r;
+    html+='<option value="'+r+'"'+(_pwData.residence===r?' selected':'')+'>'+label+'</option>';
   });
   html+='</select>';
-  const cd=_pwData.residence==='기타'?'':'none';
-  html+='<input id="pw-residence-custom" type="text" value="'+escapeHtml(_pwData.residenceCustom)+'" placeholder="거주지를 직접 입력" style="display:'+cd+';margin-top:8px;width:100%;padding:10px 14px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:12px;font-size:13px;outline:none;box-sizing:border-box;font-family:inherit">';
+  const cd=(_pwData.residence==='기타'&&!_pwData.residenceAny)?'':'none';
+  html+='<input id="pw-residence-custom" type="text" value="'+escapeHtml(_pwData.residenceCustom)+'" placeholder="예: 부산 / 인천 / 서울 등 직접 입력" onkeydown="if(event.key===\'Enter\'){event.preventDefault();const g=document.getElementById(\'pw-genre\');if(g&&!g.disabled)g.focus();}" style="display:'+cd+';margin-top:8px;width:100%;padding:10px 14px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:12px;font-size:13px;outline:none;box-sizing:border-box;font-family:inherit">';
   // Q3 관심 장르
-  html+='<label style="display:block;font-size:11px;color:#888;margin:18px 0 4px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Q3. 관심 장르</label>';
-  html+='<input id="pw-genre" type="text" value="'+escapeHtml(_pwData.genre)+'" placeholder="예: 클래식, 발레, 가족공연" style="width:100%;padding:10px 14px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:12px;font-size:13px;outline:none;box-sizing:border-box;font-family:inherit">';
+  html+='<div style="display:flex;justify-content:space-between;align-items:center;margin:18px 0 4px">';
+  html+='<label style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Q3. 관심 장르'+(_pwData.genreAny?'':'<span style="color:var(--peach);margin-left:3px">*</span>')+'</label>';
+  html+='<label style="display:flex;align-items:center;gap:5px;font-size:11px;color:#888;cursor:pointer;user-select:none"><input type="checkbox" id="pw-genre-any" '+(_pwData.genreAny?'checked':'')+' onchange="onPwAnyToggle(\'genre\',this.checked)" style="margin:0;accent-color:var(--accent)">무관</label>';
+  html+='</div>';
+  const genDis=_pwData.genreAny?' disabled':'';
+  html+='<input id="pw-genre" type="text" value="'+escapeHtml(_pwData.genre)+'"'+genDis+' placeholder="예: 클래식, 발레, 가족공연" style="width:100%;padding:10px 14px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:12px;font-size:13px;outline:none;box-sizing:border-box;font-family:inherit'+(_pwData.genreAny?';opacity:0.45':'')+'">';
   body.innerHTML=html;
   next.textContent='다음';
 }
 
 function renderAgeRangeRow(rg,i){
-  const min=rg.min||10;
-  const max=rg.max||60;
+  const min=Math.max(20,Math.min(70,rg.min||30));
+  const max=Math.max(20,Math.min(70,rg.max||50));
+  // 강조 영역 (min~max 사이) 계산: 20~70 범위 → 0~100%
+  const RANGE_MIN=20, RANGE_MAX=70;
+  const span=RANGE_MAX-RANGE_MIN;
+  const leftPct=((min-RANGE_MIN)/span)*100;
+  const rightPct=((max-RANGE_MIN)/span)*100;
   let h='<div class="pw-age-row" data-idx="'+i+'" style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:10px;margin-bottom:6px">';
   h+='<div style="flex:1">';
-  h+='<div style="display:flex;justify-content:space-between;font-size:11px;color:#666;margin-bottom:4px"><span>'+min+'세</span><span>'+max+'세</span></div>';
-  h+='<div style="position:relative;height:18px">';
-  h+='<input type="range" min="10" max="80" step="5" value="'+min+'" oninput="pwAgeRangeChange('+i+',\'min\',this.value)" style="position:absolute;left:0;right:0;width:100%;pointer-events:auto;background:transparent">';
-  h+='<input type="range" min="10" max="80" step="5" value="'+max+'" oninput="pwAgeRangeChange('+i+',\'max\',this.value)" style="position:absolute;left:0;right:0;width:100%;pointer-events:auto;background:transparent">';
+  h+='<div style="display:flex;justify-content:space-between;font-size:11px;color:#666;margin-bottom:4px"><span class="pw-age-label-min">'+min+'세</span><span class="pw-age-label-max">'+max+'세</span></div>';
+  h+='<div style="position:relative;height:24px">';
+  // 공통 track
+  h+='<div class="pw-age-track"></div>';
+  // 강조 영역 fill (두 thumb 사이)
+  h+='<div class="pw-age-fill" style="position:absolute;top:50%;height:4px;background:var(--accent);border-radius:2px;transform:translateY(-50%);pointer-events:none;left:'+leftPct+'%;right:'+(100-rightPct)+'%"></div>';
+  // 두 input range (thumb만 보임)
+  h+='<input type="range" min="20" max="70" step="5" value="'+min+'" oninput="pwAgeRangeChange('+i+',\'min\',this.value)" style="position:absolute;left:0;right:0;width:100%">';
+  h+='<input type="range" min="20" max="70" step="5" value="'+max+'" oninput="pwAgeRangeChange('+i+',\'max\',this.value)" style="position:absolute;left:0;right:0;width:100%">';
   h+='</div></div>';
   if((_pwData.ageRanges||[]).length>1){
     h+='<button type="button" onclick="pwRemoveAgeRange('+i+')" style="padding:4px 8px;background:#FFE8E8;border:none;border-radius:6px;font-size:11px;cursor:pointer;color:#C04040">삭제</button>';
@@ -1885,55 +1924,100 @@ function renderAgeRangeRow(rg,i){
 }
 
 function pwAddAgeRange(){
+  if(_pwData.ageAny)return;
   collectPwSubStep();
   _pwData.ageRanges=_pwData.ageRanges||[];
-  _pwData.ageRanges.push({min:30,max:49});
+  _pwData.ageRanges.push({min:30,max:50});
   renderPwStep();
 }
 function pwRemoveAgeRange(i){
   collectPwSubStep();
   _pwData.ageRanges.splice(i,1);
-  if(_pwData.ageRanges.length===0)_pwData.ageRanges.push({min:20,max:39});
+  if(_pwData.ageRanges.length===0)_pwData.ageRanges.push({min:30,max:50});
   renderPwStep();
 }
 function pwAgeRangeChange(i,key,val){
   if(!_pwData.ageRanges[i])return;
   const rg=_pwData.ageRanges[i];
-  rg[key]=parseInt(val);
+  const v=Math.max(20,Math.min(70,parseInt(val)));
+  rg[key]=v;
   if(rg.min>rg.max){
     if(key==='min')rg.max=rg.min;
     else rg.min=rg.max;
   }
-  // 라벨만 갱신 (전체 리렌더 X)
   const row=document.querySelector('.pw-age-row[data-idx="'+i+'"]');
   if(row){
-    const spans=row.querySelectorAll('span');
-    if(spans[0])spans[0].textContent=rg.min+'세';
-    if(spans[1])spans[1].textContent=rg.max+'세';
+    const minLbl=row.querySelector('.pw-age-label-min');
+    const maxLbl=row.querySelector('.pw-age-label-max');
+    if(minLbl)minLbl.textContent=rg.min+'세';
+    if(maxLbl)maxLbl.textContent=rg.max+'세';
+    const fill=row.querySelector('.pw-age-fill');
+    if(fill){
+      const span=70-20;
+      const leftPct=((rg.min-20)/span)*100;
+      const rightPct=((rg.max-20)/span)*100;
+      fill.style.left=leftPct+'%';
+      fill.style.right=(100-rightPct)+'%';
+    }
   }
 }
+
+// 무관 토글 (age/residence/genre)
+function onPwAnyToggle(field,checked){
+  collectPwSubStep();
+  if(field==='age')_pwData.ageAny=checked;
+  else if(field==='residence')_pwData.residenceAny=checked;
+  else if(field==='genre')_pwData.genreAny=checked;
+  renderPwStep();
+}
+
 function onPwResidenceChange(){
   const v=document.getElementById('pw-residence').value;
   _pwData.residence=v;
   const ci=document.getElementById('pw-residence-custom');
-  if(ci)ci.style.display=v==='기타'?'':'none';
+  if(ci){
+    ci.style.display=v==='기타'?'':'none';
+    if(v==='기타'){
+      setTimeout(function(){try{ci.focus();}catch(e){}},50);
+    }
+  }
 }
 
-// === Step 4 — 문자 본문 ===
+// === Step 4 — 문자 본문 (3-cell: 헤더 / 내용 / 푸터) ===
 function renderPwSubSmsBody(body,next){
-  const tpl=_pwData.smsBody||getSmsTemplate();
+  const userContent=_pwData.smsBody||'';
+  const header=getSmsHeader();
+  const footer=getSmsFooter();
   let html='<div class="pw-question">문자 본문을 작성해주세요</div>';
-  html+='<div class="pw-hint">'+(_pwData.plat2==='마케팅 수신 회원'?'홈페이지 회원 중 문자 수신에 동의한 회원에게 보내는 문자입니다':'특정 대상에게 보내는 문자입니다')+' · 최대 2,000자</div>';
-  html+='<div style="margin:14px 0 4px;font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">본문<span style="color:var(--peach);margin-left:3px">*</span> <span style="color:#aaa;font-weight:400;text-transform:none;letter-spacing:0">(광고 표시·수신거부 정보 자동 포함 — 그 사이에 본문을 작성해주세요)</span></div>';
-  html+='<textarea id="pw-sms-body" maxlength="2000" rows="14" oninput="pwCharCount(\'pw-sms-body\',\'pw-sms-count\',2000)" style="width:100%;padding:10px 14px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:12px;font-size:13px;outline:none;box-sizing:border-box;resize:vertical;font-family:inherit;line-height:1.6">'+escapeHtml(tpl)+'</textarea>';
-  html+='<div style="display:flex;justify-content:flex-end;margin-top:6px"><span id="pw-sms-count" style="font-size:11px;color:#888">'+tpl.length+' / 2000</span></div>';
+  html+='<div class="pw-hint">'+(_pwData.plat2==='마케팅 수신 회원'?'홈페이지 회원 중 문자 수신에 동의한 회원에게 보내는 문자입니다':'특정 대상에게 보내는 문자입니다')+' · 가운데 셀에 본문을 작성해주세요 (최대 2,000자)</div>';
+  html+='<div style="margin:14px 0 4px;font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">본문<span style="color:var(--peach);margin-left:3px">*</span> <span style="color:#aaa;font-weight:400;text-transform:none;letter-spacing:0">(광고 표시·수신거부 정보 자동 포함 · 가운데만 편집 가능)</span></div>';
+  // 3-cell 컨테이너
+  html+='<div class="pw-sms-stack" style="border:1.5px solid rgba(0,0,0,0.08);border-radius:12px;overflow:hidden">';
+  // 헤더 (read-only)
+  const headerRows=Math.max(1,header.split("\n").length);
+  html+='<textarea readonly tabindex="-1" rows="'+headerRows+'" title="자동 포함 — 편집 불가" style="border-bottom:1px dashed rgba(74,77,231,0.18)">'+escapeHtml(header)+'</textarea>';
+  // 내용 (편집 가능, 강조 배경)
+  html+='<textarea id="pw-sms-body" class="pw-sms-content" maxlength="2000" rows="8" oninput="pwCharCount(\'pw-sms-body\',\'pw-sms-count\',2000)" placeholder="여기에 본문을 작성해주세요…">'+escapeHtml(userContent)+'</textarea>';
+  // 푸터 (read-only)
+  const footerRows=Math.max(1,footer.split("\n").length);
+  html+='<textarea readonly tabindex="-1" rows="'+footerRows+'" title="자동 포함 — 편집 불가" style="border-top:1px dashed rgba(74,77,231,0.18)">'+escapeHtml(footer)+'</textarea>';
+  html+='</div>';
+  html+='<div style="display:flex;justify-content:space-between;margin-top:6px;font-size:11px;color:#888"><span>※ 헤더·푸터는 자동 포함</span><span id="pw-sms-count">'+userContent.length+' / 2000</span></div>';
   body.innerHTML=html;
   next.textContent='다음';
+  setTimeout(function(){const el=document.getElementById('pw-sms-body');if(el)el.focus();},80);
 }
 
-// SMS 광고 표준 양식 (광고 표시 + 수신거부 정보 자동 포함)
+// SMS 광고 표준 양식 — 헤더 / 푸터 분리 (관리자 합성용)
+function getSmsHeader(){
+  return '(광고) GS칼텍스 예울마루';
+}
+function getSmsFooter(){
+  return '- 예울마루 카카오채널 구독: https://pf.kakao.com/_xfnxjxfd\n\n문의 15447669\n무료거부 0801564352';
+}
+// 호환 유지 — 기존 getSmsTemplate 호출처 (현재는 onPwProgSelect isMonthly만)
 function getSmsTemplate(){
-  return '(광고) GS칼텍스 예울마루\n\n\n \n- 예울마루 카카오채널 구독: https://pf.kakao.com/_xfnxjxfd\n\n문의 15447669\n무료거부 0801564352';
+  return getSmsHeader()+'\n\n\n \n'+getSmsFooter();
 }
 
 // === Step 4 — 게시자 ===
@@ -2007,10 +2091,16 @@ function validatePwSubStep(){
   }else if(key==='b2b_link'){
     if(!_pwData.b2bLink){showFieldError('pw-b2b-link','B2B 또는 홈페이지 링크를 입력해주세요');return false;}
   }else if(key==='sms_target'){
-    if(!_pwData.residence){showFieldError('pw-residence','거주지를 선택해주세요');return false;}
-    if(_pwData.residence==='기타'&&!_pwData.residenceCustom){showFieldError('pw-residence-custom','기타 거주지를 입력해주세요');return false;}
-    if(!_pwData.genre){showFieldError('pw-genre','관심 장르를 입력해주세요');return false;}
-    if(!_pwData.ageRanges||_pwData.ageRanges.length===0){showToast('연령대를 선택해주세요','error');return false;}
+    if(!_pwData.residenceAny){
+      if(!_pwData.residence){showFieldError('pw-residence','거주지를 선택해주세요');return false;}
+      if(_pwData.residence==='기타'&&!_pwData.residenceCustom){showFieldError('pw-residence-custom','거주지를 직접 입력해주세요');return false;}
+    }
+    if(!_pwData.genreAny){
+      if(!_pwData.genre){showFieldError('pw-genre','관심 장르를 입력해주세요');return false;}
+    }
+    if(!_pwData.ageAny){
+      if(!_pwData.ageRanges||_pwData.ageRanges.length===0){showToast('연령대를 설정해주세요','error');return false;}
+    }
   }else if(key==='sms_body'){
     if(!_pwData.smsBody.trim()){showFieldError('pw-sms-body','문자 본문을 입력해주세요');return false;}
   }else if(key==='author'){
@@ -2107,13 +2197,17 @@ function buildPwContentText(){
   }
   if(p1==='문자'){
     if(p2==='프로그램 대상 타겟 회원'){
-      const ages=(_pwData.ageRanges||[]).map(function(r){return r.min+'~'+r.max+'세';}).join(', ');
-      const res=_pwData.residence==='기타'?_pwData.residenceCustom:_pwData.residence;
-      out.push('[타겟]\n- 연령대: '+ages+'\n- 거주지: '+(res||'-')+'\n- 관심 장르: '+(_pwData.genre||'-'));
+      const ages=_pwData.ageAny?'무관':(_pwData.ageRanges||[]).map(function(r){return r.min+'~'+r.max+'세';}).join(', ');
+      const res=_pwData.residenceAny?'무관':(_pwData.residence==='기타'?_pwData.residenceCustom:_pwData.residence);
+      const genre=_pwData.genreAny?'무관':(_pwData.genre||'-');
+      out.push('[타겟]\n- 연령대: '+(ages||'-')+'\n- 거주지: '+(res||'-')+'\n- 관심 장르: '+genre);
     }
-    if(_pwData.smsBody.trim()){
-      out.push('[본문]\n'+_pwData.smsBody.trim());
-    }
+    // 본문 — 헤더 + 사용자 작성 + 푸터 자동 합성 (관리자가 전체 복사하도록)
+    const _h=getSmsHeader();
+    const _f=getSmsFooter();
+    const _u=(_pwData.smsBody||'').trim();
+    const _full=_h+'\n\n\n'+_u+'\n\n'+_f;
+    out.push('[본문]\n'+_full);
   }
   return out.join('\n\n');
 }
@@ -2139,8 +2233,10 @@ function renderPwSummary(){
   if(_pwData.b2bLink){html+='<div><span class="lbl">B2B 링크</span><span class="val" style="word-break:break-all">'+escapeHtml(_pwData.b2bLink)+'</span></div>';}
   if(_pwData.blogDirection){html+='<div><span class="lbl">글 방향</span><span class="val">'+escapeHtml(_pwData.blogDirection.substr(0,40))+(_pwData.blogDirection.length>40?'…':'')+'</span></div>';}
   if(_pwData.plat1==='문자'&&_pwData.plat2==='프로그램 대상 타겟 회원'){
-    const ages=(_pwData.ageRanges||[]).map(function(r){return r.min+'~'+r.max;}).join(', ');
-    html+='<div><span class="lbl">타겟</span><span class="val">연령 '+escapeHtml(ages)+' / '+escapeHtml(_pwData.residence==='기타'?_pwData.residenceCustom:_pwData.residence||'-')+' / '+escapeHtml(_pwData.genre||'-')+'</span></div>';
+    const ages=_pwData.ageAny?'무관':(_pwData.ageRanges||[]).map(function(r){return r.min+'~'+r.max;}).join(', ');
+    const res=_pwData.residenceAny?'무관':(_pwData.residence==='기타'?_pwData.residenceCustom:_pwData.residence||'-');
+    const genre=_pwData.genreAny?'무관':(_pwData.genre||'-');
+    html+='<div><span class="lbl">타겟</span><span class="val">연령 '+escapeHtml(ages)+' / '+escapeHtml(res)+' / '+escapeHtml(genre)+'</span></div>';
   }
   if(_pwData.smsBody){html+='<div><span class="lbl">문자 본문</span><span class="val">'+escapeHtml(_pwData.smsBody.substr(0,40))+(_pwData.smsBody.length>40?'…':'')+'</span></div>';}
   html+='</div>';
