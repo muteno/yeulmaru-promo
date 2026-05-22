@@ -162,7 +162,7 @@ button{font-family:inherit;cursor:pointer}
 .dn.sat{color:#3B7DD8}
 .dn.sun{color:#D64545}
 .today-badge{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:var(--accent);color:#fff;font-size:12px;font-weight:700;box-shadow:0 2px 8px rgba(74,77,231,0.25)}
-.c.today .c-inner > .dn{position:sticky;top:0;z-index:1;background:var(--today-bg);padding-bottom:2px}
+.c.today .c-inner > .dn{position:sticky;top:0;z-index:2;background:#E6F0FF;padding-bottom:3px;box-shadow:0 4px 8px -4px rgba(0,0,0,0.06)}
 .ev{display:grid;grid-template-columns:34px auto 1fr;gap:4px;padding:2px 0;font-size:10.5px;line-height:1.4;align-items:center}
 .ev:hover{background:rgba(74,77,231,0.06);border-radius:4px}
 .ev-dragging{opacity:0.4 !important}
@@ -2668,13 +2668,36 @@ function startTodayMarquee(){
     // ev 한 줄 높이
     const evH=evs[0].getBoundingClientRect().height+2;
     if(evH<=0)return;
+    // 보이는 ev 개수만큼 복제해서 끝에 append (자연스러운 wraparound용)
+    const visibleCount=Math.max(1,Math.floor(inner.clientHeight/evH));
+    const cloneCount=Math.min(visibleCount,evs.length);
+    for(let i=0;i<cloneCount;i++){
+      const clone=evs[i].cloneNode(true);
+      clone.removeAttribute('onclick');
+      clone.removeAttribute('oncontextmenu');
+      clone.removeAttribute('ondragstart');
+      clone.removeAttribute('ondragend');
+      clone.removeAttribute('draggable');
+      clone.dataset.clone='1';
+      inner.appendChild(clone);
+    }
+    // 원본 끝 위치 = 원본 overflow + cloneCount*evH (복제 끝까지)
+    const jumpAt=overflow+cloneCount*evH;
     let cur=0;
     _todayMarqueeInterval=setInterval(function(){
       // 호버·드래그 중이면 일시정지
       if(todayCell.matches(':hover'))return;
       cur+=evH;
-      if(cur>overflow+evH*0.4)cur=0;
-      _smoothScrollTo(inner,cur,1500);
+      if(cur>=jumpAt-evH*0.3){
+        // 복제 끝까지 갔으면 부드럽게 처음거가 보이도록 슬라이드 끝낸 후 즉시 점프
+        _smoothScrollTo(inner,cur,1500);
+        setTimeout(function(){
+          cur=0;
+          inner.scrollTop=0;
+        },1550);
+      }else{
+        _smoothScrollTo(inner,cur,1500);
+      }
     },2800);
   },650);
 }
