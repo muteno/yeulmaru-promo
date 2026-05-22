@@ -237,6 +237,12 @@ button{font-family:inherit;cursor:pointer}
 @keyframes mini-tip-fade{0%{opacity:0;transform:translateY(-4px)}10%{opacity:1;transform:translateY(0)}85%{opacity:1}100%{opacity:0;transform:translateY(-4px)}}
 .mini-tip{animation:mini-tip-fade 1.8s ease-out forwards}
 .mini-tip.action{animation:mini-tip-fade 3s ease-out forwards}
+/* === 캘린더 우클릭 컨텍스트 메뉴 === */
+#cell-context-menu{position:fixed;z-index:99999;background:#fff;border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,0.18),0 0 0 1px rgba(0,0,0,0.06);padding:6px;min-width:180px;animation:ccm-fade .12s ease-out}
+@keyframes ccm-fade{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+.ccm-item{padding:9px 14px;font-size:13px;color:#333;border-radius:6px;cursor:pointer;display:flex;align-items:center;gap:8px;line-height:1}
+.ccm-item:hover{background:rgba(74,77,231,0.08);color:var(--accent)}
+.ccm-item .emo{font-size:14px}
 /* === read-only view (user) === */
 .mv-date1{font-size:14px;color:#333;font-weight:600;margin-bottom:18px}
 .mv-section{display:flex;align-items:center;gap:6px;color:var(--accent);font-size:13px;font-weight:700;margin:18px 0 8px;letter-spacing:0.3px}
@@ -2273,7 +2279,7 @@ function renderCal(){
       let bg='rgba(255,255,255,0.3)';
       if(nm)bg='var(--nm-bg)';else if(td)bg='var(--today-bg)';else if(past)bg='var(--past-bg)';
       let dnCls='dn';if(nm)dnCls+=' nm';else if(past)dnCls+=' past';else if(isSat)dnCls+=' sat';else if(isSun)dnCls+=' sun';
-      h+=`<div class="c cell${nm?' nm':''}${past?' past':''}${td?' today':''}${isSel?' sel':''}" data-cell data-key="${key}" onclick="clickDate('${key}')"${nm?'':` ondragover="onCellDragOver(event)" ondragleave="onCellDragLeave(event)" ondrop="onCellDrop(event,'${key}')"`} style="background:${bg};${di<5?'border-right:1px solid var(--border)':''}${nm?'cursor:default':'cursor:pointer'}">`;
+      h+=`<div class="c cell${nm?' nm':''}${past?' past':''}${td?' today':''}${isSel?' sel':''}" data-cell data-key="${key}" onclick="clickDate('${key}')"${nm?'':` oncontextmenu="onCellContextMenu(event,'${key}')" ondragover="onCellDragOver(event)" ondragleave="onCellDragLeave(event)" ondrop="onCellDrop(event,'${key}')"`} style="background:${bg};${di<5?'border-right:1px solid var(--border)':''}${nm?'cursor:default':'cursor:pointer'}">`;
       var perfs=nm?[]:getPerfs(d);var filteredRecs=recs;if(activeFilters.length>0){var allGroups=[{label:'카카오',match:['카카오']},{label:'인스타',match:['인스타']},{label:'블로그·맘카페',match:['블로그','맘카페']},{label:'B2B',match:['B2B']},{label:'문자',match:['문자']}];var activeMatches=[];activeFilters.forEach(function(af){allGroups.forEach(function(g){if(g.label===af)activeMatches=activeMatches.concat(g.match);});});filteredRecs=filteredRecs.filter(function(r){var p=r['플랫폼 1']||'';return activeMatches.some(function(m){return p.indexOf(m)>-1;});});}if(activePrograms.length>0){filteredRecs=filteredRecs.filter(function(r){var prog=r['프로그램']||'';return activePrograms.indexOf(prog)>-1;});}
       // 시간순 정렬 (입력시간 HH:MM 기준)
       filteredRecs=filteredRecs.slice().sort(function(a,b){
@@ -2311,6 +2317,35 @@ function renderCal(){
 }
 
 function clickDate(key){const[y,m,d]=key.split('-').map(Number);const dateObj=new Date(y,m-1,d);if(dateObj.getMonth()+1!==currentMonth)return;selected=key;openPanel(dateObj,getRecsForDate(dateObj));render();}
+
+// === 캘린더 셀 우클릭 컨텍스트 메뉴 ===
+function onCellContextMenu(event,key){
+  if(userRole!=='admin')return;
+  event.preventDefault();
+  event.stopPropagation();
+  closeCellContextMenu();
+  const menu=document.createElement('div');
+  menu.id='cell-context-menu';
+  menu.innerHTML='<div class="ccm-item" onclick="closeCellContextMenu();openModal(\''+key+'\')"><span class="emo">📝</span>새 콘텐츠 등록</div>';
+  // 위치 — viewport 경계 보정
+  const mx=event.clientX,my=event.clientY;
+  document.body.appendChild(menu);
+  const rect=menu.getBoundingClientRect();
+  const x=Math.min(mx,window.innerWidth-rect.width-8);
+  const y=Math.min(my,window.innerHeight-rect.height-8);
+  menu.style.left=x+'px';
+  menu.style.top=y+'px';
+  // 닫기 트리거
+  setTimeout(function(){
+    document.addEventListener('click',closeCellContextMenu,{once:true});
+    document.addEventListener('contextmenu',function(e){if(!e.target.closest('#cell-context-menu'))closeCellContextMenu();},{once:true});
+    document.addEventListener('keydown',function(e){if(e.key==='Escape')closeCellContextMenu();},{once:true});
+  },0);
+}
+function closeCellContextMenu(){
+  const m=document.getElementById('cell-context-menu');
+  if(m)m.remove();
+}
 
 function openPanel(dateObj,recs){
   panelOpen=true;var p=document.getElementById('panel'),dn=DAY_NAMES[dateObj.getDay()];
