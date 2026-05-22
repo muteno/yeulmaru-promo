@@ -1372,29 +1372,32 @@ async function submitPromoRequest(){
   try{
     // 콘텐츠 구분 (선택된 프로그램의 타입 → 한글)
     const typeMap={'c':'공연','e':'전시','a':'예술교육','r':'대관'};
-    const cat=typeMap[_pwData.programType]||'기타';
+    const cat=typeMap[_pwData.programType]||_pwData.programType||'기타';
     const[y,m,d]=_pwData.date.split('-').map(Number);
     const DAYS=['일','월','화','수','목','금','토'];
     const dn=DAYS[new Date(y,m-1,d).getDay()];
-    const nowKst=new Date();
-    const ts=nowKst.getFullYear()+'-'+String(nowKst.getMonth()+1).padStart(2,'0')+'-'+String(nowKst.getDate()).padStart(2,'0')+' '+_pwData.time+':00';
-    const body={
-      '날짜':_pwData.date,
-      '연도':y,'월':m,'일':d,'요일':dn,
-      '입력시간(KST)':ts,
-      '플랫폼 1':_pwData.plat1,
-      '플랫폼 2':_pwData.plat2||'-',
-      '콘텐츠 구분':cat,
-      '프로그램':_pwData.program,
-      '담당 부서':'예술사업팀',
-      '콘텐츠 제목':_pwData.title,
-      '콘텐츠 형식':_pwData.format||'',
-      '콘텐츠 내용':_pwData.content||'',
-      '게시 담당자':_pwData.applicant,
-      '진행 상태':'대기 중',
-      '비고':_pwData.memo||''
-    };
-    await api('POST','/api/records',body);
+    const ts=_pwData.date+' '+_pwData.time+':00';
+    const serial=Math.floor(Date.UTC(y,m-1,d)/86400000)+25569;
+    // Worker가 기대하는 values 배열 순서
+    const row=[
+      records.length+1,
+      ts,
+      serial,
+      y,m,d,
+      dn+'요일',
+      _pwData.plat1,
+      _pwData.plat2||'-',
+      cat,
+      _pwData.program,
+      '예술사업팀',
+      _pwData.title,
+      _pwData.format||'',
+      _pwData.content||'',
+      _pwData.applicant,
+      '대기 중',
+      _pwData.memo||''
+    ];
+    await api('POST','/api/records',{values:row});
     // 본인 신청자 이름 저장 (검토 페이지에서 본인 신청만 보이게)
     try{localStorage.setItem('myApplicant',_pwData.applicant);}catch(e){}
     await syncReload();
@@ -1590,23 +1593,28 @@ async function submitAdminEntry(){
     const DAYS=['일','월','화','수','목','금','토'];
     const dn=DAYS[new Date(y,m-1,d).getDay()];
     const ts=_pwData.date+' '+_pwData.time+':00';
-    const body={
-      '날짜':_pwData.date,
-      '연도':y,'월':m,'일':d,'요일':dn,
-      '입력시간(KST)':ts,
-      '플랫폼 1':_pwData.plat1,
-      '플랫폼 2':_pwData.plat2||'-',
-      '콘텐츠 구분':_pwData.cat||'',
-      '프로그램':_pwData.program||'',
-      '담당 부서':'예술사업팀',
-      '콘텐츠 제목':_pwData.title,
-      '콘텐츠 형식':_pwData.format||'',
-      '콘텐츠 내용':_pwData.content||'',
-      '게시 담당자':_pwData.author,
-      '진행 상태':'예정',
-      '비고':_pwData.memo||''
-    };
-    await api('POST','/api/records',body);
+    const serial=Math.floor(Date.UTC(y,m-1,d)/86400000)+25569;
+    // Worker가 기대하는 values 배열 순서 (시트 컬럼 순서):
+    // NO, 입력시간(KST), 날짜, 연도, 월, 일, 요일, 플랫폼1, 플랫폼2, 콘텐츠구분, 프로그램, 담당부서, 콘텐츠제목, 콘텐츠형식, 콘텐츠내용, 게시담당자, 진행상태, 비고
+    const row=[
+      records.length+1,
+      ts,
+      serial,
+      y,m,d,
+      dn+'요일',
+      _pwData.plat1,
+      _pwData.plat2||'-',
+      _pwData.cat||'',
+      _pwData.program||'',
+      '예술사업팀',
+      _pwData.title,
+      _pwData.format||'',
+      _pwData.content||'',
+      _pwData.author,
+      '예정',
+      _pwData.memo||''
+    ];
+    await api('POST','/api/records',{values:row});
     await syncReload();
     _pwStep=99;
     renderPwStep();
