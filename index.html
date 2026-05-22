@@ -2639,7 +2639,37 @@ function renderCal(){
     h+='</div>';
   });
   cal.innerHTML=h;
+  setupCellOverlays();
   startTodayMarquee();
+}
+
+// 모든 .c 셀의 dn을 c 직접 자식(absolute)으로 이동 + c-inner에 fade mask 적용
+function setupCellOverlays(){
+  const cells=document.querySelectorAll('.c.cell');
+  cells.forEach(function(c){
+    const inner=c.querySelector('.c-inner');
+    if(!inner)return;
+    const dn=inner.querySelector('.dn');
+    if(!dn)return;
+    // dn 분리
+    c.appendChild(dn);
+    dn.style.position='absolute';
+    dn.style.top='7px';
+    dn.style.left='8px';
+    dn.style.right='14px';
+    dn.style.zIndex='4';
+    dn.style.pointerEvents='none';
+    dn.style.background='transparent';
+    dn.style.padding='0';
+    dn.style.margin='0';
+    // mask
+    const dnH=dn.getBoundingClientRect().height||16;
+    const fadeStart=Math.max(0,dnH-4);
+    const fadeEnd=dnH;
+    inner.style.paddingTop=(dnH+4)+'px';
+    inner.style.webkitMaskImage='linear-gradient(to bottom, transparent 0, transparent '+fadeStart+'px, black '+fadeEnd+'px, black 100%)';
+    inner.style.maskImage='linear-gradient(to bottom, transparent 0, transparent '+fadeStart+'px, black '+fadeEnd+'px, black 100%)';
+  });
 }
 
 function clickDate(key){const[y,m,d]=key.split('-').map(Number);const dateObj=new Date(y,m-1,d);if(dateObj.getMonth()+1!==currentMonth)return;if(selected!==key)_panelProgramsOpen=false;selected=key;openPanel(dateObj,getRecsForDate(dateObj));render();}
@@ -2669,31 +2699,9 @@ function startTodayMarquee(){
     if(!todayCell)return;
     const inner=todayCell.querySelector('.c-inner');
     if(!inner)return;
-    const dn=inner.querySelector('.dn');
     const evs=inner.querySelectorAll('.ev');
     if(evs.length<2)return;
-    // dn을 c-inner 밖처럼 absolute로 띄움 — 스크롤 영향 X, 색 매치 신경 X
-    if(dn){
-      // dn을 c-inner 밖(c 셀 직접 자식)으로 이동 — mask 영향 안 받음
-      todayCell.appendChild(dn);
-      dn.style.position='absolute';
-      dn.style.top='7px';
-      dn.style.left='8px';
-      dn.style.right='14px';
-      dn.style.zIndex='4';
-      dn.style.pointerEvents='none';
-      dn.style.background='transparent';
-      dn.style.padding='0';
-      dn.style.margin='0';
-      const dnH=dn.getBoundingClientRect().height||16;
-      // mask: dn 끝 직전 4px 영역에서 fade. ev는 dn 끝 + 4px 아래부터 정상 시작.
-      const fadeStart=Math.max(0,dnH-4);
-      const fadeEnd=dnH;
-      inner.style.paddingTop=(dnH+4)+'px';
-      inner.style.webkitMaskImage='linear-gradient(to bottom, transparent 0, transparent '+fadeStart+'px, black '+fadeEnd+'px, black 100%)';
-      inner.style.maskImage='linear-gradient(to bottom, transparent 0, transparent '+fadeStart+'px, black '+fadeEnd+'px, black 100%)';
-    }
-    // overflow 재측정 (dn 떼낸 후)
+    // overflow 측정 (setupCellOverlays의 padding-top 반영 후)
     const overflow=inner.scrollHeight-inner.clientHeight;
     if(overflow<=2)return;
     // ev 한 줄 높이
