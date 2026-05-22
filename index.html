@@ -162,6 +162,7 @@ button{font-family:inherit;cursor:pointer}
 .dn.sat{color:#3B7DD8}
 .dn.sun{color:#D64545}
 .today-badge{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:var(--accent);color:#fff;font-size:12px;font-weight:700;box-shadow:0 2px 8px rgba(74,77,231,0.25)}
+.c.today .c-inner > .dn{position:sticky;top:0;z-index:1;background:var(--today-bg);padding-bottom:2px}
 .ev{display:grid;grid-template-columns:34px auto 1fr;gap:4px;padding:2px 0;font-size:10.5px;line-height:1.4;align-items:center}
 .ev:hover{background:rgba(74,77,231,0.06);border-radius:4px}
 .ev-dragging{opacity:0.4 !important}
@@ -2637,6 +2638,21 @@ function clickDate(key){const[y,m,d]=key.split('-').map(Number);const dateObj=ne
 
 // === 오늘 셀 일정 전광판 자동 스크롤 ===
 let _todayMarqueeInterval=null;
+function _smoothScrollTo(el,target,duration){
+  const start=el.scrollTop;
+  const dist=target-start;
+  if(Math.abs(dist)<0.5){el.scrollTop=target;return;}
+  const startTime=performance.now();
+  function step(now){
+    const elapsed=now-startTime;
+    const t=Math.min(1,elapsed/duration);
+    // easeInOutCubic
+    const eased=t<0.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;
+    el.scrollTop=start+dist*eased;
+    if(t<1)requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
 function startTodayMarquee(){
   if(_todayMarqueeInterval){clearInterval(_todayMarqueeInterval);_todayMarqueeInterval=null;}
   // 카드 stagger 끝난 후 측정·시작
@@ -2658,8 +2674,8 @@ function startTodayMarquee(){
       if(todayCell.matches(':hover'))return;
       cur+=evH;
       if(cur>overflow+evH*0.4)cur=0;
-      inner.scrollTo({top:cur,behavior:'smooth'});
-    },2400);
+      _smoothScrollTo(inner,cur,1500);
+    },2800);
   },650);
 }
 
