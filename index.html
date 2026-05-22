@@ -2630,9 +2630,38 @@ function renderCal(){
     h+='</div>';
   });
   cal.innerHTML=h;
+  startTodayMarquee();
 }
 
 function clickDate(key){const[y,m,d]=key.split('-').map(Number);const dateObj=new Date(y,m-1,d);if(dateObj.getMonth()+1!==currentMonth)return;if(selected!==key)_panelProgramsOpen=false;selected=key;openPanel(dateObj,getRecsForDate(dateObj));render();}
+
+// === 오늘 셀 일정 전광판 자동 스크롤 ===
+let _todayMarqueeInterval=null;
+function startTodayMarquee(){
+  if(_todayMarqueeInterval){clearInterval(_todayMarqueeInterval);_todayMarqueeInterval=null;}
+  // 카드 stagger 끝난 후 측정·시작
+  setTimeout(function(){
+    const todayCell=document.querySelector('.c.today');
+    if(!todayCell)return;
+    const inner=todayCell.querySelector('.c-inner');
+    if(!inner)return;
+    const evs=inner.querySelectorAll('.ev');
+    if(evs.length<2)return;
+    const overflow=inner.scrollHeight-inner.clientHeight;
+    if(overflow<=2)return;
+    // ev 한 줄 높이
+    const evH=evs[0].getBoundingClientRect().height+2;
+    if(evH<=0)return;
+    let cur=0;
+    _todayMarqueeInterval=setInterval(function(){
+      // 호버·드래그 중이면 일시정지
+      if(todayCell.matches(':hover'))return;
+      cur+=evH;
+      if(cur>overflow+evH*0.4)cur=0;
+      inner.scrollTo({top:cur,behavior:'smooth'});
+    },2400);
+  },650);
+}
 
 // === 캘린더 셀 우클릭 컨텍스트 메뉴 ===
 function onCellContextMenu(event,key){
