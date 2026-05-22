@@ -2739,7 +2739,7 @@ function onEvContextMenu(event,rowIndex,dateKey){
   closeCellContextMenu();
   const menu=document.createElement('div');
   menu.id='cell-context-menu';
-  menu.innerHTML='<div class="ccm-item" onclick="closeCellContextMenu();editRec('+rowIndex+',\''+dateKey+'\',null,false)"><span class="emo">✏️</span>수정</div><div class="ccm-item" onclick="closeCellContextMenu();deleteRec('+rowIndex+',\''+dateKey+'\')"><span class="emo">🗑️</span>삭제</div>';
+  menu.innerHTML='<div class="ccm-item" onclick="closeCellContextMenu();editRec('+rowIndex+',\''+dateKey+'\',null,false)"><span class="emo">✏️</span>수정</div><div class="ccm-item" onclick="closeCellContextMenu();copyRec('+rowIndex+',\''+dateKey+'\')"><span class="emo">📋</span>복사</div><div class="ccm-item" onclick="closeCellContextMenu();deleteRec('+rowIndex+',\''+dateKey+'\')"><span class="emo">🗑️</span>삭제</div>';
   const mx=event.clientX,my=event.clientY;
   document.body.appendChild(menu);
   const rect=menu.getBoundingClientRect();
@@ -3124,6 +3124,45 @@ function editRec(rowIndex,dateKey,ev,forceReadOnly){
   var rec=records.find(function(r){return r._rowIndex===rowIndex;});
   if(!rec)return;
   openModal(dateKey,rec,{readOnly:!!forceReadOnly});
+}
+async function copyRec(rowIndex,dateKey){
+  const rec=records.find(function(r){return r._rowIndex===rowIndex;});
+  if(!rec)return;
+  showOverlayLoad();
+  try{
+    // 현재 KST 시각
+    const now=new Date();
+    const ts=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0')+' '+String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
+    // 17개 컬럼 순서 — NO와 입력시간만 새로, 나머지는 그대로
+    const row=[
+      records.length+1,
+      ts,
+      rec['날짜']||'',
+      rec['연도']||'',
+      rec['월']||'',
+      rec['일']||'',
+      rec['요일']||'',
+      rec['플랫폼 1']||'',
+      rec['플랫폼 2']||'-',
+      rec['콘텐츠 구분']||'',
+      rec['프로그램']||'',
+      rec['담당 부서']||'예술사업팀',
+      rec['콘텐츠 제목']||'',
+      rec['콘텐츠 형식']||'',
+      rec['콘텐츠 내용']||'',
+      rec['게시 담당자']||'',
+      rec['진행 상태']||'예정',
+      rec['비고']||''
+    ];
+    await api('POST','/api/records',{values:row});
+    await syncReload();
+    clickDate(dateKey);
+    showToast('복사되었습니다');
+  }catch(e){
+    showToast('복사 실패: '+e.message,'error');
+  }finally{
+    hideOverlayLoad();
+  }
 }
 
 let _confirmResolve=null;
