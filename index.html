@@ -184,6 +184,12 @@ button{font-family:inherit;cursor:pointer}
 .panel-empty{text-align:center;padding:40px 0;color:var(--dim);font-size:14px}
 .p-card{display:flex;flex-direction:column;gap:6px;padding:10px 12px;background:rgba(255,255,255,0.7);backdrop-filter:blur(8px);border-radius:var(--radius);margin-bottom:8px;border:1px solid var(--glass-border);box-shadow:0 2px 8px rgba(0,0,0,0.03);transition:all .2s;cursor:pointer}
 .p-card:hover{box-shadow:0 4px 16px rgba(74,77,231,0.1);transform:translateY(-1px);border-color:rgba(74,77,231,0.2)}
+.p-card.done{opacity:0.55}
+.p-card.done .p-plat-mini{filter:grayscale(1) brightness(0.9)}
+.p-card.done .p-plat-mini-fallback{filter:grayscale(0.6) brightness(0.85)}
+.p-card.done .p-title{color:#999;text-decoration:line-through;text-decoration-color:#ccc}
+.p-card.done .p-time{color:#aaa}
+.p-card.done:hover{opacity:0.85}
 .p-row1{display:flex;align-items:center;gap:8px}
 .p-row2{display:flex;align-items:center;gap:6px;min-width:0}
 .p-time{font-size:13px;font-weight:700;color:#333;font-variant-numeric:tabular-nums;line-height:1}
@@ -2411,14 +2417,47 @@ function openPanel(dateObj,recs){
   panelOpen=true;var p=document.getElementById('panel'),dn=DAY_NAMES[dateObj.getDay()];
   document.getElementById('main-area').style.marginRight='360px';
   var h='<div class="panel-hdr"><div><div class="panel-date">'+(dateObj.getMonth()+1)+'월 '+dateObj.getDate()+'일</div><div class="panel-day">'+dn+'요일</div></div><button class="panel-close" onclick="closePanel()">✕</button></div><div class="panel-body">';
-  // 공연/전시 섹션
+  // === 홍보 일정 섹션 (먼저) ===
+  // 시간순 정렬
+  var sortedRecs=recs.slice().sort(function(a,b){
+    var ta=recTimeStr(a)||'99:99',tb=recTimeStr(b)||'99:99';
+    return ta.localeCompare(tb);
+  });
+  if(sortedRecs.length===0){h+='<div class="panel-empty"><div style="font-size:32px;margin-bottom:8px">📭</div><div>등록된 콘텐츠가 없습니다</div></div>';}
+  else{sortedRecs.forEach(function(r){
+    var p1=r['플랫폼 1']||'',p2=r['플랫폼 2']||'',col=platColor(p1);
+    var title=r['콘텐츠 제목']||'',cat=r['콘텐츠 구분']||'',st=r['진행 상태']||'';
+    var ri=r._rowIndex,dkey=dk(dateObj);
+    var icon=platIcon(p1);
+    var time=recTimeStr(r);
+    var fallbackTxt=platShort(p1)||(p1||'').slice(0,4);
+    var doneCls=(st==='완료')?' done':'';
+    h+='<div class="p-card'+doneCls+'" onclick="editRec('+ri+',\''+dkey+'\',event)">';
+    h+='<div class="p-row1">';
+    if(time)h+='<span class="p-time">'+time+'</span>';
+    if(st)h+='<span class="meta-chip '+statusClass(st)+'">'+escapeHtml(st)+'</span>';
+    if(userRole==='admin')h+='<button class="p-del" onclick="event.stopPropagation();deleteRec('+ri+',\''+dkey+'\')" title="삭제">✕</button>';
+    h+='</div>';
+    h+='<div class="p-row2">';
+    h+='<img class="p-plat-mini" src="'+icon+'" alt="'+escapeHtml(p1)+'" onerror="this.outerHTML=\'<span class=&quot;p-plat-mini-fallback&quot; style=&quot;background:'+col+'&quot;>'+escapeHtml(fallbackTxt)+'</span>\'">';
+    if(cat)h+='<span class="meta-chip cat">'+escapeHtml(cat)+'</span>';
+    h+='<span class="p-title" title="'+escapeHtml(title)+'">'+escapeHtml(title)+'</span>';
+    h+='</div>';
+    h+='</div>';
+  });}
+  if(userRole==='admin')h+='<button class="add-btn" onclick="openModal(\''+dk(dateObj)+'\')">+ 새 콘텐츠 등록</button>';
+  // === 프로그램 (공연/전시) 섹션 (아래) ===
   var perfs=getPerfs(dateObj);
   var exh=getExhibitStatus(dateObj);
   var now=new Date();now.setHours(0,0,0,0);
   var hasSchedule=false;
-  // 오픈된 공연 전체 (o:1 + 클릭한 날짜에 아직 종료 안 됨)
   var ref=new Date(dateObj);ref.setHours(0,0,0,0);
   var openPerfs=PERFS.filter(function(p){if(p.o!==1||p.t!=='c')return false;var pe=new Date(p.e);pe.setHours(0,0,0,0);return pe>=ref;});
+  var openExh=PERFS.filter(function(p){if(p.o!==1||p.t!=='e')return false;var pe=new Date(p.e);pe.setHours(0,0,0,0);return pe>=ref;});
+  if(openPerfs.length>0||openExh.length>0){
+    // 구분자
+    h+='<div style="border-top:1px solid var(--border);margin:14px 0 10px;"></div>';
+  }
   openPerfs.forEach(function(perf){
     hasSchedule=true;
     var sd=new Date(perf.s);sd.setHours(0,0,0,0);
@@ -2431,8 +2470,6 @@ function openPanel(dateObj,recs){
     if(ddText)h+='<span style="font-size:11px;font-weight:600;color:var(--accent);white-space:nowrap;flex-shrink:0">'+ddText+'</span>';
     h+='</div>';
   });
-  // 오픈된 전시 전체 (o:1 + 클릭한 날짜에 아직 종료 안 됨)
-  var openExh=PERFS.filter(function(p){if(p.o!==1||p.t!=='e')return false;var pe=new Date(p.e);pe.setHours(0,0,0,0);return pe>=ref;});
   openExh.forEach(function(x){
     hasSchedule=true;
     var eName=x.f||x.n;
@@ -2446,33 +2483,6 @@ function openPanel(dateObj,recs){
     h+='<span style="font-size:11px;font-weight:600;color:#C08070;white-space:nowrap;flex-shrink:0">'+dayNum+'일차</span>';
     h+='</div>';
   });
-  // 구분자
-  if(hasSchedule)h+='<div style="border-top:1px solid var(--border);margin:12px 0;"></div>';
-  // 콘텐츠 섹션
-  if(recs.length===0){h+='<div class="panel-empty"><div style="font-size:32px;margin-bottom:8px">📭</div><div>등록된 콘텐츠가 없습니다</div></div>';}
-  else{recs.forEach(function(r){
-    var p1=r['플랫폼 1']||'',p2=r['플랫폼 2']||'',col=platColor(p1);
-    var title=r['콘텐츠 제목']||'',cat=r['콘텐츠 구분']||'',st=r['진행 상태']||'';
-    var ri=r._rowIndex,dkey=dk(dateObj);
-    var icon=platIcon(p1);
-    var time=recTimeStr(r);
-    var fallbackTxt=platShort(p1)||(p1||'').slice(0,4);
-    h+='<div class="p-card" onclick="editRec('+ri+',\''+dkey+'\',event)">';
-    // 줄 1: 시간 · 진행 상태 · X(우측 끝)
-    h+='<div class="p-row1">';
-    if(time)h+='<span class="p-time">'+time+'</span>';
-    if(st)h+='<span class="meta-chip '+statusClass(st)+'">'+escapeHtml(st)+'</span>';
-    if(userRole==='admin')h+='<button class="p-del" onclick="event.stopPropagation();deleteRec('+ri+',\''+dkey+'\')" title="삭제">✕</button>';
-    h+='</div>';
-    // 줄 2: 플랫폼 로고 · 구분 칩 · 제목
-    h+='<div class="p-row2">';
-    h+='<img class="p-plat-mini" src="'+icon+'" alt="'+escapeHtml(p1)+'" onerror="this.outerHTML=\'<span class=&quot;p-plat-mini-fallback&quot; style=&quot;background:'+col+'&quot;>'+escapeHtml(fallbackTxt)+'</span>\'">';
-    if(cat)h+='<span class="meta-chip cat">'+escapeHtml(cat)+'</span>';
-    h+='<span class="p-title" title="'+escapeHtml(title)+'">'+escapeHtml(title)+'</span>';
-    h+='</div>';
-    h+='</div>';
-  });}
-  if(userRole==='admin')h+='<button class="add-btn" onclick="openModal(\''+dk(dateObj)+'\')">+ 새 콘텐츠 등록</button>';
   h+='</div>';
   p.innerHTML=h;p.style.display='flex';
 }
