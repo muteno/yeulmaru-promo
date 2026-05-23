@@ -206,6 +206,16 @@ button{font-family:inherit;cursor:pointer}
   .dn .ps{display:inline;max-width:100%;overflow:hidden;text-overflow:ellipsis;vertical-align:baseline}
 }
 .diag{position:absolute;inset:0;background:repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(0,0,0,0.02) 4px,rgba(0,0,0,0.02) 5px);pointer-events:none}
+/* 특별 일정 한 줄 마퀴 (전광판) — 전시 라인 위에 표시 */
+.special-marquee{position:absolute;bottom:18px;left:6px;right:6px;overflow:hidden;white-space:nowrap;height:13px;font-size:10px;line-height:13px;color:var(--text);pointer-events:auto}
+.special-marquee-track{display:inline-block;padding-left:100%;animation:sp-marquee-flow 18s linear infinite;will-change:transform}
+.special-marquee:hover .special-marquee-track{animation-play-state:paused;cursor:help}
+@keyframes sp-marquee-flow{from{transform:translateX(0)}to{transform:translateX(-100%)}}
+.sp-item{display:inline-flex;align-items:center;gap:3px;margin-right:12px}
+.sp-time{font-weight:700;color:var(--accent);min-width:36px;display:inline-block;text-align:left;font-variant-numeric:tabular-nums}
+.sp-time.off{color:#C04040}
+.sp-label{color:#555}
+.c.past .sp-time,.c.past .sp-label{color:#bbb !important}
 
 /* ═══ PANEL ═══ */
 .panel{position:fixed;top:56px;right:0;width:360px;height:calc(100vh - 56px);background:var(--glass);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-left:1px solid var(--glass-border);box-shadow:-8px 0 32px rgba(74,77,231,0.06);z-index:10;display:flex;flex-direction:column;animation:slideIn .25s ease}
@@ -583,6 +593,31 @@ h+='<div style="height:0;border-top:2px solid '+(past?'rgba(0,0,0,0.04)':st[i].o
 }
 return h+'</div>';
 }
+// 특별 일정 한 줄 마퀴 — 전시 라인 위에 표시
+function renderSpecialMarquee(d,nm,past){
+  if(nm)return'';
+  const key=dk(d);
+  const items=(PROMO_SPECIAL||[]).filter(function(s){return key>=s.start&&key<=s.end;});
+  if(!items.length)return'';
+  const emoMap={'교육':'📚','휴가':'🏖️','출장':'✈️','회의':'👥','기타':'📌'};
+  // 시간 있는 순 정렬 (휴무는 뒤로)
+  items.sort(function(a,b){
+    if(a.time&&!b.time)return -1;
+    if(!a.time&&b.time)return 1;
+    return (a.time||'').localeCompare(b.time||'');
+  });
+  let inner='';
+  items.forEach(function(it){
+    const hasTime=it.time&&it.time.length>0;
+    const t=hasTime?it.time:'휴무';
+    const cls='sp-time'+(hasTime?'':' off');
+    const emo=emoMap[it.type]||'📌';
+    const label=it.label||it.type||'';
+    const personStr=it.person?' ('+it.person+')':'';
+    inner+='<span class="sp-item" title="'+escapeHtml(it.type+' · '+label+personStr)+'"><span class="'+cls+'">'+escapeHtml(t)+'</span><span class="sp-label">'+emo+' '+escapeHtml(label)+escapeHtml(personStr)+'</span></span>';
+  });
+  return '<div class="special-marquee" title="특별 일정 — 호버 시 정지"><span class="special-marquee-track">'+inner+'</span></div>';
+}
 function getDdayText(dd){if(dd>0)return'D-'+dd;if(dd===0)return'D-Day';return'D+'+Math.abs(dd);}
 function renderPerfsHtml(perfs,td,past){
 if(!perfs||!perfs.length)return'';
@@ -597,6 +632,10 @@ else out+='<span style="display:inline-flex;align-items:center;margin-left:6px">
 }return out;
 }
 let password='',userRole='user',records=[],currentYear=new Date().getFullYear(),currentMonth=new Date().getMonth()+1;
+// === 특별 일정 (교육/휴가/출장/회의) — 1단계 localStorage / 2단계 SharePoint 연동 예정 ===
+let PROMO_SPECIAL=[];
+try{PROMO_SPECIAL=JSON.parse(localStorage.getItem('promoSpecial')||'[]');}catch(e){PROMO_SPECIAL=[];}
+function savePromoSpecialLocal(){try{localStorage.setItem('promoSpecial',JSON.stringify(PROMO_SPECIAL));}catch(e){}}
 let selected=null,editing=null,panelOpen=false,activeFilters=[],activePrograms=[];
 
 // PIN
@@ -1077,6 +1116,63 @@ async function cancelPromoRequest(rowIndex){
   }finally{
     hideOverlayLoad();
   }
+}
+
+// === 특별 일정 (교육/휴가/출장/회의) 등록 ===
+function openSpecialEntry(key){
+  if(userRole!=='admin'){showToast('관리자만 등록 가능','error');return;}
+  const today=key||(function(){const n=new Date();return n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0')+'-'+String(n.getDate()).padStart(2,'0');})();
+  const inpSt='width:100%;padding:10px 14px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:12px;font-size:13px;outline:none;box-sizing:border-box;font-family:inherit';
+  const lbSt='display:block;font-size:11px;color:#888;margin:14px 0 4px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px';
+  const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeSpecialEntry)"><div class="modal" style="width:96vw;max-width:480px;padding:24px;position:relative;text-align:left"><button class="modal-x" onclick="closeSpecialEntry()" title="닫기" aria-label="닫기">✕</button>'+
+    '<h3 style="margin:0 0 4px">📌 특별 일정 추가</h3>'+
+    '<div style="font-size:11px;color:#888;margin-bottom:8px">교육·휴가·출장·회의 등 — 캘린더 셀에 한 줄 마퀴로 표시됩니다</div>'+
+    '<label style="'+lbSt+'">유형<span style="color:var(--peach);margin-left:3px">*</span></label>'+
+    '<select id="sp-type" style="'+inpSt+'"><option value="교육">📚 교육</option><option value="휴가">🏖️ 휴가</option><option value="출장">✈️ 출장</option><option value="회의">👥 회의</option><option value="기타">📌 기타</option></select>'+
+    '<label style="'+lbSt+'">내용<span style="color:var(--peach);margin-left:3px">*</span></label>'+
+    '<input id="sp-label" type="text" placeholder="예: 마케팅 세미나 / 황세웅 휴가" style="'+inpSt+'">'+
+    '<div style="display:flex;gap:8px"><div style="flex:1"><label style="'+lbSt+'">시작일<span style="color:var(--peach);margin-left:3px">*</span></label><input id="sp-start" type="date" value="'+today+'" style="'+inpSt+'"></div>'+
+    '<div style="flex:1"><label style="'+lbSt+'">종료일<span style="color:var(--peach);margin-left:3px">*</span></label><input id="sp-end" type="date" value="'+today+'" style="'+inpSt+'"></div></div>'+
+    '<label style="'+lbSt+'">시간 <span style="color:#aaa;font-weight:400;text-transform:none;letter-spacing:0">(비우면 "휴무"로 표시)</span></label>'+
+    '<input id="sp-time" type="time" step="1800" style="'+inpSt+'">'+
+    '<label style="'+lbSt+'">담당자 <span style="color:#aaa;font-weight:400;text-transform:none;letter-spacing:0">(선택)</span></label>'+
+    '<input id="sp-person" type="text" placeholder="예: 황세웅" style="'+inpSt+'">'+
+    '<div style="display:flex;gap:8px;margin-top:18px"><button onclick="closeSpecialEntry()" class="m-btn cancel">취소</button><button onclick="saveSpecialEntry()" class="m-btn save" style="margin-left:auto">저장</button></div>'+
+    '</div></div>';
+  let el=document.getElementById('special-entry');
+  if(!el){el=document.createElement('div');el.id='special-entry';document.body.appendChild(el);}
+  el.innerHTML=html;
+  setTimeout(function(){const lb=document.getElementById('sp-label');if(lb)lb.focus();},80);
+}
+function closeSpecialEntry(){
+  const el=document.getElementById('special-entry');
+  if(el)el.innerHTML='';
+}
+function saveSpecialEntry(){
+  const type=document.getElementById('sp-type').value;
+  const label=(document.getElementById('sp-label').value||'').trim();
+  const start=document.getElementById('sp-start').value;
+  let end=document.getElementById('sp-end').value;
+  const time=document.getElementById('sp-time').value;
+  const person=(document.getElementById('sp-person').value||'').trim();
+  if(!label){showFieldError('sp-label','내용을 입력해주세요');return;}
+  if(!start){showFieldError('sp-start','시작일을 입력해주세요');return;}
+  if(!end)end=start;
+  if(end<start){showFieldError('sp-end','종료일은 시작일 이후여야 합니다');return;}
+  PROMO_SPECIAL.push({
+    id:Date.now(),
+    type:type,
+    label:label,
+    start:start,
+    end:end,
+    time:time||'',
+    person:person,
+    createdAt:new Date().toISOString()
+  });
+  savePromoSpecialLocal();
+  closeSpecialEntry();
+  renderCal();
+  showToast('특별 일정이 추가되었습니다 ('+type+')');
 }
 
 // === 홍보 신청 검토 페이지 ===
@@ -3812,6 +3908,7 @@ function renderCal(){
       });
       h+='</div>';
       h+=renderExhibitBadge(d,nm,past);
+      h+=renderSpecialMarquee(d,nm,past);
       if(nm)h+='<div class="diag"></div>';
       h+='</div>';
     });
@@ -3918,7 +4015,8 @@ function onCellContextMenu(event,key){
   const menu=document.createElement('div');
   menu.id='cell-context-menu';
   if(userRole==='admin'){
-    menu.innerHTML='<div class="ccm-item" onclick="closeCellContextMenu();openAdminWizard(\''+key+'\')"><span class="emo">📝</span>새 콘텐츠 등록</div>';
+    menu.innerHTML='<div class="ccm-item" onclick="closeCellContextMenu();openAdminWizard(\''+key+'\')"><span class="emo">📝</span>새 콘텐츠 등록</div>'+
+      '<div class="ccm-item" onclick="closeCellContextMenu();openSpecialEntry(\''+key+'\')"><span class="emo">📌</span>특별 일정 추가</div>';
   }else{
     menu.innerHTML='<div class="ccm-item" onclick="closeCellContextMenu();openPromoWizard(\''+key+'\')"><span class="emo">📨</span>홍보 신청</div>';
   }
