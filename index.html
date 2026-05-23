@@ -763,7 +763,9 @@ function _getWeekStates(){
   const twIdx=weeks.findIndex(w=>w.some(d=>dk(d)===todayKey));
   return weeks.map(function(w,wi){
     let isCollapsed;
-    if(_weekState[wi]==='collapsed')isCollapsed=true;
+    // 마지노선: 저번주(twIdx-1), 이번주(twIdx), 다음주 이상 미래(wi>twIdx)는 무조건 펼침
+    if(twIdx>=0&&wi>=twIdx-1)isCollapsed=false;
+    else if(_weekState[wi]==='collapsed')isCollapsed=true;
     else if(_weekState[wi]==='expanded')isCollapsed=false;
     else isCollapsed=isThisMonth&&twIdx>=0&&wi<twIdx-1;
     return{wi:wi,isCollapsed:isCollapsed,isToday:wi===twIdx};
@@ -772,33 +774,35 @@ function _getWeekStates(){
 function remoteCollapse(){
   const states=_getWeekStates();
   const twIdx=states.findIndex(function(s){return s.isToday;});
-  // 리모콘에 가까운 쪽부터 접음 (큰 wi부터) — 마지노선: 저번/이번/다음주 + 미래 주
-  for(let i=states.length-1;i>=0;i--){
-    const s=states[i];
-    if(twIdx>=0){
-      if(s.wi>=twIdx-1)continue;  // 저번/이번/다음/미래 보호
-    }
-    if(!s.isCollapsed){collapseWeek(s.wi);return;}
+  // 저저번주(twIdx-2)부터 위로 검토. 펼친 주 만나면 접음
+  const startIdx=twIdx>=0?twIdx-2:states.length-1;
+  for(let i=startIdx;i>=0;i--){
+    if(!states[i].isCollapsed){collapseWeek(i);return;}
   }
 }
 function remoteExpand(){
   const states=_getWeekStates();
-  // 리모콘에 가까운 쪽부터 펼침 (큰 wi부터)
-  for(let i=states.length-1;i>=0;i--){
-    if(states[i].isCollapsed){expandWeek(states[i].wi);return;}
+  const twIdx=states.findIndex(function(s){return s.isToday;});
+  // 저저번주(twIdx-2)부터 위로 검토. 접힌 주 만나면 펼침
+  const startIdx=twIdx>=0?twIdx-2:states.length-1;
+  for(let i=startIdx;i>=0;i--){
+    if(states[i].isCollapsed){expandWeek(i);return;}
   }
 }
 // 비활성화 판단
 function _canCollapse(){
   const states=_getWeekStates();
   const twIdx=states.findIndex(function(s){return s.isToday;});
-  return states.some(function(s){
-    if(twIdx>=0&&s.wi>=twIdx-1)return false;
-    return !s.isCollapsed;
-  });
+  const startIdx=twIdx>=0?twIdx-2:states.length-1;
+  for(let i=startIdx;i>=0;i--){if(!states[i].isCollapsed)return true;}
+  return false;
 }
 function _canExpand(){
-  return _getWeekStates().some(function(s){return s.isCollapsed;});
+  const states=_getWeekStates();
+  const twIdx=states.findIndex(function(s){return s.isToday;});
+  const startIdx=twIdx>=0?twIdx-2:states.length-1;
+  for(let i=startIdx;i>=0;i--){if(states[i].isCollapsed)return true;}
+  return false;
 }
 // === 특별 일정 (교육/휴가/출장/회의) — SharePoint PromoSpecial 시트 연동 ===
 let PROMO_SPECIAL=[];
