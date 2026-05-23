@@ -1223,8 +1223,8 @@ function renderPromoBoard(){
   let myApplicant='';
   try{myApplicant=localStorage.getItem('myApplicant')||'';}catch(e){}
   let rows=records.slice();
-  // viewMode 'mine' — 본인 신청만 (myApplicant 없으면 빈 결과 → 빈 상태 표시)
-  if(_promoFilter.viewMode==='mine'){
+  // viewMode 'mine' — 본인 신청만 (admin은 본인 개념 없으니 적용 안 함)
+  if(!isAdmin&&_promoFilter.viewMode==='mine'){
     if(myApplicant){
       rows=rows.filter(function(r){return(r['게시 담당자']||'')===myApplicant;});
     }else{
@@ -1295,7 +1295,7 @@ function renderPromoBoard(){
   // === 헤더 ===
   let html='<div style="display:flex;align-items:center;margin-bottom:14px;gap:8px;padding-bottom:14px;border-bottom:1px solid #eee">';
   html+='<h3 style="margin:0;flex:1;text-align:left">일정 확인 및 관리 <span style="font-size:12px;color:#888;font-weight:400">('+rows.length+'개)</span>'+(!isAdmin&&myApplicant?' <span style="font-size:11px;color:var(--accent);font-weight:600;margin-left:4px">· '+escapeHtml(myApplicant)+' 님</span>':'')+'</h3>';
-  html+='<button class="m-btn save" onclick="openPromoWizardFromBoard()" style="padding:7px 14px">+ 새 신청</button>';
+  if(!isAdmin)html+='<button class="m-btn save" onclick="openPromoWizardFromBoard()" style="padding:7px 14px">+ 새 신청</button>';
   html+='<button class="m-btn cancel" onclick="renderPromoBoard()" style="padding:7px 12px" title="새로고침">↻</button>';
   html+='</div>';
   // === 요약 박스 (내 신청 한눈에) ===
@@ -1316,13 +1316,14 @@ function renderPromoBoard(){
   });
   // 지난 일정 감추기 체크박스 (배경/보더 없음, 탭과 동일한 box-sizing/height로 라인 정렬)
   html+='<label style="display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;box-sizing:border-box;font-size:12px;line-height:1;color:#666;cursor:pointer;user-select:none;font-family:inherit;margin-left:4px;transform:translateY(-2px)"><input type="checkbox"'+(_promoFilter.hidePast?' checked':'')+' onchange="_promoFilter.hidePast=this.checked;renderPromoBoard()" style="width:14px;height:14px;margin:0;padding:0;cursor:pointer;accent-color:var(--accent);flex-shrink:0">지난 일정 감추기</label>';
-  // === 본인/전체 토글 ===
-  if(myApplicant){
+  // === 본인/전체 토글 (admin은 본인 개념 없어서 숨김) ===
+  if(!isAdmin&&myApplicant){
     html+='<span style="width:1px;height:18px;background:#ddd;margin:0 4px"></span>';
     const showAll=_promoFilter.viewMode==='all';
     html+='<button onclick="_promoFilter.viewMode=\''+(showAll?'mine':'all')+'\';renderPromoBoard()" style="'+ctrlStyle+';border:1.5px solid '+(showAll?'var(--accent)':'#ddd')+';background:'+(showAll?'rgba(74,77,231,0.08)':'#fff')+';color:'+(showAll?'var(--accent)':'#666')+';font-weight:'+(showAll?'600':'500')+'" title="'+(showAll?'클릭하면 내 신청만 보기':'클릭하면 다른 사람 신청도 보기')+'">👥 '+(showAll?'전체 보기':'내 신청만')+'</button>';
   }
-  if(isAdmin&&_promoFilter.viewMode==='all'){
+  if(isAdmin){
+    html+='<span style="width:1px;height:18px;background:#ddd;margin:0 4px"></span>';
     html+='<select onchange="_promoFilter.applicant=this.value;renderPromoBoard()" style="padding:6px 10px;height:32px;box-sizing:border-box;border-radius:8px;border:1.5px solid #eee;font-size:12px;outline:none;background:#fff;font-family:inherit;line-height:1"><option value="">전체 신청자</option>';
     PR_MANAGERS.forEach(function(m){const n=m['담당자'];html+='<option value="'+escapeHtml(n)+'"'+(_promoFilter.applicant===n?' selected':'')+'>'+escapeHtml(n)+'</option>';});
     html+='</select>';
@@ -1330,14 +1331,14 @@ function renderPromoBoard(){
   html+='<input type="text" placeholder="검색..." value="'+escapeHtml(_promoFilter.q)+'" oninput="onPromoSearch(this.value)" style="margin-left:auto;padding:6px 12px;height:32px;box-sizing:border-box;border-radius:8px;border:1.5px solid #eee;font-size:12px;outline:none;width:200px;text-align:left;line-height:1;font-family:inherit">';
   html+='</div>';
   // === 빈 상태 처리 ===
-  // 본인 신청 한 적 없는 user
-  if(!myApplicant){
+  // 본인 신청 한 적 없는 user (admin은 본인 개념 없어서 표시 안 함)
+  if(!isAdmin&&!myApplicant){
     html+='<div style="background:#FFF4DC;color:#C97A11;padding:10px 14px;border-radius:10px;font-size:12px;margin-bottom:10px;text-align:left">아직 본인 신청 내역이 없어요. 새 신청을 작성하면 이후 본인 신청만 표시됩니다.</div>';
   }
   // === 리스트 ===
   if(rows.length===0){
-    // 본인 신청 보기 모드에서 0건이면 전체 보기 버튼 강조
-    const canShowAll=myApplicant&&_promoFilter.viewMode==='mine';
+    // 본인 신청 보기 모드에서 0건이면 전체 보기 버튼 강조 (admin 제외)
+    const canShowAll=!isAdmin&&myApplicant&&_promoFilter.viewMode==='mine';
     html+='<div style="text-align:center;padding:60px 20px;color:#aaa;font-size:13px">';
     if(canShowAll){
       html+='<div style="font-size:32px;margin-bottom:10px">📭</div>';
