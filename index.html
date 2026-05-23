@@ -327,6 +327,12 @@ button{font-family:inherit;cursor:pointer}
   #main-area{padding-bottom:calc(50vh + 20px) !important}
 }
 @keyframes slideUp{from{transform:translateY(100%);opacity:0}to{transform:translateY(0);opacity:1}}
+@keyframes annualSlideIn{
+  0%{transform:translateY(40px) scale(0.96);opacity:0}
+  100%{transform:translateY(0) scale(1);opacity:1}
+}
+/* 연간 일정 모달 — 슬라이드 인 + 강한 그림자 */
+.annual-modal{animation:annualSlideIn .42s cubic-bezier(.2,.85,.25,1) !important;box-shadow:0 24px 64px rgba(0,0,0,0.22),0 8px 24px rgba(0,0,0,0.12)}
 
 /* ═══ HEADER ═══ */
 .hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:0;flex-wrap:wrap;gap:12px;position:sticky;top:56px;z-index:6;background:linear-gradient(135deg,#FDF6F3 0%,#F0EBF5 50%,#EBF0F8 100%);padding:16px 0 12px 0}
@@ -1487,7 +1493,7 @@ function openAdminPanel(){
   });
 }
 function closeAdminPanel(){const el=document.getElementById('admin-panel');if(el)el.innerHTML='';}
-// === 연간 일정 — iframe 모달 (외부 사이트 임베드, 효과 유지) ===
+// === 연간 일정 — iframe 모달 (외부 사이트 임베드, 테마 통일 + 슬라이드 인) ===
 function openAnnualCalendar(){
   let el=document.getElementById('annual-calendar');
   if(!el){
@@ -1495,12 +1501,40 @@ function openAnnualCalendar(){
     el.id='annual-calendar';
     document.body.appendChild(el);
   }
-  const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeAnnualCalendar)"><div class="modal annual-modal" style="width:96vw;max-width:1400px;height:92vh;max-height:92vh;padding:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:#fff"><button class="modal-x" onclick="closeAnnualCalendar()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:18px;float:none;margin:0;z-index:10;background:rgba(255,255,255,0.95);box-shadow:0 2px 8px rgba(0,0,0,0.12)">✕</button><iframe src="https://yeulmaru.github.io/yeulmaru-calandar-2026/" style="border:0;width:100%;height:100%;flex:1;display:block" title="2026 연간 일정" loading="lazy"></iframe></div></div>';
+  const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeAnnualCalendar)"><div class="modal annual-modal" style="width:96vw;max-width:1400px;height:92vh;max-height:92vh;padding:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:#fff"><button class="modal-x" onclick="closeAnnualCalendar()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:18px;float:none;margin:0;z-index:10;background:rgba(255,255,255,0.95);box-shadow:0 2px 8px rgba(0,0,0,0.12)">✕</button><iframe id="annual-iframe" src="https://yeulmaru.github.io/yeulmaru-calandar-2026/" onload="injectAnnualTheme(this)" style="border:0;width:100%;height:100%;flex:1;display:block;opacity:0;transition:opacity .25s ease" title="2026 연간 일정"></iframe></div></div>';
   el.innerHTML=html;
 }
 function closeAnnualCalendar(){
   const el=document.getElementById('annual-calendar');
   if(el)el.innerHTML='';
+}
+// iframe 안에 강조색(#E85A3A 오렌지 → #4A4DE7 보라) override CSS 주입
+function injectAnnualTheme(iframe){
+  try{
+    const doc=iframe.contentDocument||iframe.contentWindow.document;
+    if(!doc){iframe.style.opacity='1';return;}
+    if(!doc.getElementById('yeulmaru-promo-theme')){
+      const style=doc.createElement('style');
+      style.id='yeulmaru-promo-theme';
+      style.textContent=`
+        :root{--accent:#4A4DE7 !important}
+        .mt-p{background:rgba(74,77,231,0.08) !important;color:#4A4DE7 !important}
+        .ev-link{color:#4A4DE7 !important;border-bottom-color:rgba(74,77,231,0.28) !important}
+        .ev-date{color:#4A4DE7 !important}
+        .ev-dot{border-color:#4A4DE7 !important}
+        .hd-tri{border-top-color:#4A4DE7 !important}
+        .mnav a.active::after{background:#4A4DE7 !important}
+        .top-tri{border-bottom-color:#4A4DE7 !important}
+        .top-label{background:#4A4DE7 !important}
+      `;
+      doc.head.appendChild(style);
+    }
+    // 페이드인 — 주입 끝나면 보이게 (오렌지 깜빡임 방지)
+    setTimeout(function(){iframe.style.opacity='1';},80);
+  }catch(e){
+    console.warn('Annual theme inject failed (likely cross-origin):',e);
+    iframe.style.opacity='1';
+  }
 }
 function backToAdminMenu(){openAdminPanel();}
 
