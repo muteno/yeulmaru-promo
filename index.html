@@ -1535,10 +1535,34 @@ function _setSpType(val){
     unsetBtns.forEach(function(b){b.disabled=true;b.classList.remove('active');});
     adderBtns.forEach(function(b){b.disabled=true;});
   }else{
+    // 휴무/출장 자동값 상태에서 전환했는지 감지 (09:00 + 18:00 + readonly)
+    const wasRed=ts&&te&&ts.readOnly&&te.readOnly&&ts.value==='09:00'&&te.value==='18:00';
     if(ts){ts.readOnly=false;ts.classList.remove('sp-time-input-ro');}
     if(te){te.readOnly=false;te.classList.remove('sp-time-input-ro');}
     unsetBtns.forEach(function(b){b.disabled=false;});
     adderBtns.forEach(function(b){b.disabled=false;});
+    if(wasRed){
+      // 휴무/출장 → 일반 유형 전환 — 신규 기본(시작 10:00 + 종료 미정 active)으로
+      if(ts)ts.value='10:00';
+      if(te)te.value='';
+      const teBtn=document.querySelector('button.sp-time-unset[onclick*="sp-time-end"]');
+      if(teBtn){teBtn.classList.add('active');if(te){te.readOnly=true;te.classList.add('sp-time-input-ro');}}
+      const tsBtn=document.querySelector('button.sp-time-unset[onclick*="sp-time-start"]');
+      if(tsBtn)tsBtn.classList.remove('active');
+    }else{
+      // 일반 유형 간 전환 — 미정 active 상태 동기화 (readonly + 음영 유지)
+      document.querySelectorAll('.sp-time-unset.active').forEach(function(b){
+        if(b.disabled)return;
+        const oc=b.getAttribute('onclick')||'';
+        let elId=null;
+        if(oc.indexOf('sp-time-start')!==-1)elId='sp-time-start';
+        else if(oc.indexOf('sp-time-end')!==-1)elId='sp-time-end';
+        if(elId){
+          const e2=document.getElementById(elId);
+          if(e2){e2.readOnly=true;e2.classList.add('sp-time-input-ro');e2.value='';}
+        }
+      });
+    }
   }
 }
 // 시간 미정 토글 — 활성화 시 readonly + 빈값, 해제 시 기본값 복원
