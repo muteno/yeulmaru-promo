@@ -157,9 +157,6 @@ button{font-family:inherit;cursor:pointer}
 .week{display:grid;grid-template-columns:repeat(6,1fr);border-bottom:1px solid var(--border);position:relative}
 .week:last-child{border-bottom:none}
 .week.tw{position:relative}
-.week-collapse-btn{position:absolute;top:4px;right:6px;width:18px;height:18px;border-radius:50%;background:rgba(0,0,0,0.06);color:#888;font-size:9px;border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;opacity:0;transition:opacity 0.18s,background 0.18s,color 0.18s;z-index:5;line-height:1;padding:0}
-.week:hover .week-collapse-btn{opacity:0.7}
-.week-collapse-btn:hover{opacity:1 !important;background:var(--accent);color:#fff}
 .c-inner{overflow-x:hidden;overflow-y:auto;height:calc(100% - 42px);margin-top:18px;margin-bottom:10px;scrollbar-width:none;-ms-overflow-style:none;scrollbar-color:rgba(0,0,0,0.15) transparent}
 .c-count{position:absolute;top:4px;right:6px;font-size:9px;color:rgba(0,0,0,0.4);font-weight:600;letter-spacing:0.3px;z-index:6;pointer-events:none;font-variant-numeric:tabular-nums}
 .c.today .c-count{color:rgba(0,0,0,0.6)}
@@ -244,6 +241,59 @@ button{font-family:inherit;cursor:pointer}
 @keyframes cal-week-in{
   0%{opacity:0;transform:translateY(-10px) scale(0.985)}
   100%{opacity:1;transform:translateY(0) scale(1)}
+}
+
+/* 똑딱이 리모콘 — 캘린더 가운데 floating, 원형 위/아래 분할 */
+.cal-remote{
+  position:absolute;
+  top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  width:38px;height:38px;
+  border-radius:50%;
+  z-index:30;
+  background:#fff;
+  box-shadow:0 3px 10px rgba(0,0,0,0.18),0 1px 3px rgba(0,0,0,0.1),inset 0 1px 0 rgba(255,255,255,0.9);
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+  user-select:none;
+  opacity:0.65;
+  transition:opacity 0.2s,transform 0.2s,box-shadow 0.2s;
+}
+.cal-remote:hover{
+  opacity:1;
+  transform:translate(-50%,-50%) scale(1.06);
+  box-shadow:0 5px 14px rgba(0,0,0,0.22),0 2px 4px rgba(0,0,0,0.12);
+}
+.cal-remote-half{
+  flex:1;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:10px;
+  color:#999;
+  cursor:pointer;
+  transition:background 0.12s,color 0.12s;
+  line-height:1;
+}
+.cal-remote-half.up{
+  align-items:flex-end;
+  padding-bottom:2px;
+  border-bottom:1px solid rgba(0,0,0,0.08);
+  background:linear-gradient(180deg,rgba(0,0,0,0.02),transparent);
+}
+.cal-remote-half.down{
+  align-items:flex-start;
+  padding-top:2px;
+  background:linear-gradient(0deg,rgba(0,0,0,0.02),transparent);
+}
+.cal-remote-half:hover{
+  background:rgba(74,77,231,0.1);
+  color:var(--accent);
+}
+.cal-remote-half:active{
+  background:rgba(74,77,231,0.2);
+  transform:scale(0.95);
 }
 /* 일정 확인 페이지 행 stagger 애니메이션 (촤르륵) */
 .promo-row{animation:promo-row-in 0.32s cubic-bezier(0.34,1.56,0.64,1) backwards}
@@ -450,7 +500,14 @@ button{font-family:inherit;cursor:pointer}
         <div class="chips" id="chips"></div>
       </div>
       <div class="cal-head-wrap" id="cal-head-wrap"></div>
-        <div class="cal" id="cal"></div>
+        <div class="cal-wrap" style="position:relative">
+          <div class="cal" id="cal"></div>
+          <!-- 똑딱이 리모콘 — 캘린더 정중앙 floating -->
+          <div class="cal-remote" id="cal-remote" title="위: 한 주 접기 / 아래: 한 주 펼치기">
+            <div class="cal-remote-half up" onclick="remoteCollapse()" title="한 주 접기">▲</div>
+            <div class="cal-remote-half down" onclick="remoteExpand()" title="한 주 펼치기">▼</div>
+          </div>
+        </div>
     </div>
     <div id="panel" class="panel" style="display:none" data-panel></div>
   </div>
@@ -685,6 +742,35 @@ function collapseWeek(wi){
   renderCal();
 }
 function toggleWeek(wi){expandWeek(wi);}  // 후방 호환
+// 똑딱이 리모콘 — 위에서부터 가장 가까운 펼친/접힌 주 1개 토글
+function _getWeekStates(){
+  const dates=calDates(currentYear,currentMonth);
+  const weeks=[];for(let i=0;i<dates.length;i+=6)weeks.push(dates.slice(i,i+6));
+  const todayKey=dk(new Date());
+  const isThisMonth=currentYear===new Date().getFullYear()&&currentMonth===new Date().getMonth()+1;
+  const twIdx=weeks.findIndex(w=>w.some(d=>dk(d)===todayKey));
+  return weeks.map(function(w,wi){
+    let isCollapsed;
+    if(_weekState[wi]==='collapsed')isCollapsed=true;
+    else if(_weekState[wi]==='expanded')isCollapsed=false;
+    else isCollapsed=isThisMonth&&twIdx>=0&&wi<twIdx-1;
+    return{wi:wi,isCollapsed:isCollapsed,isToday:wi===twIdx};
+  });
+}
+function remoteCollapse(){
+  const states=_getWeekStates();
+  // 위에서부터 펼친 주(오늘 주 제외) 1개 접기
+  for(let i=0;i<states.length;i++){
+    if(!states[i].isCollapsed&&!states[i].isToday){collapseWeek(states[i].wi);return;}
+  }
+}
+function remoteExpand(){
+  const states=_getWeekStates();
+  // 위에서부터 접힌 주 1개 펼치기
+  for(let i=0;i<states.length;i++){
+    if(states[i].isCollapsed){expandWeek(states[i].wi);return;}
+  }
+}
 // === 특별 일정 (교육/휴가/출장/회의) — SharePoint PromoSpecial 시트 연동 ===
 let PROMO_SPECIAL=[];
 async function loadPromoSpecial(){
@@ -4092,10 +4178,6 @@ function renderCal(){
     }
     const justOpened=_justExpandedWeek===wi;
     h+=`<div class="week${isTW?' tw':''}${justOpened?' just-opened':''}${_calAnim}" style="${wi<weeks.length-1?'':'border-bottom:none;'}${_calDelay}">`;
-    // 펼친 주 접기 버튼 (호버 시 표시) — 오늘 주는 제외
-    if(!isTW){
-      h+='<button class="week-collapse-btn" onmousedown="event.stopPropagation()" onclick="event.stopPropagation();event.preventDefault();collapseWeek('+wi+')" title="이 주 접기">▲</button>';
-    }
     week.forEach((d,di)=>{
       const key=dk(d),nm=d.getMonth()+1!==currentMonth,td=isToday(d),past=isThisMonth&&isPast(d)&&!td,isSat=di===4,isSun=di===5,isSel=selected===key,recs=nm?[]:getRecsForDate(d);
       let bg='rgba(255,255,255,0.3)';
