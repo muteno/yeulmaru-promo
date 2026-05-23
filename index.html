@@ -1102,7 +1102,14 @@ function updatePerfOpen(){
     p.o=(now>=ss&&now<=se)?1:0;
   });
 }
-async function initApp(){buildNav();startClock();updateRoleTag();render();try{await Promise.all([loadPrograms(),loadAllMasters(),loadPromoSpecial()]);}catch(e){console.warn('[initApp]',e);}updatePerfOpen();loadData();}
+async function initApp(){
+  buildNav();startClock();updateRoleTag();
+  try{await loadPrograms();}catch(e){console.warn('[initApp loadPrograms]',e);}
+  try{await loadAllMasters();}catch(e){console.warn('[initApp loadAllMasters]',e);}
+  try{await loadPromoSpecial();}catch(e){console.warn('[initApp loadPromoSpecial]',e);}
+  updatePerfOpen();
+  loadData();
+}
 
 function updateRoleTag(){
   const el=document.getElementById('role-tag');
@@ -4003,8 +4010,9 @@ function _typeLoop(elId,text,speed){
 }
 async function loadData(showLoading){
   var cal=document.getElementById('cal');
-  if(showLoading&&cal){cal.innerHTML='<div style="text-align:center;padding:60px;color:var(--dim);font-size:14px"><span id="lt"></span></div>';_typeLoop('lt','데이터를 불러오는 중입니다... \uD83D\uDE09',65);}
-  try{const d=await api('GET','/api/records');records=(d.records||[]).map(function(r,i){return Object.assign({},r,{_rowIndex:(r._rowIndex!==undefined?r._rowIndex:i+2)});});}catch(e){console.error(e);_typingId++;if(cal&&showLoading)cal.innerHTML='<div style="text-align:center;padding:60px;color:#E24B4A;font-size:14px">데이터 로드 실패</div>';return;}
+  const _sl=showLoading!==false;  // 기본 true, 명시 false만 숨김
+  if(_sl&&cal){cal.innerHTML='<div style="text-align:center;padding:60px;color:var(--dim);font-size:14px"><span id="lt"></span></div>';_typeLoop('lt','데이터를 불러오는 중입니다... \uD83D\uDE09',65);}
+  try{const d=await api('GET','/api/records');records=(d.records||[]).map(function(r,i){return Object.assign({},r,{_rowIndex:(r._rowIndex!==undefined?r._rowIndex:i+2)});});}catch(e){console.error(e);_typingId++;if(cal&&_sl)cal.innerHTML='<div style="text-align:center;padding:60px;color:#E24B4A;font-size:14px">데이터 로드 실패</div>';return;}
   // 특별 일정 — 실패해도 records 렌더는 진행
   try{await loadPromoSpecial();}catch(e){console.warn('[loadData] promoSpecial',e);}
   _typingId++;render();}
