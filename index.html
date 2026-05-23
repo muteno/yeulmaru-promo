@@ -1048,10 +1048,13 @@ function renderPromoBoard(){
   let myApplicant='';
   try{myApplicant=localStorage.getItem('myApplicant')||'';}catch(e){}
   let rows=records.slice();
-  // viewMode 'mine' — 본인 신청만 (myApplicant 있을 때). admin도 동일하게 본인 우선
-  const showOnlyMine=_promoFilter.viewMode==='mine'&&myApplicant;
-  if(showOnlyMine){
-    rows=rows.filter(function(r){return(r['게시 담당자']||'')===myApplicant;});
+  // viewMode 'mine' — 본인 신청만 (myApplicant 없으면 빈 결과 → 빈 상태 표시)
+  if(_promoFilter.viewMode==='mine'){
+    if(myApplicant){
+      rows=rows.filter(function(r){return(r['게시 담당자']||'')===myApplicant;});
+    }else{
+      rows=[];  // 신청 한 적 없음 — 빈 상태에서 "전체 보기" 버튼 강조
+    }
   }else if(isAdmin&&_promoFilter.applicant){
     rows=rows.filter(function(r){return(r['게시 담당자']||'')===_promoFilter.applicant;});
   }
@@ -1136,8 +1139,9 @@ function renderPromoBoard(){
     const on=_promoFilter.status===t.k;
     html+='<button onclick="_promoFilter.status=\''+t.k+'\';renderPromoBoard()" style="'+ctrlStyle+';border:1.5px solid '+(on?'var(--accent)':'#ddd')+';background:'+(on?'rgba(74,77,231,0.08)':'#fff')+';color:'+(on?'var(--accent)':'#666')+';font-weight:'+(on?'600':'500')+'">'+t.l+'</button>';
   });
-  // 지난 일정 감추기 체크박스 (탭과 동일 높이/box-sizing/border 투명)
-  html+='<label style="'+ctrlStyle+';gap:6px;border:1.5px solid transparent;color:#666;user-select:none;margin-left:4px"><input type="checkbox"'+(_promoFilter.hidePast?' checked':'')+' onchange="_promoFilter.hidePast=this.checked;renderPromoBoard()" style="cursor:pointer;margin:0;vertical-align:middle">지난 일정 감추기</label>';
+  // 지난 일정 감추기 체크박스 (탭과 동일 외형 박스 + 가시 background/border)
+  const hp=_promoFilter.hidePast;
+  html+='<label style="'+ctrlStyle+';gap:6px;background:'+(hp?'#E8F5EC':'#fafafa')+';border:1.5px solid '+(hp?'#0F8B4C':'#ddd')+';color:'+(hp?'#0F8B4C':'#555')+';user-select:none;font-weight:'+(hp?'600':'500')+';margin-left:4px"><input type="checkbox"'+(hp?' checked':'')+' onchange="_promoFilter.hidePast=this.checked;renderPromoBoard()" style="width:14px;height:14px;cursor:pointer;margin:0;accent-color:var(--accent);flex-shrink:0">지난 일정 감추기</label>';
   // === 본인/전체 토글 ===
   if(myApplicant){
     html+='<span style="width:1px;height:18px;background:#ddd;margin:0 4px"></span>';
