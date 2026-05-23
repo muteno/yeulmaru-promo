@@ -1267,6 +1267,9 @@ function openPromoWizard(){
     smsTarget:'',               // 'all'(마케팅 수신) | 'target'(프로그램 대상 타겟)
     smsBody:'',                 // 문자 본문 (사용자 작성 부분만; 헤더/푸터는 합성)
     smsCustom:'',               // 문자 기타 자유 입력
+    customPlatform:'',          // 플랫폼 "기타" 선택 시 자유 입력 플랫폼명
+    freeText:'',                // 기타 플랫폼 + 텍스트 형식의 자유 본문
+    intent:'',                  // 홍보 의도 (기타 플랫폼)
     ageRanges:[{min:30,max:50}],// 연령대 범위 (멀티, 20~70)
     ageAny:false,               // 연령대 무관
     residence:'',               // 거주지
@@ -1475,9 +1478,20 @@ function onPwPlat1Change(){
     _pwData.b2bLink='';
     _pwData.blogDirection='';
     _pwData.smsBody='';
+    _pwData.customPlatform='';
+    _pwData.freeText='';
+    _pwData.intent='';
   }
   _pwData.plat1=v;
   document.getElementById('pw-plat2-wrap').innerHTML=buildPwPlat2Html();
+  // 기타 플랫폼 자유 입력 토글
+  const cw=document.getElementById('pw-custom-plat-wrap');
+  if(cw){
+    cw.style.display=(v==='기타')?'':'none';
+    if(v==='기타'){
+      setTimeout(function(){const ci=document.getElementById('pw-custom-platform');if(ci)ci.focus();},80);
+    }
+  }
 }
 function buildPwPlat2Html(){
   if(!_pwData.plat1)return'';
@@ -1708,12 +1722,15 @@ function showFieldError(targetId,msg){
   if(!el){showToast(msg,'error');return;}
   el.style.borderColor='#FF5252';
   el.style.boxShadow='0 0 0 3px rgba(255,82,82,0.12)';
+  // flex row 안에 있는 input(폴더 등)은 row 다음에 에러 표시 → input 크기 영향 X
+  const flexRow=el.closest('.pw-folder-row');
+  const anchor=flexRow||el;
   let errBox=document.getElementById(targetId+'-err');
   if(!errBox){
     errBox=document.createElement('div');
     errBox.id=targetId+'-err';
     errBox.style.cssText='margin-top:6px;font-size:12px;color:#C04040;font-weight:500;line-height:1.4';
-    el.parentNode.insertBefore(errBox,el.nextSibling);
+    anchor.parentNode.insertBefore(errBox,anchor.nextSibling);
   }
   errBox.textContent='⚠ '+msg;
   el.classList.add('pw-shake');
@@ -1789,6 +1806,9 @@ function getPwSubSteps(){
   }else if(p1==='문자'){
     if(p2==='프로그램 대상 타겟 회원'){subs.push('sms_target','sms_body');}
     else{subs.push('sms_body');}
+  }else if(p1==='기타'){
+    // 기타 플랫폼: 자유 입력 → 형식 → 세부(폴더 또는 자유 텍스트) → 홍보 의도
+    subs.push('format','detail','intent');
   }else{
     // 그 외 플랫폼 — 기본 format + detail
     subs.push('format','detail');
@@ -1812,6 +1832,7 @@ function renderPwStep4(body,next){
   if(key==='format')return renderPwSubFormat(body,next);
   if(key==='detail')return renderPwSubDetail(body,next);
   if(key==='text')return renderPwSubText(body,next);
+  if(key==='intent')return renderPwSubIntent(body,next);
   if(key==='blog')return renderPwSubBlog(body,next);
   if(key==='b2b_link')return renderPwSubB2BLink(body,next);
   if(key==='sms_target')return renderPwSubSmsTarget(body,next);
@@ -1823,6 +1844,8 @@ function renderPwStep4(body,next){
 // === Step 4 — 플랫폼 선택 ===
 function renderPwSubPlat(body,next){
   const plat1s=[...new Set(PLATFORMS.map(function(p){return p['플랫폼1'];}))];
+  // "기타"가 데이터에 없으면 추가
+  if(plat1s.indexOf('기타')<0)plat1s.push('기타');
   let html='<div class="pw-question">어디에 홍보하시겠어요?</div>';
   html+='<div class="pw-hint">먼저 플랫폼을 선택해주세요</div>';
   html+='<label style="display:block;font-size:11px;color:#888;margin:14px 0 4px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">플랫폼<span style="color:var(--peach);margin-left:3px">*</span></label>';
@@ -1830,8 +1853,17 @@ function renderPwSubPlat(body,next){
   plat1s.forEach(function(p){html+='<option value="'+escapeHtml(p)+'"'+(_pwData.plat1===p?' selected':'')+'>'+escapeHtml(p)+'</option>';});
   html+='</select>';
   html+='<div id="pw-plat2-wrap" style="margin-top:14px">'+buildPwPlat2Html()+'</div>';
+  // "기타" 선택 시 자유 입력
+  const otherDisp=_pwData.plat1==='기타'?'':'none';
+  html+='<div id="pw-custom-plat-wrap" style="display:'+otherDisp+';margin-top:14px">';
+  html+='<label style="display:block;font-size:11px;color:#888;margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">플랫폼명 직접 입력<span style="color:var(--peach);margin-left:3px">*</span></label>';
+  html+='<input id="pw-custom-platform" type="text" value="'+escapeHtml(_pwData.customPlatform||'')+'" oninput="_pwData.customPlatform=this.value" placeholder="예: 유튜브, 틱톡, 네이버TV 등" style="width:100%;padding:10px 14px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:12px;font-size:13px;outline:none;box-sizing:border-box;font-family:inherit">';
+  html+='</div>';
   body.innerHTML=html;
   next.textContent='다음';
+  if(_pwData.plat1==='기타'){
+    setTimeout(function(){const ci=document.getElementById('pw-custom-platform');if(ci)ci.focus();},80);
+  }
 }
 
 // === Step 4 — 콘텐츠 형식 선택 ===
@@ -1930,6 +1962,14 @@ function renderPwSubDetail(body,next){
       html+='<textarea id="pw-b2b-text" rows="16" style="width:100%;padding:10px 14px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:12px;font-size:13px;outline:none;box-sizing:border-box;resize:vertical;font-family:inherit;line-height:1.6">'+escapeHtml(tpl)+'</textarea>';
       body.innerHTML=html;next.textContent='다음';return;
     }
+    // 기타 플랫폼 — 자유 텍스트
+    if(p1==='기타'){
+      html='<div class="pw-question">본문을 자유롭게 작성해주세요</div>';
+      html+='<div class="pw-hint">'+escapeHtml(_pwData.customPlatform||'기타 플랫폼')+'에 게시할 텍스트 내용을 작성해주세요</div>';
+      html+='<label style="display:block;font-size:11px;color:#888;margin:14px 0 4px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">본문<span style="color:var(--peach);margin-left:3px">*</span></label>';
+      html+='<textarea id="pw-free-text" rows="12" oninput="_pwData.freeText=this.value" placeholder="자유롭게 작성해주세요" style="width:100%;padding:10px 14px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:12px;font-size:13px;outline:none;box-sizing:border-box;resize:vertical;font-family:inherit;line-height:1.6">'+escapeHtml(_pwData.freeText||'')+'</textarea>';
+      body.innerHTML=html;next.textContent='다음';return;
+    }
   }
   // 폴백 — 형식 미설정 등
   html='<div class="pw-question">형식을 먼저 선택해주세요</div>';
@@ -1964,6 +2004,17 @@ function renderPwSubText(body,next){
   }
   body.innerHTML=html;
   next.textContent='다음';
+}
+
+// === Step 4 — 홍보 의도 (기타 플랫폼 전용) ===
+function renderPwSubIntent(body,next){
+  let html='<div class="pw-question">어떤 홍보 의도인가요?</div>';
+  html+='<div class="pw-hint">홍보를 통해 전달하고 싶은 메시지나 기획 의도를 적어주세요</div>';
+  html+='<label style="display:block;font-size:11px;color:#888;margin:14px 0 4px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">홍보 의도<span style="color:var(--peach);margin-left:3px">*</span></label>';
+  html+='<textarea id="pw-intent" rows="6" oninput="_pwData.intent=this.value" placeholder="예: 신규 회원 유치, 특정 타겟층 호응 등 — 담당자가 이해할 수 있게" style="width:100%;padding:10px 14px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:12px;font-size:13px;outline:none;box-sizing:border-box;resize:vertical;font-family:inherit;line-height:1.5">'+escapeHtml(_pwData.intent||'')+'</textarea>';
+  body.innerHTML=html;
+  next.textContent='다음';
+  setTimeout(function(){const el=document.getElementById('pw-intent');if(el)el.focus();},80);
 }
 
 // === Step 4 — 블로그·맘카페 (글 방향 + 참고자료 통합) ===
@@ -2139,15 +2190,28 @@ function renderPwSubSmsBody(body,next){
   // 헤더 (read-only div, 한 줄)
   html+='<div class="pw-sms-fixline" title="자동 포함 — 편집 불가" style="padding:7px 14px;background:#F0EEFA;border-bottom:1px dashed rgba(74,77,231,0.18);font-size:12px;color:#555;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;user-select:none">'+escapeHtml(header)+'</div>';
   // 내용 (편집 가능)
-  html+='<textarea id="pw-sms-body" class="pw-sms-content" maxlength="2000" rows="7" oninput="pwCharCount(\'pw-sms-body\',\'pw-sms-count\',2000)" placeholder="여기에 본문을 작성해주세요…">'+escapeHtml(userContent)+'</textarea>';
+  // 헤더+푸터 자동 포함 길이만큼 본문 maxlength 차감
+  const maxBody=2000-autoLen;
+  html+='<textarea id="pw-sms-body" class="pw-sms-content" maxlength="'+maxBody+'" rows="7" oninput="pwSmsCount()" placeholder="여기에 본문을 작성해주세요…">'+escapeHtml(userContent)+'</textarea>';
   // 푸터 (read-only div, 4줄 원본 그대로)
   html+='<div class="pw-sms-fixline" title="실제 발송 시 자동 포함 — 편집 불가" style="padding:8px 14px;background:#F0EEFA;border-top:1px dashed rgba(74,77,231,0.18);font-size:12px;color:#555;line-height:1.55;white-space:pre-wrap;user-select:none">'+escapeHtml(footer)+'</div>';
   html+='</div>';
-  // 카운터 + 자동 양식 글자수 안내
-  html+='<div style="display:flex;justify-content:space-between;margin-top:6px;font-size:11px;color:#888"><span>※ 자동 포함 헤더·푸터 +'+autoLen+'자</span><span id="pw-sms-count">'+userContent.length+' / 2000</span></div>';
+  // 카운터 + 자동 양식 글자수 안내 (시작값 = autoLen)
+  html+='<div style="display:flex;justify-content:space-between;margin-top:6px;font-size:11px;color:#888"><span>※ 자동 포함 헤더·푸터 +'+autoLen+'자</span><span id="pw-sms-count" data-auto="'+autoLen+'">'+(autoLen+userContent.length)+' / 2000</span></div>';
   body.innerHTML=html;
   next.textContent='다음';
   setTimeout(function(){const el=document.getElementById('pw-sms-body');if(el)el.focus();},80);
+}
+
+// SMS 카운터 — 헤더+푸터 자동 91자 포함 표시
+function pwSmsCount(){
+  const t=document.getElementById('pw-sms-body');
+  const c=document.getElementById('pw-sms-count');
+  if(!t||!c)return;
+  const autoLen=parseInt(c.dataset.auto)||0;
+  const total=autoLen+t.value.length;
+  c.textContent=total+' / 2000';
+  c.style.color=total>=2000?'#C04040':total>=1900?'#C97A11':'#888';
 }
 
 // SMS 광고 표준 양식 — 헤더 / 푸터 분리 (관리자 합성용)
@@ -2181,16 +2245,22 @@ function renderPwSubAuthor(body,next){
 // === Step 4 sub-step 데이터 수집 ===
 function collectPwSubStep(){
   const key=currentPwSubKey();
-  if(key==='plat'){/* onchange 자동 sync */}
+  if(key==='plat'){
+    /* onchange 자동 sync */
+    const cp=document.getElementById('pw-custom-platform');if(cp)_pwData.customPlatform=cp.value.trim();
+  }
   else if(key==='format'){/* onchange 자동 sync */}
   else if(key==='detail'){
     pwCollectFoldersFromDOM();
     const k=document.getElementById('pw-kakao-text');if(k)_pwData.kakaoText=k.value;
     const i=document.getElementById('pw-insta-text');if(i)_pwData.instaText=i.value;
     const b=document.getElementById('pw-b2b-text');if(b)_pwData.b2bIntraText=b.value;
+    const ft=document.getElementById('pw-free-text');if(ft)_pwData.freeText=ft.value;
   }else if(key==='text'){
     const k=document.getElementById('pw-kakao-text');if(k)_pwData.kakaoText=k.value;
     const i=document.getElementById('pw-insta-text');if(i)_pwData.instaText=i.value;
+  }else if(key==='intent'){
+    const it=document.getElementById('pw-intent');if(it)_pwData.intent=it.value;
   }else if(key==='blog'){
     const d=document.getElementById('pw-blog-dir');if(d)_pwData.blogDirection=d.value;
     pwCollectFoldersFromDOM();
@@ -2212,8 +2282,12 @@ function validatePwSubStep(){
   const key=currentPwSubKey();
   if(key==='plat'){
     if(!_pwData.plat1){showFieldError('pw-plat1','플랫폼을 선택해주세요');return false;}
-    const plat2s=PLATFORMS.filter(function(p){return p['플랫폼1']===_pwData.plat1&&p['플랫폼2']&&p['플랫폼2']!=='-';});
-    if(plat2s.length>0&&(!_pwData.plat2||_pwData.plat2==='-')){showFieldError('pw-plat2','세부 채널을 선택해주세요');return false;}
+    if(_pwData.plat1==='기타'){
+      if(!_pwData.customPlatform){showFieldError('pw-custom-platform','플랫폼명을 직접 입력해주세요');return false;}
+    }else{
+      const plat2s=PLATFORMS.filter(function(p){return p['플랫폼1']===_pwData.plat1&&p['플랫폼2']&&p['플랫폼2']!=='-';});
+      if(plat2s.length>0&&(!_pwData.plat2||_pwData.plat2==='-')){showFieldError('pw-plat2','세부 채널을 선택해주세요');return false;}
+    }
   }else if(key==='format'){
     // 라디오 박스는 인라인 에러 부착 어색 → toast 유지
     if(!_pwData.format){showToast('콘텐츠 형식을 선택해주세요','error');return false;}
@@ -2229,11 +2303,14 @@ function validatePwSubStep(){
       if(p1==='카카오톡'&&!_pwData.kakaoText.trim()){showFieldError('pw-kakao-text','본문을 입력해주세요');return false;}
       if(p1==='인스타그램'&&!_pwData.instaText.trim()){showFieldError('pw-insta-text','본문을 입력해주세요');return false;}
       if(p1==='B2B'&&p2==='GS칼텍스 여수공장 인트라넷'&&!_pwData.b2bIntraText.trim()){showFieldError('pw-b2b-text','본문을 입력해주세요');return false;}
+      if(p1==='기타'&&!(_pwData.freeText||'').trim()){showFieldError('pw-free-text','본문을 입력해주세요');return false;}
     }
   }else if(key==='text'){
     const p1=_pwData.plat1;
     if(p1==='카카오톡'&&!_pwData.kakaoText.trim()){showFieldError('pw-kakao-text','본문을 입력해주세요 (최대 76자)');return false;}
     if(p1==='인스타그램'&&!_pwData.instaText.trim()){showFieldError('pw-insta-text','본문을 입력해주세요');return false;}
+  }else if(key==='intent'){
+    if(!(_pwData.intent||'').trim()){showFieldError('pw-intent','홍보 의도를 입력해주세요');return false;}
   }else if(key==='blog'){
     if(!_pwData.blogDirection||_pwData.blogDirection.length<100){showFieldError('pw-blog-dir','글 작성 방향을 최소 100자 이상 작성해주세요');return false;}
     if(!pwHasFolder()){showFieldError('pw-folder-0','참고 자료 경로를 입력해주세요');return false;}
@@ -2358,6 +2435,12 @@ function buildPwContentText(){
     const _full=_h+'\n\n\n'+_u+'\n\n'+_f;
     out.push('[본문]\n'+_full);
   }
+  // 기타 플랫폼 — 자유 텍스트(있으면) + 홍보 의도
+  if(p1==='기타'){
+    if(_pwData.customPlatform)out.unshift('[플랫폼명]\n'+_pwData.customPlatform);
+    if((_pwData.freeText||'').trim())out.push('[본문]\n'+_pwData.freeText.trim());
+    if((_pwData.intent||'').trim())out.push('[홍보 의도]\n'+_pwData.intent.trim());
+  }
   return out.join('\n\n');
 }
 
@@ -2388,6 +2471,9 @@ function renderPwSummary(){
     html+='<div><span class="lbl">타겟</span><span class="val">연령 '+escapeHtml(ages)+' / '+escapeHtml(res)+' / '+escapeHtml(genre)+'</span></div>';
   }
   if(_pwData.smsBody){html+='<div><span class="lbl">문자 본문</span><span class="val">'+escapeHtml(_pwData.smsBody.substr(0,40))+(_pwData.smsBody.length>40?'…':'')+'</span></div>';}
+  if(_pwData.plat1==='기타'&&_pwData.customPlatform){html+='<div><span class="lbl">플랫폼명</span><span class="val">'+escapeHtml(_pwData.customPlatform)+'</span></div>';}
+  if(_pwData.freeText){html+='<div><span class="lbl">본문</span><span class="val">'+escapeHtml(_pwData.freeText.substr(0,40))+(_pwData.freeText.length>40?'…':'')+'</span></div>';}
+  if(_pwData.intent){html+='<div><span class="lbl">홍보 의도</span><span class="val">'+escapeHtml(_pwData.intent.substr(0,40))+(_pwData.intent.length>40?'…':'')+'</span></div>';}
   html+='</div>';
   return html;
 }
