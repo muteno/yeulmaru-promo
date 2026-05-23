@@ -1458,7 +1458,7 @@ function openSpecialEntry(key, editRowIndex){
     const ts0=document.getElementById('sp-time-start');
     const te0=document.getElementById('sp-time-end');
     if(!isEdit){
-      if(ts0)ts0.value='10:00';
+      if(ts0)ts0.value='09:00';
       if(te0)te0.value='';
     }
     _setSpType(initType);
@@ -1499,6 +1499,7 @@ function openSpecialEntry(key, editRowIndex){
     }
     _attachSpTimeWheel('sp-time-start');
     _attachSpTimeWheel('sp-time-end');
+    _updateAdderState();
     const selectedChip=document.querySelector('#sp-type-chips .sp-chip.selected');
     const firstChip=document.querySelector('#sp-type-chips .sp-chip');
     const targetChip=selectedChip||firstChip;
@@ -1557,7 +1558,7 @@ function _setSpType(val){
     adderBtns.forEach(function(b){b.disabled=false;});
     if(wasRed){
       // 휴무/출장 → 일반 유형 전환 — 신규 기본(시작 10:00 + 종료 미정 active)으로
-      if(ts)ts.value='10:00';
+      if(ts)ts.value='09:00';
       if(te)te.value='';
       const teBtn=document.querySelector('button.sp-time-unset[onclick*="sp-time-end"]');
       if(teBtn){teBtn.classList.add('active');if(te){te.readOnly=true;te.classList.add('sp-time-input-ro');}}
@@ -1578,6 +1579,7 @@ function _setSpType(val){
       });
     }
   }
+  _updateAdderState();
 }
 // 시간 미정 토글 — 활성화 시 readonly + 빈값, 해제 시 기본값 복원
 function _toggleSpTimeUnset(id,btnEl){
@@ -1592,11 +1594,11 @@ function _toggleSpTimeUnset(id,btnEl){
     el.readOnly=false;
     el.classList.remove('sp-time-input-ro');
     if(id==='sp-time-start'){
-      el.value='10:00';
+      el.value='09:00';
     }else{
       // 종료 — 시작 시간과 동일하게 (사용자가 +버튼으로 늘림)
       const ts=document.getElementById('sp-time-start');
-      el.value=(ts&&ts.value)?ts.value:'10:00';
+      el.value=(ts&&ts.value)?ts.value:'09:00';
     }
   }else{
     // ON — readonly + 빈값 + 활성화 표시
@@ -1605,6 +1607,7 @@ function _toggleSpTimeUnset(id,btnEl){
     el.classList.add('sp-time-input-ro');
     el.value='';
   }
+  _updateAdderState();
 }
 // 종료 시간에 N분 가감 (누적). 범위: [시작, 18:00] clamp
 function _addSpTime(mins){
@@ -1615,7 +1618,7 @@ function _addSpTime(mins){
   const tsBtn=document.querySelector('button.sp-time-unset[onclick*="sp-time-start"]');
   if(tsBtn&&tsBtn.classList.contains('active'))return;
   // 시작 없으면 10:00 기본
-  if(!ts.value)ts.value='10:00';
+  if(!ts.value)ts.value='09:00';
   // 종료 미정 해제 (활성이면)
   const teBtn=document.querySelector('button.sp-time-unset[onclick*="sp-time-end"]');
   const wasUnset=teBtn&&teBtn.classList.contains('active');
@@ -1638,12 +1641,42 @@ function _addSpTime(mins){
   if(total>maxEnd)total=maxEnd;
   const nh=Math.floor(total/60),nm=total%60;
   te.value=String(nh).padStart(2,'0')+':'+String(nm).padStart(2,'0');
+  _updateAdderState();
 }
-// 시간 리셋 — 시작 10:00, 종료 미정 (active), 시작 미정 해제
+// 추가 버튼(-/+) 활성/비활성 상태 갱신 — 종료 시간 경계 시각 표시
+function _updateAdderState(){
+  const ts=document.getElementById('sp-time-start');
+  const te=document.getElementById('sp-time-end');
+  if(!ts||!te)return;
+  // 휴무/출장(readonly)이면 _setSpType이 이미 모두 disabled — 건드리지 않음
+  if(ts.readOnly)return;
+  const minusBtns=document.querySelectorAll('.sp-time-add[onclick*="_addSpTime(-"]');
+  const plusBtns=document.querySelectorAll('.sp-time-add[onclick^="_addSpTime("]:not([onclick*="-"])');
+  const teBtn=document.querySelector('button.sp-time-unset[onclick*="sp-time-end"]');
+  const teUnset=teBtn&&teBtn.classList.contains('active');
+  if(teUnset||!te.value){
+    // 종료 미정 → -버튼 disabled (감소할 종료가 없음)
+    minusBtns.forEach(function(b){b.disabled=true;});
+    plusBtns.forEach(function(b){b.disabled=false;});
+    return;
+  }
+  if(!ts.value){
+    minusBtns.forEach(function(b){b.disabled=false;});
+    plusBtns.forEach(function(b){b.disabled=false;});
+    return;
+  }
+  const tsParts=ts.value.split(':');
+  const teParts=te.value.split(':');
+  const tsMin=(parseInt(tsParts[0])||0)*60+(parseInt(tsParts[1])||0);
+  const teMin=(parseInt(teParts[0])||0)*60+(parseInt(teParts[1])||0);
+  minusBtns.forEach(function(b){b.disabled=teMin<=tsMin;});
+  plusBtns.forEach(function(b){b.disabled=teMin>=18*60;});
+}
+// 시간 리셋 — 시작 09:00, 종료 미정 (active), 시작 미정 해제
 function _resetSpTime(){
   const ts=document.getElementById('sp-time-start');
   const te=document.getElementById('sp-time-end');
-  if(ts&&!ts.disabled){ts.value='10:00';ts.readOnly=false;ts.classList.remove('sp-time-input-ro');}
+  if(ts&&!ts.disabled){ts.value='09:00';ts.readOnly=false;ts.classList.remove('sp-time-input-ro');}
   if(te&&!te.disabled){te.value='';te.readOnly=true;te.classList.add('sp-time-input-ro');}
   // 시작 미정 해제, 종료 미정 active
   document.querySelectorAll('.sp-time-unset').forEach(function(b){
@@ -1655,6 +1688,7 @@ function _resetSpTime(){
       b.classList.add('active');
     }
   });
+  _updateAdderState();
 }
 // 시간 input wheel ±10분
 function _attachSpTimeWheel(id){
@@ -1664,7 +1698,7 @@ function _attachSpTimeWheel(id){
     if(el.readOnly)return;
     e.preventDefault();
     let cur=el.value||'';
-    if(!cur){el.value='10:00';return;}
+    if(!cur){el.value='09:00';_updateAdderState();return;}
     const parts=cur.split(':');
     let h=parseInt(parts[0])||0,m=parseInt(parts[1])||0;
     let total=h*60+m;
@@ -1685,7 +1719,11 @@ function _attachSpTimeWheel(id){
     }
     const nh=Math.floor(total/60),nm=total%60;
     el.value=String(nh).padStart(2,'0')+':'+String(nm).padStart(2,'0');
+    _updateAdderState();
   },{passive:false});
+  // 직접 입력 변경 시에도 갱신
+  el.addEventListener('input',function(){_updateAdderState();});
+  el.addEventListener('change',function(){_updateAdderState();});
 }
 // 시작일 변경 시 종료일 자동 동기화 (사용자가 종료일 직접 변경 안 했을 때만)
 let _spEndManuallyChanged=false;
