@@ -632,10 +632,29 @@ else out+='<span style="display:inline-flex;align-items:center;margin-left:6px">
 }return out;
 }
 let password='',userRole='user',records=[],currentYear=new Date().getFullYear(),currentMonth=new Date().getMonth()+1;
-// === 특별 일정 (교육/휴가/출장/회의) — 1단계 localStorage / 2단계 SharePoint 연동 예정 ===
+// === 특별 일정 (교육/휴가/출장/회의) — SharePoint PromoSpecial 시트 연동 ===
 let PROMO_SPECIAL=[];
-try{PROMO_SPECIAL=JSON.parse(localStorage.getItem('promoSpecial')||'[]');}catch(e){PROMO_SPECIAL=[];}
-function savePromoSpecialLocal(){try{localStorage.setItem('promoSpecial',JSON.stringify(PROMO_SPECIAL));}catch(e){}}
+async function loadPromoSpecial(){
+  try{
+    const r=await api('GET','/api/sheet/special');
+    PROMO_SPECIAL=(r.rows||[]).map(function(it){
+      return {
+        id:it['시리얼']||it['#']||'',
+        _rowIndex:it._rowIndex,
+        type:it['유형']||'기타',
+        label:it['내용']||'',
+        start:it['시작일']||'',
+        end:it['종료일']||'',
+        time:it['시간']||'',
+        person:it['담당자']||'',
+        author:it['작성자']||''
+      };
+    });
+  }catch(e){
+    console.warn('[loadPromoSpecial]',e);
+    PROMO_SPECIAL=[];
+  }
+}
 let selected=null,editing=null,panelOpen=false,activeFilters=[],activePrograms=[];
 
 // PIN
@@ -911,7 +930,7 @@ function updatePerfOpen(){
     p.o=(now>=ss&&now<=se)?1:0;
   });
 }
-async function initApp(){buildNav();startClock();updateRoleTag();await loadPrograms();await loadAllMasters();updatePerfOpen();loadData();}
+async function initApp(){buildNav();startClock();updateRoleTag();await loadPrograms();await loadAllMasters();await loadPromoSpecial();updatePerfOpen();loadData();}
 
 function updateRoleTag(){
   const el=document.getElementById('role-tag');
@@ -1148,7 +1167,8 @@ function closeSpecialEntry(){
   const el=document.getElementById('special-entry');
   if(el)el.innerHTML='';
 }
-function saveSpecialEntry(){
+async function saveSpecialEntry(){
+  if(userRole!=='admin'){showToast('관리자만 등록 가능','error');return;}
   const type=document.getElementById('sp-type').value;
   const label=(document.getElementById('sp-label').value||'').trim();
   const start=document.getElementById('sp-start').value;
@@ -1159,20 +1179,27 @@ function saveSpecialEntry(){
   if(!start){showFieldError('sp-start','시작일을 입력해주세요');return;}
   if(!end)end=start;
   if(end<start){showFieldError('sp-end','종료일은 시작일 이후여야 합니다');return;}
-  PROMO_SPECIAL.push({
-    id:Date.now(),
-    type:type,
-    label:label,
-    start:start,
-    end:end,
-    time:time||'',
-    person:person,
-    createdAt:new Date().toISOString()
-  });
-  savePromoSpecialLocal();
-  closeSpecialEntry();
-  renderCal();
-  showToast('특별 일정이 추가되었습니다 ('+type+')');
+  // KST 시각
+  const now=new Date();
+  const kstStr=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0')+' '+String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0')+':'+String(now.getSeconds()).padStart(2,'0');
+  const serial='SP-'+Date.now();
+  let author='admin';
+  try{author=localStorage.getItem('myApplicant')||'admin';}catch(e){}
+  showOverlayLoad();
+  try{
+    // PromoSpecial 11컬럼: # / 입력시간(KST) / 시리얼 / 시작일 / 종료일 / 시간 / 유형 / 내용 / 담당자 / 작성자 / 비고
+    await api('POST','/api/sheet/special',{values:[
+      '',kstStr,serial,start,end,time||'',type,label,person,author,''
+    ]});
+    await loadPromoSpecial();
+    closeSpecialEntry();
+    renderCal();
+    showToast('특별 일정이 추가되었습니다 ('+type+')');
+  }catch(e){
+    showToast('저장 실패: '+(e.message||e),'error');
+  }finally{
+    hideOverlayLoad();
+  }
 }
 
 // === 홍보 신청 검토 페이지 ===
@@ -3692,7 +3719,10 @@ function _typeLoop(elId,text,speed){
 async function loadData(){
   var cal=document.getElementById('cal');
   if(cal){cal.innerHTML='<div style="text-align:center;padding:60px;color:var(--dim);font-size:14px"><span id="lt"></span></div>';_typeLoop('lt','데이터를 불러오는 중입니다... \uD83D\uDE09',65);}
-  try{const d=await api('GET','/api/records');records=(d.records||[]).map(function(r,i){return Object.assign({},r,{_rowIndex:(r._rowIndex!==undefined?r._rowIndex:i+2)});});_typingId++;render();}catch(e){console.error(e);_typingId++;if(cal)cal.innerHTML='<div style="text-align:center;padding:60px;color:#E24B4A;font-size:14px">데이터 로드 실패</div>';}}
+  try{const d=await api('GET','/api/records');records=(d.records||[]).map(function(r,i){return Object.assign({},r,{_rowIndex:(r._rowIndex!==undefined?r._rowIndex:i+2)});});}catch(e){console.error(e);_typingId++;if(cal)cal.innerHTML='<div style="text-align:center;padding:60px;color:#E24B4A;font-size:14px">데이터 로드 실패</div>';return;}
+  // 특별 일정 — 실패해도 records 렌더는 진행
+  try{await loadPromoSpecial();}catch(e){console.warn('[loadData] promoSpecial',e);}
+  _typingId++;render();}
 
 // SharePoint Graph API 일관성 지연 회피용 - 변경 후 row 수 검증 + 자동 재시도
 async function syncReload(expectedDelta){
