@@ -173,7 +173,7 @@ button{font-family:inherit;cursor:pointer}
 .c.today .c-inner{scrollbar-color:rgba(80,100,140,0.22) transparent}
 .c.today .c-inner::-webkit-scrollbar-thumb{background:rgba(80,100,140,0.22);border-radius:2px}
 .c.today .c-inner::-webkit-scrollbar-track{background:transparent;margin-top:24px;margin-bottom:8px}
-.c{height:140px;padding:7px 8px 26px 8px;border-right:1px solid var(--border);position:relative;overflow:hidden;transition:all .15s;background:rgba(255,255,255,0.3)}
+.c{height:140px;padding:7px 8px 20px 8px;border-right:1px solid var(--border);position:relative;overflow:hidden;transition:all .15s;background:rgba(255,255,255,0.3)}
 .c:last-child{border-right:none}
 .c.nm{background:var(--nm-bg)}
 .c.past{background:var(--past-bg)}
@@ -210,10 +210,10 @@ button{font-family:inherit;cursor:pointer}
 }
 .diag{position:absolute;inset:0;background:repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(0,0,0,0.02) 4px,rgba(0,0,0,0.02) 5px);pointer-events:none}
 /* 특별 일정 세로 슬라이드 (전광판) — 한 줄 영역 항상 확보, 위로 사라지는 느낌 */
-.sp-area{position:absolute;bottom:10px;left:6px;right:6px;height:12px;overflow:hidden;pointer-events:auto}
+.sp-area{position:absolute;bottom:6px;left:6px;right:6px;height:10px;overflow:hidden;pointer-events:auto}
 .sp-track{position:relative;transition:transform 0.5s cubic-bezier(0.55,0,0.45,1);will-change:transform}
-.sp-item{height:12px;display:flex;align-items:center;gap:4px;font-size:9.5px;line-height:12px;white-space:nowrap;overflow:hidden}
-.sp-time{font-weight:700;color:var(--accent);min-width:32px;display:inline-block;text-align:left;font-variant-numeric:tabular-nums;flex-shrink:0}
+.sp-item{height:10px;display:flex;align-items:center;gap:4px;font-size:9px;line-height:10px;white-space:nowrap;overflow:hidden}
+.sp-time{font-weight:700;color:var(--accent);min-width:30px;display:inline-block;text-align:left;font-variant-numeric:tabular-nums;flex-shrink:0}
 .sp-time.off{color:#C04040}
 .sp-label{color:#555;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .c.past .sp-time,.c.past .sp-label{color:#bbb !important}
@@ -231,6 +231,7 @@ button{font-family:inherit;cursor:pointer}
 .week-collapsed:hover .wc-arrow{color:var(--accent);transform:translateX(2px)}
 .wc-range{color:#666;font-weight:500;font-variant-numeric:tabular-nums}
 .wc-count{margin-left:auto;color:var(--accent);font-weight:600;font-size:11px}
+.wc-count.empty{color:#ccc;font-weight:400;font-size:13px;letter-spacing:1px}
 /* 펼침 애니메이션 — 위에서 샤라락 슬라이드 다운 */
 .week.just-opened{animation:wk-slide-down 0.38s cubic-bezier(0.4,0,0.2,1);transform-origin:top}
 @keyframes wk-slide-down{
@@ -615,7 +616,7 @@ function renderExhibitBadge(d,nm,past){
 if(nm)return'';
 var st=getExhibitStatus(d);
 var colors=['#006B3C','#E84393'];
-var h='<div style="position:absolute;bottom:4px;left:0;right:0;display:flex;flex-direction:column;gap:3px;padding:0">';
+var h='<div style="position:absolute;bottom:2px;left:0;right:0;display:flex;flex-direction:column;gap:3px;padding:0">';
 for(var i=0;i<st.length;i++){
 h+='<div style="height:0;border-top:2px solid '+(past?'rgba(0,0,0,0.04)':st[i].on?colors[i]:'rgba(0,0,0,0.04)')+'"></div>';
 }
@@ -4074,7 +4075,8 @@ function renderCal(){
       h+='<div class="week-collapsed" onclick="expandWeek('+wi+')" title="클릭해서 펼치기">';
       h+='<span class="wc-arrow">▶</span>';
       h+='<span class="wc-range">'+(start.getMonth()+1)+'/'+start.getDate()+' ~ '+(end.getMonth()+1)+'/'+end.getDate()+'</span>';
-      h+='<span class="wc-count">'+(evCount>0?evCount+'개 일정':'일정 없음')+'</span>';
+      if(evCount>0){h+='<span class="wc-count">'+evCount+'개</span>';}
+      else{h+='<span class="wc-count empty">—</span>';}
       h+='</div>';
       return;
     }
@@ -4082,7 +4084,7 @@ function renderCal(){
     h+=`<div class="week${isTW?' tw':''}${justOpened?' just-opened':''}" style="${wi<weeks.length-1?'':'border-bottom:none'}">`;
     // 펼친 주 접기 버튼 (호버 시 표시) — 오늘 주는 제외
     if(!isTW){
-      h+='<button class="week-collapse-btn" onclick="event.stopPropagation();collapseWeek('+wi+')" title="이 주 접기">▲</button>';
+      h+='<button class="week-collapse-btn" onmousedown="event.stopPropagation()" onclick="event.stopPropagation();event.preventDefault();collapseWeek('+wi+')" title="이 주 접기">▲</button>';
     }
     week.forEach((d,di)=>{
       const key=dk(d),nm=d.getMonth()+1!==currentMonth,td=isToday(d),past=isThisMonth&&isPast(d)&&!td,isSat=di===4,isSun=di===5,isSel=selected===key,recs=nm?[]:getRecsForDate(d);
@@ -4231,7 +4233,7 @@ function startSpecialSlide(){
       const cnt=Number(tr.dataset.spCount)||1;
       if(cnt<=1)return;  // 항목 1개는 슬라이드 X
       const idx=_spSlideIdx%cnt;
-      tr.style.transform='translateY('+(-idx*12)+'px)';
+      tr.style.transform='translateY('+(-idx*10)+'px)';
     });
   },2800);  // 2.8초마다 다음 항목
 }
