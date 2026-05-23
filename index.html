@@ -1266,7 +1266,16 @@ async function saveSpecialEntry(){
 }
 
 // === 홍보 신청 검토 페이지 ===
-let _promoFilter={status:'all',q:'',hidePast:true,applicant:'',viewMode:'mine'};
+let _promoFilter={status:'all',q:'',hidePast:true,applicant:'',viewMode:'mine',sortBy:'',sortDir:'asc'};
+function setPromoSort(col){
+  if(_promoFilter.sortBy===col){
+    if(_promoFilter.sortDir==='asc'){_promoFilter.sortDir='desc';}
+    else{_promoFilter.sortBy='';_promoFilter.sortDir='asc';}  // 3번째 클릭 = 정렬 해제
+  }else{
+    _promoFilter.sortBy=col;_promoFilter.sortDir='asc';
+  }
+  renderPromoBoard();
+}
 function openPromoBoard(){
   const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closePromoBoard)"><div class="modal" style="width:96vw;max-width:1100px;max-height:88vh;overflow:auto;padding:24px;position:relative"><button class="modal-x" onclick="closePromoBoard()" title="닫기" aria-label="닫기">✕</button><div id="promo-board-body" style="text-align:center;padding:40px;color:#888">로딩 중...</div></div></div>';
   let el=document.getElementById('promo-board');
@@ -1311,33 +1320,57 @@ function renderPromoBoard(){
     const q=_promoFilter.q.toLowerCase();
     rows=rows.filter(function(r){return(r['콘텐츠 제목']||'').toLowerCase().includes(q)||(r['게시 담당자']||'').toLowerCase().includes(q)||(r['프로그램']||'').toLowerCase().includes(q);});
   }
-  // === 정렬: 1순위 대기 중 → 2순위 오늘 → 3순위 미래(가까운) → 4순위 과거(최근) ===
+  // === 정렬 ===
   const todayKey=getTodayKey();
-  function rowBucket(r){
-    const dk=getRecDateKey(r);
-    if(dk===todayKey)return 0;
-    if(dk>todayKey)return 1;
-    return 2;
+  // 시간 추출 헬퍼
+  function rowTimeStr(r){
+    const ts=r['입력시간(KST)'];
+    if(typeof ts==='string'&&ts.indexOf(' ')>-1)return ts.split(' ')[1].substr(0,5);
+    if(typeof ts==='number'){const tm=Math.round((ts%1)*1440),hh=Math.floor(tm/60),mm=tm%60;return String(hh).padStart(2,'0')+':'+String(mm).padStart(2,'0');}
+    return '';
   }
-  rows.sort(function(a,b){
-    // 대기 중은 항상 맨 위로
-    const ap=a['진행 상태']==='대기 중'?0:1;
-    const bp=b['진행 상태']==='대기 중'?0:1;
-    if(ap!==bp)return ap-bp;
-    // 버킷
-    const ab=rowBucket(a),bb=rowBucket(b);
-    if(ab!==bb)return ab-bb;
-    // 같은 버킷 내: 미래·오늘은 가까운 순(오름차순), 과거는 최근 순(내림차순)
-    const ad=getRecDateKey(a),bd=getRecDateKey(b);
-    if(ab===2){
-      if(ad!==bd)return bd.localeCompare(ad);
-    }else{
-      if(ad!==bd)return ad.localeCompare(bd);
+  // 날짜+시간 tiebreaker 키
+  function rowDtKey(r){return getRecDateKey(r)+' '+rowTimeStr(r);}
+  if(_promoFilter.sortBy){
+    // 컬럼 헤더 클릭 정렬 — tiebreaker는 날짜+시간 오름차순
+    const col=_promoFilter.sortBy,dir=_promoFilter.sortDir;
+    rows.sort(function(a,b){
+      let av='',bv='';
+      if(col==='no'){av=Number(a['#'])||a._rowIndex;bv=Number(b['#'])||b._rowIndex;}
+      else if(col==='status'){av=a['진행 상태']||'';bv=b['진행 상태']||'';}
+      else if(col==='date'){av=getRecDateKey(a);bv=getRecDateKey(b);}
+      else if(col==='time'){av=rowTimeStr(a);bv=rowTimeStr(b);}
+      else if(col==='platform'){av=(a['플랫폼 1']||'')+'·'+(a['플랫폼 2']||'');bv=(b['플랫폼 1']||'')+'·'+(b['플랫폼 2']||'');}
+      else if(col==='category'){av=a['콘텐츠 구분']||'';bv=b['콘텐츠 구분']||'';}
+      else if(col==='content'){av=a['콘텐츠 제목']||'';bv=b['콘텐츠 제목']||'';}
+      else if(col==='applicant'){av=a['게시 담당자']||'';bv=b['게시 담당자']||'';}
+      let cmp=0;
+      if(typeof av==='number'&&typeof bv==='number')cmp=av-bv;
+      else cmp=String(av).localeCompare(String(bv),'ko');
+      if(cmp!==0)return dir==='desc'?-cmp:cmp;
+      // tiebreaker: 날짜-시간 오름차순
+      return rowDtKey(a).localeCompare(rowDtKey(b));
+    });
+  }else{
+    // 기본 정렬: 대기 중 우선 → 오늘 → 미래(가까운) → 과거(최근)
+    function rowBucket(r){
+      const dk=getRecDateKey(r);
+      if(dk===todayKey)return 0;
+      if(dk>todayKey)return 1;
+      return 2;
     }
-    // 같은 날짜는 시간 오름차순
-    const at=Number(a['입력시간(KST)'])||0,bt=Number(b['입력시간(KST)'])||0;
-    return at-bt;
-  });
+    rows.sort(function(a,b){
+      const ap=a['진행 상태']==='대기 중'?0:1;
+      const bp=b['진행 상태']==='대기 중'?0:1;
+      if(ap!==bp)return ap-bp;
+      const ab=rowBucket(a),bb=rowBucket(b);
+      if(ab!==bb)return ab-bb;
+      const ad=getRecDateKey(a),bd=getRecDateKey(b);
+      if(ab===2){if(ad!==bd)return bd.localeCompare(ad);}
+      else{if(ad!==bd)return ad.localeCompare(bd);}
+      return rowTimeStr(a).localeCompare(rowTimeStr(b));
+    });
+  }
   // === 요약 카운트 (myApplicant 기준 또는 admin은 전체) ===
   function recIsMine(r){return myApplicant&&(r['게시 담당자']||'')===myApplicant;}
   const myRows=isAdmin?records.filter(recIsMine):records.filter(recIsMine);
@@ -1356,22 +1389,9 @@ function renderPromoBoard(){
   if(!isAdmin)html+='<button class="m-btn save" onclick="openPromoWizardFromBoard()" style="padding:7px 14px">+ 새 신청</button>';
   html+='<button class="m-btn cancel" onclick="renderPromoBoard()" style="padding:7px 12px" title="새로고침">↻</button>';
   html+='</div>';
-  // === 오늘 요약 텍스트 줄 + 한 줄 박스 ===
-  const _td=new Date();
-  const _dayNames=['일','월','화','수','목','금','토'];
-  const todayMonth=_td.getMonth()+1,todayDayNum=_td.getDate(),todayDow=_dayNames[_td.getDay()];
+  // === 오늘 요약 한 줄 박스 ===
   const todayAllCnt=records.filter(function(r){return getRecDateKey(r)===todayKey&&r['진행 상태']!=='취소';}).length;
   const todayDoneCnt=records.filter(function(r){return getRecDateKey(r)===todayKey&&r['진행 상태']==='완료';}).length;
-  const isAllDone=todayAllCnt>0&&todayAllCnt===todayDoneCnt;
-  // 오늘 요약 텍스트 (변수 부분 강조색1)
-  if(todayAllCnt>0){
-    html+='<div style="font-size:13px;color:#555;margin-bottom:10px;line-height:1.5;text-align:left">';
-    html+='오늘 (<span style="color:var(--accent);font-weight:700">'+todayMonth+'월 '+todayDayNum+'일 '+todayDow+'요일</span>) 홍보 일정 <span style="color:var(--accent);font-weight:700">'+todayAllCnt+'건 중 '+todayDoneCnt+'건</span>이 완료되었습니다.';
-    if(isAllDone)html+=' <span style="color:var(--accent);font-weight:700">(모두 완료)</span>';
-    html+='</div>';
-  }else{
-    html+='<div style="font-size:13px;color:#888;margin-bottom:10px;line-height:1.5;text-align:left">오늘 ('+todayMonth+'월 '+todayDayNum+'일 '+todayDow+'요일) 예정된 홍보 일정이 없습니다.</div>';
-  }
   // 한 줄 요약 박스
   html+='<div style="display:flex;align-items:center;gap:14px;padding:10px 16px;background:#fafafa;border:1px solid #f0f0f0;border-radius:10px;font-size:12px;margin-bottom:14px;flex-wrap:wrap;text-align:left">';
   html+='<span><span style="color:#888">'+(isAdmin?'전체':'내')+' 대기 중:</span> <span style="color:var(--peach);font-weight:700;margin-left:3px">'+myPending+'건</span></span>';
@@ -1399,7 +1419,7 @@ function renderPromoBoard(){
   }
   if(isAdmin){
     html+='<span style="width:1px;height:18px;background:#ddd;margin:0 4px"></span>';
-    html+='<select onchange="_promoFilter.applicant=this.value;renderPromoBoard()" style="padding:6px 10px;height:32px;box-sizing:border-box;border-radius:8px;border:1.5px solid #eee;font-size:12px;outline:none;background:#fff;font-family:inherit;line-height:1"><option value="">전체 신청자</option>';
+    html+='<select onchange="_promoFilter.applicant=this.value;renderPromoBoard()" style="padding:6px 10px;height:32px;width:140px;box-sizing:border-box;border-radius:8px;border:1.5px solid #eee;font-size:12px;outline:none;background:#fff;font-family:inherit;line-height:1"><option value="">전체 신청자</option>';
     PR_MANAGERS.forEach(function(m){const n=m['담당자'];html+='<option value="'+escapeHtml(n)+'"'+(_promoFilter.applicant===n?' selected':'')+'>'+escapeHtml(n)+'</option>';});
     html+='</select>';
   }
@@ -1424,15 +1444,23 @@ function renderPromoBoard(){
     }
     html+='</div>';
   }else{
+    // 정렬 가능 헤더 빌더 (액션 컬럼 제외 모두 정렬 가능)
+    function _sh(col,label,width){
+      const isOn=_promoFilter.sortBy===col;
+      const arrow=isOn?(_promoFilter.sortDir==='asc'?' ▲':' ▼'):'';
+      const widthStyle=width?'width:'+width+'px;':'';
+      const colorStyle=isOn?'color:var(--accent);':'';
+      return '<th onclick="setPromoSort(\''+col+'\')" style="padding:10px 12px;text-align:left;'+widthStyle+'cursor:pointer;user-select:none;'+colorStyle+'" title="클릭: 정렬 / 다시 클릭: 역순 / 한 번 더: 정렬 해제">'+label+'<span style="font-size:9px">'+arrow+'</span></th>';
+    }
     html+='<table style="width:100%;border-collapse:collapse;font-size:13px;text-align:left"><thead><tr style="background:#fafafa;color:#666;font-size:11px;text-transform:uppercase;letter-spacing:0.5px">';
-    html+='<th style="padding:10px 12px;text-align:left;width:48px">NO</th>';
-    html+='<th style="padding:10px 12px;text-align:left;width:80px">상태</th>';
-    html+='<th style="padding:10px 12px;text-align:left;width:90px">날짜</th>';
-    html+='<th style="padding:10px 12px;text-align:left;width:70px">시간</th>';
-    html+='<th style="padding:10px 12px;text-align:left;width:150px">플랫폼</th>';
-    html+='<th style="padding:10px 12px;text-align:left;width:70px">구분</th>';
-    html+='<th style="padding:10px 12px;text-align:left">콘텐츠</th>';
-    html+='<th style="padding:10px 12px;text-align:left;width:100px">신청자</th>';
+    html+=_sh('no','NO',48);
+    html+=_sh('status','상태',80);
+    html+=_sh('date','날짜',90);
+    html+=_sh('time','시간',70);
+    html+=_sh('platform','플랫폼',125);
+    html+=_sh('category','구분',70);
+    html+=_sh('content','콘텐츠',null);
+    html+=_sh('applicant','신청자',100);
     html+='<th style="padding:10px 4px;text-align:center;width:60px">액션</th>';
     html+='</tr></thead><tbody>';
     rows.forEach(function(r,idx){
