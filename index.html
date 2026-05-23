@@ -1123,31 +1123,33 @@ function renderPromoBoard(){
   // === 요약 박스 (내 신청 한눈에) ===
   if((!isAdmin&&myApplicant)||(isAdmin&&pendingCnt+myToday+myUpcoming>0)){
     html+='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px">';
-    html+=summaryCard('⏳','대기 중',myPending,'var(--accent)','rgba(74,77,231,0.08)',isAdmin?'전체':'내 신청');
+    html+=summaryCard('⏳','신청 중',myPending,'var(--accent)','rgba(74,77,231,0.08)',isAdmin?'전체':'내 신청');
     html+=summaryCard('🔥','오늘',myToday,'#C97A11','#FFF4DC',isAdmin?'전체':'내 일정');
     html+=summaryCard('📅','다가오는 7일',myUpcoming,'#0F8B4C','#E8F5EC',isAdmin?'전체':'내 일정');
     html+='</div>';
   }
   // === 필터 탭 ===
   html+='<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;align-items:center">';
-  const tabs=[{k:'all',l:'전체'},{k:'pending',l:'대기 중'},{k:'approved',l:'예정'},{k:'done',l:'완료'}];
+  const tabs=[{k:'all',l:'전체'},{k:'pending',l:'신청 중'},{k:'approved',l:'예정'},{k:'done',l:'완료'}];
+  const ctrlStyle='display:inline-flex;align-items:center;padding:6px 14px;height:32px;box-sizing:border-box;border-radius:16px;font-size:12px;line-height:1;cursor:pointer;font-family:inherit';
   tabs.forEach(function(t){
     const on=_promoFilter.status===t.k;
-    html+='<button onclick="_promoFilter.status=\''+t.k+'\';renderPromoBoard()" style="padding:6px 14px;border-radius:16px;border:1.5px solid '+(on?'var(--accent)':'#ddd')+';background:'+(on?'rgba(74,77,231,0.08)':'#fff')+';color:'+(on?'var(--accent)':'#666')+';font-size:12px;font-weight:'+(on?'600':'500')+';cursor:pointer;height:30px;line-height:1">'+t.l+'</button>';
+    html+='<button onclick="_promoFilter.status=\''+t.k+'\';renderPromoBoard()" style="'+ctrlStyle+';border:1.5px solid '+(on?'var(--accent)':'#ddd')+';background:'+(on?'rgba(74,77,231,0.08)':'#fff')+';color:'+(on?'var(--accent)':'#666')+';font-weight:'+(on?'600':'500')+'">'+t.l+'</button>';
   });
-  html+='<label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:#666;margin-left:8px;cursor:pointer;user-select:none;height:30px;line-height:1"><input type="checkbox"'+(_promoFilter.hidePast?' checked':'')+' onchange="_promoFilter.hidePast=this.checked;renderPromoBoard()" style="cursor:pointer;margin:0">지난 일정 감추기</label>';
-  // === 본인/전체 토글 (구분선 + 토글 버튼) ===
+  // 지난 일정 감추기 체크박스 (탭과 동일 높이/box-sizing/border 투명)
+  html+='<label style="'+ctrlStyle+';gap:6px;border:1.5px solid transparent;color:#666;user-select:none;margin-left:4px"><input type="checkbox"'+(_promoFilter.hidePast?' checked':'')+' onchange="_promoFilter.hidePast=this.checked;renderPromoBoard()" style="cursor:pointer;margin:0;vertical-align:middle">지난 일정 감추기</label>';
+  // === 본인/전체 토글 ===
   if(myApplicant){
     html+='<span style="width:1px;height:18px;background:#ddd;margin:0 4px"></span>';
     const showAll=_promoFilter.viewMode==='all';
-    html+='<button onclick="_promoFilter.viewMode=\''+(showAll?'mine':'all')+'\';renderPromoBoard()" style="padding:6px 14px;border-radius:16px;border:1.5px solid '+(showAll?'var(--accent)':'#ddd')+';background:'+(showAll?'rgba(74,77,231,0.08)':'#fff')+';color:'+(showAll?'var(--accent)':'#666')+';font-size:12px;font-weight:'+(showAll?'600':'500')+';cursor:pointer;height:30px;line-height:1" title="'+(showAll?'클릭하면 내 신청만 보기':'클릭하면 다른 사람 신청도 보기')+'">👥 '+(showAll?'전체 보기':'내 신청만')+'</button>';
+    html+='<button onclick="_promoFilter.viewMode=\''+(showAll?'mine':'all')+'\';renderPromoBoard()" style="'+ctrlStyle+';border:1.5px solid '+(showAll?'var(--accent)':'#ddd')+';background:'+(showAll?'rgba(74,77,231,0.08)':'#fff')+';color:'+(showAll?'var(--accent)':'#666')+';font-weight:'+(showAll?'600':'500')+'" title="'+(showAll?'클릭하면 내 신청만 보기':'클릭하면 다른 사람 신청도 보기')+'">👥 '+(showAll?'전체 보기':'내 신청만')+'</button>';
   }
   if(isAdmin&&_promoFilter.viewMode==='all'){
-    html+='<select onchange="_promoFilter.applicant=this.value;renderPromoBoard()" style="padding:5px 10px;border-radius:8px;border:1.5px solid #eee;font-size:12px;outline:none;background:#fff;font-family:inherit;height:30px"><option value="">전체 신청자</option>';
+    html+='<select onchange="_promoFilter.applicant=this.value;renderPromoBoard()" style="padding:6px 10px;height:32px;box-sizing:border-box;border-radius:8px;border:1.5px solid #eee;font-size:12px;outline:none;background:#fff;font-family:inherit;line-height:1"><option value="">전체 신청자</option>';
     PR_MANAGERS.forEach(function(m){const n=m['담당자'];html+='<option value="'+escapeHtml(n)+'"'+(_promoFilter.applicant===n?' selected':'')+'>'+escapeHtml(n)+'</option>';});
     html+='</select>';
   }
-  html+='<input type="text" placeholder="검색..." value="'+escapeHtml(_promoFilter.q)+'" oninput="onPromoSearch(this.value)" style="margin-left:auto;padding:6px 12px;border-radius:8px;border:1.5px solid #eee;font-size:12px;outline:none;width:200px;text-align:left;height:30px;box-sizing:border-box">';
+  html+='<input type="text" placeholder="검색..." value="'+escapeHtml(_promoFilter.q)+'" oninput="onPromoSearch(this.value)" style="margin-left:auto;padding:6px 12px;height:32px;box-sizing:border-box;border-radius:8px;border:1.5px solid #eee;font-size:12px;outline:none;width:200px;text-align:left;line-height:1;font-family:inherit">';
   html+='</div>';
   // === 빈 상태 처리 ===
   // 본인 신청 한 적 없는 user
@@ -1214,7 +1216,8 @@ function renderPromoBoard(){
       const baseBg=trBg.replace('background:','')||'transparent';
       html+='<tr onclick="openPromoBoardRow(\''+dateKey+'\','+r._rowIndex+')" style="border-bottom:1px solid #f0f0f0;cursor:pointer;'+trBg+';'+trBorder+'" onmouseover="this.style.background=\''+hoverBg+'\'" onmouseout="this.style.background=\''+baseBg+'\'">';
       html+='<td style="padding:10px 12px;text-align:left;color:#aaa;font-variant-numeric:tabular-nums">'+(idx+1)+'</td>';
-      html+='<td style="padding:10px 12px;text-align:left"><span style="display:inline-block;padding:3px 10px;border-radius:10px;background:'+sBg+';color:'+sColor+';font-size:11px;font-weight:600">'+escapeHtml(status)+'</span></td>';
+      const statusLabel=status==='대기 중'?'신청 중':status;
+      html+='<td style="padding:10px 12px;text-align:left"><span style="display:inline-block;padding:3px 10px;border-radius:10px;background:'+sBg+';color:'+sColor+';font-size:11px;font-weight:600">'+escapeHtml(statusLabel)+'</span></td>';
       // 일시 + D-day 같이
       html+='<td style="padding:10px 12px;text-align:left;color:#333"><div style="display:flex;align-items:center;gap:8px"><span>'+m2+'-'+d2+' '+timeStr+'</span><span style="font-size:10px;font-weight:700;color:'+ddCol+';padding:1px 6px;border-radius:8px;background:'+(isToday?'#FFF4DC':isFuture&&daysBetween(todayKey,dateKey)<=7?'rgba(74,77,231,0.08)':'#f5f5f5')+'">'+ddTxt+'</span></div></td>';
       html+='<td style="padding:10px 12px;text-align:left;color:#222;font-weight:500">'+escapeHtml(r['콘텐츠 제목']||'')+'<div style="font-size:11px;color:#888;font-weight:400;margin-top:2px">'+escapeHtml(r['프로그램']||'-')+'</div></td>';
