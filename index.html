@@ -4284,27 +4284,37 @@ function _updateRemote(){
   if(!cal)return;
   const states=_getWeekStates();
   const twIdx=states.findIndex(function(s){return s.isToday;});
-  // 타겟 wi 결정: 위쪽부터 첫 펼친 비마지노선 wi
-  let targetWi=-1;
-  for(let i=0;i<states.length;i++){
-    if(twIdx>=0&&i>=twIdx-1)break;  // 저번주(twIdx-1)부터는 마지노선이라 위치 기준 X
-    if(!states[i].isCollapsed){targetWi=i;break;}
-  }
-  // fallback: 다 접힘 상태 → 이번주(twIdx) 윗 라인 / 다른 달 → 가운데
-  if(targetWi===-1){
-    if(twIdx>=0)targetWi=twIdx;
-    else targetWi=Math.floor(states.length/2);
-  }
-  // 타겟 element의 윗 라인 좌표
   const weekEls=cal.children;
-  const targetEl=weekEls[targetWi];
-  if(targetEl){
-    const calRect=cal.getBoundingClientRect();
-    const elRect=targetEl.getBoundingClientRect();
-    const topPx=elRect.top-calRect.top;
+  const calRect=cal.getBoundingClientRect();
+  let topPx=null;
+  if(twIdx>=1){
+    // 일반: 저번주(twIdx-1) 시작 라인 + 위쪽 접힘 비율 × 저번주 height
+    const lastWkEl=weekEls[twIdx-1];
+    if(lastWkEl){
+      const lastWkRect=lastWkEl.getBoundingClientRect();
+      const lastWkTop=lastWkRect.top-calRect.top;
+      const lastWkHeight=lastWkRect.height;
+      // 위쪽 비마지노선 wi (0 ~ twIdx-2) 중 접힌 비율
+      let collapsedCount=0,totalCount=0;
+      for(let i=0;i<twIdx-1;i++){
+        totalCount++;
+        if(states[i].isCollapsed)collapsedCount++;
+      }
+      const ratio=totalCount>0?(collapsedCount/totalCount):0;
+      topPx=lastWkTop+ratio*lastWkHeight;
+    }
+  }else if(twIdx===0){
+    // 오늘이 첫 주 — 이번주 시작 = 0
+    const todayEl=weekEls[0];
+    if(todayEl){
+      topPx=todayEl.getBoundingClientRect().top-calRect.top;
+    }
+  }
+  if(topPx!==null){
     remote.style.top=topPx+'px';
     remote.style.left='50%';
   }else{
+    // 다른 달 — 캘린더 가운데
     remote.style.top='50%';
     remote.style.left='50%';
   }
