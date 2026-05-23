@@ -4276,19 +4276,28 @@ function renderCal(){
   // 리모콘 위치 + 상태 업데이트
   _updateRemote();
 }
-// 리모콘 위치 (저번주 윗 라인) + 비활성화 상태 동기화
+// 리모콘 위치 + 비활성화 상태 동기화
 function _updateRemote(){
   const remote=document.getElementById('cal-remote');
   if(!remote)return;
   const cal=document.getElementById('cal');
   if(!cal)return;
-  // 위치: 저번주 윗 라인 = 저번주(twIdx-1) element의 top
-  const weekEls=cal.children;
   const states=_getWeekStates();
   const twIdx=states.findIndex(function(s){return s.isToday;});
-  let targetEl=null;
-  if(twIdx>=1)targetEl=weekEls[twIdx-1];
-  else if(twIdx===0)targetEl=weekEls[0];
+  // 타겟 wi 결정: 위쪽부터 첫 펼친 비마지노선 wi
+  let targetWi=-1;
+  for(let i=0;i<states.length;i++){
+    if(twIdx>=0&&i>=twIdx-1)break;  // 저번주(twIdx-1)부터는 마지노선이라 위치 기준 X
+    if(!states[i].isCollapsed){targetWi=i;break;}
+  }
+  // fallback: 다 접힘 상태 → 이번주(twIdx) 윗 라인 / 다른 달 → 가운데
+  if(targetWi===-1){
+    if(twIdx>=0)targetWi=twIdx;
+    else targetWi=Math.floor(states.length/2);
+  }
+  // 타겟 element의 윗 라인 좌표
+  const weekEls=cal.children;
+  const targetEl=weekEls[targetWi];
   if(targetEl){
     const calRect=cal.getBoundingClientRect();
     const elRect=targetEl.getBoundingClientRect();
@@ -4296,7 +4305,6 @@ function _updateRemote(){
     remote.style.top=topPx+'px';
     remote.style.left='50%';
   }else{
-    // 오늘 주 없음 (다른 달) — 캘린더 정중앙
     remote.style.top='50%';
     remote.style.left='50%';
   }
