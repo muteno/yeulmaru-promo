@@ -1349,22 +1349,37 @@ function renderPromoBoard(){
   // 오늘 건수 (완료/취소 제외)
   const todayActiveCnt=records.filter(function(r){return getRecDateKey(r)===todayKey&&r['진행 상태']!=='완료'&&r['진행 상태']!=='취소';}).length;
   // === 헤더 ===
-  let html='<div style="display:flex;align-items:center;margin-bottom:14px;gap:8px;padding-bottom:14px;border-bottom:1px solid #eee">';
-  html+='<h3 style="margin:0;flex:1;text-align:left;display:flex;align-items:center;gap:10px">일정 확인 및 관리';
-  if(todayActiveCnt>0)html+='<span style="display:inline-flex;align-items:center;gap:4px;padding:4px 12px;border-radius:14px;background:var(--accent);color:#fff;font-size:11px;font-weight:700;letter-spacing:0.3px;box-shadow:0 1px 3px rgba(74,77,231,0.3)">📍 오늘 '+todayActiveCnt+'건</span>';
-  if(!isAdmin&&myApplicant)html+='<span style="font-size:11px;color:var(--accent);font-weight:600">· '+escapeHtml(myApplicant)+' 님</span>';
+  let html='<div style="display:flex;align-items:center;margin-bottom:10px;gap:8px;padding-bottom:14px;border-bottom:1px solid #eee">';
+  html+='<h3 style="margin:0;flex:1;text-align:left">일정 확인 및 관리';
+  if(!isAdmin&&myApplicant)html+='<span style="font-size:11px;color:var(--accent);font-weight:600;margin-left:8px">· '+escapeHtml(myApplicant)+' 님</span>';
   html+='</h3>';
   if(!isAdmin)html+='<button class="m-btn save" onclick="openPromoWizardFromBoard()" style="padding:7px 14px">+ 새 신청</button>';
   html+='<button class="m-btn cancel" onclick="renderPromoBoard()" style="padding:7px 12px" title="새로고침">↻</button>';
   html+='</div>';
-  // === 요약 박스 (내 신청 한눈에) ===
-  if((!isAdmin&&myApplicant)||(isAdmin&&pendingCnt+myToday+myUpcoming>0)){
-    html+='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px">';
-    html+=summaryCard('⏳','대기 중',myPending,'var(--accent)','rgba(74,77,231,0.08)',isAdmin?'전체':'내 신청');
-    html+=summaryCard('🔥','오늘',myToday,'#C97A11','#FFF4DC',isAdmin?'전체':'내 일정');
-    html+=summaryCard('📅','다가오는 7일',myUpcoming,'#0F8B4C','#E8F5EC',isAdmin?'전체':'내 일정');
+  // === 오늘 요약 텍스트 줄 + 한 줄 박스 ===
+  const _td=new Date();
+  const _dayNames=['일','월','화','수','목','금','토'];
+  const todayMonth=_td.getMonth()+1,todayDayNum=_td.getDate(),todayDow=_dayNames[_td.getDay()];
+  const todayAllCnt=records.filter(function(r){return getRecDateKey(r)===todayKey&&r['진행 상태']!=='취소';}).length;
+  const todayDoneCnt=records.filter(function(r){return getRecDateKey(r)===todayKey&&r['진행 상태']==='완료';}).length;
+  const isAllDone=todayAllCnt>0&&todayAllCnt===todayDoneCnt;
+  // 오늘 요약 텍스트 (변수 부분 강조색1)
+  if(todayAllCnt>0){
+    html+='<div style="font-size:13px;color:#555;margin-bottom:10px;line-height:1.5;text-align:left">';
+    html+='오늘 (<span style="color:var(--accent);font-weight:700">'+todayMonth+'월 '+todayDayNum+'일 '+todayDow+'요일</span>) 홍보 일정 <span style="color:var(--accent);font-weight:700">'+todayAllCnt+'건 중 '+todayDoneCnt+'건</span>이 완료되었습니다.';
+    if(isAllDone)html+=' <span style="color:var(--accent);font-weight:700">(모두 완료)</span>';
     html+='</div>';
+  }else{
+    html+='<div style="font-size:13px;color:#888;margin-bottom:10px;line-height:1.5;text-align:left">오늘 ('+todayMonth+'월 '+todayDayNum+'일 '+todayDow+'요일) 예정된 홍보 일정이 없습니다.</div>';
   }
+  // 한 줄 요약 박스
+  html+='<div style="display:flex;align-items:center;gap:14px;padding:10px 16px;background:#fafafa;border:1px solid #f0f0f0;border-radius:10px;font-size:12px;margin-bottom:14px;flex-wrap:wrap;text-align:left">';
+  html+='<span><span style="color:#888">'+(isAdmin?'전체':'내')+' 대기 중:</span> <span style="color:var(--peach);font-weight:700;margin-left:3px">'+myPending+'건</span></span>';
+  html+='<span style="color:#ddd;font-weight:300">|</span>';
+  html+='<span><span style="color:#888">오늘 일정:</span> <span style="color:var(--accent);font-weight:700;margin-left:3px">'+todayDoneCnt+' / '+todayAllCnt+'건</span></span>';
+  html+='<span style="color:#ddd;font-weight:300">|</span>';
+  html+='<span><span style="color:#888">다가오는 7일:</span> <span style="color:#0F8B4C;font-weight:700;margin-left:3px">'+myUpcoming+'건</span></span>';
+  html+='</div>';
   // === 필터 탭 ===
   html+='<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;align-items:center">';
   const tabs=[{k:'all',l:'전체'},{k:'pending',l:'대기 중'},{k:'approved',l:'예정'},{k:'done',l:'완료'}];
