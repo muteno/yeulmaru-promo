@@ -578,6 +578,10 @@ table.promo-board-table th:last-child .col-resize-handle{display:none}
 .panel-prog-cnt{font-size:11px;font-weight:700;color:var(--accent);background:rgba(74,77,231,0.1);padding:2px 8px;border-radius:10px;min-width:16px;text-align:center}
 .panel-prog-body{max-height:0;overflow:hidden;opacity:0;transition:max-height .35s cubic-bezier(0.4,0,0.2,1),opacity .2s ease,padding-top .25s ease;padding-top:0}
 .panel-prog-body.open{max-height:2000px;opacity:1;padding-top:8px;transition:max-height .45s cubic-bezier(0.4,0,0.2,1),opacity .3s ease .05s,padding-top .3s ease}
+/* 프로그램 row — URL 있으면 호버 강조 */
+.panel-perf-row[onclick]:hover{background:rgba(74,77,231,0.12) !important;transform:translateX(2px)}
+/* 캘린더 셀 안 프로그램 뱃지 — URL 있으면 호버 강조 */
+.perf-badge[onclick]:hover{filter:brightness(1.1);transform:translateY(-1px);transition:all .12s ease}
 .p-row1{display:flex;align-items:center;gap:8px}
 .p-row2{display:flex;align-items:center;gap:6px;min-width:0}
 .p-time{font-size:13px;font-weight:700;color:#333;font-variant-numeric:tabular-nums;line-height:1}
@@ -1034,9 +1038,10 @@ if(!cperfs.length)return'';
 var out='';
 for(var i=0;i<cperfs.length;i++){var perf=cperfs[i],fn=perf.f||perf.n,sn=perf.n,dd=perf.dday,lb=perf.t==='e'?'전':perf.t==='a'?'교':perf.t==='r'?'대':'공';
 var nameHtml='<span class="pf">'+fn+'</span><span class="ps">'+sn+'</span>';
+var clickAttr=(perf.u&&!past)?' onclick="event.stopPropagation();openPerfUrl(\''+escapeHtml(perf.u).replace(/'/g,'\\\'')+'\',\''+escapeHtml(fn).replace(/'/g,'\\\'')+'\')" title="공연 상세 페이지로 이동" style="cursor:pointer"':'';
 if(past)out+='<span style="display:inline-flex;align-items:center;margin-left:6px"><span style="display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;border-radius:50%;font-size:8px;background:rgba(0,0,0,0.05);color:rgba(0,0,0,0.22);flex-shrink:0">'+lb+'</span><span class="pname" style="margin-left:4px;font-size:9px;color:rgba(0,0,0,0.18)">'+nameHtml+'</span></span>';
-else if(td)out+='<span style="display:inline-flex;align-items:center;margin-left:6px"><span style="display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;border-radius:50%;font-size:8px;font-weight:600;background:rgba(255,255,255,0.85);color:#111;flex-shrink:0">'+lb+'</span><span class="pname" style="margin-left:5px;font-size:9px;font-weight:700;color:#111">'+nameHtml+'</span></span>';
-else out+='<span style="display:inline-flex;align-items:center;margin-left:6px"><span style="display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;border-radius:50%;font-size:8px;font-weight:600;background:var(--accent);color:#fff;flex-shrink:0">'+lb+'</span><span class="pname" style="margin-left:5px;font-size:9px;font-weight:700;color:var(--text)">'+nameHtml+'</span>'+(dd!==null&&dd!==0?'<span class="pday" style="margin-left:8px;font-size:9px;color:var(--dim);white-space:nowrap">'+getDdayText(dd)+'</span>':'')+'</span>';
+else if(td)out+='<span class="perf-badge"'+clickAttr+' style="display:inline-flex;align-items:center;margin-left:6px"><span style="display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;border-radius:50%;font-size:8px;font-weight:600;background:rgba(255,255,255,0.85);color:#111;flex-shrink:0">'+lb+'</span><span class="pname" style="margin-left:5px;font-size:9px;font-weight:700;color:#111">'+nameHtml+'</span></span>';
+else out+='<span class="perf-badge"'+clickAttr+' style="display:inline-flex;align-items:center;margin-left:6px"><span style="display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;border-radius:50%;font-size:8px;font-weight:600;background:var(--accent);color:#fff;flex-shrink:0">'+lb+'</span><span class="pname" style="margin-left:5px;font-size:9px;font-weight:700;color:var(--text)">'+nameHtml+'</span>'+(dd!==null&&dd!==0?'<span class="pday" style="margin-left:8px;font-size:9px;color:var(--dim);white-space:nowrap">'+getDdayText(dd)+'</span>':'')+'</span>';
 }return out;
 }
 let password='',userRole='user',records=[],currentYear=new Date().getFullYear(),currentMonth=new Date().getMonth()+1;
@@ -1128,7 +1133,8 @@ function programToPerf(p){
     ss:excelSerialToISO(p['판매시작일']),
     se:excelSerialToISO(p['판매종료일']),
     m:p['담당자']||'',
-    l:p['장소']||''
+    l:p['장소']||'',
+    u:p['URL']||p['공연 URL']||p['상세 링크']||p['링크']||''
   };
 }
 // SharePoint에서 프로그램 시트 fetch → PERFS 채우기
@@ -1515,6 +1521,13 @@ function openAnnualCalendar(){
 function closeAnnualCalendar(){
   const el=document.getElementById('annual-calendar');
   if(el)el.innerHTML='';
+}
+// === 프로그램 외부 링크 열기 — 확인 다이얼로그 후 새 창 ===
+async function openPerfUrl(url, perfName){
+  if(!url)return;
+  event&&event.stopPropagation&&event.stopPropagation();
+  const ok=await showConfirm('"'+perfName+'" 공연 페이지로 이동할까요?\n\n새 창에서 열려요.',{okText:'이동',cancelText:'취소'});
+  if(ok)window.open(url,'_blank','noopener,noreferrer');
 }
 // iframe 안에 강조색(#E85A3A 오렌지 → #4A4DE7 보라) override CSS 주입
 function injectAnnualTheme(iframe){
@@ -5516,9 +5529,11 @@ function openPanel(dateObj,recs){
       var ed=new Date(perf.e);ed.setHours(0,0,0,0);
       var dd=(ref>=sd&&ref<=ed)?0:Math.round((sd-ref)/86400000);
       var ddText=dd===0?'D-Day':dd>0?'D-'+dd:'';
-      h+='<div style="display:flex;align-items:center;padding:10px 12px;background:rgba(74,77,231,0.06);border-radius:10px;margin-bottom:6px;gap:10px">';
+      var hasUrl=!!perf.u;
+      var clickAttr=hasUrl?' onclick="openPerfUrl(\''+escapeHtml(perf.u).replace(/'/g,'\\\'')+'\',\''+escapeHtml(perf.f).replace(/'/g,'\\\'')+'\')" title="클릭하면 공연 페이지로 이동" style="cursor:pointer;"':' style="cursor:default;"';
+      h+='<div'+clickAttr+' class="panel-perf-row" style="display:flex;align-items:center;padding:10px 12px;background:rgba(74,77,231,0.06);border-radius:10px;margin-bottom:6px;gap:10px;transition:background .15s">';
       h+='<span style="display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;border-radius:50%;font-size:8px;font-weight:700;background:var(--accent);color:#fff;flex-shrink:0">공</span>';
-      h+='<div style="flex:1;min-width:0;overflow:hidden"><div style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+perf.f+'</div><div style="font-size:10px;color:var(--dim);margin-top:1px">4층 대극장</div></div>';
+      h+='<div style="flex:1;min-width:0;overflow:hidden"><div style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+perf.f+(hasUrl?' <span style="font-size:9px;color:var(--accent);font-weight:500;margin-left:2px">↗</span>':'')+'</div><div style="font-size:10px;color:var(--dim);margin-top:1px">4층 대극장</div></div>';
       if(ddText)h+='<span style="font-size:11px;font-weight:600;color:var(--accent);white-space:nowrap;flex-shrink:0">'+ddText+'</span>';
       h+='</div>';
     });
