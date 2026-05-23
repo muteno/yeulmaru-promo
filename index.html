@@ -1256,7 +1256,7 @@ function backToAdminMenu(){openAdminPanel();}
 
 // === Coming Soon 모달 (미구현 메뉴용) ===
 function showComingSoon(label){
-  const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeComingSoon)"><div class="modal" style="width:auto;min-width:320px;max-width:90vw;padding:36px 40px;text-align:center"><div style="font-size:56px;margin-bottom:12px;line-height:1">😉</div><h3 style="margin:0 0 6px;font-size:18px">'+escapeHtml(label)+'</h3><div style="color:#888;font-size:13px;margin-bottom:24px">아직 준비중이예요</div><button onclick="closeComingSoon()" style="padding:10px 32px;background:var(--accent);color:#fff;border:0;border-radius:10px;cursor:pointer;font-weight:600;font-size:13px">확인</button></div></div>';
+  const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeComingSoon)"><div class="modal" style="width:auto;min-width:320px;max-width:90vw;padding:36px 40px;text-align:center"><div style="font-size:56px;margin-bottom:12px;line-height:1">😉</div><h3 style="margin:0 0 6px;font-size:18px">'+escapeHtml(label)+'</h3><div style="color:#888;font-size:13px;margin-bottom:24px">아직 준비 중이에요</div><button onclick="closeComingSoon()" style="padding:10px 32px;background:var(--accent);color:#fff;border:0;border-radius:10px;cursor:pointer;font-weight:600;font-size:13px">확인</button></div></div>';
   let el=document.getElementById('coming-soon');
   if(!el){el=document.createElement('div');el.id='coming-soon';document.body.appendChild(el);}
   el.innerHTML=html;
@@ -2861,7 +2861,7 @@ function checkPwSalesEnd(){
   if(!_pwData.date||!_pwData.programEndDate)return;
   if(_pwData.isCustom)return;
   if(_pwData.date>_pwData.programEndDate){
-    warn.innerHTML='<div style="padding:10px 12px;background:#FFF0F0;border:1.5px solid #FFB8B8;border-radius:10px;color:#C04040;font-size:12px;font-weight:600">⚠️ 끝난 시점이예요. 다시 확인해주세요.<div style="font-weight:400;font-size:11px;color:#A05050;margin-top:3px">'+escapeHtml(_pwData.program)+'의 종료일: '+escapeHtml(_pwData.programEndDate)+'</div></div>';
+    warn.innerHTML='<div style="padding:10px 12px;background:#FFF0F0;border:1.5px solid #FFB8B8;border-radius:10px;color:#C04040;font-size:12px;font-weight:600">⚠️ 끝난 시점이에요. 다시 확인해주세요.<div style="font-weight:400;font-size:11px;color:#A05050;margin-top:3px">'+escapeHtml(_pwData.program)+'의 종료일: '+escapeHtml(_pwData.programEndDate)+'</div></div>';
   }
 }
 
@@ -4241,7 +4241,7 @@ function exportLogsCsv(){
 // === 일반화 시트 관리 (platform / content / manager 공용) ===
 async function openSheetAdmin(slug){
   const cfg=SHEET_CONFIG[slug];
-  if(!cfg){showToast('Unknown sheet: '+slug,'error');return;}
+  if(!cfg){showToast('알 수 없는 시트입니다: '+slug,'error');return;}
   const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeAdminPanel)"><div class="modal" style="width:96vw;max-width:1100px;max-height:88vh;overflow:auto;padding:24px"><div id="sheet-admin-body" style="text-align:center;padding:40px;color:#888">로딩 중...</div></div></div>';
   let el=document.getElementById('admin-panel');
   if(!el){el=document.createElement('div');el.id='admin-panel';document.body.appendChild(el);}
@@ -5514,6 +5514,7 @@ function showConfirm(msg, opts){
       '<button class="c-btn no" onclick="confirmResolve(false)">'+(opts.cancelText||'취소')+'</button>'+
       '<button class="c-btn '+okCls+'" onclick="confirmResolve(true)">'+(opts.okText||'확인')+'</button>';
     document.getElementById('confirm-modal').classList.add('show');
+    _attachConfirmKeyHandler(false);
   });
 }
 function showAlert(msg, opts){
@@ -5525,10 +5526,26 @@ function showAlert(msg, opts){
     const acts=document.getElementById('confirm-acts');
     acts.innerHTML='<button class="c-btn yes" onclick="confirmResolve(true)">'+(opts.okText||'확인')+'</button>';
     document.getElementById('confirm-modal').classList.add('show');
+    _attachConfirmKeyHandler(true);
   });
+}
+let _confirmKeyHandler=null;
+function _attachConfirmKeyHandler(isAlert){
+  if(_confirmKeyHandler)document.removeEventListener('keydown',_confirmKeyHandler);
+  _confirmKeyHandler=function(e){
+    if(e.key==='Escape'){
+      e.preventDefault();
+      confirmResolve(isAlert?true:false);  // alert는 Esc=확인, confirm은 Esc=취소
+    }else if(e.key==='Enter'){
+      e.preventDefault();
+      confirmResolve(true);
+    }
+  };
+  document.addEventListener('keydown',_confirmKeyHandler);
 }
 function confirmResolve(v){
   document.getElementById('confirm-modal').classList.remove('show');
+  if(_confirmKeyHandler){document.removeEventListener('keydown',_confirmKeyHandler);_confirmKeyHandler=null;}
   if(_confirmResolve){var r=_confirmResolve;_confirmResolve=null;r(v);}
 }
 
