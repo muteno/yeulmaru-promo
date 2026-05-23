@@ -239,6 +239,12 @@ button{font-family:inherit;cursor:pointer}
   60%{opacity:1}
   100%{opacity:1;transform:scaleY(1);max-height:200px}
 }
+/* 캘린더 stagger 애니메이션 (월 변경 / 첫 로드 시) — 행 단위 촤르륵 */
+.week.cal-anim,.week-collapsed.cal-anim{animation:cal-week-in 0.42s cubic-bezier(0.34,1.56,0.64,1) backwards}
+@keyframes cal-week-in{
+  0%{opacity:0;transform:translateY(-10px) scale(0.985)}
+  100%{opacity:1;transform:translateY(0) scale(1)}
+}
 /* 일정 확인 페이지 행 stagger 애니메이션 (촤르륵) */
 .promo-row{animation:promo-row-in 0.32s cubic-bezier(0.34,1.56,0.64,1) backwards}
 @keyframes promo-row-in{
@@ -668,6 +674,7 @@ let password='',userRole='user',records=[],currentYear=new Date().getFullYear(),
 // === 주차 접힘 상태 — 저저번 주차 이상 자동 접힘 ===
 let _weekState={};  // {wi: 'expanded'|'collapsed'} — 사용자 명시 상태
 let _justExpandedWeek=null;  // 펼친 직후 1회 — 애니메이션용
+let _calAnimateOnNextRender=true;  // 캘린더 stagger — 첫 로드/월 변경 시에만 true
 function expandWeek(wi){
   _weekState[wi]='expanded';
   _justExpandedWeek=wi;
@@ -4067,12 +4074,15 @@ function renderCal(){
     if(_weekState[wi]==='collapsed')isCollapsed=true;
     else if(_weekState[wi]==='expanded')isCollapsed=false;
     else isCollapsed=isThisMonth&&twIdx>=0&&wi<twIdx-1;
+    // stagger 애니메이션 (월 변경/첫 로드 시에만)
+    const _calAnim=_calAnimateOnNextRender?' cal-anim':'';
+    const _calDelay=_calAnimateOnNextRender?'animation-delay:'+(wi*45)+'ms;':'';
     if(isCollapsed){
       // 접힌 한 줄 — 클릭 시 펼침
       const start=week[0],end=week[week.length-1];
       let evCount=0;
       week.forEach(function(d){if(d.getMonth()+1===currentMonth)evCount+=getRecsForDate(d).length;});
-      h+='<div class="week-collapsed" onclick="expandWeek('+wi+')" title="클릭해서 펼치기">';
+      h+='<div class="week-collapsed'+_calAnim+'" style="'+_calDelay+'" onclick="expandWeek('+wi+')" title="클릭해서 펼치기">';
       h+='<span class="wc-arrow">▶</span>';
       h+='<span class="wc-range">'+(start.getMonth()+1)+'/'+start.getDate()+' ~ '+(end.getMonth()+1)+'/'+end.getDate()+'</span>';
       if(evCount>0){h+='<span class="wc-count">'+evCount+'개</span>';}
@@ -4081,7 +4091,7 @@ function renderCal(){
       return;
     }
     const justOpened=_justExpandedWeek===wi;
-    h+=`<div class="week${isTW?' tw':''}${justOpened?' just-opened':''}" style="${wi<weeks.length-1?'':'border-bottom:none'}">`;
+    h+=`<div class="week${isTW?' tw':''}${justOpened?' just-opened':''}${_calAnim}" style="${wi<weeks.length-1?'':'border-bottom:none;'}${_calDelay}">`;
     // 펼친 주 접기 버튼 (호버 시 표시) — 오늘 주는 제외
     if(!isTW){
       h+='<button class="week-collapse-btn" onmousedown="event.stopPropagation()" onclick="event.stopPropagation();event.preventDefault();collapseWeek('+wi+')" title="이 주 접기">▲</button>';
@@ -4131,6 +4141,7 @@ function renderCal(){
   startTodayMarquee();
   startSpecialSlide();
   if(_justExpandedWeek!==null){setTimeout(function(){_justExpandedWeek=null;},500);}
+  if(_calAnimateOnNextRender){_calAnimateOnNextRender=false;}
 }
 
 // 모든 .c 셀의 dn을 c 직접 자식(absolute)으로 이동 + c-inner에 fade mask 적용
@@ -4378,7 +4389,7 @@ function togglePanelPrograms(){
   arrow.classList.toggle('open',_panelProgramsOpen);
 }
 function closePanel(){panelOpen=false;selected=null;document.getElementById('panel').style.display='none';document.getElementById('main-area').style.marginRight='0';render();}
-function changeMonth(delta){currentMonth+=delta;if(currentMonth<1){currentMonth=12;currentYear--;}if(currentMonth>12){currentMonth=1;currentYear++;}closePanel();_weekState={};render();}
+function changeMonth(delta){currentMonth+=delta;if(currentMonth<1){currentMonth=12;currentYear--;}if(currentMonth>12){currentMonth=1;currentYear++;}closePanel();_weekState={};_calAnimateOnNextRender=true;render();}
 
 function onPlatChange(){
   const p=document.getElementById('f-plat').value;
