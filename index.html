@@ -1367,6 +1367,7 @@ async function initApp(){
   try{await loadPrograms();}catch(e){console.warn('[initApp loadPrograms]',e);}
   try{await loadAllMasters();}catch(e){console.warn('[initApp loadAllMasters]',e);}
   try{await loadPromoSpecial();}catch(e){console.warn('[initApp loadPromoSpecial]',e);}
+  try{await loadApplySettings();}catch(e){console.warn('[initApp loadApplySettings]',e);}
   updatePerfOpen();
   loadData();
 }
@@ -1496,7 +1497,8 @@ function openAdminPanel(){
     {id:'platform',label:'플랫폼 관리',desc:'플랫폼 시트 CRUD'},
     {id:'content',label:'콘텐츠 관리',desc:'콘텐츠 시트 CRUD'},
     {id:'users',label:'사용자 관리',desc:'담당자 + 여부 필터'},
-    {id:'programs',label:'프로그램 관리',desc:'프로그램 등록·수정·삭제'}
+    {id:'programs',label:'프로그램 관리',desc:'프로그램 등록·수정·삭제'},
+    {id:'applysettings',label:'신청 일정 관리',desc:'접수월 · 제외일자/시간 설정'}
   ];
   const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeAdminPanel)"><div class="modal admin-modal" style="width:520px;position:relative"><button class="modal-x" onclick="closeAdminPanel()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:14px;float:none;margin:0;z-index:10">✕</button><div style="display:flex;align-items:center;margin-bottom:14px;gap:8px;padding-bottom:14px;padding-right:48px;border-bottom:1px solid #eee"><h3 style="margin:0;flex:1;text-align:left">관리자 패널</h3></div><div style="font-size:12px;color:#888;margin-bottom:14px">관리할 항목을 골라 주세요</div><div class="admin-modal-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+items.map(it=>'<button class="admin-item" data-id="'+it.id+'" style="text-align:left;padding:14px;border:1px solid rgba(0,0,0,0.08);border-radius:12px;background:#fff;cursor:pointer;transition:all .15s"><div style="font-weight:700;font-size:14px;margin-bottom:4px">'+it.label+'</div><div style="font-size:11px;color:#888">'+it.desc+'</div></button>').join('')+'</div></div></div>';
   let el=document.getElementById('admin-panel');
@@ -4227,7 +4229,99 @@ function adminRoute(id){
   if(id==='users')return openSheetAdmin('manager');
   if(id==='schedule')return openPromoBoard();
   if(id==='logs')return openLogsAdmin();
+  if(id==='applysettings')return openApplySettings();
   showToast('['+id+'] 미구현','error');
+}
+
+// === 신청 일정 관리 (홍보접수설정 시트) ===
+let APPLY_SETTINGS={접수월:'',제외일자:'',제외시간:''};
+let APPLY_SETTINGS_ROWS={}; // key → rowIndex
+
+async function loadApplySettings(){
+  try{
+    const d=await api('GET','/api/sheet/applysettings');
+    APPLY_SETTINGS={접수월:'',제외일자:'',제외시간:''};
+    APPLY_SETTINGS_ROWS={};
+    (d.rows||[]).forEach(function(r){
+      const k=String(r['키']||'').trim();
+      const v=String(r['값']||'').trim();
+      if(k in APPLY_SETTINGS){
+        APPLY_SETTINGS[k]=v;
+        APPLY_SETTINGS_ROWS[k]=r._rowIndex;
+      }
+    });
+    return true;
+  }catch(e){
+    console.error('[loadApplySettings]',e);
+    return false;
+  }
+}
+
+async function openApplySettings(){
+  const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeAdminPanel)"><div class="modal" style="width:96vw;max-width:600px;max-height:88vh;overflow:auto;padding:24px;position:relative"><button class="modal-x" onclick="closeAdminPanel()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:14px;float:none;margin:0;z-index:10">✕</button><div id="apply-settings-body" style="text-align:center;padding:40px;color:#888">로딩 중...</div></div></div>';
+  let el=document.getElementById('admin-panel');
+  if(!el){el=document.createElement('div');el.id='admin-panel';document.body.appendChild(el);}
+  el.innerHTML=html;
+  const ok=await loadApplySettings();
+  renderApplySettings(ok);
+}
+
+function renderApplySettings(loadOk){
+  const body=document.getElementById('apply-settings-body');
+  if(!body)return;
+  if(!loadOk){
+    body.innerHTML='<div style="text-align:left"><div style="display:flex;align-items:center;margin-bottom:14px;gap:8px;padding-bottom:14px;padding-right:48px;border-bottom:1px solid #eee"><h3 style="margin:0;flex:1;text-align:left">신청 일정 관리</h3><button onclick="backToAdminMenu()" style="padding:7px 12px;border:1px solid rgba(0,0,0,0.08);border-radius:10px;background:#fff;cursor:pointer;font-size:13px">뒤로</button></div><div style="padding:30px;background:#fff8f3;border-radius:12px;color:#b35a30;line-height:1.7"><div style="font-weight:700;font-size:14px;margin-bottom:8px">⚠️ 시트 미생성 또는 Worker 미배포</div><div style="font-size:12px">아래 2개 작업이 끝나야 신청 일정 관리가 작동해:<br><br>1) Cloudflare Worker에 <code style="background:#fff;padding:2px 6px;border-radius:4px">"applysettings": "홍보접수설정"</code> 추가 → 저장 & 배포<br><br>2) SharePoint 통합 문서1.xlsm에 <code style="background:#fff;padding:2px 6px;border-radius:4px">홍보접수설정</code> 시트 추가 (A:키, B:값 — 접수월/제외일자/제외시간 3 row)</div></div></div>';
+    return;
+  }
+  const ym=APPLY_SETTINGS.접수월||'';
+  const exDates=APPLY_SETTINGS.제외일자||'';
+  const exTimes=APPLY_SETTINGS.제외시간||'';
+  let html='';
+  html+='<div style="display:flex;align-items:center;margin-bottom:10px;gap:8px;padding-bottom:14px;padding-right:48px;border-bottom:1px solid #eee">';
+  html+='<h3 style="margin:0;flex:1;text-align:left">신청 일정 관리</h3>';
+  html+='<button onclick="backToAdminMenu()" style="padding:7px 12px;border:1px solid rgba(0,0,0,0.08);border-radius:10px;background:#fff;cursor:pointer;font-size:13px">뒤로</button>';
+  html+='<button onclick="saveApplySettings()" style="padding:7px 16px;background:var(--accent);color:#fff;border:0;border-radius:10px;cursor:pointer;font-weight:600;font-size:13px">저장</button>';
+  html+='</div>';
+  html+='<div style="font-size:12px;color:#888;margin-bottom:18px">사용자가 신청할 수 있는 기간과 제외할 일자/시간을 설정해</div>';
+  html+='<div style="display:flex;flex-direction:column;gap:18px">';
+  // 접수월
+  html+='<div><label style="display:block;font-weight:600;margin-bottom:6px;font-size:13px">접수월</label><input type="month" id="as-ym" value="'+escapeHtml(ym)+'" style="width:100%;padding:10px 12px;border:1px solid rgba(0,0,0,0.1);border-radius:8px;font-size:14px;outline:none;font-family:inherit"><div style="font-size:11px;color:#888;margin-top:4px">예: 2026-06 — 이 월에만 사용자가 신청 가능</div></div>';
+  // 제외일자
+  html+='<div><label style="display:block;font-weight:600;margin-bottom:6px;font-size:13px">제외일자 <span style="font-weight:400;color:#888;font-size:11px">(쉼표 구분)</span></label><input type="text" id="as-exdates" value="'+escapeHtml(exDates)+'" placeholder="예: 2026-06-15, 2026-06-22" style="width:100%;padding:10px 12px;border:1px solid rgba(0,0,0,0.1);border-radius:8px;font-size:14px;outline:none;font-family:inherit"><div style="font-size:11px;color:#888;margin-top:4px">YYYY-MM-DD 형식, 쉼표로 구분. 이 일자는 사용자가 신청 못함</div></div>';
+  // 제외시간
+  html+='<div><label style="display:block;font-weight:600;margin-bottom:6px;font-size:13px">제외시간 <span style="font-weight:400;color:#888;font-size:11px">(쉼표 구분)</span></label><input type="text" id="as-extimes" value="'+escapeHtml(exTimes)+'" placeholder="예: 12:00, 18:00, 09:00-10:00" style="width:100%;padding:10px 12px;border:1px solid rgba(0,0,0,0.1);border-radius:8px;font-size:14px;outline:none;font-family:inherit"><div style="font-size:11px;color:#888;margin-top:4px">HH:MM 또는 HH:MM-HH:MM 형식, 쉼표로 구분</div></div>';
+  html+='</div>';
+  body.innerHTML=html;
+}
+
+async function saveApplySettings(){
+  const ym=(document.getElementById('as-ym')||{}).value||'';
+  const exd=(document.getElementById('as-exdates')||{}).value||'';
+  const ext=(document.getElementById('as-extimes')||{}).value||'';
+  const updates=[
+    {key:'접수월',value:ym},
+    {key:'제외일자',value:exd},
+    {key:'제외시간',value:ext}
+  ];
+  showOverlayLoad('저장 중입니다...');
+  try{
+    for(const u of updates){
+      const ri=APPLY_SETTINGS_ROWS[u.key];
+      if(ri){
+        await api('PATCH','/api/sheet/applysettings/'+ri,{values:[u.key,u.value]});
+      }else{
+        // row 없으면 추가
+        const r=await api('POST','/api/sheet/applysettings',{values:[u.key,u.value]});
+        if(r&&r.row)APPLY_SETTINGS_ROWS[u.key]=r.row;
+      }
+      APPLY_SETTINGS[u.key]=u.value;
+    }
+    showToast('저장되었습니다','success');
+  }catch(e){
+    showToast('저장 실패: '+e.message,'error');
+  }finally{
+    hideOverlayLoad();
+  }
 }
 
 // === 일정 관리 리스트뷰 (Phase 3D) ===
