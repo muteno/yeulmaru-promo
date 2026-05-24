@@ -4267,22 +4267,26 @@ function adminRoute(id){
 
 // === 신청 일정 관리 (홍보접수설정 시트) ===
 // 데이터 모델:
-//  - 접수월 (단일 row)
-//  - 제외 (다중 row, 값 = "일자|시작|종료" 형식. 빈 칸 가능. 예: "2026-06-15||" 또는 "|18:00|22:00")
-let APPLY_SETTINGS={접수월:''};
+//  - 접수ON (boolean text "true"/"false")
+//  - 접수월 (단일 row, "YYYY-MM")
+//  - 제외 (다중 row, 값 = "일자|시작|종료" 형식)
+let APPLY_SETTINGS={접수ON:false,접수월:''};
 let APPLY_SETTINGS_ROWS={};
 let APPLY_EXCLUSIONS=[]; // [{rowIndex, date, start, end}]
 
 async function loadApplySettings(){
   try{
     const d=await api('GET','/api/sheet/applysettings');
-    APPLY_SETTINGS={접수월:''};
+    APPLY_SETTINGS={접수ON:false,접수월:''};
     APPLY_SETTINGS_ROWS={};
     APPLY_EXCLUSIONS=[];
     (d.rows||[]).forEach(function(r){
       const k=String(r['키']||'').trim();
       const v=String(r['값']||'').trim();
-      if(k==='접수월'){
+      if(k==='접수ON'){
+        APPLY_SETTINGS.접수ON=(v==='true'||v==='TRUE'||v==='1');
+        APPLY_SETTINGS_ROWS.접수ON=r._rowIndex;
+      }else if(k==='접수월'){
         APPLY_SETTINGS.접수월=v;
         APPLY_SETTINGS_ROWS.접수월=r._rowIndex;
       }else if(k==='제외'){
@@ -4294,7 +4298,6 @@ async function loadApplySettings(){
           end:(parts[2]||'').trim()
         });
       }
-      // 기존 호환: 제외일자/제외시간 row는 무시 (구버전 데이터)
     });
     return true;
   }catch(e){
@@ -4319,88 +4322,117 @@ function renderApplySettings(loadOk){
     body.innerHTML='<div style="text-align:left"><div style="display:flex;align-items:center;margin-bottom:14px;gap:8px;padding-bottom:14px;padding-right:48px;border-bottom:1px solid #eee"><h3 style="margin:0;flex:1;text-align:left">신청 일정 관리</h3><button onclick="backToAdminMenu()" style="padding:7px 12px;border:1px solid rgba(0,0,0,0.08);border-radius:10px;background:#fff;cursor:pointer;font-size:13px">뒤로</button></div><div style="padding:30px;background:#fff8f3;border-radius:12px;color:#b35a30;line-height:1.7"><div style="font-weight:700;font-size:14px;margin-bottom:8px">⚠️ 시트 미생성 또는 Worker 미배포</div><div style="font-size:12px">아래 2개 작업이 끝나야 신청 일정 관리가 작동합니다.<br><br>1) Cloudflare Worker SHEET_MAP에 <code style="background:#fff;padding:2px 6px;border-radius:4px">"applysettings": "홍보접수설정"</code> 추가 → 저장 & 배포<br><br>2) SharePoint 통합 문서1.xlsm에 <code style="background:#fff;padding:2px 6px;border-radius:4px">홍보접수설정</code> 시트 추가 (A:키, B:값)</div></div></div>';
     return;
   }
+  const isOn=!!APPLY_SETTINGS.접수ON;
   const ym=APPLY_SETTINGS.접수월||'';
-  const isRegistered=!!ym;
+  const ymParts=ym.split('-');
+  const curYear=ymParts.length===2?parseInt(ymParts[0]):new Date().getFullYear();
+  const curMonth=ymParts.length===2?parseInt(ymParts[1]):(new Date().getMonth()+1);
+  const hasYm=!!ym;
+  // 연도 옵션 (현재 ±3)
+  const thisYear=new Date().getFullYear();
+  let yearOpts='';
+  for(let y=thisYear-1;y<=thisYear+5;y++){
+    yearOpts+='<option value="'+y+'"'+(y===curYear?' selected':'')+'>'+y+'년</option>';
+  }
+  let monthOpts='';
+  for(let m=1;m<=12;m++){
+    monthOpts+='<option value="'+m+'"'+(m===curMonth?' selected':'')+'>'+m+'월</option>';
+  }
   let html='';
-  // 공통 헤더
+  // 헤더
   html+='<div style="display:flex;align-items:center;margin-bottom:14px;gap:8px;padding-bottom:14px;padding-right:48px;border-bottom:1px solid #eee">';
   html+='<h3 style="margin:0;flex:1;text-align:left">신청 일정 관리</h3>';
   html+='<button onclick="backToAdminMenu()" style="padding:7px 12px;border:1px solid rgba(0,0,0,0.08);border-radius:10px;background:#fff;cursor:pointer;font-size:13px">뒤로</button>';
-  if(!isRegistered)html+='<button onclick="openApplyEditForm()" style="padding:7px 16px;background:var(--accent);color:#fff;border:0;border-radius:10px;cursor:pointer;font-weight:600;font-size:13px">등록</button>';
   html+='</div>';
-  if(!isRegistered){
-    // 등록 안 됨 — 안내만
-    html+='<div style="padding:50px 30px;text-align:center;color:#888;font-size:14px;background:#fafafa;border-radius:12px">현재 접수 기간으로 설정한 기간이 없습니다</div>';
-  }else{
-    // 등록 됨 — 카드 형태
-    const exCount=APPLY_EXCLUSIONS.length;
-    // 접수월 표시 (YYYY-MM → YYYY년 M월)
-    const ymParts=ym.split('-');
-    const ymLabel=ymParts.length===2?(ymParts[0]+'년 '+parseInt(ymParts[1])+'월'):ym;
-    html+='<div style="background:#F8F7FC;border:1.5px solid rgba(74,77,231,0.15);border-radius:14px;padding:20px 22px">';
-    html+='<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">';
-    html+='<div style="flex:1"><div style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">접수 기간</div><div style="font-size:18px;font-weight:700;color:var(--text)">'+escapeHtml(ymLabel)+'</div></div>';
-    html+='<button onclick="openApplyEditForm()" style="padding:7px 14px;border:1px solid rgba(74,77,231,0.3);border-radius:10px;background:#fff;color:var(--accent);cursor:pointer;font-weight:600;font-size:12px">수정</button>';
-    html+='<button onclick="deleteAllApplySettings()" style="padding:7px 14px;border:1px solid rgba(226,75,74,0.3);border-radius:10px;background:#fff;color:#E24B4A;cursor:pointer;font-weight:600;font-size:12px">삭제</button>';
+  // ===== Step 1·2: 접수 상태 + 접수 기간 (한 묶음) =====
+  html+='<div style="display:flex;align-items:center;gap:14px;margin-bottom:10px;flex-wrap:wrap">';
+  // Step 1: 접수 상태 토글 chip
+  html+='<label style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;min-width:56px">접수 상태</label>';
+  html+='<div style="display:inline-flex;background:#F8F7FC;border-radius:10px;padding:3px;gap:2px">';
+  html+='<button onclick="setApplyOpen(true)" style="padding:7px 14px;border:0;border-radius:8px;cursor:pointer;font-weight:600;font-size:12px;background:'+(isOn?'var(--accent)':'transparent')+';color:'+(isOn?'#fff':'#888')+';transition:all .15s">열림</button>';
+  html+='<button onclick="setApplyOpen(false)" style="padding:7px 14px;border:0;border-radius:8px;cursor:pointer;font-weight:600;font-size:12px;background:'+(!isOn?'#888':'transparent')+';color:'+(!isOn?'#fff':'#888')+';transition:all .15s">닫힘</button>';
+  html+='</div>';
+  html+='<span id="as-on-status" style="font-size:11px;color:#888"></span>';
+  html+='</div>';
+  // Step 2: 접수 기간 (ON일 때만 활성)
+  html+='<div style="display:flex;align-items:center;gap:14px;margin-bottom:'+(isOn&&hasYm?'24px':'10px')+';flex-wrap:wrap;opacity:'+(isOn?'1':'0.4')+';pointer-events:'+(isOn?'auto':'none')+';transition:opacity .15s">';
+  html+='<label style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;min-width:56px">접수 기간</label>';
+  html+='<select id="as-year" onchange="saveApplyMonth()" onwheel="asSelectWheel(this,event)" style="padding:8px 12px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:10px;font-size:13px;outline:none;font-family:inherit;cursor:pointer">'+yearOpts+'</select>';
+  html+='<select id="as-month" onchange="saveApplyMonth()" onwheel="asSelectWheel(this,event)" style="padding:8px 12px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:10px;font-size:13px;outline:none;font-family:inherit;cursor:pointer">'+monthOpts+'</select>';
+  html+='<span id="as-ym-status" style="font-size:11px;color:#888"></span>';
+  html+='</div>';
+  // ===== Step 3: 제외 일정 (접수 ON + 기간 설정 시만) =====
+  if(isOn&&hasYm){
+    html+='<div style="padding-top:14px;border-top:1px solid #eee">';
+    html+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">';
+    html+='<label style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">제외 일정</label>';
+    html+='<button onclick="openExclusionForm(null)" style="padding:6px 12px;background:var(--accent);color:#fff;border:0;border-radius:8px;cursor:pointer;font-weight:600;font-size:12px">+ 등록</button>';
     html+='</div>';
-    // 제외 일정 요약
-    html+='<div style="padding-top:14px;border-top:1px solid rgba(0,0,0,0.06)">';
-    html+='<div style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">제외 일정 ('+exCount+'건)</div>';
-    if(exCount===0){
-      html+='<div style="font-size:13px;color:#aaa">제외 일정 없음</div>';
-    }else{
-      html+='<div style="display:flex;flex-direction:column;gap:6px">';
-      APPLY_EXCLUSIONS.forEach(function(ex){
-        const hasDate=!!ex.date,hasTime=!!(ex.start&&ex.end);
-        let label='';
-        if(hasDate&&!hasTime)label=ex.date+' (하루 전체)';
-        else if(!hasDate&&hasTime)label='매일 '+ex.start+'~'+ex.end;
-        else if(hasDate&&hasTime)label=ex.date+' '+ex.start+'~'+ex.end;
-        html+='<div style="font-size:13px;color:#555;padding:6px 10px;background:#fff;border-radius:8px">'+escapeHtml(label)+'</div>';
-      });
-      html+='</div>';
-    }
-    html+='</div>';
+    html+='<div style="font-size:11px;color:#888;line-height:1.6;margin-bottom:10px"><b>일자만</b> 입력 → 그날 전체 / <b>시간만</b> 입력 → 매일 그 시간 / <b>둘 다</b> 입력 → 특정 일자의 특정 시간만</div>';
+    html+='<div id="as-exclusion-list">'+buildExclusionListHtml()+'</div>';
     html+='</div>';
   }
   body.innerHTML=html;
 }
 
-// === 2차 팝업: 신청 일정 등록/수정 ===
-function openApplyEditForm(){
-  const ym=APPLY_SETTINGS.접수월||'';
-  let html='<div class="modal-bg show" style="z-index:60" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeApplyEditForm)"><div class="modal" style="width:96vw;max-width:720px;max-height:88vh;overflow:auto;padding:24px;position:relative">';
-  html+='<button class="modal-x" onclick="closeApplyEditForm()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:14px;float:none;margin:0;z-index:10">✕</button>';
-  // 헤더
-  html+='<div style="display:flex;align-items:center;margin-bottom:14px;gap:8px;padding-bottom:14px;padding-right:48px;border-bottom:1px solid #eee">';
-  html+='<h3 style="margin:0;flex:1;text-align:left">신청 일정 '+(ym?'수정':'등록')+'</h3>';
-  html+='</div>';
-  // 접수월
-  html+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:18px">';
-  html+='<label style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap">접수월</label>';
-  html+='<input id="as-ym" type="month" value="'+escapeHtml(ym)+'" onchange="saveApplyMonth()" style="flex:0 0 180px;padding:8px 12px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:10px;font-size:13px;outline:none;font-family:inherit">';
-  html+='<span id="as-ym-status" style="font-size:11px;color:#888"></span>';
-  html+='</div>';
-  // 제외 일정 헤더
-  html+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid #eee">';
-  html+='<div style="font-size:13px;font-weight:700">제외 일정</div>';
-  html+='<button onclick="openExclusionForm(null)" style="padding:6px 12px;background:var(--accent);color:#fff;border:0;border-radius:8px;cursor:pointer;font-weight:600;font-size:12px">+ 등록</button>';
-  html+='</div>';
-  // 안내
-  html+='<div style="font-size:11px;color:#888;line-height:1.6;margin-bottom:10px"><b>일자만</b> 입력 → 그날 전체 / <b>시간만</b> 입력 → 매일 그 시간 / <b>둘 다</b> 입력 → 특정 일자의 특정 시간만</div>';
-  // 목록 — 컨테이너 ID로 부분 갱신 지원
-  html+='<div id="as-exclusion-list">'+buildExclusionListHtml()+'</div>';
-  html+='</div></div>';
-  let el=document.getElementById('apply-edit-modal');
-  if(!el){el=document.createElement('div');el.id='apply-edit-modal';document.body.appendChild(el);}
-  el.innerHTML=html;
+// === Step 1: 접수 ON/OFF 토글 ===
+async function setApplyOpen(on){
+  const val=on?'true':'false';
+  const stEl=document.getElementById('as-on-status');
+  if(stEl){stEl.textContent='저장 중...';stEl.style.color='#888';}
+  try{
+    const ri=APPLY_SETTINGS_ROWS.접수ON;
+    if(ri){
+      await api('PATCH','/api/sheet/applysettings/'+ri,{values:['접수ON',val]});
+    }else{
+      const r=await api('POST','/api/sheet/applysettings',{values:['접수ON',val]});
+      if(r&&r.row)APPLY_SETTINGS_ROWS.접수ON=r.row;
+    }
+    APPLY_SETTINGS.접수ON=on;
+    renderApplySettings(true);
+    showToast(on?'접수가 열렸습니다':'접수가 닫혔습니다','success');
+  }catch(e){
+    if(stEl){stEl.textContent='저장 실패';stEl.style.color='#E24B4A';}
+    showToast('저장 실패: '+e.message,'error');
+  }
 }
 
-function closeApplyEditForm(){
-  const el=document.getElementById('apply-edit-modal');
-  if(el)el.innerHTML='';
-  // 1차 화면 갱신
-  renderApplySettings(true);
+// === Step 2: 접수월 저장 (연도/월 select change 시) ===
+async function saveApplyMonth(){
+  const y=(document.getElementById('as-year')||{}).value||'';
+  const m=(document.getElementById('as-month')||{}).value||'';
+  if(!y||!m)return;
+  const ym=y+'-'+String(parseInt(m)).padStart(2,'0');
+  const stEl=document.getElementById('as-ym-status');
+  if(stEl){stEl.textContent='저장 중...';stEl.style.color='#888';}
+  try{
+    const ri=APPLY_SETTINGS_ROWS.접수월;
+    if(ri){
+      await api('PATCH','/api/sheet/applysettings/'+ri,{values:['접수월',ym]});
+    }else{
+      const r=await api('POST','/api/sheet/applysettings',{values:['접수월',ym]});
+      if(r&&r.row)APPLY_SETTINGS_ROWS.접수월=r.row;
+    }
+    const wasEmpty=!APPLY_SETTINGS.접수월;
+    APPLY_SETTINGS.접수월=ym;
+    if(stEl){stEl.textContent='✓ 저장됨';stEl.style.color='#0F8B4C';setTimeout(function(){if(stEl)stEl.textContent='';},2000);}
+    // 첫 등록이면 Step 3 영역 노출
+    if(wasEmpty)renderApplySettings(true);
+  }catch(e){
+    if(stEl){stEl.textContent='저장 실패';stEl.style.color='#E24B4A';}
+    showToast('저장 실패: '+e.message,'error');
+  }
+}
+
+// === select 휠 스크롤 (위로 = 이전, 아래로 = 다음) ===
+function asSelectWheel(el,ev){
+  ev.preventDefault();
+  const idx=el.selectedIndex;
+  const newIdx=ev.deltaY>0?idx+1:idx-1;
+  if(newIdx>=0&&newIdx<el.options.length){
+    el.selectedIndex=newIdx;
+    if(el.onchange)el.onchange();
+  }
 }
 
 function buildExclusionListHtml(){
@@ -4431,52 +4463,6 @@ function buildExclusionListHtml(){
 function refreshExclusionList(){
   const el=document.getElementById('as-exclusion-list');
   if(el)el.innerHTML=buildExclusionListHtml();
-}
-
-// === 신청 일정 전체 삭제 ===
-async function deleteAllApplySettings(){
-  if(!await showConfirm('신청 일정을 전부 삭제할까요?\n\n접수월 + 제외 일정 '+APPLY_EXCLUSIONS.length+'건이 함께 삭제됩니다.',{okText:'삭제',danger:true}))return;
-  showOverlayLoad('삭제 중입니다...');
-  try{
-    // 접수월 row
-    const ri=APPLY_SETTINGS_ROWS.접수월;
-    if(ri)await api('DELETE','/api/sheet/applysettings/'+ri);
-    // 제외 row들
-    for(const ex of APPLY_EXCLUSIONS){
-      try{await api('DELETE','/api/sheet/applysettings/'+ex.rowIndex);}catch(e){console.warn('[deleteAllApplySettings ex]',e);}
-    }
-    // 캐시 reset
-    APPLY_SETTINGS={접수월:''};
-    APPLY_SETTINGS_ROWS={};
-    APPLY_EXCLUSIONS=[];
-    renderApplySettings(true);
-    showToast('삭제되었습니다','success');
-  }catch(e){
-    showToast('삭제 실패: '+e.message,'error');
-  }finally{
-    hideOverlayLoad();
-  }
-}
-
-// === 접수월만 별도 저장 (input change 시 즉시) ===
-async function saveApplyMonth(){
-  const ym=(document.getElementById('as-ym')||{}).value||'';
-  const stEl=document.getElementById('as-ym-status');
-  if(stEl){stEl.textContent='저장 중...';stEl.style.color='#888';}
-  try{
-    const ri=APPLY_SETTINGS_ROWS.접수월;
-    if(ri){
-      await api('PATCH','/api/sheet/applysettings/'+ri,{values:['접수월',ym]});
-    }else{
-      const r=await api('POST','/api/sheet/applysettings',{values:['접수월',ym]});
-      if(r&&r.row)APPLY_SETTINGS_ROWS.접수월=r.row;
-    }
-    APPLY_SETTINGS.접수월=ym;
-    if(stEl){stEl.textContent='✓ 저장됨';stEl.style.color='#0F8B4C';setTimeout(function(){if(stEl)stEl.textContent='';},2000);}
-  }catch(e){
-    if(stEl){stEl.textContent='저장 실패';stEl.style.color='#E24B4A';}
-    showToast('저장 실패: '+e.message,'error');
-  }
 }
 
 // === 2차 팝업: 제외 일정 등록/수정 폼 ===
@@ -4580,6 +4566,7 @@ async function saveApplySettings(){
 // === 신청 가능 여부 검증 ===
 function canApplyOnDate(dateKey){
   // dateKey = "YYYY-MM-DD"
+  if(!APPLY_SETTINGS.접수ON)return{ok:false,reason:'접수가 닫혀있습니다'};
   const ym=String(APPLY_SETTINGS.접수월||'').trim();
   if(!ym)return{ok:false,reason:'접수월이 설정되지 않았습니다'};
   const dateYm=dateKey.substring(0,7);
