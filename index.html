@@ -4395,9 +4395,9 @@ function renderApplySettings(loadOk){
     // ----- 공통 (시간만, 모든 일자 적용) -----
     html+='<div style="display:flex;align-items:center;gap:14px;margin-bottom:8px;flex-wrap:wrap">';
     html+='<label style="font-size:11px;color:#666;font-weight:600;letter-spacing:0.5px;white-space:nowrap;min-width:64px;padding-left:8px">공통</label>';
-    html+='<input id="cm-start" type="time" step="1800" placeholder="시작" onchange="onCommonStartChange()" onwheel="exTimeWheel(event,\'cm-start\')" style="width:140px;padding:8px 12px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:10px;font-size:13px;outline:none;font-family:inherit">';
+    html+='<input id="cm-start" type="time" step="1800" value="18:00" placeholder="시작" onchange="onCommonStartChange()" onwheel="exTimeWheel(event,\'cm-start\')" style="width:140px;padding:8px 12px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:10px;font-size:13px;outline:none;font-family:inherit">';
     html+='<span style="color:#aaa">~</span>';
-    html+='<input id="cm-end" type="time" step="1800" placeholder="종료" onwheel="exTimeWheel(event,\'cm-end\')" style="width:140px;padding:8px 12px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:10px;font-size:13px;outline:none;font-family:inherit">';
+    html+='<input id="cm-end" type="time" step="1800" value="09:00" placeholder="종료" onwheel="exTimeWheel(event,\'cm-end\')" style="width:140px;padding:8px 12px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:10px;font-size:13px;outline:none;font-family:inherit">';
     html+='<button onclick="addCommonExclusion()" style="padding:8px 16px;background:var(--accent);color:#fff;border:0;border-radius:10px;cursor:pointer;font-weight:600;font-size:12px">+ 추가</button>';
     html+='</div>';
     // 공통 chip 영역
@@ -4546,8 +4546,8 @@ async function addCommonExclusion(){
       await _postCommonRow(start,'23:59');
       await _postCommonRow('00:00',end);
     }
-    if(document.getElementById('cm-start'))document.getElementById('cm-start').value='';
-    if(document.getElementById('cm-end'))document.getElementById('cm-end').value='';
+    if(document.getElementById('cm-start'))document.getElementById('cm-start').value='18:00';
+    if(document.getElementById('cm-end'))document.getElementById('cm-end').value='09:00';
     invalidateApplyCache();
     refreshCommonChips();
     showToast('추가되었습니다','success');
@@ -4723,11 +4723,12 @@ function canApplyOnDate(dateKey){
 
 function canApplyAtTime(time){
   // time = "HH:MM" — 공통 시간(일자 없는 항목) 체크. 이전 호환용.
+  // 제외 범위: start 이상 ~ end 미만 (end 시점은 신청 가능)
   if(!time)return{ok:true};
   for(const ex of APPLY_EXCLUSIONS){
     if(!ex.date&&ex.start&&ex.end){
       // 공통 시간 (매일)
-      if(time>=ex.start&&time<=ex.end)return{ok:false,reason:'신청 불가 시간: '+ex.start+'-'+ex.end};
+      if(time>=ex.start&&time<ex.end)return{ok:false,reason:'신청 불가 시간: '+ex.start+'-'+ex.end};
     }
   }
   return{ok:true};
@@ -4735,6 +4736,7 @@ function canApplyAtTime(time){
 
 function canApplyOnDateTime(dateKey,time){
   // 통합 검증 — 일자 + 시간 결합 (개별 제외 슬롯 처리)
+  // 제외 범위: start 이상 ~ end 미만 (end 시점은 신청 가능)
   const dateChk=canApplyOnDate(dateKey);
   if(!dateChk.ok)return dateChk;
   const timeChk=canApplyAtTime(time);
@@ -4743,7 +4745,7 @@ function canApplyOnDateTime(dateKey,time){
   if(time){
     for(const ex of APPLY_EXCLUSIONS){
       if(ex.date===dateKey&&ex.start&&ex.end){
-        if(time>=ex.start&&time<=ex.end){
+        if(time>=ex.start&&time<ex.end){
           return{ok:false,reason:'신청 불가: '+ex.date+' '+ex.start+'-'+ex.end};
         }
       }
