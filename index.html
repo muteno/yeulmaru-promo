@@ -4270,9 +4270,15 @@ function adminRoute(id){
 //  - 접수ON (boolean text "true"/"false")
 //  - 접수월 (단일 row, "YYYY-MM")
 //  - 제외 (다중 row, 값 = "일자|시작|종료" 형식)
-let APPLY_SETTINGS={접수ON:false,접수월:''};
+//  - 자동_낮에만 (boolean, 17:00 이상 22:00 미만 자동 차단, default true)
+//  - 자동_일요일 (boolean, 일요일 자동 차단, default true)
+//  - 자동_휴무 (boolean, 담당자 휴무일 자동 차단, default false)
+let APPLY_SETTINGS={접수ON:false,접수월:'',자동_낮에만:true,자동_일요일:true,자동_휴무:false};
 let APPLY_SETTINGS_ROWS={};
 let APPLY_EXCLUSIONS=[]; // [{rowIndex, date, start, end}]
+
+// 자동 키 default 값
+const APPLY_AUTO_DEFAULTS={'자동_낮에만':true,'자동_일요일':true,'자동_휴무':false};
 
 // 캐시 (60초)
 let _applySettingsCache=null;
@@ -4293,7 +4299,8 @@ async function loadApplySettings(){
     const d=await api('GET','/api/sheet/applysettings');
     const t1=performance.now();
     console.log('[applysettings] api GET:',Math.round(t1-t0),'ms');
-    APPLY_SETTINGS={접수ON:false,접수월:''};
+    // default 값으로 초기화
+    APPLY_SETTINGS={접수ON:false,접수월:'',자동_낮에만:APPLY_AUTO_DEFAULTS['자동_낮에만'],자동_일요일:APPLY_AUTO_DEFAULTS['자동_일요일'],자동_휴무:APPLY_AUTO_DEFAULTS['자동_휴무']};
     APPLY_SETTINGS_ROWS={};
     APPLY_EXCLUSIONS=[];
     (d.rows||[]).forEach(function(r){
@@ -4313,6 +4320,9 @@ async function loadApplySettings(){
           start:(parts[1]||'').trim(),
           end:(parts[2]||'').trim()
         });
+      }else if(k==='자동_낮에만'||k==='자동_일요일'||k==='자동_휴무'){
+        APPLY_SETTINGS[k]=(v==='true'||v==='TRUE'||v==='1');
+        APPLY_SETTINGS_ROWS[k]=r._rowIndex;
       }
     });
     // 캐시 저장
@@ -4393,8 +4403,18 @@ function renderApplySettings(loadOk){
     html+='<label style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">제외 일정</label>';
     html+='</div>';
     // ----- 공통 (시간만, 모든 일자 적용) -----
-    html+='<div style="display:flex;align-items:center;gap:14px;margin-bottom:8px;flex-wrap:wrap">';
+    // 자동 옵션 체크박스
+    html+='<div style="display:flex;align-items:center;gap:14px;margin-bottom:6px;flex-wrap:wrap">';
     html+='<label style="font-size:11px;color:#666;font-weight:600;letter-spacing:0.5px;white-space:nowrap;min-width:64px;padding-left:8px">공통</label>';
+    html+='<div style="display:flex;align-items:center;gap:14px;font-size:12px;color:#555">';
+    html+='<label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;user-select:none"><input type="checkbox" '+(APPLY_SETTINGS['자동_낮에만']?'checked':'')+' onchange="setApplyAuto(\'자동_낮에만\',this.checked)" style="margin:0;cursor:pointer;accent-color:var(--accent)">낮에만</label>';
+    html+='<label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;user-select:none"><input type="checkbox" '+(APPLY_SETTINGS['자동_일요일']?'checked':'')+' onchange="setApplyAuto(\'자동_일요일\',this.checked)" style="margin:0;cursor:pointer;accent-color:var(--accent)">일</label>';
+    html+='<label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;user-select:none"><input type="checkbox" '+(APPLY_SETTINGS['자동_휴무']?'checked':'')+' onchange="setApplyAuto(\'자동_휴무\',this.checked)" style="margin:0;cursor:pointer;accent-color:var(--accent)">휴무</label>';
+    html+='</div>';
+    html+='</div>';
+    // 공통 시간 입력
+    html+='<div style="display:flex;align-items:center;gap:14px;margin-bottom:8px;flex-wrap:wrap">';
+    html+='<label style="font-size:11px;color:transparent;font-weight:600;letter-spacing:0.5px;white-space:nowrap;min-width:64px;padding-left:8px">공통</label>';
     html+='<input id="cm-start" type="time" step="1800" value="18:00" placeholder="시작" onchange="onCommonStartChange()" onwheel="exTimeWheel(event,\'cm-start\')" style="width:140px;padding:8px 12px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:10px;font-size:13px;outline:none;font-family:inherit">';
     html+='<span style="color:#aaa">~</span>';
     html+='<input id="cm-end" type="time" step="1800" value="09:00" placeholder="종료" onwheel="exTimeWheel(event,\'cm-end\')" style="width:140px;padding:8px 12px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:10px;font-size:13px;outline:none;font-family:inherit">';
@@ -4418,6 +4438,30 @@ function renderApplySettings(loadOk){
 }
 
 // === Step 1: 접수 ON/OFF 토글 ===
+// === 자동 옵션 토글 (낮에만/일요일/휴무) ===
+async function setApplyAuto(key,on){
+  const val=on?'true':'false';
+  showOverlayLoad('변경 중입니다...');
+  try{
+    const ri=APPLY_SETTINGS_ROWS[key];
+    if(ri){
+      await api('PATCH','/api/sheet/applysettings/'+ri,{values:[key,val]});
+    }else{
+      const r=await api('POST','/api/sheet/applysettings',{values:[key,val]});
+      if(r&&r.row)APPLY_SETTINGS_ROWS[key]=r.row;
+    }
+    APPLY_SETTINGS[key]=on;
+    invalidateApplyCache();
+    showToast((key.replace('자동_',''))+' '+(on?'적용':'해제'),'success');
+  }catch(e){
+    showToast('저장 실패: '+e.message,'error');
+    // 실패 시 UI 롤백
+    renderApplySettings(true);
+  }finally{
+    hideOverlayLoad();
+  }
+}
+
 async function setApplyOpen(on){
   const val=on?'true':'false';
   try{
@@ -4712,6 +4756,21 @@ function canApplyOnDate(dateKey){
   if(!ym)return{ok:false,reason:'접수월이 설정되지 않았습니다'};
   const dateYm=dateKey.substring(0,7);
   if(dateYm!==ym)return{ok:false,reason:'신청 가능한 월: '+ym};
+  // 자동_일요일 — 일요일 차단
+  if(APPLY_SETTINGS['자동_일요일']){
+    const d=new Date(dateKey+'T00:00:00');
+    if(d.getDay()===0)return{ok:false,reason:'일요일은 신청 불가'};
+  }
+  // 자동_휴무 — 담당자 휴무일 차단 (PROMO_SPECIAL type==='휴무')
+  if(APPLY_SETTINGS['자동_휴무']&&typeof PROMO_SPECIAL!=='undefined'){
+    for(const ps of PROMO_SPECIAL){
+      if(ps.type==='휴무'&&ps.start&&ps.end){
+        if(dateKey>=ps.start&&dateKey<=ps.end){
+          return{ok:false,reason:'담당자 휴무: '+(ps.label||ps.person||'')};
+        }
+      }
+    }
+  }
   // 제외 항목 — 일자 only (그날 전체) 체크
   for(const ex of APPLY_EXCLUSIONS){
     if(ex.date===dateKey&&!ex.start&&!ex.end){
@@ -4725,6 +4784,10 @@ function canApplyAtTime(time){
   // time = "HH:MM" — 공통 시간(일자 없는 항목) 체크. 이전 호환용.
   // 제외 범위: start 이상 ~ end 미만 (end 시점은 신청 가능)
   if(!time)return{ok:true};
+  // 자동_낮에만 — 17:00 이상 22:00 미만 차단
+  if(APPLY_SETTINGS['자동_낮에만']){
+    if(time>='17:00'&&time<'22:00')return{ok:false,reason:'낮에만 신청 가능 (17:00~22:00 제외)'};
+  }
   for(const ex of APPLY_EXCLUSIONS){
     if(!ex.date&&ex.start&&ex.end){
       // 공통 시간 (매일)
