@@ -5405,7 +5405,12 @@ function renderCal(){
         var applyingBadge=applying?'<span style="display:inline-block;background:#fff8f3;color:#b35a30;font-size:8px;font-weight:700;padding:1px 4px;border-radius:3px;margin-right:3px;border:1px solid rgba(216,132,85,0.3);letter-spacing:0">신청중</span>':'';
         var rowOpacity=applying?'0.85':(done?'0.6':'1');
         var border=applying?'border:1px dashed rgba(216,132,85,0.5);background:rgba(255,248,243,0.4);':'';
-        h+='<div class="ev'+(td&&evPast?' ev-past':'')+(applying?' ev-applying':'')+'" '+(userRole==='admin'&&!applying?'draggable="true" ondragstart="onEvDragStart(event,'+(r._rowIndex)+',\''+key+'\')" ondragend="onEvDragEnd(event)"':'')+' onclick="event.stopPropagation();editRec('+(r._rowIndex)+',\''+key+'\',event,true)"'+(userRole==='admin'?' oncontextmenu="onEvContextMenu(event,'+(r._rowIndex)+',\''+key+'\')"':'')+' style="cursor:'+(userRole==='admin'?'grab':'pointer')+';'+deco+border+'opacity:'+rowOpacity+'"><span class="ev-time" style="color:'+timeCol+';font-weight:600">'+hhmm+'</span><span class="ev-plat" style="color:'+platCol+';font-weight:600" title="'+(p2&&p2!=='-'?p2:p)+'">'+platDisplay(p,p2)+'</span><span class="ev-title" style="color:'+titleCol+'">'+applyingBadge+title+'</span></div>';
+        // 우클릭 메뉴: admin 또는 (user + 본인 신청 중)
+        var _myAppl='';try{_myAppl=localStorage.getItem('myApplicant')||'';}catch(e){}
+        var _isMine=_myAppl&&(r['게시 담당자']||'')===_myAppl;
+        var _canCtx=userRole==='admin'||(_isMine&&applying);
+        var _ctxAttr=_canCtx?' oncontextmenu="onEvContextMenu(event,'+(r._rowIndex)+',\''+key+'\')"':'';
+        h+='<div class="ev'+(td&&evPast?' ev-past':'')+(applying?' ev-applying':'')+'" '+(userRole==='admin'&&!applying?'draggable="true" ondragstart="onEvDragStart(event,'+(r._rowIndex)+',\''+key+'\')" ondragend="onEvDragEnd(event)"':'')+' onclick="event.stopPropagation();editRec('+(r._rowIndex)+',\''+key+'\',event,true)"'+_ctxAttr+' style="cursor:'+(userRole==='admin'?'grab':'pointer')+';'+deco+border+'opacity:'+rowOpacity+'"><span class="ev-time" style="color:'+timeCol+';font-weight:600">'+hhmm+'</span><span class="ev-plat" style="color:'+platCol+';font-weight:600" title="'+(p2&&p2!=='-'?p2:p)+'">'+platDisplay(p,p2)+'</span><span class="ev-title" style="color:'+titleCol+'">'+applyingBadge+title+'</span></div>';
       });
       h+='</div>';
       h+=renderExhibitBadge(d,nm,past);
@@ -5578,13 +5583,27 @@ function closeCellContextMenu(){
 }
 // 캘린더 이벤트 row 우클릭 → 수정/삭제
 function onEvContextMenu(event,rowIndex,dateKey){
-  if(userRole!=='admin')return;
+  const rec=records.find(function(r){return r._rowIndex===rowIndex;});
+  // 권한 체크: admin 또는 본인 "신청 중" 건
+  let menuHtml='';
+  if(userRole==='admin'){
+    menuHtml='<div class="ccm-item" onclick="closeCellContextMenu();editRec('+rowIndex+',\''+dateKey+'\',null,false)"><span class="emo">✏️</span>수정</div><div class="ccm-item" onclick="closeCellContextMenu();copyRec('+rowIndex+',\''+dateKey+'\')"><span class="emo">📋</span>복사</div><div class="ccm-item" onclick="closeCellContextMenu();deleteRec('+rowIndex+',\''+dateKey+'\')"><span class="emo">🗑️</span>삭제</div>';
+  }else if(rec){
+    let myAppl='';try{myAppl=localStorage.getItem('myApplicant')||'';}catch(e){}
+    const isMine=myAppl&&(rec['게시 담당자']||'')===myAppl;
+    const status=rec['진행 상태']||'';
+    if(isMine&&status==='신청 중'){
+      menuHtml='<div class="ccm-item" onclick="closeCellContextMenu();editRec('+rowIndex+',\''+dateKey+'\',null,false)"><span class="emo">✏️</span>수정</div><div class="ccm-item" onclick="closeCellContextMenu();deleteRec('+rowIndex+',\''+dateKey+'\')"><span class="emo">🗑️</span>신청 취소</div>';
+    }else{
+      return; // 다른 건은 우클릭 메뉴 안 띄움
+    }
+  }else return;
   event.preventDefault();
   event.stopPropagation();
   closeCellContextMenu();
   const menu=document.createElement('div');
   menu.id='cell-context-menu';
-  menu.innerHTML='<div class="ccm-item" onclick="closeCellContextMenu();editRec('+rowIndex+',\''+dateKey+'\',null,false)"><span class="emo">✏️</span>수정</div><div class="ccm-item" onclick="closeCellContextMenu();copyRec('+rowIndex+',\''+dateKey+'\')"><span class="emo">📋</span>복사</div><div class="ccm-item" onclick="closeCellContextMenu();deleteRec('+rowIndex+',\''+dateKey+'\')"><span class="emo">🗑️</span>삭제</div>';
+  menu.innerHTML=menuHtml;
   const mx=event.clientX,my=event.clientY;
   document.body.appendChild(menu);
   const rect=menu.getBoundingClientRect();
@@ -5661,7 +5680,13 @@ function openPanel(dateObj,recs){
     h+='<div class="p-row1">';
     if(time)h+='<span class="p-time">'+time+'</span>';
     if(st)h+='<span class="meta-chip '+statusClass(st)+'">'+escapeHtml(st)+'</span>';
-    if(userRole==='admin')h+='<button class="p-del" onclick="event.stopPropagation();deleteRec('+ri+',\''+dkey+'\')" title="삭제">✕</button>';
+    // 삭제 버튼: admin이거나, 본인이 신청한 "신청 중" 건
+    var _showDel=userRole==='admin';
+    if(!_showDel){
+      var _myAppl='';try{_myAppl=localStorage.getItem('myApplicant')||'';}catch(e){}
+      if(_myAppl&&(r['게시 담당자']||'')===_myAppl&&st==='신청 중')_showDel=true;
+    }
+    if(_showDel)h+='<button class="p-del" onclick="event.stopPropagation();deleteRec('+ri+',\''+dkey+'\')" title="'+(userRole==='admin'?'삭제':'신청 취소')+'">✕</button>';
     h+='</div>';
     h+='<div class="p-row2">';
     h+='<img class="p-plat-mini" src="'+icon+'" alt="'+escapeHtml(p1)+'" onerror="this.outerHTML=\'<span class=&quot;p-plat-mini-fallback&quot; style=&quot;background:'+col+'&quot;>'+escapeHtml(fallbackTxt)+'</span>\'">';
@@ -6008,6 +6033,14 @@ function editRec(rowIndex,dateKey,ev,forceReadOnly){
   if(ev&&ev.target&&ev.target.closest('.p-del'))return;
   var rec=records.find(function(r){return r._rowIndex===rowIndex;});
   if(!rec)return;
+  // 사용자 권한: 본인이 신청한 "신청 중" 건만 편집 가능. 그 외는 읽기 전용.
+  if(userRole!=='admin'){
+    var myAppl='';try{myAppl=localStorage.getItem('myApplicant')||'';}catch(e){}
+    var isMine=myAppl&&(rec['게시 담당자']||'')===myAppl;
+    var status=rec['진행 상태']||'';
+    var canEdit=isMine&&status==='신청 중';
+    if(!canEdit)forceReadOnly=true;
+  }
   openModal(dateKey,rec,{readOnly:!!forceReadOnly});
 }
 // 복사 직후 점등 효과용 — 셀 dateKey 저장
@@ -6302,7 +6335,28 @@ async function rejectPromo(){
 }
 
 async function deleteRec(rowIndex,dateKey){
-  if(userRole!=='admin'){showToast('관리자만 삭제할 수 있어요','error');return;}
+  const rec=records.find(function(x){return x._rowIndex===rowIndex;});
+  // 사용자: 본인이 신청한 "신청 중" 건은 본인이 삭제(취소) 가능
+  if(userRole!=='admin'){
+    if(!rec){showToast('대상을 찾을 수 없어요','error');return;}
+    let myAppl='';try{myAppl=localStorage.getItem('myApplicant')||'';}catch(e){}
+    const isMine=myAppl&&(rec['게시 담당자']||'')===myAppl;
+    const status=rec['진행 상태']||'';
+    if(!isMine){showToast('본인이 신청한 건만 취소할 수 있어요','error');return;}
+    if(status!=='신청 중'){showToast('이미 접수된 건은 취소할 수 없어요. 담당자에게 문의해 주세요','error');return;}
+    const ok=await showConfirm('"'+escapeHtml(rec['콘텐츠 제목']||'')+'"\n\n신청을 취소할까요?',{okText:'취소하기',danger:true});
+    if(!ok)return;
+    showOverlayLoad();
+    try{
+      await api('DELETE','/api/records/'+rowIndex);
+      await syncReload(-1);
+      closePanel();
+      showToast('신청이 취소됐어요');
+    }catch(e){showToast('취소 실패: '+e.message,'error');}
+    finally{hideOverlayLoad();}
+    return;
+  }
+  // admin
   const ok=await showConfirm('정말로 삭제할까요?');
   if(!ok)return;
   showOverlayLoad();
