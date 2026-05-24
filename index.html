@@ -976,7 +976,7 @@ function renderSpecialMarquee(d,nm,past){
     const tipParts=[typeStr];
     if(it.person)tipParts.push(it.person);
     if(it.label)tipParts.push(it.label);
-    const ctxAttr=userRole==='admin'?' oncontextmenu="event.stopPropagation();event.preventDefault();onSpContextMenu(event,'+it._rowIndex+');return false;"':'';
+    const ctxAttr=' oncontextmenu="event.stopPropagation();event.preventDefault();onSpContextMenu(event,'+it._rowIndex+');return false;"';
     const dragAttr=userRole==='admin'?' draggable="true" ondragstart="onSpDragStart(event,'+it._rowIndex+',\''+key+'\')" ondragend="onSpDragEnd(event)"':'';
     const cursorStyle=userRole==='admin'?'cursor:grab':'';
     inner+='<div class="sp-item"'+ctxAttr+dragAttr+' data-sp-row="'+it._rowIndex+'" style="'+cursorStyle+'" title="'+escapeHtml(tipParts.join(' · '))+(userRole==='admin'?' (우클릭: 수정/삭제 · 드래그: 이동)':'')+'">'+
@@ -2217,18 +2217,26 @@ async function deleteSpecialEntry(rowIndex){
 }
 // 우클릭 컨텍스트 메뉴
 function onSpContextMenu(event,rowIndex){
-  if(userRole!=='admin')return;
   event.preventDefault();
   event.stopPropagation();
   closeCellContextMenu();
   const menu=document.createElement('div');
   menu.id='cell-context-menu';
-  // 담당자 일정 메뉴 — 모달과 동일한 옅은 하늘색
-  menu.style.background='linear-gradient(135deg,#E0F2FE 0%,#F0F9FF 100%)';
-  menu.style.borderColor='rgba(125,211,252,0.5)';
-  menu.innerHTML=
-    '<div class="ccm-item" onclick="closeCellContextMenu();openSpecialEntry(null,'+rowIndex+')"><span class="emo">✏️</span>수정</div>'+
-    '<div class="ccm-item" onclick="closeCellContextMenu();deleteSpecialEntry('+rowIndex+')"><span class="emo">🗑️</span>삭제</div>';
+  if(userRole==='admin'){
+    // admin — 수정/삭제 메뉴 (옅은 하늘색)
+    menu.style.background='linear-gradient(135deg,#E0F2FE 0%,#F0F9FF 100%)';
+    menu.style.borderColor='rgba(125,211,252,0.5)';
+    menu.innerHTML=
+      '<div class="ccm-item" onclick="closeCellContextMenu();openSpecialEntry(null,'+rowIndex+')"><span class="emo">✏️</span>수정</div>'+
+      '<div class="ccm-item" onclick="closeCellContextMenu();deleteSpecialEntry('+rowIndex+')"><span class="emo">🗑️</span>삭제</div>';
+  }else{
+    // user — 담당자 일정 안내만 (수정 불가)
+    const rec=(PROMO_SPECIAL||[]).find(function(s){return s._rowIndex===rowIndex;});
+    const typeStr=rec?(rec.type||'일정'):'일정';
+    const person=rec&&rec.person?rec.person:'담당자';
+    const labelStr=rec&&rec.label&&rec.label!==typeStr?' — '+rec.label:'';
+    menu.innerHTML='<div style="padding:10px 14px;color:#0c4a6e;font-size:12px;line-height:1.4;background:linear-gradient(135deg,#E0F2FE 0%,#F0F9FF 100%);border:1px solid rgba(125,211,252,0.5);border-radius:8px;margin:2px;max-width:240px">📌 홍보 담당자 일정<br><span style="color:#075985;font-size:11px">'+escapeHtml(person)+' · '+escapeHtml(typeStr)+escapeHtml(labelStr)+'</span></div>';
+  }
   const mx=event.clientX,my=event.clientY;
   document.body.appendChild(menu);
   const rect=menu.getBoundingClientRect();
