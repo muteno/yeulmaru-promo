@@ -4386,8 +4386,10 @@ function renderApplySettings(loadOk){
     return;
   }
   const isOn=!!APPLY_SETTINGS.접수ON;
-  const ym=APPLY_SETTINGS.접수월||'';
-  const hasYm=!!ym;
+  const ymArr=getApplyMonths();
+  const hasYm=ymArr.length>0;
+  // 호환: 첫 번째 ym (Step 3 개별 일자 min/max용)
+  const ym=ymArr[0]||'';
   let html='';
   // 헤더 (뒤로 버튼은 모달 우상단 아이콘으로 분리됨)
   html+='<div style="display:flex;align-items:center;margin-bottom:14px;gap:8px;padding-bottom:14px;padding-right:96px;border-bottom:1px solid #eee">';
@@ -4404,17 +4406,29 @@ function renderApplySettings(loadOk){
   // ===== Step 2: 접수 기간 (input month + 휠 스크롤) =====
   html+='<div style="display:flex;align-items:center;gap:14px;margin-bottom:'+(isOn&&hasYm?'24px':'10px')+';flex-wrap:wrap;opacity:'+(isOn?'1':'0.4')+';pointer-events:'+(isOn?'auto':'none')+';transition:opacity .15s">';
   html+='<label style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;min-width:64px">접수 기간</label>';
-  html+='<input id="as-ym" type="month" value="'+escapeHtml(ym)+'" onchange="saveApplyMonth()" onwheel="asYmWheel(event)" style="width:140px;padding:8px 12px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:10px;font-size:13px;outline:none;font-family:inherit">';
-  html+='<span id="as-ym-status" style="font-size:11px;color:#888"></span>';
+  // 접수월 input 1~2개 + 추가/삭제 (최대 2개)
+  html+='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">';
+  html+='<input id="as-ym-0" type="month" value="'+escapeHtml(ymArr[0]||'')+'" onchange="saveApplyMonth(0)" onwheel="asYmWheel(event,0)" style="width:140px;padding:8px 12px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:10px;font-size:13px;outline:none;font-family:inherit">';
+  if(ymArr.length>=2){
+    html+='<input id="as-ym-1" type="month" value="'+escapeHtml(ymArr[1]||'')+'" onchange="saveApplyMonth(1)" onwheel="asYmWheel(event,1)" style="width:140px;padding:8px 12px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:10px;font-size:13px;outline:none;font-family:inherit">';
+    html+='<button onclick="removeApplyMonth(1)" title="제거" style="width:28px;height:28px;border-radius:50%;border:1px solid rgba(0,0,0,0.08);background:#fff;color:#888;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:14px;line-height:1">✕</button>';
+  }else if(hasYm){
+    html+='<button onclick="addApplyMonth()" style="padding:7px 12px;background:#fff;color:var(--accent);border:1px solid var(--accent);border-radius:10px;cursor:pointer;font-weight:600;font-size:12px">+ 월 추가</button>';
+  }
+  html+='<span id="as-ym-status" style="font-size:11px;color:#888;margin-left:4px"></span>';
+  html+='</div>';
   html+='</div>';
   // ===== Step 3: 제외 일정 (공통 + 개별 분리) =====
   if(isOn&&hasYm){
-    // 접수월 범위 (개별 일자 input min/max)
-    const ymParts2=ym.split('-');
-    const yr=parseInt(ymParts2[0]),mo=parseInt(ymParts2[1]);
-    const lastDay=new Date(yr,mo,0).getDate();
-    const ymMin=ym+'-01';
-    const ymMax=ym+'-'+String(lastDay).padStart(2,'0');
+    // 접수월 범위 (개별 일자 input min/max) — 배열 중 가장 빠른 ~ 가장 늦은 ym 말일
+    const sortedYms=ymArr.slice().sort();
+    const firstYm=sortedYms[0];
+    const lastYm=sortedYms[sortedYms.length-1];
+    const lastYmParts=lastYm.split('-');
+    const lastYr=parseInt(lastYmParts[0]),lastMo=parseInt(lastYmParts[1]);
+    const lastDay=new Date(lastYr,lastMo,0).getDate();
+    const ymMin=firstYm+'-01';
+    const ymMax=lastYm+'-'+String(lastDay).padStart(2,'0');
     // 제외 일정 헤더 (구분선)
     html+='<div style="margin-top:18px;padding-top:14px;border-top:1px solid #eee;margin-bottom:6px">';
     html+='<label style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">제외 일정</label>';
@@ -4498,25 +4512,28 @@ async function setApplyOpen(on){
   }
 }
 
-// === Step 2: 접수월 저장 (input month change 시) ===
-async function saveApplyMonth(){
-  const ym=(document.getElementById('as-ym')||{}).value||'';
+// === Step 2: 접수월 저장 (input month change 시) — 인덱스별 처리 ===
+async function saveApplyMonth(idx){
+  idx=idx||0;
+  const ym=(document.getElementById('as-ym-'+idx)||{}).value||'';
   if(!ym)return;
   const stEl=document.getElementById('as-ym-status');
   if(stEl){stEl.textContent='저장 중...';stEl.style.color='#888';}
   try{
-    const ri=APPLY_SETTINGS_ROWS.접수월;
+    const rows=getApplyMonthRows();
+    const ri=rows[idx];
     if(ri){
       await api('PATCH','/api/sheet/applysettings/'+ri,{values:['접수월',ym]});
     }else{
       const r=await api('POST','/api/sheet/applysettings',{values:['접수월',ym]});
-      if(r&&r.row)APPLY_SETTINGS_ROWS.접수월=r.row;
+      if(!Array.isArray(APPLY_SETTINGS_ROWS.접수월))APPLY_SETTINGS_ROWS.접수월=[];
+      if(r&&r.row)APPLY_SETTINGS_ROWS.접수월[idx]=r.row;
     }
-    const wasEmpty=!APPLY_SETTINGS.접수월;
-    APPLY_SETTINGS.접수월=ym;
+    const wasEmpty=!getApplyMonths().length;
+    if(!Array.isArray(APPLY_SETTINGS.접수월))APPLY_SETTINGS.접수월=[];
+    APPLY_SETTINGS.접수월[idx]=ym;
     invalidateApplyCache();
     if(stEl){stEl.textContent='✓ 저장됨';stEl.style.color='#0F8B4C';setTimeout(function(){if(stEl)stEl.textContent='';},2000);}
-    // 첫 등록이면 Step 3 영역 노출
     if(wasEmpty)renderApplySettings(true);
   }catch(e){
     if(stEl){stEl.textContent='저장 실패';stEl.style.color='#E24B4A';}
@@ -4524,13 +4541,69 @@ async function saveApplyMonth(){
   }
 }
 
+// === 접수월 추가 (1개 → 2개) ===
+async function addApplyMonth(){
+  const arr=getApplyMonths();
+  if(arr.length>=2){showToast('접수월은 최대 2개까지 가능합니다','error');return;}
+  let nextYm='';
+  if(arr.length===1){
+    const parts=arr[0].split('-');
+    const y=parseInt(parts[0]),m=parseInt(parts[1]);
+    const nm=m===12?1:m+1;
+    const ny=m===12?y+1:y;
+    nextYm=ny+'-'+String(nm).padStart(2,'0');
+  }else{
+    const d=new Date();
+    nextYm=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+  }
+  showOverlayLoad('추가 중입니다...');
+  try{
+    const r=await api('POST','/api/sheet/applysettings',{values:['접수월',nextYm]});
+    if(!Array.isArray(APPLY_SETTINGS.접수월))APPLY_SETTINGS.접수월=[];
+    if(!Array.isArray(APPLY_SETTINGS_ROWS.접수월))APPLY_SETTINGS_ROWS.접수월=[];
+    APPLY_SETTINGS.접수월.push(nextYm);
+    if(r&&r.row)APPLY_SETTINGS_ROWS.접수월.push(r.row);
+    invalidateApplyCache();
+    renderApplySettings(true);
+    showToast('접수월 추가됨','success');
+  }catch(e){
+    showToast('추가 실패: '+e.message,'error');
+  }finally{
+    hideOverlayLoad();
+  }
+}
+
+// === 접수월 제거 ===
+async function removeApplyMonth(idx){
+  const arr=getApplyMonths();
+  if(idx<0||idx>=arr.length)return;
+  if(arr.length<=1){showToast('최소 1개는 남겨야 합니다','error');return;}
+  const ok=await showConfirm('이 접수월을 제거하시겠어요?',{okText:'제거',danger:true});
+  if(!ok)return;
+  const rows=getApplyMonthRows();
+  const ri=rows[idx];
+  showOverlayLoad('제거 중입니다...');
+  try{
+    if(ri)await api('DELETE','/api/sheet/applysettings/'+ri);
+    if(Array.isArray(APPLY_SETTINGS.접수월))APPLY_SETTINGS.접수월.splice(idx,1);
+    if(Array.isArray(APPLY_SETTINGS_ROWS.접수월))APPLY_SETTINGS_ROWS.접수월.splice(idx,1);
+    invalidateApplyCache();
+    renderApplySettings(true);
+    showToast('접수월 제거됨','success');
+  }catch(e){
+    showToast('제거 실패: '+e.message,'error');
+  }finally{
+    hideOverlayLoad();
+  }
+}
+
 // === input month 휠 스크롤 (위로 = 이전 월, 아래로 = 다음 월) ===
-function asYmWheel(ev){
+function asYmWheel(ev, idx){
   ev.preventDefault();
-  const el=document.getElementById('as-ym');if(!el)return;
+  idx=idx||0;
+  const el=document.getElementById('as-ym-'+idx);if(!el)return;
   let v=el.value||'';
   if(!v){
-    // 빈 값이면 오늘 기준
     const d=new Date();
     v=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
   }
@@ -4634,7 +4707,7 @@ async function addIndividualExclusion(){
   if(!date){showToast('일자를 선택해 주세요','error');return;}
   if(!start||!end){showToast('시작/종료 시간을 입력해 주세요','error');return;}
   if(start>=end){showToast('종료 시간이 시작 시간보다 늦어야 합니다 (개별은 자정 넘는 시간 불가)','error');return;}
-  if(date.substring(0,7)!==APPLY_SETTINGS.접수월){showToast('접수월 안의 일자만 등록 가능합니다','error');return;}
+  if(!getApplyMonths().includes(date.substring(0,7))){showToast('접수월 안의 일자만 등록 가능합니다','error');return;}
   // 중복 검증
   const dup=APPLY_EXCLUSIONS.some(function(ex){return ex.date===date&&ex.start===start&&ex.end===end;});
   if(dup){showToast('이미 등록된 개별 일정입니다 ('+date+' '+start+'~'+end+')','error');return;}
