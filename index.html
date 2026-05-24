@@ -3058,9 +3058,13 @@ function validatePwStep(){
   }else if(_pwStep===3){
     if(!_pwData.date){showFieldError('pw-date','날짜를 골라 주세요');return false;}
     if(!_pwData.time){showFieldError('pw-time','시간을 골라 주세요');return false;}
-    // 모든 담당자 시간 충돌 검증 — 자동_휴무 옵션 ON일 때
-    if(APPLY_SETTINGS['자동_휴무']&&allManagersConflict(_pwData.date,_pwData.time)){
-      showFieldError('pw-time','해당 일시는 모든 담당자가 일정 중이라 신청 불가');
+    // 통합 검증 — 자동(낮에만/일요일/휴무) + 공통/개별 제외 + 모든 담당자 충돌
+    const chk=canApplyOnDateTime(_pwData.date,_pwData.time);
+    if(!chk.ok){
+      // 날짜 자체 차단(일요일·접수월 외)이면 pw-date에, 그 외 시간 차단이면 pw-time에 표시
+      const dateChk=canApplyOnDate(_pwData.date);
+      if(!dateChk.ok)showFieldError('pw-date',chk.reason);
+      else showFieldError('pw-time',chk.reason);
       return false;
     }
     // 판매기간 검증은 경고만, 진행은 허용
