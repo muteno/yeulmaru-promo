@@ -4754,20 +4754,18 @@ function canApplyOnDate(dateKey){
   if(!APPLY_SETTINGS.접수ON)return{ok:false,reason:'접수가 닫혀있습니다'};
   const ym=String(APPLY_SETTINGS.접수월||'').trim();
   if(!ym)return{ok:false,reason:'접수월이 설정되지 않았습니다'};
-  const dateYm=dateKey.substring(0,7);
-  if(dateYm!==ym)return{ok:false,reason:'신청 가능한 월: '+ym};
   // 자동_일요일 — 라벨 "화-토" (시트 키는 호환을 위해 자동_일요일 유지). 일(0)·월(1) 차단
   if(APPLY_SETTINGS['자동_일요일']){
     const d=new Date(dateKey+'T00:00:00');
     const dow=d.getDay();
-    if(dow===0||dow===1)return{ok:false,reason:'화-토만 신청 가능 (일·월 제외)'};
+    if(dow===0||dow===1)return{ok:false,reason:'일요일 신청 불가 상태'};
   }
   // 자동_휴무 — 담당자 휴무일 차단 (PROMO_SPECIAL type==='휴무')
   if(APPLY_SETTINGS['자동_휴무']&&typeof PROMO_SPECIAL!=='undefined'){
     for(const ps of PROMO_SPECIAL){
       if(ps.type==='휴무'&&ps.start&&ps.end){
         if(dateKey>=ps.start&&dateKey<=ps.end){
-          return{ok:false,reason:'담당자 휴무: '+(ps.label||ps.person||'')};
+          return{ok:false,reason:'담당자 휴무 기간'};
         }
       }
     }
@@ -4775,9 +4773,12 @@ function canApplyOnDate(dateKey){
   // 제외 항목 — 일자 only (그날 전체) 체크
   for(const ex of APPLY_EXCLUSIONS){
     if(ex.date===dateKey&&!ex.start&&!ex.end){
-      return{ok:false,reason:'신청 불가 일자: '+ex.date};
+      return{ok:false,reason:'해당 기간에는 신청이 불가해요'};
     }
   }
+  // 접수월 외 — 가장 마지막에 체크 (자동 옵션이 더 우선적 사유)
+  const dateYm=dateKey.substring(0,7);
+  if(dateYm!==ym)return{ok:false,reason:'신청 가능한 월: '+ym};
   return{ok:true};
 }
 
@@ -4787,12 +4788,12 @@ function canApplyAtTime(time){
   if(!time)return{ok:true};
   // 자동_낮에만 — 17:00 이상 22:00 미만 차단
   if(APPLY_SETTINGS['자동_낮에만']){
-    if(time>='17:00'&&time<'22:00')return{ok:false,reason:'낮에만 신청 가능 (17:00~22:00 제외)'};
+    if(time>='17:00'&&time<'22:00')return{ok:false,reason:'낮에만 신청 가능 상태'};
   }
   for(const ex of APPLY_EXCLUSIONS){
     if(!ex.date&&ex.start&&ex.end){
       // 공통 시간 (매일)
-      if(time>=ex.start&&time<ex.end)return{ok:false,reason:'신청 불가 시간: '+ex.start+'-'+ex.end};
+      if(time>=ex.start&&time<ex.end)return{ok:false,reason:'해당 시간에는 신청이 불가해요'};
     }
   }
   return{ok:true};
@@ -4810,7 +4811,7 @@ function canApplyOnDateTime(dateKey,time){
     for(const ex of APPLY_EXCLUSIONS){
       if(ex.date===dateKey&&ex.start&&ex.end){
         if(time>=ex.start&&time<ex.end){
-          return{ok:false,reason:'신청 불가: '+ex.date+' '+ex.start+'-'+ex.end};
+          return{ok:false,reason:'해당 기간에는 신청이 불가해요'};
         }
       }
     }
