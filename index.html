@@ -3116,6 +3116,29 @@ async function promoNext(){
   await submitPromoRequest();
 }
 async function submitPromoRequest(){
+  // ===== 신청 직전 재검증 (관리자 설정 + 카카오/문자 중복) =====
+  const dateChk=canApplyOnDate(_pwData.date);
+  if(!dateChk.ok){showToast('신청 불가: '+dateChk.reason,'error');return;}
+  const timeChk=canApplyAtTime(_pwData.time);
+  if(!timeChk.ok){showToast('신청 불가: '+timeChk.reason,'error');return;}
+  // 카카오톡 / 문자 — 같은 날짜에 다른 사람 신청 있으면 차단
+  const lockedPlats=['카카오톡','문자'];
+  if(lockedPlats.indexOf(_pwData.plat1)>=0){
+    const sameDate=(records||[]).filter(function(r){
+      const y=r['연도'],m=String(r['월']||'').padStart(2,'0'),d=String(r['일']||'').padStart(2,'0');
+      return (y+'-'+m+'-'+d)===_pwData.date;
+    });
+    const conflict=sameDate.find(function(r){
+      const p1=r['플랫폼 1']||'';
+      const status=r['진행 상태']||'';
+      const isOther=(r['게시 담당자']||'')!==_pwData.applicant;
+      return p1===_pwData.plat1&&isOther&&status!=='취소';
+    });
+    if(conflict){
+      showToast('이미 같은 날 '+_pwData.plat1+' 신청이 있어 신청할 수 없어요. ('+(conflict['게시 담당자']||'다른 사용자')+')','error');
+      return;
+    }
+  }
   showOverlayLoad();
   try{
     const typeMap={'c':'공연','e':'전시','a':'예술교육','r':'대관'};
