@@ -3803,27 +3803,52 @@ function getSmsTemplate(){
 
 // === Step 4 — 게시자 ===
 function renderPwSubAuthor(body,next){
-  // 기본값: applicant 비어있으면 "상관 없음" 자동 선택
-  if(!_pwData.applicant)_pwData.applicant='상관 없음';
+  // 각 담당자 충돌 정보 수집 (type 포함)
+  const states=PR_MANAGERS.map(function(m){
+    const n=m['담당자'];
+    return {name:n, conflict:personConflictInfo(n,_pwData.date,_pwData.time)};
+  });
+  const available=states.filter(function(s){return !s.conflict;});
+  const blocked=states.filter(function(s){return s.conflict;});
+
+  // 현재 선택값이 충돌 상태면 해제
+  if(_pwData.applicant && _pwData.applicant!=='상관 없음'){
+    const cur=states.find(function(s){return s.name===_pwData.applicant;});
+    if(cur && cur.conflict)_pwData.applicant='';
+  }
+
+  // 자동 선택 — 차단된 담당자 있고 가능한 담당자가 정확히 1명일 때만
+  let autoSelected='';
+  if(!_pwData.applicant){
+    if(blocked.length>0 && available.length===1){
+      _pwData.applicant=available[0].name;
+      autoSelected=available[0].name;
+    }else{
+      _pwData.applicant='상관 없음';
+    }
+  }
+
   let html='<div class="pw-question">누가 게시하시나요?</div>';
   html+='<div class="pw-hint">게시자를 지정하지 않아도 됩니다. 담당자가 정해지지 않았다면 "상관 없음"을 그대로 두세요.</div>';
   html+='<label style="display:block;font-size:11px;color:#888;margin:14px 0 4px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">게시자<span style="color:var(--peach);margin-left:3px">*</span></label>';
   html+='<select id="pw-applicant" style="width:100%;padding:10px 14px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:12px;font-size:13px;outline:none;box-sizing:border-box;font-family:inherit">';
-  // "상관 없음"이 항상 첫 옵션
   html+='<option value="상관 없음"'+(_pwData.applicant==='상관 없음'?' selected':'')+'>상관 없음</option>';
-  // 담당자별 일정 충돌 체크 — 충돌이면 option disabled + 안내
-  PR_MANAGERS.forEach(function(m){
-    const n=m['담당자'];
-    const conflict=personHasConflict(n,_pwData.date,_pwData.time);
-    if(conflict){
-      // 현재 선택된 게 충돌이면 → "상관 없음"으로 자동 변경
-      if(_pwData.applicant===n)_pwData.applicant='상관 없음';
-      html+='<option value="'+escapeHtml(n)+'" disabled style="color:#bbb">'+escapeHtml(n)+' (해당 일시 일정 중)</option>';
+  states.forEach(function(s){
+    const n=s.name;
+    if(s.conflict){
+      html+='<option value="'+escapeHtml(n)+'" disabled style="color:#bbb">'+escapeHtml(n)+' (해당 일시 '+escapeHtml(s.conflict.type)+' 중)</option>';
     }else{
       html+='<option value="'+escapeHtml(n)+'"'+(_pwData.applicant===n?' selected':'')+'>'+escapeHtml(n)+'</option>';
     }
   });
   html+='</select>';
+
+  // 자동 선택 시 안내 말풍선
+  if(autoSelected){
+    const blockedDesc=blocked.map(function(s){return escapeHtml(s.name)+' ('+escapeHtml(s.conflict.type)+')';}).join(', ');
+    html+='<div style="margin-top:10px;padding:10px 14px;background:#fff8f3;border:1px solid #fde4cc;border-radius:10px;font-size:12px;color:#b35a30;line-height:1.5">💡 '+blockedDesc+' → <strong>'+escapeHtml(autoSelected)+'</strong> 자동 선택</div>';
+  }
+
   body.innerHTML=html;
   next.textContent='다음';
 }
@@ -4877,6 +4902,26 @@ function personHasConflict(person, dateKey, time){
     if(time>=parsed.s&&time<parsed.e)return true;
   }
   return false;
+}
+
+// 특정 담당자의 충돌 정보 반환 ({type, label} 또는 null)
+function personConflictInfo(person, dateKey, time){
+  if(!person||person==='상관 없음')return null;
+  if(typeof PROMO_SPECIAL==='undefined')return null;
+  for(const ps of PROMO_SPECIAL){
+    if(ps.person!==person)continue;
+    if(!ps.start||!ps.end)continue;
+    if(dateKey<ps.start||dateKey>ps.end)continue;
+    const parsed=_parseSpTime(ps.time||'');
+    if(!parsed.s||!parsed.e){
+      return {type:ps.type||'일정', label:ps.label||''};
+    }
+    if(!time)continue;
+    if(time>=parsed.s&&time<parsed.e){
+      return {type:ps.type||'일정', label:ps.label||''};
+    }
+  }
+  return null;
 }
 
 // 모든 홍보 담당자가 dateKey/time에 일정 충돌인지
