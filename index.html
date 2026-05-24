@@ -4285,17 +4285,31 @@ function adminRoute(id){
 // === 신청 일정 관리 (홍보접수설정 시트) ===
 // 데이터 모델:
 //  - 접수ON (boolean text "true"/"false")
-//  - 접수월 (단일 row, "YYYY-MM")
+//  - 접수월 (다중 row, 최대 2개. 각 row 값 = "YYYY-MM")
 //  - 제외 (다중 row, 값 = "일자|시작|종료" 형식)
 //  - 자동_낮에만 (boolean, 17:00 이상 22:00 미만 자동 차단, default true)
 //  - 자동_일요일 (boolean, 일요일 자동 차단, default true)
 //  - 자동_휴무 (boolean, 담당자 휴무일 자동 차단, default false)
-let APPLY_SETTINGS={접수ON:false,접수월:'',자동_낮에만:true,자동_일요일:true,자동_휴무:false};
+let APPLY_SETTINGS={접수ON:false,접수월:[],자동_낮에만:true,자동_일요일:true,자동_휴무:false};
 let APPLY_SETTINGS_ROWS={};
 let APPLY_EXCLUSIONS=[]; // [{rowIndex, date, start, end}]
 
 // 자동 키 default 값
 const APPLY_AUTO_DEFAULTS={'자동_낮에만':true,'자동_일요일':true,'자동_휴무':false};
+
+// === 접수월 헬퍼 — 배열/단수 둘 다 정규화 (구버전 데이터 호환) ===
+function getApplyMonths(){
+  const v=APPLY_SETTINGS.접수월;
+  if(Array.isArray(v))return v.filter(Boolean);
+  if(typeof v==='string'&&v)return [v];
+  return [];
+}
+function getApplyMonthRows(){
+  const v=APPLY_SETTINGS_ROWS.접수월;
+  if(Array.isArray(v))return v;
+  if(typeof v==='number')return [v];
+  return [];
+}
 
 // 캐시 (60초)
 let _applySettingsCache=null;
@@ -4317,7 +4331,7 @@ async function loadApplySettings(){
     const t1=performance.now();
     console.log('[applysettings] api GET:',Math.round(t1-t0),'ms');
     // default 값으로 초기화
-    APPLY_SETTINGS={접수ON:false,접수월:'',자동_낮에만:APPLY_AUTO_DEFAULTS['자동_낮에만'],자동_일요일:APPLY_AUTO_DEFAULTS['자동_일요일'],자동_휴무:APPLY_AUTO_DEFAULTS['자동_휴무']};
+    APPLY_SETTINGS={접수ON:false,접수월:[],자동_낮에만:APPLY_AUTO_DEFAULTS['자동_낮에만'],자동_일요일:APPLY_AUTO_DEFAULTS['자동_일요일'],자동_휴무:APPLY_AUTO_DEFAULTS['자동_휴무']};
     APPLY_SETTINGS_ROWS={};
     APPLY_EXCLUSIONS=[];
     (d.rows||[]).forEach(function(r){
@@ -4327,8 +4341,10 @@ async function loadApplySettings(){
         APPLY_SETTINGS.접수ON=(v==='true'||v==='TRUE'||v==='1');
         APPLY_SETTINGS_ROWS.접수ON=r._rowIndex;
       }else if(k==='접수월'){
-        APPLY_SETTINGS.접수월=v;
-        APPLY_SETTINGS_ROWS.접수월=r._rowIndex;
+        if(!Array.isArray(APPLY_SETTINGS.접수월))APPLY_SETTINGS.접수월=[];
+        if(!Array.isArray(APPLY_SETTINGS_ROWS.접수월))APPLY_SETTINGS_ROWS.접수월=[];
+        APPLY_SETTINGS.접수월.push(v);
+        APPLY_SETTINGS_ROWS.접수월.push(r._rowIndex);
       }else if(k==='제외'){
         const parts=v.split('|');
         APPLY_EXCLUSIONS.push({
@@ -4868,8 +4884,8 @@ function allManagersConflict(dateKey, time){
 function canApplyOnDate(dateKey){
   // dateKey = "YYYY-MM-DD"
   if(!APPLY_SETTINGS.접수ON)return{ok:false,reason:'접수가 닫혀있습니다'};
-  const ym=String(APPLY_SETTINGS.접수월||'').trim();
-  if(!ym)return{ok:false,reason:'접수월이 설정되지 않았습니다'};
+  const ymArr=getApplyMonths();
+  if(!ymArr.length)return{ok:false,reason:'접수월이 설정되지 않았습니다'};
   // 자동_일요일 — 라벨 "화-토" (시트 키는 호환을 위해 자동_일요일 유지). 일(0)·월(1) 차단
   if(APPLY_SETTINGS['자동_일요일']){
     const d=new Date(dateKey+'T00:00:00');
@@ -4889,7 +4905,7 @@ function canApplyOnDate(dateKey){
   }
   // 접수월 외 — 가장 마지막에 체크 (자동 옵션이 더 우선적 사유)
   const dateYm=dateKey.substring(0,7);
-  if(dateYm!==ym)return{ok:false,reason:'신청 가능한 월: '+ym};
+  if(!ymArr.includes(dateYm))return{ok:false,reason:'신청 가능한 월: '+ymArr.join(', ')};
   return{ok:true};
 }
 
