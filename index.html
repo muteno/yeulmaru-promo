@@ -4274,9 +4274,25 @@ let APPLY_SETTINGS={접수ON:false,접수월:''};
 let APPLY_SETTINGS_ROWS={};
 let APPLY_EXCLUSIONS=[]; // [{rowIndex, date, start, end}]
 
+// 캐시 (60초)
+let _applySettingsCache=null;
+let _applySettingsCacheAt=0;
+
 async function loadApplySettings(){
+  // 60초 캐시 재사용
+  if(_applySettingsCache&&Date.now()-_applySettingsCacheAt<60000){
+    const c=_applySettingsCache;
+    APPLY_SETTINGS=JSON.parse(JSON.stringify(c.settings));
+    APPLY_SETTINGS_ROWS=JSON.parse(JSON.stringify(c.rows));
+    APPLY_EXCLUSIONS=JSON.parse(JSON.stringify(c.exclusions));
+    console.log('[applysettings] cache hit');
+    return true;
+  }
   try{
+    const t0=performance.now();
     const d=await api('GET','/api/sheet/applysettings');
+    const t1=performance.now();
+    console.log('[applysettings] api GET:',Math.round(t1-t0),'ms');
     APPLY_SETTINGS={접수ON:false,접수월:''};
     APPLY_SETTINGS_ROWS={};
     APPLY_EXCLUSIONS=[];
@@ -4299,6 +4315,13 @@ async function loadApplySettings(){
         });
       }
     });
+    // 캐시 저장
+    _applySettingsCache={
+      settings:JSON.parse(JSON.stringify(APPLY_SETTINGS)),
+      rows:JSON.parse(JSON.stringify(APPLY_SETTINGS_ROWS)),
+      exclusions:JSON.parse(JSON.stringify(APPLY_EXCLUSIONS))
+    };
+    _applySettingsCacheAt=Date.now();
     return true;
   }catch(e){
     console.error('[loadApplySettings]',e);
@@ -4306,12 +4329,21 @@ async function loadApplySettings(){
   }
 }
 
+// 캐시 무효화 (수정/추가/삭제 후 호출)
+function invalidateApplyCache(){
+  _applySettingsCache=null;
+  _applySettingsCacheAt=0;
+}
+
 async function openApplySettings(){
   const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeAdminPanel)"><div class="modal" style="width:96vw;max-width:720px;max-height:88vh;overflow:auto;padding:24px;position:relative"><button class="modal-x" onclick="closeAdminPanel()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:14px;float:none;margin:0;z-index:10">✕</button><div id="apply-settings-body" style="text-align:center;padding:40px;color:#888">로딩 중...</div></div></div>';
   let el=document.getElementById('admin-panel');
   if(!el){el=document.createElement('div');el.id='admin-panel';document.body.appendChild(el);}
   el.innerHTML=html;
+  const t0=performance.now();
   const ok=await loadApplySettings();
+  const t1=performance.now();
+  console.log('[applysettings] total load:',Math.round(t1-t0),'ms');
   renderApplySettings(ok);
 }
 
@@ -4324,51 +4356,40 @@ function renderApplySettings(loadOk){
   }
   const isOn=!!APPLY_SETTINGS.접수ON;
   const ym=APPLY_SETTINGS.접수월||'';
-  const ymParts=ym.split('-');
-  const curYear=ymParts.length===2?parseInt(ymParts[0]):new Date().getFullYear();
-  const curMonth=ymParts.length===2?parseInt(ymParts[1]):(new Date().getMonth()+1);
   const hasYm=!!ym;
-  // 연도 옵션 (현재 ±3)
-  const thisYear=new Date().getFullYear();
-  let yearOpts='';
-  for(let y=thisYear-1;y<=thisYear+5;y++){
-    yearOpts+='<option value="'+y+'"'+(y===curYear?' selected':'')+'>'+y+'년</option>';
-  }
-  let monthOpts='';
-  for(let m=1;m<=12;m++){
-    monthOpts+='<option value="'+m+'"'+(m===curMonth?' selected':'')+'>'+m+'월</option>';
-  }
   let html='';
   // 헤더
   html+='<div style="display:flex;align-items:center;margin-bottom:14px;gap:8px;padding-bottom:14px;padding-right:48px;border-bottom:1px solid #eee">';
   html+='<h3 style="margin:0;flex:1;text-align:left">신청 일정 관리</h3>';
   html+='<button onclick="backToAdminMenu()" style="padding:7px 12px;border:1px solid rgba(0,0,0,0.08);border-radius:10px;background:#fff;cursor:pointer;font-size:13px">뒤로</button>';
   html+='</div>';
-  // ===== Step 1·2: 접수 상태 + 접수 기간 (한 묶음) =====
+  // ===== Step 1: 접수 상태 ON/OFF =====
   html+='<div style="display:flex;align-items:center;gap:14px;margin-bottom:10px;flex-wrap:wrap">';
-  // Step 1: 접수 상태 토글 chip
-  html+='<label style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;min-width:56px">접수 상태</label>';
+  html+='<label style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;min-width:64px">접수 상태</label>';
   html+='<div style="display:inline-flex;background:#F8F7FC;border-radius:10px;padding:3px;gap:2px">';
-  html+='<button onclick="setApplyOpen(true)" style="padding:7px 14px;border:0;border-radius:8px;cursor:pointer;font-weight:600;font-size:12px;background:'+(isOn?'var(--accent)':'transparent')+';color:'+(isOn?'#fff':'#888')+';transition:all .15s">열림</button>';
-  html+='<button onclick="setApplyOpen(false)" style="padding:7px 14px;border:0;border-radius:8px;cursor:pointer;font-weight:600;font-size:12px;background:'+(!isOn?'#888':'transparent')+';color:'+(!isOn?'#fff':'#888')+';transition:all .15s">닫힘</button>';
+  html+='<button onclick="setApplyOpen(true)" style="padding:7px 16px;border:0;border-radius:8px;cursor:pointer;font-weight:700;font-size:12px;letter-spacing:0.5px;background:'+(isOn?'var(--accent)':'transparent')+';color:'+(isOn?'#fff':'#888')+';transition:all .15s">ON</button>';
+  html+='<button onclick="setApplyOpen(false)" style="padding:7px 16px;border:0;border-radius:8px;cursor:pointer;font-weight:700;font-size:12px;letter-spacing:0.5px;background:'+(!isOn?'#888':'transparent')+';color:'+(!isOn?'#fff':'#888')+';transition:all .15s">OFF</button>';
   html+='</div>';
-  html+='<span id="as-on-status" style="font-size:11px;color:#888"></span>';
   html+='</div>';
-  // Step 2: 접수 기간 (ON일 때만 활성)
+  // ===== Step 2: 접수 기간 (input month + 휠 스크롤) =====
   html+='<div style="display:flex;align-items:center;gap:14px;margin-bottom:'+(isOn&&hasYm?'24px':'10px')+';flex-wrap:wrap;opacity:'+(isOn?'1':'0.4')+';pointer-events:'+(isOn?'auto':'none')+';transition:opacity .15s">';
-  html+='<label style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;min-width:56px">접수 기간</label>';
-  html+='<select id="as-year" onchange="saveApplyMonth()" onwheel="asSelectWheel(this,event)" style="padding:8px 12px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:10px;font-size:13px;outline:none;font-family:inherit;cursor:pointer">'+yearOpts+'</select>';
-  html+='<select id="as-month" onchange="saveApplyMonth()" onwheel="asSelectWheel(this,event)" style="padding:8px 12px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:10px;font-size:13px;outline:none;font-family:inherit;cursor:pointer">'+monthOpts+'</select>';
+  html+='<label style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;min-width:64px">접수 기간</label>';
+  html+='<input id="as-ym" type="month" value="'+escapeHtml(ym)+'" onchange="saveApplyMonth()" onwheel="asYmWheel(event)" style="width:140px;padding:8px 12px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:10px;font-size:13px;outline:none;font-family:inherit">';
   html+='<span id="as-ym-status" style="font-size:11px;color:#888"></span>';
   html+='</div>';
-  // ===== Step 3: 제외 일정 (접수 ON + 기간 설정 시만) =====
+  // ===== Step 3: 제외 일정 =====
   if(isOn&&hasYm){
     html+='<div style="padding-top:14px;border-top:1px solid #eee">';
-    html+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">';
-    html+='<label style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">제외 일정</label>';
-    html+='<button onclick="openExclusionForm(null)" style="padding:6px 12px;background:var(--accent);color:#fff;border:0;border-radius:8px;cursor:pointer;font-weight:600;font-size:12px">+ 등록</button>';
+    html+='<label style="display:block;font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">제외 일정</label>';
+    // inline 입력 영역
+    html+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap">';
+    html+='<input id="ex-date-inline" type="date" style="width:160px;padding:8px 12px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:10px;font-size:13px;outline:none;font-family:inherit">';
+    html+='<input id="ex-start-inline" type="time" step="1800" placeholder="시작" onwheel="exTimeWheel(event,\'ex-start-inline\')" style="width:110px;padding:8px 12px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:10px;font-size:13px;outline:none;font-family:inherit">';
+    html+='<span style="color:#aaa">~</span>';
+    html+='<input id="ex-end-inline" type="time" step="1800" placeholder="종료" onwheel="exTimeWheel(event,\'ex-end-inline\')" style="width:110px;padding:8px 12px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:10px;font-size:13px;outline:none;font-family:inherit">';
+    html+='<button onclick="addExclusionInline()" style="padding:8px 16px;background:var(--accent);color:#fff;border:0;border-radius:10px;cursor:pointer;font-weight:600;font-size:12px">+ 추가</button>';
     html+='</div>';
-    html+='<div style="font-size:11px;color:#888;line-height:1.6;margin-bottom:10px"><b>일자만</b> 입력 → 그날 전체 / <b>시간만</b> 입력 → 매일 그 시간 / <b>둘 다</b> 입력 → 특정 일자의 특정 시간만</div>';
+    // 목록
     html+='<div id="as-exclusion-list">'+buildExclusionListHtml()+'</div>';
     html+='</div>';
   }
@@ -4378,8 +4399,6 @@ function renderApplySettings(loadOk){
 // === Step 1: 접수 ON/OFF 토글 ===
 async function setApplyOpen(on){
   const val=on?'true':'false';
-  const stEl=document.getElementById('as-on-status');
-  if(stEl){stEl.textContent='저장 중...';stEl.style.color='#888';}
   try{
     const ri=APPLY_SETTINGS_ROWS.접수ON;
     if(ri){
@@ -4389,20 +4408,18 @@ async function setApplyOpen(on){
       if(r&&r.row)APPLY_SETTINGS_ROWS.접수ON=r.row;
     }
     APPLY_SETTINGS.접수ON=on;
+    invalidateApplyCache();
     renderApplySettings(true);
-    showToast(on?'접수가 열렸습니다':'접수가 닫혔습니다','success');
+    showToast(on?'접수 ON':'접수 OFF','success');
   }catch(e){
-    if(stEl){stEl.textContent='저장 실패';stEl.style.color='#E24B4A';}
     showToast('저장 실패: '+e.message,'error');
   }
 }
 
-// === Step 2: 접수월 저장 (연도/월 select change 시) ===
+// === Step 2: 접수월 저장 (input month change 시) ===
 async function saveApplyMonth(){
-  const y=(document.getElementById('as-year')||{}).value||'';
-  const m=(document.getElementById('as-month')||{}).value||'';
-  if(!y||!m)return;
-  const ym=y+'-'+String(parseInt(m)).padStart(2,'0');
+  const ym=(document.getElementById('as-ym')||{}).value||'';
+  if(!ym)return;
   const stEl=document.getElementById('as-ym-status');
   if(stEl){stEl.textContent='저장 중...';stEl.style.color='#888';}
   try{
@@ -4415,6 +4432,7 @@ async function saveApplyMonth(){
     }
     const wasEmpty=!APPLY_SETTINGS.접수월;
     APPLY_SETTINGS.접수월=ym;
+    invalidateApplyCache();
     if(stEl){stEl.textContent='✓ 저장됨';stEl.style.color='#0F8B4C';setTimeout(function(){if(stEl)stEl.textContent='';},2000);}
     // 첫 등록이면 Step 3 영역 노출
     if(wasEmpty)renderApplySettings(true);
@@ -4424,38 +4442,68 @@ async function saveApplyMonth(){
   }
 }
 
-// === select 휠 스크롤 (위로 = 이전, 아래로 = 다음) ===
-function asSelectWheel(el,ev){
+// === input month 휠 스크롤 (위로 = 이전 월, 아래로 = 다음 월) ===
+function asYmWheel(ev){
   ev.preventDefault();
-  const idx=el.selectedIndex;
-  const newIdx=ev.deltaY>0?idx+1:idx-1;
-  if(newIdx>=0&&newIdx<el.options.length){
-    el.selectedIndex=newIdx;
-    if(el.onchange)el.onchange();
+  const el=document.getElementById('as-ym');if(!el)return;
+  let v=el.value||'';
+  if(!v){
+    // 빈 값이면 오늘 기준
+    const d=new Date();
+    v=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+  }
+  const[y,m]=v.split('-').map(Number);
+  let total=y*12+(m-1);
+  total+=ev.deltaY>0?1:-1;
+  const ny=Math.floor(total/12),nm=(total%12)+1;
+  el.value=ny+'-'+String(nm).padStart(2,'0');
+  if(el.onchange)el.onchange();
+}
+
+// === 제외 일정 inline 추가 ===
+async function addExclusionInline(){
+  const date=(document.getElementById('ex-date-inline')||{}).value||'';
+  const start=(document.getElementById('ex-start-inline')||{}).value||'';
+  const end=(document.getElementById('ex-end-inline')||{}).value||'';
+  if(!date&&!start&&!end){showToast('일자 또는 시간 중 하나는 입력해야 합니다','error');return;}
+  if((start&&!end)||(!start&&end)){showToast('시작/종료 시간을 둘 다 입력해야 합니다','error');return;}
+  if(start&&end&&start>=end){showToast('종료 시간이 시작 시간보다 늦어야 합니다','error');return;}
+  const value=date+'|'+start+'|'+end;
+  // 인라인 disable
+  const btn=event&&event.target;
+  if(btn){btn.disabled=true;btn.style.opacity='0.5';}
+  try{
+    const r=await api('POST','/api/sheet/applysettings',{values:['제외',value]});
+    const newRow=r&&r.row?r.row:0;
+    APPLY_EXCLUSIONS.push({rowIndex:newRow,date:date,start:start,end:end});
+    invalidateApplyCache();
+    // 입력 비우기
+    if(document.getElementById('ex-date-inline'))document.getElementById('ex-date-inline').value='';
+    if(document.getElementById('ex-start-inline'))document.getElementById('ex-start-inline').value='';
+    if(document.getElementById('ex-end-inline'))document.getElementById('ex-end-inline').value='';
+    refreshExclusionList();
+    showToast('추가되었습니다','success');
+  }catch(e){
+    showToast('추가 실패: '+e.message,'error');
+  }finally{
+    if(btn){btn.disabled=false;btn.style.opacity='';}
   }
 }
 
 function buildExclusionListHtml(){
   if(APPLY_EXCLUSIONS.length===0){
-    return '<div style="text-align:center;padding:30px;color:#aaa;font-size:13px;background:#fafafa;border-radius:10px">등록된 제외 일정이 없습니다</div>';
+    return '<div style="text-align:center;padding:20px;color:#aaa;font-size:12px;background:#fafafa;border-radius:10px">등록된 제외 일정이 없습니다</div>';
   }
-  let html='<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="background:#F8F7FC"><th style="padding:10px 12px;text-align:left;font-weight:700;font-size:12px;color:#555;border-bottom:1px solid #eee">일자</th><th style="padding:10px 12px;text-align:left;font-weight:700;font-size:12px;color:#555;border-bottom:1px solid #eee">시작</th><th style="padding:10px 12px;text-align:left;font-weight:700;font-size:12px;color:#555;border-bottom:1px solid #eee">종료</th><th style="padding:10px 12px;text-align:left;font-weight:700;font-size:12px;color:#555;border-bottom:1px solid #eee">유형</th><th style="padding:10px 12px;border-bottom:1px solid #eee"></th></tr></thead><tbody>';
+  let html='<div style="display:flex;flex-direction:column;gap:6px">';
   APPLY_EXCLUSIONS.forEach(function(ex,i){
     const hasDate=!!ex.date,hasTime=!!(ex.start&&ex.end);
-    let type='';
-    if(hasDate&&!hasTime)type='<span style="font-size:11px;background:#fff8f3;color:#b35a30;padding:2px 8px;border-radius:4px">하루 전체</span>';
-    else if(!hasDate&&hasTime)type='<span style="font-size:11px;background:#F8F7FC;color:#4A4DE7;padding:2px 8px;border-radius:4px">매일 시간대</span>';
-    else if(hasDate&&hasTime)type='<span style="font-size:11px;background:#FDF6F3;color:#D88455;padding:2px 8px;border-radius:4px">개별 슬롯</span>';
-    else type='<span style="font-size:11px;color:#aaa">-</span>';
-    html+='<tr style="border-bottom:1px solid #f0f0f0">';
-    html+='<td style="padding:10px 12px">'+(ex.date||'<span style="color:#bbb">-</span>')+'</td>';
-    html+='<td style="padding:10px 12px">'+(ex.start||'<span style="color:#bbb">-</span>')+'</td>';
-    html+='<td style="padding:10px 12px">'+(ex.end||'<span style="color:#bbb">-</span>')+'</td>';
-    html+='<td style="padding:10px 12px">'+type+'</td>';
-    html+='<td style="padding:10px 12px;text-align:right;white-space:nowrap"><button onclick="openExclusionForm('+i+')" style="padding:4px 10px;border:1px solid rgba(0,0,0,0.08);border-radius:6px;background:#fff;cursor:pointer;font-size:11px;margin-right:4px">수정</button><button onclick="deleteExclusion('+i+')" style="padding:4px 10px;border:1px solid rgba(216,75,74,0.3);border-radius:6px;background:#fff;color:#E24B4A;cursor:pointer;font-size:11px">삭제</button></td>';
-    html+='</tr>';
+    let label='',badge='';
+    if(hasDate&&!hasTime){label=ex.date;badge='<span style="font-size:10px;background:#fff8f3;color:#b35a30;padding:2px 6px;border-radius:4px;margin-left:6px">하루 전체</span>';}
+    else if(!hasDate&&hasTime){label='매일 '+ex.start+'~'+ex.end;badge='<span style="font-size:10px;background:#F8F7FC;color:#4A4DE7;padding:2px 6px;border-radius:4px;margin-left:6px">매일</span>';}
+    else if(hasDate&&hasTime){label=ex.date+' '+ex.start+'~'+ex.end;badge='<span style="font-size:10px;background:#FDF6F3;color:#D88455;padding:2px 6px;border-radius:4px;margin-left:6px">슬롯</span>';}
+    html+='<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:#fff;border:1px solid #eee;border-radius:8px"><div style="flex:1;font-size:13px;color:#333">'+escapeHtml(label)+badge+'</div><button onclick="deleteExclusion('+i+')" style="padding:4px 10px;border:1px solid rgba(216,75,74,0.3);border-radius:6px;background:#fff;color:#E24B4A;cursor:pointer;font-size:11px">삭제</button></div>';
   });
-  html+='</tbody></table>';
+  html+='</div>';
   return html;
 }
 
@@ -4465,36 +4513,7 @@ function refreshExclusionList(){
   if(el)el.innerHTML=buildExclusionListHtml();
 }
 
-// === 2차 팝업: 제외 일정 등록/수정 폼 ===
-function openExclusionForm(idx){
-  const existing=(idx!==null&&idx>=0&&idx<APPLY_EXCLUSIONS.length)?APPLY_EXCLUSIONS[idx]:null;
-  const d=existing?existing.date:'';
-  const s=existing?existing.start:'';
-  const e=existing?existing.end:'';
-  const html='<div class="modal-bg show" style="z-index:70" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeExclusionForm)"><div class="modal" style="width:96vw;max-width:420px;max-height:88vh;overflow:auto;padding:24px;position:relative"><button class="modal-x" onclick="closeExclusionForm()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:14px;float:none;margin:0;z-index:10">✕</button>'+
-    '<div style="display:flex;align-items:center;margin-bottom:14px;gap:8px;padding-bottom:14px;padding-right:48px;border-bottom:1px solid #eee"><h3 style="margin:0;flex:1;text-align:left">'+(existing?'제외 일정 수정':'제외 일정 등록')+'</h3></div>'+
-    '<div style="display:flex;flex-direction:column;gap:14px">'+
-    // 일자
-    '<div><label style="display:block;font-size:11px;color:#888;margin-bottom:6px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">일자</label><input id="ex-date" type="date" value="'+escapeHtml(d)+'" style="width:100%;padding:10px 14px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:12px;font-size:13px;outline:none;box-sizing:border-box;font-family:inherit"></div>'+
-    // 시간
-    '<div style="display:flex;gap:10px"><div style="flex:1"><label style="display:block;font-size:11px;color:#888;margin-bottom:6px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">시작 시간 <span style="color:#aaa;font-weight:400;text-transform:none;letter-spacing:0">🖱 30분</span></label><input id="ex-start" type="time" step="1800" value="'+escapeHtml(s)+'" onwheel="exTimeWheel(event,\'ex-start\')" style="width:100%;padding:10px 14px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:12px;font-size:13px;outline:none;box-sizing:border-box;font-family:inherit"></div>'+
-    '<div style="flex:1"><label style="display:block;font-size:11px;color:#888;margin-bottom:6px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">종료 시간 <span style="color:#aaa;font-weight:400;text-transform:none;letter-spacing:0">🖱 30분</span></label><input id="ex-end" type="time" step="1800" value="'+escapeHtml(e)+'" onwheel="exTimeWheel(event,\'ex-end\')" style="width:100%;padding:10px 14px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:12px;font-size:13px;outline:none;box-sizing:border-box;font-family:inherit"></div></div>'+
-    '</div>'+
-    '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px;padding-top:14px;border-top:1px solid #eee">'+
-    '<button type="button" onclick="closeExclusionForm()" style="padding:9px 18px;border:1px solid rgba(0,0,0,0.08);border-radius:10px;background:#fff;cursor:pointer;font-size:13px">취소</button>'+
-    '<button type="button" onclick="saveExclusion('+(idx!==null?idx:'null')+')" style="padding:9px 22px;background:var(--accent);color:#fff;border:0;border-radius:10px;cursor:pointer;font-weight:600;font-size:13px">저장</button>'+
-    '</div></div></div>';
-  let el=document.getElementById('exclusion-form-modal');
-  if(!el){el=document.createElement('div');el.id='exclusion-form-modal';document.body.appendChild(el);}
-  el.innerHTML=html;
-}
-
-function closeExclusionForm(){
-  const el=document.getElementById('exclusion-form-modal');
-  if(el)el.innerHTML='';
-}
-
-// 시간 input wheel 스크롤 30분 단위 조정
+// 시간 input wheel 스크롤 30분 단위 조정 (inline 제외 입력에서 사용)
 function exTimeWheel(event,id){
   event.preventDefault();
   const el=document.getElementById(id);if(!el)return;
@@ -4507,38 +4526,6 @@ function exTimeWheel(event,id){
   el.value=String(nh).padStart(2,'0')+':'+String(nm).padStart(2,'0');
 }
 
-async function saveExclusion(idx){
-  const date=(document.getElementById('ex-date')||{}).value||'';
-  const start=(document.getElementById('ex-start')||{}).value||'';
-  const end=(document.getElementById('ex-end')||{}).value||'';
-  // 검증
-  if(!date&&!start&&!end){showToast('일자 또는 시간 중 하나는 입력해야 합니다','error');return;}
-  if((start&&!end)||(!start&&end)){showToast('시작/종료 시간을 둘 다 입력해야 합니다','error');return;}
-  if(start&&end&&start>=end){showToast('종료 시간이 시작 시간보다 늦어야 합니다','error');return;}
-  const value=date+'|'+start+'|'+end;
-  showOverlayLoad('저장 중입니다...');
-  try{
-    if(idx!==null&&idx>=0&&idx<APPLY_EXCLUSIONS.length){
-      // 수정
-      const ri=APPLY_EXCLUSIONS[idx].rowIndex;
-      await api('PATCH','/api/sheet/applysettings/'+ri,{values:['제외',value]});
-      APPLY_EXCLUSIONS[idx]={rowIndex:ri,date:date,start:start,end:end};
-    }else{
-      // 등록
-      const r=await api('POST','/api/sheet/applysettings',{values:['제외',value]});
-      const newRow=r&&r.row?r.row:0;
-      APPLY_EXCLUSIONS.push({rowIndex:newRow,date:date,start:start,end:end});
-    }
-    closeExclusionForm();
-    refreshExclusionList();
-    showToast('저장되었습니다','success');
-  }catch(e){
-    showToast('저장 실패: '+e.message,'error');
-  }finally{
-    hideOverlayLoad();
-  }
-}
-
 async function deleteExclusion(idx){
   if(idx<0||idx>=APPLY_EXCLUSIONS.length)return;
   const ex=APPLY_EXCLUSIONS[idx];
@@ -4548,6 +4535,7 @@ async function deleteExclusion(idx){
   try{
     await api('DELETE','/api/sheet/applysettings/'+ex.rowIndex);
     APPLY_EXCLUSIONS.splice(idx,1);
+    invalidateApplyCache();
     refreshExclusionList();
     showToast('삭제되었습니다','success');
   }catch(e){
