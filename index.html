@@ -4336,7 +4336,7 @@ function invalidateApplyCache(){
 }
 
 async function openApplySettings(){
-  const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeAdminPanel)"><div class="modal" style="width:96vw;max-width:720px;max-height:88vh;overflow:auto;padding:24px;position:relative"><button class="modal-x" onclick="closeAdminPanel()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:14px;float:none;margin:0;z-index:10">✕</button><div id="apply-settings-body" style="text-align:center;padding:40px;color:#888">로딩 중...</div></div></div>';
+  const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeAdminPanel)"><div class="modal" style="width:96vw;max-width:720px;max-height:88vh;overflow:auto;padding:24px;position:relative"><button onclick="backToAdminMenu()" title="뒤로" aria-label="뒤로" style="position:absolute;top:14px;right:54px;float:none;margin:0;width:32px;height:32px;border-radius:50%;border:0;background:#fff;color:var(--accent);cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:10;box-shadow:0 1px 3px rgba(0,0,0,0.08);transition:background .15s" onmouseover="this.style.background=\'#f5f5fa\'" onmouseout="this.style.background=\'#fff\'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button><button class="modal-x" onclick="closeAdminPanel()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:14px;float:none;margin:0;z-index:10">✕</button><div id="apply-settings-body" style="text-align:center;padding:40px;color:#888">로딩 중...</div></div></div>';
   let el=document.getElementById('admin-panel');
   if(!el){el=document.createElement('div');el.id='admin-panel';document.body.appendChild(el);}
   el.innerHTML=html;
@@ -4355,17 +4355,16 @@ function renderApplySettings(loadOk){
   body.style.padding='';
   body.style.color='';
   if(!loadOk){
-    body.innerHTML='<div style="text-align:left"><div style="display:flex;align-items:center;margin-bottom:14px;gap:8px;padding-bottom:14px;padding-right:48px;border-bottom:1px solid #eee"><h3 style="margin:0;flex:1;text-align:left">신청 일정 관리</h3><button onclick="backToAdminMenu()" style="padding:7px 12px;border:1px solid rgba(0,0,0,0.08);border-radius:10px;background:#fff;cursor:pointer;font-size:13px">뒤로</button></div><div style="padding:30px;background:#fff8f3;border-radius:12px;color:#b35a30;line-height:1.7"><div style="font-weight:700;font-size:14px;margin-bottom:8px">⚠️ 시트 미생성 또는 Worker 미배포</div><div style="font-size:12px">아래 2개 작업이 끝나야 신청 일정 관리가 작동합니다.<br><br>1) Cloudflare Worker SHEET_MAP에 <code style="background:#fff;padding:2px 6px;border-radius:4px">"applysettings": "홍보접수설정"</code> 추가 → 저장 & 배포<br><br>2) SharePoint 통합 문서1.xlsm에 <code style="background:#fff;padding:2px 6px;border-radius:4px">홍보접수설정</code> 시트 추가 (A:키, B:값)</div></div></div>';
+    body.innerHTML='<div style="text-align:left"><div style="display:flex;align-items:center;margin-bottom:14px;gap:8px;padding-bottom:14px;padding-right:96px;border-bottom:1px solid #eee"><h3 style="margin:0;flex:1;text-align:left">신청 일정 관리</h3></div><div style="padding:30px;background:#fff8f3;border-radius:12px;color:#b35a30;line-height:1.7"><div style="font-weight:700;font-size:14px;margin-bottom:8px">⚠️ 시트 미생성 또는 Worker 미배포</div><div style="font-size:12px">아래 2개 작업이 끝나야 신청 일정 관리가 작동합니다.<br><br>1) Cloudflare Worker SHEET_MAP에 <code style="background:#fff;padding:2px 6px;border-radius:4px">"applysettings": "홍보접수설정"</code> 추가 → 저장 & 배포<br><br>2) SharePoint 통합 문서1.xlsm에 <code style="background:#fff;padding:2px 6px;border-radius:4px">홍보접수설정</code> 시트 추가 (A:키, B:값)</div></div></div>';
     return;
   }
   const isOn=!!APPLY_SETTINGS.접수ON;
   const ym=APPLY_SETTINGS.접수월||'';
   const hasYm=!!ym;
   let html='';
-  // 헤더
-  html+='<div style="display:flex;align-items:center;margin-bottom:14px;gap:8px;padding-bottom:14px;padding-right:48px;border-bottom:1px solid #eee">';
+  // 헤더 (뒤로 버튼은 모달 우상단 아이콘으로 분리됨)
+  html+='<div style="display:flex;align-items:center;margin-bottom:14px;gap:8px;padding-bottom:14px;padding-right:96px;border-bottom:1px solid #eee">';
   html+='<h3 style="margin:0;flex:1;text-align:left">신청 일정 관리</h3>';
-  html+='<button onclick="backToAdminMenu()" style="padding:7px 12px;border:1px solid rgba(0,0,0,0.08);border-radius:10px;background:#fff;cursor:pointer;font-size:13px">뒤로</button>';
   html+='</div>';
   // ===== Step 1: 접수 상태 ON/OFF =====
   html+='<div style="display:flex;align-items:center;gap:14px;margin-bottom:10px;flex-wrap:wrap">';
@@ -4533,18 +4532,20 @@ async function addCommonExclusion(){
   const end=(document.getElementById('cm-end')||{}).value||'';
   if(!start||!end){showToast('시작/종료 시간을 입력해 주세요','error');return;}
   if(start===end){showToast('시작/종료가 같으면 등록할 수 없습니다','error');return;}
-  const btn=event&&event.target;
-  if(btn){btn.disabled=true;btn.style.opacity='0.5';}
+  // 중복 검증 — 분할 전 의도 기준으로 체크
+  const willAddRanges=(start<end)?[[start,end]]:[[start,'23:59'],['00:00',end]];
+  for(const[s,e]of willAddRanges){
+    const dup=APPLY_EXCLUSIONS.some(function(ex){return !ex.date&&ex.start===s&&ex.end===e;});
+    if(dup){showToast('이미 등록된 공통 시간입니다 ('+s+'~'+e+')','error');return;}
+  }
+  showOverlayLoad('변경 중입니다...');
   try{
     if(start<end){
-      // 같은 날 범위 — 한 row
       await _postCommonRow(start,end);
     }else{
-      // 자정 넘는 범위 — 두 row 자동 분할 (start~23:59 + 00:00~end)
       await _postCommonRow(start,'23:59');
       await _postCommonRow('00:00',end);
     }
-    // 입력 비우기
     if(document.getElementById('cm-start'))document.getElementById('cm-start').value='';
     if(document.getElementById('cm-end'))document.getElementById('cm-end').value='';
     invalidateApplyCache();
@@ -4553,7 +4554,7 @@ async function addCommonExclusion(){
   }catch(e){
     showToast('추가 실패: '+e.message,'error');
   }finally{
-    if(btn){btn.disabled=false;btn.style.opacity='';}
+    hideOverlayLoad();
   }
 }
 
@@ -4573,15 +4574,16 @@ async function addIndividualExclusion(){
   if(!start||!end){showToast('시작/종료 시간을 입력해 주세요','error');return;}
   if(start>=end){showToast('종료 시간이 시작 시간보다 늦어야 합니다 (개별은 자정 넘는 시간 불가)','error');return;}
   if(date.substring(0,7)!==APPLY_SETTINGS.접수월){showToast('접수월 안의 일자만 등록 가능합니다','error');return;}
+  // 중복 검증
+  const dup=APPLY_EXCLUSIONS.some(function(ex){return ex.date===date&&ex.start===start&&ex.end===end;});
+  if(dup){showToast('이미 등록된 개별 일정입니다 ('+date+' '+start+'~'+end+')','error');return;}
   const value=date+'|'+start+'|'+end;
-  const btn=event&&event.target;
-  if(btn){btn.disabled=true;btn.style.opacity='0.5';}
+  showOverlayLoad('변경 중입니다...');
   try{
     const r=await api('POST','/api/sheet/applysettings',{values:['제외',value]});
     const newRow=r&&r.row?r.row:0;
     APPLY_EXCLUSIONS.push({rowIndex:newRow,date:date,start:start,end:end});
     invalidateApplyCache();
-    // 입력 비우기
     if(document.getElementById('iv-date'))document.getElementById('iv-date').value='';
     if(document.getElementById('iv-start'))document.getElementById('iv-start').value='';
     if(document.getElementById('iv-end'))document.getElementById('iv-end').value='';
@@ -4590,21 +4592,25 @@ async function addIndividualExclusion(){
   }catch(e){
     showToast('추가 실패: '+e.message,'error');
   }finally{
-    if(btn){btn.disabled=false;btn.style.opacity='';}
+    hideOverlayLoad();
   }
 }
 
-// ===== 공통 시작 시간 변경 시 — 종료 비어있으면 자동 +30분 + focus =====
+// ===== 공통 시작 시간 변경 시 — 종료 비어있으면 자동 +30분 / 시작 >= 종료면 종료 focus =====
 function onCommonStartChange(){
   const start=document.getElementById('cm-start');
   const end=document.getElementById('cm-end');
   if(!start||!end||!start.value)return;
   if(!end.value){
+    // 종료 비어있음 — 시작+30분 자동 + focus
     const[h,m]=start.value.split(':').map(Number);
     let total=h*60+m+30;
     if(total>=1440)total=0;
     const nh=Math.floor(total/60)%24,nm=total%60;
     end.value=String(nh).padStart(2,'0')+':'+String(nm).padStart(2,'0');
+    setTimeout(function(){end.focus();},0);
+  }else if(start.value>=end.value){
+    // 시작 >= 종료 (자정 넘는 의도일 수 있음) — 값 변경 X, focus만 이동
     setTimeout(function(){end.focus();},0);
   }
 }
@@ -4674,6 +4680,9 @@ function exTimeWheel(event,id){
 async function deleteExclusion(idx){
   if(idx<0||idx>=APPLY_EXCLUSIONS.length)return;
   const ex=APPLY_EXCLUSIONS[idx];
+  const label=ex.date?(ex.date+' '+ex.start+'~'+ex.end):(ex.start+'~'+ex.end);
+  if(!await showConfirm('정말 삭제하시겠습니까?\n\n'+label,{okText:'삭제',danger:true}))return;
+  showOverlayLoad('변경 중입니다...');
   try{
     await api('DELETE','/api/sheet/applysettings/'+ex.rowIndex);
     APPLY_EXCLUSIONS.splice(idx,1);
@@ -4683,6 +4692,8 @@ async function deleteExclusion(idx){
     showToast('삭제되었습니다','success');
   }catch(e){
     showToast('삭제 실패: '+e.message,'error');
+  }finally{
+    hideOverlayLoad();
   }
 }
 
