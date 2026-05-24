@@ -4383,11 +4383,17 @@ function renderApplySettings(loadOk){
   html+='</div>';
   // ===== Step 3: 제외 일정 (다른 step과 동일 가로 배치) =====
   if(isOn&&hasYm){
+    // 접수월 범위 (일자 input min/max)
+    const ymParts2=ym.split('-');
+    const yr=parseInt(ymParts2[0]),mo=parseInt(ymParts2[1]);
+    const lastDay=new Date(yr,mo,0).getDate();
+    const ymMin=ym+'-01';
+    const ymMax=ym+'-'+String(lastDay).padStart(2,'0');
     // 라벨 + 입력 (한 행, 다른 step과 동일 세로 라인)
     html+='<div style="display:flex;align-items:center;gap:14px;margin-bottom:10px;flex-wrap:wrap;margin-top:18px;padding-top:14px;border-top:1px solid #eee">';
     html+='<label style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;min-width:64px">제외 일정</label>';
-    html+='<input id="ex-date-inline" type="date" onchange="onExDateInlineChange()" onwheel="exDateWheel(event)" style="width:160px;padding:8px 12px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:10px;font-size:13px;outline:none;font-family:inherit">';
-    html+='<input id="ex-start-inline" type="time" step="1800" placeholder="시작" onwheel="exTimeWheel(event,\'ex-start-inline\')" style="width:140px;padding:8px 12px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:10px;font-size:13px;outline:none;font-family:inherit">';
+    html+='<input id="ex-date-inline" type="date" min="'+ymMin+'" max="'+ymMax+'" onchange="onExDateInlineChange()" onwheel="exDateWheel(event)" style="width:160px;padding:8px 12px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:10px;font-size:13px;outline:none;font-family:inherit">';
+    html+='<input id="ex-start-inline" type="time" step="1800" placeholder="시작" onchange="onExStartChange()" onwheel="exTimeWheel(event,\'ex-start-inline\')" style="width:140px;padding:8px 12px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:10px;font-size:13px;outline:none;font-family:inherit">';
     html+='<span style="color:#aaa">~</span>';
     html+='<input id="ex-end-inline" type="time" step="1800" placeholder="종료" onwheel="exTimeWheel(event,\'ex-end-inline\')" style="width:140px;padding:8px 12px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:10px;font-size:13px;outline:none;font-family:inherit">';
     html+='<button onclick="addExclusionInline()" style="padding:8px 16px;background:var(--accent);color:#fff;border:0;border-radius:10px;cursor:pointer;font-weight:600;font-size:12px">+ 추가</button>';
@@ -4470,6 +4476,12 @@ async function addExclusionInline(){
   if(!date&&!start&&!end){showToast('일자 또는 시간 중 하나는 입력해야 합니다','error');return;}
   if((start&&!end)||(!start&&end)){showToast('시작/종료 시간을 둘 다 입력해야 합니다','error');return;}
   if(start&&end&&start>=end){showToast('종료 시간이 시작 시간보다 늦어야 합니다','error');return;}
+  // 일자 입력 시 접수월 안인지 검증
+  if(date&&APPLY_SETTINGS.접수월){
+    if(date.substring(0,7)!==APPLY_SETTINGS.접수월){
+      showToast('접수월 안의 일자만 등록 가능합니다 ('+APPLY_SETTINGS.접수월+')','error');return;
+    }
+  }
   const value=date+'|'+start+'|'+end;
   // 인라인 disable
   const btn=event&&event.target;
@@ -4499,11 +4511,11 @@ function buildExclusionListHtml(){
   let html='<div style="display:flex;flex-direction:column;gap:6px">';
   APPLY_EXCLUSIONS.forEach(function(ex,i){
     const hasDate=!!ex.date,hasTime=!!(ex.start&&ex.end);
-    let label='',badge='';
-    if(hasDate&&!hasTime){label=ex.date;badge='<span style="font-size:10px;background:#fff8f3;color:#b35a30;padding:2px 6px;border-radius:4px;margin-left:6px">하루 전체</span>';}
-    else if(!hasDate&&hasTime){label='매일 '+ex.start+'~'+ex.end;badge='<span style="font-size:10px;background:#F8F7FC;color:#4A4DE7;padding:2px 6px;border-radius:4px;margin-left:6px">매일</span>';}
-    else if(hasDate&&hasTime){label=ex.date+' '+ex.start+'~'+ex.end;badge='<span style="font-size:10px;background:#FDF6F3;color:#D88455;padding:2px 6px;border-radius:4px;margin-left:6px">슬롯</span>';}
-    html+='<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:#fff;border:1px solid #eee;border-radius:8px"><div style="flex:1;font-size:13px;color:#333">'+escapeHtml(label)+badge+'</div><button onclick="deleteExclusion('+i+')" style="padding:4px 10px;border:1px solid rgba(216,75,74,0.3);border-radius:6px;background:#fff;color:#E24B4A;cursor:pointer;font-size:11px">삭제</button></div>';
+    let label='';
+    if(hasDate&&!hasTime)label=ex.date;
+    else if(!hasDate&&hasTime)label=ex.start+'~'+ex.end;
+    else if(hasDate&&hasTime)label=ex.date+' - '+ex.start+'~'+ex.end;
+    html+='<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:#fff;border:1px solid #eee;border-radius:8px"><div style="flex:1;font-size:13px;color:#333">'+escapeHtml(label)+'</div><button onclick="deleteExclusion('+i+')" style="padding:4px 10px;border:1px solid rgba(216,75,74,0.3);border-radius:6px;background:#fff;color:#E24B4A;cursor:pointer;font-size:11px">삭제</button></div>';
   });
   html+='</div>';
   return html;
@@ -4526,21 +4538,25 @@ function exTimeWheel(event,id){
   if(total<0)total=0;if(total>1410)total=1410;
   const nh=Math.floor(total/60),nm=total%60;
   el.value=String(nh).padStart(2,'0')+':'+String(nm).padStart(2,'0');
+  // 시작 시간 변경 시 자동 흐름 트리거 (휠은 onchange 발동 안 함)
+  if(id==='ex-start-inline')onExStartChange();
 }
 
-// 제외 일자 wheel — 1일 단위 ±
+// 제외 일자 wheel — 1일 단위 ± (접수월 범위 안에서만)
 function exDateWheel(event){
   event.preventDefault();
   const el=document.getElementById('ex-date-inline');if(!el)return;
   let v=el.value;
   if(!v){
-    const d=new Date();
-    v=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+    // 빈 값이면 접수월 1일부터
+    v=APPLY_SETTINGS.접수월+'-01';
   }
   const d=new Date(v+'T00:00:00');
   d.setDate(d.getDate()+(event.deltaY>0?1:-1));
+  const newYm=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+  // 접수월 벗어나면 변경 안 함
+  if(newYm!==APPLY_SETTINGS.접수월)return;
   el.value=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
-  // onchange는 휠로 안 발동되니까 수동 호출
   onExDateInlineChange();
 }
 
@@ -4556,6 +4572,25 @@ function onExDateInlineChange(){
   if(!endEl.value)endEl.value='14:00';
   // 시작 시간으로 focus
   setTimeout(function(){startEl.focus();},0);
+}
+
+// 시작 시간 변경 시 — 종료 ≤ 시작이면 종료 자동 +30분 + 종료 input으로 focus
+function onExStartChange(){
+  const startEl=document.getElementById('ex-start-inline');
+  const endEl=document.getElementById('ex-end-inline');
+  if(!startEl||!endEl)return;
+  if(!startEl.value)return;
+  // 종료 비어있거나 시작 >= 종료면 자동 조정 + focus
+  const needAdjust=!endEl.value||startEl.value>=endEl.value;
+  if(needAdjust){
+    const[h,m]=startEl.value.split(':').map(Number);
+    let total=h*60+m+30;
+    if(total>1440)total=1440-30;
+    const nh=Math.floor(total/60)%24,nm=total%60;
+    endEl.value=String(nh).padStart(2,'0')+':'+String(nm).padStart(2,'0');
+    // 종료 input으로 focus (사용자가 휠로 조정하기 좋게)
+    setTimeout(function(){endEl.focus();},0);
+  }
 }
 
 async function deleteExclusion(idx){
