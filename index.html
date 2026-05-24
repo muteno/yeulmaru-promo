@@ -580,6 +580,8 @@ table.promo-board-table th:last-child .col-resize-handle{display:none}
 .panel-prog-cnt{font-size:11px;font-weight:700;color:var(--accent);background:rgba(74,77,231,0.1);padding:2px 8px;border-radius:10px;min-width:16px;text-align:center}
 .panel-prog-body{max-height:0;overflow:hidden;opacity:0;transition:max-height .35s cubic-bezier(0.4,0,0.2,1),opacity .2s ease,padding-top .25s ease;padding-top:0}
 .panel-prog-body.open{max-height:2000px;opacity:1;padding-top:8px;transition:max-height .45s cubic-bezier(0.4,0,0.2,1),opacity .3s ease .05s,padding-top .3s ease}
+@keyframes panel-perf-flash{0%{box-shadow:0 0 0 0 rgba(74,77,231,0);transform:scale(1)}15%{box-shadow:0 0 0 4px rgba(74,77,231,0.35);transform:scale(1.02)}30%{box-shadow:0 0 0 0 rgba(74,77,231,0);transform:scale(1)}45%{box-shadow:0 0 0 4px rgba(74,77,231,0.35);transform:scale(1.02)}60%{box-shadow:0 0 0 0 rgba(74,77,231,0);transform:scale(1)}100%{box-shadow:0 0 0 0 rgba(74,77,231,0);transform:scale(1)}}
+.panel-perf-flash{animation:panel-perf-flash 2s ease-out}
 /* 프로그램 row — URL 있으면 호버 강조 */
 .panel-perf-row[onclick]:hover{background:rgba(74,77,231,0.12) !important;transform:translateX(2px)}
 /* 캘린더 셀 안 프로그램 뱃지 — URL 있으면 호버 강조 */
@@ -1033,17 +1035,20 @@ function onSpAreaContextMenu(event){
   onSpContextMenu(event,rowIndex);
 }
 function getDdayText(dd){if(dd>0)return'D-'+dd;if(dd===0)return'D-Day';return'D+'+Math.abs(dd);}
-function renderPerfsHtml(perfs,td,past){
+function renderPerfsHtml(perfs,td,past,dateKey){
 if(!perfs||!perfs.length)return'';
 var cperfs=perfs.filter(function(p){return p.t!=='e';});
 if(!cperfs.length)return'';
 var out='';
 for(var i=0;i<cperfs.length;i++){var perf=cperfs[i],fn=perf.f||perf.n,sn=perf.n,dd=perf.dday,lb=perf.t==='e'?'전':perf.t==='a'?'교':perf.t==='r'?'대':'공';
 var nameHtml='<span class="pf">'+fn+'</span><span class="ps">'+sn+'</span>';
-var clickAttr=(perf.u&&!past)?' onclick="event.stopPropagation();openPerfUrl(\''+escapeHtml(perf.u).replace(/'/g,'\\\'')+'\',\''+escapeHtml(fn).replace(/'/g,'\\\'')+'\')" title="공연 상세 페이지로 이동" style="cursor:pointer"':'';
+// 좌클릭: panel 열고 프로그램 일정 펼침+깜빡  /  우클릭: 정보 박스
+var safeFn=escapeHtml(fn).replace(/'/g,'\\\'');
+var clickAttr=!past?' onclick="event.stopPropagation();openPanelWithPerfHighlight(\''+safeFn+'\',\''+(dateKey||'')+'\')" style="cursor:pointer" title="클릭: 자세히 보기 / 우클릭: 빠른 정보"':'';
+var ctxAttr=!past?' oncontextmenu="event.stopPropagation();event.preventDefault();onPerfContextMenu(event,\''+safeFn+'\');return false;"':'';
 if(past)out+='<span style="display:inline-flex;align-items:center;margin-left:6px"><span style="display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;border-radius:50%;font-size:8px;background:rgba(0,0,0,0.05);color:rgba(0,0,0,0.22);flex-shrink:0">'+lb+'</span><span class="pname" style="margin-left:4px;font-size:9px;color:rgba(0,0,0,0.18)">'+nameHtml+'</span></span>';
-else if(td)out+='<span class="perf-badge"'+clickAttr+' style="display:inline-flex;align-items:center;margin-left:6px"><span style="display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;border-radius:50%;font-size:8px;font-weight:600;background:rgba(255,255,255,0.85);color:#111;flex-shrink:0">'+lb+'</span><span class="pname" style="margin-left:5px;font-size:9px;font-weight:700;color:#111">'+nameHtml+'</span></span>';
-else out+='<span class="perf-badge"'+clickAttr+' style="display:inline-flex;align-items:center;margin-left:6px"><span style="display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;border-radius:50%;font-size:8px;font-weight:600;background:var(--accent);color:#fff;flex-shrink:0">'+lb+'</span><span class="pname" style="margin-left:5px;font-size:9px;font-weight:700;color:var(--text)">'+nameHtml+'</span>'+(dd!==null&&dd!==0?'<span class="pday" style="margin-left:8px;font-size:9px;color:var(--dim);white-space:nowrap">'+getDdayText(dd)+'</span>':'')+'</span>';
+else if(td)out+='<span class="perf-badge"'+clickAttr+ctxAttr+' style="display:inline-flex;align-items:center;margin-left:6px"><span style="display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;border-radius:50%;font-size:8px;font-weight:600;background:rgba(255,255,255,0.85);color:#111;flex-shrink:0">'+lb+'</span><span class="pname" style="margin-left:5px;font-size:9px;font-weight:700;color:#111">'+nameHtml+'</span></span>';
+else out+='<span class="perf-badge"'+clickAttr+ctxAttr+' style="display:inline-flex;align-items:center;margin-left:6px"><span style="display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;border-radius:50%;font-size:8px;font-weight:600;background:var(--accent);color:#fff;flex-shrink:0">'+lb+'</span><span class="pname" style="margin-left:5px;font-size:9px;font-weight:700;color:var(--text)">'+nameHtml+'</span>'+(dd!==null&&dd!==0?'<span class="pday" style="margin-left:8px;font-size:9px;color:var(--dim);white-space:nowrap">'+getDdayText(dd)+'</span>':'')+'</span>';
 }return out;
 }
 let password='',userRole='user',records=[],currentYear=new Date().getFullYear(),currentMonth=new Date().getMonth()+1;
@@ -6048,7 +6053,7 @@ function renderCal(){
         var doneCount=filteredRecs.filter(function(r){return (r['진행 상태']||'')==='완료';}).length;
         h+='<div class="c-count">'+doneCount+'/'+filteredRecs.length+'</div>';
       }
-      h+='<div class="c-inner"><div class="'+dnCls+'">'+(td&&!nm?'<span style="color:var(--accent);font-weight:700">'+d.getDate()+'</span>':d.getDate())+renderPerfsHtml(perfs,td,past)+'</div>';
+      h+='<div class="c-inner"><div class="'+dnCls+'">'+(td&&!nm?'<span style="color:var(--accent);font-weight:700">'+d.getDate()+'</span>':d.getDate())+renderPerfsHtml(perfs,td,past,key)+'</div>';
       filteredRecs.forEach(r=>{
         var p=r['플랫폼 1']||'',p2=r['플랫폼 2']||'',title=r['콘텐츠 제목']||'',col=platColor(p),st=r['진행 상태']||'예정';
         var done=st==='완료';
@@ -6391,21 +6396,22 @@ function openPanel(dateObj,recs){
       var ddText=dd===0?'D-Day':dd>0?'D-'+dd:'';
       var hasUrl=!!perf.u;
       var clickAttr=hasUrl?' onclick="openPerfUrl(\''+escapeHtml(perf.u).replace(/'/g,'\\\'')+'\',\''+escapeHtml(perf.f).replace(/'/g,'\\\'')+'\')" title="클릭하면 공연 페이지로 이동" style="cursor:pointer;"':' style="cursor:default;"';
-      h+='<div'+clickAttr+' class="panel-perf-row" style="display:flex;align-items:center;padding:10px 12px;background:rgba(74,77,231,0.06);border-radius:10px;margin-bottom:6px;gap:10px;transition:background .15s">';
+      var venueP=perf.l||'장소 미정';
+      h+='<div'+clickAttr+' class="panel-perf-row" data-perf-name="'+escapeHtml(perf.f)+'" style="display:flex;align-items:center;padding:10px 12px;background:rgba(74,77,231,0.06);border-radius:10px;margin-bottom:6px;gap:10px;transition:background .15s">';
       h+='<span style="display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;border-radius:50%;font-size:8px;font-weight:700;background:var(--accent);color:#fff;flex-shrink:0">공</span>';
-      h+='<div style="flex:1;min-width:0;overflow:hidden"><div style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+perf.f+(hasUrl?' <span style="font-size:9px;color:var(--accent);font-weight:500;margin-left:2px">↗</span>':'')+'</div><div style="font-size:10px;color:var(--dim);margin-top:1px">4층 대극장</div></div>';
+      h+='<div style="flex:1;min-width:0;overflow:hidden"><div style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+perf.f+(hasUrl?' <span style="font-size:9px;color:var(--accent);font-weight:500;margin-left:2px">↗</span>':'')+'</div><div style="font-size:10px;color:var(--dim);margin-top:1px">'+escapeHtml(venueP)+'</div></div>';
       if(ddText)h+='<span style="font-size:11px;font-weight:600;color:var(--accent);white-space:nowrap;flex-shrink:0">'+ddText+'</span>';
       h+='</div>';
     });
     openExh.forEach(function(x){
       var eName=x.f||x.n;
-      var eVenue=x.n==='우리 SUM'?'7층 전시실':'장도 전시실';
+      var eVenue=x.l||'장소 미정';
       var eStart=new Date(x.s);
       eStart.setHours(0,0,0,0);
       var dayNum=Math.floor((ref-eStart)/86400000)+1;
-      h+='<div style="display:flex;align-items:center;padding:10px 12px;background:rgba(240,196,184,0.15);border-radius:10px;margin-bottom:6px;gap:10px">';
+      h+='<div class="panel-perf-row" data-perf-name="'+escapeHtml(eName)+'" style="display:flex;align-items:center;padding:10px 12px;background:rgba(240,196,184,0.15);border-radius:10px;margin-bottom:6px;gap:10px;transition:background .15s">';
       h+='<span style="display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;border-radius:50%;font-size:8px;font-weight:700;background:#F0C4B8;color:#333;flex-shrink:0">전</span>';
-      h+='<div style="flex:1;min-width:0;overflow:hidden"><div style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+eName+'</div><div style="font-size:10px;color:var(--dim);margin-top:1px">'+eVenue+'</div></div>';
+      h+='<div style="flex:1;min-width:0;overflow:hidden"><div style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+eName+'</div><div style="font-size:10px;color:var(--dim);margin-top:1px">'+escapeHtml(eVenue)+'</div></div>';
       h+='<span style="font-size:11px;font-weight:600;color:#C08070;white-space:nowrap;flex-shrink:0">'+dayNum+'일차</span>';
       h+='</div>';
     });
@@ -6423,6 +6429,68 @@ function togglePanelPrograms(){
   body.classList.toggle('open',_panelProgramsOpen);
   arrow.classList.toggle('open',_panelProgramsOpen);
 }
+// === 프로그램 우클릭 — 빠른 정보 박스 ===
+function onPerfContextMenu(event, perfName){
+  event.preventDefault();
+  event.stopPropagation();
+  closeCellContextMenu();
+  const perf=(PERFS||[]).find(function(p){return p.f===perfName;});
+  if(!perf)return;
+  const now=new Date(); now.setHours(0,0,0,0);
+  const sd=new Date(perf.s); sd.setHours(0,0,0,0);
+  const ed=new Date(perf.e); ed.setHours(0,0,0,0);
+  let ddText;
+  if(now>=sd&&now<=ed) ddText=perf.t==='e'?(Math.floor((now-sd)/86400000)+1)+'일차':'D-Day';
+  else if(sd>now) ddText='D-'+Math.round((sd-now)/86400000);
+  else ddText='종료';
+  const typeLabel=perf.t==='e'?'전시':perf.t==='a'?'예술교육':perf.t==='r'?'대관':'공연';
+  const venue=perf.l||'장소 미정';
+  const menu=document.createElement('div');
+  menu.id='cell-context-menu';
+  menu.innerHTML='<div style="padding:10px 14px;color:#4A4DE7;font-size:12px;line-height:1.5;background:rgba(74,77,231,0.06);border:1px solid rgba(74,77,231,0.2);border-radius:8px;margin:2px;max-width:240px">📌 프로그램 정보<br><span style="color:#333;font-size:11px;font-weight:600">'+escapeHtml(perf.f)+'</span><br><span style="color:#666;font-size:11px">'+escapeHtml(venue)+' · '+escapeHtml(typeLabel)+' · '+ddText+'</span></div>';
+  const mx=event.clientX, my=event.clientY;
+  document.body.appendChild(menu);
+  const rect=menu.getBoundingClientRect();
+  menu.style.left=Math.min(mx,window.innerWidth-rect.width-8)+'px';
+  menu.style.top=Math.min(my,window.innerHeight-rect.height-8)+'px';
+  setTimeout(function(){
+    document.addEventListener('click',closeCellContextMenu,{once:true});
+    document.addEventListener('contextmenu',function(e){if(!e.target.closest('#cell-context-menu'))closeCellContextMenu();},{once:true});
+    document.addEventListener('keydown',function(e){if(e.key==='Escape')closeCellContextMenu();},{once:true});
+  },0);
+}
+
+// === 프로그램 좌클릭 — panel 열고 프로그램 일정 펼침 + 깜빡 강조 ===
+function openPanelWithPerfHighlight(perfName, dateKey){
+  if(!dateKey)return;
+  const [y,m,d]=dateKey.split('-').map(Number);
+  const dateObj=new Date(y, m-1, d);
+  const recs=(records||[]).filter(function(r){
+    const ry=r['연도'], rm=String(r['월']||'').padStart(2,'0'), rd=String(r['일']||'').padStart(2,'0');
+    return (ry+'-'+rm+'-'+rd)===dateKey;
+  });
+  selected=dateObj;
+  openPanel(dateObj, recs);
+  // 프로그램 일정 섹션 강제 펼침
+  _panelProgramsOpen=true;
+  setTimeout(function(){
+    const body=document.getElementById('panel-prog-body');
+    const arrow=document.getElementById('panel-prog-arrow');
+    if(body)body.classList.add('open');
+    if(arrow)arrow.classList.add('open');
+    // 해당 row 찾고 깜빡 강조
+    const rows=document.querySelectorAll('[data-perf-name]');
+    for(const row of rows){
+      if(row.dataset.perfName===perfName){
+        row.scrollIntoView({behavior:'smooth', block:'center'});
+        row.classList.add('panel-perf-flash');
+        setTimeout(function(){row.classList.remove('panel-perf-flash');}, 2200);
+        break;
+      }
+    }
+  }, 60);
+}
+
 function closePanel(){panelOpen=false;selected=null;document.getElementById('panel').style.display='none';document.getElementById('main-area').style.marginRight='0';render();}
 function changeMonth(delta){currentMonth+=delta;if(currentMonth<1){currentMonth=12;currentYear--;}if(currentMonth>12){currentMonth=1;currentYear++;}_weekState={};_calAnimateOnNextRender=true;if(window.matchMedia('(max-width:768px)').matches){render();}else{closePanel();}}
 
