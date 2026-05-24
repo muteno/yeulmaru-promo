@@ -2820,8 +2820,14 @@ function renderPwStep(){
   back.style.display=_pwStep===1?'none':'';
   if(_pwMode==='admin'){return renderAwStep(body,next,bar);}
   if(_pwStep===1){
-    // 어떤 프로그램?
-    const activePerfs=PERFS.filter(function(p){return p.o===1;});
+    // 어떤 프로그램? — 판매 종료 안 된 것만 (오늘 ≤ 판매종료일)
+    const _todayKey=(function(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');})();
+    const activePerfs=PERFS.filter(function(p){
+      if(p.o!==1)return false;
+      // 판매종료일 있는 경우만 체크 (없으면 표시)
+      if(p.se&&p.se<_todayKey)return false;
+      return true;
+    });
     const groups=[
       {label:'공연',items:activePerfs.filter(function(p){return p.t==='c';})},
       {label:'전시',items:activePerfs.filter(function(p){return p.t==='e';})},
@@ -2913,7 +2919,7 @@ function renderPwStep(){
     let html='<div class="pw-question">마지막으로 확인해주세요</div>';
     html+='<div class="pw-hint">신청 내용을 확인하고 추가 요청이 있으면 적어주세요</div>';
     html+=renderPwSummary();
-    html+='<div style="margin-top:14px;padding:12px 14px;background:#fff8f3;border-radius:10px;border:1px solid rgba(216,132,85,0.25);font-size:12px;color:#b35a30;line-height:1.5"><span style="font-weight:700">🛈 신청 후</span> 관리자가 접수하기 전까지 <b>「신청 중」</b> 상태로 표시되고, 캘린더에 점선 박스로 보여. 본인은 신청 취소·수정이 가능해.</div>';
+    html+='<div style="margin-top:14px;padding:12px 14px;background:#fff8f3;border-radius:10px;border:1px solid rgba(216,132,85,0.25);font-size:12px;color:#b35a30;line-height:1.5"><span style="font-weight:700">🛈 신청 후</span> 관리자가 접수하기 전까지 <b>「신청 중」</b> 상태로 표시되고, 캘린더에 점선 박스로 보입니다. 본인은 신청 취소·수정이 가능합니다.</div>';
     html+='<label style="display:block;font-size:11px;color:#888;margin:18px 0 4px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">추가 요청 (비고)</label>';
     html+='<textarea id="pw-memo" rows="3" placeholder="관리자에게 전달할 추가 요청사항" style="width:100%;padding:10px 14px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:12px;font-size:13px;outline:none;box-sizing:border-box;resize:vertical;font-family:inherit;line-height:1.5">'+escapeHtml(_pwData.memo)+'</textarea>';
     body.innerHTML=html;
@@ -2922,7 +2928,7 @@ function renderPwStep(){
     // 완료
     document.getElementById('pw-steplabel').textContent='';
     bar.style.width='100%';
-    body.innerHTML='<div class="pw-done"><div class="emo">📮</div><div class="msg">신청이 완료되었어요!</div><div class="sub">「신청 중」 상태로 등록됐어. 관리자가 접수하면 「예정」으로 바뀔 거야.</div></div>';
+    body.innerHTML='<div class="pw-done"><div class="emo">📮</div><div class="msg">신청이 완료되었어요!</div><div class="sub">「신청 중」 상태로 등록됐어요. 관리자가 접수하면 「예정」으로 바뀝니다.</div></div>';
     document.getElementById('pw-acts').innerHTML='<button class="m-btn save" onclick="closePromoWizard()" style="margin-left:auto">확인</button>';
   }
 }
@@ -4356,11 +4362,11 @@ async function saveApplySettings(){
 function canApplyOnDate(dateKey){
   // dateKey = "YYYY-MM-DD"
   const ym=String(APPLY_SETTINGS.접수월||'').trim();
-  if(!ym)return{ok:false,reason:'관리자가 접수월을 설정하지 않았어'};
+  if(!ym)return{ok:false,reason:'접수월이 설정되지 않았습니다'};
   const dateYm=dateKey.substring(0,7);
   if(dateYm!==ym)return{ok:false,reason:'신청 가능한 월: '+ym};
   const exDates=String(APPLY_SETTINGS.제외일자||'').split(',').map(s=>s.trim()).filter(Boolean);
-  if(exDates.includes(dateKey))return{ok:false,reason:'이 날짜는 신청 불가능한 날이야'};
+  if(exDates.includes(dateKey))return{ok:false,reason:'신청 불가 일자: '+dateKey};
   return{ok:true};
 }
 
@@ -4370,11 +4376,11 @@ function canApplyAtTime(time){
   const exTimes=String(APPLY_SETTINGS.제외시간||'').split(',').map(s=>s.trim()).filter(Boolean);
   for(const t of exTimes){
     if(t.indexOf('-')>=0){
-      // 범위 시간 예: "12:00-13:00" — start 이상, end 미만
+      // 범위 시간 예: "18:00-22:00" — start 이상, end 이하 (양 끝 포함)
       const parts=t.split('-').map(x=>x.trim());
-      if(parts.length===2&&time>=parts[0]&&time<parts[1])return{ok:false,reason:'제외 시간대 ('+t+')'};
+      if(parts.length===2&&time>=parts[0]&&time<=parts[1])return{ok:false,reason:'신청 불가 시간: '+t};
     }else{
-      if(time===t)return{ok:false,reason:'제외 시간 ('+t+')'};
+      if(time===t)return{ok:false,reason:'신청 불가 시간: '+t};
     }
   }
   return{ok:true};
@@ -6375,7 +6381,7 @@ async function deleteRec(rowIndex,dateKey){
       await api('DELETE','/api/records/'+rowIndex);
       await syncReload(-1);
       closePanel();
-      showToast('신청이 취소됐어요');
+      showToast('신청이 취소되었습니다');
     }catch(e){showToast('취소 실패: '+e.message,'error');}
     finally{hideOverlayLoad();}
     return;
