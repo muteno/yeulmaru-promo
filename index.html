@@ -1783,7 +1783,7 @@ async function completePromoRequest(rowIndex){
   // 권한 체크
   let myApplicant='';
   try{myApplicant=localStorage.getItem('myApplicant')||'';}catch(e){}
-  const isMine=myApplicant&&(r['게시 담당자']||'')===myApplicant;
+  const isMine=_isMineRec(r,myApplicant);
   const isAdmin=userRole==='admin';
   if(!isMine&&!isAdmin){showToast('본인 또는 관리자만 완료 처리할 수 있어요','error');return;}
   const status=r['진행 상태']||'';
@@ -1818,7 +1818,7 @@ async function cancelPromoRequest(rowIndex){
   // 권한 체크
   let myApplicant='';
   try{myApplicant=localStorage.getItem('myApplicant')||'';}catch(e){}
-  const isMine=myApplicant&&(r['게시 담당자']||'')===myApplicant;
+  const isMine=_isMineRec(r,myApplicant);
   const isAdmin=userRole==='admin';
   if(!isMine&&!isAdmin){showToast('본인 신청만 취소할 수 있어요','error');return;}
   // 상태 체크 — 완료/취소된 건 취소 불가
@@ -2491,7 +2491,7 @@ function renderPromoBoard(){
   // viewMode 'mine' — 본인 신청만 (admin은 본인 개념 없으니 적용 안 함)
   if(!isAdmin&&_promoFilter.viewMode==='mine'){
     if(myApplicant){
-      rows=rows.filter(function(r){return(r['게시 담당자']||'')===myApplicant;});
+      rows=rows.filter(function(r){return _isMineRec(r,myApplicant);});
     }else{
       rows=[];  // 신청 한 적 없음 — 빈 상태에서 "전체 보기" 버튼 강조
     }
@@ -2552,6 +2552,15 @@ function renderPromoBoard(){
     });
   }else{
     // 기본 정렬: 신청 중 우선 → 오늘 → 미래(가까운) → 과거(최근)
+// === isMine 매핑 — 신청자 기준 + 하이브리드 (기존 row는 담당자 fallback) ===
+function _isMineRec(rec, myAppl){
+  if(!myAppl||!rec) return false;
+  const applicant = (rec['신청자']||'').toString().trim();
+  const author = (rec['게시 담당자']||'').toString().trim();
+  if(applicant && applicant === myAppl) return true;
+  if(!applicant && author === myAppl) return true;
+  return false;
+}
     function rowBucket(r){
       const dk=getRecDateKey(r);
       if(dk===todayKey)return 0;
@@ -2559,9 +2568,15 @@ function renderPromoBoard(){
       return 2;
     }
     rows.sort(function(a,b){
+      // 1차: 본인 우선 (체크 OFF에서도 본인 row가 위에)
+      const am=_isMineRec(a,myApplicant)?0:1;
+      const bm=_isMineRec(b,myApplicant)?0:1;
+      if(am!==bm)return am-bm;
+      // 2차: 신청 중 우선 (그룹 내에서)
       const ap=a['진행 상태']==='신청 중'?0:1;
       const bp=b['진행 상태']==='신청 중'?0:1;
       if(ap!==bp)return ap-bp;
+      // 3차: 오늘 → 미래(가까운) → 과거(최근)
       const ab=rowBucket(a),bb=rowBucket(b);
       if(ab!==bb)return ab-bb;
       const ad=getRecDateKey(a),bd=getRecDateKey(b);
@@ -2571,7 +2586,7 @@ function renderPromoBoard(){
     });
   }
   // === 요약 카운트 (myApplicant 기준 또는 admin은 전체) ===
-  function recIsMine(r){return myApplicant&&(r['게시 담당자']||'')===myApplicant;}
+  function recIsMine(r){return _isMineRec(r,myApplicant);}
   const myRows=isAdmin?records.filter(recIsMine):records.filter(recIsMine);
   const summaryBase=isAdmin?records:myRows;
   const myPending=summaryBase.filter(function(r){return r['진행 상태']==='신청 중';}).length;
@@ -2759,7 +2774,7 @@ function renderPromoBoard(){
       const plat2=r['플랫폼 2']&&r['플랫폼 2']!=='-'?r['플랫폼 2']:'';
       const cat=r['콘텐츠 구분']||'';
       const y=r['연도'],dateKey=y+'-'+m2+'-'+d2;
-      const isMine=myApplicant&&(r['게시 담당자']||'')===myApplicant;
+      const isMine=_isMineRec(r,myApplicant);
       const isToday=dateKey===todayKey;
       const isFuture=dateKey>todayKey;
       const isPast=dateKey<todayKey;
@@ -2938,7 +2953,7 @@ function openChangeWizard(rowIndex){
   // 권한 체크
   if(userRole!=='admin'){
     let myAppl='';try{myAppl=localStorage.getItem('myApplicant')||'';}catch(e){}
-    const isMine=myAppl&&(rec['게시 담당자']||'')===myAppl;
+    const isMine=_isMineRec(rec,myAppl);
     const st=rec['진행 상태']||'';
     if(!isMine||(st!=='신청 중'&&st!=='예정')){
       showToast('변경 권한이 없어요','error');
@@ -3585,6 +3600,9 @@ async function submitPromoRequest(){
     const format=resolvePwFormat();
     // 콘텐츠 내용 — 구조화 텍스트 (사람이 SharePoint 셀에서 직접 읽기 좋게)
     const content=buildPwContentText();
+    // 신청자 — user 본인 식별 (localStorage.myApplicant 우선)
+    let _myAppl='';try{_myAppl=localStorage.getItem('myApplicant')||'';}catch(e){}
+    const requesterName=_myAppl||_pwData.applicant||'';
     const row=[
       records.length+1,
       ts,
@@ -3601,7 +3619,8 @@ async function submitPromoRequest(){
       content,
       _pwData.applicant,
       '신청 중',
-      _pwData.memo||''
+      _pwData.memo||'',
+      requesterName
     ];
     await api('POST','/api/records',{values:row});
     try{localStorage.setItem('myApplicant',_pwData.applicant);}catch(e){}
@@ -6679,7 +6698,7 @@ function onEvContextMenu(event,rowIndex,dateKey){
       '<div class="ccm-item" onclick="closeCellContextMenu();deleteRec('+rowIndex+',\''+dateKey+'\')"><span class="emo">🗑️</span>삭제</div>';
   }else{
     let myAppl='';try{myAppl=localStorage.getItem('myApplicant')||'';}catch(e){}
-    const isMine=myAppl&&(rec['게시 담당자']||'')===myAppl;
+    const isMine=_isMineRec(rec,myAppl);
     const status=rec['진행 상태']||'';
     if(!isMine){
       // 남이 신청한 콘텐츠 — 안내만
@@ -7209,7 +7228,7 @@ function editRec(rowIndex,dateKey,ev,forceReadOnly){
   // === user 본인 신청 중·예정 → 변경 위저드 (step별 선택) ===
   if(userRole!=='admin'&&!forceReadOnly){
     var myAppl='';try{myAppl=localStorage.getItem('myApplicant')||'';}catch(e){}
-    var isMine=myAppl&&(rec['게시 담당자']||'')===myAppl;
+    var isMine=_isMineRec(rec,myAppl);
     var status=rec['진행 상태']||'';
     if(isMine&&(status==='신청 중'||status==='예정')){
       openChangeWizard(rowIndex);
@@ -7536,7 +7555,7 @@ async function deleteRec(rowIndex,dateKey){
   if(userRole!=='admin'){
     if(!rec){showToast('대상을 찾을 수 없어요','error');return;}
     let myAppl='';try{myAppl=localStorage.getItem('myApplicant')||'';}catch(e){}
-    const isMine=myAppl&&(rec['게시 담당자']||'')===myAppl;
+    const isMine=_isMineRec(rec,myAppl);
     const status=rec['진행 상태']||'';
     if(!isMine){showToast('본인이 신청한 건만 취소할 수 있어요','error');return;}
     if(status!=='신청 중'){showToast('이미 접수된 건은 취소할 수 없어요. 담당자에게 문의해 주세요','error');return;}
