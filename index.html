@@ -2490,6 +2490,65 @@ function _getAdminSection(rec, todayKey){
 }
 // admin 신청 대기 목록 펼침 상태 (알림 배지 클릭으로 토글)
 let _showApplyList = false;
+// admin 신청 대기 체크박스 — 일괄 처리용 (rowIndex Set)
+let _pendingChecks = new Set();
+function togglePendingCheck(rowIndex, el){
+  if(el.checked) _pendingChecks.add(rowIndex);
+  else _pendingChecks.delete(rowIndex);
+  updateBulkActionsUI();
+}
+function toggleAllPending(el){
+  const checkboxes = document.querySelectorAll('input[data-pending-row]');
+  checkboxes.forEach(function(cb){
+    cb.checked = el.checked;
+    const ri = parseInt(cb.dataset.pendingRow);
+    if(el.checked) _pendingChecks.add(ri);
+    else _pendingChecks.delete(ri);
+  });
+  updateBulkActionsUI();
+}
+function updateBulkActionsUI(){
+  const cnt = _pendingChecks.size;
+  const wrap = document.getElementById('apply-bulk-actions');
+  if(!wrap) return;
+  wrap.style.display = cnt > 0 ? 'flex' : 'none';
+  const btn = document.getElementById('apply-bulk-approve-btn');
+  if(btn) btn.textContent = '✓ 선택한 '+cnt+'건 접수';
+  const btn2 = document.getElementById('apply-bulk-cancel-btn');
+  if(btn2) btn2.textContent = '✕ 선택한 '+cnt+'건 취소';
+}
+// 일괄 접수 — 신청 중 → 예정 (순차 PATCH)
+async function bulkApprovePending(){
+  if(!_pendingChecks.size){showToast('선택된 건이 없어요','error');return;}
+  const ids = Array.from(_pendingChecks);
+  const ok = await showConfirm('선택한 '+ids.length+'건을 접수하시겠어요?<br><br><span style="color:#888;font-size:12px">신청 중 → 예정으로 변경됩니다.</span>',{title:'일괄 접수',html:true});
+  if(!ok) return;
+  showOverlayLoad('일괄 접수 중... (0/'+ids.length+')');
+  let success = 0, failed = 0;
+  for(let i = 0; i < ids.length; i++){
+    const rowIndex = ids[i];
+    try{
+      const rec = records.find(function(r){return r._rowIndex === rowIndex;});
+      if(!rec){failed++;continue;}
+      const updated = Object.assign({}, rec, {'진행 상태': '예정'});
+      delete updated._rowIndex;
+      const res = await fetch(WORKER_BASE+'/api/sheet/records/'+rowIndex, {
+        method: 'PATCH',
+        headers: {'Content-Type':'application/json','x-pw':password},
+        body: JSON.stringify({values: Object.values(updated)})
+      });
+      if(!res.ok) throw new Error('API '+res.status);
+      success++;
+      showOverlayLoad('일괄 접수 중... ('+(i+1)+'/'+ids.length+')');
+    }catch(e){ console.error(e); failed++; }
+  }
+  hideOverlayLoad();
+  showToast(success+'건 접수 완료'+(failed?' / '+failed+'건 실패':''), failed?'error':'success');
+  _pendingChecks.clear();
+  await loadRecords();
+  if(typeof renderPromoBoard==='function') renderPromoBoard();
+  render();
+}
 function renderPromoBoard(){
   const body=document.getElementById('promo-board-body');
   if(!body)return;
@@ -2761,7 +2820,23 @@ function renderPromoBoard(){
           const _sCount=rows.filter(function(rr){return _getAdminSection(rr,todayKey)===_sec;}).length;
           const _sBg=_sec===0?'rgba(216,132,85,0.08)':_sec===1?'rgba(74,77,231,0.06)':_sec===2?'#fafafa':'#f5f5f5';
           const _sBorder=_sec===0?'border-top:2px solid var(--peach);border-bottom:1px solid rgba(216,132,85,0.2)':_sec===1?'border-top:2px solid var(--accent);border-bottom:1px solid rgba(74,77,231,0.15)':'border-top:1px solid #eee;border-bottom:1px solid #eee';
-          html+='<tr style="background:'+_sBg+';'+_sBorder+'"><td colspan="10" style="padding:10px 14px"><div style="display:flex;align-items:center;gap:10px;font-size:12px;font-weight:700;color:#333;letter-spacing:0.3px">'+_adminSectionLabels[_sec]+' <span style="color:#888;font-size:11px;font-weight:500">('+_sCount+'건)</span><span style="color:#aaa;font-size:11px;font-weight:400;margin-left:6px">'+_adminSectionDescs[_sec]+'</span></div></td></tr>';
+          let _sectionRowHtml='<tr style="background:'+_sBg+';'+_sBorder+'"><td colspan="10" style="padding:10px 14px">';
+          _sectionRowHtml+='<div style="display:flex;align-items:center;gap:10px;font-size:12px;font-weight:700;color:#333;letter-spacing:0.3px">';
+          // 신청 대기 헤더 — 전체 선택 체크박스
+          if(_sec===0){
+            _sectionRowHtml+='<label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer" onclick="event.stopPropagation()"><input type="checkbox" id="apply-select-all" onchange="toggleAllPending(this)" style="width:14px;height:14px;accent-color:var(--peach);cursor:pointer"><span>'+_adminSectionLabels[_sec]+'</span></label>';
+          } else {
+            _sectionRowHtml+=_adminSectionLabels[_sec];
+          }
+          _sectionRowHtml+=' <span style="color:#888;font-size:11px;font-weight:500">('+_sCount+'건)</span><span style="color:#aaa;font-size:11px;font-weight:400;margin-left:6px">'+_adminSectionDescs[_sec]+'</span>';
+          // 신청 대기 헤더 — 우측 일괄 액션 버튼 (체크 후 노출)
+          if(_sec===0){
+            _sectionRowHtml+='<div id="apply-bulk-actions" style="display:none;margin-left:auto;gap:6px;align-items:center">';
+            _sectionRowHtml+='<button id="apply-bulk-approve-btn" onclick="event.stopPropagation();bulkApprovePending()" style="padding:5px 12px;border-radius:8px;border:1.5px solid #0F8B4C;background:#0F8B4C;color:#fff;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;transition:all .12s" onmouseover="this.style.background=\'#0a6e3c\'" onmouseout="this.style.background=\'#0F8B4C\'">✓ 선택한 건 접수</button>';
+            _sectionRowHtml+='</div>';
+          }
+          _sectionRowHtml+='</div></td></tr>';
+          html+=_sectionRowHtml;
           _adminLastSection=_sec;
         }
       }
@@ -2855,7 +2930,13 @@ function renderPromoBoard(){
       // 플랫폼 (P1 › P2)
       const platHtml=escapeHtml(plat1||'-')+(plat2?'<span style="color:#bbb;margin:0 4px">›</span>'+escapeHtml(plat2):'');
       html+='<tr class="promo-row" onclick="openPromoBoardRow(\''+dateKey+'\','+r._rowIndex+')" style="border-bottom:1px solid #f0f0f0;cursor:pointer;'+trBg+';'+trBorder+';animation-delay:'+_animDelay+'" onmouseover="this.style.background=\''+hoverBg+'\'" onmouseout="this.style.background=\''+baseBg+'\'">';
-      html+='<td title="'+escapeHtml(noTitle)+'" style="padding:10px 12px;text-align:left;color:#aaa;font-variant-numeric:tabular-nums;font-size:11px;font-weight:600;cursor:help">'+escapeHtml(noShort)+'</td>';
+      // === admin 신청 대기 row — NO 셀 안에 체크박스 prefix ===
+      if(isAdmin && (r['진행 상태']||'')==='신청 중'){
+        const _chkAttr = _pendingChecks.has(r._rowIndex) ? 'checked' : '';
+        html+='<td style="padding:10px 8px;text-align:left;white-space:nowrap" onclick="event.stopPropagation()"><label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" data-pending-row="'+r._rowIndex+'" '+_chkAttr+' onchange="togglePendingCheck('+r._rowIndex+', this)" onclick="event.stopPropagation()" style="width:14px;height:14px;accent-color:var(--peach);cursor:pointer"><span title="'+escapeHtml(noTitle)+'" style="color:#aaa;font-variant-numeric:tabular-nums;font-size:11px;font-weight:600">'+escapeHtml(noShort)+'</span></label></td>';
+      } else {
+        html+='<td title="'+escapeHtml(noTitle)+'" style="padding:10px 12px;text-align:left;color:#aaa;font-variant-numeric:tabular-nums;font-size:11px;font-weight:600;cursor:help">'+escapeHtml(noShort)+'</td>';
+      }
       html+='<td style="padding:10px 12px;text-align:left"><span style="display:inline-block;padding:3px 10px;border-radius:10px;background:'+sBg+';color:'+sColor+';font-size:11px;font-weight:600;white-space:nowrap">'+escapeHtml(status)+'</span></td>';
       html+='<td style="padding:10px 12px;text-align:left;color:'+(isPast?'#aaa':'#333')+';white-space:nowrap"><span style="font-variant-numeric:tabular-nums">'+m2+'/'+d2+'</span>'+todayBadge+'</td>';
       html+='<td style="padding:10px 12px;text-align:left;color:'+(isPast?'#aaa':'#333')+';font-variant-numeric:tabular-nums;white-space:nowrap">'+timeStr+'</td>';
@@ -2886,6 +2967,10 @@ function renderPromoBoard(){
     html+='</tbody></table></div>';
   }
   body.innerHTML=html;
+  // 재렌더 후 일괄 액션 UI 복원
+  if(isAdmin && _pendingChecks.size > 0){
+    setTimeout(updateBulkActionsUI, 50);
+  }
 }
 // 요약 카드 헬퍼
 function summaryCard(emo,label,count,color,bg,scope){
