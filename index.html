@@ -1104,6 +1104,76 @@ pins.forEach((el,i)=>{
   el.addEventListener('keydown',e=>{if(e.key==='Backspace'&&!el.value&&i>0)pins[i-1].focus();});
   el.addEventListener('paste',e=>{e.preventDefault();const t=(e.clipboardData.getData('text')||'').replace(/\D/g,'').slice(0,4);t.split('').forEach((c,j)=>{if(pins[j])pins[j].value=c;});if(t.length===4)tryLogin();});
 });
+// === 비밀번호 입력/설정 모달 (Promise 기반) ===
+function _promptPasswordSetup(userName){
+  return new Promise(function(resolve){
+    const inpSt='width:100%;padding:11px 14px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:12px;font-size:14px;outline:none;box-sizing:border-box;font-family:inherit;letter-spacing:2px;text-align:center';
+    const html='<div class="modal-bg show" id="pwd-setup-modal" style="z-index:99999" onclick="if(event.target===this)_resolvePwdSetup(null)"><div class="modal" style="max-width:380px;padding:24px;text-align:left;position:relative"><button class="modal-x" onclick="_resolvePwdSetup(null)" title="닫기">✕</button>'+
+      '<h3 style="margin:0 0 4px">'+escapeHtml(userName)+' 님</h3>'+
+      '<div style="font-size:12px;color:#888;margin-bottom:14px">첫 접속이에요. 사용할 비밀번호를 설정해 주세요.</div>'+
+      '<label style="display:block;font-size:11px;color:#888;margin:0 0 4px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">비밀번호 (4~20자)<span style="color:var(--peach);margin-left:3px">*</span></label>'+
+      '<input id="pwd-new" type="password" autocomplete="new-password" maxlength="20" style="'+inpSt+'">'+
+      '<label style="display:block;font-size:11px;color:#888;margin:14px 0 4px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">비밀번호 확인<span style="color:var(--peach);margin-left:3px">*</span></label>'+
+      '<input id="pwd-confirm" type="password" autocomplete="new-password" maxlength="20" style="'+inpSt+'">'+
+      '<div id="pwd-msg" style="font-size:11px;color:#E24B4A;margin-top:8px;min-height:14px"></div>'+
+      '<div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end">'+
+      '<button onclick="_resolvePwdSetup(null)" class="m-btn cancel">취소</button>'+
+      '<button onclick="_resolvePwdSetupOk()" class="m-btn save">설정 완료</button>'+
+      '</div></div></div>';
+    let el=document.getElementById('pwd-setup-modal');
+    if(el)el.remove();
+    document.body.insertAdjacentHTML('beforeend',html);
+    window._pwdSetupResolver=resolve;
+    setTimeout(function(){const i=document.getElementById('pwd-new');if(i)i.focus();},80);
+    // Enter 키 = 확인
+    document.getElementById('pwd-confirm').addEventListener('keydown',function(ev){if(ev.key==='Enter')_resolvePwdSetupOk();});
+  });
+}
+function _resolvePwdSetup(val){
+  const el=document.getElementById('pwd-setup-modal');
+  if(el)el.remove();
+  if(window._pwdSetupResolver){window._pwdSetupResolver(val);window._pwdSetupResolver=null;}
+}
+function _resolvePwdSetupOk(){
+  const a=document.getElementById('pwd-new').value;
+  const b=document.getElementById('pwd-confirm').value;
+  const m=document.getElementById('pwd-msg');
+  if(!a||a.length<4){m.textContent='비밀번호는 4자 이상이어야 해요';return;}
+  if(a.length>20){m.textContent='비밀번호는 20자 이하로 입력해 주세요';return;}
+  if(a!==b){m.textContent='두 비밀번호가 일치하지 않아요';return;}
+  _resolvePwdSetup(a);
+}
+function _promptPasswordInput(userName){
+  return new Promise(function(resolve){
+    const inpSt='width:100%;padding:11px 14px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:12px;font-size:14px;outline:none;box-sizing:border-box;font-family:inherit;letter-spacing:2px;text-align:center';
+    const html='<div class="modal-bg show" id="pwd-input-modal" style="z-index:99999" onclick="if(event.target===this)_resolvePwdInput(null)"><div class="modal" style="max-width:360px;padding:24px;text-align:left;position:relative"><button class="modal-x" onclick="_resolvePwdInput(null)" title="닫기">✕</button>'+
+      '<h3 style="margin:0 0 4px">'+escapeHtml(userName)+' 님</h3>'+
+      '<div style="font-size:12px;color:#888;margin-bottom:14px">비밀번호를 입력해 주세요.</div>'+
+      '<input id="pwd-in" type="password" autocomplete="current-password" maxlength="20" style="'+inpSt+'">'+
+      '<div id="pwd-in-msg" style="font-size:11px;color:#E24B4A;margin-top:8px;min-height:14px"></div>'+
+      '<div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end">'+
+      '<button onclick="_resolvePwdInput(null)" class="m-btn cancel">취소</button>'+
+      '<button onclick="_resolvePwdInputOk()" class="m-btn save">확인</button>'+
+      '</div></div></div>';
+    let el=document.getElementById('pwd-input-modal');
+    if(el)el.remove();
+    document.body.insertAdjacentHTML('beforeend',html);
+    window._pwdInputResolver=resolve;
+    setTimeout(function(){const i=document.getElementById('pwd-in');if(i)i.focus();},80);
+    document.getElementById('pwd-in').addEventListener('keydown',function(ev){if(ev.key==='Enter')_resolvePwdInputOk();});
+  });
+}
+function _resolvePwdInput(val){
+  const el=document.getElementById('pwd-input-modal');
+  if(el)el.remove();
+  if(window._pwdInputResolver){window._pwdInputResolver(val);window._pwdInputResolver=null;}
+}
+function _resolvePwdInputOk(){
+  const v=document.getElementById('pwd-in').value;
+  if(!v){document.getElementById('pwd-in-msg').textContent='비밀번호를 입력해 주세요';return;}
+  _resolvePwdInput(v);
+}
+
 async function tryLogin(){
   const pin=Array.from(pins).map(p=>p.value).join('');if(pin.length!==4)return;
   document.getElementById('login-msg').textContent='';
@@ -1136,9 +1206,55 @@ async function tryLogin(){
         pins.forEach(p=>{p.value='';p.classList.add('err')});pins[0].focus();
         return;
       }
-      // 매칭 성공 — user 권한 + 개인 정보 저장
+      // 매칭 성공 — 비밀번호 검증/설정 단계
       const userName=matched['담당자']||'';
       const userDept=matched['담당부서']||'';
+      const storedPwd=(matched['비밀번호']||'').toString();
+      document.getElementById('login-load').textContent='';
+      let pwdOk=false;
+      if(!storedPwd){
+        // 첫 접속 — 비밀번호 설정 (2번 입력)
+        const newPwd=await _promptPasswordSetup(userName);
+        if(!newPwd){
+          // 취소
+          password='';sessionStorage.removeItem('pw');
+          pins.forEach(p=>{p.value=''});pins[0].focus();
+          return;
+        }
+        // 시트 K열에 비밀번호 저장 (PATCH)
+        try{
+          const ri=matched._rowIndex;
+          const updated=Object.assign({},matched,{'비밀번호':newPwd,'계정여부':accountStatus||'정상'});
+          delete updated._rowIndex;
+          await api('PATCH','/api/sheet/manager/'+ri,{values:Object.values(updated)});
+          pwdOk=true;
+          // 메모리에서도 즉시 반영
+          matched['비밀번호']=newPwd;
+          matched['계정여부']=accountStatus||'정상';
+        }catch(e){
+          console.error('[password save]',e);
+          showToast('비밀번호 저장 실패: '+e.message,'error');
+          password='';sessionStorage.removeItem('pw');
+          return;
+        }
+      } else {
+        // 기존 사용자 — 비밀번호 입력
+        const inputPwd=await _promptPasswordInput(userName);
+        if(!inputPwd){
+          password='';sessionStorage.removeItem('pw');
+          pins.forEach(p=>{p.value=''});pins[0].focus();
+          return;
+        }
+        if(inputPwd!==storedPwd){
+          password='';sessionStorage.removeItem('pw');
+          document.getElementById('login-msg').textContent='비밀번호가 일치하지 않아요';
+          pins.forEach(p=>{p.value='';p.classList.add('err')});pins[0].focus();
+          return;
+        }
+        pwdOk=true;
+      }
+      if(!pwdOk){password='';sessionStorage.removeItem('pw');return;}
+      // 인증 성공 — 세션 저장 + initApp
       sessionStorage.setItem('pw','0510');sessionStorage.setItem('role','user');
       try{
         localStorage.setItem('myApplicant',userName);
