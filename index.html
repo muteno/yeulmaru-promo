@@ -586,7 +586,7 @@ table.promo-board-table th:last-child .col-resize-handle{display:none}
 .panel-perf-row{display:flex !important;flex-direction:row !important;flex-wrap:nowrap !important;align-items:center !important;width:100%;box-sizing:border-box}
 .panel-perf-row > div{min-width:0}
 /* URL 있으면 호버 강조 */
-.panel-perf-row[onclick]:hover{background:rgba(74,77,231,0.18) !important;transform:translateX(2px)}
+.panel-perf-row[onclick]:hover{transform:translateX(2px);box-shadow:0 2px 6px rgba(0,0,0,0.08)}
 /* 캘린더 셀 안 프로그램 뱃지 — URL 있으면 호버 강조 */
 .perf-badge[onclick]:hover{filter:brightness(1.1);transform:translateY(-1px);transition:all .12s ease}
 .p-row1{display:flex;align-items:center;gap:8px}
@@ -1538,7 +1538,8 @@ function closeAnnualCalendar(){
 async function openPerfUrl(url, perfName){
   if(!url)return;
   event&&event.stopPropagation&&event.stopPropagation();
-  const ok=await showConfirm('"'+perfName+'" 공연 페이지로 이동할까요?\n\n새 창에서 열려요.',{okText:'이동',cancelText:'취소'});
+  const msg="'"+escapeHtml(perfName)+"' 상세페이지로 이동할까요?<br><br><span style=\"font-size:12px;color:#999;font-weight:400\">새 창에서 열립니다</span>";
+  const ok=await showConfirm(msg,{okText:'이동',cancelText:'취소',html:true});
   if(ok)window.open(url,'_blank','noopener,noreferrer');
 }
 // iframe 안에 강조색(#E85A3A 오렌지 → #4A4DE7 보라) override CSS 주입
@@ -6426,9 +6427,13 @@ function openPanel(dateObj,recs){
       var eStart=new Date(x.s);
       eStart.setHours(0,0,0,0);
       var dayNum=Math.floor((ref-eStart)/86400000)+1;
-      h+='<div class="panel-perf-row" data-perf-name="'+escapeHtml(eName)+'" style="display:flex;align-items:center;padding:10px 12px;background:rgba(240,196,184,0.15);border-radius:10px;margin-bottom:6px;gap:10px;transition:background .15s">';
+      var eHasUrl=!!x.u;
+      var eClickAttr=eHasUrl?' onclick="openPerfUrl(\''+escapeHtml(x.u).replace(/'/g,'\\\'')+'\',\''+escapeHtml(eName).replace(/'/g,'\\\'')+'\')" title="클릭하면 전시 페이지로 이동"':'';
+      var eCursorStyle=eHasUrl?'cursor:pointer;':'';
+      var eNameWithArrow=escapeHtml(eName)+(eHasUrl?' <span style="font-size:9px;color:#C08070;font-weight:500;margin-left:2px">↗</span>':'');
+      h+='<div'+eClickAttr+' class="panel-perf-row" data-perf-name="'+escapeHtml(eName)+'" style="'+eCursorStyle+'display:flex;align-items:center;padding:10px 12px;background:rgba(240,196,184,0.15);border-radius:10px;margin-bottom:6px;gap:10px;transition:background .15s">';
       h+='<span style="display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;border-radius:50%;font-size:8px;font-weight:700;background:#F0C4B8;color:#333;flex-shrink:0">전</span>';
-      h+='<div style="flex:1;min-width:0;overflow:hidden"><div style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+eName+'</div><div style="font-size:10px;color:var(--dim);margin-top:1px">'+escapeHtml(eVenue)+'</div></div>';
+      h+='<div style="flex:1;min-width:0;overflow:hidden"><div style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+eNameWithArrow+'</div><div style="font-size:10px;color:var(--dim);margin-top:1px">'+escapeHtml(eVenue)+'</div></div>';
       h+='<span style="font-size:11px;font-weight:600;color:#C08070;white-space:nowrap;flex-shrink:0">'+dayNum+'일차</span>';
       h+='</div>';
     });
