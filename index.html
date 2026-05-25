@@ -1111,30 +1111,87 @@ function _promptPasswordSetup(userName){
     return window._pwdSetupPromise;
   }
   const p = new Promise(function(resolve){
-    const inpSt='width:100%;padding:11px 14px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:12px;font-size:14px;outline:none;box-sizing:border-box;font-family:inherit;letter-spacing:2px;text-align:center';
-    const html='<div class="modal-bg show" id="pwd-setup-modal" style="z-index:99999" onclick="if(event.target===this)_resolvePwdSetup(null)"><div class="modal" style="max-width:380px;padding:24px;text-align:left;position:relative"><button class="modal-x" onclick="_resolvePwdSetup(null)" title="닫기">✕</button>'+
+    const inpSt='width:100%;padding:11px 14px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:12px;font-size:14px;outline:none;box-sizing:border-box;font-family:inherit;letter-spacing:2px;text-align:center;transition:border-color .15s';
+    const html='<div class="modal-bg show" id="pwd-setup-modal" style="z-index:99999" onclick="if(event.target===this)_resolvePwdSetup(null)"><div class="modal" style="max-width:400px;padding:24px;text-align:left;position:relative"><button class="modal-x" onclick="_resolvePwdSetup(null)" title="닫기">✕</button>'+
       '<h3 style="margin:0 0 4px">'+escapeHtml(userName)+' 님</h3>'+
-      '<div style="font-size:12px;color:#888;margin-bottom:14px;line-height:1.5">사용할 비밀번호를 설정해 주세요.<br><span style="color:var(--accent);font-weight:600">2번 입력</span>해서 일치하는지 확인합니다.</div>'+
+      '<div style="font-size:12px;color:#888;margin-bottom:16px;line-height:1.5">사용할 비밀번호를 설정해 주세요.</div>'+
+      // 새 비밀번호
       '<label style="display:block;font-size:11px;color:#888;margin:0 0 4px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">새 비밀번호 (4~20자)<span style="color:var(--peach);margin-left:3px">*</span></label>'+
-      '<input id="pwd-new" type="password" autocomplete="new-password" maxlength="20" style="'+inpSt+'">'+
-      '<label style="display:block;font-size:11px;color:#888;margin:14px 0 4px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">비밀번호 한 번 더 입력<span style="color:var(--peach);margin-left:3px">*</span></label>'+
-      '<input id="pwd-confirm" type="password" autocomplete="new-password" maxlength="20" style="'+inpSt+'">'+
-      '<div id="pwd-msg" style="font-size:11px;color:#E24B4A;margin-top:8px;min-height:14px"></div>'+
-      '<div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end">'+
+      '<input id="pwd-new" type="password" autocomplete="new-password" maxlength="20" oninput="_checkPwdMatch()" style="'+inpSt+'">'+
+      '<div id="pwd-len-hint" style="font-size:11px;color:#bbb;margin-top:5px;min-height:14px;font-weight:500"></div>'+
+      // 비밀번호 확인
+      '<label style="display:block;font-size:11px;color:#888;margin:12px 0 4px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">비밀번호 확인<span style="color:var(--peach);margin-left:3px">*</span></label>'+
+      '<input id="pwd-confirm" type="password" autocomplete="new-password" maxlength="20" oninput="_checkPwdMatch()" style="'+inpSt+'">'+
+      '<div id="pwd-match-hint" style="font-size:11px;color:#bbb;margin-top:5px;min-height:14px;font-weight:500"></div>'+
+      '<div style="display:flex;gap:8px;margin-top:18px;justify-content:flex-end">'+
       '<button onclick="_resolvePwdSetup(null)" class="m-btn cancel">취소</button>'+
-      '<button onclick="_resolvePwdSetupOk()" class="m-btn save">설정 완료</button>'+
+      '<button id="pwd-ok-btn" onclick="_resolvePwdSetupOk()" class="m-btn save" disabled style="opacity:0.4;cursor:not-allowed">설정 완료</button>'+
       '</div></div></div>';
     let el=document.getElementById('pwd-setup-modal');
     if(el)el.remove();
     document.body.insertAdjacentHTML('beforeend',html);
     window._pwdSetupResolver=resolve;
     setTimeout(function(){const i=document.getElementById('pwd-new');if(i)i.focus();},80);
-    // Enter 키 = 확인
-    document.getElementById('pwd-confirm').addEventListener('keydown',function(ev){if(ev.key==='Enter')_resolvePwdSetupOk();});
+    // Enter 키 = 확인 (조건 충족 시만)
+    document.getElementById('pwd-new').addEventListener('keydown',function(ev){if(ev.key==='Enter'){ev.preventDefault();document.getElementById('pwd-confirm').focus();}});
+    document.getElementById('pwd-confirm').addEventListener('keydown',function(ev){if(ev.key==='Enter'){ev.preventDefault();_resolvePwdSetupOk();}});
   });
   window._pwdSetupPromise = p;
   p.finally(function(){ window._pwdSetupPromise = null; });
   return p;
+}
+// 실시간 비밀번호 검증 (회원가입 폼 스타일)
+function _checkPwdMatch(){
+  const a = document.getElementById('pwd-new');
+  const b = document.getElementById('pwd-confirm');
+  const lenHint = document.getElementById('pwd-len-hint');
+  const matchHint = document.getElementById('pwd-match-hint');
+  const okBtn = document.getElementById('pwd-ok-btn');
+  if(!a || !b || !lenHint || !matchHint || !okBtn) return;
+  const av = a.value, bv = b.value;
+  let lenOk = false, matchOk = false;
+  // 길이 검증 + 시각 피드백
+  if(av.length === 0){
+    lenHint.textContent = '';
+    a.style.borderColor = 'rgba(0,0,0,0.06)';
+  } else if(av.length < 4){
+    lenHint.innerHTML = '⚠️ 4자 이상 입력해 주세요 <span style="color:#bbb">('+av.length+'/4)</span>';
+    lenHint.style.color = '#E24B4A';
+    a.style.borderColor = '#E24B4A';
+  } else if(av.length > 20){
+    lenHint.textContent = '⚠️ 20자 이하로 입력해 주세요';
+    lenHint.style.color = '#E24B4A';
+    a.style.borderColor = '#E24B4A';
+  } else {
+    lenHint.innerHTML = '✓ 사용 가능 <span style="color:#bbb">('+av.length+'자)</span>';
+    lenHint.style.color = '#0F8B4C';
+    a.style.borderColor = '#0F8B4C';
+    lenOk = true;
+  }
+  // 일치 검증 + 시각 피드백
+  if(bv.length === 0){
+    matchHint.textContent = '';
+    b.style.borderColor = 'rgba(0,0,0,0.06)';
+  } else if(av === bv){
+    matchHint.textContent = '✓ 일치합니다';
+    matchHint.style.color = '#0F8B4C';
+    b.style.borderColor = '#0F8B4C';
+    matchOk = true;
+  } else {
+    matchHint.textContent = '✕ 일치하지 않아요';
+    matchHint.style.color = '#E24B4A';
+    b.style.borderColor = '#E24B4A';
+  }
+  // 확인 버튼 — 두 조건 모두 충족 시만 활성화
+  if(lenOk && matchOk){
+    okBtn.disabled = false;
+    okBtn.style.opacity = '1';
+    okBtn.style.cursor = 'pointer';
+  } else {
+    okBtn.disabled = true;
+    okBtn.style.opacity = '0.4';
+    okBtn.style.cursor = 'not-allowed';
+  }
 }
 function _resolvePwdSetup(val){
   const el=document.getElementById('pwd-setup-modal');
@@ -1142,13 +1199,13 @@ function _resolvePwdSetup(val){
   if(window._pwdSetupResolver){window._pwdSetupResolver(val);window._pwdSetupResolver=null;}
 }
 function _resolvePwdSetupOk(){
-  const a=document.getElementById('pwd-new').value;
-  const b=document.getElementById('pwd-confirm').value;
-  const m=document.getElementById('pwd-msg');
-  if(!a||a.length<4){m.textContent='비밀번호는 4자 이상이어야 해요';return;}
-  if(a.length>20){m.textContent='비밀번호는 20자 이하로 입력해 주세요';return;}
-  if(a!==b){m.textContent='두 비밀번호가 일치하지 않아요';return;}
-  _resolvePwdSetup(a);
+  const a=document.getElementById('pwd-new');
+  const b=document.getElementById('pwd-confirm');
+  if(!a||!b) return;
+  const av=a.value, bv=b.value;
+  // 조건 미충족 시 무시 (버튼 disabled 상태인데 Enter로 호출 시 방어)
+  if(av.length<4 || av.length>20 || av!==bv) return;
+  _resolvePwdSetup(av);
 }
 function _promptPasswordInput(userName){
   if(document.getElementById('pwd-input-modal') && window._pwdInputPromise){
@@ -6435,7 +6492,7 @@ function markRowDirty(slug,rowIndex){
 
 // === 비밀번호 초기화 (관리자가 manager 시트에서 호출) ===
 async function resetUserPassword(rowIndex, userName){
-  const ok = await showConfirm('<b>'+escapeHtml(userName||'사용자')+'</b> 님의 비밀번호를 초기화할까요?<br><br><span style="color:#888;font-size:12px;line-height:1.5">• 시트의 비밀번호가 빈값이 됩니다.<br>• 그 사용자가 다음 접속할 때 비밀번호 <b>2번 입력</b>으로 새로 설정합니다.<br>• PIN과 계정 활성 여부는 그대로 유지됩니다.</span>', {title:'🔑 비밀번호 초기화', html:true, okText:'초기화', danger:true});
+  const ok = await showConfirm('<b>'+escapeHtml(userName||'사용자')+'</b> 님의 비밀번호를 초기화할까요?', {title:'🔑 비밀번호 초기화', html:true, okText:'초기화', danger:true});
   if(!ok) return;
   const rec = (_sheetCache['manager']||[]).find(r=>r._rowIndex===rowIndex);
   if(!rec){showToast('사용자를 찾을 수 없어요','error');return;}
