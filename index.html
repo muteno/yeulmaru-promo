@@ -1100,13 +1100,17 @@ let selected=null,editing=null,panelOpen=false,activeFilters=[],activePrograms=[
 const pins=document.querySelectorAll('.pin');
 pins.forEach((el,i)=>{
   el.addEventListener('input',()=>{el.classList.remove('err');if(el.value.length===1&&i<3)pins[i+1].focus();if(i===3&&el.value.length===1)tryLogin();});
-  el.addEventListener('keyup',()=>{if(el.value.length===1&&i<3)pins[i+1].focus();if(i===3&&el.value.length===1)tryLogin();});
+  el.addEventListener('keyup',()=>{if(el.value.length===1&&i<3)pins[i+1].focus();});
   el.addEventListener('keydown',e=>{if(e.key==='Backspace'&&!el.value&&i>0)pins[i-1].focus();});
   el.addEventListener('paste',e=>{e.preventDefault();const t=(e.clipboardData.getData('text')||'').replace(/\D/g,'').slice(0,4);t.split('').forEach((c,j)=>{if(pins[j])pins[j].value=c;});if(t.length===4)tryLogin();});
 });
 // === 비밀번호 입력/설정 모달 (Promise 기반) ===
 function _promptPasswordSetup(userName){
-  return new Promise(function(resolve){
+  // 중복 호출 방어 — 이미 떠있으면 같은 promise 반환
+  if(document.getElementById('pwd-setup-modal') && window._pwdSetupPromise){
+    return window._pwdSetupPromise;
+  }
+  const p = new Promise(function(resolve){
     const inpSt='width:100%;padding:11px 14px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:12px;font-size:14px;outline:none;box-sizing:border-box;font-family:inherit;letter-spacing:2px;text-align:center';
     const html='<div class="modal-bg show" id="pwd-setup-modal" style="z-index:99999" onclick="if(event.target===this)_resolvePwdSetup(null)"><div class="modal" style="max-width:380px;padding:24px;text-align:left;position:relative"><button class="modal-x" onclick="_resolvePwdSetup(null)" title="닫기">✕</button>'+
       '<h3 style="margin:0 0 4px">'+escapeHtml(userName)+' 님</h3>'+
@@ -1128,6 +1132,9 @@ function _promptPasswordSetup(userName){
     // Enter 키 = 확인
     document.getElementById('pwd-confirm').addEventListener('keydown',function(ev){if(ev.key==='Enter')_resolvePwdSetupOk();});
   });
+  window._pwdSetupPromise = p;
+  p.finally(function(){ window._pwdSetupPromise = null; });
+  return p;
 }
 function _resolvePwdSetup(val){
   const el=document.getElementById('pwd-setup-modal');
@@ -1144,7 +1151,10 @@ function _resolvePwdSetupOk(){
   _resolvePwdSetup(a);
 }
 function _promptPasswordInput(userName){
-  return new Promise(function(resolve){
+  if(document.getElementById('pwd-input-modal') && window._pwdInputPromise){
+    return window._pwdInputPromise;
+  }
+  const p = new Promise(function(resolve){
     const inpSt='width:100%;padding:11px 14px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:12px;font-size:14px;outline:none;box-sizing:border-box;font-family:inherit;letter-spacing:2px;text-align:center';
     const html='<div class="modal-bg show" id="pwd-input-modal" style="z-index:99999" onclick="if(event.target===this)_resolvePwdInput(null)"><div class="modal" style="max-width:360px;padding:24px;text-align:left;position:relative"><button class="modal-x" onclick="_resolvePwdInput(null)" title="닫기">✕</button>'+
       '<h3 style="margin:0 0 4px">'+escapeHtml(userName)+' 님</h3>'+
@@ -1162,6 +1172,9 @@ function _promptPasswordInput(userName){
     setTimeout(function(){const i=document.getElementById('pwd-in');if(i)i.focus();},80);
     document.getElementById('pwd-in').addEventListener('keydown',function(ev){if(ev.key==='Enter')_resolvePwdInputOk();});
   });
+  window._pwdInputPromise = p;
+  p.finally(function(){ window._pwdInputPromise = null; });
+  return p;
 }
 function _resolvePwdInput(val){
   const el=document.getElementById('pwd-input-modal');
@@ -1174,8 +1187,12 @@ function _resolvePwdInputOk(){
   _resolvePwdInput(v);
 }
 
+let _loggingIn = false;
 async function tryLogin(){
-  const pin=Array.from(pins).map(p=>p.value).join('');if(pin.length!==4)return;
+  if(_loggingIn) return;
+  _loggingIn = true;
+  try {
+  const pin=Array.from(pins).map(p=>p.value).join('');if(pin.length!==4){_loggingIn=false;return;}
   document.getElementById('login-msg').textContent='';
   document.getElementById('login-load').textContent='확인 중...';
   try{
@@ -1295,6 +1312,7 @@ async function tryLogin(){
     document.getElementById('login-load').textContent='';
     document.getElementById('login-msg').textContent='서버 연결 실패';
   }
+  } finally { _loggingIn = false; }
 }
 (function(){const s=sessionStorage.getItem('pw');if(s){password=s;userRole=sessionStorage.getItem('role')||'user';document.getElementById('login').style.display='none';document.getElementById('app').style.display='';initApp();}})();
 
