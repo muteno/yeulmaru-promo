@@ -2471,14 +2471,12 @@ function closePromoBoard(){
   const el=document.getElementById('promo-board');
   if(el)el.innerHTML='';
 }
-// === isMine 매핑 (전역) — 신청자 기준 + 하이브리드 (기존 row는 담당자 fallback) ===
+// === isMine 매핑 (전역) — 순수 신청자 기준 ===
+// 기존 row (신청자 빈값)는 본인 아님 처리. 새 row만 신청자 매칭으로 본인 판정.
 function _isMineRec(rec, myAppl){
   if(!myAppl||!rec) return false;
   const applicant = (rec['신청자']||'').toString().trim();
-  const author = (rec['게시 담당자']||'').toString().trim();
-  if(applicant && applicant === myAppl) return true;
-  if(!applicant && author === myAppl) return true;
-  return false;
+  return applicant === myAppl;
 }
 function renderPromoBoard(){
   const body=document.getElementById('promo-board-body');
@@ -2598,7 +2596,10 @@ function renderPromoBoard(){
   // === 헤더 ===
   let html='<div style="display:flex;align-items:center;margin-bottom:10px;gap:8px;padding-bottom:14px;padding-right:48px;border-bottom:1px solid #eee">';
   html+='<h3 style="margin:0;flex:1;text-align:left">일정 확인 및 관리';
-  if(!isAdmin)html+='<span style="font-size:11px;color:var(--accent);font-weight:600;margin-left:8px">· 0000 팀, 0000 님</span>';
+  if(!isAdmin){
+    const _meName=myApplicant||'0000';
+    html+='<span style="font-size:11px;color:var(--accent);font-weight:600;margin-left:8px">· 0000 팀, '+escapeHtml(_meName)+' 님</span>';
+  }
   html+='</h3>';
   if(!isAdmin)html+='<button class="m-btn save" onclick="openPromoWizardFromBoard()" style="padding:7px 14px">+ 새 신청</button>';
   html+='</div>';
@@ -2642,8 +2643,9 @@ function renderPromoBoard(){
   // === 본인/전체 토글 (admin은 본인 개념 없어서 숨김) ===
   if(!isAdmin&&myApplicant){
     html+='<span style="width:1px;height:18px;background:#ddd;margin:0 4px"></span>';
-    const showAll=_promoFilter.viewMode==='all';
-    html+='<button onclick="_promoFilter.viewMode=\''+(showAll?'mine':'all')+'\';renderPromoBoard()" style="'+ctrlStyle+';border:1.5px solid '+(showAll?'transparent':'#ddd')+';background:'+(showAll?'rgba(74,77,231,0.85)':'#fff')+';color:'+(showAll?'#fff':'#666')+';font-weight:'+(showAll?'600':'500')+'" title="'+(showAll?'클릭하면 내 신청만 보기':'클릭하면 다른 사람 신청도 보기')+'">👥 '+(showAll?'전체 보기':'내 신청만')+'</button>';
+    const mineOn=_promoFilter.viewMode==='mine';
+    const cbStyle='display:inline-block;width:14px;height:14px;border-radius:3px;border:1.5px solid '+(mineOn?'var(--accent)':'#bbb')+';background:'+(mineOn?'var(--accent)':'#fff')+';color:#fff;text-align:center;line-height:11px;font-size:10px;font-weight:700;margin-right:6px;vertical-align:middle;transition:all .12s';
+    html+='<button onclick="_promoFilter.viewMode=\''+(mineOn?'all':'mine')+'\';renderPromoBoard()" style="'+ctrlStyle+';border:1.5px solid #ddd;background:#fff;color:#444;font-weight:500" title="'+(mineOn?'클릭하면 다른 사람 신청도 보기':'클릭하면 내 신청만 보기')+'"><span style="'+cbStyle+'">'+(mineOn?'✓':'')+'</span>👥 내 신청만</button>';
   }
   if(isAdmin){
     html+='<span style="width:1px;height:18px;background:#ddd;margin:0 4px"></span>';
@@ -2779,13 +2781,15 @@ function renderPromoBoard(){
       const isFuture=dateKey>todayKey;
       const isPast=dateKey<todayKey;
       const isPending=isPendingLike;
-      // 행 배경: 신청/대기(살구) → 오늘(강조색1) → 본인 미래(옅은 강조색1) → 홀수행 zebra → 기본
+      // 행 배경: 본인 row(연한 강조색) → 짝홀 zebra. 상태 색은 배지에만.
       let trBg='',trBorder='border-left:3px solid transparent';
-      if(isPending){trBg='background:var(--peach-bg)';trBorder='border-left:3px solid var(--peach)';}
-      else if(isToday){trBg='background:rgba(74,77,231,0.05)';trBorder='border-left:3px solid var(--accent)';}
-      else if(isMine&&isFuture){trBg='background:rgba(74,77,231,0.02)';trBorder='border-left:3px solid rgba(74,77,231,0.35)';}
-      else if(idx%2===0){trBg='background:rgba(0,0,0,0.018)';}
-      const hoverBg=isPending?'var(--peach-light)':isToday?'rgba(74,77,231,0.1)':'#f5f5f5';
+      if(isMine){
+        trBg='background:rgba(74,77,231,0.06)';
+        trBorder='border-left:3px solid rgba(74,77,231,0.45)';
+      }else if(idx%2===0){
+        trBg='background:#fafafa';
+      }
+      const hoverBg=isMine?'rgba(74,77,231,0.12)':'#f0f0f0';
       const baseBg=trBg.replace('background:','')||'transparent';
       // 오늘 배지 (강조색1)
       const todayBadge=isToday?'<span style="display:inline-block;padding:2px 7px;border-radius:6px;background:var(--accent);color:#fff;font-size:9px;font-weight:700;letter-spacing:0.5px;margin-left:5px">오늘</span>':'';
