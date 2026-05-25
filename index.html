@@ -4909,6 +4909,16 @@ async function saveApplySettings(){
 }
 
 // === 신청 가능 여부 검증 ===
+// 시간 범위 체크 — start/end 둘 다 미포함, 자정 넘는 케이스 지원
+// 예: _timeInExcl('17:00', '17:00', '22:00') === false (start 미포함)
+//     _timeInExcl('03:00', '17:00', '09:00') === true (자정 넘는 범위)
+function _timeInExcl(time, start, end){
+  if(!start||!end||!time)return false;
+  if(start<end)return time>start && time<end;
+  if(start>end)return time>start || time<end;
+  return false;
+}
+
 // 특정 담당자가 dateKey/time에 일정 충돌 있는지 체크
 // time이 빈 문자열이면 그날 종일 일정(휴무·출장 등)만 충돌로 판정
 function personHasConflict(person, dateKey, time){
@@ -4924,7 +4934,7 @@ function personHasConflict(person, dateKey, time){
     // time이 빈 문자열이면 시간 정보 알 수 없음 — 종일 일정 외에는 충돌로 보지 않음
     if(!time)continue;
     // 시간대 일정 — start 이상 ~ end 미만 (end 시점은 가능, 다른 검증과 일관)
-    if(time>=parsed.s&&time<parsed.e)return true;
+    if(_timeInExcl(time, parsed.s, parsed.e))return true;
   }
   return false;
 }
@@ -4942,7 +4952,7 @@ function personConflictInfo(person, dateKey, time){
       return {type:ps.type||'일정', label:ps.label||''};
     }
     if(!time)continue;
-    if(time>=parsed.s&&time<parsed.e){
+    if(_timeInExcl(time, parsed.s, parsed.e)){
       return {type:ps.type||'일정', label:ps.label||''};
     }
   }
@@ -4989,12 +4999,12 @@ function canApplyAtTime(time){
   if(!time)return{ok:true};
   // 자동_낮에만 — 17:00 이상 22:00 미만 차단
   if(APPLY_SETTINGS['자동_낮에만']){
-    if(time>='17:00'&&time<'22:00')return{ok:false,reason:'낮에만 신청 가능 상태'};
+    if(time>'17:00'&&time<'22:00')return{ok:false,reason:'낮에만 신청 가능 상태'};
   }
   for(const ex of APPLY_EXCLUSIONS){
     if(!ex.date&&ex.start&&ex.end){
       // 공통 시간 (매일)
-      if(time>=ex.start&&time<ex.end)return{ok:false,reason:'해당 시간에는 신청이 불가해요'};
+      if(_timeInExcl(time, ex.start, ex.end))return{ok:false,reason:'해당 시간에는 신청이 불가해요'};
     }
   }
   return{ok:true};
@@ -5011,7 +5021,7 @@ function canApplyOnDateTime(dateKey,time){
   if(time){
     for(const ex of APPLY_EXCLUSIONS){
       if(ex.date===dateKey&&ex.start&&ex.end){
-        if(time>=ex.start&&time<ex.end){
+        if(_timeInExcl(time, ex.start, ex.end)){
           return{ok:false,reason:'해당 기간에는 신청이 불가해요'};
         }
       }
