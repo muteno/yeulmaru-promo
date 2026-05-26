@@ -3612,6 +3612,10 @@ function _renderChangeMenu(rec){
   html+='<h3 style="margin:0 0 4px">변경할 항목 선택</h3>';
   html+='<div style="font-size:12px;color:#888;margin-bottom:6px">여러 개 선택 가능 — 선택한 순서대로 진행</div>';
   html+='<div style="font-size:12px;color:var(--accent);padding:8px 12px;background:rgba(74,77,231,0.06);border-radius:8px;margin-bottom:14px;font-weight:600">'+escapeHtml(rec['콘텐츠 제목']||'(제목 없음)')+'</div>';
+  // admin이 신청 중 상태 변경 시 — 자동 승인 안내
+  if(isAdmin && (rec['진행 상태']||'')==='신청 중'){
+    html+='<div style="font-size:12px;color:#0F8B4C;padding:10px 12px;background:rgba(15,139,76,0.08);border-left:3px solid #0F8B4C;border-radius:6px;margin-bottom:14px;line-height:1.5">✓ <b>변경 시 자동 승인</b> — 저장하면 「신청 중」 → 「예정」으로 변경됩니다. 거절하려면 닫고 우클릭 → 보류를 사용하세요.</div>';
+  }
   html+='<div id="change-menu-list">';
   items.forEach(it=>{
     html+='<label style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:10px;cursor:pointer;background:#fafafa;margin-bottom:8px;transition:all .15s;border:1.5px solid transparent" onmouseover="this.style.background=\'rgba(74,77,231,0.06)\';this.style.borderColor=\'rgba(74,77,231,0.2)\'" onmouseout="this.style.background=\'#fafafa\';this.style.borderColor=\'transparent\'">';
@@ -3717,6 +3721,10 @@ async function submitPromoEdit(){
   // Step 7 — 진행 상태 (admin only)
   if(_pwSelectedSteps.includes(7)&&userRole==='admin'){
     patch['진행 상태']=_pwData.status;
+  }
+  // admin이 신청 중 항목을 1건 이상 변경하면 자동으로 「예정」으로 승인 (Step 7로 직접 지정한 경우는 admin 선택 우선)
+  if(userRole==='admin' && (orig['진행 상태']||'')==='신청 중' && !patch['진행 상태'] && Object.keys(patch).length>0){
+    patch['진행 상태']='예정';
   }
   if(!Object.keys(patch).length){showToast('변경된 항목이 없어요','error');return;}
   showOverlayLoad('변경 사항 저장 중...');
@@ -7407,19 +7415,19 @@ function onEvContextMenu(event,rowIndex,dateKey){
     const adminStatus=rec['진행 상태']||'';
     if(adminStatus==='신청 중'){
       // 신청 중 — 변경 / 승인 / 보류
-      menuHtml='<div class="ccm-item" onclick="closeCellContextMenu();editRec('+rowIndex+',\''+dateKey+'\',null,false)"><span class="emo">✏️</span>변경</div>'+
+      menuHtml='<div class="ccm-item" onclick="closeCellContextMenu();openChangeWizard('+rowIndex+')"><span class="emo">✏️</span>변경</div>'+
         '<div class="ccm-item" onclick="closeCellContextMenu();approvePromoFromBoard('+rowIndex+')"><span class="emo" style="color:#0F8B4C">✓</span>승인</div>'+
         '<div class="ccm-item" onclick="closeCellContextMenu();holdPromoFromBoard('+rowIndex+')"><span class="emo" style="color:#F59E0B">⏸</span>보류</div>';
     }else if(adminStatus==='예정'){
       // 예정 — 변경 / 완료 / 취소 / ─ / 복사
-      menuHtml='<div class="ccm-item" onclick="closeCellContextMenu();editRec('+rowIndex+',\''+dateKey+'\',null,false)"><span class="emo">✏️</span>변경</div>'+
+      menuHtml='<div class="ccm-item" onclick="closeCellContextMenu();openChangeWizard('+rowIndex+')"><span class="emo">✏️</span>변경</div>'+
         '<div class="ccm-item" onclick="closeCellContextMenu();adminCompleteWithResult('+rowIndex+')"><span class="emo">✅</span>완료</div>'+
         '<div class="ccm-item" onclick="closeCellContextMenu();cancelWithReason('+rowIndex+')"><span class="emo" style="color:#E24B4A">✕</span>취소</div>'+
         '<div class="ccm-divider"></div>'+
         '<div class="ccm-item" onclick="closeCellContextMenu();copyRec('+rowIndex+',\''+dateKey+'\')"><span class="emo">📋</span>복사</div>';
     }else if(adminStatus==='보류'){
       // 보류 — 변경 / 승인 (재처리)
-      menuHtml='<div class="ccm-item" onclick="closeCellContextMenu();editRec('+rowIndex+',\''+dateKey+'\',null,false)"><span class="emo">✏️</span>변경</div>'+
+      menuHtml='<div class="ccm-item" onclick="closeCellContextMenu();openChangeWizard('+rowIndex+')"><span class="emo">✏️</span>변경</div>'+
         '<div class="ccm-item" onclick="closeCellContextMenu();approvePromoFromBoard('+rowIndex+')"><span class="emo" style="color:#0F8B4C">✓</span>승인 (예정으로)</div>';
     }else{
       // 완료/취소 — 복사 / 삭제 (admin only, 캘린더에선 안 보임. 일정관리 페이지 우클릭만)
