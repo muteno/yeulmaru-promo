@@ -33,6 +33,54 @@ SharePoint Excel (통합 문서1.xlsm)
 - **Storage**: SharePoint Excel (`통합 문서1.xlsm`)
 - **Auth (Worker→Graph)**: Azure AD 앱 (service account)
 
+### ⚠️ 데이터 흐름 — 헷갈리지 말 것 (다음 Claude 필독)
+
+이 시스템엔 **완전히 별개의 두 흐름**이 공존한다. 섞으면 데이터 손상.
+
+#### A. 데이터 흐름 (모달 변경 → Excel, 실시간 1~3초)
+
+```
+사용자 모달 → fetch → Cloudflare Worker → Graph API → SharePoint Excel 마스터
+```
+
+- 모달에서 일정 등록/수정/삭제 = **즉시** SharePoint 마스터 xlsm 반영 (1~3초)
+- **OneDrive 동기화 안 거침** (그래서 빠름)
+- 양 PC 로컬 xlsm 복사본은 *뒤늦게* OneDrive sync로 따라옴
+
+#### B. 코드/파일 흐름 (수초~분)
+
+```
+회사 PC ↔ OneDrive 클라우드 (= SharePoint Document Library) ↔ 집 PC
+```
+
+- index.html, CLAUDE.md, docs/, .gitignore 등 *코드/문서 파일*
+- OneDrive client가 변경 감지 → 양 PC + 클라우드 자동 반영
+- 회사 PC `C:\Users\황세웅\...` ↔ 집 PC `C:\Users\Hwang\...` = **사용자명만 다르고 같은 파일** (OneDrive 안 경로 동일)
+
+#### 🚨 절대 금지 — 로컬 xlsm 직접 편집
+
+- 로컬 `통합 문서1.xlsm` = OneDrive sync로 받은 **복사본** (마스터 아님)
+- 직접 편집 → OneDrive가 SharePoint에 push 시도 → Worker가 Graph API로 마스터 수정 중이면 **conflict copy 생성 + 데이터 손상**
+- 그래서 `.gitignore`로 xlsm 차단 (`*.xlsm`) + **모든 데이터 변경은 반드시 모달에서만**
+- `.xlsm` 로컬 파일은 *데이터 구조 참고용 read-only*로만 열 것
+
+#### 변경 대상별 cheat sheet
+
+| 변경 대상 | 어디서 | 흐름 | 속도 |
+|---|---|---|---|
+| 시트 데이터 (PIN/비번/홍보기록/일정/applysettings) | **모달** | Worker → Graph API → SharePoint Excel | 1~3초 |
+| index.html / CSS / inline JS | **에디터 + git push** | GitHub → GitHub Pages | 1~2분 |
+| Worker 코드 | **Cloudflare Quick Edit** 또는 wrangler | Cloudflare 배포 (git 무관) | 즉시 |
+| CLAUDE.md / docs/ / README.md | **에디터 + git push** | GitHub (참고용, 시스템 동작 영향 X) | - |
+| `통합 문서1.xlsm` 로컬 파일 | **🚫 절대 X** | (데이터 손상 위험) | - |
+
+#### 헷갈리기 쉬운 포인트 정리
+
+1. **"OneDrive sync로 데이터가 SharePoint Excel에 들어가는 거 아냐?"** → ❌ NO. Worker가 Graph API로 *직접 마스터 수정*. OneDrive 무관.
+2. **"GitHub push하면 Excel 데이터도 바뀌나?"** → ❌ NO. GitHub는 index.html/Worker 코드만. Excel 데이터는 시스템 어디서도 git이 안 건드림.
+3. **"회사 PC에서 작업한 게 집 PC에 안 보임"** → OneDrive sync 지연 (큰 파일/네트워크 느림). 5분 기다리거나 OneDrive 강제 sync. *git push한 코드는 git pull로 즉시 받기 가능*.
+4. **"통합 문서1.xlsm 열어서 수동으로 한 줄 추가하면?"** → 🚨 conflict 위험. 데이터 백업하고 싶으면 *모달에서 export* 또는 SharePoint 웹에서 *읽기 전용 사본 다운로드*.
+
 ### Worker API 패턴
 ```
 GET    /api/sheet/<slug>             → 시트 row 전체
