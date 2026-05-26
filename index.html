@@ -3411,7 +3411,7 @@ function renderPromoBoard(){
       const prog=r['프로그램']||'-';
       // 플랫폼 (P1 › P2)
       const platHtml=escapeHtml(plat1||'-')+(plat2?'<span style="color:#bbb;margin:0 4px">›</span>'+escapeHtml(plat2):'');
-      html+='<tr class="promo-row" onclick="openPromoBoardRow(\''+dateKey+'\','+r._rowIndex+')" style="border-bottom:1px solid #f0f0f0;cursor:pointer;'+trBg+';'+trBorder+';animation-delay:'+_animDelay+'" onmouseover="this.style.background=\''+hoverBg+'\'" onmouseout="this.style.background=\''+baseBg+'\'">';
+      html+='<tr class="promo-row" onclick="openPromoBoardRow(\''+dateKey+'\','+r._rowIndex+')" oncontextmenu="onEvContextMenu(event,'+r._rowIndex+',\''+dateKey+'\');return false;" style="border-bottom:1px solid #f0f0f0;cursor:pointer;'+trBg+';'+trBorder+';animation-delay:'+_animDelay+'" onmouseover="this.style.background=\''+hoverBg+'\'" onmouseout="this.style.background=\''+baseBg+'\'">';
       // === admin 신청 대기 row — NO 셀 안에 체크박스 prefix ===
       if(isAdmin && (r['진행 상태']||'')==='신청 중'){
         const _chkAttr = _pendingChecks.has(r._rowIndex) ? 'checked' : '';
@@ -3436,12 +3436,11 @@ function renderPromoBoard(){
       const dKey=getRecDateKey(r);
       html+='<td style="padding:10px 4px;text-align:center;white-space:nowrap">';
       if(canApprove){
-        html+='<button onclick="event.stopPropagation();approvePromoFromBoard('+r._rowIndex+')" title="신청 접수 (신청 중 → 예정)" style="padding:5px 10px;border-radius:8px;border:none;background:transparent;color:var(--peach-text);font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;min-width:50px;transition:all .12s" onmouseover="this.innerHTML=\'접수\';this.style.color=\'#0F8B4C\';this.style.background=\'rgba(15,139,76,0.08)\';this.style.fontSize=\'12px\'" onmouseout="this.innerHTML=\'—\';this.style.color=\'#ccc\';this.style.background=\'transparent\';this.style.fontSize=\'14px\'">—</button>';
+        html+='<button onclick="event.stopPropagation();approvePromoFromBoard('+r._rowIndex+')" title="신청 승인 (신청 중 → 예정)" style="padding:5px 10px;border-radius:8px;border:none;background:transparent;color:var(--peach-text);font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;min-width:50px;transition:all .12s" onmouseover="this.innerHTML=\'승인\';this.style.color=\'#0F8B4C\';this.style.background=\'rgba(15,139,76,0.08)\';this.style.fontSize=\'12px\'" onmouseout="this.innerHTML=\'—\';this.style.color=\'#ccc\';this.style.background=\'transparent\';this.style.fontSize=\'14px\'">—</button>';
       }else if(canComplete){
         html+='<button onclick="event.stopPropagation();completePromoRequest('+r._rowIndex+')" title="게시 완료 처리 (예정 → 완료)" style="padding:5px 10px;border-radius:8px;border:none;background:transparent;color:#bbb;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;min-width:50px;transition:all .12s" onmouseover="this.innerHTML=\'완료\';this.style.color=\'#0F8B4C\';this.style.background=\'rgba(15,139,76,0.08)\';this.style.fontSize=\'12px\'" onmouseout="this.innerHTML=\'—\';this.style.color=\'#ccc\';this.style.background=\'transparent\';this.style.fontSize=\'14px\'">—</button>';
       }else if(canMineEdit){
-        html+='<button onclick="event.stopPropagation();editRec('+r._rowIndex+',\''+dKey+'\',null,false)" title="신청 내용 변경" style="padding:5px 8px;border-radius:6px;border:none;background:rgba(74,77,231,0.08);color:var(--accent);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;margin-right:4px;transition:all .12s" onmouseover="this.style.background=\'rgba(74,77,231,0.18)\'" onmouseout="this.style.background=\'rgba(74,77,231,0.08)\'">변경</button>';
-        html+='<button onclick="event.stopPropagation();deleteRec('+r._rowIndex+',\''+dKey+'\')" title="신청 취소" style="padding:5px 8px;border-radius:6px;border:none;background:rgba(216,132,85,0.1);color:#b35a30;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;transition:all .12s" onmouseover="this.style.background=\'rgba(216,132,85,0.22)\'" onmouseout="this.style.background=\'rgba(216,132,85,0.1)\'">취소</button>';
+        html+='<button onclick="event.stopPropagation();editRec('+r._rowIndex+',\''+dKey+'\',null,false)" title="신청 내용 변경" style="padding:5px 8px;border-radius:6px;border:none;background:rgba(74,77,231,0.08);color:var(--accent);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;transition:all .12s" onmouseover="this.style.background=\'rgba(74,77,231,0.18)\'" onmouseout="this.style.background=\'rgba(74,77,231,0.08)\'">변경</button>';
       }
       html+='</td>';
       html+='</tr>';
@@ -6974,7 +6973,14 @@ function excelToKey(v){if(!v)return'';if(typeof v==='number'){const d=new Date((
 function dk(d){return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
 function isToday(d){return dk(d)===dk(new Date());}
 function isPast(d){const t=new Date();t.setHours(0,0,0,0);const dd=new Date(d);dd.setHours(0,0,0,0);return dd<t;}
-function getRecsForDate(d){return records.filter(r=>excelToKey(r['날짜'])===dk(d));}
+function getRecsForDate(d){
+  // 캘린더 표시 정책: 신청 중, 예정만 보임. 완료/취소/보류는 숨김 (일정관리 페이지에서만 조회)
+  return records.filter(function(r){
+    const st=(r['진행 상태']||'').toString();
+    if(st==='완료'||st==='취소'||st==='보류')return false;
+    return excelToKey(r['날짜'])===dk(d);
+  });
+}
 
 function calDates(y,m){const first=new Date(y,m-1,1),dow=first.getDay(),offset=(dow-2+7)%7,start=new Date(y,m-1,1-offset),out=[];for(let w=0;w<6;w++){for(let d=0;d<6;d++){const dt=new Date(start);dt.setDate(dt.getDate()+w*7+d);out.push(dt);}}return out;}
 
@@ -7396,8 +7402,10 @@ function onEvContextMenu(event,rowIndex,dateKey){
       menuHtml='<div class="ccm-item" onclick="closeCellContextMenu();editRec('+rowIndex+',\''+dateKey+'\',null,false)"><span class="emo">✏️</span>변경</div>'+
         '<div class="ccm-item" onclick="closeCellContextMenu();approvePromoFromBoard('+rowIndex+')"><span class="emo" style="color:#0F8B4C">✓</span>승인 (예정으로)</div>';
     }else{
-      // 완료/취소 — 복사만 (캘린더에서 안 보이지만 안전망)
-      menuHtml='<div class="ccm-item" onclick="closeCellContextMenu();copyRec('+rowIndex+',\''+dateKey+'\')"><span class="emo">📋</span>복사</div>';
+      // 완료/취소 — 복사 / 삭제 (admin only, 캘린더에선 안 보임. 일정관리 페이지 우클릭만)
+      menuHtml='<div class="ccm-item" onclick="closeCellContextMenu();copyRec('+rowIndex+',\''+dateKey+'\')"><span class="emo">📋</span>복사</div>'+
+        '<div class="ccm-divider"></div>'+
+        '<div class="ccm-item" onclick="closeCellContextMenu();deleteRec('+rowIndex+',\''+dateKey+'\')"><span class="emo">🗑️</span>삭제</div>';
     }
   }else{
     let myAppl='';try{myAppl=localStorage.getItem('myApplicant')||'';}catch(e){}
