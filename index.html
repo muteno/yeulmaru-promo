@@ -7871,7 +7871,8 @@ function openPanel(dateObj,recs){
       var venueP=perf.l||'장소 미정';
       var nameWithArrow=escapeHtml(perf.f)+(hasUrl?' <span style="font-size:9px;color:var(--accent);font-weight:500;margin-left:2px">↗</span>':'');
       // 전시 row와 100% 동일 구조 — 색깔/라벨/onclick만 다름
-      h+='<div'+clickAttr+' class="panel-perf-row" data-perf-name="'+escapeHtml(perf.f)+'" style="'+cursorStyle+'display:flex;align-items:center;padding:10px 12px;background:rgba(74,77,231,0.15);border-radius:10px;margin-bottom:6px;gap:10px;transition:background .15s">';
+      var perfCtxAttr=' oncontextmenu="onPerfContextMenu(event,\''+escapeHtml(perf.f).replace(/\\'/g,"\\'").replace(/\'/g,"\\'")+'\');return false;"';
+      h+='<div'+clickAttr+perfCtxAttr+' class="panel-perf-row" data-perf-name="'+escapeHtml(perf.f)+'" style="'+cursorStyle+'display:flex;align-items:center;padding:10px 12px;background:rgba(74,77,231,0.15);border-radius:10px;margin-bottom:6px;gap:10px;transition:background .15s">';
       h+='<span style="display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;border-radius:50%;font-size:8px;font-weight:700;background:var(--accent);color:#fff;flex-shrink:0">공</span>';
       h+='<div style="flex:1;min-width:0;overflow:hidden"><div style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+nameWithArrow+'</div><div style="font-size:10px;color:var(--dim);margin-top:1px">'+escapeHtml(venueP)+'</div></div>';
       h+='<span style="font-size:11px;font-weight:600;color:var(--accent);white-space:nowrap;flex-shrink:0">'+ddText+'</span>';
@@ -7887,7 +7888,8 @@ function openPanel(dateObj,recs){
       var eClickAttr=eHasUrl?' onclick="openPerfUrl(\''+escapeHtml(x.u).replace(/'/g,'\\\'')+'\',\''+escapeHtml(eName).replace(/'/g,'\\\'')+'\')" title="클릭하면 전시 페이지로 이동"':'';
       var eCursorStyle=eHasUrl?'cursor:pointer;':'';
       var eNameWithArrow=escapeHtml(eName)+(eHasUrl?' <span style="font-size:9px;color:#C08070;font-weight:500;margin-left:2px">↗</span>':'');
-      h+='<div'+eClickAttr+' class="panel-perf-row" data-perf-name="'+escapeHtml(eName)+'" style="'+eCursorStyle+'display:flex;align-items:center;padding:10px 12px;background:rgba(240,196,184,0.15);border-radius:10px;margin-bottom:6px;gap:10px;transition:background .15s">';
+      var exhCtxAttr=' oncontextmenu="onPerfContextMenu(event,'+JSON.stringify(eName)+');return false;"';
+      h+='<div'+eClickAttr+exhCtxAttr+' class="panel-perf-row" data-perf-name="'+escapeHtml(eName)+'" style="'+eCursorStyle+'display:flex;align-items:center;padding:10px 12px;background:rgba(240,196,184,0.15);border-radius:10px;margin-bottom:6px;gap:10px;transition:background .15s">';
       h+='<span style="display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;border-radius:50%;font-size:8px;font-weight:700;background:#F0C4B8;color:#333;flex-shrink:0">전</span>';
       h+='<div style="flex:1;min-width:0;overflow:hidden"><div style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+eNameWithArrow+'</div><div style="font-size:10px;color:var(--dim);margin-top:1px">'+escapeHtml(eVenue)+'</div></div>';
       h+='<span style="font-size:11px;font-weight:600;color:#C08070;white-space:nowrap;flex-shrink:0">'+dayNum+'일차</span>';
@@ -7913,29 +7915,82 @@ function onPerfContextMenu(event, perfName){
   event.stopPropagation();
   closeCellContextMenu();
   const perf=(PERFS||[]).find(function(p){return p.f===perfName;});
-  if(!perf)return;
-  const now=new Date(); now.setHours(0,0,0,0);
-  const sd=new Date(perf.s); sd.setHours(0,0,0,0);
-  const ed=new Date(perf.e); ed.setHours(0,0,0,0);
-  let ddText;
-  if(now>=sd&&now<=ed) ddText=perf.t==='e'?(Math.floor((now-sd)/86400000)+1)+'일차':'D-Day';
-  else if(sd>now) ddText='D-'+Math.round((sd-now)/86400000);
-  else ddText='종료';
-  const typeLabel=perf.t==='e'?'전시':perf.t==='a'?'예술교육':perf.t==='r'?'대관':'공연';
-  const venue=perf.l||'장소 미정';
-  const menu=document.createElement('div');
-  menu.id='cell-context-menu';
-  menu.innerHTML='<div style="padding:10px 14px;color:#4A4DE7;font-size:12px;line-height:1.5;background:rgba(74,77,231,0.06);border:1px solid rgba(74,77,231,0.2);border-radius:8px;margin:2px;max-width:240px">📌 프로그램 정보<br><span style="color:#333;font-size:11px;font-weight:600">'+escapeHtml(perf.f)+'</span><br><span style="color:#666;font-size:11px">'+escapeHtml(venue)+' · '+escapeHtml(typeLabel)+' · '+ddText+'</span></div>';
-  const mx=event.clientX, my=event.clientY;
+  if(!perf) return;
+  const hasUrl = !!perf.u;
+  let menuHtml = '';
+  menuHtml += '<div class="ccm-item" onclick="closeCellContextMenu();openProgramView('+JSON.stringify(perfName)+')"><span class="emo">👁️</span>조회</div>';
+  menuHtml += '<div class="ccm-item" onclick="closeCellContextMenu();openPromoBoardForProgram('+JSON.stringify(perfName)+')"><span class="emo">📋</span>홍보 현황</div>';
+  if(hasUrl){
+    menuHtml += '<div class="ccm-item" onclick="closeCellContextMenu();openPerfUrl('+JSON.stringify(perf.u)+','+JSON.stringify(perfName)+')"><span class="emo">🔗</span>상세페이지 이동</div>';
+  }
+  const menu = document.createElement('div');
+  menu.id = 'cell-context-menu';
+  menu.innerHTML = menuHtml;
   document.body.appendChild(menu);
-  const rect=menu.getBoundingClientRect();
-  menu.style.left=Math.min(mx,window.innerWidth-rect.width-8)+'px';
-  menu.style.top=Math.min(my,window.innerHeight-rect.height-8)+'px';
+  const rect = menu.getBoundingClientRect();
+  const mx = Math.min(event.clientX, window.innerWidth - rect.width - 8);
+  const my = Math.min(event.clientY, window.innerHeight - rect.height - 8);
+  menu.style.position = 'fixed';
+  menu.style.left = mx + 'px';
+  menu.style.top = my + 'px';
+  menu.style.zIndex = '10000';
   setTimeout(function(){
-    document.addEventListener('click',closeCellContextMenu,{once:true});
-    document.addEventListener('contextmenu',function(e){if(!e.target.closest('#cell-context-menu'))closeCellContextMenu();},{once:true});
-    document.addEventListener('keydown',function(e){if(e.key==='Escape')closeCellContextMenu();},{once:true});
-  },0);
+    document.addEventListener('click', closeCellContextMenu, {once: true});
+    document.addEventListener('contextmenu', function(e){if(!e.target.closest('#cell-context-menu'))closeCellContextMenu();}, {once: true});
+    document.addEventListener('keydown', function(e){if(e.key==='Escape')closeCellContextMenu();}, {once: true});
+  }, 0);
+}
+
+// === 프로그램 조회 모달 (콘텐츠 조회 디자인 계승, no/담당자/줄임명 제외) ===
+function openProgramView(perfName){
+  const p = (_programsCache||[]).find(function(x){return (x['풀네임']||'')===perfName;});
+  if(!p){
+    showToast('프로그램 정보를 찾을 수 없어요','error');
+    return;
+  }
+  const fields = [];
+  if(p['콘텐츠구분']||p['콘텐츠 구분']) fields.push({label:'장르/구분', value:p['콘텐츠구분']||p['콘텐츠 구분']});
+  if(p['풀네임']) fields.push({label:'프로그램명', value:p['풀네임'], bold:true});
+  if(p['판매시작일']) fields.push({label:'판매 시작', value:excelDateDisplay(p['판매시작일'])});
+  if(p['판매종료일']) fields.push({label:'판매 종료', value:excelDateDisplay(p['판매종료일'])});
+  if(p['공연일']) fields.push({label:'공연 시작', value:excelDateDisplay(p['공연일'])});
+  if(p['공연종료일']) fields.push({label:'공연 종료', value:excelDateDisplay(p['공연종료일'])});
+  if(p['상태']) fields.push({label:'상태', value:p['상태']});
+  let bodyHtml = '<div class="mv-section">📊 프로그램 개요</div>';
+  fields.forEach(function(f){
+    if(!f.value) return;
+    bodyHtml += '<div class="mv-row"><span class="lbl">'+escapeHtml(f.label)+'</span><span class="val"'+(f.bold?' style="font-weight:700;color:var(--accent)"':'')+'>'+escapeHtml(String(f.value))+'</span></div>';
+  });
+  const html = '<div class="modal-bg show" onclick="if(event.target===this)closeProgramView()" style="z-index:9100">'
+    +'<div class="modal" style="max-width:480px;padding:0;position:relative;text-align:left">'
+    +'<div style="padding:24px 24px 0;display:flex;align-items:center;justify-content:space-between">'
+    +'<h3 style="margin:0;font-size:16px;font-weight:700">프로그램 조회</h3>'
+    +'<button onclick="closeProgramView()" style="background:rgba(216,132,85,0.15);border:none;width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:16px;color:var(--peach);font-family:inherit">×</button>'
+    +'</div>'
+    +'<div style="padding:16px 24px 24px">'+bodyHtml+'</div>'
+    +'</div>'
+    +'</div>';
+  let el = document.getElementById('program-view-modal');
+  if(!el){
+    el = document.createElement('div');
+    el.id = 'program-view-modal';
+    document.body.appendChild(el);
+  }
+  el.innerHTML = html;
+}
+function closeProgramView(){
+  const el = document.getElementById('program-view-modal');
+  if(el) el.innerHTML = '';
+}
+
+// === 일정 확인 및 관리 — 특정 프로그램 검색으로 진입 ===
+function openPromoBoardForProgram(perfName){
+  openPromoBoard();
+  // 검색 필드에 프로그램명 자동 입력
+  setTimeout(function(){
+    _promoFilter.q = perfName;
+    renderPromoBoard();
+  }, 50);
 }
 
 // === 프로그램 좌클릭 — panel 열고 프로그램 일정 펼침 + 깜빡 강조 ===
