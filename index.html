@@ -1,245 +1,4 @@
-// ============================================================
-// MSAL.js — Microsoft OAuth for OneDrive 접근 (B-1 SPA)
-// Azure AD app id: 9f3a0105-aa86-4a8b-bad0-bd651688d854
-// Tenant: 95768064-89cb-48c0-b5e5-e7bd309abcbd
-// ============================================================
-const _MSAL_CONFIG = {
-  auth: {
-    clientId: '9f3a0105-aa86-4a8b-bad0-bd651688d854',
-    authority: 'https://login.microsoftonline.com/95768064-89cb-48c0-b5e5-e7bd309abcbd',
-    redirectUri: window.location.origin + window.location.pathname
-  },
-  cache: {
-    cacheLocation: 'localStorage',  // sessionStorage = 탭별 / localStorage = 영구
-    storeAuthStateInCookie: false
-  }
-};
-const _MSAL_SCOPES = ['Files.Read'];
-let _msalInstance = null;
-let _msalInitialized = false;
-
-async function _msalGet(){
-  if(!window.msal){
-    showToast('MSAL 라이브러리 로드 실패. 새로고침 후 다시 시도해주세요','error');
-    return null;
-  }
-  if(!_msalInstance){
-    _msalInstance = new msal.PublicClientApplication(_MSAL_CONFIG);
-  }
-  if(!_msalInitialized){
-    try { await _msalInstance.initialize(); _msalInitialized = true; }
-    catch(e){ console.error('[msal init failed]', e); return null; }
-  }
-  return _msalInstance;
-}
-
-async function _msalGetToken(){
-  const inst = await _msalGet();
-  if(!inst) return null;
-  // 1. silent — 이미 로그인된 계정 사용
-  const accounts = inst.getAllAccounts();
-  if(accounts.length > 0){
-    try {
-      const res = await inst.acquireTokenSilent({scopes: _MSAL_SCOPES, account: accounts[0]});
-      return res.accessToken;
-    } catch(e){
-      console.warn('[msal silent failed, fallback to popup]', e.errorCode || e.message);
-    }
-  }
-  // 2. popup — 첫 로그인 또는 silent 실패
-  try {
-    const res = await inst.loginPopup({scopes: _MSAL_SCOPES, prompt: 'select_account'});
-    return res.accessToken;
-  } catch(e){
-    console.error('[msal popup failed]', e);
-    showToast('Microsoft 로그인 실패: ' + (e.errorCode || e.message),'error');
-    return null;
-  }
-}
-
-async function _msalFetchOneDriveChildren(path){
-  // path = '' = root, 또는 '/DAX/Sewoong Hwang'
-  const token = await _msalGetToken();
-  if(!token) return null;
-  let url;
-  if(!path || path === '/' || path === ''){
-    url = 'https://graph.microsoft.com/v1.0/me/drive/root/children?$select=id,name,folder,parentReference&$top=200&$orderby=name';
-  } else {
-    const encoded = path.split('/').filter(Boolean).map(encodeURIComponent).join('/');
-    url = 'https://graph.microsoft.com/v1.0/me/drive/root:/' + encoded + ':/children?$select=id,name,folder,parentReference&$top=200&$orderby=name';
-  }
-  try {
-    const resp = await fetch(url, {headers: {'Authorization': 'Bearer ' + token}});
-    if(!resp.ok){
-      const t = await resp.text();
-      throw new Error('Graph ' + resp.status + ': ' + t.slice(0,200));
-    }
-    const data = await resp.json();
-    return (data.value || []).filter(function(it){ return !!it.folder; }).map(function(it){
-      return {id: it.id, name: it.name, hasChildren: (it.folder && it.folder.childCount > 0)};
-    });
-  } catch(e){
-    console.error('[fetchOneDriveChildren]', path, e);
-    showToast('폴더 조회 실패: ' + e.message,'error');
-    return null;
-  }
-}
-
-// ============================================================
-// 폴더 트리 UI 모달
-// ============================================================
-let _folderTreeCurrentIdx = -1;
-let _folderTreeSelectedPath = '';
-let _folderTreeSelectedName = '';
-
-async function openFolderTreeModal(idx){
-  _folderTreeCurrentIdx = idx;
-  _folderTreeSelectedPath = '';
-  _folderTreeSelectedName = '';
-  let el = document.getElementById('folder-tree-modal');
-  if(!el){
-    el = document.createElement('div');
-    el.id = 'folder-tree-modal';
-    document.body.appendChild(el);
-  }
-  el.innerHTML = '<div class="modal-bg show" style="z-index:9300" onclick="if(event.target===this)closeFolderTreeModal()">'+
-    '<div class="modal" style="max-width:560px;padding:0;text-align:left;max-height:80vh;display:flex;flex-direction:column">'+
-    '<div style="padding:18px 22px;border-bottom:1px solid rgba(0,0,0,0.06);display:flex;justify-content:space-between;align-items:center;flex-shrink:0">'+
-    '<h3 style="margin:0;font-size:15px;font-weight:700">📁 OneDrive 폴더 선택</h3>'+
-    '<button onclick="closeFolderTreeModal()" style="background:rgba(216,132,85,0.15);border:none;width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:14px;color:var(--peach);font-family:inherit">×</button>'+
-    '</div>'+
-    '<div style="padding:10px 18px 8px;border-bottom:1px solid rgba(0,0,0,0.04);font-size:11px;color:#888;flex-shrink:0;letter-spacing:0.2px">'+
-    '<span style="color:#666">현재 선택: </span><span id="ftm-current-path" style="color:#333">없음</span>'+
-    '</div>'+
-    '<div id="ftm-tree" style="overflow-y:auto;padding:12px 18px;flex:1;font-size:13px">'+
-    '<div style="text-align:center;color:#aaa;padding:30px">⌛ Microsoft 로그인 중...</div>'+
-    '</div>'+
-    '<div style="padding:12px 22px;border-top:1px solid rgba(0,0,0,0.06);display:flex;gap:8px;justify-content:flex-end;flex-shrink:0">'+
-    '<button onclick="closeFolderTreeModal()" style="padding:8px 18px;border:1px solid rgba(0,0,0,0.10);background:transparent;color:#666;border-radius:8px;cursor:pointer;font-family:inherit;font-size:12px">취소</button>'+
-    '<button id="ftm-confirm-btn" onclick="confirmFolderTreeSelection()" disabled style="padding:8px 18px;border:none;background:var(--accent);color:#fff;border-radius:8px;cursor:pointer;font-family:inherit;font-size:12px;opacity:0.4">선택 (폴더 클릭)</button>'+
-    '</div>'+
-    '</div></div>';
-  // root children 로드
-  const children = await _msalFetchOneDriveChildren('');
-  const treeEl = document.getElementById('ftm-tree');
-  if(!treeEl) return;
-  if(!children){
-    treeEl.innerHTML = '<div style="color:#E74C3C;padding:30px;text-align:center;font-size:12px;line-height:1.6">폴더 조회 실패<br>Microsoft 로그인 권한을 확인해주세요</div>';
-    return;
-  }
-  treeEl.innerHTML = '';
-  if(children.length === 0){
-    treeEl.innerHTML = '<div style="color:#999;padding:20px;text-align:center">OneDrive에 폴더가 없어요</div>';
-    return;
-  }
-  children.forEach(function(child){ treeEl.appendChild(_renderFolderTreeNode(child, '', 0)); });
-}
-
-function _renderFolderTreeNode(node, parentPath, depth){
-  const wrap = document.createElement('div');
-  wrap.className = 'ftm-node';
-  const row = document.createElement('div');
-  row.className = 'ftm-row';
-  row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 8px;cursor:pointer;border-radius:6px;transition:background 0.12s;margin-left:'+(depth*18)+'px';
-  row.onmouseenter = function(){ if(!this.dataset.selected) this.style.background='rgba(74,77,231,0.05)'; };
-  row.onmouseleave = function(){ if(!this.dataset.selected) this.style.background=''; };
-  const fullPath = parentPath + '/' + node.name;
-  const expandBtn = document.createElement('span');
-  expandBtn.style.cssText = 'width:14px;flex-shrink:0;color:#888;font-size:9px;text-align:center;user-select:none';
-  expandBtn.textContent = node.hasChildren ? '▶' : '·';
-  if(node.hasChildren){
-    expandBtn.style.cursor = 'pointer';
-    expandBtn.onclick = async function(e){
-      e.stopPropagation();
-      const childrenDiv = wrap.querySelector('.ftm-children');
-      if(childrenDiv){
-        const isHidden = childrenDiv.style.display === 'none';
-        childrenDiv.style.display = isHidden ? '' : 'none';
-        this.textContent = isHidden ? '▼' : '▶';
-        return;
-      }
-      this.textContent = '⌛';
-      const children = await _msalFetchOneDriveChildren(fullPath);
-      this.textContent = '▼';
-      const cd = document.createElement('div');
-      cd.className = 'ftm-children';
-      if(children && children.length > 0){
-        children.forEach(function(c){ cd.appendChild(_renderFolderTreeNode(c, fullPath, depth + 1)); });
-      } else {
-        const empty = document.createElement('div');
-        empty.style.cssText = 'color:#bbb;font-size:11px;padding:4px 12px;margin-left:'+((depth+1)*18+22)+'px';
-        empty.textContent = '(빈 폴더)';
-        cd.appendChild(empty);
-      }
-      wrap.appendChild(cd);
-    };
-  }
-  row.appendChild(expandBtn);
-  const icon = document.createElement('span');
-  icon.textContent = '📁';
-  icon.style.cssText = 'font-size:13px;user-select:none';
-  row.appendChild(icon);
-  const nameSpan = document.createElement('span');
-  nameSpan.textContent = node.name;
-  nameSpan.style.cssText = 'flex:1;color:#333;user-select:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
-  row.appendChild(nameSpan);
-  row.onclick = function(e){
-    if(e.target === expandBtn) return;
-    document.querySelectorAll('.ftm-row[data-selected]').forEach(function(r){
-      r.removeAttribute('data-selected');
-      r.style.background = '';
-      r.style.fontWeight = '';
-    });
-    this.dataset.selected = '1';
-    this.style.background = 'rgba(74,77,231,0.15)';
-    this.style.fontWeight = '600';
-    _folderTreeSelectedPath = fullPath;
-    _folderTreeSelectedName = node.name;
-    const pathSpan = document.getElementById('ftm-current-path');
-    if(pathSpan) pathSpan.textContent = 'OneDrive - GS칼텍스 예울마루' + fullPath.replace(/\//g, '\\');
-    const btn = document.getElementById('ftm-confirm-btn');
-    if(btn){ btn.disabled = false; btn.style.opacity = '1'; btn.textContent = '✓ 선택: ' + node.name; }
-  };
-  wrap.appendChild(row);
-  return wrap;
-}
-
-function closeFolderTreeModal(){
-  const el = document.getElementById('folder-tree-modal');
-  if(el) el.innerHTML = '';
-  _folderTreeCurrentIdx = -1;
-  _folderTreeSelectedPath = '';
-  _folderTreeSelectedName = '';
-}
-
-function confirmFolderTreeSelection(){
-  if(_folderTreeCurrentIdx < 0 || !_folderTreeSelectedPath){
-    showToast('폴더를 클릭해서 선택해주세요','error');
-    return;
-  }
-  // OneDrive - GS칼텍스 예울마루 prefix + 선택 경로 (백슬래시)
-  const PREFIX = 'OneDrive - GS칼텍스 예울마루';
-  const newPath = PREFIX + _folderTreeSelectedPath.replace(/\//g, '\\');
-  if(!_pwData.folders) _pwData.folders = [''];
-  _pwData.folders[_folderTreeCurrentIdx] = newPath;
-  const input = document.getElementById('pw-folder-' + _folderTreeCurrentIdx);
-  if(input){
-    input.value = newPath;
-    setTimeout(function(){ try{ input.scrollLeft = input.scrollWidth; }catch(_e){} }, 30);
-    input.style.background = '#F0F8E0';
-    setTimeout(function(){ input.style.background = '#F0F0F5'; }, 800);
-  }
-  console.log('[folderTree] OK', {idx: _folderTreeCurrentIdx, treePath: _folderTreeSelectedPath, newPath: newPath, _pwData_folders: _pwData.folders.slice()});
-  showToast('선택됨: ' + _folderTreeSelectedName,'info');
-  closeFolderTreeModal();
-}
-
-// ============================================================
-// pwPickFolder — OneDrive 트리 모달 호출 (root handle 시스템 폐기)
-// ============================================================
-async function pwPickFolder(idx){
-  await openFolderTreeModal(idx);
-}<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
@@ -5384,57 +5143,247 @@ async function pwClearRoot(){
   showToast('OneDrive root 등록 초기화됨','info');
 }
 
-async function pwPickFolder(idx){
-  if(!window.showDirectoryPicker){
-    showToast('이 브라우저는 폴더 선택을 지원하지 않아요 (Chrome/Edge 사용)','error');
+// ============================================================
+// MSAL.js — Microsoft OAuth for OneDrive 접근 (B-1 SPA)
+// Azure AD app id: 9f3a0105-aa86-4a8b-bad0-bd651688d854
+// Tenant: 95768064-89cb-48c0-b5e5-e7bd309abcbd
+// ============================================================
+const _MSAL_CONFIG = {
+  auth: {
+    clientId: '9f3a0105-aa86-4a8b-bad0-bd651688d854',
+    authority: 'https://login.microsoftonline.com/95768064-89cb-48c0-b5e5-e7bd309abcbd',
+    redirectUri: window.location.origin + window.location.pathname
+  },
+  cache: {
+    cacheLocation: 'localStorage',  // sessionStorage = 탭별 / localStorage = 영구
+    storeAuthStateInCookie: false
+  }
+};
+const _MSAL_SCOPES = ['Files.Read'];
+let _msalInstance = null;
+let _msalInitialized = false;
+
+async function _msalGet(){
+  if(!window.msal){
+    showToast('MSAL 라이브러리 로드 실패. 새로고침 후 다시 시도해주세요','error');
+    return null;
+  }
+  if(!_msalInstance){
+    _msalInstance = new msal.PublicClientApplication(_MSAL_CONFIG);
+  }
+  if(!_msalInitialized){
+    try { await _msalInstance.initialize(); _msalInitialized = true; }
+    catch(e){ console.error('[msal init failed]', e); return null; }
+  }
+  return _msalInstance;
+}
+
+async function _msalGetToken(){
+  const inst = await _msalGet();
+  if(!inst) return null;
+  // 1. silent — 이미 로그인된 계정 사용
+  const accounts = inst.getAllAccounts();
+  if(accounts.length > 0){
+    try {
+      const res = await inst.acquireTokenSilent({scopes: _MSAL_SCOPES, account: accounts[0]});
+      return res.accessToken;
+    } catch(e){
+      console.warn('[msal silent failed, fallback to popup]', e.errorCode || e.message);
+    }
+  }
+  // 2. popup — 첫 로그인 또는 silent 실패
+  try {
+    const res = await inst.loginPopup({scopes: _MSAL_SCOPES, prompt: 'select_account'});
+    return res.accessToken;
+  } catch(e){
+    console.error('[msal popup failed]', e);
+    showToast('Microsoft 로그인 실패: ' + (e.errorCode || e.message),'error');
+    return null;
+  }
+}
+
+async function _msalFetchOneDriveChildren(path){
+  // path = '' = root, 또는 '/DAX/Sewoong Hwang'
+  const token = await _msalGetToken();
+  if(!token) return null;
+  let url;
+  if(!path || path === '/' || path === ''){
+    url = 'https://graph.microsoft.com/v1.0/me/drive/root/children?$select=id,name,folder,parentReference&$top=200&$orderby=name';
+  } else {
+    const encoded = path.split('/').filter(Boolean).map(encodeURIComponent).join('/');
+    url = 'https://graph.microsoft.com/v1.0/me/drive/root:/' + encoded + ':/children?$select=id,name,folder,parentReference&$top=200&$orderby=name';
+  }
+  try {
+    const resp = await fetch(url, {headers: {'Authorization': 'Bearer ' + token}});
+    if(!resp.ok){
+      const t = await resp.text();
+      throw new Error('Graph ' + resp.status + ': ' + t.slice(0,200));
+    }
+    const data = await resp.json();
+    return (data.value || []).filter(function(it){ return !!it.folder; }).map(function(it){
+      return {id: it.id, name: it.name, hasChildren: (it.folder && it.folder.childCount > 0)};
+    });
+  } catch(e){
+    console.error('[fetchOneDriveChildren]', path, e);
+    showToast('폴더 조회 실패: ' + e.message,'error');
+    return null;
+  }
+}
+
+// ============================================================
+// 폴더 트리 UI 모달
+// ============================================================
+let _folderTreeCurrentIdx = -1;
+let _folderTreeSelectedPath = '';
+let _folderTreeSelectedName = '';
+
+async function openFolderTreeModal(idx){
+  _folderTreeCurrentIdx = idx;
+  _folderTreeSelectedPath = '';
+  _folderTreeSelectedName = '';
+  let el = document.getElementById('folder-tree-modal');
+  if(!el){
+    el = document.createElement('div');
+    el.id = 'folder-tree-modal';
+    document.body.appendChild(el);
+  }
+  el.innerHTML = '<div class="modal-bg show" style="z-index:9300" onclick="if(event.target===this)closeFolderTreeModal()">'+
+    '<div class="modal" style="max-width:560px;padding:0;text-align:left;max-height:80vh;display:flex;flex-direction:column">'+
+    '<div style="padding:18px 22px;border-bottom:1px solid rgba(0,0,0,0.06);display:flex;justify-content:space-between;align-items:center;flex-shrink:0">'+
+    '<h3 style="margin:0;font-size:15px;font-weight:700">📁 OneDrive 폴더 선택</h3>'+
+    '<button onclick="closeFolderTreeModal()" style="background:rgba(216,132,85,0.15);border:none;width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:14px;color:var(--peach);font-family:inherit">×</button>'+
+    '</div>'+
+    '<div style="padding:10px 18px 8px;border-bottom:1px solid rgba(0,0,0,0.04);font-size:11px;color:#888;flex-shrink:0;letter-spacing:0.2px">'+
+    '<span style="color:#666">현재 선택: </span><span id="ftm-current-path" style="color:#333">없음</span>'+
+    '</div>'+
+    '<div id="ftm-tree" style="overflow-y:auto;padding:12px 18px;flex:1;font-size:13px">'+
+    '<div style="text-align:center;color:#aaa;padding:30px">⌛ Microsoft 로그인 중...</div>'+
+    '</div>'+
+    '<div style="padding:12px 22px;border-top:1px solid rgba(0,0,0,0.06);display:flex;gap:8px;justify-content:flex-end;flex-shrink:0">'+
+    '<button onclick="closeFolderTreeModal()" style="padding:8px 18px;border:1px solid rgba(0,0,0,0.10);background:transparent;color:#666;border-radius:8px;cursor:pointer;font-family:inherit;font-size:12px">취소</button>'+
+    '<button id="ftm-confirm-btn" onclick="confirmFolderTreeSelection()" disabled style="padding:8px 18px;border:none;background:var(--accent);color:#fff;border-radius:8px;cursor:pointer;font-family:inherit;font-size:12px;opacity:0.4">선택 (폴더 클릭)</button>'+
+    '</div>'+
+    '</div></div>';
+  // root children 로드
+  const children = await _msalFetchOneDriveChildren('');
+  const treeEl = document.getElementById('ftm-tree');
+  if(!treeEl) return;
+  if(!children){
+    treeEl.innerHTML = '<div style="color:#E74C3C;padding:30px;text-align:center;font-size:12px;line-height:1.6">폴더 조회 실패<br>Microsoft 로그인 권한을 확인해주세요</div>';
     return;
   }
-  // 1. root handle 확인
-  let rootHandle = await _getRootHandle();
-  if(!rootHandle){
-    // root 없으면 등록만 진행. 자식 선택은 사용자가 다시 폴더 선택 버튼 누를 때 진행.
-    // (같은 user gesture 안 다이얼로그 2개 호출 시 브라우저 차단 가능성 회피 + UX 명확화)
-    showToast('처음 한 번 OneDrive 폴더를 등록해야 해요. 파일 선택 창에서 "OneDrive - GS칼텍스 예울마루" 폴더를 선택해주세요','info');
-    const registered = await pwRegisterRoot();
-    if(!registered){
-      // 등록 실패 — 거부 토스트는 pwRegisterRoot 안에서 이미 표시됨
-      return;
-    }
-    // 등록 성공 — 사용자에게 다시 클릭하라고 안내
-    showToast('등록 완료! 폴더 선택 버튼(📁)을 다시 클릭해서 자료 폴더를 선택해주세요','info');
-    return;  // 종료. 자식 선택은 다음 사용자 클릭에서.
+  treeEl.innerHTML = '';
+  if(children.length === 0){
+    treeEl.innerHTML = '<div style="color:#999;padding:20px;text-align:center">OneDrive에 폴더가 없어요</div>';
+    return;
   }
-  // 2. 자식 폴더 선택 (root 기준)
-  try {
-    const childHandle = await window.showDirectoryPicker({startIn: rootHandle, mode:'read'});
-    if(!childHandle) return;
-    // 3. resolve로 상대 경로 계산
-    const relative = await rootHandle.resolve(childHandle);
-    if(!relative){
-      // 자식 폴더가 등록된 root의 자손이 아님 = OneDrive root 밖의 폴더 (다른 OneDrive 계정 또는 로컬)
-      showToast('"' + childHandle.name + '" 폴더가 등록된 OneDrive root 안에 없어요. OneDrive - GS칼텍스 예울마루 폴더 안에서만 선택 가능','error');
-      console.warn('[pwPickFolder] resolve null — child not in root', {root: rootHandle.name, child: childHandle.name});
-      return;
-    }
-    // 4. 최종 경로 조립
-    const newPath = _ONEDRIVE_ROOT_NAME + '\\' + relative.join('\\');
-    if(!_pwData.folders) _pwData.folders = [''];
-    _pwData.folders[idx] = newPath;
-    const input = document.getElementById('pw-folder-'+idx);
-    if(input){
-      input.value = newPath;
-      setTimeout(function(){ try{ input.scrollLeft = input.scrollWidth; }catch(_e){} }, 30);
-      input.style.background = '#F0F8E0';
-      setTimeout(function(){ input.style.background = '#F8F7FC'; }, 800);
-    }
-    try{ console.log('[pwPickFolder] OK', {idx, childName: childHandle.name, relative, newPath, _pwData_folders: _pwData.folders.slice()}); }catch(_e){}
-    showToast('선택됨: ' + childHandle.name,'info');
-  } catch(err){
-    if(err.name !== 'AbortError'){
-      console.error('[pwPickFolder]', err);
-      showToast('폴더 선택 실패: ' + err.message,'error');
-    }
+  children.forEach(function(child){ treeEl.appendChild(_renderFolderTreeNode(child, '', 0)); });
+}
+
+function _renderFolderTreeNode(node, parentPath, depth){
+  const wrap = document.createElement('div');
+  wrap.className = 'ftm-node';
+  const row = document.createElement('div');
+  row.className = 'ftm-row';
+  row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 8px;cursor:pointer;border-radius:6px;transition:background 0.12s;margin-left:'+(depth*18)+'px';
+  row.onmouseenter = function(){ if(!this.dataset.selected) this.style.background='rgba(74,77,231,0.05)'; };
+  row.onmouseleave = function(){ if(!this.dataset.selected) this.style.background=''; };
+  const fullPath = parentPath + '/' + node.name;
+  const expandBtn = document.createElement('span');
+  expandBtn.style.cssText = 'width:14px;flex-shrink:0;color:#888;font-size:9px;text-align:center;user-select:none';
+  expandBtn.textContent = node.hasChildren ? '▶' : '·';
+  if(node.hasChildren){
+    expandBtn.style.cursor = 'pointer';
+    expandBtn.onclick = async function(e){
+      e.stopPropagation();
+      const childrenDiv = wrap.querySelector('.ftm-children');
+      if(childrenDiv){
+        const isHidden = childrenDiv.style.display === 'none';
+        childrenDiv.style.display = isHidden ? '' : 'none';
+        this.textContent = isHidden ? '▼' : '▶';
+        return;
+      }
+      this.textContent = '⌛';
+      const children = await _msalFetchOneDriveChildren(fullPath);
+      this.textContent = '▼';
+      const cd = document.createElement('div');
+      cd.className = 'ftm-children';
+      if(children && children.length > 0){
+        children.forEach(function(c){ cd.appendChild(_renderFolderTreeNode(c, fullPath, depth + 1)); });
+      } else {
+        const empty = document.createElement('div');
+        empty.style.cssText = 'color:#bbb;font-size:11px;padding:4px 12px;margin-left:'+((depth+1)*18+22)+'px';
+        empty.textContent = '(빈 폴더)';
+        cd.appendChild(empty);
+      }
+      wrap.appendChild(cd);
+    };
   }
+  row.appendChild(expandBtn);
+  const icon = document.createElement('span');
+  icon.textContent = '📁';
+  icon.style.cssText = 'font-size:13px;user-select:none';
+  row.appendChild(icon);
+  const nameSpan = document.createElement('span');
+  nameSpan.textContent = node.name;
+  nameSpan.style.cssText = 'flex:1;color:#333;user-select:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+  row.appendChild(nameSpan);
+  row.onclick = function(e){
+    if(e.target === expandBtn) return;
+    document.querySelectorAll('.ftm-row[data-selected]').forEach(function(r){
+      r.removeAttribute('data-selected');
+      r.style.background = '';
+      r.style.fontWeight = '';
+    });
+    this.dataset.selected = '1';
+    this.style.background = 'rgba(74,77,231,0.15)';
+    this.style.fontWeight = '600';
+    _folderTreeSelectedPath = fullPath;
+    _folderTreeSelectedName = node.name;
+    const pathSpan = document.getElementById('ftm-current-path');
+    if(pathSpan) pathSpan.textContent = 'OneDrive - GS칼텍스 예울마루' + fullPath.replace(/\//g, '\\');
+    const btn = document.getElementById('ftm-confirm-btn');
+    if(btn){ btn.disabled = false; btn.style.opacity = '1'; btn.textContent = '✓ 선택: ' + node.name; }
+  };
+  wrap.appendChild(row);
+  return wrap;
+}
+
+function closeFolderTreeModal(){
+  const el = document.getElementById('folder-tree-modal');
+  if(el) el.innerHTML = '';
+  _folderTreeCurrentIdx = -1;
+  _folderTreeSelectedPath = '';
+  _folderTreeSelectedName = '';
+}
+
+function confirmFolderTreeSelection(){
+  if(_folderTreeCurrentIdx < 0 || !_folderTreeSelectedPath){
+    showToast('폴더를 클릭해서 선택해주세요','error');
+    return;
+  }
+  // OneDrive - GS칼텍스 예울마루 prefix + 선택 경로 (백슬래시)
+  const PREFIX = 'OneDrive - GS칼텍스 예울마루';
+  const newPath = PREFIX + _folderTreeSelectedPath.replace(/\//g, '\\');
+  if(!_pwData.folders) _pwData.folders = [''];
+  _pwData.folders[_folderTreeCurrentIdx] = newPath;
+  const input = document.getElementById('pw-folder-' + _folderTreeCurrentIdx);
+  if(input){
+    input.value = newPath;
+    setTimeout(function(){ try{ input.scrollLeft = input.scrollWidth; }catch(_e){} }, 30);
+    input.style.background = '#F0F8E0';
+    setTimeout(function(){ input.style.background = '#F0F0F5'; }, 800);
+  }
+  console.log('[folderTree] OK', {idx: _folderTreeCurrentIdx, treePath: _folderTreeSelectedPath, newPath: newPath, _pwData_folders: _pwData.folders.slice()});
+  showToast('선택됨: ' + _folderTreeSelectedName,'info');
+  closeFolderTreeModal();
+}
+
+// ============================================================
+// pwPickFolder — OneDrive 트리 모달 호출 (root handle 시스템 폐기)
+// ============================================================
+async function pwPickFolder(idx){
+  await openFolderTreeModal(idx);
 }
 
 function pwAddFolder(){
