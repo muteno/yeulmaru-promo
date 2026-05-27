@@ -1439,6 +1439,11 @@ async function api(method,path,body){
   const r=await fetch(`${API}${path}`,o);if(!r.ok)throw new Error(`${r.status}: ${await r.text()}`);return r.json();
 }
 
+// 슈퍼 admin = 0511로 직접 로그인 (subAdminPin 없음 + role admin)
+function isSuperAdmin(){
+  return sessionStorage.getItem('pw')==='0511' && !sessionStorage.getItem('subAdminPin');
+}
+
 // Excel 시리얼(1899-12-30 기준) → "YYYY-MM-DD" 변환
 function excelSerialToISO(serial){
   if(serial===''||serial==null||isNaN(serial))return'';
@@ -1735,26 +1740,9 @@ async function switchRole(){
       }
       return;
     }
-    // 슈퍼 admin → user 모드 전환 (디폴트 fallback)
-    if(await showConfirm('일반 모드로 전환할까요?')){
-      userRole='user';
-      password='0510';
-      sessionStorage.setItem('pw','0510');
-      sessionStorage.setItem('role','user');
-      try{
-        if(!MANAGERS||!MANAGERS.length) await loadManagers();
-        const adminUser=MANAGERS.find(m=>isFlagOn(m['관리자여부'])&&m['담당자']);
-        const fallbackName=adminUser?adminUser['담당자']:'황세웅';
-        const fallbackDept=adminUser?(adminUser['담당부서']||''):'';
-        localStorage.setItem('myApplicant',fallbackName);
-        if(fallbackDept)localStorage.setItem('myUserDept',fallbackDept);
-        else localStorage.removeItem('myUserDept');
-      }catch(e){console.error('[switchRole fallback]',e);}
-      updateRoleTag();
-      buildNav();
-      render();
-      showToast('일반 모드로 전환됐어요');
-    }
+    // 슈퍼 admin은 일반모드 전환 차단 (신원 없으니 일반 사용자처럼 작업 불가)
+    showToast('슈퍼 관리자는 일반 모드를 사용할 수 없어요. 본인 PIN으로 로그인해 주세요.','error');
+    return;
   }else{
     // user → admin 전환
     const subPin=sessionStorage.getItem('subAdminPin');
@@ -6630,7 +6618,12 @@ function buildSheetListHtml(slug,rows){
       if(cfg.inlineEdit){
         if(c.type==='checkbox'){
           const on=(raw==='1'||raw===1||raw===true||String(raw||'').toLowerCase()==='true');
-          html+='<td style="text-align:center"><input type="checkbox" class="inl-cb" data-key="'+escapeHtml(c.key)+'"'+(on?' checked':'')+' onchange="markRowDirty(\''+slug+'\','+r._rowIndex+')"></td>';
+          // 관리자여부 컬럼은 슈퍼 admin만 토글 가능 (서브 admin은 read-only)
+          const isAdminCol=(slug==='manager'&&c.key==='관리자여부');
+          const locked=isAdminCol&&!isSuperAdmin();
+          const lockedAttr=locked?' disabled title="슈퍼 관리자만 변경 가능"':'';
+          const lockedStyle=locked?' style="opacity:0.35;cursor:not-allowed"':'';
+          html+='<td style="text-align:center"><input type="checkbox" class="inl-cb" data-key="'+escapeHtml(c.key)+'"'+(on?' checked':'')+lockedAttr+lockedStyle+' onchange="markRowDirty(\''+slug+'\','+r._rowIndex+')"></td>';
         }else{
           html+='<td><input type="text" class="inl-input" data-key="'+escapeHtml(c.key)+'" value="'+escapeHtml(raw||'')+'" oninput="markRowDirty(\''+slug+'\','+r._rowIndex+')"></td>';
         }
@@ -6765,7 +6758,14 @@ function openSheetForm(slug,rowIndex){
     const v=existing?existing[c.key]:'';
     if(c.type==='checkbox'){
       const checked=(v==='1'||v===1||v===true||String(v||'').toLowerCase()==='true');
-      html+='<div><label style="display:flex;align-items:center;gap:8px;background:#fafafa;padding:12px;border-radius:10px;border:1px solid rgba(0,0,0,0.06);cursor:pointer;margin:0;text-transform:none;letter-spacing:0;color:#333;font-size:13px;font-weight:600"><input type="checkbox" name="'+c.key+'"'+(checked?' checked':'')+' style="width:18px;height:18px;cursor:pointer;margin:0"> '+escapeHtml(c.label)+'</label></div>';
+      // 관리자여부 컬럼은 슈퍼 admin만 변경 가능
+      const isAdminCol=(slug==='manager'&&c.key==='관리자여부');
+      const locked=isAdminCol&&!isSuperAdmin();
+      const lockAttr=locked?' disabled':'';
+      const lockNote=locked?' <span style="color:#999;font-size:11px;font-weight:400;margin-left:4px">(슈퍼 관리자만 변경)</span>':'';
+      const opacity=locked?'opacity:0.55;':'';
+      const curStyle=locked?'not-allowed':'pointer';
+      html+='<div><label style="display:flex;align-items:center;gap:8px;background:#fafafa;padding:12px;border-radius:10px;border:1px solid rgba(0,0,0,0.06);cursor:'+curStyle+';margin:0;text-transform:none;letter-spacing:0;color:#333;font-size:13px;font-weight:600;'+opacity+'"><input type="checkbox" name="'+c.key+'"'+(checked?' checked':'')+lockAttr+' style="width:18px;height:18px;cursor:'+curStyle+';margin:0"> '+escapeHtml(c.label)+lockNote+'</label></div>';
     }else{
       html+='<div><label>'+escapeHtml(c.label)+(c.required?'<span class="req">*</span>':'')+'</label><input name="'+c.key+'" type="text" value="'+escapeHtml(v||'')+'"'+(c.required?' required':'')+'></div>';
     }
