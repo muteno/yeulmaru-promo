@@ -3084,8 +3084,20 @@ async function reapplyPromoRequest(rowIndex){
 async function cancelWithReason(rowIndex){
   const rec=records.find(function(r){return r._rowIndex===rowIndex;});
   if(!rec){showToast('신청을 찾을 수 없어요','error');return;}
-  const reason=await _renderCancelReasonModal(1);
-  if(!reason)return;
+  // 신청자=본인이면 사유 입력 모달 생략 — 단순 confirm만
+  let _myApplForCancel='';
+  try{ _myApplForCancel = localStorage.getItem('myApplicant')||''; }catch(e){}
+  if(!_myApplForCancel && typeof isSuperAdmin==='function' && isSuperAdmin()) _myApplForCancel='황세웅';
+  const _recApplicant=(rec['신청자']||'').toString().trim();
+  const _isSelfCancel=!!_myApplForCancel && _recApplicant===_myApplForCancel;
+  let reason='';
+  if(_isSelfCancel){
+    const ok=await showConfirm('취소하시겠습니까?', {title:'일정 취소', okText:'취소', danger:true});
+    if(!ok) return;
+  } else {
+    reason=await _renderCancelReasonModal(1);
+    if(!reason) return;
+  }
   showOverlayLoad('취소 처리 중...');
   try{
     const ts=new Date().toISOString().slice(0,16).replace('T',' ');
