@@ -3164,11 +3164,33 @@ function renderPromoBoard(){
     rows=rows.filter(function(r){return getRecDateKey(r)>=todayKey;});
   }
   // 상태 필터 (특수일정은 status='all'일 때만 포함, 대기/예정/완료 탭에선 제외)
+  // 1차 그룹 매핑: 보류 → 신청 중에 흡수, 취소는 showCancelled ON + 직전 상태 그룹에 분류
   if(_promoFilter.status!=='all'){
     rows=rows.filter(function(r){return!r._isSpecial;});
-    if(_promoFilter.status==='pending')rows=rows.filter(function(r){const s=r['진행 상태']||'';return s==='신청 중'||s==='신청 중';});
-    else if(_promoFilter.status==='approved')rows=rows.filter(function(r){return r['진행 상태']==='예정';});
-    else if(_promoFilter.status==='done')rows=rows.filter(function(r){return r['진행 상태']==='완료';});
+    if(_promoFilter.status==='pending'){
+      rows=rows.filter(function(r){
+        const s=(r['진행 상태']||'').toString().trim();
+        if(s==='신청 중'||s==='보류')return true;
+        if(_promoFilter.showCancelled && s==='취소' && getCancelOrigGroup(r)==='신청 중')return true;
+        return false;
+      });
+    } else if(_promoFilter.status==='approved'){
+      rows=rows.filter(function(r){
+        const s=(r['진행 상태']||'').toString().trim();
+        if(s==='예정')return true;
+        if(_promoFilter.showCancelled && s==='취소' && getCancelOrigGroup(r)==='예정')return true;
+        return false;
+      });
+    } else if(_promoFilter.status==='done'){
+      rows=rows.filter(function(r){
+        const s=(r['진행 상태']||'').toString().trim();
+        if(s==='완료')return true;
+        if(_promoFilter.showCancelled && s==='취소' && getCancelOrigGroup(r)==='완료')return true;
+        return false;
+      });
+    }
+  } else if(!_promoFilter.showCancelled){
+    rows=rows.filter(function(r){return (r['진행 상태']||'').toString().trim()!=='취소';});
   }
   if(_promoFilter.q){
     const q=_promoFilter.q.toLowerCase();
