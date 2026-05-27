@@ -9298,16 +9298,45 @@ async function approvePromo(){
 async function rejectPromo(){
   if(!editing?.existing)return;
   if(userRole!=='admin'){showToast('관리자만 할 수 있어요','error');return;}
-  const ok=await showConfirm('이 홍보 신청을 거절할까요? 삭제돼요.');if(!ok)return;
+  // 사유 입력 (반려는 record 삭제 → 신청자 메시지에 사유 전달 필수)
+  const reason=await _renderCancelReasonModal(1,{
+    title:'신청 반려',
+    subtitle:'반려 사유를 입력해 주세요. 신청자에게 전달되며 기록이 삭제됩니다.',
+    labelText:'반려 사유',
+    placeholder:'예: 동일 일정 중복 / 정책 부적합 / 자료 불충분 등',
+    buttonLabel:'반려 (삭제)',
+    buttonColor:'#E24B4A'
+  });
+  if(!reason)return;
+  // DELETE 전 record 정보 캐시 (메시지 푸시용)
+  const _rec = editing.existing;
+  const _refNo = _rec['No']||_rec['NO']||'';
+  const _refApplicant = _rec['신청자']||'';
+  const _refSum = (_rec['날짜']||'') + ' ' + (_rec['플랫폼 1']||'') + ' ' + (_rec['콘텐츠 제목']||'');
   showOverlayLoad();
   try{
-    const ri=editing.existing._rowIndex;
+    const ri=_rec._rowIndex;
     await api('DELETE','/api/records/'+ri);
+    // 메시지함 hook (중요: 신청→반려, 신청자에게 사유 전달)
+    try{
+      if(_refApplicant){
+        pushMessage({
+          recipient: _refApplicant,
+          type: '중요',
+          trigger: '신청→반려',
+          before: _rec['진행 상태']||'신청 중',
+          after: '반려 (삭제)',
+          reason: reason,
+          refNo: _refNo,
+          refSummary: _refSum.trim()
+        });
+      }
+    }catch(_e){ console.error('[pushMessage reject]', _e); }
     closeModal();
     await syncReload(-1);
     closePanel();
-    showToast('거절했어요');
-  }catch(e){showToast('거절 실패: '+e.message,'error');}
+    showToast('반려 처리됐어요 (사유 전달됨)');
+  }catch(e){showToast('반려 실패: '+e.message,'error');}
   finally{hideOverlayLoad();}
 }
 
