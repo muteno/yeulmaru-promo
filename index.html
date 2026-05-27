@@ -4733,11 +4733,13 @@ async function pwPickFolder(idx){
     const folderName = handle.name || '';
     pwCollectFoldersFromDOM();
     if(!_pwData.folders) _pwData.folders=[''];
-    // append 모드: 기존 input 값이 있으면 끝에 \폴더명 추가
+    // append 모드: 빈 input에는 OneDrive prefix 자동 추가, 값이 있으면 끝에 \폴더명 append
     const _curr_v = (_pwData.folders[idx] || '').trim();
+    const _ONEDRIVE_PREFIX = 'Onedrive - GS칼텍스 예울마루\\예술사업팀 - 자료 공유\\';
     let _newPath_v;
     if(_curr_v === ''){
-      _newPath_v = folderName;
+      // 빈 input → 고정 OneDrive prefix + 폴더명
+      _newPath_v = _ONEDRIVE_PREFIX + folderName;
     } else {
       const _sep_v = (_curr_v.endsWith('\\') || _curr_v.endsWith('/')) ? '' : '\\';
       _newPath_v = _curr_v + _sep_v + folderName;
@@ -7897,7 +7899,7 @@ function openPanel(dateObj,recs){
       var eClickAttr=eHasUrl?' onclick="openPerfUrl(\''+escapeHtml(x.u).replace(/'/g,'\\\'')+'\',\''+escapeHtml(eName).replace(/'/g,'\\\'')+'\')" title="클릭하면 전시 페이지로 이동"':'';
       var eCursorStyle=eHasUrl?'cursor:pointer;':'';
       var eNameWithArrow=escapeHtml(eName)+(eHasUrl?' <span style="font-size:9px;color:#C08070;font-weight:500;margin-left:2px">↗</span>':'');
-      var exhCtxAttr=' oncontextmenu="onPerfContextMenu(event,'+JSON.stringify(eName)+');return false;"';
+      var exhCtxAttr=' oncontextmenu="onPerfContextMenu(event,this);return false;"';
       h+='<div'+eClickAttr+exhCtxAttr+' class="panel-perf-row" data-perf-name="'+escapeHtml(eName)+'" style="'+eCursorStyle+'display:flex;align-items:center;padding:10px 12px;background:rgba(240,196,184,0.15);border-radius:10px;margin-bottom:6px;gap:10px;transition:background .15s">';
       h+='<span style="display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;border-radius:50%;font-size:8px;font-weight:700;background:#F0C4B8;color:#333;flex-shrink:0">전</span>';
       h+='<div style="flex:1;min-width:0;overflow:hidden"><div style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+eNameWithArrow+'</div><div style="font-size:10px;color:var(--dim);margin-top:1px">'+escapeHtml(eVenue)+'</div></div>';
@@ -7919,18 +7921,26 @@ function togglePanelPrograms(){
   arrow.classList.toggle('open',_panelProgramsOpen);
 }
 // === 프로그램 우클릭 — 빠른 정보 박스 ===
-function onPerfContextMenu(event, perfName){
+function onPerfContextMenu(event, target){
   event.preventDefault();
   event.stopPropagation();
   closeCellContextMenu();
+  // target.dataset.perfName에서 원본 이름 (HTML attribute는 자동 unescape됨, 꺽쇠/따옴표 무관)
+  const perfName = (target && target.dataset) ? target.dataset.perfName : '';
+  if(!perfName) return;
+  // PERFS(공연) 또는 openExh(전시)에서 매칭
   const perf=(PERFS||[]).find(function(p){return p.f===perfName;});
-  if(!perf) return;
-  const hasUrl = !!perf.u;
+  const exhFromList=(typeof openExh!=='undefined'&&openExh)?openExh.find(function(x){return x.name===perfName;}):null;
+  const matched = perf || exhFromList;
+  if(!matched) return;
+  // 상세페이지 URL: 공연은 perf.u, 전시는 exh.u
+  const detailUrl = perf ? perf.u : (exhFromList ? exhFromList.u : '');
+  const hasUrl = !!detailUrl;
   let menuHtml = '';
   menuHtml += '<div class="ccm-item" onclick="closeCellContextMenu();openProgramView('+JSON.stringify(perfName)+')"><span class="emo">👁️</span>조회</div>';
   menuHtml += '<div class="ccm-item" onclick="closeCellContextMenu();openPromoBoardForProgram('+JSON.stringify(perfName)+')"><span class="emo">📋</span>홍보 현황</div>';
   if(hasUrl){
-    menuHtml += '<div class="ccm-item" onclick="closeCellContextMenu();openPerfUrl('+JSON.stringify(perf.u)+','+JSON.stringify(perfName)+')"><span class="emo">🔗</span>상세페이지 이동</div>';
+    menuHtml += '<div class="ccm-item" onclick="closeCellContextMenu();openPerfUrl('+JSON.stringify(detailUrl)+','+JSON.stringify(perfName)+')"><span class="emo">🔗</span>상세페이지 이동</div>';
   }
   const menu = document.createElement('div');
   menu.id = 'cell-context-menu';
