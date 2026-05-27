@@ -1300,8 +1300,8 @@ async function tryLogin(){
     if(d.ok){
       password=pin;userRole=d.role||'user';
       sessionStorage.setItem('pw',pin);sessionStorage.setItem('role',userRole);
-      // admin 또는 0510 공유 PIN — 개인 사용자 정보 없음
-      try{localStorage.removeItem('myUserDept');}catch(e){}
+      // 슈퍼 admin / 공유 user — 개인 신원 없음, subAdminPin 제거
+      try{localStorage.removeItem('myUserDept');sessionStorage.removeItem('subAdminPin');}catch(e){}
       document.getElementById('login').style.display='none';
       document.getElementById('app').style.display='';
       initApp();
@@ -1396,7 +1396,15 @@ async function tryLogin(){
       }
       if(!pwdOk){password='';sessionStorage.removeItem('pw');return;}
       // 인증 성공 — 세션 저장 + initApp
-      sessionStorage.setItem('pw','0510');sessionStorage.setItem('role','user');
+      // 관리자여부=true면 서브 admin: role='admin' + subAdminPin 저장 (Worker 헤더용)
+      const isSubAdmin=isFlagOn(matched['관리자여부']);
+      const sessRole=isSubAdmin?'admin':'user';
+      sessionStorage.setItem('pw','0510');
+      sessionStorage.setItem('role',sessRole);
+      if(isSubAdmin){sessionStorage.setItem('subAdminPin',String(pin));}
+      else{sessionStorage.removeItem('subAdminPin');}
+      password='0510';
+      userRole=sessRole;
       try{
         localStorage.setItem('myApplicant',userName);
         localStorage.setItem('myUserDept',userDept);
@@ -1404,7 +1412,7 @@ async function tryLogin(){
       document.getElementById('login').style.display='none';
       document.getElementById('app').style.display='';
       initApp();
-      setTimeout(function(){if(typeof showToast==='function')showToast(userName+' 님 환영합니다','success');},300);
+      setTimeout(function(){if(typeof showToast==='function')showToast(userName+(isSubAdmin?' 님 환영합니다 (관리자)':' 님 환영합니다'),'success');},300);
       return;
     }
     // 모두 실패
@@ -1422,7 +1430,11 @@ async function tryLogin(){
 (function(){const s=sessionStorage.getItem('pw');if(s){password=s;userRole=sessionStorage.getItem('role')||'user';document.getElementById('login').style.display='none';document.getElementById('app').style.display='';initApp();}})();
 
 async function api(method,path,body){
-  const o={method,headers:{'Content-Type':'application/json','X-App-Password':password}};
+  const headers={'Content-Type':'application/json','X-App-Password':password};
+  // 서브 admin: 본인 PIN을 헤더에 동봉 (Worker가 검증해 admin 권한 부여)
+  const subPin=sessionStorage.getItem('subAdminPin');
+  if(subPin)headers['X-Sub-Admin-PIN']=subPin;
+  const o={method,headers};
   if(body)o.body=JSON.stringify(body);
   const r=await fetch(`${API}${path}`,o);if(!r.ok)throw new Error(`${r.status}: ${await r.text()}`);return r.json();
 }
@@ -1708,14 +1720,27 @@ function updateRoleTag(){
 }
 async function switchRole(){
   if(userRole==='admin'){
+    const subPin=sessionStorage.getItem('subAdminPin');
+    if(subPin){
+      // 서브 admin → user 모드 전환 (본인 신원 유지)
+      const myName=localStorage.getItem('myApplicant')||'';
+      if(await showConfirm('일반 모드로 전환할까요? ('+myName+' 신원 유지)')){
+        userRole='user';
+        sessionStorage.setItem('role','user');
+        // subAdminPin, myApplicant, myUserDept 모두 그대로 유지
+        updateRoleTag();
+        buildNav();
+        render();
+        showToast('일반 모드로 전환됐어요');
+      }
+      return;
+    }
+    // 슈퍼 admin → user 모드 전환 (디폴트 fallback)
     if(await showConfirm('일반 모드로 전환할까요?')){
       userRole='user';
       password='0510';
       sessionStorage.setItem('pw','0510');
       sessionStorage.setItem('role','user');
-      // admin → user 전환 시 신청자/부서 자동 설정
-      // MANAGERS 시트의 '관리자여부' 플래그가 켜진 첫 사용자 → 그 사람의 이름·부서로 적용
-      // 없으면 디폴트 '황세웅' (코드 fallback)
       try{
         if(!MANAGERS||!MANAGERS.length) await loadManagers();
         const adminUser=MANAGERS.find(m=>isFlagOn(m['관리자여부'])&&m['담당자']);
@@ -1731,6 +1756,19 @@ async function switchRole(){
       showToast('일반 모드로 전환됐어요');
     }
   }else{
+    // user → admin 전환
+    const subPin=sessionStorage.getItem('subAdminPin');
+    if(subPin){
+      // 서브 admin이 일반 모드에서 토글 — PIN 재입력 없이 즉시 admin
+      userRole='admin';
+      sessionStorage.setItem('role','admin');
+      updateRoleTag();
+      buildNav();
+      render();
+      showToast('관리자 모드로 전환됐어요');
+      return;
+    }
+    // 일반 user → admin: 슈퍼 admin PIN 입력 모달
     showRolePrompt();
   }
 }
