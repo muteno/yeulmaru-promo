@@ -4929,7 +4929,7 @@ function pwFolderInputs(){
   _pwData.folders.forEach(function(v,i){
     const isFirst=(i===0);
     html+='<div class="pw-folder-row" data-idx="'+i+'" style="display:flex;gap:6px;margin-bottom:6px;align-items:center">';
-    html+='<input id="pw-folder-'+i+'" class="pw-folder-input" type="text" data-idx="'+i+'" value="'+escapeHtml(v||'')+'" oninput="pwFolderInputChange('+i+',this.value)" placeholder="'+escapeHtml(ph)+'" style="flex:1;min-width:0;padding:10px 14px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:12px;font-size:13px;outline:none;font-family:inherit;box-sizing:border-box">';
+    html+='<input id="pw-folder-'+i+'" class="pw-folder-input" type="text" data-idx="'+i+'" value="'+escapeHtml(v||'')+'" readonly onpaste="return false" oncontextmenu="return false" placeholder="'+escapeHtml(ph)+'" style="flex:1;min-width:0;padding:10px 14px;background:#F0F0F5;cursor:not-allowed;color:#555;border:1.5px solid rgba(0,0,0,0.06);border-radius:12px;font-size:13px;outline:none;font-family:inherit;box-sizing:border-box">';
     html+='<button type="button" onclick="pwPickFolder('+i+')" title="내 PC에서 폴더 선택 (자동 입력)" style="flex-shrink:0;width:42px;height:42px;background:#F8F7FC;color:var(--accent);border:1.5px solid rgba(0,0,0,0.06);border-radius:12px;font-size:18px;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;line-height:1">📁</button>';
     if(isFirst){
       html+='<button type="button" onclick="pwAddFolder()" title="폴더 추가" style="flex-shrink:0;width:42px;height:42px;background:var(--accent);color:#fff;border:none;border-radius:12px;font-size:22px;font-weight:700;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;line-height:1;box-shadow:0 2px 6px rgba(74,77,231,0.25);transition:transform 0.1s">+</button>';
@@ -4954,39 +4954,153 @@ function pwCollectFoldersFromDOM(){
 }
 
 // === 폴더 선택 (showDirectoryPicker) — 폴더명 자동 입력 ===
+// ===== OneDrive Root Handle 시스템 (IndexedDB persistence) =====
+const _ONEDRIVE_ROOT_NAME = 'OneDrive - GS칼텍스 예울마루';
+const _IDB_DB_NAME = 'yeulmaru-promo-handles';
+const _IDB_STORE = 'handles';
+const _IDB_KEY_ROOT = 'oneDriveRoot';
+
+function _idbOpen(){
+  return new Promise(function(resolve, reject){
+    const req = indexedDB.open(_IDB_DB_NAME, 1);
+    req.onupgradeneeded = function(){
+      const db = req.result;
+      if(!db.objectStoreNames.contains(_IDB_STORE)) db.createObjectStore(_IDB_STORE);
+    };
+    req.onsuccess = function(){ resolve(req.result); };
+    req.onerror = function(){ reject(req.error); };
+  });
+}
+async function _idbGet(key){
+  try {
+    const db = await _idbOpen();
+    return await new Promise(function(resolve, reject){
+      const tx = db.transaction(_IDB_STORE, 'readonly');
+      const req = tx.objectStore(_IDB_STORE).get(key);
+      req.onsuccess = function(){ resolve(req.result); };
+      req.onerror = function(){ reject(req.error); };
+    });
+  } catch(e){ console.warn('[idbGet]', e); return null; }
+}
+async function _idbSet(key, value){
+  try {
+    const db = await _idbOpen();
+    return await new Promise(function(resolve, reject){
+      const tx = db.transaction(_IDB_STORE, 'readwrite');
+      const req = tx.objectStore(_IDB_STORE).put(value, key);
+      req.onsuccess = function(){ resolve(true); };
+      req.onerror = function(){ reject(req.error); };
+    });
+  } catch(e){ console.warn('[idbSet]', e); return false; }
+}
+async function _idbDel(key){
+  try {
+    const db = await _idbOpen();
+    return await new Promise(function(resolve, reject){
+      const tx = db.transaction(_IDB_STORE, 'readwrite');
+      const req = tx.objectStore(_IDB_STORE).delete(key);
+      req.onsuccess = function(){ resolve(true); };
+      req.onerror = function(){ reject(req.error); };
+    });
+  } catch(e){ console.warn('[idbDel]', e); return false; }
+}
+
+async function _verifyRootPermission(handle){
+  if(!handle || !handle.queryPermission) return false;
+  try {
+    const opts = {mode: 'read'};
+    let p = await handle.queryPermission(opts);
+    if(p === 'granted') return true;
+    p = await handle.requestPermission(opts);
+    return p === 'granted';
+  } catch(e){ console.warn('[verifyPerm]', e); return false; }
+}
+
+async function _getRootHandle(){
+  const h = await _idbGet(_IDB_KEY_ROOT);
+  if(!h) return null;
+  const ok = await _verifyRootPermission(h);
+  if(!ok) return null;
+  return h;
+}
+
+async function pwRegisterRoot(){
+  if(!window.showDirectoryPicker){
+    showToast('이 브라우저는 폴더 선택을 지원하지 않아요 (Chrome/Edge 사용)', 'error');
+    return null;
+  }
+  showToast('OneDrive - GS칼텍스 예울마루 폴더를 선택해주세요','info');
+  try {
+    const handle = await window.showDirectoryPicker({mode:'read'});
+    if(!handle){ return null; }
+    if(handle.name !== _ONEDRIVE_ROOT_NAME){
+      showToast('잘못 선택했어요: ' + handle.name + ' / 정확히 "' + _ONEDRIVE_ROOT_NAME + '" 폴더를 선택해야 합니다','error');
+      return null;
+    }
+    const ok = await _verifyRootPermission(handle);
+    if(!ok){
+      showToast('권한 거부됨. OneDrive 폴더 접근 권한이 필요합니다','error');
+      return null;
+    }
+    await _idbSet(_IDB_KEY_ROOT, handle);
+    showToast('등록 완료: ' + _ONEDRIVE_ROOT_NAME + ' (다음부턴 자동 사용)','info');
+    console.log('[pwRegisterRoot] OK', handle);
+    return handle;
+  } catch(err){
+    if(err.name !== 'AbortError'){
+      console.error('[pwRegisterRoot]', err);
+      showToast('등록 실패: ' + err.message, 'error');
+    }
+    return null;
+  }
+}
+
+async function pwClearRoot(){
+  if(!confirm('OneDrive root 등록을 초기화할까요? 다음 폴더 선택 시 재등록이 필요해요.')) return;
+  await _idbDel(_IDB_KEY_ROOT);
+  showToast('OneDrive root 등록 초기화됨','info');
+}
+
 async function pwPickFolder(idx){
   if(!window.showDirectoryPicker){
-    showToast('이 브라우저는 폴더 선택을 지원하지 않아요 (Chrome/Edge에서 사용 가능)','error');
+    showToast('이 브라우저는 폴더 선택을 지원하지 않아요 (Chrome/Edge 사용)','error');
     return;
   }
+  // 1. root handle 확인
+  let rootHandle = await _getRootHandle();
+  if(!rootHandle){
+    showToast('처음 한 번 OneDrive root 폴더를 등록해야 해요','info');
+    rootHandle = await pwRegisterRoot();
+    if(!rootHandle) return;
+  }
+  // 2. 자식 폴더 선택 (root 기준)
   try {
-    const handle = await window.showDirectoryPicker();
-    const folderName = handle.name || '';
-    // 매 폴더 선택 시 prefix + folderName 덮어쓰기 (append 모드 폐기)
-    // 사용자 의도: 폴더 선택할 때마다 초기화 후 새로 시작 (이전 선택 영향 없음)
-    const _ONEDRIVE_PREFIX = 'Onedrive - GS칼텍스 예울마루\\예술사업팀 - 자료 공유\\';
-    const newPath = _ONEDRIVE_PREFIX + folderName;
+    const childHandle = await window.showDirectoryPicker({startIn: rootHandle, mode:'read'});
+    if(!childHandle) return;
+    // 3. resolve로 상대 경로 계산
+    const relative = await rootHandle.resolve(childHandle);
+    if(!relative){
+      showToast('OneDrive 안 폴더가 아닙니다. OneDrive - GS칼텍스 예울마루 폴더 안에서만 선택 가능','error');
+      console.warn('[pwPickFolder] resolve null', {root: rootHandle.name, child: childHandle.name});
+      return;
+    }
+    // 4. 최종 경로 조립
+    const newPath = _ONEDRIVE_ROOT_NAME + '\\' + relative.join('\\');
     if(!_pwData.folders) _pwData.folders = [''];
     _pwData.folders[idx] = newPath;
     const input = document.getElementById('pw-folder-'+idx);
     if(input){
       input.value = newPath;
-      // 끝으로 자동 스크롤 — 마지막 폴더명 보이게
-      setTimeout(function(){
-        try{ input.scrollLeft = input.scrollWidth; }catch(_e){}
-      }, 30);
-      input.style.background='#F0F8E0';
-      setTimeout(function(){input.style.background='#F8F7FC';},800);
+      setTimeout(function(){ try{ input.scrollLeft = input.scrollWidth; }catch(_e){} }, 30);
+      input.style.background = '#F0F8E0';
+      setTimeout(function(){ input.style.background = '#F8F7FC'; }, 800);
     }
-    // 디버그 로그
-    try{ console.log('[pwPickFolder] OVERWRITE mode', {idx: idx, folderName: folderName, newPath: newPath, _pwData_folders: _pwData.folders.slice()}); }catch(_e){}
-    // 안내 toast
-    if(typeof showToast === 'function'){
-      showToast('선택됨: ' + folderName, 'info');
-    }
+    try{ console.log('[pwPickFolder] OK', {idx, childName: childHandle.name, relative, newPath, _pwData_folders: _pwData.folders.slice()}); }catch(_e){}
+    showToast('선택됨: ' + childHandle.name,'info');
   } catch(err){
     if(err.name !== 'AbortError'){
-      console.error('Folder pick error:', err);
+      console.error('[pwPickFolder]', err);
+      showToast('폴더 선택 실패: ' + err.message,'error');
     }
   }
 }
