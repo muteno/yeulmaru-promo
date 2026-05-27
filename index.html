@@ -7968,40 +7968,57 @@ function onPerfContextMenu(event, target){
 
 // === 프로그램 조회 모달 (콘텐츠 조회 디자인 계승, no/담당자/줄임명 제외) ===
 function openProgramView(perfName){
-  // PERFS(공연) / openExh(전시) / _programsCache(admin raw) 순으로 매칭
+  // PERFS에서 매칭 (공연/전시 모두 PERFS에 포함). t 필드로 구분
   const perfObj = (PERFS||[]).find(function(x){return x.f===perfName;});
-  const exhObj = (typeof openExh!=='undefined'&&openExh)?openExh.find(function(x){return x.name===perfName;}):null;
+  // _programsCache는 admin이 프로그램 관리 페이지 열어야만 채워짐 (user는 빈 배열)
   const p = (typeof _programsCache!=='undefined'&&_programsCache)?_programsCache.find(function(x){return (x['풀네임']||'')===perfName;}):null;
-  if(!perfObj && !exhObj && !p){
+  if(!perfObj && !p){
     showToast('프로그램 정보를 찾을 수 없어요','error');
     return;
   }
-  const fields = [];
-  // 장르/구분
-  if(p && (p['콘텐츠구분']||p['콘텐츠 구분'])) fields.push({label:'장르/구분', value:p['콘텐츠구분']||p['콘텐츠 구분']});
-  else if(perfObj) fields.push({label:'장르/구분', value:'공연'});
-  else if(exhObj) fields.push({label:'장르/구분', value:'전시'});
-  // 프로그램명
-  fields.push({label:'프로그램명', value:perfName, bold:true});
-  // 날짜/장소 — _programsCache 우선, 없으면 PERFS/openExh
-  if(p){
-    if(p['판매시작일']) fields.push({label:'판매 시작', value:excelDateDisplay(p['판매시작일'])});
-    if(p['판매종료일']) fields.push({label:'판매 종료', value:excelDateDisplay(p['판매종료일'])});
-    if(p['공연일']) fields.push({label:'공연 시작', value:excelDateDisplay(p['공연일'])});
-    if(p['공연종료일']) fields.push({label:'공연 종료', value:excelDateDisplay(p['공연종료일'])});
-    if(p['상태']) fields.push({label:'상태', value:p['상태']});
-    if(p['장소']) fields.push({label:'장소', value:p['장소']});
-  } else if(perfObj){
-    if(perfObj.ss) fields.push({label:'판매 시작', value:perfObj.ss});
-    if(perfObj.se) fields.push({label:'판매 종료', value:perfObj.se});
-    if(perfObj.s) fields.push({label:'공연 시작', value:perfObj.s});
-    if(perfObj.e) fields.push({label:'공연 종료', value:perfObj.e});
-    if(perfObj.l) fields.push({label:'장소', value:perfObj.l});
-  } else if(exhObj){
-    if(exhObj.l || exhObj.venue) fields.push({label:'장소', value:exhObj.l||exhObj.venue});
-    if(exhObj.s || exhObj.start) fields.push({label:'시작', value:exhObj.s||exhObj.start});
-    if(exhObj.e || exhObj.end) fields.push({label:'종료', value:exhObj.e||exhObj.end});
+  // 콘텐츠 구분 (t 기반)
+  let catLabel = '공연';
+  if(perfObj){
+    if(perfObj.t==='e') catLabel = '전시';
+    else if(perfObj.t==='a') catLabel = '아카데미';
+    else if(perfObj.t==='r') catLabel = '기타';
   }
+  if(p && (p['콘텐츠구분']||p['콘텐츠 구분'])) catLabel = p['콘텐츠구분']||p['콘텐츠 구분'];
+  // 기간 포맷 — 시작 + 종료를 한 줄로 'YYYY-MM-DD ~ YYYY-MM-DD'
+  function _fmtRange(s, e){
+    if(!s && !e) return '';
+    if(s && e && s===e) return s;
+    if(s && e) return s + ' ~ ' + e;
+    return s || e || '';
+  }
+  const fields = [];
+  fields.push({label:'구분', value:catLabel});
+  fields.push({label:'프로그램', value:perfName, bold:true});
+  // 날짜/장소 데이터 — _programsCache 우선, 없으면 PERFS
+  let salesRange = '';
+  let mainRange = '';
+  let venue = '';
+  if(p){
+    salesRange = _fmtRange(
+      p['판매시작일'] ? excelDateDisplay(p['판매시작일']) : '',
+      p['판매종료일'] ? excelDateDisplay(p['판매종료일']) : ''
+    );
+    mainRange = _fmtRange(
+      p['공연일'] ? excelDateDisplay(p['공연일']) : '',
+      p['공연종료일'] ? excelDateDisplay(p['공연종료일']) : ''
+    );
+    venue = p['장소']||'';
+  } else if(perfObj){
+    salesRange = _fmtRange(perfObj.ss||'', perfObj.se||'');
+    mainRange = _fmtRange(perfObj.s||'', perfObj.e||'');
+    venue = perfObj.l||'';
+  }
+  if(salesRange) fields.push({label:'판매 기간', value:salesRange});
+  // 전시는 '전시 기간', 그 외는 '공연 기간'
+  const mainLabel = (catLabel==='전시') ? '전시 기간' : (catLabel==='아카데미') ? '운영 기간' : '공연 기간';
+  if(mainRange) fields.push({label:mainLabel, value:mainRange});
+  if(venue) fields.push({label:'장소', value:venue});
+  if(p && p['상태']) fields.push({label:'상태', value:p['상태']});
   let bodyHtml = '<div class="mv-section">📊 프로그램 개요</div>';
   fields.forEach(function(f){
     if(!f.value) return;
