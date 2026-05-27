@@ -4219,6 +4219,9 @@ function onPwProgChange(input){
 }
 function onPwPlat1Change(){
   const v=document.getElementById('pw-plat1').value;
+  // 카카오톡 hint 토글 (user만)
+  const _kh=document.getElementById('pw-kakao-hint');
+  if(_kh) _kh.style.display=(v==='카카오톡' && userRole!=='admin')?'':'none';
   if(_pwData.plat1!==v){
     // 플랫폼1 바뀌면 하위 선택값 모두 리셋
     _pwData.plat2='';
@@ -4421,20 +4424,37 @@ async function submitPromoRequest(){
   const chk=canApplyOnDateTime(_pwData.date,_pwData.time);
   if(!chk.ok){showToast('신청 불가: '+chk.reason,'error');return;}
   // 카카오톡 / 문자 — 같은 날짜에 다른 사람 신청 있으면 차단
+  // 카카오톡 / 문자 → 다른 신청과 충돌 검사 (관리자 제외, user만)
+  // 카카오: 같은 날 + 전날(D-1)도 검사 (누구든 1건만)
+  // 문자: 같은 날 + 다른 사람과의 충돌만
   const lockedPlats=['카카오톡','문자'];
-  if(lockedPlats.indexOf(_pwData.plat1)>=0){
-    const sameDate=(records||[]).filter(function(r){
+  const _isKakao=_pwData.plat1==='카카오톡';
+  if(lockedPlats.indexOf(_pwData.plat1)>=0 && userRole!=='admin'){
+    const _checkDates=[_pwData.date];
+    if(_isKakao){
+      const _d=new Date(_pwData.date+'T00:00:00');
+      _d.setDate(_d.getDate()-1);
+      _checkDates.push(_d.getFullYear()+'-'+String(_d.getMonth()+1).padStart(2,'0')+'-'+String(_d.getDate()).padStart(2,'0'));
+    }
+    const _matched=(records||[]).filter(function(r){
       const y=r['연도'],m=String(r['월']||'').padStart(2,'0'),d=String(r['일']||'').padStart(2,'0');
-      return (y+'-'+m+'-'+d)===_pwData.date;
+      return _checkDates.indexOf(y+'-'+m+'-'+d)>=0;
     });
-    const conflict=sameDate.find(function(r){
+    const conflict=_matched.find(function(r){
       const p1=r['플랫폼 1']||'';
       const status=r['진행 상태']||'';
-      const isOther=(r['게시 담당자']||'')!==_pwData.applicant;
-      return p1===_pwData.plat1&&isOther&&status!=='취소';
+      if(p1!==_pwData.plat1||status==='취소') return false;
+      if(_isKakao) return true;
+      return (r['게시 담당자']||'')!==_pwData.applicant;
     });
     if(conflict){
-      showToast('이미 같은 날 '+_pwData.plat1+' 신청이 있어 신청할 수 없어요. ('+(conflict['게시 담당자']||'다른 사용자')+')','error');
+      const yy=conflict['연도'],mm=String(conflict['월']||'').padStart(2,'0'),dd=String(conflict['일']||'').padStart(2,'0');
+      const _cDate=mm+'/'+dd;
+      const _sameDay=(yy+'-'+mm+'-'+dd)===_pwData.date;
+      const _msg=_sameDay
+        ? '같은 날('+_cDate+') '+_pwData.plat1+' 신청이 이미 있어요. ('+(conflict['게시 담당자']||'다른 담당자')+')'
+        : '전날('+_cDate+') 카카오톡 신청이 있어 다음날엔 등록할 수 없어요. ('+(conflict['게시 담당자']||'다른 담당자')+')';
+      showToast(_msg,'error');
       return;
     }
   }
@@ -4702,6 +4722,9 @@ function renderPwSubPlat(body,next){
   html+='<select id="pw-plat1" onchange="onPwPlat1Change()" style="width:100%;padding:10px 14px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:12px;font-size:13px;outline:none;box-sizing:border-box;font-family:inherit"><option value="">선택</option>';
   plat1s.forEach(function(p){html+='<option value="'+escapeHtml(p)+'"'+(_pwData.plat1===p?' selected':'')+'>'+escapeHtml(p)+'</option>';});
   html+='</select>';
+  // 카카오톡 선택 시 안내 (user만, admin은 자유)
+  const _khDisp=(_pwData.plat1==='카카오톡' && userRole!=='admin')?'':'none';
+  html+='<div id="pw-kakao-hint" style="display:'+_khDisp+';font-size:11px;color:var(--peach-text);background:rgba(216,132,85,0.08);border-left:3px solid var(--peach);padding:10px 12px;border-radius:6px;margin-top:10px;line-height:1.5">📢 <b>카카오톡 안내</b><br>같은 날 또는 전날에 카카오톡 신청이 있으면 등록할 수 없어요. (관리자는 자유)</div>';
   html+='<div id="pw-plat2-wrap" style="margin-top:14px">'+buildPwPlat2Html()+'</div>';
   // "기타" 선택 시 자유 입력
   const otherDisp=_pwData.plat1==='기타'?'':'none';
