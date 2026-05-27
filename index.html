@@ -7925,27 +7925,33 @@ function onPerfContextMenu(event, target){
   event.preventDefault();
   event.stopPropagation();
   closeCellContextMenu();
-  // target.dataset.perfName에서 원본 이름 (HTML attribute는 자동 unescape됨, 꺽쇠/따옴표 무관)
   const perfName = (target && target.dataset) ? target.dataset.perfName : '';
   if(!perfName) return;
-  // PERFS(공연) 또는 openExh(전시)에서 매칭
   const perf=(PERFS||[]).find(function(p){return p.f===perfName;});
   const exhFromList=(typeof openExh!=='undefined'&&openExh)?openExh.find(function(x){return x.name===perfName;}):null;
   const matched = perf || exhFromList;
   if(!matched) return;
-  // 상세페이지 URL: 공연은 perf.u, 전시는 exh.u
   const detailUrl = perf ? perf.u : (exhFromList ? exhFromList.u : '');
   const hasUrl = !!detailUrl;
   let menuHtml = '';
-  menuHtml += '<div class="ccm-item" onclick="closeCellContextMenu();openProgramView('+JSON.stringify(perfName)+')"><span class="emo">👁️</span>조회</div>';
-  menuHtml += '<div class="ccm-item" onclick="closeCellContextMenu();openPromoBoardForProgram('+JSON.stringify(perfName)+')"><span class="emo">📋</span>홍보 현황</div>';
+  menuHtml += '<div class="ccm-item" data-action="view"><span class="emo">\ud83d\udd0d</span>조회</div>';
+  menuHtml += '<div class="ccm-item" data-action="promo"><span class="emo">\ud83d\udce3</span>홍보 현황</div>';
   if(hasUrl){
-    menuHtml += '<div class="ccm-item" onclick="closeCellContextMenu();openPerfUrl('+JSON.stringify(detailUrl)+','+JSON.stringify(perfName)+')"><span class="emo">🔗</span>상세페이지 이동</div>';
+    menuHtml += '<div class="ccm-item" data-action="url"><span class="emo">\ud83c\udf10</span>상세페이지 이동</div>';
   }
   const menu = document.createElement('div');
   menu.id = 'cell-context-menu';
   menu.innerHTML = menuHtml;
   document.body.appendChild(menu);
+  menu.addEventListener('click', function(e){
+    const item = e.target.closest('.ccm-item');
+    if(!item) return;
+    const action = item.dataset.action;
+    closeCellContextMenu();
+    if(action === 'view') openProgramView(perfName);
+    else if(action === 'promo') openPromoBoardForProgram(perfName);
+    else if(action === 'url' && detailUrl) openPerfUrl(detailUrl, perfName);
+  });
   const rect = menu.getBoundingClientRect();
   const mx = Math.min(event.clientX, window.innerWidth - rect.width - 8);
   const my = Math.min(event.clientY, window.innerHeight - rect.height - 8);
