@@ -985,7 +985,7 @@ function renderSpecialMarquee(d,nm,past){
     if(it.label)tipParts.push(it.label);
     const ctxAttr=' oncontextmenu="event.stopPropagation();event.preventDefault();onSpContextMenu(event,'+it._rowIndex+');return false;"';
     // 좌클릭: user/admin 동일 — 일정 확인 및 관리 풀화면 열기
-    const clickAttr=' onclick="event.stopPropagation();openPromoBoard();"';
+    const clickAttr=' onclick="event.stopPropagation();openSpecialView('+it._rowIndex+');"';
     const dragAttr=userRole==='admin'?' draggable="true" ondragstart="onSpDragStart(event,'+it._rowIndex+',\''+key+'\')" ondragend="onSpDragEnd(event)"':'';
     const cursorStyle=userRole==='admin'?'cursor:grab':'';
     inner+='<div class="sp-item"'+ctxAttr+clickAttr+dragAttr+' data-sp-row="'+it._rowIndex+'" style="'+cursorStyle+'" title="'+escapeHtml(tipParts.join(' · '))+(userRole==='admin'?' (우클릭: 변경/삭제 · 드래그: 이동)':'')+'">'+
@@ -2195,6 +2195,63 @@ async function cancelPromoRequest(rowIndex){
 
 // === 특별 일정 (교육/휴가/출장/회의) 등록 ===
 let _editingSpecial=null;
+// === 담당자 일정(특수일정) 상세 보기 모달 (콘텐츠 조회와 동일 디자인, user/admin 공통) ===
+function openSpecialView(rowIndex){
+  const it = (PROMO_SPECIAL||[]).find(function(s){return s._rowIndex===rowIndex;});
+  if(!it){ showToast('일정 정보를 찾을 수 없어요','error'); return; }
+  const startRaw = String(it.start||'').trim();
+  const endRaw = String(it.end||'').trim();
+  let dateStr = startRaw;
+  let timeStr = '';
+  if(startRaw.indexOf(' ')>-1){
+    dateStr = startRaw.split(' ')[0];
+    timeStr = startRaw.split(' ')[1] || '';
+  }
+  let endTimeStr = '';
+  if(endRaw && endRaw !== startRaw){
+    if(endRaw.indexOf(' ')>-1){
+      const endDate = endRaw.split(' ')[0];
+      const endTime = endRaw.split(' ')[1] || '';
+      if(endDate === dateStr){ endTimeStr = endTime; }
+      else { dateStr = dateStr + ' ~ ' + endDate; endTimeStr = endTime; }
+    } else if(endRaw !== dateStr){
+      dateStr = dateStr + ' ~ ' + endRaw;
+    }
+  }
+  const timeFull = timeStr ? (endTimeStr ? (timeStr + ' ~ ' + endTimeStr) : timeStr) : '';
+  const typeStr = it.type || '-';
+  const personStr = it.person || '-';
+  const labelStr = it.label || '';
+  const html = '<div class="modal-bg show" onclick="if(event.target===this)closeSpecialView()" style="z-index:9100">'
+    +'<div class="modal" style="max-width:480px;padding:0;position:relative;text-align:left">'
+    +'<div style="padding:24px 24px 0;display:flex;align-items:center;justify-content:space-between">'
+    +'<h3 style="margin:0;font-size:16px;font-weight:700">담당자 일정</h3>'
+    +'<button onclick="closeSpecialView()" style="background:rgba(216,132,85,0.15);border:none;width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:16px;color:var(--peach);font-family:inherit">×</button>'
+    +'</div>'
+    +'<div style="padding:16px 24px 24px">'
+    +'<div class="mv-section">📅 일정 현황</div>'
+    +'<div class="mv-row"><span class="lbl">날짜</span><span class="val">'+escapeHtml(dateStr||'-')+'</span></div>'
+    +(timeFull?'<div class="mv-row"><span class="lbl">시간</span><span class="val">'+escapeHtml(timeFull)+'</span></div>':'')
+    +'<div class="mv-section">📌 상세</div>'
+    +'<div class="mv-row"><span class="lbl">구분</span><span class="val" style="font-weight:600">'+escapeHtml(typeStr)+'</span></div>'
+    +'<div class="mv-row"><span class="lbl">담당자</span><span class="val" style="font-weight:600;color:var(--accent)">'+escapeHtml(personStr)+'</span></div>'
+    +(labelStr?'<div class="mv-row"><span class="lbl">내용</span><span class="val">'+escapeHtml(labelStr)+'</span></div>':'')
+    +'</div>'
+    +'</div>'
+    +'</div>';
+  let el = document.getElementById('special-view-modal');
+  if(!el){
+    el = document.createElement('div');
+    el.id = 'special-view-modal';
+    document.body.appendChild(el);
+  }
+  el.innerHTML = html;
+}
+function closeSpecialView(){
+  const el = document.getElementById('special-view-modal');
+  if(el) el.innerHTML = '';
+}
+
 function openSpecialEntry(key, editRowIndex){
   if(userRole!=='admin'){showToast('관리자만 등록할 수 있어요','error');return;}
   // 변경 모드: editRowIndex로 PROMO_SPECIAL 찾기
