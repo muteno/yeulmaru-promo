@@ -2258,7 +2258,7 @@ function closeSpecialView(){
 }
 
 // === 전역 ESC 핸들러 — 활성 팝업/모달 우선순위 닫기 ===
-// === CapsLock 알림 (비밀번호 input에 자동 적용) ===
+// === CapsLock 알림 (비밀번호 input 아래 inline 표시) ===
 (function(){
   if(window._capsLockInstalled) return;
   window._capsLockInstalled = true;
@@ -2268,17 +2268,17 @@ function closeSpecialView(){
     if(warn) return warn;
     warn = document.createElement('div');
     warn.id = '_caps-lock-warn';
-    warn.style.cssText = 'display:none;position:fixed;background:linear-gradient(135deg,#FF6B6B 0%,#EF4444 100%);color:#fff;padding:6px 12px;border-radius:10px;font-size:11.5px;font-weight:600;letter-spacing:0.3px;box-shadow:0 8px 24px rgba(239,68,68,0.28),0 2px 6px rgba(0,0,0,0.08);pointer-events:none;z-index:99999;white-space:nowrap;font-family:inherit;line-height:1.3';
-    warn.innerHTML = '\ud83d\udd12 CapsLock 켜져있어요';
+    warn.style.cssText = 'display:none;position:fixed;background:transparent;color:#666;padding:0;font-size:11px;font-weight:500;letter-spacing:0.2px;pointer-events:none;z-index:99999;white-space:nowrap;font-family:inherit;line-height:1.3';
+    warn.innerHTML = '\ud83d\udd12 [CapsLock]이 켜져있습니다.';
     document.body.appendChild(warn);
     return warn;
   }
   function showWarn(inputEl){
     const w = ensureWarn();
     const rect = inputEl.getBoundingClientRect();
-    w.style.left = (rect.left + rect.width/2) + 'px';
-    w.style.top = (rect.top - 8) + 'px';
-    w.style.transform = 'translate(-50%, -100%)';
+    w.style.left = rect.left + 'px';
+    w.style.top = (rect.bottom + 6) + 'px';
+    w.style.transform = 'none';
     w.style.display = '';
   }
   function hideWarn(){
@@ -2305,7 +2305,6 @@ function closeSpecialView(){
       currentInput = null;
     }
   }, true);
-  // 스크롤 시 위치 재계산
   window.addEventListener('scroll', function(){
     if(currentInput && warn && warn.style.display !== 'none'){
       showWarn(currentInput);
@@ -4786,19 +4785,13 @@ async function pwPickFolder(idx){
   try {
     const handle = await window.showDirectoryPicker();
     const folderName = handle.name || '';
-    // input.value를 source of truth — pwCollectFoldersFromDOM 우회 (Brave 등에서 sync 실패 회피)
-    const input = document.getElementById('pw-folder-'+idx);
-    const currentValue = (input ? input.value : ((_pwData.folders && _pwData.folders[idx]) || '')).trim();
+    // 큐 방식: 매 선택 시 prefix + 선택폴더명으로 덮어쓰기
+    // (이전 값 무시 — 폴더 지정마다 초기화 후 새로 넣음)
     const _ONEDRIVE_PREFIX = 'Onedrive - GS칼텍스 예울마루\\예술사업팀 - 자료 공유\\';
-    let newPath;
-    if(currentValue === ''){
-      newPath = _ONEDRIVE_PREFIX + folderName;
-    } else {
-      const sep = (currentValue.endsWith('\\') || currentValue.endsWith('/')) ? '' : '\\';
-      newPath = currentValue + sep + folderName;
-    }
+    const newPath = _ONEDRIVE_PREFIX + folderName;
     if(!_pwData.folders) _pwData.folders = [''];
     _pwData.folders[idx] = newPath;
+    const input = document.getElementById('pw-folder-'+idx);
     if(input){
       input.value = newPath;
       input.style.background='#F0F8E0';
@@ -8036,11 +8029,20 @@ function openProgramView(perfName){
   }
   if(p && (p['콘텐츠구분']||p['콘텐츠 구분'])) catLabel = p['콘텐츠구분']||p['콘텐츠 구분'];
   // 기간 포맷 — 시작 + 종료를 한 줄로 'YYYY-MM-DD ~ YYYY-MM-DD'
-  function _fmtRange(s, e){
-    if(!s && !e) return '';
-    if(s && e && s===e) return s;
-    if(s && e) return s + ' ~ ' + e;
-    return s || e || '';
+  function _fmtRange(s, e, withDay){
+    function _addDay(dateStr){
+      if(!withDay || !dateStr) return dateStr;
+      const d = new Date(dateStr);
+      if(isNaN(d.getTime())) return dateStr;
+      const days = ['일','월','화','수','목','금','토'];
+      return dateStr + '(' + days[d.getDay()] + ')';
+    }
+    const sFmt = _addDay(s);
+    const eFmt = _addDay(e);
+    if(!sFmt && !eFmt) return '';
+    if(sFmt && eFmt && s===e) return sFmt;
+    if(sFmt && eFmt) return sFmt + ' ~ ' + eFmt;
+    return sFmt || eFmt || '';
   }
   const fields = [];
   fields.push({label:'구분', value:catLabel});
@@ -8056,12 +8058,13 @@ function openProgramView(perfName){
     );
     mainRange = _fmtRange(
       p['공연일'] ? excelDateDisplay(p['공연일']) : '',
-      p['공연종료일'] ? excelDateDisplay(p['공연종료일']) : ''
+      p['공연종료일'] ? excelDateDisplay(p['공연종료일']) : '',
+      true
     );
     venue = p['장소']||'';
   } else if(perfObj){
     salesRange = _fmtRange(perfObj.ss||'', perfObj.se||'');
-    mainRange = _fmtRange(perfObj.s||'', perfObj.e||'');
+    mainRange = _fmtRange(perfObj.s||'', perfObj.e||'', true);
     venue = perfObj.l||'';
   }
   if(salesRange) fields.push({label:'판매 기간', value:salesRange});
