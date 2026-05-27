@@ -4962,37 +4962,27 @@ async function pwPickFolder(idx){
   try {
     const handle = await window.showDirectoryPicker();
     const folderName = handle.name || '';
-    // _pwData.folders[idx]를 source of truth
-    if(!_pwData.folders) _pwData.folders = [''];
-    const current = (_pwData.folders[idx] || '').trim();
+    // 매 폴더 선택 시 prefix + folderName 덮어쓰기 (append 모드 폐기)
+    // 사용자 의도: 폴더 선택할 때마다 초기화 후 새로 시작 (이전 선택 영향 없음)
     const _ONEDRIVE_PREFIX = 'Onedrive - GS칼텍스 예울마루\\예술사업팀 - 자료 공유\\';
-    let newPath;
-    if(current === ''){
-      newPath = _ONEDRIVE_PREFIX + folderName;
-    } else {
-      const sep = (current.endsWith('\\') || current.endsWith('/')) ? '' : '\\';
-      newPath = current + sep + folderName;
-    }
+    const newPath = _ONEDRIVE_PREFIX + folderName;
+    if(!_pwData.folders) _pwData.folders = [''];
     _pwData.folders[idx] = newPath;
     const input = document.getElementById('pw-folder-'+idx);
     if(input){
       input.value = newPath;
-      // ※ dispatchEvent('input') 제거 — Brave에서 input.value setter 부분 실패 시 stale DOM value가 pwFolderInputChange를 통해 _pwData 덮어쓰는 역설 발생 가능
-      // _pwData는 이미 위에서 newPath로 정확히 set됨. 추가 sync 불필요
       // 끝으로 자동 스크롤 — 마지막 폴더명 보이게
       setTimeout(function(){
         try{ input.scrollLeft = input.scrollWidth; }catch(_e){}
       }, 30);
-      // 디버그: F12 콘솔에서 _pwData 상태 확인 가능
-      try{ console.log('[pwPickFolder] idx='+idx+' folderName='+folderName+' newPath='+newPath+' _pwData.folders=', _pwData.folders.slice()); }catch(_e){}
       input.style.background='#F0F8E0';
       setTimeout(function(){input.style.background='#F8F7FC';},800);
     }
-    // 디버그 로그 — F12 콘솔에서 _pwData.folders 추적 가능
-    try{ console.log('[pwPickFolder]', {idx: idx, folderName: folderName, newPath: newPath, _pwData_folders: _pwData.folders.slice()}); }catch(_e){}
-    // 마지막 추가 폴더명 안내 표시 (1.5초)
+    // 디버그 로그
+    try{ console.log('[pwPickFolder] OVERWRITE mode', {idx: idx, folderName: folderName, newPath: newPath, _pwData_folders: _pwData.folders.slice()}); }catch(_e){}
+    // 안내 toast
     if(typeof showToast === 'function'){
-      showToast('추가됨: ' + folderName, 'info');
+      showToast('선택됨: ' + folderName, 'info');
     }
   } catch(err){
     if(err.name !== 'AbortError'){
