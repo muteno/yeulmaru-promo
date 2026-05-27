@@ -4962,27 +4962,33 @@ async function pwPickFolder(idx){
   try {
     const handle = await window.showDirectoryPicker();
     const folderName = handle.name || '';
-    // _pwData.folders[idx]를 source of truth — input.value 무시 (Brave sync 실패 회피)
+    // _pwData.folders[idx]를 source of truth
     if(!_pwData.folders) _pwData.folders = [''];
     const current = (_pwData.folders[idx] || '').trim();
     const _ONEDRIVE_PREFIX = 'Onedrive - GS칼텍스 예울마루\\예술사업팀 - 자료 공유\\';
     let newPath;
     if(current === ''){
-      // 빈 _pwData → prefix + folder
       newPath = _ONEDRIVE_PREFIX + folderName;
     } else {
-      // append — current 끝에 \folderName 추가
       const sep = (current.endsWith('\\') || current.endsWith('/')) ? '' : '\\';
       newPath = current + sep + folderName;
     }
-    // _pwData 먼저 업데이트 (source of truth)
     _pwData.folders[idx] = newPath;
-    // input.value는 display 용도로만 동기화
     const input = document.getElementById('pw-folder-'+idx);
     if(input){
       input.value = newPath;
+      // 강제 input event 트리거 (Brave 등 sync 안전망)
+      try{ input.dispatchEvent(new Event('input', {bubbles: true})); }catch(_e){}
+      // 끝으로 자동 스크롤 — 마지막 폴더명 보이게
+      setTimeout(function(){
+        try{ input.scrollLeft = input.scrollWidth; }catch(_e){}
+      }, 30);
       input.style.background='#F0F8E0';
       setTimeout(function(){input.style.background='#F8F7FC';},800);
+    }
+    // 마지막 추가 폴더명 안내 표시 (1.5초)
+    if(typeof showToast === 'function'){
+      showToast('추가됨: ' + folderName, 'info');
     }
   } catch(err){
     if(err.name !== 'AbortError'){
