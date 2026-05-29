@@ -2034,6 +2034,8 @@ async function approvePromoFromBoard(rowIndex){
   if(!r){showToast('신청을 찾을 수 없어요','error');return;}
   const _st=r['진행 상태']||'';
   if(_st!=='신청 중'){showToast('신청 중 상태만 접수할 수 있어요','error');return;}
+  const _ca=canApprove(r,rowIndex);
+  if(!_ca.ok){showToast(_ca.reason,'error');return;}
   const title=r['콘텐츠 제목']||'(제목 없음)';
   const ok=await showConfirm('"'+title+'"\n\n이 신청을 접수(예정)할까요?');
   if(!ok)return;
@@ -4663,20 +4665,48 @@ function onPwProgChange(input){
   _pwData.programType=input.dataset.type;
 }
 // === 카카오톡 충돌 검사 헬퍼 (user만 사용) ===
-function _checkKakaoConflict(date){
-  if(!date || userRole==='admin') return null;
-  // 같은 날 + 전날(D-1) 검사
-  const _checkDates=[date];
-  const _d=new Date(date+'T00:00:00');
-  _d.setDate(_d.getDate()-1);
-  _checkDates.push(_d.getFullYear()+'-'+String(_d.getMonth()+1).padStart(2,'0')+'-'+String(_d.getDate()).padStart(2,'0'));
+function _checkKakaoConflict(date,opts){
+  opts=opts||{};
+  if(!date)return null;
+  if(userRole==='admin'&&!opts.force)return null;
+  const _fmt=function(dt){return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');};
+  const _cd=[date];
+  const _dm=new Date(date+'T00:00:00');_dm.setDate(_dm.getDate()-1);_cd.push(_fmt(_dm));
+  const _dp=new Date(date+'T00:00:00');_dp.setDate(_dp.getDate()+1);_cd.push(_fmt(_dp));
+  const _ex=opts.excludeRowIdx;
   const _matched=(records||[]).filter(function(r){
+    if(_ex&&r._rowIndex===_ex)return false;
     const y=r['연도'],m=String(r['월']||'').padStart(2,'0'),dd=String(r['일']||'').padStart(2,'0');
-    return _checkDates.indexOf(y+'-'+m+'-'+dd)>=0;
+    return _cd.indexOf(y+'-'+m+'-'+dd)>=0;
   });
   return _matched.find(function(r){
-    return (r['플랫폼 1']||'')==='카카오톡' && (r['진행 상태']||'')!=='취소';
-  }) || null;
+    const p1=r['플랫폼 1']||'',p2=r['플랫폼 2']||'';
+    return (p1==='카카오톡'||p2==='카카오톡')&&(r['진행 상태']||'')!=='취소';
+  })||null;
+}
+function _checkSmsConflict(dateKey,excludeRowIdx){
+  return (records||[]).find(function(r){
+    if(excludeRowIdx&&r._rowIndex===excludeRowIdx)return false;
+    const y=r['연도'],m=String(r['월']||'').padStart(2,'0'),dd=String(r['일']||'').padStart(2,'0');
+    if((y+'-'+m+'-'+dd)!==dateKey)return false;
+    const p1=r['플랫폼 1']||'',p2=r['플랫폼 2']||'';
+    return (/문자|SMS/i.test(p1)||/문자|SMS/i.test(p2))&&(r['진행 상태']||'')!=='취소';
+  })||null;
+}
+function canApprove(rec,excludeRowIdx){
+  const y=rec['연도'],m=String(rec['월']||'').padStart(2,'0'),d=String(rec['일']||'').padStart(2,'0');
+  const dateKey=y+'-'+m+'-'+d;
+  if(!y)return{ok:true};
+  const p1=rec['플랫폼 1']||'',p2=rec['플랫폼 2']||'';
+  if(p1==='카카오톡'||p2==='카카오톡'){
+    const c=_checkKakaoConflict(dateKey,{force:true,excludeRowIdx:excludeRowIdx});
+    if(c)return{ok:false,reason:'카카오톡은 2일 연속 발송이 불가해요 ('+Number(c['월'])+'/'+Number(c['일'])+' 충돌)'};
+  }
+  if(/문자|SMS/i.test(p1)||/문자|SMS/i.test(p2)){
+    const s=_checkSmsConflict(dateKey,excludeRowIdx);
+    if(s)return{ok:false,reason:'문자(SMS)는 같은 날 중복 발송이 불가해요'};
+  }
+  return{ok:true};
 }
 function _showKakaoConflictHint(conflict){
   const hint=document.getElementById('pw-kakao-hint');
