@@ -1296,7 +1296,7 @@ async function tryLogin(){
       password=pin;userRole=d.role||'user';
       sessionStorage.setItem('pw',pin);sessionStorage.setItem('role',userRole);
       // 슈퍼 admin / 공유 user — 개인 신원 없음, subAdminPin 제거
-      try{localStorage.removeItem('myUserDept');sessionStorage.removeItem('subAdminPin');}catch(e){}
+      try{sessionStorage.removeItem('myUserDept');sessionStorage.removeItem('subAdminPin');}catch(e){}
       document.getElementById('login').style.display='none';
       document.getElementById('app').style.display='';
       initApp();
@@ -1401,8 +1401,8 @@ async function tryLogin(){
       password='0510';
       userRole=sessRole;
       try{
-        localStorage.setItem('myApplicant',userName);
-        localStorage.setItem('myUserDept',userDept);
+        sessionStorage.setItem('myApplicant',userName);
+        sessionStorage.setItem('myUserDept',userDept);
       }catch(e){}
       document.getElementById('login').style.display='none';
       document.getElementById('app').style.display='';
@@ -1422,7 +1422,7 @@ async function tryLogin(){
   }
   } finally { _loggingIn = false; }
 }
-(function(){const s=sessionStorage.getItem('pw');if(s){password=s;userRole=sessionStorage.getItem('role')||'user';document.getElementById('login').style.display='none';document.getElementById('app').style.display='';initApp();}})();
+(function(){try{localStorage.removeItem('myApplicant');localStorage.removeItem('myUserDept');}catch(e){}const s=sessionStorage.getItem('pw');if(s){password=s;userRole=sessionStorage.getItem('role')||'user';document.getElementById('login').style.display='none';document.getElementById('app').style.display='';initApp();}})();
 
 async function api(method,path,body){
   const headers={'Content-Type':'application/json','X-App-Password':password};
@@ -1700,7 +1700,7 @@ async function initApp(){
   buildNav();startClock();updateRoleTag();
   // 슈퍼 admin (subAdminPin 없음)만 myApplicant 정리. 서브 admin은 본인 신원 유지.
   if(userRole==='admin' && !sessionStorage.getItem('subAdminPin')){
-    try{localStorage.removeItem('myApplicant');}catch(e){}
+    try{sessionStorage.removeItem('myApplicant');}catch(e){}
   }
   try{await loadPrograms();}catch(e){console.warn('[initApp loadPrograms]',e);}
   try{await loadAllMasters();}catch(e){console.warn('[initApp loadAllMasters]',e);}
@@ -2144,7 +2144,7 @@ async function completePromoRequest(rowIndex){
   if(!r){showToast('신청을 찾을 수 없어요','error');return;}
   // 권한 체크
   let myApplicant='';
-  try{myApplicant=localStorage.getItem('myApplicant')||'';}catch(e){}
+  try{myApplicant=sessionStorage.getItem('myApplicant')||'';}catch(e){}
   const isMine=_isMineRec(r,myApplicant);
   const isAdmin=userRole==='admin';
   if(!isMine&&!isAdmin){showToast('본인 또는 관리자만 완료 처리할 수 있어요','error');return;}
@@ -2190,7 +2190,7 @@ async function cancelPromoRequest(rowIndex){
   if(!r){showToast('신청을 찾을 수 없어요','error');return;}
   // 권한 체크
   let myApplicant='';
-  try{myApplicant=localStorage.getItem('myApplicant')||'';}catch(e){}
+  try{myApplicant=sessionStorage.getItem('myApplicant')||'';}catch(e){}
   const isMine=_isMineRec(r,myApplicant);
   const isAdmin=userRole==='admin';
   if(!isMine&&!isAdmin){showToast('본인 신청만 취소할 수 있어요','error');return;}
@@ -2341,7 +2341,7 @@ function _msgSave(msgs){
   try { localStorage.setItem('nomute_messages', JSON.stringify(msgs)); } catch(e){}
 }
 function _msgMyAppl(){
-  try { return localStorage.getItem('myApplicant') || ''; } catch(e){ return ''; }
+  try { return sessionStorage.getItem('myApplicant') || ''; } catch(e){ return ''; }
 }
 function pushMessage(opts){
   if(!opts || !opts.recipient) return;
@@ -3048,7 +3048,7 @@ async function saveSpecialEntry(){
   const now=new Date();
   const kstStr=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0')+' '+String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0')+':'+String(now.getSeconds()).padStart(2,'0');
   let author='admin';
-  try{author=localStorage.getItem('myApplicant')||'admin';}catch(e){}
+  try{author=sessionStorage.getItem('myApplicant')||'admin';}catch(e){}
   const isEdit=!!_editingSpecial;
   const editTarget=_editingSpecial;  // 닫기 전에 보존
   showOverlayLoad();
@@ -3530,7 +3530,7 @@ async function reapplyPromoRequest(rowIndex){
   if(!rec){showToast('신청을 찾을 수 없어요','error');return;}
   const _curSt=(rec['진행 상태']||'').toString();if(_curSt!=='취소' && _curSt!=='보류'){showToast('취소 또는 보류 상태에서만 재신청할 수 있어요','error');return;}
   // 권한 — 본인 또는 admin
-  let myAppl='';try{myAppl=localStorage.getItem('myApplicant')||'';}catch(e){}
+  let myAppl='';try{myAppl=sessionStorage.getItem('myApplicant')||'';}catch(e){}
   if(userRole!=='admin' && !_isMineRec(rec,myAppl)){
     showToast('본인 신청만 재신청할 수 있어요','error');return;
   }
@@ -3561,7 +3561,7 @@ async function cancelWithReason(rowIndex){
   if(!rec){showToast('신청을 찾을 수 없어요','error');return;}
   // 신청자=본인이면 사유 입력 모달 생략 — 단순 confirm만
   let _myApplForCancel='';
-  try{ _myApplForCancel = localStorage.getItem('myApplicant')||''; }catch(e){}
+  try{ _myApplForCancel = sessionStorage.getItem('myApplicant')||''; }catch(e){}
   if(!_myApplForCancel && typeof isSuperAdmin==='function' && isSuperAdmin()) _myApplForCancel='황세웅';
   const _recApplicant=(rec['신청자']||'').toString().trim();
   const _isSelfCancel=!!_myApplForCancel && _recApplicant===_myApplForCancel;
@@ -3644,7 +3644,7 @@ function renderPromoBoard(){
   const isAdmin=userRole==='admin';
   // user는 자기 신청만 (localStorage에 저장된 신청자 이름) — 위저드 제출 시 저장됨
   let myApplicant='';
-  try{myApplicant=localStorage.getItem('myApplicant')||'';}catch(e){}
+  try{myApplicant=sessionStorage.getItem('myApplicant')||'';}catch(e){}
   // 데이터 소스 — specialMode에 따라
   let rows;
   const _spMode=_promoFilter.specialMode||'hide';
@@ -3794,7 +3794,7 @@ function renderPromoBoard(){
   html+='<h3 style="margin:0;flex:1;text-align:left">일정 확인 및 관리';
   if(!isAdmin){
     let _meDept='';
-    try{_meDept=localStorage.getItem('myUserDept')||'';}catch(e){}
+    try{_meDept=sessionStorage.getItem('myUserDept')||'';}catch(e){}
     const _meName=myApplicant||'0000';
     const _meDeptShow=_meDept||'0000';
     html+='<span style="font-size:11px;color:var(--accent);font-weight:600;margin-left:8px">· '+escapeHtml(_meDeptShow)+', '+escapeHtml(_meName)+' 님</span>';
@@ -4238,7 +4238,7 @@ function openChangeWizard(rowIndex){
   if(!rec){showToast('신청을 찾을 수 없어요','error');return;}
   // 권한 체크
   if(userRole!=='admin'){
-    let myAppl='';try{myAppl=localStorage.getItem('myApplicant')||'';}catch(e){}
+    let myAppl='';try{myAppl=sessionStorage.getItem('myApplicant')||'';}catch(e){}
     const isMine=_isMineRec(rec,myAppl);
     const st=rec['진행 상태']||'';
     if(!isMine||(st!=='신청 중'&&st!=='예정')){
@@ -4977,7 +4977,7 @@ async function submitPromoRequest(){
     // 콘텐츠 내용 — 구조화 텍스트 (사람이 SharePoint 셀에서 직접 읽기 좋게)
     const content=buildPwContentText();
     // 신청자 — user 본인 식별 (localStorage.myApplicant 우선)
-    let _myAppl='';try{_myAppl=localStorage.getItem('myApplicant')||'';}catch(e){}
+    let _myAppl='';try{_myAppl=sessionStorage.getItem('myApplicant')||'';}catch(e){}
     // 신청자(S) 결정 로직 (통일):
     // - 일반 user: localStorage.myApplicant (로그인 시 PIN→userName으로 저장)
     // - 서브 admin: 동일 (admin 진입 시에도 myApplicant 유지됨)
@@ -7762,7 +7762,7 @@ function startClock(){
     const _wel = document.getElementById('welcome-msg');
     if(_wel){
       let _name = '';
-      try{ _name = localStorage.getItem('myApplicant') || ''; }catch(e){}
+      try{ _name = sessionStorage.getItem('myApplicant') || ''; }catch(e){}
       if(_name){
         _wel.innerHTML = '<b style="color:var(--accent);font-weight:700">'+_name.replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</b><span style="margin-left:4px">님</span>';
       } else {
@@ -8083,7 +8083,7 @@ function renderCal(){
         var _ctxAttr=' oncontextmenu="onEvContextMenu(event,'+(r._rowIndex)+',\''+key+'\')"';
         h+='<div class="ev'+(done?' done':'')+(td&&evPast?' ev-past':'')+(applying?' ev-applying':'')+'"'+(function(){
   // 호버 툴팁: 신청중 + 본인 record(모든 상태)에 표시
-  let _myAppl_v='';try{_myAppl_v=localStorage.getItem('myApplicant')||'';}catch(e){}
+  let _myAppl_v='';try{_myAppl_v=sessionStorage.getItem('myApplicant')||'';}catch(e){}
   const _isMine_v = _isMineRec(r, _myAppl_v);
   if(!applying && !_isMine_v) return '';
   let _tipMsg = (r['신청자']||r['게시 담당자']||'').replace(/"/g,'&quot;')+' 님이 ';
@@ -8303,7 +8303,7 @@ function onEvContextMenu(event,rowIndex,dateKey){
         '<div class="ccm-item" onclick="closeCellContextMenu();deleteRec('+rowIndex+',\''+dateKey+'\')"><span class="emo">🗑️</span>삭제</div>';
     }
   }else{
-    let myAppl='';try{myAppl=localStorage.getItem('myApplicant')||'';}catch(e){}
+    let myAppl='';try{myAppl=sessionStorage.getItem('myApplicant')||'';}catch(e){}
     const isMine=_isMineRec(rec,myAppl);
     const status=rec['진행 상태']||'';
     if(!isMine){
@@ -8408,7 +8408,7 @@ function openPanel(dateObj,recs){
     // 삭제 버튼: admin이거나, 본인이 신청한 "신청 중" 건
     var _showDel=userRole==='admin';
     if(!_showDel){
-      var _myAppl='';try{_myAppl=localStorage.getItem('myApplicant')||'';}catch(e){}
+      var _myAppl='';try{_myAppl=sessionStorage.getItem('myApplicant')||'';}catch(e){}
       if(_myAppl&&(r['게시 담당자']||'')===_myAppl&&st==='신청 중')_showDel=true;
     }
     if(_showDel)h+='<button class="p-del" onclick="event.stopPropagation();deleteRec('+ri+',\''+dkey+'\')" title="'+(userRole==='admin'?'삭제':'신청 취소')+'">✕</button>';
@@ -8989,7 +8989,7 @@ function editRec(rowIndex,dateKey,ev,forceReadOnly){
   if(!rec)return;
   // === user 본인 신청 중·예정 → 변경 위저드 (step별 선택) ===
   if(userRole!=='admin'&&!forceReadOnly){
-    var myAppl='';try{myAppl=localStorage.getItem('myApplicant')||'';}catch(e){}
+    var myAppl='';try{myAppl=sessionStorage.getItem('myApplicant')||'';}catch(e){}
     var isMine=_isMineRec(rec,myAppl);
     var status=rec['진행 상태']||'';
     if(isMine&&(status==='신청 중'||status==='예정')){
@@ -9345,7 +9345,7 @@ async function deleteRec(rowIndex,dateKey){
   // 사용자: 본인이 신청한 "신청 중" 건은 본인이 삭제(취소) 가능
   if(userRole!=='admin'){
     if(!rec){showToast('대상을 찾을 수 없어요','error');return;}
-    let myAppl='';try{myAppl=localStorage.getItem('myApplicant')||'';}catch(e){}
+    let myAppl='';try{myAppl=sessionStorage.getItem('myApplicant')||'';}catch(e){}
     const isMine=_isMineRec(rec,myAppl);
     const status=rec['진행 상태']||'';
     if(!isMine){showToast('본인이 신청한 건만 취소할 수 있어요','error');return;}
