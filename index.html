@@ -1841,6 +1841,8 @@ async function initApp(){
   try{await loadApplySettings();}catch(e){console.warn('[initApp loadApplySettings]',e);}
   updatePerfOpen();
   loadData();
+  // MS(OneDrive) 토큰 미리 확보 — 폴더 선택 때 팝업 안 뜨게 (재방문 silent / 첫 로그인 popup 1회)
+  _msalPrefetch();
 }
 
 function updateRoleTag(){
@@ -5938,6 +5940,28 @@ async function _msalGetToken(){
     showToast('Microsoft 로그인 실패: ' + (e.errorCode || e.message),'error');
     return null;
   }
+}
+
+// PIN 로그인 직후 호출 — MS 토큰 미리 확보 (조용한 버전)
+// 재방문자=silent(팝업0) / 첫 로그인자=popup 1회 / 실패해도 토스트 없이 무시 (폴더 선택 때 _msalGetToken으로 재시도)
+function _msalPrefetch(){
+  try {
+    _msalGet().then(function(inst){
+      if(!inst) return;
+      const accounts = inst.getAllAccounts();
+      if(accounts.length > 0){
+        // 재방문 — silent (팝업 없음). 실패해도 무시
+        inst.acquireTokenSilent({scopes:_MSAL_SCOPES, account:accounts[0]})
+          .then(function(){ console.log('[msal prefetch] silent OK'); })
+          .catch(function(e){ console.warn('[msal prefetch] silent skip', e.errorCode||e.message); });
+      } else {
+        // 첫 로그인 — popup 시도 (현재와 동일). 차단/취소 시 조용히 무시
+        inst.loginPopup({scopes:_MSAL_SCOPES, prompt:'select_account'})
+          .then(function(){ console.log('[msal prefetch] popup login OK'); })
+          .catch(function(e){ console.warn('[msal prefetch] popup skip (폴더 선택 때 재시도)', e.errorCode||e.message); });
+      }
+    }).catch(function(){});
+  } catch(e){}
 }
 
 async function _msalFetchOneDriveChildren(path){
