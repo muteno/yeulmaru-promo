@@ -1041,13 +1041,15 @@ if(!cperfs.length)return'';
 var out='';
 for(var i=0;i<cperfs.length;i++){var perf=cperfs[i],fn=perf.f||perf.n,sn=perf.n,dd=perf.dday,lb=perf.t==='e'?'전':perf.t==='a'?'교':perf.t==='r'?'대':'공';
 var nameHtml='<span class="pf">'+fn+'</span><span class="ps">'+sn+'</span>';
-// 좌클릭: panel 열고 프로그램 일정 펼침+깜빡  /  우클릭: 정보 박스
-var safeFn=escapeHtml(fn).replace(/'/g,'\\\'');
-var clickAttr=!past?' onclick="event.stopPropagation();openPromoBoardForProgram(\''+safeFn+'\',\''+(dateKey||'')+'\')" style="cursor:pointer" title="클릭: 홍보 현황 / 우클릭: 빠른 정보"':'';
-var ctxAttr=!past?' oncontextmenu="event.stopPropagation();event.preventDefault();onPerfContextMenu(event,\''+safeFn+'\');return false;"':'';
+// 좌클릭: 프로그램 조회 모달  /  우클릭: 정보 박스 — data-perf-name + this 패턴으로 사이드바와 통일 (escape 안전)
+var safeFn=escapeHtml(fn);
+var dataAttr=' data-perf-name="'+safeFn+'"';
+var clickAttr=!past?dataAttr+' onclick="event.stopPropagation();openProgramView(this.dataset.perfName)" title="클릭: 조회 / 우클릭: 빠른 정보"':dataAttr;
+var ctxAttr=!past?' oncontextmenu="event.stopPropagation();event.preventDefault();onPerfContextMenu(event,this);return false;"':'';
+var cursorStyle=!past?'cursor:pointer;':'';
 if(past)out+='<span style="display:inline-flex;align-items:center;margin-left:6px"><span style="display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;border-radius:50%;font-size:8px;background:rgba(0,0,0,0.05);color:rgba(0,0,0,0.22);flex-shrink:0">'+lb+'</span><span class="pname" style="margin-left:4px;font-size:9px;color:rgba(0,0,0,0.18)">'+nameHtml+'</span></span>';
-else if(td)out+='<span class="perf-badge"'+clickAttr+ctxAttr+' style="display:inline-flex;align-items:center;margin-left:6px"><span style="display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;border-radius:50%;font-size:8px;font-weight:600;background:rgba(255,255,255,0.85);color:#111;flex-shrink:0">'+lb+'</span><span class="pname" style="margin-left:5px;font-size:9px;font-weight:700;color:#111">'+nameHtml+'</span></span>';
-else out+='<span class="perf-badge"'+clickAttr+ctxAttr+' style="display:inline-flex;align-items:center;margin-left:6px"><span style="display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;border-radius:50%;font-size:8px;font-weight:600;background:var(--accent);color:#fff;flex-shrink:0">'+lb+'</span><span class="pname" style="margin-left:5px;font-size:9px;font-weight:700;color:var(--text)">'+nameHtml+'</span>'+(dd!==null&&dd!==0?'<span class="pday" style="margin-left:8px;font-size:9px;color:var(--dim);white-space:nowrap">'+getDdayText(dd)+'</span>':'')+'</span>';
+else if(td)out+='<span class="perf-badge"'+clickAttr+ctxAttr+' style="'+cursorStyle+'display:inline-flex;align-items:center;margin-left:6px"><span style="display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;border-radius:50%;font-size:8px;font-weight:600;background:rgba(255,255,255,0.85);color:#111;flex-shrink:0">'+lb+'</span><span class="pname" style="margin-left:5px;font-size:9px;font-weight:700;color:#111">'+nameHtml+'</span></span>';
+else out+='<span class="perf-badge"'+clickAttr+ctxAttr+' style="'+cursorStyle+'display:inline-flex;align-items:center;margin-left:6px"><span style="display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;border-radius:50%;font-size:8px;font-weight:600;background:var(--accent);color:#fff;flex-shrink:0">'+lb+'</span><span class="pname" style="margin-left:5px;font-size:9px;font-weight:700;color:var(--text)">'+nameHtml+'</span>'+(dd!==null&&dd!==0?'<span class="pday" style="margin-left:8px;font-size:9px;color:var(--dim);white-space:nowrap">'+getDdayText(dd)+'</span>':'')+'</span>';
 }return out;
 }
 let password='',userRole='user',records=[],currentYear=new Date().getFullYear(),currentMonth=new Date().getMonth()+1;
@@ -8045,7 +8047,7 @@ function renderCal(){
       let bg='rgba(255,255,255,0.3)';
       if(nm)bg='var(--nm-bg)';else if(td)bg='var(--today-bg)';else if(past)bg='var(--past-bg)';
       let dnCls='dn';if(nm)dnCls+=' nm';else if(past)dnCls+=' past';else if(isSat)dnCls+=' sat';else if(isSun)dnCls+=' sun';
-      h+=`<div class="c cell${nm?' nm':''}${past?' past':''}${td?' today':''}${isSel?' sel':''}${_justCopiedDateKey===key?' just-copied-cell':''}" data-cell data-key="${key}" onclick="clickDate('${key}')" oncontextmenu="onCellContextMenu(event,'${key}')"${nm?'':` ondragover="onCellDragOver(event)" ondragleave="onCellDragLeave(event)" ondrop="onCellDrop(event,'${key}')"`} style="background:${bg};${di<5?'border-right:1px solid var(--border)':''}${nm?'cursor:default':'cursor:pointer'}">`;
+      h+=`<div class="c cell${nm?' nm':''}${past?' past':''}${td?' today':''}${isSel?' sel':''}${_justCopiedDateKey===key?' just-copied-cell':''}" data-cell data-key="${key}" onclick="if(event.target.closest('.perf-badge'))return;clickDate('${key}')" oncontextmenu="if(event.target.closest('.perf-badge'))return;onCellContextMenu(event,'${key}')"${nm?'':` ondragover="onCellDragOver(event)" ondragleave="onCellDragLeave(event)" ondrop="onCellDrop(event,'${key}')"`} style="background:${bg};${di<5?'border-right:1px solid var(--border)':''}${nm?'cursor:default':'cursor:pointer'}">`;
       var perfs=nm?[]:getPerfs(d);var filteredRecs=recs;if(activeFilters.length>0){var allGroups=[{label:'카카오',match:['카카오']},{label:'인스타',match:['인스타']},{label:'블로그·맘카페',match:['블로그','맘카페']},{label:'B2B',match:['B2B']},{label:'문자',match:['문자']}];var activeMatches=[];activeFilters.forEach(function(af){allGroups.forEach(function(g){if(g.label===af)activeMatches=activeMatches.concat(g.match);});});filteredRecs=filteredRecs.filter(function(r){var p=r['플랫폼 1']||'';return activeMatches.some(function(m){return p.indexOf(m)>-1;});});}if(activePrograms.length>0){filteredRecs=filteredRecs.filter(function(r){var prog=r['프로그램']||'';return activePrograms.indexOf(prog)>-1;});}
       // 시간순 정렬 (입력시간 HH:MM 기준)
       filteredRecs=filteredRecs.slice().sort(function(a,b){
