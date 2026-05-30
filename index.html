@@ -1015,6 +1015,40 @@ const DID_PARTNERS = [
   { id:'Y0030', name:'(미설치)', addr:'', status:'미설치' }
 ];
 
+// === 예울마루 조감도 핀 (Phase A2-3) ===
+// x/y는 16:9 이미지 기준 % (좌상단 0,0). 초기값은 추정 — 좌표 조정 모드로 정확히 잡고 갱신
+const VENUE_PINS = [
+  {
+    id:'mangma-main', label:'망마 본관', venue:'망마',
+    x:51, y:65,
+    type:'group',
+    children:[
+      { id:'mangma-did-7f', name:'DID 7층', type:'did' },
+      { id:'mangma-did-4f', name:'DID 4층', type:'did' },
+      { id:'mangma-did-3f', name:'DID 3층', type:'did' },
+      { id:'mangma-board-4f', name:'전광판 (4F 입구)', type:'electronic-board' },
+      { id:'mangma-board-concert', name:'전광판 (공연 시 — 대극장 매표소/로비)', type:'electronic-board-conditional' }
+    ]
+  },
+  {
+    id:'jinseom-bridge', label:'진섬다리 입구', venue:'장도',
+    x:37, y:46,
+    type:'did'
+  },
+  {
+    id:'jangdo-entrance', label:'장도 입구 ★', venue:'장도',
+    x:48, y:26,
+    type:'samsung-tizen',
+    signageUrl:'https://yeulmaru-signage.pages.dev',
+    isUrlLauncher:true
+  },
+  {
+    id:'jangdo-lamp', label:'장도 가로등 현수기', venue:'장도',
+    x:42, y:33,
+    type:'lamp-banner-print'
+  }
+];
+
 let PERFS=[];
 function getPerfs(d){var k=dk(d),now=new Date();now.setHours(0,0,0,0);return PERFS.filter(function(p){return k>=p.s&&k<=p.e}).map(function(p){var sd=new Date(p.s);sd.setHours(0,0,0,0);var ed=new Date(p.e);ed.setHours(0,0,0,0);if(ed<now)return Object.assign({},p,{dday:null});if(now>=sd&&now<=ed)return Object.assign({},p,{dday:0});var diff=Math.round((sd-now)/86400000);return Object.assign({},p,{dday:diff});});}
 function getExhibitStatus(d){
@@ -2310,6 +2344,205 @@ function closeDidPartnerDetail(){
   }
   if(el) el.innerHTML = '';
 }
+// === 예울마루 조감도 핀맵 (Phase A2-3) ===
+let _venueMapState = null;
+function openVenueMap(venueFilter){
+  _venueMapState = { venueFilter: venueFilter || null, pinEdit: false, escHandler: null, popoverPinId: null };
+  let el = document.getElementById('venue-map');
+  if(!el){
+    el = document.createElement('div');
+    el.id = 'venue-map';
+    document.body.appendChild(el);
+  }
+  if(!document.getElementById('venue-map-style')){
+    const ss = document.createElement('style');
+    ss.id = 'venue-map-style';
+    ss.textContent = '.vm-pin{position:absolute;transform:translate(-50%,-50%);width:32px;height:32px;border-radius:50%;background:#E84A3A;border:3px solid #fff;box-shadow:0 4px 12px rgba(0,0,0,0.35),0 0 0 1px rgba(0,0,0,0.15);cursor:pointer;display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:700;transition:transform .15s ease,box-shadow .15s ease;z-index:5}.vm-pin:hover{transform:translate(-50%,-50%) scale(1.18);box-shadow:0 6px 18px rgba(232,74,58,0.55),0 0 0 1px rgba(0,0,0,0.18)}.vm-pin::after{content:"";position:absolute;left:50%;top:100%;transform:translateX(-50%);width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-top:11px solid #E84A3A;filter:drop-shadow(0 2px 2px rgba(0,0,0,0.3))}.vm-pin-label{position:absolute;left:50%;top:calc(100% + 14px);transform:translateX(-50%);background:rgba(0,0,0,0.78);color:#fff;padding:3px 9px;border-radius:6px;font-size:11px;font-weight:600;white-space:nowrap;pointer-events:none;backdrop-filter:blur(4px)}.vm-edit-overlay{position:absolute;inset:0;cursor:crosshair;z-index:50;background:rgba(0,255,200,0.04)}.vm-popover{position:absolute;background:#fff;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.22);padding:12px 8px;min-width:220px;z-index:30;border:1px solid rgba(0,0,0,0.08)}.vm-popover-title{font-size:12px;font-weight:700;color:#666;padding:4px 10px 8px;border-bottom:1px solid #eee;margin-bottom:6px}.vm-popover-item{padding:8px 10px;font-size:13px;border-radius:8px;cursor:pointer;transition:background .12s}.vm-popover-item:hover{background:var(--peach-light)}.vm-coord-toast{position:absolute;top:80px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.85);color:#fff;padding:10px 18px;border-radius:10px;font-size:13px;font-weight:600;z-index:60;font-family:monospace;letter-spacing:0.5px;pointer-events:none;animation:vmFade .25s ease}@keyframes vmFade{from{opacity:0;transform:translate(-50%,-6px)}to{opacity:1;transform:translateX(-50%)}}';
+    document.head.appendChild(ss);
+  }
+  const title = venueFilter ? ('🛰️ 예울마루 조감도 — ' + venueFilter) : '🛰️ 예울마루 조감도';
+  const html = '<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeVenueMap)">'
+    + '<div class="modal" style="width:96vw;max-width:1500px;height:92vh;max-height:92vh;padding:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:#0f1216">'
+    + '<button class="modal-x" onclick="closeVenueMap()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:14px;float:none;margin:0;z-index:60;background:rgba(255,255,255,0.92);box-shadow:0 2px 8px rgba(0,0,0,0.18)">✕</button>'
+    + '<div style="padding:14px 22px;background:rgba(15,18,22,0.92);color:#fff;display:flex;align-items:center;gap:14px;flex-shrink:0;border-bottom:1px solid rgba(255,255,255,0.08)">'
+    + '<div style="font-size:15px;font-weight:700">'+escapeHtml(title)+'</div>'
+    + '<div style="margin-left:auto;display:flex;gap:8px;align-items:center">'
+    + '<button id="vm-edit-toggle" onclick="toggleVenuePinEdit()" style="padding:7px 14px;border:1.5px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.08);color:#fff;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600">📍 좌표 조정 모드</button>'
+    + '</div></div>'
+    + '<div style="flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#0f1216;padding:8px">'
+    + '<div id="vm-container" style="position:relative;width:100%;max-width:100%;aspect-ratio:16/9;max-height:100%;background:#1a1d22 url(\'10_background.jpg\') center/contain no-repeat;border-radius:8px"></div>'
+    + '</div></div></div>';
+  el.innerHTML = html;
+  _renderVenuePins();
+  _venueMapState.escHandler = function(e){
+    if(e.key !== 'Escape') return;
+    if(_venueMapState && _venueMapState.popoverPinId){
+      _closeVenuePopover();
+      return;
+    }
+    const inner = document.getElementById('venue-item-detail');
+    if(inner && inner.children.length) return;
+    closeVenueMap();
+  };
+  document.addEventListener('keydown', _venueMapState.escHandler);
+}
+function closeVenueMap(){
+  if(_venueMapState && _venueMapState.escHandler){
+    document.removeEventListener('keydown', _venueMapState.escHandler);
+  }
+  _venueMapState = null;
+  const el = document.getElementById('venue-map');
+  if(el) el.innerHTML = '';
+}
+function _renderVenuePins(){
+  const c = document.getElementById('vm-container');
+  if(!c || !_venueMapState) return;
+  const vf = _venueMapState.venueFilter;
+  const pins = VENUE_PINS.filter(p => !vf || p.venue === vf);
+  c.querySelectorAll('.vm-pin,.vm-pin-label-wrap,.vm-edit-overlay,.vm-popover,.vm-coord-toast').forEach(n => n.remove());
+  if(_venueMapState.pinEdit){
+    // 좌표 조정 모드 — 핀 숨기고 클릭 캡쳐 오버레이
+    const ov = document.createElement('div');
+    ov.className = 'vm-edit-overlay';
+    ov.onclick = function(e){
+      const rect = c.getBoundingClientRect();
+      const x = ((e.clientX - rect.left) / rect.width * 100).toFixed(1);
+      const y = ((e.clientY - rect.top) / rect.height * 100).toFixed(1);
+      const txt = 'x:'+x+', y:'+y;
+      console.log('[venue-pin-edit]', txt);
+      try{ navigator.clipboard && navigator.clipboard.writeText(txt); }catch(err){}
+      // 토스트
+      c.querySelectorAll('.vm-coord-toast').forEach(n => n.remove());
+      const t = document.createElement('div');
+      t.className = 'vm-coord-toast';
+      t.textContent = txt + '   (클립보드 복사됨)';
+      c.appendChild(t);
+      setTimeout(() => { try{ t.remove(); }catch(_e){} }, 2200);
+    };
+    c.appendChild(ov);
+    return;
+  }
+  pins.forEach(p => {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'position:absolute;left:'+p.x+'%;top:'+p.y+'%;transform:translate(-50%,-50%);z-index:6';
+    const pin = document.createElement('div');
+    pin.className = 'vm-pin';
+    pin.title = p.label;
+    pin.style.cssText = 'position:relative;transform:none;left:0;top:0;width:32px;height:32px;border-radius:50%;background:#E84A3A;border:3px solid #fff;box-shadow:0 4px 12px rgba(0,0,0,0.35),0 0 0 1px rgba(0,0,0,0.15);cursor:pointer;display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:700;transition:transform .15s ease,box-shadow .15s ease';
+    pin.onmouseenter = () => { pin.style.transform = 'scale(1.18)'; };
+    pin.onmouseleave = () => { pin.style.transform = 'none'; };
+    pin.textContent = p.type === 'group' ? (p.children ? p.children.length : '') : '';
+    pin.onclick = (e) => { e.stopPropagation(); _onVenuePinClick(p, wrap); };
+    wrap.appendChild(pin);
+    const lab = document.createElement('div');
+    lab.className = 'vm-pin-label';
+    lab.textContent = p.label;
+    wrap.appendChild(lab);
+    wrap.className = 'vm-pin-label-wrap';
+    c.appendChild(wrap);
+  });
+}
+function toggleVenuePinEdit(){
+  if(!_venueMapState) return;
+  _venueMapState.pinEdit = !_venueMapState.pinEdit;
+  const btn = document.getElementById('vm-edit-toggle');
+  if(btn){
+    if(_venueMapState.pinEdit){
+      btn.style.background = '#FFC107';
+      btn.style.color = '#222';
+      btn.style.borderColor = '#FFC107';
+      btn.textContent = '📍 조정 중 — 끄려면 클릭';
+    } else {
+      btn.style.background = 'rgba(255,255,255,0.08)';
+      btn.style.color = '#fff';
+      btn.style.borderColor = 'rgba(255,255,255,0.2)';
+      btn.textContent = '📍 좌표 조정 모드';
+    }
+  }
+  _renderVenuePins();
+}
+function _onVenuePinClick(p, wrapEl){
+  _closeVenuePopover();
+  if(p.type === 'group'){
+    _showVenueChildrenPopover(p, wrapEl);
+  } else {
+    openVenueItemDetail(p);
+  }
+}
+function _showVenueChildrenPopover(p, wrapEl){
+  if(!_venueMapState) return;
+  const c = document.getElementById('vm-container');
+  if(!c) return;
+  const pop = document.createElement('div');
+  pop.className = 'vm-popover';
+  // 위치: 핀 우측 18px, 같은 y
+  pop.style.left = 'calc('+p.x+'% + 22px)';
+  pop.style.top = p.y + '%';
+  pop.style.transform = 'translateY(-50%)';
+  let inner = '<div class="vm-popover-title">'+escapeHtml(p.label)+'</div>';
+  for(const ch of (p.children || [])){
+    const chJson = JSON.stringify(ch).replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+    inner += '<div class="vm-popover-item" data-spec="'+chJson+'">'+escapeHtml(ch.name)+'</div>';
+  }
+  pop.innerHTML = inner;
+  pop.querySelectorAll('.vm-popover-item').forEach(it => {
+    it.onclick = (e) => {
+      e.stopPropagation();
+      const spec = JSON.parse(it.dataset.spec);
+      _closeVenuePopover();
+      openVenueItemDetail(spec);
+    };
+  });
+  c.appendChild(pop);
+  _venueMapState.popoverPinId = p.id;
+}
+function _closeVenuePopover(){
+  const c = document.getElementById('vm-container');
+  if(c) c.querySelectorAll('.vm-popover').forEach(n => n.remove());
+  if(_venueMapState) _venueMapState.popoverPinId = null;
+}
+function openVenueItemDetail(spec){
+  let el = document.getElementById('venue-item-detail');
+  if(!el){
+    el = document.createElement('div');
+    el.id = 'venue-item-detail';
+    document.body.appendChild(el);
+  }
+  let body = '';
+  const t = spec.type;
+  if(t === 'samsung-tizen' || spec.isUrlLauncher){
+    body = '<div style="padding:20px;background:var(--peach-light);border-radius:12px;margin-bottom:14px"><div style="font-weight:700;margin-bottom:8px">사이니지 관리 (Phase A2 준비 중)</div><div style="font-size:12px;color:#666">디바이스: 삼성 타이젠 (URL Launcher 모드)</div></div>'
+      + (spec.signageUrl ? '<div style="padding:14px 16px;background:#fafafa;border-radius:12px"><div style="font-size:12px;color:#888;margin-bottom:6px">현재 표시 URL</div><div style="word-break:break-all;font-size:13px">'+escapeHtml(spec.signageUrl)+'</div></div>' : '');
+  } else if(t === 'did'){
+    body = '<div style="padding:20px;background:#f0f4ff;border-radius:12px"><div style="font-weight:700;margin-bottom:8px">자체 API 연동 (Phase A2 준비 중)</div><div style="font-size:12px;color:#666;line-height:1.6">DID 사이니지 콘텐츠 관리 인터페이스가 추가될 예정입니다</div></div>';
+  } else if(t === 'lamp-banner-print' || t === 'signboard'){
+    body = '<div style="padding:20px;background:var(--peach-light);border-radius:12px"><div style="font-weight:700;margin-bottom:8px">시안 등록 (Phase A2 준비 중)</div><div style="font-size:12px;color:#666;line-height:1.6">SharePoint 연동으로 시안 파일 업로드/관리 인터페이스가 추가될 예정입니다</div></div>';
+  } else if(t === 'electronic-board' || t === 'electronic-board-conditional'){
+    body = '<div style="padding:20px;background:#f0f4ff;border-radius:12px"><div style="font-weight:700;margin-bottom:8px">전광판 운영 (Phase A2 준비 중)</div><div style="font-size:12px;color:#666;line-height:1.6">전광판 송출 콘텐츠 관리 인터페이스가 추가될 예정입니다</div></div>';
+  } else {
+    body = '<div style="padding:20px;background:#fafafa;border-radius:12px;color:#888;font-size:13px">상세 정보가 아직 정의되지 않았습니다</div>';
+  }
+  const name = spec.label || spec.name || '';
+  const escHandler = function(e){ if(e.key === 'Escape') closeVenueItemDetail(); };
+  const html = '<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeVenueItemDetail)">'
+    + '<div class="modal" style="width:auto;min-width:340px;max-width:480px;padding:24px 28px;position:relative">'
+    + '<button class="modal-x" onclick="closeVenueItemDetail()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:14px;float:none;margin:0;z-index:10">✕</button>'
+    + '<div style="font-size:11px;color:#888;margin-bottom:4px">'+escapeHtml(spec.id || '')+'</div>'
+    + '<div style="font-size:18px;font-weight:700;margin-bottom:14px;padding-right:36px">'+escapeHtml(name)+'</div>'
+    + body
+    + '</div></div>';
+  el.innerHTML = html;
+  el._escHandler = escHandler;
+  document.addEventListener('keydown', escHandler);
+}
+function closeVenueItemDetail(){
+  const el = document.getElementById('venue-item-detail');
+  if(el && el._escHandler){
+    document.removeEventListener('keydown', el._escHandler);
+    el._escHandler = null;
+  }
+  if(el) el.innerHTML = '';
+}
 function _buildPlatformNodes(){
   const nodes = {};
   for(const gKey in PLATFORM_TREE){
@@ -2459,6 +2692,10 @@ function renderPlatformDetail(){
   } else {
     body = '<div style="padding:20px;background:#fafafa;border-radius:12px;color:#888;font-size:13px">상세 정보가 아직 정의되지 않았습니다</div>';
   }
+  // 망마/장도 venue 감지 → [조감도에서 보기] 버튼
+  const _pl = node.parentLabel || '';
+  const _vf = it.venue || (_pl.indexOf('망마') >= 0 ? '망마' : (_pl.indexOf('장도') >= 0 ? '장도' : ''));
+  const venueBtn = _vf ? '<div style="margin-top:18px"><button onclick="openVenueMap(\''+_vf+'\')" style="padding:10px 18px;background:linear-gradient(135deg,#E84A3A,#D88455);color:#fff;border:0;border-radius:10px;cursor:pointer;font-weight:600;font-size:13px;box-shadow:0 4px 12px rgba(232,74,58,0.25)">🛰️ 예울마루 조감도에서 보기</button></div>' : '';
   c.innerHTML =
     '<div style="margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid #eee">'
     + '<div style="font-size:11px;color:#888;margin-bottom:4px">' + escapeHtml(node.parentLabel) + '</div>'
@@ -2468,6 +2705,7 @@ function renderPlatformDetail(){
     + ' · 상태: <span style="color:' + (pending ? '#aaa' : '#22a06b') + ';font-weight:600">' + (pending ? '미진행' : '운영중') + '</span></div>'
     + '</div>'
     + body
+    + venueBtn
     + '<div style="margin-top:24px"><button disabled style="padding:10px 20px;background:#eee;color:#aaa;border:0;border-radius:10px;cursor:not-allowed;font-weight:600;font-size:13px">[관리] (Phase A2)</button></div>';
 }
 // === 프로그램 외부 링크 열기 — 확인 다이얼로그 후 새 창 ===
