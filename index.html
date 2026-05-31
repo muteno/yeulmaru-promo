@@ -1617,13 +1617,15 @@ async function initLoginScreen(){
       +'<button type="button" onclick="msLogin()" style="width:100%;padding:12px;background:#fff;border:1.5px solid rgba(74,77,231,0.3);color:#444;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px"><svg width="18" height="18" viewBox="0 0 23 23"><path fill="#f25022" d="M1 1h10v10H1z"/><path fill="#7fba00" d="M12 1h10v10H12z"/><path fill="#00a4ef" d="M1 12h10v10H1z"/><path fill="#ffb900" d="M12 12h10v10H12z"/></svg>Microsoft 계정으로 로그인</button>';
   }
 }
-async function goToPinStep(){
+async function goToPinStep(skipEnsure){
   if(_loginEmail === SUPER_EMAIL){ _enterPinInputStep(); return; }
   const step=document.getElementById('account-step');
   if(step)step.innerHTML='<div style="color:#999;font-size:13px;padding:24px 0">Microsoft 인증 확인 중...</div>';
-  const v=await _msalEnsureToken(_loginEmail);
-  if(!v){ showToast('Microsoft 인증이 필요합니다','error'); initLoginScreen(); return; }
-  _loginEmail=v;
+  if(!skipEnsure){
+    const v=await _msalEnsureToken(_loginEmail);
+    if(!v){ showToast('Microsoft 인증이 필요합니다','error'); initLoginScreen(); return; }
+    _loginEmail=v;
+  }
   if(!MANAGERS||!MANAGERS.length){ password='0510'; try{await loadManagers();}catch(e){} }
   const matched=(MANAGERS||[]).find(function(m){return String(_authGetCol(m,_EMAIL_KEYS)||'').trim().toLowerCase()===_loginEmail;});
   if(!matched){ if(typeof showToast==='function')showToast('등록되지 않은 계정입니다. 관리자에게 문의하세요','error'); initLoginScreen(); return; }
@@ -1671,7 +1673,7 @@ async function switchMsAccount(){
   if(_loggingIn)return; _loggingIn=true;
   try{
     const email=await _msalLoginEmail();
-    if(email){ _loginEmail=email; goToPinStep(); }
+    if(email){ _loginEmail=email; goToPinStep(true); }
   }finally{ _loggingIn=false; }
 }
 async function msLogin(){
@@ -1683,7 +1685,7 @@ async function msLogin(){
     const email = await _msalLoginEmail();
     if(!email){ if(typeof initLoginScreen==='function')initLoginScreen(); _loggingIn=false; return; }
     _loginEmail = email;
-    goToPinStep();
+    goToPinStep(true);
   } catch(e){
     console.error('[msLogin]',e);
     if(typeof initLoginScreen==='function')initLoginScreen();
@@ -2185,7 +2187,7 @@ async function _doSwitchUser(){
   const login=document.getElementById('login'); if(login)login.style.display='';
   try{
     const email=await _msalLoginEmail();
-    if(email){ _loginEmail=email; goToPinStep(); }
+    if(email){ _loginEmail=email; goToPinStep(true); }
     else { initLoginScreen(); }
   }catch(e){ console.warn('[switchUser]',e); initLoginScreen(); }
 }
@@ -6225,7 +6227,7 @@ async function _msalEnsureToken(hintEmail){
   const inst=await _msalGet(); if(!inst) return null;
   let acc=inst.getActiveAccount();
   if(!acc){ const accs=inst.getAllAccounts(); if(hintEmail) acc=accs.find(a=>((a.username)||'').trim().toLowerCase()===hintEmail); if(!acc && accs.length===1) acc=accs[0]; }
-  if(acc){ try{ await inst.acquireTokenSilent({scopes:_MSAL_SCOPES, account:acc}); inst.setActiveAccount(acc); return ((acc.username)||'').trim().toLowerCase(); }catch(e){ console.warn('[ensureToken silent]', e.errorCode||e.message); } }
+  if(acc){ try{ await Promise.race([inst.acquireTokenSilent({scopes:_MSAL_SCOPES, account:acc}), new Promise(function(_,rej){setTimeout(function(){rej(new Error('silent_timeout'));},4000)})]); inst.setActiveAccount(acc); return ((acc.username)||'').trim().toLowerCase(); }catch(e){ console.warn('[ensureToken silent]', e.errorCode||e.message); } }
   try{ const res=await inst.loginPopup({scopes:_MSAL_SCOPES, prompt:'select_account', loginHint:hintEmail||undefined}); if(res&&res.account){ inst.setActiveAccount(res.account); return ((res.account.username)||'').trim().toLowerCase(); } }catch(e){ console.warn('[ensureToken popup]', e.errorCode||e.message); }
   return null;
 }
