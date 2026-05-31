@@ -1618,29 +1618,37 @@ async function initLoginScreen(){
   }
 }
 async function goToPinStep(skipEnsure){
-  if(_loginEmail === SUPER_EMAIL){ _enterPinInputStep(); return; }
+  console.log('[goToPin] start skipEnsure=',skipEnsure,'_loginEmail=',_loginEmail,'MANAGERS=',MANAGERS?MANAGERS.length:'null');
+  try{
+  if(_loginEmail === SUPER_EMAIL){ console.log('[goToPin] SUPER → pinInput'); _enterPinInputStep(); return; }
   const step=document.getElementById('account-step');
   if(step)step.innerHTML='<div style="color:#999;font-size:13px;padding:24px 0">Microsoft 인증 확인 중...</div>';
   if(!skipEnsure){
+    console.log('[goToPin] _msalEnsureToken...');
     const v=await _msalEnsureToken(_loginEmail);
+    console.log('[goToPin] ensureToken →',v);
     if(!v){ showToast('Microsoft 인증이 필요합니다','error'); initLoginScreen(); return; }
     _loginEmail=v;
   }
-  if(!MANAGERS||!MANAGERS.length){ password='0510'; try{await loadManagers();}catch(e){} }
+  if(!MANAGERS||!MANAGERS.length){ password='0510'; console.log('[goToPin] loadManagers...'); try{await Promise.race([loadManagers(),new Promise(function(_,rj){setTimeout(function(){rj(new Error('loadManagers_timeout'))},8000)})]);console.log('[goToPin] loadManagers done count=',MANAGERS?MANAGERS.length:0);}catch(e){console.error('[goToPin] loadManagers fail:',e);} }
   const matched=(MANAGERS||[]).find(function(m){return String(_authGetCol(m,_EMAIL_KEYS)||'').trim().toLowerCase()===_loginEmail;});
+  console.log('[goToPin] matched=',matched?matched['담당자']:'null','계정여부=',matched?_authGetCol(matched,_ACTIVE_KEYS):'N/A');
   if(!matched){ if(typeof showToast==='function')showToast('등록되지 않은 계정입니다. 관리자에게 문의하세요','error'); initLoginScreen(); return; }
   if(isFlagOn(_authGetCol(matched,_LEAVE_KEYS))){ if(typeof showToast==='function')showToast('휴직 상태 계정입니다. 관리자에게 문의하세요','error'); initLoginScreen(); return; }
   if(!isFlagOn(_authGetCol(matched,_ACTIVE_KEYS))){
-    const step=document.getElementById('account-step');
-    if(step){ step.style.display='';
-      step.innerHTML='<div style="font-size:14px;color:#e24b4a;font-weight:700;margin-bottom:6px">본 프로그램에 접근 권한이 없습니다</div><div style="font-size:12px;color:#888;margin-bottom:18px">관리자에게 문의해주세요</div><button type="button" onclick="initLoginScreen()" style="width:100%;padding:10px;background:none;border:0;color:#999;font-size:12px;cursor:pointer;text-decoration:underline">다른 계정으로</button>';
+    console.log('[goToPin] BLOCKED by _ACTIVE_KEYS');
+    const astep=document.getElementById('account-step');
+    if(astep){ astep.style.display='';
+      astep.innerHTML='<div style="font-size:14px;color:#e24b4a;font-weight:700;margin-bottom:6px">본 프로그램에 접근 권한이 없습니다</div><div style="font-size:12px;color:#888;margin-bottom:18px">관리자에게 문의해주세요</div><button type="button" onclick="initLoginScreen()" style="width:100%;padding:10px;background:none;border:0;color:#999;font-size:12px;cursor:pointer;text-decoration:underline">다른 계정으로</button>';
     }
     const ps=document.getElementById('pin-step'); if(ps)ps.style.display='none';
     return;
   }
   const storedPin=String(_authGetCol(matched,_PIN_KEYS)||'').trim();
   const userName=matched['담당자']||'';
+  console.log('[goToPin] storedPin?',!!storedPin,'userName=',userName);
   if(!storedPin){
+    console.log('[goToPin] no PIN → _promptNewPin');
     const newPin=await _promptNewPin(userName);
     if(!newPin){ initLoginScreen(); return; }
     try{
@@ -1650,8 +1658,10 @@ async function goToPinStep(skipEnsure){
     }catch(e){ console.error('[set-pin]',e); if(typeof showToast==='function')showToast('PIN 설정 실패: '+e.message,'error'); initLoginScreen(); return; }
     _enterAsManager(matched, newPin, userName);
   } else {
+    console.log('[goToPin] → _enterPinInputStep');
     _enterPinInputStep();
   }
+  }catch(err){ console.error('[goToPin] UNCAUGHT:',err); if(typeof showToast==='function')showToast('로그인 처리 중 오류가 발생했습니다','error'); if(typeof initLoginScreen==='function')initLoginScreen(); }
 }
 function _enterPinInputStep(){
   const a=document.getElementById('account-step'); if(a)a.style.display='none';
@@ -1673,8 +1683,9 @@ async function switchMsAccount(){
   if(_loggingIn)return; _loggingIn=true;
   try{
     const email=await _msalLoginEmail();
-    if(email){ _loginEmail=email; goToPinStep(true); }
-  }finally{ _loggingIn=false; }
+    if(email){ _loginEmail=email; await goToPinStep(true); }
+  }catch(e){ console.error('[switchMs]',e); if(typeof initLoginScreen==='function')initLoginScreen(); }
+  finally{ _loggingIn=false; }
 }
 async function msLogin(){
   if(_loggingIn) return;
@@ -1685,7 +1696,7 @@ async function msLogin(){
     const email = await _msalLoginEmail();
     if(!email){ if(typeof initLoginScreen==='function')initLoginScreen(); _loggingIn=false; return; }
     _loginEmail = email;
-    goToPinStep(true);
+    await goToPinStep(true);
   } catch(e){
     console.error('[msLogin]',e);
     if(typeof initLoginScreen==='function')initLoginScreen();
@@ -2187,7 +2198,7 @@ async function _doSwitchUser(){
   const login=document.getElementById('login'); if(login)login.style.display='';
   try{
     const email=await _msalLoginEmail();
-    if(email){ _loginEmail=email; goToPinStep(true); }
+    if(email){ _loginEmail=email; await goToPinStep(true); }
     else { initLoginScreen(); }
   }catch(e){ console.warn('[switchUser]',e); initLoginScreen(); }
 }
