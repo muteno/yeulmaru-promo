@@ -744,16 +744,19 @@ table.promo-board-table th:last-child .col-resize-handle{display:none}
   <div class="login-card">
     <div class="login-welcome">YEULMARU</div>
     
-    <div class="pin-wrap">
-      <input class="pin" type="text" maxlength="1" inputmode="numeric" autocomplete="off" autofocus>
-      <input class="pin" type="text" maxlength="1" inputmode="numeric" autocomplete="off">
-      <input class="pin" type="text" maxlength="1" inputmode="numeric" autocomplete="off">
-      <input class="pin" type="text" maxlength="1" inputmode="numeric" autocomplete="off">
+    <div id="account-step" style="margin-top:8px"></div>
+    <div id="pin-step" style="display:none">
+      <div id="pin-account" style="font-size:12px;color:#888;text-align:center;margin-bottom:14px"></div>
+      <div class="pin-wrap">
+        <input class="pin" type="text" maxlength="1" inputmode="numeric" autocomplete="off">
+        <input class="pin" type="text" maxlength="1" inputmode="numeric" autocomplete="off">
+        <input class="pin" type="text" maxlength="1" inputmode="numeric" autocomplete="off">
+        <input class="pin" type="text" maxlength="1" inputmode="numeric" autocomplete="off">
+      </div>
+      <div id="login-msg"></div>
+      <div id="login-load"></div>
+      <button type="button" onclick="backToAccountStep()" style="margin-top:16px;background:none;border:0;color:#aaa;font-size:12px;cursor:pointer;text-decoration:underline">← 계정 다시 선택</button>
     </div>
-    <div id="login-msg"></div>
-    <div id="login-load"></div>
-    <button type="button" onclick="msLogin()" style="width:100%;margin-top:16px;padding:12px;background:#fff;border:1.5px solid rgba(74,77,231,0.3);color:#444;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:all .12s" onmouseover="this.style.borderColor='var(--accent)';this.style.background='#FAFAFE'" onmouseout="this.style.borderColor='rgba(74,77,231,0.3)';this.style.background='#fff'"><svg width="18" height="18" viewBox="0 0 23 23"><path fill="#f25022" d="M1 1h10v10H1z"/><path fill="#7fba00" d="M12 1h10v10H12z"/><path fill="#00a4ef" d="M1 12h10v10H1z"/><path fill="#ffb900" d="M12 12h10v10H12z"/></svg>Microsoft 계정으로 로그인</button>
-    <div style="font-size:11px;color:#aaa;margin-top:10px;text-align:center;line-height:1.6">재방문이면 PIN만 입력<br>처음·다른 기기면 먼저 Microsoft 로그인</div>
   </div>
 </div>
 
@@ -1448,7 +1451,7 @@ async function tryLogin(){
     }
 
     // MS 계정 이메일 (silent, 팝업 없음)
-    const email = await _msalGetEmailSilent();
+    const email = _loginEmail || await _msalGetEmailSilent();
     if(!email){
       document.getElementById('login-load').textContent='';
       document.getElementById('login-msg').innerHTML='먼저 <b>MS 로그인</b>을 해주세요';
@@ -1584,63 +1587,63 @@ function _enterAsManager(matched, pin, userName){
 }
 
 // MS 로그인 버튼 (토큰 無 → popup) — 첫 방문/다른 기기
+let _loginEmail='';
+async function initLoginScreen(){
+  const step=document.getElementById('account-step');
+  if(!step)return;
+  step.innerHTML='<div style="color:#999;font-size:13px;padding:10px 0">계정 확인 중...</div>';
+  let email=null;
+  try{ email=await _msalGetEmailSilent(); }catch(e){}
+  if(email){
+    _loginEmail=email;
+    step.innerHTML='<div style="font-size:14px;color:#333;font-weight:600;margin-bottom:2px;word-break:break-all">'+escapeHtml(email)+'</div>'
+      +'<div style="font-size:11px;color:#aaa;margin-bottom:18px">이 Microsoft 계정으로 로그인됩니다</div>'
+      +'<button type="button" onclick="goToPinStep(false)" style="width:100%;padding:12px;background:var(--accent);color:#fff;border:0;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer">계속</button>'
+      +'<button type="button" onclick="switchMsAccount()" style="width:100%;margin-top:8px;padding:10px;background:none;border:0;color:#888;font-size:12px;cursor:pointer;text-decoration:underline">다른 계정으로 로그인</button>';
+  }else{
+    _loginEmail='';
+    step.innerHTML='<div style="font-size:12px;color:#888;margin-bottom:18px;line-height:1.6">로그인하려면 먼저<br>Microsoft 계정 인증이 필요해요</div>'
+      +'<button type="button" onclick="msLogin()" style="width:100%;padding:12px;background:#fff;border:1.5px solid rgba(74,77,231,0.3);color:#444;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px"><svg width="18" height="18" viewBox="0 0 23 23"><path fill="#f25022" d="M1 1h10v10H1z"/><path fill="#7fba00" d="M12 1h10v10H12z"/><path fill="#00a4ef" d="M1 12h10v10H1z"/><path fill="#ffb900" d="M12 12h10v10H12z"/></svg>Microsoft 계정으로 로그인</button>';
+  }
+  step.innerHTML+='<div style="margin-top:18px;text-align:center"><a onclick="goToPinStep(true)" style="font-size:11px;color:#ccc;cursor:pointer;text-decoration:underline">관리자 비상 코드</a></div>';
+}
+function goToPinStep(emergency){
+  const a=document.getElementById('account-step'); if(a)a.style.display='none';
+  const ps=document.getElementById('pin-step'); if(ps)ps.style.display='';
+  const pa=document.getElementById('pin-account');
+  if(emergency){ _loginEmail=''; if(pa)pa.textContent='관리자 비상 코드 입력'; }
+  else if(pa){ pa.innerHTML='<b>'+escapeHtml(_loginEmail)+'</b> 로 로그인'; }
+  pins.forEach(function(x){x.value='';x.classList.remove('err');});
+  if(pins[0])pins[0].focus();
+  const lm=document.getElementById('login-msg'); if(lm)lm.textContent='';
+}
+function backToAccountStep(){
+  const ps=document.getElementById('pin-step'); if(ps)ps.style.display='none';
+  const a=document.getElementById('account-step'); if(a)a.style.display='';
+  pins.forEach(function(x){x.value='';x.classList.remove('err');});
+  const lm=document.getElementById('login-msg'); if(lm)lm.textContent='';
+  const ll=document.getElementById('login-load'); if(ll)ll.textContent='';
+}
+async function switchMsAccount(){
+  if(_loggingIn)return; _loggingIn=true;
+  try{
+    const email=await _msalLoginEmail();
+    if(email){ _loginEmail=email; goToPinStep(false); }
+  }finally{ _loggingIn=false; }
+}
 async function msLogin(){
   if(_loggingIn) return;
   _loggingIn = true;
   try {
-    document.getElementById('login-msg').textContent='';
-    document.getElementById('login-load').textContent='Microsoft 로그인 중...';
+    const step=document.getElementById('account-step');
+    if(step)step.innerHTML='<div style="color:#999;font-size:13px;padding:10px 0">Microsoft 로그인 중...</div>';
     const email = await _msalLoginEmail();
-    if(!email){ document.getElementById('login-load').textContent=''; _loggingIn=false; return; }
-
-    if(email === SUPER_EMAIL){
-      document.getElementById('login-load').textContent='';
-      document.getElementById('login-msg').textContent='PIN을 입력해 주세요';
-      pins.forEach(p=>{p.value=''});pins[0].focus();
-      _loggingIn=false; return;
-    }
-
-    if(!MANAGERS||!MANAGERS.length){ password='0510'; await loadManagers(); }
-    const matched=(MANAGERS||[]).find(function(m){
-      return String(_authGetCol(m,_EMAIL_KEYS)||'').trim().toLowerCase()===email;
-    });
-    if(!matched){
-      document.getElementById('login-load').textContent='';
-      document.getElementById('login-msg').textContent='등록되지 않은 계정입니다. 관리자에게 문의하세요';
-      _loggingIn=false; return;
-    }
-    if(isFlagOn(_authGetCol(matched,_LEAVE_KEYS))){
-      document.getElementById('login-load').textContent='';
-      document.getElementById('login-msg').textContent='휴직 상태 계정입니다. 관리자에게 문의하세요';
-      _loggingIn=false; return;
-    }
-    const storedPin=String(_authGetCol(matched,_PIN_KEYS)||'').trim();
-    const userName=matched['담당자']||'';
-    if(!storedPin){
-      document.getElementById('login-load').textContent='';
-      const newPin = await _promptNewPin(userName);
-      if(!newPin){ _loggingIn=false; return; }
-      document.getElementById('login-load').textContent='확인 중...';
-      try{
-        const r=await fetch(`${API}/api/auth/set-pin`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:email,pin:newPin})});
-        const d=await r.json();
-        if(!r.ok || !d.ok){ throw new Error(d.error||('HTTP '+r.status)); }
-      }catch(e){
-        console.error('[set-pin]',e);
-        document.getElementById('login-load').textContent='';
-        document.getElementById('login-msg').textContent='PIN 설정 실패: '+e.message;
-        _loggingIn=false; return;
-      }
-      _enterAsManager(matched, newPin, userName);
-    } else {
-      document.getElementById('login-load').textContent='';
-      document.getElementById('login-msg').textContent='PIN을 입력해 주세요';
-      pins.forEach(p=>{p.value=''});pins[0].focus();
-    }
+    if(!email){ if(typeof initLoginScreen==='function')initLoginScreen(); _loggingIn=false; return; }
+    _loginEmail = email;
+    goToPinStep(false);
   } catch(e){
     console.error('[msLogin]',e);
-    document.getElementById('login-load').textContent='';
-    document.getElementById('login-msg').textContent='로그인 실패';
+    if(typeof initLoginScreen==='function')initLoginScreen();
   } finally { _loggingIn = false; }
 }
 
@@ -1699,7 +1702,7 @@ function _resolveNewPinOk(){
   _resolveNewPin(v);
 }
 
-(function(){try{localStorage.removeItem('myApplicant');localStorage.removeItem('myUserDept');}catch(e){}const s=sessionStorage.getItem('pw');if(s){password=s;userRole=sessionStorage.getItem('role')||'user';document.getElementById('login').style.display='none';document.getElementById('app').style.display='';initApp();}})();
+(function(){try{localStorage.removeItem('myApplicant');localStorage.removeItem('myUserDept');}catch(e){}const s=sessionStorage.getItem('pw');if(s){password=s;userRole=sessionStorage.getItem('role')||'user';document.getElementById('login').style.display='none';document.getElementById('app').style.display='';initApp();}else{if(typeof initLoginScreen==='function')initLoginScreen();}})();
 
 async function api(method,path,body){
   const headers={'Content-Type':'application/json','X-App-Password':password};
