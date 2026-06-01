@@ -8871,7 +8871,7 @@ async function loadData(){
   try{const d=await api('GET','/api/records');records=(d.records||[]).map(function(r,i){return Object.assign({},r,{_rowIndex:(r._rowIndex!==undefined?r._rowIndex:i+2)});});}catch(e){console.error(e);_typingId++;if(cal)cal.innerHTML='<div style="text-align:center;padding:60px;color:#E24B4A;font-size:14px">데이터 로드 실패</div>';return;}
   // 특별 일정 — 실패해도 records 렌더는 진행
   try{await loadPromoSpecial();}catch(e){console.warn('[loadData] promoSpecial',e);}
-  _typingId++;render();}
+  _typingId++;render();if(typeof _refreshSeenMod==='function')_refreshSeenMod();}
 
 // SharePoint Graph API 일관성 지연 회피용 - 변경 후 row 수 검증 + 자동 재시도
 async function syncReload(expectedDelta){
@@ -8890,6 +8890,55 @@ async function syncReload(expectedDelta){
     console.warn('[syncReload] final mismatch. SharePoint 일관성 안정화에 시간이 더 필요할 수 있음.');
   }
 }
+
+// === [C-1] 변경 감지 폴링 (방식B: 가벼운 폴링 + 뱃지, 자동 리로드 X) ===
+let _lastSeenMod = null;
+let _updateBadgeShown = false;
+async function _refreshSeenMod(){
+  try{ const r = await api('GET','/api/lastmod'); if(r && r.lastModified){ _lastSeenMod = r.lastModified; } }catch(e){}
+}
+async function _checkForUpdates(){
+  if(!password) return;                          // 로그인 상태만
+  const app=document.getElementById('app');
+  if(!app || app.style.display==='none') return; // 앱 화면일 때만
+  if(_updateBadgeShown) return;                  // 이미 표시 중이면 skip
+  try{
+    const r = await api('GET','/api/lastmod');
+    const mod = r && r.lastModified;
+    if(!mod) return;
+    if(_lastSeenMod === null){ _lastSeenMod = mod; return; } // 첫 샘플 = baseline
+    if(mod > _lastSeenMod){ _showUpdateBadge(); }
+  }catch(e){}
+}
+function _showUpdateBadge(){
+  _updateBadgeShown = true;
+  let el = document.getElementById('update-badge');
+  if(!el){
+    el = document.createElement('div');
+    el.id = 'update-badge';
+    el.onclick = _applyUpdate;
+    el.style.cssText = 'position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:99980;background:linear-gradient(135deg,var(--accent) 0%,#6366F1 100%);color:#fff;padding:9px 18px;border-radius:999px;font-size:12.5px;font-weight:700;cursor:pointer;box-shadow:0 6px 20px rgba(74,77,231,0.35);font-family:inherit;white-space:nowrap';
+    document.body.appendChild(el);
+  }
+  el.innerHTML = '🔄 새 업데이트가 있어요 — 클릭해서 새로고침';
+  el.style.display = '';
+}
+function _hideUpdateBadge(){
+  _updateBadgeShown = false;
+  const el = document.getElementById('update-badge');
+  if(el) el.style.display = 'none';
+}
+async function _applyUpdate(){
+  _hideUpdateBadge();
+  try{
+    if(typeof showOverlayLoad==='function') showOverlayLoad('최신 데이터 불러오는 중...');
+    await syncReload(0);   // loadData → _refreshSeenMod로 baseline 갱신
+    if(typeof render==='function') render();
+    try{ if(typeof renderPromoBoard==='function') renderPromoBoard(); }catch(_e){}
+  }catch(e){ console.warn('[update]',e); }
+  finally{ if(typeof hideOverlayLoad==='function') hideOverlayLoad(); }
+}
+(function(){ setInterval(function(){ try{ _checkForUpdates(); }catch(e){} }, 45000); })();
 
 function excelToKey(v){if(!v)return'';if(typeof v==='number'){const d=new Date((v-25569)*86400000);return dk(d);}return String(v);}
 function dk(d){return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
