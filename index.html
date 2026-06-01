@@ -2238,6 +2238,51 @@ function _bizToggleType(t){_bizState.types[t]=!_bizState.types[t];_bizRender();}
 function _bizCard(label,val){
   return '<div style="flex:1;min-width:120px;padding:14px 16px;background:#fafafa;border-radius:12px;border:1px solid #eee"><div style="font-size:11px;color:#888;font-weight:600;margin-bottom:6px">'+label+'</div><div style="font-size:22px;font-weight:800;color:var(--accent);font-variant-numeric:tabular-nums">'+val+'</div></div>';
 }
+var _BIZ_GENRE_COLORS={'클래식':'#4A4DE7','뮤지컬':'#2563EB','대중':'#0891B2','발레/연극':'#D97706','어린이·가족':'#DB2777','기타':'#9CA3AF'};
+var _BIZ_TYPE_COLORS={'기획':'#4A4DE7','대관':'#D97706','기타':'#9CA3AF'};
+function _bizEnsurePlotly(cb){
+  if(window.Plotly){cb();return;}
+  if(window._plotlyQ){window._plotlyQ.push(cb);return;}
+  window._plotlyQ=[cb];
+  var s=document.createElement('script');
+  s.src='https://cdn.plot.ly/plotly-basic-2.27.0.min.js';
+  s.onload=function(){var q=window._plotlyQ||[];window._plotlyQ=null;q.forEach(function(f){try{f();}catch(e){console.error('[biz chart]',e);}});};
+  s.onerror=function(){window._plotlyQ=null;var el=document.getElementById('biz-chart');if(el)el.innerHTML='<div style="color:#E24B4A;text-align:center;padding:40px;font-size:13px">차트 라이브러리 로드 실패 (오프라인?)</div>';};
+  document.head.appendChild(s);
+}
+function _bizDrawChart(list,multi){
+  if(!window.Plotly)return;
+  var div=document.getElementById('biz-chart');if(!div)return;
+  var cmap=multi?_BIZ_TYPE_COLORS:_BIZ_GENRE_COLORS;
+  var catOf=function(g){return multi?(g.type||'기타'):(g.genre||'기타');};
+  var cats={};
+  list.forEach(function(g){var c=catOf(g);(cats[c]=cats[c]||[]).push(g);});
+  var traces=Object.keys(cats).map(function(c){
+    var pts=cats[c];
+    return {type:'scatter',mode:'markers',name:c,
+      x:pts.map(function(g){return g.end.getMonth()+1+(g.end.getDate()-1)/31;}),
+      y:pts.map(function(g){return g.avg;}),
+      marker:{size:11,opacity:0.82,color:cmap[c]||'#9CA3AF',line:{width:1,color:'#fff'}},
+      text:pts.map(function(g){return g.name;}),
+      customdata:pts.map(function(g){return [g.genre||'-',g.cnt,Math.round(g.paid)];}),
+      hovertemplate:'<b>%{text}</b><br>장르: %{customdata[0]}<br>회차: %{customdata[1]}<br>유료: %{customdata[2]:,}석<br>점유율: %{y:.1f}%<extra></extra>'};
+  });
+  var shapes=[{type:'rect',xref:'x',yref:'paper',x0:3.5,x1:6.5,y0:0,y1:1,fillcolor:'rgba(0,0,0,0.035)',line:{width:0},layer:'below'},
+              {type:'rect',xref:'x',yref:'paper',x0:9.5,x1:12.5,y0:0,y1:1,fillcolor:'rgba(0,0,0,0.035)',line:{width:0},layer:'below'}];
+  var annotations=[];
+  Object.keys(cats).forEach(function(c){
+    var arr=cats[c];var avg=arr.reduce(function(a,g){return a+g.avg;},0)/arr.length;
+    shapes.push({type:'line',xref:'x',yref:'y',x0:0.5,x1:12.5,y0:avg,y1:avg,line:{dash:'dash',color:cmap[c]||'#9CA3AF',width:1.3},opacity:0.55});
+    annotations.push({x:12.5,y:avg,xref:'x',yref:'y',text:avg.toFixed(0)+' ('+c+')',showarrow:false,xanchor:'right',yanchor:'bottom',font:{color:cmap[c]||'#666',size:10.5},bgcolor:'rgba(255,255,255,0.82)',borderpad:2});
+  });
+  var layout={height:430,margin:{t:16,r:30,b:36,l:42},paper_bgcolor:'#fff',plot_bgcolor:'#fff',
+    font:{family:'inherit',color:'#444'},
+    xaxis:{tickmode:'array',tickvals:[1,2,3,4,5,6,7,8,9,10,11,12],ticktext:['1','2','3','4','5','6','7','8','9','10','11','12'],range:[0.5,12.5],gridcolor:'#f2f2f2',zeroline:false},
+    yaxis:{range:[0,110],ticksuffix:'%',gridcolor:'#f2f2f2',zeroline:false},
+    showlegend:true,legend:{orientation:'h',y:-0.13,x:0.5,xanchor:'center',font:{size:11}},
+    shapes:shapes,annotations:annotations};
+  Plotly.react(div,traces,layout,{responsive:true,displayModeBar:false});
+}
 function _bizRender(){
   const body=document.getElementById('biz-body');if(!body)return;
   const all=_bizClean();
@@ -2279,6 +2324,7 @@ function _bizRender(){
   });
   h+='</div></div>';
   if(!list.length){h+='<div style="text-align:center;padding:40px;color:#888">해당 연도/분류 데이터가 없습니다</div>';body.innerHTML=h;return;}
+  h+='<div id="biz-chart" style="height:430px;margin-bottom:14px"></div>';
   const total=list.length,avgAll=list.reduce(function(a,g){return a+g.avg;},0)/list.length,maxAll=Math.max.apply(null,list.map(function(g){return g.avg;}));
   h+='<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">'+_bizCard('총 공연',total+'건')+_bizCard('평균 점유율',avgAll.toFixed(1)+'%')+_bizCard('최고 점유율',maxAll.toFixed(1)+'%')+'</div>';
   h+='<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="border-bottom:2px solid #eee;color:#888;font-size:11px;text-align:left">';
@@ -2299,6 +2345,7 @@ function _bizRender(){
   const sa=(_bizState.raw&&_bizState.raw.syncedAt)?_bizState.raw.syncedAt:null;
   if(sa)h+='<div style="text-align:right;color:#bbb;font-size:11px;margin-top:10px">동기화: '+escapeHtml(sa)+'</div>';
   body.innerHTML=h;
+  _bizEnsurePlotly(function(){ _bizDrawChart(list, selTypes.length>1); });
 }
 function openPlatformBoard(){
   _platformState = {
