@@ -8585,7 +8585,7 @@ function buildSheetListHtml(slug,rows){
     }else{
       html+='<button class="adm-btn" onclick="openSheetForm(\''+slug+'\','+r._rowIndex+')">변경</button>';
     }
-    html+='<button class="adm-btn adm-btn-del" onclick="deleteSheetRow(\''+slug+'\','+r._rowIndex+')">삭제</button>';
+    html+=isSuperAdmin()?'<button class="adm-btn adm-btn-del" onclick="deleteSheetRow(\''+slug+'\','+r._rowIndex+')">삭제</button>':'<button class="adm-btn adm-btn-del" disabled title="슈퍼 관리자만 삭제 가능" style="opacity:0.35;cursor:not-allowed">삭제</button>';
     html+='</td></tr>';
   });
   html+='</tbody></table>';
@@ -8762,8 +8762,25 @@ async function saveSheetRow(slug,rowIndex){
   }
 }
 
+// === 삭제 전 슈퍼 관리자 비밀번호 검증 (슈퍼만 삭제 가능) ===
+async function _verifySuperForDelete(){
+  if(!isSuperAdmin()){ showToast('삭제는 슈퍼 관리자만 가능해요','error'); return false; }
+  const secret = await _promptSuperSecret();
+  if(!secret) return false;
+  showOverlayLoad('확인 중...');
+  try{
+    const r = await fetch(`${API}/api/auth/super`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:SUPER_EMAIL,pin:'0510',secret:secret})});
+    const d = await r.json();
+    hideOverlayLoad();
+    if(r.ok && d.ok) return true;
+    showToast('비밀번호가 틀렸어요','error');
+    return false;
+  }catch(e){ hideOverlayLoad(); showToast('인증 실패: '+e.message,'error'); return false; }
+}
+
 async function deleteSheetRow(slug,rowIndex){
   if(!await showConfirm('정말 삭제할까요?',{title:'행 삭제',okText:'삭제',danger:true}))return;
+  if(!await _verifySuperForDelete())return;
   showOverlayLoad('\uC0AD\uC81C \uC911\uC785\uB2C8\uB2E4...');
   try{
     await api('DELETE','/api/sheet/'+slug+'/'+rowIndex);
@@ -8819,7 +8836,7 @@ function buildProgramListHtml(programs){
     html+='<td>'+escapeHtml(p['장소']||'')+'</td>';
     html+='<td style="text-align:right;white-space:nowrap">';
     html+='<button class="adm-btn" onclick="openProgramForm('+p._rowIndex+')">변경</button>';
-    html+='<button class="adm-btn adm-btn-del" onclick="deleteProgram('+p._rowIndex+')">삭제</button>';
+    html+=isSuperAdmin()?'<button class="adm-btn adm-btn-del" onclick="deleteProgram('+p._rowIndex+')">삭제</button>':'<button class="adm-btn adm-btn-del" disabled title="슈퍼 관리자만 삭제 가능" style="opacity:0.35;cursor:not-allowed">삭제</button>';
     html+='</td></tr>';
   });
   html+='</tbody></table>';
@@ -8906,6 +8923,7 @@ async function deleteProgram(rowIndex){
   const p=_programsCache.find(pp=>pp._rowIndex===rowIndex);
   if(!p)return;
   if(!await showConfirm('정말 삭제할까요?\n\n['+(p['풀네임']||'')+']',{title:'프로그램 삭제',okText:'삭제',danger:true}))return;
+  if(!await _verifySuperForDelete())return;
   showOverlayLoad('\uC0AD\uC81C \uC911\uC785\uB2C8\uB2E4...');
   try{
     await api('DELETE','/api/sheet/program/'+rowIndex);
