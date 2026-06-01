@@ -1432,25 +1432,6 @@ async function tryLogin(){
     document.getElementById('login-msg').textContent='';
     document.getElementById('login-load').textContent='확인 중...';
 
-    // 0511 비상 백도어 (MS 없이 진입, 락아웃 복구용)
-    if(pin==='0511'){
-      try{
-        const r=await fetch(`${API}/api/auth`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pin})});
-        const d=await r.json();
-        if(r.ok && d.ok){
-          password=pin;userRole=d.role||'admin';
-          sessionStorage.setItem('pw',pin);sessionStorage.setItem('role',userRole);
-          sessionStorage.setItem('myApplicant','ADMIN');
-          try{sessionStorage.removeItem('myUserDept');sessionStorage.removeItem('subAdminPin');}catch(e){}
-          _enterApp();return;
-        }
-      }catch(e){console.error('[0511]',e);}
-      document.getElementById('login-load').textContent='';
-      document.getElementById('login-msg').textContent='비상 인증 실패';
-      pins.forEach(p=>{p.value='';p.classList.add('err')});pins[0].focus();
-      return;
-    }
-
     // MS 계정 이메일 (silent, 팝업 없음)
     const email = _loginEmail || await _msalGetEmailSilent();
     if(!email){
@@ -2183,35 +2164,13 @@ async function submitRolePrompt(){
     }
     return;
   }
-  // 일반 user → 슈퍼 admin PIN(0511) 입력
-  try{
-    const d=await fetch(API+'/api/auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pin})}).then(r=>r.json());
-    if(d.ok&&d.role==='admin'){
-      // 성공: 전환
-      userRole='admin';
-      password=pin;
-      sessionStorage.setItem('pw',pin);
-      sessionStorage.setItem('role','admin');
-      closeRolePrompt();
-      updateRoleTag();
-      buildNav();
-      render();
-      showToast('관리자 모드로 전환됐어요');
-    }else{
-      // 실패: 흔들기
-      err.textContent=d.ok?'관리자 PIN이 아님':'잘못된 PIN';
-      card.classList.remove('role-shake');
-      void card.offsetWidth;
-      card.classList.add('role-shake');
-      inp.value='';
-      inp.focus();
-    }
-  }catch(e){
-    err.textContent='네트워크 오류';
-    card.classList.remove('role-shake');
-    void card.offsetWidth;
-    card.classList.add('role-shake');
-  }
+  // 서브 admin이 아닌 계정은 관리자 전환 불가 (0511 백도어 제거)
+  err.textContent='관리자 지정 계정이 아닙니다';
+  card.classList.remove('role-shake');
+  void card.offsetWidth;
+  card.classList.add('role-shake');
+  inp.value='';
+  inp.focus();
 }
 function logout(){ showLogoutModal(); }
 function showLogoutModal(){
