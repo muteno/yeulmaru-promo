@@ -8646,20 +8646,8 @@ async function saveInlineRow(slug,rowIndex){
     const myPin=(values[pinColIdx]||'').toString().trim();
     const myActive=values[activeColIdx]==='1';
     const myName=tr.querySelector('[data-key="담당자"]')?tr.querySelector('[data-key="담당자"]').value:'';
-    // 활성 ON + PIN 있는 경우 — 다른 활성 계정과 중복 체크 (비활성 계정은 무시)
-    if(myActive && myPin){
-      const dup=(_sheetCache['manager']||[]).find(function(m){
-        if(m._rowIndex===rowIndex)return false; // 자기 자신 제외
-        if(!isFlagOn(m['계정여부']))return false; // 비활성 계정 무시
-        return String(m['PIN']||'').trim()===myPin;
-      });
-      if(dup){
-        showToast('PIN '+myPin+'은 이미 '+(dup['담당자']||'다른 활성 계정')+'님이 사용 중입니다','error');
-        return;
-      }
-    }
-  }
-  showOverlayLoad('\uC800\uC7A5 \uC911\uC785\uB2C8\uB2E4...');
+    // PIN 중복 허용 — 중복 체크 제거함 (타인 PIN 유출 방지 겸 정책상 중복 허용)
+  }  showOverlayLoad('\uC800\uC7A5 \uC911\uC785\uB2C8\uB2E4...');
   try{
     await api('PATCH','/api/sheet/'+slug+'/'+rowIndex,{values});
     if(slug==='content'){CONTENT_TYPES=[];await loadContentMeta();populateMasterDropdowns();}
@@ -8678,7 +8666,7 @@ async function saveInlineRow(slug,rowIndex){
 function openSheetForm(slug,rowIndex){
   const cfg=SHEET_CONFIG[slug];
   const existing=rowIndex?_sheetCache[slug].find(r=>r._rowIndex===rowIndex):null;
-  let html='<div class="modal-bg show" style="z-index:60" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeSheetForm)"><div class="modal" style="width:96vw;max-width:440px;max-height:88vh;overflow:auto;padding:24px;position:relative">';
+  let html='<div class="modal-bg show" style="z-index:9500" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeSheetForm)"><div class="modal" style="width:96vw;max-width:440px;max-height:88vh;overflow:auto;padding:24px;position:relative">';
   html+='<button class="modal-x" onclick="closeSheetForm()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:14px;float:none;margin:0;z-index:10">✕</button>';
   html+='<div style="display:flex;align-items:center;margin-bottom:14px;gap:8px;padding-bottom:14px;padding-right:48px;border-bottom:1px solid #eee"><h3 style="margin:0;flex:1;text-align:left">'+escapeHtml(cfg.title)+' '+(existing?'변경':'등록')+'</h3></div>';
   html+='<form id="sheet-form" onsubmit="event.preventDefault();saveSheetRow(\''+slug+'\','+(rowIndex||'null')+')" style="display:flex;flex-direction:column;gap:14px">';
@@ -8818,7 +8806,7 @@ function openProgramForm(rowIndex){
     담당자:existing?existing['담당자']:'',
     장소:existing?existing['장소']:'대극장'
   };
-  let html='<div class="modal-bg show" style="z-index:60" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeProgramForm)"><div class="modal" style="width:96vw;max-width:480px;max-height:88vh;overflow:auto;padding:24px;position:relative">';
+  let html='<div class="modal-bg show" style="z-index:9500" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeProgramForm)"><div class="modal" style="width:96vw;max-width:480px;max-height:88vh;overflow:auto;padding:24px;position:relative">';
   html+='<button class="modal-x" onclick="closeProgramForm()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:14px;float:none;margin:0;z-index:10">✕</button>';
   html+='<div style="display:flex;align-items:center;margin-bottom:14px;gap:8px;padding-bottom:14px;padding-right:48px;border-bottom:1px solid #eee"><h3 style="margin:0;flex:1;text-align:left">'+(existing?'프로그램 변경':'프로그램 등록')+'</h3></div>';
   html+='<form id="prog-form" onsubmit="event.preventDefault();saveProgram('+(rowIndex||'null')+')" style="display:flex;flex-direction:column;gap:14px">';
