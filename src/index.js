@@ -662,20 +662,34 @@ var index_default = {
         if (request.method === "PATCH") return json(await handleMarkMessageRead(token, mid), env);
       }
 
-      // === [DB통합] 대시보드 운영 데이터 — KV 미러 (dash가 push, 사업현황 뷰 + 향후 LLM) ===
+      // === [DB통합] 대시보드 운영 데이터 — KV 멀티시트 미러 (dash가 시트별 push) ===
+      // GET ?sheet=<name> → 해당 시트 {headers,rows,count,syncedAt}. GET (no param) → 시트 인덱스.
+      // POST {sheet,headers,rows} (admin) → KV "ops:<sheet>" 저장 + 인덱스 갱신. 사업현황·판매현황·연간현황·LLM 공용.
       if (url.pathname === "/api/ops") {
         if (request.method === "GET") {
-          const cached = await env.ops_kv.get("ops_latest");
-          if (!cached) return json({ headers: [], rows: [], count: 0, syncedAt: null, note: "아직 동기화 안 됨" }, env);
-          return new Response(cached, { headers: { "Content-Type": "application/json", ...corsHeaders(env) } });
+          const sheet = url.searchParams.get("sheet");
+          if (sheet) {
+            const cached = await env.ops_kv.get("ops:" + sheet);
+            if (!cached) return json({ sheet, headers: [], rows: [], count: 0, syncedAt: null, note: "아직 동기화 안 됨" }, env);
+            return new Response(cached, { headers: { "Content-Type": "application/json", ...corsHeaders(env) } });
+          }
+          const idx = await env.ops_kv.get("ops:__index");
+          return json(idx ? JSON.parse(idx) : { sheets: [] }, env);
         }
         if (request.method === "POST") {
           if (role !== "admin") return json({ error: "Admin only (ops push)" }, env, 403);
           const body = await request.json();
+          const sheet = body.sheet;
+          if (!sheet) return json({ error: "sheet name required" }, env, 400);
           const rows = Array.isArray(body.rows) ? body.rows : [];
-          const payload = JSON.stringify({ headers: body.headers || [], rows, count: rows.length, syncedAt: (new Date()).toISOString() });
-          await env.ops_kv.put("ops_latest", payload);
-          return json({ ok: true, count: rows.length }, env);
+          const syncedAt = (new Date()).toISOString();
+          await env.ops_kv.put("ops:" + sheet, JSON.stringify({ sheet, headers: body.headers || [], rows, count: rows.length, syncedAt }));
+          let idx = { sheets: [] };
+          try { const cur = await env.ops_kv.get("ops:__index"); if (cur) idx = JSON.parse(cur); } catch (e) {}
+          const others = (idx.sheets || []).filter((s) => s.name !== sheet);
+          others.push({ name: sheet, count: rows.length, syncedAt });
+          await env.ops_kv.put("ops:__index", JSON.stringify({ sheets: others }));
+          return json({ ok: true, sheet, count: rows.length }, env);
         }
       }
 
