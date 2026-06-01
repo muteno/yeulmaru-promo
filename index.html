@@ -3298,6 +3298,7 @@ async function cancelPromoRequest(rowIndex){
   const status=r['진행 상태']||'';
   if(status==='완료'){showToast('완료된 신청은 취소할 수 없어요','error');return;}
   if(status==='취소'){showToast('이미 취소된 신청이에요','error');return;}
+  if(status==='예정'&&!isAdmin){showToast('예정(승인)된 신청은 취소할 수 없어요. 관리자에게 문의해 주세요','error');return;}
   // 확인
   const title=r['콘텐츠 제목']||'(제목 없음)';
   const ok=await showConfirm('"'+title+'"\n\n이 홍보 신청을 취소할까요?');
@@ -5147,28 +5148,13 @@ function renderPromoBoard(){
       html+='<td style="padding:10px 12px;text-align:left;color:#555;font-weight:500;white-space:nowrap">'+escapeHtml(r['게시 담당자']||'상관 없음')+'</td>';
       // 신청자 컬럼 — 추후 사용자 시스템 도입 후 본인 이름. 지금은 '상관 없음' 디폴트
       html+='<td style="padding:10px 12px;text-align:left;color:#888;font-size:12px;white-space:nowrap">'+escapeHtml(r['신청자']||'상관 없음')+'</td>';
-      // 액션 — admin은 신청 중→접수(✓), 예정→완료(✓) / 본인 user는 신청 중·예정에서 변경/취소
-      const canApprove=isAdmin&&status==='신청 중';
-      const canComplete=isAdmin&&status==='예정';
-      const canMineEdit=isMine&&!isAdmin&&(status==='신청 중'||status==='예정');
-      const canMineReapply=isMine&&!isAdmin&&(status==='취소'||status==='보류');
+      // 액션 — 모든 행 단일 [변경] 메뉴 버튼으로 통일 (클릭→onEvContextMenu, 우클릭과 동일 분기). A-1
+      // 노출: admin은 항상 / user는 본인 '신청 중'·'보류'만 (예정·완료·취소·남의것 = 액션 없음). A-2
       const dKey=getRecDateKey(r);
+      const _hasRowAction = isAdmin || (isMine && (status==='신청 중' || status==='보류'));
       html+='<td style="padding:10px 4px;text-align:center;white-space:nowrap">';
-      if(canApprove){
-        html+='<button onclick="event.stopPropagation();approvePromoFromBoard('+r._rowIndex+')" title="신청 승인 (신청 중 → 예정)" style="padding:5px 10px;border-radius:8px;border:none;background:transparent;color:var(--peach-text);font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;min-width:50px;transition:all .12s" onmouseover="this.innerHTML=\'승인\';this.style.color=\'#0F8B4C\';this.style.background=\'rgba(15,139,76,0.08)\';this.style.fontSize=\'12px\'" onmouseout="this.innerHTML=\'—\';this.style.color=\'#ccc\';this.style.background=\'transparent\';this.style.fontSize=\'14px\'">—</button>';
-      }else if(canComplete){
-        html+='<button onclick="event.stopPropagation();completePromoRequest('+r._rowIndex+')" title="게시 완료 처리 (예정 → 완료)" style="padding:5px 10px;border-radius:8px;border:none;background:transparent;color:#bbb;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;min-width:50px;transition:all .12s" onmouseover="this.innerHTML=\'완료\';this.style.color=\'#0F8B4C\';this.style.background=\'rgba(15,139,76,0.08)\';this.style.fontSize=\'12px\'" onmouseout="this.innerHTML=\'—\';this.style.color=\'#ccc\';this.style.background=\'transparent\';this.style.fontSize=\'14px\'">—</button>';
-      }else if(canMineEdit){
-        html+='<button onclick="event.stopPropagation();openChangeWizard('+r._rowIndex+')" title="신청 내용 변경" style="padding:5px 8px;border-radius:6px;border:none;background:rgba(74,77,231,0.08);color:var(--accent);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;transition:all .12s" onmouseover="this.style.background=\'rgba(74,77,231,0.18)\'" onmouseout="this.style.background=\'rgba(74,77,231,0.08)\'">변경</button>';
-      }else if(canMineReapply){
-        // 일반 사용자 + 본인 신청 + (취소|보류) → 재신청 버튼
-        html+='<button onclick="event.stopPropagation();reapplyPromoRequest('+r._rowIndex+')" title="다시 신청 (재신청)" style="padding:5px 10px;border-radius:8px;border:1px solid rgba(15,139,76,0.25);background:rgba(15,139,76,0.08);color:#0F8B4C;font-size:11px;font-weight:600;cursor:pointer;letter-spacing:0.3px;font-family:inherit">↩ 재신청</button>';
-        if(status==='보류'){
-          html+='<button onclick="event.stopPropagation();cancelPromoRequest('+r._rowIndex+')" title="신청 취소" style="padding:5px 10px;border-radius:8px;border:1px solid rgba(229,72,77,0.25);background:rgba(229,72,77,0.08);color:#e5484d;font-size:11px;font-weight:600;cursor:pointer;letter-spacing:0.3px;font-family:inherit;margin-left:4px">✕ 취소</button>';
-        }
-      }else if(isAdmin){
-        // admin + 보류/완료/취소 — 우클릭 메뉴 호출 버튼
-        html+='<button onclick="event.stopPropagation();onEvContextMenu(event,'+r._rowIndex+',\''+dKey+'\')" title="메뉴 열기 (변경/삭제 등)" style="padding:5px 10px;border-radius:8px;border:none;background:transparent;color:#ccc;font-size:16px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;min-width:50px;transition:all .12s;letter-spacing:1px" onmouseover="this.style.color=\'var(--accent)\';this.style.background=\'rgba(74,77,231,0.08)\'" onmouseout="this.style.color=\'#ccc\';this.style.background=\'transparent\'">···</button>';
+      if(_hasRowAction){
+        html+='<button onclick="event.stopPropagation();onEvContextMenu(event,'+r._rowIndex+',\''+dKey+'\')" title="메뉴 열기" style="padding:5px 14px;border-radius:8px;border:1px solid rgba(74,77,231,0.18);background:rgba(74,77,231,0.07);color:var(--accent);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;min-width:50px;transition:all .12s" onmouseover="this.style.background=\'rgba(74,77,231,0.16)\'" onmouseout="this.style.background=\'rgba(74,77,231,0.07)\'">변경</button>';
       }
       html+='</td>';
       html+='</tr>';
@@ -5302,7 +5288,8 @@ function openChangeWizard(rowIndex){
     let myAppl='';try{myAppl=sessionStorage.getItem('myApplicant')||'';}catch(e){}
     const isMine=_isMineRec(rec,myAppl);
     const st=rec['진행 상태']||'';
-    if(!isMine||(st!=='신청 중'&&st!=='예정')){
+    if(!isMine||st!=='신청 중'){
+      // A-2: user는 '신청 중'만 변경 가능 (예정은 관리자만)
       showToast('변경 권한이 없어요','error');
       return;
     }
@@ -9508,12 +9495,13 @@ function onEvContextMenu(event,rowIndex,dateKey){
       // 남의 일정 — 변경 불가 안내
       const appl=escapeHtml(rec['신청자']||rec['게시 담당자']||'다른 사용자');
       menuHtml='<div style="padding:10px 14px;color:#b35a30;font-size:12px;line-height:1.4;background:#fff8f3;border-radius:8px;margin:2px;max-width:220px">⚠️ 변경 불가<br><span style="color:#888;font-size:11px">'+appl+' 님이 신청한 내역입니다</span></div>';
-    }else if(status==='신청 중' || status==='예정'){
-      // 본인 + 신청 중/예정 — 변경
-      menuHtml='<div class="ccm-item" onclick="closeCellContextMenu();editRec('+rowIndex+',\''+dateKey+'\',null,false)"><span class="emo">✏️</span>변경</div>';
-      if(status==='신청 중'){
-        menuHtml+='<div class="ccm-item" onclick="closeCellContextMenu();cancelPromoRequest('+rowIndex+')"><span class="emo" style="color:#E24B4A">✕</span>취소</div>';
-      }
+    }else if(status==='신청 중'){
+      // 본인 + 신청 중 — 변경 + 취소
+      menuHtml='<div class="ccm-item" onclick="closeCellContextMenu();editRec('+rowIndex+',\''+dateKey+'\',null,false)"><span class="emo">✏️</span>변경</div>'+
+        '<div class="ccm-item" onclick="closeCellContextMenu();cancelPromoRequest('+rowIndex+')"><span class="emo" style="color:#E24B4A">✕</span>취소</div>';
+    }else if(status==='예정'){
+      // 본인 + 예정(승인) — user는 변경·취소 불가, 관리자 문의 (A-2)
+      menuHtml='<div style="padding:10px 14px;color:#0F8B4C;font-size:12px;line-height:1.4;background:rgba(15,139,76,0.06);border-radius:8px;margin:2px;max-width:220px">📅 예정(승인)된 신청<br><span style="color:#888;font-size:11px">변경·취소는 관리자에게 문의하세요</span></div>';
     }else if(status==='보류'){
       // 본인 + 보류 — 재신청
       menuHtml='<div style="padding:10px 14px;color:#F59E0B;font-size:12px;line-height:1.4;background:#fff8e6;border-radius:8px;margin:2px 2px 4px;max-width:220px">⏸ 보류된 신청<br><span style="color:#888;font-size:11px">내용 확인 후 재신청 가능</span></div>'+
@@ -10189,16 +10177,16 @@ function editRec(rowIndex,dateKey,ev,forceReadOnly){
   if(ev&&ev.target&&ev.target.closest('.p-del'))return;
   var rec=records.find(function(r){return r._rowIndex===rowIndex;});
   if(!rec)return;
-  // === user 본인 신청 중·예정 → 변경 위저드 (step별 선택) ===
+  // === user 본인 '신청 중'만 → 변경 위저드 (예정은 읽기전용, A-2) ===
   if(userRole!=='admin'&&!forceReadOnly){
     var myAppl='';try{myAppl=sessionStorage.getItem('myApplicant')||'';}catch(e){}
     var isMine=_isMineRec(rec,myAppl);
     var status=rec['진행 상태']||'';
-    if(isMine&&(status==='신청 중'||status==='예정')){
+    if(isMine&&status==='신청 중'){
       openChangeWizard(rowIndex);
       return;
     }
-    // 그 외 user → 읽기 전용 모달
+    // 그 외 user(예정/보류/완료/취소/남의것) → 읽기 전용 모달
     forceReadOnly=true;
   }
   // admin 또는 forceReadOnly → 기존 모달
