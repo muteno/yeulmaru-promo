@@ -134,9 +134,23 @@ async function getToken(env) {
 __name(getToken, "getToken");
 
 async function graphGet(token, path) {
-  const r = await fetch(`https://graph.microsoft.com/v1.0${path}`, { headers: { Authorization: `Bearer ${token}` } });
-  if (!r.ok) throw new Error(`Graph GET ${r.status}: ${await r.text()}`);
-  return r.json();
+  let lastErr;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    if (attempt > 0) await new Promise((res) => setTimeout(res, 200 * attempt));
+    let r;
+    try {
+      r = await fetch(`https://graph.microsoft.com/v1.0${path}`, { headers: { Authorization: `Bearer ${token}` } });
+    } catch (e) {
+      lastErr = e;
+      continue;
+    }
+    if (r.ok) return r.json();
+    const text = await r.text();
+    const err = new Error(`Graph GET ${r.status}: ${text}`);
+    if (r.status === 429 || r.status === 423 || r.status >= 500) { lastErr = err; continue; }
+    throw err;
+  }
+  throw lastErr;
 }
 __name(graphGet, "graphGet");
 
