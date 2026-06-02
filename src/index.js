@@ -517,9 +517,58 @@ async function opsAppendRows(token, slug, rows){
 }
 __name(opsAppendRows, "opsAppendRows");
 
+// === 공휴일 (KASI 한국천문연구원 특일정보) — KV 캐시 + cron 갱신. 임시·대체공휴일 포함 ===
+async function fetchHolidaysFromKasi(env, year) {
+  if (!env.KASI_KEY) throw new Error("KASI_KEY 미설정");
+  const sk = env.KASI_KEY.includes("%") ? env.KASI_KEY : encodeURIComponent(env.KASI_KEY);
+  const out = [];
+  for (let m = 1; m <= 12; m++) {
+    const mm = String(m).padStart(2, "0");
+    const url = `https://apis.data.go.kr/B090041/openapi/service/SpcdeInfoService/getRestDeInfo?serviceKey=${sk}&solYear=${year}&solMonth=${mm}&numOfRows=100&_type=json`;
+    let r;
+    try { r = await fetch(url); } catch (e) { continue; }
+    if (!r.ok) continue;
+    let j;
+    try { j = await r.json(); } catch (e) { continue; }
+    let items = j && j.response && j.response.body && j.response.body.items && j.response.body.items.item;
+    if (!items) continue;
+    if (!Array.isArray(items)) items = [items];
+    for (const it of items) {
+      if (String(it.isHoliday).trim() !== "Y") continue;
+      const loc = String(it.locdate);
+      if (loc.length !== 8) continue;
+      out.push({ date: `${loc.slice(0, 4)}-${loc.slice(4, 6)}-${loc.slice(6, 8)}`, name: String(it.dateName || "").trim() });
+    }
+  }
+  return out;
+}
+__name(fetchHolidaysFromKasi, "fetchHolidaysFromKasi");
+
+async function getHolidays(env, year, forceRefresh) {
+  const key = `holidays:${year}`;
+  if (!forceRefresh) {
+    const cached = await env.ops_kv.get(key);
+    if (cached) return JSON.parse(cached);
+  }
+  let days = [];
+  try { days = await fetchHolidaysFromKasi(env, year); } catch (e) {}
+  if (days.length) {
+    const payload = { year, days, cachedAt: (/* @__PURE__ */ new Date()).toISOString() };
+    await env.ops_kv.put(key, JSON.stringify(payload));
+    return payload;
+  }
+  const cached = await env.ops_kv.get(key);
+  if (cached) return JSON.parse(cached);
+  return { year, days: [], cachedAt: null };
+}
+__name(getHolidays, "getHolidays");
+
 var index_default = {
   async scheduled(event, env, ctx) {
     ctx.waitUntil(autoCancelStalePending(env));
+    const ky = new Date(Date.now() + 9 * 3600 * 1e3).getUTCFullYear();
+    ctx.waitUntil(getHolidays(env, ky, true));
+    ctx.waitUntil(getHolidays(env, ky + 1, true));
   },
   async fetch(request, env) {
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders(env) });
@@ -756,6 +805,14 @@ var index_default = {
           if (body.mode === "append") return json(await opsAppendRows(token, body.sheet, rows), env);
           return json(await opsWriteSheet(token, body.sheet, body.headers || [], rows), env);
         }
+      }
+
+      // 공휴일 (KASI) — GET ?year=YYYY [&refresh=1]. KV 캐시. 임시·대체공휴일 포함.
+      if (url.pathname === "/api/holidays") {
+        const ky = new Date(Date.now() + 9 * 3600 * 1e3).getUTCFullYear();
+        const year = parseInt(url.searchParams.get("year") || "", 10) || ky;
+        const data = await getHolidays(env, year, url.searchParams.get("refresh") === "1");
+        return json(data, env);
       }
 
       if (url.pathname === "/api/health") return json({ status: "ok", ts: (/* @__PURE__ */ new Date()).toISOString() }, env);

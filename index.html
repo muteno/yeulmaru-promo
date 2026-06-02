@@ -433,6 +433,8 @@ button{font-family:inherit;cursor:pointer}
 .dn.past{color:rgba(0,0,0,0.15)}
 .dn.sat{color:#3B7DD8}
 .dn.sun{color:#D64545}
+.dn.hol{color:#D64545}
+.hol-badge{font-size:9px;color:#D64545;font-weight:600;line-height:1.15;margin:0 0 2px 1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
 .today-badge{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:var(--accent);color:#fff;font-size:12px;font-weight:700;box-shadow:0 2px 8px rgba(74,77,231,0.25)}
 .c-inner > .dn{position:sticky;top:0;z-index:2;background:inherit}
 .c.today .c-inner > .dn{padding:0 0 3px 0}
@@ -9435,7 +9437,15 @@ function getRecsForDate(d){
 
 function calDates(y,m){const first=new Date(y,m-1,1),dow=first.getDay(),offset=(dow-2+7)%7,start=new Date(y,m-1,1-offset),out=[];for(let w=0;w<6;w++){for(let d=0;d<6;d++){const dt=new Date(start);dt.setDate(dt.getDate()+w*7+d);out.push(dt);}}return out;}
 
-function render(){document.getElementById('nav-month').textContent=currentMonth;document.getElementById('nav-year').textContent=currentYear;renderChips();renderCal();autoOpenMobilePanel();}
+function render(){document.getElementById('nav-month').textContent=currentMonth;document.getElementById('nav-year').textContent=currentYear;loadHolidays(currentYear);renderChips();renderCal();autoOpenMobilePanel();}
+var _holidays={},_holLoadedYears={};
+function loadHolidays(year){
+  if(_holLoadedYears[year])return;_holLoadedYears[year]=true;
+  api('GET','/api/holidays?year='+year).then(function(d){
+    var ch=false;((d&&d.days)||[]).forEach(function(x){if(x&&x.date&&!_holidays[x.date]){_holidays[x.date]=x.name;ch=true;}});
+    if(ch&&typeof renderCal==='function')renderCal();
+  }).catch(function(){_holLoadedYears[year]=false;});
+}
 // 모바일이면 자동으로 오늘 날짜 panel 열기 (drawer 항상 표시)
 function autoOpenMobilePanel(){
   if(!window.matchMedia('(max-width:768px)').matches)return;
@@ -9619,6 +9629,7 @@ function renderCal(){
       let bg='rgba(255,255,255,0.3)';
       if(nm)bg='var(--nm-bg)';else if(td)bg='var(--today-bg)';else if(past)bg='var(--past-bg)';
       let dnCls='dn';if(nm)dnCls+=' nm';else if(past)dnCls+=' past';else if(isSat)dnCls+=' sat';else if(isSun)dnCls+=' sun';
+      var holName=(!nm)?(_holidays[key]||''):'';if(holName)dnCls+=' hol';
       h+=`<div class="c cell${nm?' nm':''}${past?' past':''}${td?' today':''}${isSel?' sel':''}${_justCopiedDateKey===key?' just-copied-cell':''}" data-cell data-key="${key}" onclick="if(event.target.closest('.perf-badge'))return;clickDate('${key}')" oncontextmenu="if(event.target.closest('.perf-badge'))return;onCellContextMenu(event,'${key}')"${nm?'':` ondragover="onCellDragOver(event)" ondragleave="onCellDragLeave(event)" ondrop="onCellDrop(event,'${key}')"`} style="background:${bg};${di<5?'border-right:1px solid var(--border)':''}${nm?'cursor:default':'cursor:pointer'}">`;
       var perfs=nm?[]:getPerfs(d);var filteredRecs=recs;if(activeFilters.length>0){var allGroups=[{label:'카카오',match:['카카오']},{label:'인스타',match:['인스타']},{label:'블로그·맘카페',match:['블로그','맘카페']},{label:'B2B',match:['B2B']},{label:'문자',match:['문자']}];var activeMatches=[];activeFilters.forEach(function(af){allGroups.forEach(function(g){if(g.label===af)activeMatches=activeMatches.concat(g.match);});});filteredRecs=filteredRecs.filter(function(r){var p=r['플랫폼 1']||'';return activeMatches.some(function(m){return p.indexOf(m)>-1;});});}if(activePrograms.length>0){filteredRecs=filteredRecs.filter(function(r){var prog=r['프로그램']||'';return activePrograms.indexOf(prog)>-1;});}
       // 시간순 정렬 (입력시간 HH:MM 기준)
@@ -9631,7 +9642,7 @@ function renderCal(){
         var doneCount=filteredRecs.filter(function(r){return (r['진행 상태']||'')==='완료';}).length;
         h+='<div class="c-count">'+doneCount+'/'+filteredRecs.length+'</div>';
       }
-      h+='<div class="c-inner"><div class="'+dnCls+'">'+(td&&!nm?'<span style="color:var(--accent);font-weight:700">'+d.getDate()+'</span>':d.getDate())+renderPerfsHtml(perfs,td,past,key)+'</div>';
+      h+='<div class="c-inner"><div class="'+dnCls+'">'+(td&&!nm?'<span style="color:var(--accent);font-weight:700">'+d.getDate()+'</span>':d.getDate())+renderPerfsHtml(perfs,td,past,key)+'</div>'+(holName?'<div class="hol-badge" title="'+escapeHtml(holName)+'">'+escapeHtml(holName)+'</div>':'');
       filteredRecs.forEach(r=>{
         var p=r['플랫폼 1']||'',p2=r['플랫폼 2']||'',title=r['콘텐츠 제목']||'',col=platColor(p),st=r['진행 상태']||'예정';
         var done=st==='완료';
