@@ -7925,7 +7925,7 @@ function renderApplySettings(loadOk){
     html+='<button onclick="addIndividualExclusion()" style="padding:8px 16px;background:var(--accent);color:#fff;border:0;border-radius:10px;cursor:pointer;font-weight:600;font-size:12px">+ 추가</button>';
     html+='</div>';
     // 개별 목록 영역
-    html+='<div id="iv-list" style="margin-left:72px;margin-top:8px">'+buildIndividualListHtml()+'</div>';
+    html+='<div id="iv-list" style="margin-left:72px;margin-top:8px;max-height:260px;overflow-y:auto;padding-right:4px">'+buildIndividualListHtml()+'</div>';
   }
   body.innerHTML=html;
 }
@@ -8049,6 +8049,13 @@ async function removeApplyMonth(idx){
   showOverlayLoad('제거 중입니다...');
   try{
     if(ri)await api('DELETE','/api/sheet/applysettings/'+ri);
+    // 해당 월에 자동등록된 공휴일(종일) 제외도 함께 삭제
+    var _rym=arr[idx];
+    var _delHols=APPLY_EXCLUSIONS.filter(function(ex){return ex.date&&ex.date.substring(0,7)===_rym&&ex.start==='00:00'&&ex.end==='23:59'&&window._holidays&&_holidays[ex.date];});
+    for(var _hi=0;_hi<_delHols.length;_hi++){
+      try{ if(_delHols[_hi].rowIndex)await api('DELETE','/api/sheet/applysettings/'+_delHols[_hi].rowIndex); }catch(e){}
+      var _ix=APPLY_EXCLUSIONS.indexOf(_delHols[_hi]); if(_ix>=0)APPLY_EXCLUSIONS.splice(_ix,1);
+    }
     if(Array.isArray(APPLY_SETTINGS.접수월))APPLY_SETTINGS.접수월.splice(idx,1);
     if(Array.isArray(APPLY_SETTINGS_ROWS.접수월))APPLY_SETTINGS_ROWS.접수월.splice(idx,1);
     invalidateApplyCache();
@@ -8105,9 +8112,10 @@ function buildIndividualListHtml(){
   indivs.forEach(function(ex){
     const idx=APPLY_EXCLUSIONS.indexOf(ex);
     html+='<div style="display:flex;align-items:center;gap:10px;padding:7px 12px;background:#fff;border:1px solid #eee;border-radius:8px;font-size:13px">';
-    var _isHol=(ex.start==='00:00'&&ex.end==='23:59'&&window._holidays&&_holidays[ex.date]);
+    var _holNm=(window._holidays&&_holidays[ex.date])||'';
+    var _isFull=(ex.start==='00:00'&&ex.end==='23:59');
     html+='<span style="color:#333;font-weight:600;min-width:90px">'+escapeHtml(ex.date)+'</span>';
-    html+=_isHol?'<span style="color:#D64545;flex:1;font-weight:600">'+escapeHtml(_holidays[ex.date])+' <span style="font-size:10px;color:#D64545;background:rgba(214,69,69,0.1);padding:1px 6px;border-radius:8px;font-weight:600;margin-left:2px">공휴일</span></span>':'<span style="color:#666;flex:1">'+escapeHtml(ex.start+' ~ '+ex.end)+'</span>';
+    html+=_holNm?'<span style="color:#D64545;flex:1;font-weight:600">'+escapeHtml(_holNm)+' <span style="font-size:10px;color:#D64545;background:rgba(214,69,69,0.1);padding:1px 6px;border-radius:8px;font-weight:600;margin-left:2px">공휴일</span>'+(_isFull?'':' <span style="color:#999;font-weight:400;font-size:11px">'+escapeHtml(ex.start+'~'+ex.end)+'</span>')+'</span>':'<span style="color:#666;flex:1">'+escapeHtml(ex.start+' ~ '+ex.end)+'</span>';
     html+='<button onclick="deleteExclusion('+idx+')" style="padding:3px 9px;border:1px solid rgba(216,75,74,0.25);border-radius:6px;background:#fff;color:#E24B4A;cursor:pointer;font-size:11px">삭제</button>';
     html+='</div>';
   });
