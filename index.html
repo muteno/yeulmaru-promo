@@ -527,6 +527,8 @@ button{font-family:inherit;cursor:pointer}
 .panel-hdr-prog{font-size:13px;font-weight:600;color:var(--accent)}
 .panel-hdr-labels{margin-top:7px;display:flex;flex-wrap:wrap;gap:6px}
 .panel-hdr-labels>span{margin-left:0}
+.panel-svc{margin:2px 0 16px;padding-bottom:14px;border-bottom:1px solid var(--border)}
+.panel-svc-row{font-size:13px;font-weight:600;color:#333;line-height:2}
 .panel-close{width:32px;height:32px;border-radius:50%;border:1px solid rgba(0,0,0,0.06);background:var(--glass);font-size:14px;color:var(--dim);display:flex;align-items:center;justify-content:center;transition:all .2s}
 .panel-close:hover{background:var(--accent-light);color:var(--accent)}
 .panel-body{flex:1;padding:16px 24px;overflow-y:auto}
@@ -2055,6 +2057,7 @@ async function initApp(){
   try{await loadPrograms();}catch(e){console.warn('[initApp loadPrograms]',e);}
   try{await loadAllMasters();}catch(e){console.warn('[initApp loadAllMasters]',e);}
   try{await loadPromoSpecial();}catch(e){console.warn('[initApp loadPromoSpecial]',e);}
+  try{await loadCafeJangdo();}catch(e){console.warn('[initApp loadCafeJangdo]',e);}
   try{await loadApplySettings();}catch(e){console.warn('[initApp loadApplySettings]',e);}
   updatePerfOpen();
   loadData();
@@ -9552,6 +9555,12 @@ function loadHolidays(year){
     if(ch&&typeof renderCal==='function')renderCal();
   }).catch(function(){_holLoadedYears[year]=false;});
 }
+// === 카페/장도 운영시간 (DB 운영_카페일정 / 운영_장도) — 날짜 패널 서비스 안내용 ===
+var _cafeHours={},_jangdoHours={};
+async function loadCafeJangdo(){
+  try{ var c=await api('GET','/api/ops?sheet='+encodeURIComponent('카페일정')); ((c&&c.rows)||[]).forEach(function(r){var d=(r['날짜']||'').toString().trim();if(d)_cafeHours[d]=(r['운영시간']||'').toString().trim();}); }catch(e){}
+  try{ var j=await api('GET','/api/ops?sheet='+encodeURIComponent('장도')); ((j&&j.rows)||[]).forEach(function(r){var d=(r['날짜']||'').toString().trim();if(d)_jangdoHours[d]=(r['입도가능시간']||'').toString().trim();}); }catch(e){}
+}
 // 모바일이면 자동으로 오늘 날짜 panel 열기 (drawer 항상 표시)
 function autoOpenMobilePanel(){
   if(!window.matchMedia('(max-width:768px)').matches)return;
@@ -10042,8 +10051,10 @@ function openPanel(dateObj,recs){
   var _pPerfs=((typeof getPerfs==='function')?getPerfs(dateObj):[]).filter(function(p){return p.t!=='e';});
   var _pLabels=(_pHol?'<span class="panel-hdr-hol">'+escapeHtml(_pHol)+'</span>':'')+_pPerfs.map(function(p){return '<span class="panel-hdr-prog">'+escapeHtml(p.f||p.n)+'</span>';}).join('');
   var h='<div class="panel-hdr"><div style="flex:1;min-width:0"><div class="panel-date">'+(dateObj.getMonth()+1)+'월 '+dateObj.getDate()+'일<span class="panel-dow">'+dn+'요일</span></div>'+(_pLabels?'<div class="panel-hdr-labels">'+_pLabels+'</div>':'')+'</div><button class="panel-close" onclick="closePanel()">✕</button></div><div class="panel-body">';
-  // === 특수 일정 섹션 (홍보 콘텐츠 위, 살구 톤 구분) ===
   var dKey=dk(dateObj);
+  // === 카페/장도 운영시간 (서비스 안내 — 본문 맨 위 고정) ===
+  h+='<div class="panel-svc"><div class="panel-svc-row">• 장도 입도 가능 시간 : '+escapeHtml((window._jangdoHours&&_jangdoHours[dKey])||'-')+'</div><div class="panel-svc-row">• 카페 운영 시간 : '+escapeHtml((window._cafeHours&&_cafeHours[dKey])||'-')+'</div></div>';
+  // === 특수 일정 섹션 (홍보 콘텐츠 위, 살구 톤 구분) ===
   var spItems=(PROMO_SPECIAL||[]).filter(function(s){return dKey>=s.start&&dKey<=s.end;});
   if(spItems.length>0){
     var redTypes={'휴무':1,'출장':1};
