@@ -2472,6 +2472,7 @@ function _salesTrendCtrl(label,opts,cur,fn){
   opts.forEach(function(o){var on=(o===cur);h+='<button onclick="'+fn+'(\''+o+'\')" style="padding:5px 11px;border-radius:7px;border:1.5px solid '+(on?'var(--accent)':'#e0e0e0')+';background:'+(on?'rgba(74,77,231,0.08)':'#fff')+';color:'+(on?'var(--accent)':'#777')+';font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">'+o+(label==='기간'?'별':'')+'</button>';});
   return h+'</div>';
 }
+function _salesDrawPacing(){var div=document.getElementById('sales-pacing-chart');if(!div||!window.Plotly)return;function _pdYmd(s){s=String(s||'').trim();if(/^\d{8}$/.test(s))return new Date(+s.slice(0,4),+s.slice(4,6)-1,+s.slice(6,8));return _salesDate(s);}var mmap={};((_salesState.master&&_salesState.master.rows)||[]).map(_salesNorm).forEach(function(m){var n=String(m['사업명']||'').trim();if(!n)return;mmap[n]={show:_salesDate(m['시작일']),cat:String(m['수익성']||'').trim(),tgt:_salesNum(m['목표점유율'])};});var g={};((_salesState.daily&&_salesState.daily.rows)||[]).map(_salesNorm).forEach(function(r){var n=String(r['공연명']||'').trim();if(!mmap[n])return;(g[n]=g[n]||[]).push(r);});var pal={'상업성':'#E5484D','공공성':'#4A4DE7'};var traces=[];Object.keys(g).forEach(function(n){var meta=mmap[n];if(!meta.show)return;var pts=g[n].map(function(r){var bd=_pdYmd(r['기준일자']);return bd?{d:Math.round((meta.show-bd)/86400000),occ:_salesNum(r['점유율'])||0}:null;}).filter(Boolean).filter(function(p){return p.d>=0;}).sort(function(a,b){return b.d-a.d;});if(pts.length<2)return;var nm=n.replace(/^20\d\d\s*/,'').replace(/^GS칼텍스 예울마루\s*/,'').slice(0,18);traces.push({type:'scatter',mode:'lines',name:nm,x:pts.map(function(p){return p.d;}),y:pts.map(function(p){return p.occ;}),line:{color:pal[meta.cat]||'#9AA0A6',width:2},hovertemplate:n+'<br>D-%{x}: %{y:.1f}%<extra></extra>'});});if(!traces.length){div.innerHTML='<div style="color:#aaa;text-align:center;padding:30px;font-size:12px">페이싱 데이터 없음 (일일입력↔공연마스터 매칭 필요)</div>';return;}var layout={height:300,margin:{t:10,r:16,b:40,l:46},paper_bgcolor:'#fff',plot_bgcolor:'#fff',font:{family:'inherit',size:11,color:'#444'},xaxis:{title:'공연일까지 남은 일수 (D-)',autorange:'reversed',gridcolor:'#f2f2f2',zeroline:true,zerolinecolor:'#ccc'},yaxis:{title:'누적 점유율 %',rangemode:'tozero',gridcolor:'#f2f2f2'},showlegend:true,legend:{orientation:'h',y:-0.25,font:{size:9}}};Plotly.react(div,traces,layout,{responsive:true,displayModeBar:false});}
 function _salesRender(){
   var body=document.getElementById('sales-body'); if(!body)return;
   var perfs=_salesBuild();
@@ -2498,6 +2499,7 @@ function _salesRender(){
     h+='<div style="font-size:14px;font-weight:700;color:#333;margin:26px 0 8px">[3] 판매추이</div>';
     h+='<div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:12px">'+_salesTrendCtrl('지표',['점유율','합계좌석','합계금액'],_salesState.trendMetric,'_salesSetMetric')+_salesTrendCtrl('기간',['일','주','월'],_salesState.trendPeriod,'_salesSetPeriod')+'</div>';
     h+='<div style="display:flex;gap:14px;flex-wrap:wrap"><div id="sales-trend-comm" style="flex:1;min-width:300px;min-height:200px"></div><div id="sales-trend-pub" style="flex:1;min-width:300px;min-height:200px"></div></div>';
+    h+='<div style="font-size:14px;font-weight:700;color:#333;margin:26px 0 4px">[4] 판매 페이싱 곡선</div><div style="font-size:11px;color:#999;margin-bottom:6px">공연일까지 남은 일수(D-) 기준 누적 점유율 — 공연 간 판매 속도 비교 · 색=수익성(빨강 상업/파랑 공공)</div><div id="sales-pacing-chart" style="min-height:240px"></div>';
   }
   if(ended.length){
     h+='<div style="margin-top:18px"><button onclick="_salesToggleEnded()" style="padding:7px 14px;border-radius:8px;border:1px solid #ddd;background:#fafafa;font-size:12px;font-weight:600;color:#666;cursor:pointer;font-family:inherit">종료된 공연 '+(_salesState.showEnded?'숨기기 ▲':'보기 ▼')+' ('+ended.length+')</button></div>';
@@ -2506,7 +2508,7 @@ function _salesRender(){
   var sa=(_salesState.daily&&_salesState.daily.syncedAt)?_salesState.daily.syncedAt:null;
   if(sa)h+='<div style="text-align:right;color:#bbb;font-size:11px;margin-top:12px">동기화: '+escapeHtml(sa)+'</div>';
   body.innerHTML=h;
-  if(active.length){ _bizEnsurePlotly(function(){ _salesDrawOccChart(active); _salesDrawTrend(); }); }
+  if(active.length){ _bizEnsurePlotly(function(){ _salesDrawOccChart(active); _salesDrawTrend(); _salesDrawPacing(); }); }
 }
 // === [DB통합] 사업 현황 (dash 2_사업현황 '연간 운영현황' 이식 — 프로모 톤) ===
 var _bizState = { raw:null, year:null, types:{}, escHandler:null };
