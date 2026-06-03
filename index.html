@@ -2229,8 +2229,10 @@ function _opsIndex(){
     var nm=String(r['공연명']||'').trim(); var k=_uName(nm); if(!k) return;
     var y=parseInt(String(r['년도']||'').replace(/[^0-9]/g,''),10); if(isNaN(y))y=null;
     var kk=k+'|'+(y||'?');
-    var e=agg[kk]; if(!e){ e=agg[kk]={key:k,name:nm,year:y,base:_salesNum(r['기본좌석'])||0,genre:String(r['장르1']||'').trim(),gubun:String(r['공연구분']||'').trim(),count:0}; }
+    var e=agg[kk]; if(!e){ e=agg[kk]={key:k,name:nm,year:y,base:_salesNum(r['기본좌석'])||0,genre:String(r['장르1']||'').trim(),gubun:String(r['공연구분']||'').trim(),count:0,first:null,last:null}; }
     e.count++; if(!e.base)e.base=_salesNum(r['기본좌석'])||0;
+    var mo=_salesNum(r['월']), dy=_salesNum(r['일']);
+    if(y&&mo){ var dt=new Date(y,mo-1,dy||1); if(!isNaN(dt.getTime())){ if(!e.first||dt<e.first)e.first=dt; if(!e.last||dt>e.last)e.last=dt; } }
   });
   var byName={};
   Object.keys(agg).forEach(function(kk){ var e=agg[kk]; (byName[e.key]=byName[e.key]||[]).push(e); });
@@ -2282,13 +2284,15 @@ function _salesBuild(){
     var genre=ops?ops.genre:'';
     var totalOpen=(m&&m.총오픈석)?m.총오픈석:(ops?base*(ops.count||1):base*((m&&m.총회차)||1));
     var occ=totalOpen>0?Math.min(seats/totalOpen*100,100):0;
-    var startDate=m?m.시작:null;
+    var startDate=m?m.시작:(ops&&ops.first?ops.first:null);
+    var endDate=m?m.종료:(ops&&ops.last?ops.last:null);
     var dday=startDate?Math.round((startDate-today)/86400000):null;
     var dateStr='';
     if(m&&m.ID&&rounds[m.ID])dateStr=_salesFmtDates(rounds[m.ID]);
     else if(startDate){var ws=['일','월','화','수','목','금','토'];dateStr=(startDate.getMonth()+1)+'.'+startDate.getDate()+'('+ws[startDate.getDay()]+')';}
     var status='unknown';
     if(m&&m.티켓오픈&&m.종료){ if(m.티켓오픈<=today&&today<=m.종료)status='active'; else if(today>m.종료)status='ended'; else status='notyet'; }
+    else if(!m&&endDate){ status=(today>endDate)?'ended':(startDate&&today<startDate?'notyet':'active'); }
     else if(dday!==null){ status=dday>=0?'active':'ended'; }
     perfs.push({name:name,seats:seats,money:money,diff:diff,occ:occ,totalOpen:totalOpen,dday:dday,dateStr:dateStr,수익성:(m&&m.수익성)?m.수익성:_profitType(name,genre),목표:(m?m.목표:50),startDate:startDate,status:status,genre:genre,gubun:(ops?ops.gubun:''),enriched:(!m&&!!ops)});
   });
