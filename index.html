@@ -789,6 +789,7 @@ table.promo-board-table th:last-child .col-resize-handle{display:none}
     </div>
     <div class="nav-center" id="nav-menus"></div>
     <div class="nav-right">
+      <div id="wx-widget" title="여수 날씨" style="display:none;align-items:center;gap:8px;padding:4px 11px;border-radius:14px;background:linear-gradient(135deg,#eef2ff,#f7f9ff);border:1px solid #e7eaf6;margin-right:12px;cursor:default;font-family:inherit"></div>
       <button class="msgbox-btn" id="msgbox-btn" onclick="openMsgBox()" title="메시지함" aria-label="메시지함" style="font-family:inherit">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
         <span class="msgbox-count" id="msgbox-count" style="display:none">0</span>
@@ -2052,6 +2053,7 @@ function updatePerfOpen(){
 }
 async function initApp(){
   buildNav();startClock();updateRoleTag();
+  loadWeather(); if(!window._wxTimer)window._wxTimer=setInterval(loadWeather,1800000);
   // 슈퍼 admin (subAdminPin 없음)만 myApplicant 정리. 서브 admin은 본인 신원 유지.
   if(userRole==='admin' && !sessionStorage.getItem('subAdminPin')){
     try{sessionStorage.removeItem('myApplicant');}catch(e){}
@@ -2065,6 +2067,27 @@ async function initApp(){
   loadData();
   // MS(OneDrive) 토큰 미리 확보 — 폴더 선택 때 팝업 안 뜨게 (재방문 silent / 첫 로그인 popup 1회)
   _msalPrefetch();
+}
+
+// === 날씨 위젯 (Open-Meteo · API키 불필요 · 위치=전남 여수시 고정) ===
+var _WX_CODE={0:['☀️','맑음'],1:['🌤️','대체로 맑음'],2:['⛅','구름 조금'],3:['☁️','흐림'],45:['🌫️','안개'],48:['🌫️','안개'],51:['🌦️','약한 이슬비'],53:['🌦️','이슬비'],55:['🌦️','짙은 이슬비'],56:['🌧️','어는 이슬비'],57:['🌧️','어는 이슬비'],61:['🌧️','약한 비'],63:['🌧️','비'],65:['🌧️','강한 비'],66:['🌧️','어는 비'],67:['🌧️','어는 비'],71:['🌨️','약한 눈'],73:['❄️','눈'],75:['❄️','강한 눈'],77:['🌨️','싸락눈'],80:['🌦️','소나기'],81:['🌦️','소나기'],82:['⛈️','강한 소나기'],85:['🌨️','소나기눈'],86:['🌨️','소나기눈'],95:['⛈️','뇌우'],96:['⛈️','뇌우·우박'],99:['⛈️','뇌우·우박']};
+async function loadWeather(){
+  var el=document.getElementById('wx-widget'); if(!el)return;
+  try{
+    var u='https://api.open-meteo.com/v1/forecast?latitude=34.7604&longitude=127.6622&current=temperature_2m,weather_code,relative_humidity_2m,apparent_temperature&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=Asia%2FSeoul&forecast_days=1';
+    var r=await fetch(u); if(!r.ok)throw new Error('wx '+r.status); var d=await r.json();
+    var cur=d.current||{}, dy=d.daily||{};
+    var ic=_WX_CODE[cur.weather_code]||['🌡️','—'];
+    var t=Math.round(cur.temperature_2m), hi=Math.round((dy.temperature_2m_max||[])[0]), lo=Math.round((dy.temperature_2m_min||[])[0]);
+    var feel=Math.round(cur.apparent_temperature), hum=cur.relative_humidity_2m;
+    el.innerHTML='<span style="font-size:22px;line-height:1">'+ic[0]+'</span>'
+      +'<span style="display:flex;flex-direction:column;line-height:1.15">'
+      +'<span><b style="font-size:15px;color:#333;font-variant-numeric:tabular-nums">'+t+'°</b> <span style="font-size:11px;color:#8a8f9c">여수</span></span>'
+      +'<span style="font-size:10.5px;color:#a3a8b4;white-space:nowrap">'+ic[1]+' · <span style="color:#E5736B">↑'+hi+'°</span> <span style="color:#5B8DEF">↓'+lo+'°</span></span>'
+      +'</span>';
+    el.title='여수시 · '+ic[1]+' · 현재 '+t+'°(체감 '+feel+'°) · 습도 '+hum+'% · 오늘 ↑'+hi+'° ↓'+lo+'°';
+    el.style.display='inline-flex';
+  }catch(e){ console.warn('[loadWeather]',e); el.style.display='none'; }
 }
 
 function updateRoleTag(){
