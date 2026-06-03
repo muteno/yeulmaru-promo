@@ -2545,7 +2545,11 @@ function _salesShapeCurve(cat){
   var raw=[];for(var d=0;d<=150;d++){var arr=b[d];raw[d]=(arr&&arr.length)?arr.reduce(function(a,x){return a+x;},0)/arr.length:null;}
   var last=null;for(var d2=150;d2>=0;d2--){if(raw[d2]!=null)last=raw[d2];else if(last!=null)raw[d2]=last;}
   var next=null;for(var d3=0;d3<=150;d3++){if(raw[d3]!=null)next=raw[d3];else if(next!=null)raw[d3]=next;}
-  return raw;
+  // 평활(이동평균 ±4) + 단조(공연일로 갈수록 누적진척률 비감소) → 깔끔한 기준곡선
+  var sm=raw.slice();
+  for(var d4=0;d4<=150;d4++){var a=0,c=0;for(var w=-4;w<=4;w++){var k=d4+w;if(k>=0&&k<=150&&raw[k]!=null){a+=raw[k];c++;}}sm[d4]=c?a/c:raw[d4];}
+  for(var d5=149;d5>=0;d5--){if(sm[d5]!=null&&sm[d5+1]!=null&&sm[d5]<sm[d5+1])sm[d5]=sm[d5+1];}
+  return sm;
 }
 function _salesDrawTarget(){
   var div=document.getElementById('sales-target-chart');if(!div||!window.Plotly)return;
