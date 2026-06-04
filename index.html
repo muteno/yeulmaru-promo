@@ -6357,6 +6357,26 @@ async function submitPromoEdit(){
     patch['진행 상태']='예정';
   }
   if(!Object.keys(patch).length){showToast('변경된 항목이 없어요','error');return;}
+  // [버그수정] 일정 관련 항목(일자·시간/프로그램/플랫폼)이 바뀔 때만 해당 제약 재검증 — 제목·메모만 수정은 미차단
+  {
+    var _dtCh=_pwSelectedSteps.includes(3), _progCh=_pwSelectedSteps.includes(1), _platCh=_pwSelectedSteps.includes(4);
+    if(_dtCh||_progCh||_platCh){
+      var _st=String(orig['진행 상태']||'').trim();
+      if(_st==='완료'||_st==='취소'){showToast('완료·취소된 일정은 변경할 수 없어요','error');return;}
+      var _effDate=_dtCh?_pwData.date:_recDate(orig);
+      var _effTime=_dtCh?_pwData.time:_recTime(orig);
+      var _effPlat=_platCh?_pwData.plat1:(orig['플랫폼 1']||'');
+      var _effProg=_progCh?_pwData.program:(orig['프로그램']||'');
+      var _effAppl=_platCh?_pwData.applicant:(orig['게시 담당자']||'');
+      // 날짜/시간 변경 시: 접수·홍보시간대·제외·담당자 검증
+      if(_dtCh){ var _c=canApplyOnDateTime(_effDate,_effTime); if(!_c.ok){showToast('변경 불가: '+_c.reason,'error');return;} }
+      // 날짜 or 프로그램 변경 시: 판매기간 검증
+      var _perf=_findPerfByName(_effProg);
+      if(_perf){ if(_perf.ss&&_effDate<_perf.ss){showToast('변경 불가: 프로그램 판매 시작('+_perf.ss+') 전이라 홍보할 수 없어요','error');return;} if(_perf.se&&_effDate>_perf.se){showToast('변경 불가: 프로그램 판매 종료('+_perf.se+') 후라 홍보할 수 없어요','error');return;} }
+      // 날짜 or 플랫폼 변경 시: 카카오/문자 충돌 (자기 자신 제외)
+      if(_dtCh||_platCh){ var _kc=_kakaoSmsConflict(_effPlat,_effDate,_effAppl,_pwEditTarget); if(_kc){showToast('변경 불가: '+_kc,'error');return;} }
+    }
+  }
   showOverlayLoad('변경 사항 저장 중...');
   try{
     const row = buildRecordRow(orig, patch);
@@ -6933,44 +6953,9 @@ async function promoNext(){
   await submitPromoRequest();
 }
 async function submitPromoRequest(){
-  // ===== 신청 직전 재검증 (관리자 설정 + 카카오/문자 중복) =====
-  const chk=canApplyOnDateTime(_pwData.date,_pwData.time);
-  if(!chk.ok){showToast('신청 불가: '+chk.reason,'error');return;}
-  // 카카오톡 / 문자 — 같은 날짜에 다른 사람 신청 있으면 차단
-  // 카카오톡 / 문자 → 다른 신청과 충돌 검사 (관리자 제외, user만)
-  // 카카오: 같은 날 + 전날(D-1)도 검사 (누구든 1건만)
-  // 문자: 같은 날 + 다른 사람과의 충돌만
-  const lockedPlats=['카카오톡','문자'];
-  const _isKakao=_pwData.plat1==='카카오톡';
-  if(lockedPlats.indexOf(_pwData.plat1)>=0 && userRole!=='admin'){
-    const _checkDates=[_pwData.date];
-    if(_isKakao){
-      const _d=new Date(_pwData.date+'T00:00:00');
-      _d.setDate(_d.getDate()-1);
-      _checkDates.push(_d.getFullYear()+'-'+String(_d.getMonth()+1).padStart(2,'0')+'-'+String(_d.getDate()).padStart(2,'0'));
-    }
-    const _matched=(records||[]).filter(function(r){
-      const y=r['연도'],m=String(r['월']||'').padStart(2,'0'),d=String(r['일']||'').padStart(2,'0');
-      return _checkDates.indexOf(y+'-'+m+'-'+d)>=0;
-    });
-    const conflict=_matched.find(function(r){
-      const p1=r['플랫폼 1']||'';
-      const status=r['진행 상태']||'';
-      if(p1!==_pwData.plat1||status==='취소') return false;
-      if(_isKakao) return true;
-      return (r['게시 담당자']||'')!==_pwData.applicant;
-    });
-    if(conflict){
-      const yy=conflict['연도'],mm=String(conflict['월']||'').padStart(2,'0'),dd=String(conflict['일']||'').padStart(2,'0');
-      const _cDate=mm+'/'+dd;
-      const _sameDay=(yy+'-'+mm+'-'+dd)===_pwData.date;
-      const _msg=_sameDay
-        ? '같은 날('+_cDate+') '+_pwData.plat1+' 신청이 이미 있어요. ('+(conflict['게시 담당자']||'다른 담당자')+')'
-        : '전날('+_cDate+') 카카오톡 신청이 있어 다음날엔 등록할 수 없어요. ('+(conflict['게시 담당자']||'다른 담당자')+')';
-      showToast(_msg,'error');
-      return;
-    }
-  }
+  // ===== 신청 직전 재검증 (통합 게이트: 접수/홍보시간대/제외/담당자/판매기간/카카오문자) =====
+  const _v=_validateScheduleChange(null,_pwData.date,_pwData.time,{action:'submit',plat1:_pwData.plat1,applicant:_pwData.applicant,program:_pwData.program});
+  if(!_v.ok){showToast('신청 불가: '+_v.reason,'error');return;}
   showOverlayLoad();
   try{
     const typeMap={'c':'공연','e':'전시','a':'예술교육','r':'대관'};
@@ -9045,6 +9030,51 @@ function canApplyOnDateTime(dateKey,time){
     return{ok:false,reason:'해당 시간은 모든 담당자가 일정 중'};
   }
   return{ok:true};
+}
+
+// === [버그수정] 일정 변경 통합 검증 게이트 — 신청·복사·이동·변경 전 경로 공용 ===
+function _recDate(rec){ return (rec['연도']||'')+'-'+String(rec['월']||'').padStart(2,'0')+'-'+String(rec['일']||'').padStart(2,'0'); }
+function _recTime(rec){ var ts=rec['입력시간(KST)']; if(typeof ts==='string'&&ts.indexOf(' ')>-1)return ts.split(' ')[1].substr(0,5); if(typeof ts==='number'){var tm=Math.round((ts%1)*1440),hh=Math.floor(tm/60),mm=tm%60;return String(hh).padStart(2,'0')+':'+String(mm).padStart(2,'0');} return '10:00'; }
+function _findPerfByName(name){ name=String(name||'').trim(); if(!name)return null; var arr=(typeof PERFS!=='undefined'&&PERFS)?PERFS:[]; return arr.find(function(p){return String(p.f||'').trim()===name||String(p.n||'').trim()===name;})||null; }
+// 카카오/문자 2일연속·중복 (관리자 포함 전 경로). ignoreRowIndex=자기 자신(이동/변경 원본) 제외
+function _kakaoSmsConflict(plat1, dateKey, applicant, ignoreRowIndex){
+  if(plat1!=='카카오톡'&&plat1!=='문자')return null;
+  var isKakao=(plat1==='카카오톡'); var checkDates=[dateKey];
+  if(isKakao){ var d=new Date(dateKey+'T00:00:00'); d.setDate(d.getDate()-1); checkDates.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')); }
+  var matched=(records||[]).filter(function(r){
+    if(ignoreRowIndex!=null && r._rowIndex===ignoreRowIndex)return false;
+    var y=r['연도'],m=String(r['월']||'').padStart(2,'0'),dd=String(r['일']||'').padStart(2,'0');
+    return checkDates.indexOf(y+'-'+m+'-'+dd)>=0;
+  });
+  var conflict=matched.find(function(r){
+    var p1=r['플랫폼 1']||'', status=r['진행 상태']||'';
+    if(p1!==plat1||status==='취소')return false;
+    if(isKakao)return true;
+    return (r['게시 담당자']||'')!==(applicant||'');
+  });
+  if(!conflict)return null;
+  var yy=conflict['연도'],mm=String(conflict['월']||'').padStart(2,'0'),dd=String(conflict['일']||'').padStart(2,'0');
+  var cDate=mm+'/'+dd, sameDay=(yy+'-'+mm+'-'+dd)===dateKey;
+  return sameDay ? ('같은 날('+cDate+') '+plat1+' 신청이 이미 있어요. ('+(conflict['게시 담당자']||'다른 담당자')+')')
+                 : ('전날('+cDate+') 카카오톡 신청이 있어 다음날엔 등록할 수 없어요. ('+(conflict['게시 담당자']||'다른 담당자')+')');
+}
+// 통합 게이트: 새 날짜·시간이 모든 제약(접수/홍보시간대/제외/담당자/판매기간/카카오문자/완료취소)을 통과하는지
+function _validateScheduleChange(rec, newDate, newTime, opts){
+  opts=opts||{}; var action=opts.action||'change';
+  var actLabel={copy:'복사',move:'이동',change:'변경',submit:'신청'}[action]||'변경';
+  if(action!=='submit' && rec){
+    var st=String(rec['진행 상태']||'').trim();
+    if(st==='완료'||st==='취소')return {ok:false, reason:'완료·취소된 일정은 '+actLabel+'할 수 없어요'};
+  }
+  var chk=canApplyOnDateTime(newDate,newTime); if(!chk.ok)return chk;
+  var perf=_findPerfByName(opts.program!=null?opts.program:(rec?rec['프로그램']:''));
+  if(perf){
+    if(perf.ss && newDate<perf.ss)return {ok:false, reason:'프로그램 판매 시작('+perf.ss+') 전이라 홍보할 수 없어요'};
+    if(perf.se && newDate>perf.se)return {ok:false, reason:'프로그램 판매 종료('+perf.se+') 후라 홍보할 수 없어요'};
+  }
+  var kc=_kakaoSmsConflict(opts.plat1, newDate, opts.applicant, opts.ignoreRowIndex);
+  if(kc)return {ok:false, reason:kc};
+  return {ok:true};
 }
 
 // === 일정 관리 리스트뷰 (Phase 3D) ===
@@ -11281,6 +11311,9 @@ async function copyRec(rowIndex,dateKey){
   // 복사할 날짜·시간 묻기
   const newDt=await _askCopyDate(rec);
   if(!newDt)return;
+  // [버그수정] 복사도 모든 제약 검증 (제외일·홍보시간대·판매기간·카카오문자·완료취소)
+  const _v=_validateScheduleChange(rec,newDt.date,newDt.time,{action:'copy',plat1:rec['플랫폼 1'],applicant:rec['게시 담당자'],program:rec['프로그램']});
+  if(!_v.ok){showToast('복사 불가: '+_v.reason,'error');return;}
   showOverlayLoad();
   try{
     const [y,m,d]=newDt.date.split('-').map(Number);
@@ -11686,6 +11719,9 @@ async function onCellDrop(ev,toKey){
   if(typeof ts==='string'&&ts.indexOf(' ')>-1)hhmm=ts.split(' ')[1].substr(0,5);
   else if(typeof ts==='number'){var tm=Math.round((ts%1)*1440),hh=Math.floor(tm/60),mm=tm%60;hhmm=String(hh).padStart(2,'0')+':'+String(mm).padStart(2,'0');}
   const kstStr=`${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')} ${hhmm}`;
+  // [버그수정] 드래그 이동도 모든 제약 검증 (제외일·홍보시간대·판매기간·카카오문자·완료취소) — 자기 자신 제외
+  const _v=_validateScheduleChange(rec,toKey,hhmm,{action:'move',plat1:rec['플랫폼 1'],applicant:rec['게시 담당자'],program:rec['프로그램'],ignoreRowIndex:drag.rowIndex});
+  if(!_v.ok){showToast('이동 불가: '+_v.reason,'error');return;}
   const row=[records.length+1,kstStr,serial,y,m,d,dn+'요일',rec['플랫폼 1']||'',rec['플랫폼 2']||'',rec['콘텐츠 구분']||'',rec['프로그램']||'',rec['담당 부서']||'예술사업팀',rec['콘텐츠 제목']||'',rec['콘텐츠 형식']||'',rec['콘텐츠 내용']||'',rec['게시 담당자']||'',rec['진행 상태']||'예정',rec['비고']||''];
   showOverlayLoad();
   try{
