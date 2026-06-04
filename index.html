@@ -2187,8 +2187,8 @@ function _wxSetLoc(l){ try{ localStorage.setItem('wxLoc',JSON.stringify(l)); }ca
 function _wxResultsHtml(results){
   if(results==null) return '';
   if(!results.length) return '<div style="color:#bbb;font-size:12px;padding:8px;text-align:center">검색 결과 없음</div>';
-  return results.map(function(r){ var sub=[r.admin1,r.country].filter(Boolean).join(' · '); var nm=(r.name||'').replace(/['\\]/g,'');
-    return '<div onclick="_wxPick('+r.latitude+','+r.longitude+',\''+nm+'\')" style="padding:7px 9px;border-radius:8px;cursor:pointer" onmouseover="this.style.background=\'#f3f4fb\'" onmouseout="this.style.background=\'\'"><b style="font-size:12.5px;color:#333">'+escapeHtml(r.name||'')+'</b> <span style="font-size:11px;color:#999">'+escapeHtml(sub)+'</span></div>';
+  return results.map(function(r){ var nm=(r.name||'').replace(/['\\]/g,'');
+    return '<div onclick="_wxPick('+r.lat+','+r.lon+',\''+nm+'\')" style="padding:7px 9px;border-radius:8px;cursor:pointer" onmouseover="this.style.background=\'#f3f4fb\'" onmouseout="this.style.background=\'\'"><b style="font-size:12.5px;color:#333">'+escapeHtml(r.name||'')+'</b> <span style="font-size:11px;color:#999">'+escapeHtml(r.sub||'')+'</span></div>';
   }).join('');
 }
 function _wxRenderResults(results,msg){ var el=document.getElementById('wx-results'); if(el)el.innerHTML= msg?('<div style="color:#bbb;font-size:12px;padding:8px;text-align:center">'+escapeHtml(msg)+'</div>'):_wxResultsHtml(results); }
@@ -2207,8 +2207,12 @@ function _wxSearchDebounced(q){ if(_wxTimer)clearTimeout(_wxTimer); _wxTimer=set
 async function _wxSearch(q){
   q=(q||'').trim(); if(_wxTimer){clearTimeout(_wxTimer);_wxTimer=null;} if(!q){ _wxRenderResults([]); return; }
   _wxRenderResults(null,'검색 중…');
-  try{ var r=await fetch('https://geocoding-api.open-meteo.com/v1/search?name='+encodeURIComponent(q)+'&count=6&language=ko&format=json'); var d=await r.json(); _wxRenderResults((d&&d.results)||[]); }
-  catch(e){ _wxRenderResults([],'검색 실패'); }
+  try{
+    var r=await fetch('https://nominatim.openstreetmap.org/search?q='+encodeURIComponent(q)+'&format=jsonv2&accept-language=ko&limit=6&addressdetails=1');
+    var j=await r.json();
+    var list=(j||[]).map(function(x){ var nm=x.name||String(x.display_name||'').split(',')[0]; var parts=String(x.display_name||'').split(',').map(function(s){return s.trim();}).filter(Boolean); var sub=parts.slice(1).slice(-2).join(' · '); return {lat:+x.lat, lon:+x.lon, name:nm, sub:sub}; }).filter(function(x){return x.name&&!isNaN(x.lat);});
+    _wxRenderResults(list);
+  }catch(e){ _wxRenderResults([],'검색 실패'); }
 }
 function _wxPick(lat,lon,name){ _wxSetLoc({lat:lat,lon:lon,name:name||'선택 지역'}); var p=document.getElementById('wx-pop'); if(p)p.classList.remove('show'); }
 function _wxReset(){ _wxSetLoc({lat:34.7604,lon:127.6622,name:'여수'}); var p=document.getElementById('wx-pop'); if(p)p.classList.remove('show'); }
