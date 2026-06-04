@@ -126,8 +126,8 @@ button{font-family:inherit;cursor:pointer}
 .kst{font-size:12px;color:var(--dim);font-weight:500;font-variant-numeric:tabular-nums}
 .icon-btn{width:36px;height:36px;border-radius:50%;border:1px solid rgba(0,0,0,0.06);background:var(--glass);backdrop-filter:blur(8px);font-size:16px;color:#666;display:flex;align-items:center;justify-content:center;transition:all .2s}
 /* === 동시 접속자 아바타 === */
-.pres-ava{position:relative;width:36px;height:36px;border-radius:50%;border:2px solid #e3e3ef;background:linear-gradient(135deg,#7c7ff0,#4A4DE7);color:#fff;font-size:14px;font-weight:800;display:flex;align-items:center;justify-content:center;cursor:pointer;font-family:inherit;transition:box-shadow .25s,border-color .25s;flex:0 0 auto;padding:0}
-.pres-ava.live{border-color:#22c55e;animation:presPulse 2s infinite}
+.pres-ava{position:relative;width:36px;height:36px;border-radius:50%;border:1px solid transparent;background:#eef0f5;color:#9aa3b2;display:flex;align-items:center;justify-content:center;cursor:pointer;font-family:inherit;transition:box-shadow .25s,border-color .25s,background .25s,color .25s;flex:0 0 auto;padding:0}
+.pres-ava.live{border:2px solid #22c55e;background:#e9faf0;color:#16a34a;animation:presPulse 2s infinite}
 @keyframes presPulse{0%,100%{box-shadow:0 0 0 3px rgba(34,197,94,0.22),0 0 10px rgba(34,197,94,0.4)}50%{box-shadow:0 0 0 4px rgba(34,197,94,0.14),0 0 16px rgba(34,197,94,0.65)}}
 .pres-dot{position:absolute;top:-3px;right:-3px;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:#22c55e;color:#fff;font-size:10px;font-weight:800;display:none;align-items:center;justify-content:center;border:2px solid #fff;line-height:1}
 .pres-ava.live .pres-dot{display:flex}
@@ -815,7 +815,7 @@ table.promo-board-table th:last-child .col-resize-handle{display:none}
     <div class="nav-right">
       <div id="wx-widget" title="여수 날씨" style="display:none;align-items:center;gap:8px;padding:4px 11px;border-radius:14px;background:linear-gradient(135deg,#eef2ff,#f7f9ff);border:1px solid #e7eaf6;cursor:default;font-family:inherit"></div>
       <div id="pres-wrap" style="position:relative;display:none">
-        <button class="pres-ava" id="pres-ava" onclick="_presToggle(event)" title="접속자 보기"><span id="pres-ava-init">·</span><span class="pres-dot" id="pres-dot">0</span></button>
+        <button class="pres-ava" id="pres-ava" onclick="_presToggle(event)" title="접속자 보기"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.6"/><path d="M5 20c0-3.6 3.2-5.6 7-5.6s7 2 7 5.6"/></svg><span class="pres-dot" id="pres-dot">0</span></button>
         <div class="pres-pop" id="pres-pop"></div>
       </div>
       <button class="icon-btn" id="admin-gear" onclick="openAdminPanel()" title="관리" aria-label="관리" style="display:none;cursor:pointer">
@@ -2132,20 +2132,23 @@ async function _presPoll(){ if(userRole!=='admin'||!password)return; try{ _presD
 function _presAgo(ms){ var m=Math.floor(ms/60000); if(m<1)return '방금'; if(m<60)return m+'분 전'; var h=Math.floor(m/60); return h+'시간 전'; }
 function _presRender(){
   var ava=document.getElementById('pres-ava'); if(!ava)return;
-  var me=_presSid(), now=_presData.now||Date.now();
+  var myName=(sessionStorage.getItem('myApplicant')||'').trim();
+  var now=_presData.now||Date.now();
   var users=(_presData.users||[]).map(function(u){ u._age=now-(u.ts||0); return u; });
-  var online=users.filter(function(u){return u._age<70000;});
-  var others=online.filter(function(u){return u.sid!==me;});
-  ava.classList.toggle('live', others.length>0);
+  // 이름(사람) 기준 중복 제거 — 본인 여러 탭/세션 = 한 사람 (가장 최근 ts 대표)
+  var rep={};
+  users.forEach(function(u){ var n=(u.name||'').trim()||('익명·'+u.sid); if(!rep[n]||u.ts>rep[n].ts)rep[n]=u; });
+  var people=Object.keys(rep).map(function(n){return rep[n];});
+  var online=people.filter(function(p){return p._age<70000;});
+  var others=online.filter(function(p){return (p.name||'').trim()!==myName;});  // 본인 외 = 진짜 '다른 사람'
+  ava.classList.toggle('live', others.length>0);  // 혼자면 발광·배지 없음(익명 무테두리)
   var dot=document.getElementById('pres-dot'); if(dot)dot.textContent=others.length;
-  var init=document.getElementById('pres-ava-init'); var myName=sessionStorage.getItem('myApplicant')||'';
-  if(init)init.textContent=(myName||'·').slice(0,1);
   var pop=document.getElementById('pres-pop'); if(!pop)return;
-  online.sort(function(a,b){return (b.sid===me?1:0)-(a.sid===me?1:0);});
-  var recent=users.filter(function(u){return u._age>=70000&&u._age<=900000;}).sort(function(a,b){return a._age-b._age;});
+  online.sort(function(a,b){return ((b.name||'').trim()===myName?1:0)-((a.name||'').trim()===myName?1:0);});
+  var recent=people.filter(function(p){return p._age>=70000&&p._age<=900000&&(p.name||'').trim()!==myName;}).sort(function(a,b){return a._age-b._age;});  // 본인 나간건 제외
   var h='<div class="pres-hd">🟢 접속 중 ('+online.length+'명)</div>';
   if(!online.length)h+='<div style="padding:6px 14px;color:#bbb;font-size:12px">없음</div>';
-  online.forEach(function(u,i){ var mine=u.sid===me;
+  online.forEach(function(u,i){ var mine=(u.name||'').trim()===myName;
     h+='<div class="pres-row" style="animation-delay:'+(i*0.04).toFixed(2)+'s"><span class="pres-ico" style="background:'+_presColor(u.name)+'">'+escapeHtml((u.name||'·').slice(0,1))+'</span><span style="flex:1;min-width:0"><span style="font-size:13px;font-weight:600;color:#333">'+escapeHtml(u.name||'이름없음')+'</span>'+(mine?' <span style="font-size:10px;color:var(--accent);font-weight:700">(나)</span>':'')+'<br><span style="font-size:11px;color:#999">'+escapeHtml(u.dept||'')+(u.role==='admin'?' · 관리자':'')+'</span></span><span style="width:8px;height:8px;border-radius:50%;background:#22c55e;flex:0 0 auto"></span></div>';
   });
   if(recent.length){
