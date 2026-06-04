@@ -11272,6 +11272,11 @@ function _askCopyDate(originalRec){
     if(typeof ts==='string'&&ts.indexOf(' ')>-1)origTime=ts.split(' ')[1].substr(0,5);
     else if(typeof ts==='number'){const tm=Math.round((ts%1)*1440),hh=Math.floor(tm/60),mm=tm%60;origTime=String(hh).padStart(2,'0')+':'+String(mm).padStart(2,'0');}
     const origTitle=originalRec['콘텐츠 제목']||'(제목 없음)';
+    const origPlat=originalRec['플랫폼 1']||'';
+    const origTitleRaw=originalRec['콘텐츠 제목']||'';
+    const _p1s=[...new Set((PLATFORMS||[]).map(function(r){return r['플랫폼1'];}))].filter(Boolean);
+    if(origPlat && _p1s.indexOf(origPlat)<0)_p1s.unshift(origPlat);
+    const _platOpts=_p1s.map(function(p){return '<option value="'+escapeHtml(p)+'"'+(p===origPlat?' selected':'')+'>'+escapeHtml(p)+'</option>';}).join('');
     const inpSt='width:100%;padding:10px 14px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:12px;font-size:13px;outline:none;box-sizing:border-box;font-family:inherit';
     const lbSt='display:block;font-size:11px;color:#888;margin:14px 0 4px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px';
     const html='<div class="modal-bg show" style="z-index:99999" onclick="if(event.target===this)_resolveCopyAsk(null)"><div class="modal" style="width:96vw;max-width:380px;padding:24px;text-align:left;position:relative"><button class="modal-x" onclick="_resolveCopyAsk(null)" title="닫기">✕</button>'+
@@ -11282,7 +11287,12 @@ function _askCopyDate(originalRec){
       '<input id="cp-date" type="date" value="'+origDate+'" style="'+inpSt+'">'+
       '<label style="'+lbSt+'">새 시간<span style="color:var(--peach);margin-left:3px">*</span></label>'+
       '<input id="cp-time" type="time" step="600" value="'+origTime+'" style="'+inpSt+'">'+
-      '<div style="display:flex;gap:8px;margin-top:18px;justify-content:flex-end">'+
+      '<label style="'+lbSt+'">플랫폼</label>'+
+      '<select id="cp-plat" style="'+inpSt+'">'+_platOpts+'</select>'+
+      '<label style="'+lbSt+'">제목</label>'+
+      '<input id="cp-title" type="text" value="'+escapeHtml(origTitleRaw)+'" style="'+inpSt+'">'+
+      '<div style="font-size:11px;color:#888;margin-top:10px;line-height:1.5">※ 게시 담당자 외 <b>날짜·시간·플랫폼·제목</b> 중 하나는 바꿔야 복사돼요 (완전 동일본 방지)</div>'+
+      '<div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end">'+
       '<button onclick="_resolveCopyAsk(null)" class="m-btn cancel">취소</button>'+
       '<button onclick="_resolveCopyAskOk()" class="m-btn save">복사</button>'+
       '</div></div></div>';
@@ -11303,16 +11313,23 @@ function _resolveCopyAskOk(){
   const t=document.getElementById('cp-time').value;
   if(!d){showFieldError('cp-date','날짜를 입력해 주세요');return;}
   if(!t){showFieldError('cp-time','시간을 입력해 주세요');return;}
-  _resolveCopyAsk({date:d,time:t});
+  const plat1=(document.getElementById('cp-plat')||{}).value||'';
+  const title=((document.getElementById('cp-title')||{}).value||'').trim();
+  _resolveCopyAsk({date:d,time:t,plat1:plat1,title:title});
 }
 async function copyRec(rowIndex,dateKey){
   const rec=records.find(function(r){return r._rowIndex===rowIndex;});
   if(!rec)return;
-  // 복사할 날짜·시간 묻기
+  // 복사할 날짜·시간·플랫폼·제목 묻기
   const newDt=await _askCopyDate(rec);
   if(!newDt)return;
+  const _newPlat=newDt.plat1||rec['플랫폼 1']||'';
+  const _newTitle=(newDt.title!=null&&newDt.title!=='')?newDt.title:(rec['콘텐츠 제목']||'');
+  // [버그수정 #6] 게시담당자 외 날짜·시간·플랫폼·제목 중 하나는 달라야 복사 (완전 동일본 방지)
+  const _same=(newDt.date===_recDate(rec))&&(newDt.time===_recTime(rec))&&(_newPlat===(rec['플랫폼 1']||''))&&(_newTitle===(rec['콘텐츠 제목']||''));
+  if(_same){showToast('원본과 동일해요 — 날짜·시간·플랫폼·제목 중 하나는 바꿔야 복사돼요','error');return;}
   // [버그수정] 복사도 모든 제약 검증 (제외일·홍보시간대·판매기간·카카오문자·완료취소)
-  const _v=_validateScheduleChange(rec,newDt.date,newDt.time,{action:'copy',plat1:rec['플랫폼 1'],applicant:rec['게시 담당자'],program:rec['프로그램']});
+  const _v=_validateScheduleChange(rec,newDt.date,newDt.time,{action:'copy',plat1:_newPlat,applicant:rec['게시 담당자'],program:rec['프로그램']});
   if(!_v.ok){showToast('복사 불가: '+_v.reason,'error');return;}
   showOverlayLoad();
   try{
@@ -11328,12 +11345,12 @@ async function copyRec(rowIndex,dateKey){
       m,
       d,
       dn,
-      rec['플랫폼 1']||'',
-      rec['플랫폼 2']||'-',
+      _newPlat,
+      (_newPlat!==(rec['플랫폼 1']||'')?'-':(rec['플랫폼 2']||'-')),
       rec['콘텐츠 구분']||'',
       rec['프로그램']||'',
       rec['담당 부서']||'예술사업팀',
-      rec['콘텐츠 제목']||'',
+      _newTitle,
       rec['콘텐츠 형식']||'',
       rec['콘텐츠 내용']||'',
       rec['게시 담당자']||'',
