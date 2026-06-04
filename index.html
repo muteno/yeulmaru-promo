@@ -166,7 +166,10 @@ button{font-family:inherit;cursor:pointer}
 .todo-imp{font-size:10px;font-weight:800;padding:1px 6px;border-radius:6px}
 .todo-imp.h{background:#fdecec;color:#e5484d}.todo-imp.m{background:#fef3e2;color:#e08600}.todo-imp.l{background:#eef0f5;color:#6b7280}
 .todo-due{font-size:11px;color:#8a8f9c;font-variant-numeric:tabular-nums}
-.todo-due.over{color:#e5484d;font-weight:700}.todo-due.soon{color:#e08600;font-weight:700}
+.todo-due.over{color:#e5484d;font-weight:700}.todo-due.soon{color:#e08600;font-weight:700}.todo-due.carry{color:#aeb4c0;font-weight:600}
+.todo-row.carry{opacity:0.66}
+.todo-row.carry .todo-title{color:#9aa1ad;font-weight:500}
+.todo-row.carry .todo-cir{border-color:#d7dbe3}
 .todo-memo{width:100%;margin-top:7px;border:1px solid #e6e6ef;border-radius:8px;padding:7px 9px;font-size:12px;font-family:inherit;line-height:1.55;outline:none;resize:vertical;box-sizing:border-box;background:#fcfcff;color:#444;min-height:46px}
 .todo-x{border:0;background:none;color:#cbd0da;cursor:pointer;font-size:13px;padding:2px 4px;flex:0 0 auto}
 .todo-x:hover{color:#e5484d}
@@ -2210,27 +2213,40 @@ function _presToggle(ev){ if(ev)ev.stopPropagation(); var pop=document.getElemen
 document.addEventListener('click',function(e){ var w=document.getElementById('pres-wrap'),pop=document.getElementById('pres-pop'); if(w&&pop&&pop.classList.contains('show')&&!w.contains(e.target))pop.classList.remove('show'); });
 
 // === 개인 할 일/일정 (관리자 전용, KV /api/memo에 JSON 저장 · 중요도→기한 정렬 · 기한 알람 · 우클릭 완료) ===
-var _MEMO_ALARM_MS=24*3600*1000; // 기한 24시간 이내 = 임박(깜빡)
-var _memoState={timer:null, tasks:[], loaded:false, addImp:2, expand:null, alarmOff:false};
+var _MEMO_ALARM_MS=3*3600*1000; // 시간 3시간 이내 = 임박(깜빡)
+var _memoState={timer:null, tasks:[], loaded:false, addImp:1, expand:null, alarmOff:false};
 function _memoUser(){ return (sessionStorage.getItem('myApplicant')||'').trim(); }
 function _memoDateLabel(){ var d=new Date(); var w=['일','월','화','수','목','금','토']; return (d.getMonth()+1)+'/'+d.getDate()+'('+w[d.getDay()]+')'; }
 function _memoUid(){ return 't'+Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
-function _memoDue(due){
-  if(!due) return {label:'',cls:''};
-  var t=new Date(due).getTime(); if(isNaN(t)) return {label:'',cls:''};
-  var diff=t-Date.now(), dayMs=86400000;
-  var d=new Date(due), hm=('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);
-  var dN=Math.round((new Date(due).setHours(0,0,0,0) - new Date().setHours(0,0,0,0))/dayMs);
-  if(diff<0){ var od=Math.max(1,Math.ceil(-diff/dayMs)); return {label:'⏰ '+(diff>-3600000?'방금':od+'일')+' 지남',cls:'over'}; }
-  var lbl = dN===0?('오늘 '+hm) : dN===1?('내일 '+hm) : ('D-'+dN+' '+(d.getMonth()+1)+'/'+d.getDate());
-  return {label:lbl, cls:(diff<=_MEMO_ALARM_MS?'soon':'')};
+function _memoTodayStr(){ var d=new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
+function _memoNowTime(){ var d=new Date(), h=d.getHours(), m=Math.round(d.getMinutes()/10)*10; if(m>=60){m=0;h=(h+1)%24;} return ('0'+h).slice(-2)+':'+('0'+m).slice(-2); }
+function _taskDate(t){ if(t.date)return t.date; if(t.due)return String(t.due).slice(0,10); return _memoTodayStr(); }
+function _taskTime(t){ if(t.time)return t.time; if(t.due){var m=String(t.due).match(/T(\d\d:\d\d)/);return m?m[1]:'';} return ''; }
+function _taskDT(t){ var dt=new Date(_taskDate(t)+'T'+(_taskTime(t)||'23:59')); return isNaN(dt.getTime())?null:dt; }
+function _memoTimeWheel(ev){ ev.preventDefault(); var el=document.getElementById('m-time'); if(!el)return; var v=el.value||_memoNowTime(); var p=v.split(':'); var tm=(+p[0])*60+(+p[1]); tm+=(ev.deltaY<0?10:-10); tm=((tm%1440)+1440)%1440; el.value=('0'+Math.floor(tm/60)).slice(-2)+':'+('0'+(tm%60)).slice(-2); }
+// 할 일 시간/이월 상태 → 라벨·클래스 (날짜=오늘 고정, 지난 날 미완료=잔여 이월)
+function _memoDue(t){
+  var today=_memoTodayStr(), date=_taskDate(t), tm=_taskTime(t), dt=_taskDT(t);
+  if(date<today){
+    var dn=Math.round((new Date(today)-new Date(date))/86400000);
+    return {label:'('+(dn<=1?'어제':dn+'일 전')+') '+(tm||''), cls:'carry', carry:true, blink:false};
+  }
+  var lbl=tm||'오늘';
+  if(!dt) return {label:lbl, cls:'', carry:false, blink:false};
+  var diff=dt.getTime()-Date.now();
+  if(diff<0) return {label:'⏰ '+lbl+' 지남', cls:'over', carry:false, blink:true};
+  var soon=diff<=_MEMO_ALARM_MS;
+  return {label:lbl, cls:(soon?'soon':''), carry:false, blink:soon};
 }
 function _memoSorted(){
+  var today=_memoTodayStr(), hi=function(x){return (x.imp||1)>=2?1:0;};
   return _memoState.tasks.slice().sort(function(a,b){
-    if(!!a.done!==!!b.done) return a.done?1:-1;                 // 완료=아래
-    if((b.imp||0)!==(a.imp||0)) return (b.imp||0)-(a.imp||0);   // 중요도 ↓
-    var ta=a.due?new Date(a.due).getTime():Infinity, tb=b.due?new Date(b.due).getTime():Infinity;
-    return ta-tb;                                               // 기한 ↑
+    if(!!a.done!==!!b.done) return a.done?1:-1;               // 완료 맨 아래
+    var ca=_taskDate(a)<today, cb=_taskDate(b)<today;          // 이월(잔여)
+    if(ca!==cb) return ca?1:-1;                                // 잔여는 오늘 것 아래
+    if(hi(b)!==hi(a)) return hi(b)-hi(a);                      // 중요 먼저
+    var ta=_taskDT(a), tb=_taskDT(b);
+    return (ta?ta.getTime():Infinity)-(tb?tb.getTime():Infinity); // 시간 ↑
   });
 }
 async function _memoLoad(){
@@ -2251,12 +2267,12 @@ function _memoPersist(){
   },500);
   _memoAlarmRefresh();
 }
-function _memoSetImp(v){ _memoState.addImp=v; ['h','m','l'].forEach(function(c,i){ var b=document.getElementById('mi-'+c); if(b)b.classList.toggle('on',(3-i)===v); }); }
+function _memoSetImp(v){ _memoState.addImp=v; var h=document.getElementById('mi-h'),l=document.getElementById('mi-l'); if(h)h.classList.toggle('on',v>=2); if(l)l.classList.toggle('on',v<2); }
 function _memoAdd(){
-  var ti=document.getElementById('m-title'), du=document.getElementById('m-due');
+  var ti=document.getElementById('m-title'), tm=document.getElementById('m-time');
   var title=(ti&&ti.value||'').trim(); if(!title){ if(ti)ti.focus(); return; }
-  _memoState.tasks.push({id:_memoUid(),title:title,due:(du&&du.value)||'',imp:_memoState.addImp||2,memo:'',done:false});
-  if(ti)ti.value=''; if(du)du.value='';
+  _memoState.tasks.push({id:_memoUid(),title:title,date:_memoTodayStr(),time:(tm&&tm.value)||_memoNowTime(),imp:_memoState.addImp||1,memo:'',done:false});
+  if(ti)ti.value=''; if(tm)tm.value=_memoNowTime();
   _memoPersist(); _memoRenderBody();
   setTimeout(function(){var t=document.getElementById('m-title');if(t)t.focus();},0);
 }
@@ -2267,9 +2283,9 @@ function _memoMemoInput(id,el){ var t=_memoState.tasks.find(function(x){return x
 function _memoRows(){
   var list=_memoSorted(); if(!list.length) return '<div class="todo-empty">할 일이 없어요. 위에서 추가하세요 ✏️</div>';
   return list.map(function(t){
-    var du=_memoDue(t.due); var impc=t.imp>=3?'h':(t.imp===2?'m':'l'); var impl=t.imp>=3?'상':(t.imp===2?'중':'하');
-    var blink=!_memoState.alarmOff && !t.done && (du.cls==='soon'||du.cls==='over');
-    var h='<div class="todo-row'+(t.done?' done':'')+'" oncontextmenu="event.preventDefault();_memoToggleDone(\''+t.id+'\')">';
+    var du=_memoDue(t); var hi=(t.imp||1)>=2; var impc=hi?'h':'l'; var impl=hi?'중요':'일반';
+    var blink=!_memoState.alarmOff && !t.done && du.blink;
+    var h='<div class="todo-row'+(t.done?' done':'')+((!t.done&&du.carry)?' carry':'')+'" oncontextmenu="event.preventDefault();_memoToggleDone(\''+t.id+'\')">';
     h+='<span class="todo-cir'+(t.done?' done':'')+(blink?' soon':'')+'" onclick="_memoToggleDone(\''+t.id+'\')" title="클릭/우클릭 = 완료">'+(t.done?'✓':'')+'</span>';
     h+='<div class="todo-main"><div class="todo-title" onclick="_memoExpand(\''+t.id+'\')" title="클릭 = 메모">'+escapeHtml(t.title)+'</div>';
     h+='<div class="todo-meta"><span class="todo-imp '+impc+'">'+impl+'</span>'+(du.label?'<span class="todo-due '+du.cls+'">'+escapeHtml(du.label)+'</span>':'')+((t.memo&&_memoState.expand!==t.id)?'<span class="todo-note" onclick="_memoExpand(\''+t.id+'\')">📝</span>':'')+'</div>';
@@ -2285,17 +2301,16 @@ function _memoRender(loading){
   if(loading){ pop.innerHTML='<div style="color:#bbb;font-size:12px;padding:26px;text-align:center">불러오는 중…</div>'; return; }
   var imp=_memoState.addImp||2;
   pop.innerHTML=''
-    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;gap:8px"><span style="font-size:14px;font-weight:800;color:#2a2a3a">📝 내 할 일 <span style="font-size:11px;color:#aaa;font-weight:500">· '+_memoDateLabel()+'</span></span>'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;gap:8px"><span style="font-size:14px;font-weight:800;color:#2a2a3a">📝 내 할 일 <span style="font-size:12.5px;color:var(--accent);font-weight:800;background:rgba(74,77,231,0.09);padding:1px 8px;border-radius:7px;margin-left:2px">'+_memoDateLabel()+'</span></span>'
       +'<span style="display:inline-flex;align-items:center;gap:6px"><span style="font-size:11px;color:#888;display:inline-flex;align-items:center;gap:4px">'+(_memoState.alarmOff?'🔕':'🔔')+'<span class="sw'+(_memoState.alarmOff?'':' on')+'" onclick="_memoToggleAlarm()" title="알림 전체 켜기/끄기"><span class="sw-k"></span></span></span></span></div>'
     +'<div style="text-align:right;height:14px;margin-bottom:6px"><span id="memo-status" style="font-size:11px;color:#bbb"></span></div>'
     +'<div class="todo-add">'
       +'<input id="m-title" placeholder="해야 할 일" style="width:100%;box-sizing:border-box;margin-bottom:7px" onkeydown="if(event.key===\'Enter\')_memoAdd()">'
       +'<div style="display:flex;gap:6px;align-items:center">'
-        +'<input id="m-due" type="datetime-local" style="flex:1.5;min-width:0" title="기한">'
+        +'<input id="m-time" type="time" step="600" value="'+_memoNowTime()+'" onwheel="_memoTimeWheel(event)" style="flex:1;min-width:0;text-align:center" title="시간 (스크롤/화살표 · 10분 단위)">'
         +'<div style="display:flex;gap:4px;flex:1.2">'
-          +'<button class="todo-impbtn h'+(imp===3?' on':'')+'" id="mi-h" onclick="_memoSetImp(3)">상</button>'
-          +'<button class="todo-impbtn m'+(imp===2?' on':'')+'" id="mi-m" onclick="_memoSetImp(2)">중</button>'
-          +'<button class="todo-impbtn l'+(imp===1?' on':'')+'" id="mi-l" onclick="_memoSetImp(1)">하</button>'
+          +'<button class="todo-impbtn h'+(imp>=2?' on':'')+'" id="mi-h" onclick="_memoSetImp(2)">중요</button>'
+          +'<button class="todo-impbtn l'+(imp<2?' on':'')+'" id="mi-l" onclick="_memoSetImp(1)">일반</button>'
         +'</div>'
         +'<button class="todo-addbtn" style="flex:0 0 42px" onclick="_memoAdd()">추가</button>'
       +'</div>'
@@ -2314,8 +2329,7 @@ async function _memoToggle(ev){
 function _memoAlarmRefresh(){
   var dot=document.getElementById('memo-alarm'); if(!dot)return;
   if(_memoState.alarmOff){ dot.classList.remove('on'); return; }  // 알림 끔
-  var now=Date.now();
-  var alarm=(_memoState.tasks||[]).some(function(t){ if(t.done||!t.due)return false; var dt=new Date(t.due).getTime(); return !isNaN(dt) && (dt-now)<=_MEMO_ALARM_MS; });
+  var alarm=(_memoState.tasks||[]).some(function(t){ return !t.done && _memoDue(t).blink; });  // 오늘 임박/지남 (이월 제외)
   dot.classList.toggle('on',alarm);
 }
 document.addEventListener('click',function(e){ var w=document.getElementById('memo-wrap'),pop=document.getElementById('memo-pop'); if(w&&pop&&pop.classList.contains('show')&&!w.contains(e.target))pop.classList.remove('show'); });
