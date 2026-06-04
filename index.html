@@ -182,6 +182,10 @@ button{font-family:inherit;cursor:pointer}
 .sw.on{background:#22c55e}
 .sw-k{position:absolute;top:2px;left:2px;width:15px;height:15px;border-radius:50%;background:#fff;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,0.25)}
 .sw.on .sw-k{left:17px}
+/* === 날씨 지역 팝오버 === */
+.wx-pop{position:absolute;top:44px;right:0;width:250px;max-width:88vw;background:#fff;border:1px solid rgba(0,0,0,0.08);border-radius:14px;box-shadow:0 14px 38px rgba(0,0,0,0.17);padding:12px;z-index:100000;display:none}
+.wx-pop.show{display:block}
+.wx-pop input:focus{border-color:var(--accent)}
 .icon-btn:hover{background:var(--accent-light);color:var(--accent);border-color:var(--accent-glow)}
 /* 햄버거 — 데스크탑에서는 숨김 */
 .hamburger{display:none;background:transparent;border:none;cursor:pointer;padding:8px;margin-right:4px;color:var(--text);align-items:center;justify-content:center;border-radius:8px;transition:background .15s}
@@ -858,7 +862,10 @@ table.promo-board-table th:last-child .col-resize-handle{display:none}
     </div>
     <div class="nav-center" id="nav-menus"></div>
     <div class="nav-right">
-      <div id="wx-widget" title="여수 날씨" style="display:none;align-items:center;gap:8px;padding:4px 11px;border-radius:14px;background:linear-gradient(135deg,#eef2ff,#f7f9ff);border:1px solid #e7eaf6;cursor:default;font-family:inherit"></div>
+      <div id="wx-wrap" style="position:relative;display:none">
+        <div id="wx-widget" title="클릭하여 지역 변경" onclick="_wxToggle(event)" style="display:flex;align-items:center;gap:8px;padding:4px 11px;border-radius:14px;background:linear-gradient(135deg,#eef2ff,#f7f9ff);border:1px solid #e7eaf6;cursor:pointer;font-family:inherit"></div>
+        <div class="wx-pop" id="wx-pop"></div>
+      </div>
       <div id="memo-wrap" style="position:relative;display:none">
         <button class="icon-btn" id="memo-btn" onclick="_memoToggle(event)" title="내 일정 메모" aria-label="내 메모" style="cursor:pointer"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg><span class="memo-alarm" id="memo-alarm"></span></button>
         <div class="memo-pop" id="memo-pop"></div>
@@ -2154,24 +2161,70 @@ async function initApp(){
 
 // === 날씨 위젯 (Open-Meteo · API키 불필요 · 위치=전남 여수시 고정) ===
 var _WX_CODE={0:['☀️','맑음'],1:['🌤️','대체로 맑음'],2:['⛅','구름 조금'],3:['☁️','흐림'],45:['🌫️','안개'],48:['🌫️','안개'],51:['🌦️','약한 이슬비'],53:['🌦️','이슬비'],55:['🌦️','짙은 이슬비'],56:['🌧️','어는 이슬비'],57:['🌧️','어는 이슬비'],61:['🌧️','약한 비'],63:['🌧️','비'],65:['🌧️','강한 비'],66:['🌧️','어는 비'],67:['🌧️','어는 비'],71:['🌨️','약한 눈'],73:['❄️','눈'],75:['❄️','강한 눈'],77:['🌨️','싸락눈'],80:['🌦️','소나기'],81:['🌦️','소나기'],82:['⛈️','강한 소나기'],85:['🌨️','소나기눈'],86:['🌨️','소나기눈'],95:['⛈️','뇌우'],96:['⛈️','뇌우·우박'],99:['⛈️','뇌우·우박']};
+function _wxLoc(){ try{ var s=JSON.parse(localStorage.getItem('wxLoc')||'null'); if(s&&s.lat&&s.lon)return s; }catch(_){} return {lat:34.7604,lon:127.6622,name:'여수'}; }
 async function loadWeather(){
   var el=document.getElementById('wx-widget'); if(!el)return;
+  var loc=_wxLoc();
   try{
-    var u='https://api.open-meteo.com/v1/forecast?latitude=34.7604&longitude=127.6622&current=temperature_2m,weather_code,relative_humidity_2m,apparent_temperature&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=Asia%2FSeoul&forecast_days=1';
+    var u='https://api.open-meteo.com/v1/forecast?latitude='+loc.lat+'&longitude='+loc.lon+'&current=temperature_2m,weather_code,relative_humidity_2m,apparent_temperature&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=1';
     var r=await fetch(u); if(!r.ok)throw new Error('wx '+r.status); var d=await r.json();
     var cur=d.current||{}, dy=d.daily||{};
     var ic=_WX_CODE[cur.weather_code]||['🌡️','—'];
     var t=Math.round(cur.temperature_2m), hi=Math.round((dy.temperature_2m_max||[])[0]), lo=Math.round((dy.temperature_2m_min||[])[0]);
     var feel=Math.round(cur.apparent_temperature), hum=cur.relative_humidity_2m;
+    var nm=(loc.name||'').length>6?(loc.name.slice(0,6)+'…'):loc.name;
     el.innerHTML='<span style="font-size:22px;line-height:1">'+ic[0]+'</span>'
       +'<span style="display:flex;flex-direction:column;line-height:1.15">'
-      +'<span><b style="font-size:15px;color:#333;font-variant-numeric:tabular-nums">'+t+'°</b> <span style="font-size:11px;color:#8a8f9c">여수</span></span>'
+      +'<span><b style="font-size:15px;color:#333;font-variant-numeric:tabular-nums">'+t+'°</b> <span style="font-size:11px;color:#8a8f9c">'+escapeHtml(nm)+'</span></span>'
       +'<span style="font-size:10.5px;color:#a3a8b4;white-space:nowrap">'+ic[1]+' · <span style="color:#E5736B">↑'+hi+'°</span> <span style="color:#5B8DEF">↓'+lo+'°</span></span>'
       +'</span>';
-    el.title='여수시 · '+ic[1]+' · 현재 '+t+'°(체감 '+feel+'°) · 습도 '+hum+'% · 오늘 ↑'+hi+'° ↓'+lo+'°';
-    el.style.display='inline-flex';
-  }catch(e){ console.warn('[loadWeather]',e); el.style.display='none'; }
+    el.title=escapeHtml(loc.name)+' · '+ic[1]+' · 현재 '+t+'°(체감 '+feel+'°) · 습도 '+hum+'% · 오늘 ↑'+hi+'° ↓'+lo+'°  (클릭=지역 변경)';
+    var w=document.getElementById('wx-wrap'); if(w)w.style.display='block';
+  }catch(e){ console.warn('[loadWeather]',e); var w=document.getElementById('wx-wrap'); if(w)w.style.display='none'; }
 }
+// === 날씨 지역 변경 팝오버 (검색=Open-Meteo geocoding · 현재위치=geolocation+역지오코딩, 키 불필요) ===
+function _wxSetLoc(l){ try{ localStorage.setItem('wxLoc',JSON.stringify(l)); }catch(_){} loadWeather(); }
+function _wxResultsHtml(results){
+  if(results==null) return '';
+  if(!results.length) return '<div style="color:#bbb;font-size:12px;padding:8px;text-align:center">검색 결과 없음</div>';
+  return results.map(function(r){ var sub=[r.admin1,r.country].filter(Boolean).join(' · '); var nm=(r.name||'').replace(/['\\]/g,'');
+    return '<div onclick="_wxPick('+r.latitude+','+r.longitude+',\''+nm+'\')" style="padding:7px 9px;border-radius:8px;cursor:pointer" onmouseover="this.style.background=\'#f3f4fb\'" onmouseout="this.style.background=\'\'"><b style="font-size:12.5px;color:#333">'+escapeHtml(r.name||'')+'</b> <span style="font-size:11px;color:#999">'+escapeHtml(sub)+'</span></div>';
+  }).join('');
+}
+function _wxRenderResults(results,msg){ var el=document.getElementById('wx-results'); if(el)el.innerHTML= msg?('<div style="color:#bbb;font-size:12px;padding:8px;text-align:center">'+escapeHtml(msg)+'</div>'):_wxResultsHtml(results); }
+function _wxRenderPop(){
+  var p=document.getElementById('wx-pop'); if(!p)return; var cur=_wxLoc();
+  var h='<div style="font-size:12px;font-weight:700;color:#333;margin-bottom:8px">🌦️ 날씨 지역 <span style="font-size:11px;color:var(--accent);font-weight:600">· '+escapeHtml(cur.name)+'</span></div>';
+  h+='<input id="wx-q" placeholder="지역 검색 (예: 서울, 광양, Tokyo)" oninput="_wxSearchDebounced(this.value)" onkeydown="if(event.key===\'Enter\')_wxSearch(this.value)" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #e1e1ec;border-radius:9px;font-size:12.5px;font-family:inherit;outline:none">';
+  h+='<div id="wx-results" style="margin-top:6px;max-height:170px;overflow:auto"></div>';
+  h+='<button onclick="_wxGeo()" style="width:100%;margin-top:8px;padding:8px;border:1px solid var(--accent);background:rgba(74,77,231,0.06);color:var(--accent);border-radius:9px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">📍 현재 위치 사용</button>';
+  if(cur.name!=='여수') h+='<button onclick="_wxReset()" style="width:100%;margin-top:5px;padding:5px;border:0;background:none;color:#999;font-size:11px;cursor:pointer;font-family:inherit;text-decoration:underline">여수로 초기화</button>';
+  p.innerHTML=h;
+}
+function _wxToggle(ev){ if(ev)ev.stopPropagation(); var p=document.getElementById('wx-pop'); if(!p)return; if(p.classList.contains('show')){p.classList.remove('show');return;} _wxRenderPop(); p.classList.add('show'); var i=document.getElementById('wx-q'); if(i)i.focus(); }
+var _wxTimer=null;
+function _wxSearchDebounced(q){ if(_wxTimer)clearTimeout(_wxTimer); _wxTimer=setTimeout(function(){_wxSearch(q);},350); }
+async function _wxSearch(q){
+  q=(q||'').trim(); if(_wxTimer){clearTimeout(_wxTimer);_wxTimer=null;} if(!q){ _wxRenderResults([]); return; }
+  _wxRenderResults(null,'검색 중…');
+  try{ var r=await fetch('https://geocoding-api.open-meteo.com/v1/search?name='+encodeURIComponent(q)+'&count=6&language=ko&format=json'); var d=await r.json(); _wxRenderResults((d&&d.results)||[]); }
+  catch(e){ _wxRenderResults([],'검색 실패'); }
+}
+function _wxPick(lat,lon,name){ _wxSetLoc({lat:lat,lon:lon,name:name||'선택 지역'}); var p=document.getElementById('wx-pop'); if(p)p.classList.remove('show'); }
+function _wxReset(){ _wxSetLoc({lat:34.7604,lon:127.6622,name:'여수'}); var p=document.getElementById('wx-pop'); if(p)p.classList.remove('show'); }
+function _wxGeo(){
+  if(!navigator.geolocation){ _wxRenderResults([],'이 브라우저는 위치를 지원하지 않아요'); return; }
+  _wxRenderResults(null,'현재 위치 확인 중…');
+  navigator.geolocation.getCurrentPosition(function(pos){
+    var la=pos.coords.latitude, lo=pos.coords.longitude;
+    fetch('https://api.bigdatacloud.net/data/reverse-geocode-client?latitude='+la+'&longitude='+lo+'&localityLanguage=ko')
+      .then(function(r){return r.json();})
+      .then(function(d){ var nm=d.city||d.locality||d.principalSubdivision||'현재 위치'; _wxSetLoc({lat:la,lon:lo,name:nm}); })
+      .catch(function(){ _wxSetLoc({lat:la,lon:lo,name:'현재 위치'}); });
+    var p=document.getElementById('wx-pop'); if(p)p.classList.remove('show');
+  }, function(err){ _wxRenderResults([], (err&&err.code===1)?'위치 권한이 거부됐어요':'위치를 가져오지 못했어요'); }, {timeout:8000,maximumAge:300000});
+}
+document.addEventListener('click',function(e){ var w=document.getElementById('wx-wrap'),p=document.getElementById('wx-pop'); if(w&&p&&p.classList.contains('show')&&!w.contains(e.target))p.classList.remove('show'); });
 
 // === 동시 접속자 presence (KV 백엔드 /api/presence) ===
 var _presData={now:0,users:[]};
