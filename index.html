@@ -1592,6 +1592,7 @@ function _enterAsManager(matched, pin, userName){
   if(isSubAdmin){sessionStorage.setItem('subAdminPin',String(pin));}else{sessionStorage.removeItem('subAdminPin');}
   password='0510';userRole=sessRole;
   try{sessionStorage.setItem('myApplicant',userName);sessionStorage.setItem('myUserDept',userDept);}catch(e){}
+  try{sessionStorage.setItem('myEmail',String(_authGetCol(matched,_EMAIL_KEYS)||'').trim().toLowerCase());}catch(e){}
   _enterApp();
   setTimeout(function(){if(typeof showToast==='function')showToast('<span style="color:var(--accent);font-weight:700">'+escapeHtml(userName)+'</span>님'+(isSubAdmin?' (관리자)':'')+' 접속을 환영합니다','success',true);},300);
 }
@@ -9199,8 +9200,8 @@ function buildSheetListHtml(slug,rows){
           const on=(raw==='1'||raw===1||raw===true||String(raw||'').toLowerCase()==='true');
           // 관리자여부 컬럼은 슈퍼 admin만 토글 가능 (서브 admin은 read-only)
           const isAdminCol=(slug==='manager'&&c.key==='관리자여부');
-          const locked=isAdminCol&&userRole!=='admin';
-          const lockedAttr=locked?' disabled title="관리자만 변경 가능"':'';
+          const locked=isAdminCol&&!_isSuperAdmin();
+          const lockedAttr=locked?' disabled title="최고관리자만 변경 가능"':'';
           const lockedStyle=locked?' style="opacity:0.35;cursor:not-allowed"':'';
           html+='<td style="text-align:center;width:46px;padding-left:3px;padding-right:3px"><input type="checkbox" class="inl-cb" data-key="'+escapeHtml(c.key)+'"'+(on?' checked':'')+lockedAttr+lockedStyle+' onchange="markRowDirty(\''+slug+'\','+r._rowIndex+')"></td>';
         }else{
@@ -9333,9 +9334,9 @@ function openSheetForm(slug,rowIndex){
     html+='<div><label style="margin-bottom:6px">담당 업무</label><div style="display:flex;flex-wrap:wrap;gap:8px">';
     _bizCols.forEach(function(pair){var k=pair[0],lb=pair[1];html+='<label style="display:flex;align-items:center;gap:6px;background:#fafafa;padding:9px 14px;border-radius:10px;border:1px solid rgba(0,0,0,0.06);cursor:pointer;margin:0;text-transform:none;letter-spacing:0;color:#333;font-size:13px;font-weight:600"><input type="checkbox" name="'+k+'"'+(_onFlag(k)?' checked':'')+' style="width:17px;height:17px;cursor:pointer;margin:0"> '+lb+'</label>';});
     html+='</div></div>';
-    const _admLocked=userRole!=='admin';
+    const _admLocked=!_isSuperAdmin();
     const _admLockAttr=_admLocked?' disabled':'';
-    const _admNote=_admLocked?' <span style="color:#999;font-size:11px;font-weight:400;margin-left:4px">(관리자만 변경)</span>':'';
+    const _admNote=_admLocked?' <span style="color:#999;font-size:11px;font-weight:400;margin-left:4px">(최고관리자만 변경)</span>':'';
     const _admOp=_admLocked?'opacity:0.55;':'';
     const _admCur=_admLocked?'not-allowed':'pointer';
     html+='<div><label style="display:flex;align-items:center;gap:8px;background:#fafafa;padding:12px;border-radius:10px;border:1px solid rgba(0,0,0,0.06);cursor:'+_admCur+';margin:0;text-transform:none;letter-spacing:0;color:#333;font-size:13px;font-weight:600;'+_admOp+'"><input type="checkbox" name="관리자여부"'+(_onFlag('관리자여부')?' checked':'')+_admLockAttr+' style="width:18px;height:18px;cursor:'+_admCur+';margin:0"> 관리자'+_admNote+'</label></div>';
@@ -9345,9 +9346,9 @@ function openSheetForm(slug,rowIndex){
     if(c.type==='checkbox'){
       const checked=(v==='1'||v===1||v===true||String(v||'').toLowerCase()==='true');
       const isAdminCol=(slug==='manager'&&c.key==='관리자여부');
-      const locked=isAdminCol&&userRole!=='admin';
+      const locked=isAdminCol&&!_isSuperAdmin();
       const lockAttr=locked?' disabled':'';
-      const lockNote=locked?' <span style="color:#999;font-size:11px;font-weight:400;margin-left:4px">(관리자만 변경)</span>':'';
+      const lockNote=locked?' <span style="color:#999;font-size:11px;font-weight:400;margin-left:4px">(최고관리자만 변경)</span>':'';
       const opacity=locked?'opacity:0.55;':'';
       const curStyle=locked?'not-allowed':'pointer';
       html+='<div><label style="display:flex;align-items:center;gap:8px;background:#fafafa;padding:12px;border-radius:10px;border:1px solid rgba(0,0,0,0.06);cursor:'+curStyle+';margin:0;text-transform:none;letter-spacing:0;color:#333;font-size:13px;font-weight:600;'+opacity+'"><input type="checkbox" name="'+c.key+'"'+(checked?' checked':'')+lockAttr+' style="width:18px;height:18px;cursor:'+curStyle+';margin:0"> '+escapeHtml(c.label)+lockNote+'</label></div>';
@@ -9407,6 +9408,15 @@ async function saveSheetRow(slug,rowIndex){
   }
 }
 
+// === 최고관리자(슈퍼관리자) — '관리자여부' 지정/해제만 이 계정들이 가능 ===
+// ⚠️ MS 이메일(소문자) 정확히. 새 최고관리자 추가 시 이 배열에만 넣으면 됨.
+var SUPER_ADMINS=['ems1130@gscf.or.kr'];
+function _isSuperAdmin(){
+  try{
+    var e=(sessionStorage.getItem('myEmail')||localStorage.getItem('lastLoginEmail')||(typeof _loginEmail!=='undefined'?_loginEmail:'')||'').trim().toLowerCase();
+    return !!e && SUPER_ADMINS.indexOf(e)>=0;
+  }catch(_){ return false; }
+}
 // === 삭제 권한 검증 (관리자면 삭제 가능 — 슈퍼admin 개념 폐기) ===
 function _canDelete(){
   if(userRole!=='admin'){ showToast('관리자만 삭제할 수 있어요','error'); return false; }
@@ -9709,13 +9719,12 @@ function _hideUpdateBadge(){
 }
 async function _applyUpdate(){
   _hideUpdateBadge();
+  // 중복 로더 제거: loadData가 자체 단일 로딩 표시를 하므로 overlay-load 타자기와 충돌 안 나게 함
   try{
-    if(typeof showOverlayLoad==='function') showOverlayLoad('최신 데이터 불러오는 중...');
-    await syncReload(0);   // loadData → _refreshSeenMod로 baseline 갱신
+    await syncReload(0);   // loadData → _refreshSeenMod로 baseline 갱신 (자체 로딩 표시)
     if(typeof render==='function') render();
     try{ if(typeof renderPromoBoard==='function') renderPromoBoard(); }catch(_e){}
   }catch(e){ console.warn('[update]',e); }
-  finally{ if(typeof hideOverlayLoad==='function') hideOverlayLoad(); }
 }
 (function(){ setInterval(function(){ try{ _checkForUpdates(); }catch(e){} }, 45000); })();
 
