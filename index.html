@@ -979,7 +979,8 @@ const _MSAL_CONFIG = {
     storeAuthStateInCookie: false
   }
 };
-const _MSAL_SCOPES = ['Files.Read'];
+// Files.Read.All: 공유받은 폴더(sharedWithMe) 조회용 — 위임 권한, 관리자 동의 불요 (첫 사용 시 동의 팝업 1회)
+const _MSAL_SCOPES = ['Files.Read', 'Files.Read.All'];
 
 const API='https://yeulmaru-promo-api.yeulmarumaster.workers.dev';
 const PLAT_COLORS={
@@ -7354,17 +7355,75 @@ async function _msalFetchOneDriveChildren(path){
   }
 }
 
+// 공유받은 항목 (타 유저가 공유한 폴더) — Files.Read.All 필요
+async function _msalFetchSharedWithMe(){
+  const token = await _msalGetToken();
+  if(!token) return null;
+  try {
+    const resp = await fetch('https://graph.microsoft.com/v1.0/me/drive/sharedWithMe', {headers: {'Authorization': 'Bearer ' + token}});
+    if(!resp.ok){
+      const t = await resp.text();
+      throw new Error('Graph ' + resp.status + ': ' + t.slice(0,200));
+    }
+    const data = await resp.json();
+    return (data.value || []).filter(function(it){
+      const ri = it.remoteItem || it;
+      return !!(ri.folder);
+    }).map(function(it){
+      const ri = it.remoteItem || it;
+      const owner = (ri.createdBy && ri.createdBy.user && ri.createdBy.user.displayName) ||
+                    (ri.shared && ri.shared.owner && ri.shared.owner.user && ri.shared.owner.user.displayName) || '';
+      return {
+        id: ri.id,
+        driveId: ri.parentReference && ri.parentReference.driveId,
+        name: it.name || ri.name || '(이름 없음)',
+        hasChildren: !!(ri.folder && ri.folder.childCount > 0),
+        webUrl: ri.webUrl || it.webUrl || '',
+        owner: owner,
+        shared: true
+      };
+    }).filter(function(n){ return !!n.driveId; });
+  } catch(e){
+    console.warn('[fetchSharedWithMe]', e.message);
+    return null;  // 실패해도 내 폴더 흐름은 유지 (호출부에서 안내만)
+  }
+}
+
+// 공유 폴더 하위 탐색 — 원본 드라이브 ID 기반 (path 주소 불가)
+async function _msalFetchDriveChildren(driveId, itemId){
+  const token = await _msalGetToken();
+  if(!token) return null;
+  try {
+    const url = 'https://graph.microsoft.com/v1.0/drives/' + encodeURIComponent(driveId) + '/items/' + encodeURIComponent(itemId) + '/children?$select=id,name,folder,parentReference,webUrl&$top=200&$orderby=name';
+    const resp = await fetch(url, {headers: {'Authorization': 'Bearer ' + token}});
+    if(!resp.ok){
+      const t = await resp.text();
+      throw new Error('Graph ' + resp.status + ': ' + t.slice(0,200));
+    }
+    const data = await resp.json();
+    return (data.value || []).filter(function(it){ return !!it.folder; }).map(function(it){
+      return {id: it.id, driveId: driveId, name: it.name, hasChildren: (it.folder && it.folder.childCount > 0), webUrl: it.webUrl || '', shared: true};
+    });
+  } catch(e){
+    console.error('[fetchDriveChildren]', driveId, itemId, e);
+    showToast('공유 폴더 조회 실패: ' + e.message,'error');
+    return null;
+  }
+}
+
 // ============================================================
 // 폴더 트리 UI 모달
 // ============================================================
 let _folderTreeCurrentIdx = -1;
 let _folderTreeSelectedPath = '';
 let _folderTreeSelectedName = '';
+let _folderTreeSelectedUrl = '';   // 공유 폴더 선택 시 webUrl (빈값 = 내 OneDrive 경로 저장)
 
 async function openFolderTreeModal(idx){
   _folderTreeCurrentIdx = idx;
   _folderTreeSelectedPath = '';
   _folderTreeSelectedName = '';
+  _folderTreeSelectedUrl = '';
   let el = document.getElementById('folder-tree-modal');
   if(!el){
     el = document.createElement('div');
@@ -7388,8 +7447,8 @@ async function openFolderTreeModal(idx){
     '<button id="ftm-confirm-btn" onclick="confirmFolderTreeSelection()" disabled style="padding:8px 18px;border:none;background:var(--accent);color:#fff;border-radius:8px;cursor:pointer;font-family:inherit;font-size:12px;opacity:0.4">선택 (폴더 클릭)</button>'+
     '</div>'+
     '</div></div>';
-  // root children 로드
-  const children = await _msalFetchOneDriveChildren('');
+  // root children + 공유받은 폴더 병렬 로드
+  const [children, shared] = await Promise.all([_msalFetchOneDriveChildren(''), _msalFetchSharedWithMe()]);
   const treeEl = document.getElementById('ftm-tree');
   if(!treeEl) return;
   if(!children){
@@ -7397,11 +7456,23 @@ async function openFolderTreeModal(idx){
     return;
   }
   treeEl.innerHTML = '';
+  const secSt='font-size:11px;font-weight:700;color:#888;letter-spacing:0.5px;padding:6px 4px 4px;user-select:none';
+  // 섹션 1 — 내 OneDrive
+  const myHdr=document.createElement('div'); myHdr.style.cssText=secSt; myHdr.textContent='📂 내 OneDrive'; treeEl.appendChild(myHdr);
   if(children.length === 0){
-    treeEl.innerHTML = '<div style="color:#999;padding:20px;text-align:center">OneDrive에 폴더가 없어요</div>';
-    return;
+    const e1=document.createElement('div'); e1.style.cssText='color:#999;padding:8px 12px;font-size:12px'; e1.textContent='OneDrive에 폴더가 없어요'; treeEl.appendChild(e1);
+  } else {
+    children.forEach(function(child){ treeEl.appendChild(_renderFolderTreeNode(child, '', 0)); });
   }
-  children.forEach(function(child){ treeEl.appendChild(_renderFolderTreeNode(child, '', 0)); });
+  // 섹션 2 — 공유받은 폴더 (타 유저 공유분, Files.Read.All)
+  const shHdr=document.createElement('div'); shHdr.style.cssText=secSt+';margin-top:10px;border-top:1px solid rgba(0,0,0,0.05);padding-top:10px'; shHdr.textContent='🤝 공유받은 폴더'; treeEl.appendChild(shHdr);
+  if(shared===null){
+    const e2=document.createElement('div'); e2.style.cssText='color:#bbb;padding:6px 12px;font-size:11px;line-height:1.5'; e2.textContent='공유받은 폴더를 불러올 수 없어요 (권한 동의가 필요할 수 있어요 — 다시 열면 동의 팝업이 떠요)'; treeEl.appendChild(e2);
+  } else if(shared.length === 0){
+    const e3=document.createElement('div'); e3.style.cssText='color:#bbb;padding:6px 12px;font-size:11px'; e3.textContent='공유받은 폴더가 없어요'; treeEl.appendChild(e3);
+  } else {
+    shared.forEach(function(child){ treeEl.appendChild(_renderFolderTreeNode(child, '', 0)); });
+  }
 }
 
 function _renderFolderTreeNode(node, parentPath, depth){
@@ -7428,7 +7499,10 @@ function _renderFolderTreeNode(node, parentPath, depth){
         return;
       }
       this.textContent = '⌛';
-      const children = await _msalFetchOneDriveChildren(fullPath);
+      // 공유 폴더(타 드라이브)는 path 주소가 불가 — 드라이브 ID 기반으로 탐색
+      const children = node.driveId
+        ? await _msalFetchDriveChildren(node.driveId, node.id)
+        : await _msalFetchOneDriveChildren(fullPath);
       this.textContent = '▼';
       const cd = document.createElement('div');
       cd.className = 'ftm-children';
@@ -7452,6 +7526,12 @@ function _renderFolderTreeNode(node, parentPath, depth){
   nameSpan.textContent = node.name;
   nameSpan.style.cssText = 'flex:1;color:#333;user-select:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
   row.appendChild(nameSpan);
+  if(node.owner){
+    const ownerSpan = document.createElement('span');
+    ownerSpan.textContent = node.owner;
+    ownerSpan.style.cssText = 'flex-shrink:0;color:#aaa;font-size:10px;user-select:none;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+    row.appendChild(ownerSpan);
+  }
   row.onclick = function(e){
     if(e.target === expandBtn) return;
     document.querySelectorAll('.ftm-row[data-selected]').forEach(function(r){
@@ -7464,8 +7544,11 @@ function _renderFolderTreeNode(node, parentPath, depth){
     this.style.fontWeight = '600';
     _folderTreeSelectedPath = fullPath;
     _folderTreeSelectedName = node.name;
+    _folderTreeSelectedUrl = node.shared ? (node.webUrl || '') : '';
     const pathSpan = document.getElementById('ftm-current-path');
-    if(pathSpan) pathSpan.textContent = 'OneDrive - GS칼텍스 예울마루' + fullPath.replace(/\//g, '\\');
+    if(pathSpan) pathSpan.textContent = node.shared
+      ? ('공유받은 폴더' + fullPath.replace(/\//g, '\\') + (node.owner ? ' (' + node.owner + ')' : ''))
+      : ('OneDrive - GS칼텍스 예울마루' + fullPath.replace(/\//g, '\\'));
     const btn = document.getElementById('ftm-confirm-btn');
     if(btn){ btn.disabled = false; btn.style.opacity = '1'; btn.textContent = '✓ 선택: ' + node.name; }
   };
@@ -7479,6 +7562,7 @@ function closeFolderTreeModal(){
   _folderTreeCurrentIdx = -1;
   _folderTreeSelectedPath = '';
   _folderTreeSelectedName = '';
+  _folderTreeSelectedUrl = '';
 }
 
 function confirmFolderTreeSelection(){
@@ -7486,9 +7570,9 @@ function confirmFolderTreeSelection(){
     showToast('폴더를 클릭해서 선택해주세요','error');
     return;
   }
-  // OneDrive - GS칼텍스 예울마루 prefix + 선택 경로 (백슬래시)
+  // 내 OneDrive = 로컬 동기화 경로(백슬래시) / 공유받은 폴더 = 타 드라이브라 로컬 경로가 없어 webUrl 저장
   const PREFIX = 'OneDrive - GS칼텍스 예울마루';
-  const newPath = PREFIX + _folderTreeSelectedPath.replace(/\//g, '\\');
+  const newPath = _folderTreeSelectedUrl || (PREFIX + _folderTreeSelectedPath.replace(/\//g, '\\'));
   if(!_pwData.folders) _pwData.folders = [''];
   _pwData.folders[_folderTreeCurrentIdx] = newPath;
   const input = document.getElementById('pw-folder-' + _folderTreeCurrentIdx);
