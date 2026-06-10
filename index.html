@@ -6938,17 +6938,17 @@ function renderPwStep(){
     const customSel=_pwData.isCustom?' selected':'';
     html+='<optgroup label="기타"><option value="__custom__"'+customSel+'>홍보하려는 항목이 없음 — 직접 입력</option></optgroup>';
     html+='</select>';
-    // 직접 입력 영역
+    // 직접 입력 영역 — (260610) 프로그램명 입력 제거: 임의 텍스트가 프로그램 레벨로 records에 들어가
+    // 프로그램 목록을 오염시키던 문제. 구분만 고르면 프로그램='기타' 자동, 내용은 다음 단계 제목으로.
     const customDisp=_pwData.isCustom?'':'none';
     html+='<div id="pw-custom-wrap" style="display:'+customDisp+';margin-top:14px">';
-    html+='<label style="display:block;font-size:11px;color:#888;margin:0 0 4px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">프로그램명<span style="color:var(--peach);margin-left:3px">*</span></label>';
-    html+='<input id="pw-custom-name" type="text" value="'+escapeHtml(_pwData.customName||'')+'" placeholder="예: N월 홍보 일정" style="'+inputStyle+'">';
-    html+='<label style="display:block;font-size:11px;color:#888;margin:12px 0 4px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">콘텐츠 구분<span style="color:var(--peach);margin-left:3px">*</span></label>';
+    html+='<label style="display:block;font-size:11px;color:#888;margin:0 0 4px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">콘텐츠 구분<span style="color:var(--peach);margin-left:3px">*</span></label>';
     html+='<select id="pw-custom-cat" style="'+inputStyle+'"><option value="">선택</option>';
     (CONTENT_TYPES.length>0?CONTENT_TYPES:['공연','전시','예술교육','대관','기타']).forEach(function(t){
       html+='<option value="'+escapeHtml(t)+'"'+(_pwData.customCat===t?' selected':'')+'>'+escapeHtml(t)+'</option>';
     });
     html+='</select>';
+    html+='<div style="margin-top:10px;font-size:11.5px;color:#888;line-height:1.6">프로그램은 <b>기타</b>로 저장돼요. 홍보할 내용은 다음 단계의 <b>콘텐츠 제목</b>에 적어주세요.</div>';
     html+='</div>';
     // Monthly 자동 채움 정보 박스 (read-only)
     const monthlyDisp=_pwData.isMonthly?'':'none';
@@ -7112,10 +7112,11 @@ function onPwProgSelect(sel){
   if(monthlyEl)monthlyEl.style.display='none';
   if(v==='__custom__'){
     _pwData.isCustom=true;
-    _pwData.program='';
+    _pwData.program='기타';
     _pwData.programType='';
     _pwData.programEndDate='';
     document.getElementById('pw-custom-wrap').style.display='';
+    setTimeout(function(){const c=document.getElementById('pw-custom-cat');if(c)c.focus();},30);
   }else{
     _pwData.isCustom=false;
     document.getElementById('pw-custom-wrap').style.display='none';
@@ -7274,8 +7275,8 @@ function buildPwPlat2Html(){
 function collectPwStep(){
   if(_pwStep===1){
     if(_pwData.isCustom){
-      _pwData.customName=document.getElementById('pw-custom-name').value.trim();
-      _pwData.customCat=document.getElementById('pw-custom-cat').value;
+      const _cc=document.getElementById('pw-custom-cat');
+      if(_cc)_pwData.customCat=_cc.value;
     }
   }else if(_pwStep===2){
     const el=document.getElementById('pw-title');
@@ -7301,9 +7302,8 @@ function collectPwStep(){
 function validatePwStep(){
   if(_pwStep===1){
     if(_pwData.isCustom){
-      if(!_pwData.customName){showFieldError('pw-custom-name','프로그램명을 입력해 주세요');return false;}
       if(!_pwData.customCat){showFieldError('pw-custom-cat','콘텐츠 구분을 골라 주세요');return false;}
-      _pwData.program=_pwData.customName;
+      _pwData.program='기타';   // 임의 텍스트가 프로그램 레벨로 저장되던 것 차단 — 항상 '기타' 고정
       _pwData.programType=_pwData.customCat;
     }else{
       if(!_pwData.program){showFieldError('pw-program','프로그램을 골라 주세요');return false;}
