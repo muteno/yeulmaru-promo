@@ -527,6 +527,32 @@ async function handleAddChatLog(token, log) {
 }
 __name(handleAddChatLog, "handleAddChatLog");
 
+// === 규정 시트 — 사무처리규정 PDF 조항 인제스트 (docs/260610_rules_ingest.mjs) ===
+var RULES_SHEET = "규정";
+var RULES_HEADERS = ["규정명", "조항", "제목", "본문", "키워드"];
+
+async function writeNamedSheetRows(token, name, headers, rows) {
+  const { driveId, itemId } = await ensureNamedSheet(token, name, headers, null);
+  const lastCol = colLetter(headers.length);
+  await graphPatch(token, `${sheetPathFor(driveId, itemId, name)}/range(address='A1:${lastCol}1')`, { values: [headers] });
+  for (let b = 0; b < rows.length; b += 200) {
+    const slice = rows.slice(b, b + 200).map((r) => headers.map((h) => { const v = r[h]; return (v === null || v === undefined) ? "" : String(v); }));
+    const sr = 2 + b, er = sr + slice.length - 1;
+    const addr = `A${sr}:${lastCol}${er}`;
+    await graphPatch(token, `${sheetPathFor(driveId, itemId, name)}/range(address='${addr}')`, { numberFormat: slice.map(() => headers.map(() => "@")) });
+    await graphPatch(token, `${sheetPathFor(driveId, itemId, name)}/range(address='${addr}')`, { values: slice });
+  }
+  return { ok: true, sheet: name, rows: rows.length };
+}
+__name(writeNamedSheetRows, "writeNamedSheetRows");
+
+async function handleGetRules(token) {
+  await ensureNamedSheet(token, RULES_SHEET, RULES_HEADERS, null);
+  const { rows } = await handleGetSheet(token, RULES_SHEET);
+  return rows;
+}
+__name(handleGetRules, "handleGetRules");
+
 async function handleMarkMessageRead(token, id) {
   const { driveId, itemId } = await ensureMessagesSheet(token);
   const { headers, rows } = await handleGetSheet(token, MSG_SHEET);
@@ -890,6 +916,15 @@ var index_default = {
       }
       if (url.pathname === "/api/chatbot/log" && request.method === "POST") {
         return json(await handleAddChatLog(token, await request.json()), env);
+      }
+      if (url.pathname === "/api/chatbot/rules") {
+        if (request.method === "GET") return json({ rules: await handleGetRules(token) }, env);
+        if (request.method === "POST") {
+          const rAuth = await checkAdmin(request, env, token);
+          if (!rAuth.admin) return json({ error: "Admin only" }, env, 403);
+          const body = await request.json();
+          return json(await writeNamedSheetRows(token, RULES_SHEET, RULES_HEADERS, Array.isArray(body.rows) ? body.rows : []), env);
+        }
       }
 
       // === [DB통합/이관] 운영 데이터 — 프로모 엑셀 "운영_*" 시트가 source of truth (Workbook API) ===
