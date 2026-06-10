@@ -391,6 +391,29 @@ async function autoCancelStalePending(env) {
     try {
       await handleUpdateSheetRow(token, "\uD64D\uBCF4\uAE30\uB85D", row._rowIndex, { values }, "admin", "records");
       cancelled++;
+      // \uC2E0\uCCAD\uC790\uC5D0\uAC8C \uC790\uB3D9\uCDE8\uC18C \uC54C\uB9BC (\uC218\uB3D9 \uCDE8\uC18C \uACBD\uB85C\uC758 pushMessage\uC640 \uB3D9\uC77C \uD3EC\uB9F7) \u2014 \uC2E4\uD328\uD574\uB3C4 cron\uC740 \uACC4\uC18D
+      try {
+        const recipient = String(row["\uC2E0\uCCAD\uC790"] || "").trim();
+        if (recipient) {
+          const dateKey = [row["\uC5F0\uB3C4"], String(row["\uC6D4"] || "").padStart(2, "0"), String(row["\uC77C"] || "").padStart(2, "0")].join("-");
+          const refSummary = (dateKey + " " + (row["\uD50C\uB7AB\uD3FC 1"] || "") + " " + (row["\uCF58\uD150\uCE20 \uC81C\uBAA9"] || "")).trim();
+          await handleAddMessage(token, {
+            id: "m" + Date.now() + "-" + Math.random().toString(36).slice(2, 6),
+            recipient,
+            type: "\uC911\uC694",
+            trigger: "\uC790\uB3D9\uCDE8\uC18C",
+            before: HOLD_VAL,
+            after: CANCEL_VAL,
+            reason: "\uBCF4\uB958 3\uC77C \uACBD\uACFC\uB85C \uC790\uB3D9 \uCDE8\uC18C\uB418\uC5C8\uC5B4\uC694",
+            refNo: row["No"] || row["NO"] || "",
+            refSummary,
+            kst: nowKstStr.slice(0, 16),
+            read: false
+          });
+        }
+      } catch (e2) {
+        console.error("autoCancel notify", row._rowIndex, e2);
+      }
     } catch (e) {
       console.error("autoCancel row", row._rowIndex, e);
     }
