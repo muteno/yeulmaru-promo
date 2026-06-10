@@ -8,5 +8,11 @@ const PW = process.env.DB_PW || '0510';
 const PIN = process.env.DB_PIN || '';
 const data = JSON.parse(fs.readFileSync(new URL('./260610_rules_rows.json', import.meta.url), 'utf8'));
 console.log('조항 rows:', data.rows.length);
-const r = await fetch(BASE + '/api/chatbot/rules', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-App-Password': PW, 'X-Sub-Admin-PIN': PIN }, body: JSON.stringify({ rows: data.rows }) });
+// 기존 행 수보다 줄어들면 잔여 행이 남음(Worker가 초과분 클리어 안 함) → 빈 행 패딩으로 덮어쓰기
+const cur = await (await fetch(BASE + '/api/chatbot/rules', { headers: { 'X-App-Password': PW } })).json();
+const oldN = (cur.rules || []).length;
+const rows = data.rows.slice();
+while (rows.length < oldN) rows.push({ '규정명':'', '조항':'', '제목':'', '본문':'', '키워드':'' });
+console.log('업로드 rows:', rows.length, '(패딩', rows.length - data.rows.length, ')');
+const r = await fetch(BASE + '/api/chatbot/rules', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-App-Password': PW, 'X-Sub-Admin-PIN': PIN }, body: JSON.stringify({ rows }) });
 console.log(r.status, (await r.text()).slice(0, 200));

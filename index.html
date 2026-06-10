@@ -496,6 +496,8 @@ button{font-family:inherit;cursor:pointer}
 .pf-row input{vertical-align:middle;margin:0 8px 0 0;width:14px;height:14px;flex-shrink:0;cursor:pointer;accent-color:var(--accent)}
 .pf-row.on.pf-c{border-left-color:var(--accent);background:rgba(74,77,231,0.07)}
 .pf-row.on.pf-e{border-left-color:var(--peach);background:var(--peach-bg)}
+.pf-row.on.pf-a{border-left-color:var(--green);background:rgba(26,107,60,0.07)}
+.pf-row.on.pf-r{border-left-color:#999;background:rgba(0,0,0,0.05)}
 .pf-name{vertical-align:middle;color:#333;font-weight:500}
 .pf-date{vertical-align:middle;font-size:11px;color:#999;font-weight:500;margin-left:8px}
 
@@ -2252,9 +2254,15 @@ async function api(method,path,body){
 
 // (isSuperAdmin 제거됨 — 슈퍼admin 개념 폐기, 권한은 role==='admin'로 통일)
 
-// Excel 시리얼(1899-12-30 기준) → "YYYY-MM-DD" 변환
+// Excel 시리얼(1899-12-30 기준) → "YYYY-MM-DD" 변환. 텍스트 날짜('2026-06-30'/'2026.6.30')도 허용
+// — 관리자 CRUD/시트 수기 편집으로 시리얼 대신 문자열이 저장돼도 표시가 깨지지 않게 (260610)
 function excelSerialToISO(serial){
-  if(serial===''||serial==null||isNaN(serial))return'';
+  if(serial===''||serial==null)return'';
+  if(isNaN(serial)){
+    var m=String(serial).trim().match(/^(\d{4})[.\-\/년]\s*(\d{1,2})[.\-\/월]\s*(\d{1,2})/);
+    if(m)return m[1]+'-'+String(m[2]).padStart(2,'0')+'-'+String(m[3]).padStart(2,'0');
+    return'';
+  }
   var ms=(Number(serial)-25569)*86400*1000;
   var d=new Date(ms);
   return d.toISOString().slice(0,10);
@@ -10785,6 +10793,27 @@ function renderProgList(){
       html+='<label class="pf-row pf-e'+onCls+'"><input type="checkbox" onchange="onProgRowChange(this)" value="'+p.f.replace(/"/g,'&quot;')+'" '+checked+'><span class="pf-name">'+p.f+'</span><span class="pf-date">'+date+'</span></label>';
     });
   }
+  // (260610) 예술교육·대관 섹션 — 기존엔 공연/전시만 렌더해 예술교육 프로그램(화요살롱 등)이 사이드바에서 누락됐음
+  var edus=perfs.filter(function(p){return p.t==='a';});
+  var rents=perfs.filter(function(p){return p.t==='r';});
+  if(edus.length>0){
+    html+='<div class="pf-section" style="color:var(--green)">예술교육</div>';
+    edus.forEach(function(p){
+      var checked=_modalSelected.indexOf(p.f)>-1?'checked':'';
+      var onCls=checked?' on':'';
+      var date=p.s===p.e?p.s.substr(5).replace('-','.'):p.s.substr(5).replace('-','.')+'~'+p.e.substr(5).replace('-','.');
+      html+='<label class="pf-row pf-a'+onCls+'"><input type="checkbox" onchange="onProgRowChange(this)" value="'+p.f.replace(/"/g,'&quot;')+'" '+checked+'><span class="pf-name">'+p.f+'</span><span class="pf-date">'+date+'</span></label>';
+    });
+  }
+  if(rents.length>0){
+    html+='<div class="pf-section" style="color:#888">대관</div>';
+    rents.forEach(function(p){
+      var checked=_modalSelected.indexOf(p.f)>-1?'checked':'';
+      var onCls=checked?' on':'';
+      var date=p.s===p.e?p.s.substr(5).replace('-','.'):p.s.substr(5).replace('-','.')+'~'+p.e.substr(5).replace('-','.');
+      html+='<label class="pf-row pf-r'+onCls+'"><input type="checkbox" onchange="onProgRowChange(this)" value="'+p.f.replace(/"/g,'&quot;')+'" '+checked+'><span class="pf-name">'+p.f+'</span><span class="pf-date">'+date+'</span></label>';
+    });
+  }
   if(!html)html='<div style="text-align:center;color:var(--dim);padding:20px;font-size:13px">표시할 프로그램이 없습니다</div>';
   document.getElementById('prog-list').innerHTML=html;
   syncMasterCheckbox();
@@ -12257,7 +12286,7 @@ function _bnavMore(){
 // 챗봇 위젯 — 회사 규정 질문(챗봇FAQ 시트) / 사업 프로그램 문의(PERFS+records)
 // 규칙 기반 자동응답. 모든 질의는 '챗봇로그' 시트에 누적 (사용자/시간/종류/질의/응답/매칭)
 // ============================================================
-let _cb={cat:null,faq:null,rules:null,open:false};
+let _cb={cat:null,faq:null,rules:null,daily:null,open:false};
 function _cbNorm(s){return String(s==null?'':s).toLowerCase().replace(/[\s〈〉<>«»'’"”\[\]()·~\-_,.!?]/g,'');}
 function _cbTodayISO(){return new Date(Date.now()+9*36e5).toISOString().slice(0,10);}
 function _cbLog(kind,query,answer,match){
@@ -12281,10 +12310,19 @@ function _chatbotMount(){
   document.body.appendChild(fab);
   const win=document.createElement('div');
   win.id='cb-win';win.className='cb-win';
-  win.innerHTML='<div class="cb-hdr"><div class="cb-ava">🤖</div><div class="cb-titles"><div class="cb-title">예울마루 도우미</div><div class="cb-sub">자동응답 · 회사/프로그램 문의</div></div><button class="cb-close" onclick="_cbToggle()">✕</button></div>'+
+  win.innerHTML='<div class="cb-hdr"><div class="cb-ava">🤖</div><div class="cb-titles"><div class="cb-title">예울마루 도우미</div><div class="cb-sub">자동응답 · 규정/프로그램 문의</div></div><button class="cb-close" onclick="_cbClear()" title="대화 지우기" style="font-size:15px">⟲</button><button class="cb-close" onclick="_cbToggle()">✕</button></div>'+
     '<div class="cb-body" id="cb-body"></div>'+
     '<div class="cb-foot"><input class="cb-in" id="cb-in" placeholder="궁금한 내용을 입력하세요" onkeydown="if(event.key===\'Enter\')_cbSend()"><button class="cb-send" onclick="_cbSend()"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg></button></div>';
   document.body.appendChild(win);
+  // 바깥(캘린더/모달 등) 클릭 시 자동 닫힘 — 창/FAB 내부 클릭은 유지
+  document.addEventListener('click',function(e){
+    const w=document.getElementById('cb-win');
+    if(!w||!w.classList.contains('show'))return;
+    if(w.contains(e.target))return;
+    const f=document.getElementById('cb-fab');
+    if(f&&f.contains(e.target))return;
+    w.classList.remove('show');_cb.open=false;
+  },true);
 }
 function _cbToggle(){
   const win=document.getElementById('cb-win');
@@ -12347,11 +12385,15 @@ async function _cbPickCat(cat){
     _cbBot('궁금한 항목을 골라주세요. 직접 입력하면 사무처리규정에서도 찾아드려요.');
     _cbChips(faq.slice(0,8).map(function(r,i){return{label:r['질문'],fn:function(){_cbFaqAnswer(i);}};}).concat([{label:'처음으로',fn:_cbHome,ghost:true}]));
   }else{
-    const list=_cbProgList();
+    // 실무자 시선: 지금 오픈된(안 끝난) 프로그램 기준 질문형 추천
+    const open=_cbProgList().filter(function(p){return p.e&&p.e>=_cbTodayISO();}).slice(0,4);
     _cbReply(function(){
-      if(!list.length){_cbBot('등록된 프로그램이 없어요.');_cbChips([{label:'처음으로',fn:_cbHome,ghost:true}]);return;}
-      _cbBot('어떤 프로그램이 궁금하세요? 이름을 입력하셔도 돼요.');
-      _cbChips(list.slice(0,8).map(function(p){return{label:p.f||p.n,fn:function(){_cbProgAnswer(p);}};}).concat([{label:'처음으로',fn:_cbHome,ghost:true}]));
+      if(!open.length){_cbBot('지금 진행 중인 프로그램이 없네요. 프로그램 이름을 입력하면 지난 것도 찾아드려요.');_cbChips([{label:'처음으로',fn:_cbHome,ghost:true}]);return;}
+      _cbBot('지금 진행·판매 중인 프로그램 기준으로 물어보세요 🙂\n다른 프로그램은 이름으로 입력하면 돼요.');
+      // 공연만 판매 추이 질문 — 전시/교육은 판매 데이터가 없음
+      const tplC=[' 판매 추이는 어때?',' 홍보 뭐가 잡혀있어?',' 일정 알려줘'];
+      const tplX=[' 일정 알려줘',' 홍보 뭐가 잡혀있어?'];
+      _cbChips(open.map(function(p,i){const t=(p.t==='c'?tplC:tplX);const q=(p.f||p.n)+t[i%t.length];return{label:q,fn:function(){_cbAsk(q);}};}).concat([{label:'처음으로',fn:_cbHome,ghost:true}]));
     });
   }
 }
@@ -12404,13 +12446,40 @@ function _cbProgAnswer(p,typed){
       }
     }
   }catch(e){console.warn('[cbProg records]',e);}
-  _cbReply(function(){
-    _cbBot(h);
-    _cbChips([{label:'다른 프로그램',fn:function(){_cbPickCat('프로그램');}},{label:'처음으로',fn:_cbHome,ghost:true}]);
-  });
+  const _show=function(extra){
+    _cbReply(function(){
+      _cbBot(h+(extra||''));
+      _cbChips([{label:'다른 프로그램',fn:function(){_cbPickCat('프로그램');}},{label:'처음으로',fn:_cbHome,ghost:true}]);
+    });
+  };
+  // 공연이면 일일입력에서 최신 판매 스냅샷 ("판매 추이는 어때?" 실답변)
+  if(p.t==='c'){_cbDailyLine(p).then(_show).catch(function(){_show('');});}else{_show('');}
   _cbLog('프로그램',typed||p.f||p.n,'프로그램 정보 응답',p.f||p.n);
 }
-// === 규정(사무처리규정 535조항) 검색 — '규정' 시트, FAQ 미스 시 폴백 ===
+async function _cbDailyLine(p){
+  try{
+    if(_cb.daily===null){
+      const d=await api('GET','/api/ops?sheet='+encodeURIComponent('일일입력'));
+      _cb.daily=(d&&d.rows)||[];
+    }
+    const fn=_cbNorm(p.f),nn=_cbNorm(p.n);
+    const mine=_cb.daily.filter(function(r){const v=_cbNorm(r['공연명']);return v&&((fn&&(v.indexOf(fn)>-1||fn.indexOf(v)>-1))||(nn&&(v.indexOf(nn)>-1||nn.indexOf(v)>-1)));});
+    if(!mine.length)return '';
+    mine.sort(function(a,b){return String(a['기준일자']).localeCompare(String(b['기준일자']));});
+    const last=mine[mine.length-1];
+    let occ=parseFloat(String(last['점유율']).replace(/[^0-9.\-]/g,''));
+    if(!isNaN(occ)&&occ<=1.5)occ=occ*100;
+    const seats=parseFloat(String(last['합계좌석']).replace(/[^0-9.\-]/g,''))||0;
+    const diff=parseFloat(String(last['전일대비(석)']).replace(/[^0-9.\-]/g,''));
+    const bd=String(last['기준일자']||'');
+    let line='\n<span class="cb-dim">─ 판매 현황 ─</span>\n';
+    line+=(isNaN(occ)?'':('점유율 '+occ.toFixed(1)+'% · '))+'누적 '+seats.toLocaleString()+'석';
+    if(!isNaN(diff)&&diff!==0)line+=' (전일 '+(diff>0?'+':'')+diff+')';
+    if(/^\d{8}/.test(bd))line+=' · '+bd.slice(4,6)+'/'+bd.slice(6,8)+' 기준';
+    return line;
+  }catch(e){return '';}
+}
+// === 규정(사무처리규정 512청크) 검색 v2 — 토큰화+동의어 스코어링, 모호하면 되묻기 ===
 async function _cbLoadRules(){
   if(_cb.rules!==null)return _cb.rules;
   try{
@@ -12419,18 +12488,48 @@ async function _cbLoadRules(){
   }catch(e){console.warn('[cbRules]',e.message);return null;}
   return _cb.rules;
 }
-function _cbRulesSearch(rules,qn){
+const _CB_FILLER=['관련','해서','해줘','해주','사용','방법','알려','알려줘','알려주','궁금','며칠','몇일','주세요','주나요','얼마나','어떻게','언제','뭐야','뭔가','무엇','우리','회사','규정','문의','질문','대해','대한','있나','있나요','인가요','인지','하는','해야','어때','그리고','하면','되나'];
+const _CB_SYN={'부모님':'부모','아버지':'부모','어머니':'부모','돌아가':'사망','별세':'사망','장례':'사망 경조','상을당':'사망','결혼식':'결혼','월급':'급여','봉급':'급여','연봉':'급여','휴무':'휴가','쉬는날':'휴가','퇴사':'퇴직','그만두':'퇴직','빌리':'대관','대여':'대관','임신':'출산','야근':'연장근무 보상휴가','출장가':'출장'};
+function _cbTokens(q){
+  let s=String(q||'');
+  Object.keys(_CB_SYN).forEach(function(k){if(s.indexOf(k)>-1)s+=' '+_CB_SYN[k];});
+  const toks=[];
+  s.split(/[\s,.?!~·()\[\]'"]+/).forEach(function(w){
+    var st=w.replace(/(으로|에서|에게|한테|까지|부터|이나|만큼|처럼|이라|라는|면|을|를|이|가|은|는|의|에|도|만|요|줘|야)$/,'');
+    if(st.length>=2)w=st;  // 조사 제거로 1글자가 되면 원형 유지 ('휴가'→'휴' 방지)
+    w=w.replace(/[^\w가-힣]/g,'');
+    if(w.length<2)return;
+    if(_CB_FILLER.indexOf(w)>-1)return;
+    if(toks.indexOf(w)===-1)toks.push(w);
+  });
+  return toks;
+}
+function _cbRulesSearch(rules,q){
+  const toks=_cbTokens(q);
+  if(!toks.length)return{clarify:true,hits:[]};
   const scored=[];
   (rules||[]).forEach(function(r){
-    let s=0;
-    const tn=_cbNorm(r['제목']);
-    if(tn&&(tn.indexOf(qn)>-1||qn.indexOf(tn)>-1))s+=4;
-    String(r['키워드']||'').split(',').forEach(function(k){k=_cbNorm(k);if(k&&qn.indexOf(k)>-1)s+=2;});
-    if(qn.length>=2&&_cbNorm(r['본문']).indexOf(qn)>-1)s+=1;
+    const tn=_cbNorm(r['제목']),kw=_cbNorm(r['키워드']),body=_cbNorm(r['본문']),reg=_cbNorm(r['규정명']);
+    let s=0,hit=0;
+    toks.forEach(function(t){
+      const n=_cbNorm(t);if(!n)return;let h=0;
+      if(tn.indexOf(n)>-1){h+=4;if(tn===n)h+=2;}
+      if(kw.indexOf(n)>-1)h+=2;
+      if(reg.indexOf(n)>-1)h+=1;
+      if(body.indexOf(n)>-1)h+=1.5;
+      if(h>0){s+=h;hit++;}
+    });
+    if(hit>=2)s+=hit*1.5;
     if(s>0)scored.push({s:s,r:r});
   });
   scored.sort(function(a,b){return b.s-a.s;});
-  return scored.slice(0,3);
+  return{clarify:false,hits:scored.slice(0,3)};
+}
+function _cbAsk(t){const inp=document.getElementById('cb-in');if(inp)inp.value=t;_cbSend();}
+function _cbClear(){
+  const b=document.getElementById('cb-body');if(b)b.innerHTML='';
+  _cb.cat=null;
+  _cbHome(true);  // 화면만 비움 — 챗봇로그(DB)는 그대로
 }
 function _cbRuleCard(r){
   return '<div class="cb-card-t">📖 '+escapeHtml((r['규정명']||'')+' '+(r['조항']||''))+' <span class="cb-dim">'+escapeHtml(r['제목']||'')+'</span></div>'+
@@ -12447,22 +12546,27 @@ function _cbShowRule(r){
 }
 function _cbRulesAnswer(q,qn){
   const done=function(rules){
-    const hits=_cbRulesSearch(rules,qn);
-    if(hits.length){
-      const best=hits[0].r;
-      _cbBot(_cbRuleCard(best));
-      const chips=hits.slice(1).map(function(h){return {label:'📖 '+(h.r['조항']||'')+' '+(h.r['제목']||''),fn:function(){_cbShowRule(h.r);}};});
-      chips.push({label:'처음으로',fn:_cbHome,ghost:true});
-      _cbChips(chips);
-      _cbLog('규정',q,String(best['본문']).slice(0,80),(best['규정명']||'')+' '+(best['조항']||''));
-    }else{
-      _cbBot('아직 그 질문엔 답을 못 찾았어요 😢\n아래에서 카테고리를 골라 다시 시도하거나, 담당자에게 직접 문의해주세요.');
+    const res=_cbRulesSearch(rules,q);
+    if(res.clarify||!res.hits.length){
+      _cbBot(res.clarify
+        ?'음, 조금만 더 구체적으로 물어봐 주실래요? 🙂\n키워드가 있으면 바로 찾아드려요. 예를 들면 —'
+        :'그 내용은 규정에서 못 찾았어요 😢 다른 키워드로 다시 물어보시거나, 아래 예시처럼 질문해 보세요.');
       _cbChips([
-        {label:'🏢 회사 규정 질문',fn:function(){_cbPickCat('회사');}},
-        {label:'🎭 사업 프로그램 문의',fn:function(){_cbPickCat('프로그램');}}
+        {label:'경조 휴가는 며칠?',fn:function(){_cbAsk('경조 휴가는 며칠?');}},
+        {label:'연차는 어떻게 생겨?',fn:function(){_cbAsk('연차는 어떻게 생겨?');}},
+        {label:'출장비 지급 기준',fn:function(){_cbAsk('출장비 지급 기준');}},
+        {label:'처음으로',fn:_cbHome,ghost:true}
       ]);
-      _cbLog('자유입력',q,'','미응답');
+      _cbLog('자유입력',q,'',res.clarify?'모호질문':'미응답');
+      return;
     }
+    const best=res.hits[0];
+    const lead=best.s>=8?'찾았어요! 요 조항에 있어요 🙂\n\n':'딱 맞는지 확실하진 않지만, 가장 가까운 조항이에요 —\n\n';
+    _cbBot(lead+_cbRuleCard(best.r)+'\n<span class="cb-dim">더 궁금하면 이어서 물어보세요!</span>');
+    const chips=res.hits.slice(1).map(function(h){return{label:'📖 '+(h.r['조항']||'')+' '+(h.r['제목']||''),fn:function(){_cbShowRule(h.r);}};});
+    chips.push({label:'처음으로',fn:_cbHome,ghost:true});
+    _cbChips(chips);
+    _cbLog('규정',q,String(best.r['본문']).slice(0,80),(best.r['규정명']||'')+' '+(best.r['조항']||''));
   };
   if(_cb.rules!==null){done(_cb.rules);return;}
   _cbTyping(true);

@@ -534,6 +534,8 @@ var RULES_HEADERS = ["규정명", "조항", "제목", "본문", "키워드"];
 async function writeNamedSheetRows(token, name, headers, rows) {
   const { driveId, itemId } = await ensureNamedSheet(token, name, headers, null);
   const lastCol = colLetter(headers.length);
+  let oldRows = 0;
+  try { const ur = await graphGet(token, `${sheetPathFor(driveId, itemId, name)}/usedRange?$select=rowCount`); oldRows = ur.rowCount || 0; } catch (e) {}
   await graphPatch(token, `${sheetPathFor(driveId, itemId, name)}/range(address='A1:${lastCol}1')`, { values: [headers] });
   for (let b = 0; b < rows.length; b += 200) {
     const slice = rows.slice(b, b + 200).map((r) => headers.map((h) => { const v = r[h]; return (v === null || v === undefined) ? "" : String(v); }));
@@ -541,6 +543,9 @@ async function writeNamedSheetRows(token, name, headers, rows) {
     const addr = `A${sr}:${lastCol}${er}`;
     await graphPatch(token, `${sheetPathFor(driveId, itemId, name)}/range(address='${addr}')`, { numberFormat: slice.map(() => headers.map(() => "@")) });
     await graphPatch(token, `${sheetPathFor(driveId, itemId, name)}/range(address='${addr}')`, { values: slice });
+  }
+  if (oldRows > rows.length + 1) {
+    await graphPost(token, `${sheetPathFor(driveId, itemId, name)}/range(address='A${rows.length + 2}:${lastCol}${oldRows}')/clear`, { applyTo: "Contents" });
   }
   return { ok: true, sheet: name, rows: rows.length };
 }
