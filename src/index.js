@@ -473,6 +473,60 @@ async function handleAddMessage(token, msg) {
 }
 __name(handleAddMessage, "handleAddMessage");
 
+// === 챗봇 — FAQ 시트(운영자 편집) + 질의 로그 누적 ===
+var FAQ_SHEET = "챗봇FAQ";
+var FAQ_HEADERS = ["카테고리", "질문", "답변", "키워드", "사용"];
+var FAQ_SEED = [
+  ["회사", "예울마루 위치 / 오시는 길", "(여기에 답변을 입력한 뒤 '사용'을 TRUE로 바꾸면 챗봇에 표시돼요)", "위치,주소,오시는길,찾아오", "FALSE"],
+  ["회사", "주차 안내", "(여기에 답변을 입력한 뒤 '사용'을 TRUE로 바꾸면 챗봇에 표시돼요)", "주차,주차장,차", "FALSE"],
+  ["회사", "운영 시간 / 휴관일", "(여기에 답변을 입력한 뒤 '사용'을 TRUE로 바꾸면 챗봇에 표시돼요)", "시간,운영,휴관,오픈,마감", "FALSE"],
+  ["회사", "대관 문의", "(여기에 답변을 입력한 뒤 '사용'을 TRUE로 바꾸면 챗봇에 표시돼요)", "대관,대여,빌리", "FALSE"]
+];
+var CHATLOG_SHEET = "챗봇로그";
+var CHATLOG_HEADERS = ["ID", "KST", "사용자", "부서", "종류", "질의", "응답", "매칭"];
+
+// 시트 없으면 생성 + 헤더(+시드) 기록 — ensureMessagesSheet 일반화 버전
+async function ensureNamedSheet(token, name, headerRow, seedRows) {
+  const { driveId, itemId } = await findFile(token);
+  const ws = await graphGet(token, `/drives/${driveId}/items/${itemId}/workbook/worksheets`);
+  const exists = (ws.value || []).some((w) => w.name === name);
+  if (!exists) {
+    await graphPost(token, `/drives/${driveId}/items/${itemId}/workbook/worksheets/add`, { name });
+    const lastCol = colLetter(headerRow.length);
+    await graphPatch(token, `${sheetPathFor(driveId, itemId, name)}/range(address='A1:${lastCol}1')`, { values: [headerRow] });
+    if (seedRows && seedRows.length) {
+      const addr = `A2:${lastCol}${1 + seedRows.length}`;
+      await graphPatch(token, `${sheetPathFor(driveId, itemId, name)}/range(address='${addr}')`, { numberFormat: seedRows.map((r) => r.map(() => "@")) });
+      await graphPatch(token, `${sheetPathFor(driveId, itemId, name)}/range(address='${addr}')`, { values: seedRows });
+    }
+  }
+  return { driveId, itemId };
+}
+__name(ensureNamedSheet, "ensureNamedSheet");
+
+async function handleGetFaq(token) {
+  await ensureNamedSheet(token, FAQ_SHEET, FAQ_HEADERS, FAQ_SEED);
+  const { rows } = await handleGetSheet(token, FAQ_SHEET);
+  return rows;
+}
+__name(handleGetFaq, "handleGetFaq");
+
+async function handleAddChatLog(token, log) {
+  const { driveId, itemId } = await ensureNamedSheet(token, CHATLOG_SHEET, CHATLOG_HEADERS, null);
+  const { rows } = await handleGetSheet(token, CHATLOG_SHEET);
+  const nextRow = rows.length > 0 ? Math.max(...rows.map((r) => r._rowIndex)) + 1 : 2;
+  const values = [
+    log.id || "", log.kst || kstNowText(), log.user || "", log.dept || "",
+    log.kind || "", log.query || "", log.answer || "", log.match || ""
+  ];
+  const lastCol = colLetter(values.length);
+  const addr = `A${nextRow}:${lastCol}${nextRow}`;
+  await graphPatch(token, `${sheetPathFor(driveId, itemId, CHATLOG_SHEET)}/range(address='${addr}')`, { numberFormat: [values.map(() => "@")] });
+  await graphPatch(token, `${sheetPathFor(driveId, itemId, CHATLOG_SHEET)}/range(address='${addr}')`, { values: [values] });
+  return { ok: true, row: nextRow };
+}
+__name(handleAddChatLog, "handleAddChatLog");
+
 async function handleMarkMessageRead(token, id) {
   const { driveId, itemId } = await ensureMessagesSheet(token);
   const { headers, rows } = await handleGetSheet(token, MSG_SHEET);
@@ -828,6 +882,14 @@ var index_default = {
       if (url.pathname.startsWith("/api/messages/")) {
         const mid = decodeURIComponent(url.pathname.split("/").pop());
         if (request.method === "PATCH") return json(await handleMarkMessageRead(token, mid), env);
+      }
+
+      // === 챗봇 — FAQ 조회(시트 자동생성) + 질의 로그 누적. 로그인 사용자 허용 ===
+      if (url.pathname === "/api/chatbot/faq" && request.method === "GET") {
+        return json({ faq: await handleGetFaq(token) }, env);
+      }
+      if (url.pathname === "/api/chatbot/log" && request.method === "POST") {
+        return json(await handleAddChatLog(token, await request.json()), env);
       }
 
       // === [DB통합/이관] 운영 데이터 — 프로모 엑셀 "운영_*" 시트가 source of truth (Workbook API) ===

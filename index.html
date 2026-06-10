@@ -790,6 +790,36 @@ table.promo-board-table th:last-child .col-resize-handle{display:none}
 .sub-sec-b{white-space:pre-wrap;word-break:break-word;color:#444}
 .sub-path-row{display:flex;align-items:center;gap:8px;background:#fafafa;border:1px solid rgba(0,0,0,0.06);border-radius:10px;padding:9px 12px;margin-bottom:8px}
 .sub-path-tx{flex:1;font-size:12px;color:#444;word-break:break-all;line-height:1.5}
+/* === 챗봇 위젯 (우측 하단) === */
+.cb-fab{position:fixed;right:26px;bottom:26px;width:54px;height:54px;border-radius:50%;border:none;background:linear-gradient(135deg,var(--accent),#6E71F0);color:#fff;font-size:23px;cursor:pointer;z-index:95;box-shadow:0 8px 24px rgba(74,77,231,0.35),0 2px 8px rgba(0,0,0,0.10);display:flex;align-items:center;justify-content:center;transition:transform .2s,box-shadow .2s}
+.cb-fab:hover{transform:translateY(-3px);box-shadow:0 12px 32px rgba(74,77,231,0.45)}
+.cb-win{position:fixed;right:26px;bottom:92px;width:344px;height:500px;max-height:calc(100vh - 130px);background:var(--surface-solid);border:1px solid var(--glass-border);border-radius:var(--radius-lg);box-shadow:0 24px 80px rgba(74,77,231,0.16),0 8px 24px rgba(0,0,0,0.10);z-index:96;display:none;flex-direction:column;overflow:hidden;animation:fadeUp .22s ease}
+.cb-win.show{display:flex}
+.cb-hdr{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid rgba(0,0,0,0.06);background:linear-gradient(135deg,rgba(74,77,231,0.06),rgba(74,77,231,0.02));flex-shrink:0}
+.cb-ava{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#6E71F0);color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.cb-titles{flex:1;min-width:0}
+.cb-title{font-size:13.5px;font-weight:700;color:var(--text)}
+.cb-sub{font-size:10.5px;color:#888;margin-top:1px}
+.cb-close{width:28px;height:28px;border-radius:50%;border:none;background:rgba(0,0,0,0.05);color:#888;font-size:13px;cursor:pointer;flex-shrink:0}
+.cb-close:hover{background:rgba(0,0,0,0.1)}
+.cb-body{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:8px;scrollbar-width:thin}
+.cb-msg{max-width:86%;padding:9px 13px;border-radius:14px;font-size:12.5px;line-height:1.6;word-break:break-word;white-space:pre-line}
+.cb-msg.bot{background:#F4F4FB;color:#333;align-self:flex-start;border-bottom-left-radius:4px}
+.cb-msg.user{background:var(--accent);color:#fff;align-self:flex-end;border-bottom-right-radius:4px}
+.cb-msg.bot a{color:var(--accent);font-weight:600}
+.cb-msg.bot .cb-card-t{font-weight:700;font-size:13px;color:var(--text);margin-bottom:2px}
+.cb-msg.bot .cb-dim{color:#999;font-size:11px}
+.cb-chiprow{display:flex;flex-wrap:wrap;gap:6px;align-self:flex-start;max-width:95%}
+.cb-chip{padding:6px 12px;border-radius:999px;border:1px solid rgba(74,77,231,0.25);background:#fff;color:var(--accent);font-size:11.5px;font-weight:600;cursor:pointer;transition:all .15s;font-family:inherit}
+.cb-chip:hover{background:rgba(74,77,231,0.08)}
+.cb-chip.ghost{border-color:rgba(0,0,0,0.12);color:#777}
+.cb-chip.ghost:hover{background:rgba(0,0,0,0.04)}
+.cb-foot{display:flex;gap:8px;padding:10px 12px;border-top:1px solid rgba(0,0,0,0.06);flex-shrink:0}
+.cb-in{flex:1;border:1px solid #e1e1ec;border-radius:999px;padding:8px 14px;font-size:12.5px;font-family:inherit;outline:none;background:#fafafa}
+.cb-in:focus{border-color:var(--accent);background:#fff}
+.cb-send{width:36px;height:36px;border-radius:50%;border:none;background:var(--accent);color:#fff;font-size:14px;cursor:pointer;flex-shrink:0;transition:transform .15s}
+.cb-send:hover{transform:scale(1.08)}
+@media(max-width:600px){.cb-win{right:10px;left:10px;width:auto;bottom:86px;height:62vh}.cb-fab{right:16px;bottom:16px}}
 .mv-content.empty{color:#aaa;font-style:italic}
 .mv-cat{display:inline-block;padding:3px 10px;border-radius:8px;background:rgba(74,77,231,0.1);color:var(--accent);font-size:11px;font-weight:600;margin:4px 0}
 /* === 홍보 신청 위저드 === */
@@ -2169,6 +2199,7 @@ function updatePerfOpen(){
 }
 async function initApp(){
   buildNav();startClock();updateRoleTag();
+  try{_chatbotMount();}catch(_e){console.warn('[chatbot mount]',_e);}
   loadWeather(); if(!window._wxTimer)window._wxTimer=setInterval(loadWeather,1800000);
   _presBeat(); _presPoll(); if(!window._presTimer)window._presTimer=setInterval(function(){_presBeat();_presPoll();},35000);
   _memoLoad().then(_memoAlarmRefresh); if(!window._memoTimer)window._memoTimer=setInterval(_memoAlarmRefresh,60000);  // 메모/알림 = 전체 사용자
@@ -4303,9 +4334,13 @@ let _msgApiAvailable = false;  // API 호출 실패 시 false (재시도 throttl
 async function _msgApiCall(method, path, body){
   if(!_msgApiAvailable) return null;  // API 안 됨 알려진 상태면 skip
   try {
-    const opts = {method};
+    // Worker는 /api/messages도 X-App-Password 게이트 뒤에 있음 — 헤더 없으면 401로
+    // 전부 localStorage 폴백되어 크로스유저 알림이 끊긴다 (260610 라이브 probe로 확인)
+    const opts = {method, headers: {'X-App-Password': (typeof password!=='undefined'?password:'')||''}};
+    const _sp = sessionStorage.getItem('subAdminPin');
+    if(_sp) opts.headers['X-Sub-Admin-PIN'] = _sp;
     if(body){
-      opts.headers = {'Content-Type': 'application/json'};
+      opts.headers['Content-Type'] = 'application/json';
       opts.body = JSON.stringify(body);
     }
     const resp = await fetch(_MSG_API_BASE + path, opts);
@@ -11884,6 +11919,194 @@ function confirmResolve(v){
 }
 
 let _toastTimer=null;
+// ============================================================
+// 챗봇 위젯 — 회사 관련 문의(챗봇FAQ 시트) / 사업 프로그램 문의(PERFS+records)
+// 규칙 기반 자동응답. 모든 질의는 '챗봇로그' 시트에 누적 (사용자/시간/종류/질의/응답/매칭)
+// ============================================================
+let _cb={cat:null,faq:null,open:false};
+function _cbNorm(s){return String(s==null?'':s).toLowerCase().replace(/[\s〈〉<>«»'’"”\[\]()·~\-_,.!?]/g,'');}
+function _cbTodayISO(){return new Date(Date.now()+9*36e5).toISOString().slice(0,10);}
+function _cbLog(kind,query,answer,match){
+  try{
+    api('POST','/api/chatbot/log',{
+      id:'c'+Date.now()+'-'+Math.random().toString(36).slice(2,6),
+      kst:new Date(Date.now()+9*36e5).toISOString().slice(0,16).replace('T',' '),
+      user:sessionStorage.getItem('myApplicant')||'(미상)',
+      dept:sessionStorage.getItem('myUserDept')||'',
+      kind:kind||'',query:String(query||'').slice(0,200),
+      answer:String(answer||'').slice(0,120),match:match||''
+    }).catch(function(e){console.warn('[cbLog]',e.message);});
+  }catch(e){}
+}
+function _chatbotMount(){
+  if(document.getElementById('cb-fab'))return;
+  const fab=document.createElement('button');
+  fab.id='cb-fab';fab.className='cb-fab';fab.title='예울마루 도우미';fab.textContent='💬';
+  fab.onclick=_cbToggle;
+  document.body.appendChild(fab);
+  const win=document.createElement('div');
+  win.id='cb-win';win.className='cb-win';
+  win.innerHTML='<div class="cb-hdr"><div class="cb-ava">🤖</div><div class="cb-titles"><div class="cb-title">예울마루 도우미</div><div class="cb-sub">자동응답 · 회사/프로그램 문의</div></div><button class="cb-close" onclick="_cbToggle()">✕</button></div>'+
+    '<div class="cb-body" id="cb-body"></div>'+
+    '<div class="cb-foot"><input class="cb-in" id="cb-in" placeholder="궁금한 내용을 입력하세요" onkeydown="if(event.key===\'Enter\')_cbSend()"><button class="cb-send" onclick="_cbSend()">➤</button></div>';
+  document.body.appendChild(win);
+}
+function _cbToggle(){
+  const win=document.getElementById('cb-win');
+  if(!win)return;
+  _cb.open=!win.classList.contains('show');
+  win.classList.toggle('show',_cb.open);
+  if(_cb.open&&!document.getElementById('cb-body').children.length)_cbHome(true);
+}
+function _cbScroll(){const b=document.getElementById('cb-body');if(b)b.scrollTop=b.scrollHeight;}
+function _cbBot(html){const b=document.getElementById('cb-body');if(!b)return;const d=document.createElement('div');d.className='cb-msg bot';d.innerHTML=html;b.appendChild(d);_cbScroll();}
+function _cbUser(text){const b=document.getElementById('cb-body');if(!b)return;const d=document.createElement('div');d.className='cb-msg user';d.textContent=text;b.appendChild(d);_cbScroll();}
+function _cbChips(items){
+  const b=document.getElementById('cb-body');if(!b)return;
+  const row=document.createElement('div');row.className='cb-chiprow';
+  items.forEach(function(it){
+    const c=document.createElement('button');
+    c.className='cb-chip'+(it.ghost?' ghost':'');c.textContent=it.label;c.onclick=it.fn;
+    row.appendChild(c);
+  });
+  b.appendChild(row);_cbScroll();
+}
+function _cbClearChips(){document.querySelectorAll('#cb-body .cb-chiprow').forEach(function(r){r.remove();});}
+function _cbHome(first){
+  _cb.cat=null;
+  _cbClearChips();
+  _cbBot(first?'안녕하세요! 예울마루 도우미예요 🙋\n어떤 문의인지 먼저 골라주세요.':'무엇이 더 궁금하세요?');
+  _cbChips([
+    {label:'🏢 회사 관련 문의',fn:function(){_cbPickCat('회사');}},
+    {label:'🎭 사업 프로그램 문의',fn:function(){_cbPickCat('프로그램');}}
+  ]);
+}
+async function _cbLoadFaq(){
+  if(_cb.faq!==null)return _cb.faq;
+  try{
+    const res=await api('GET','/api/chatbot/faq');
+    _cb.faq=(res.faq||[]).filter(function(r){return isFlagOn(r['사용'])&&String(r['질문']||'').trim()&&String(r['답변']||'').trim();});
+  }catch(e){console.warn('[cbFaq]',e.message);_cb.faq=null;return null;}
+  return _cb.faq;
+}
+async function _cbPickCat(cat){
+  _cbClearChips();
+  _cbUser(cat==='회사'?'회사 관련 문의':'사업 프로그램 문의');
+  _cb.cat=cat;
+  _cbLog('카테고리',cat==='회사'?'회사 관련 문의':'사업 프로그램 문의','','');
+  if(cat==='회사'){
+    _cbBot('잠시만요, 자주 묻는 질문을 불러올게요…');
+    const faq=await _cbLoadFaq();
+    if(faq===null){_cbBot('FAQ를 불러오지 못했어요 😢 잠시 후 다시 시도해주세요.');_cbChips([{label:'처음으로',fn:_cbHome,ghost:true}]);return;}
+    if(!faq.length){
+      _cbBot('아직 등록된 회사 FAQ가 없어요.\n관리자가 <b>챗봇FAQ</b> 시트에 질문/답변을 채우고 \'사용\'을 TRUE로 바꾸면 여기서 바로 답해드려요!');
+      _cbChips([{label:'처음으로',fn:_cbHome,ghost:true}]);return;
+    }
+    _cbBot('궁금한 항목을 골라주세요. 직접 입력하셔도 돼요.');
+    _cbChips(faq.slice(0,8).map(function(r,i){return{label:r['질문'],fn:function(){_cbFaqAnswer(i);}};}).concat([{label:'처음으로',fn:_cbHome,ghost:true}]));
+  }else{
+    const list=_cbProgList();
+    if(!list.length){_cbBot('등록된 프로그램이 없어요.');_cbChips([{label:'처음으로',fn:_cbHome,ghost:true}]);return;}
+    _cbBot('어떤 프로그램이 궁금하세요? 이름을 입력하셔도 돼요.');
+    _cbChips(list.slice(0,8).map(function(p){return{label:p.f||p.n,fn:function(){_cbProgAnswer(p);}};}).concat([{label:'처음으로',fn:_cbHome,ghost:true}]));
+  }
+}
+function _cbProgList(){
+  const t=_cbTodayISO();
+  const all=(typeof PERFS!=='undefined'?PERFS:[]).filter(function(p){return (p.f||p.n);});
+  const cur=all.filter(function(p){return p.e&&p.e>=t;}).sort(function(a,b){return (a.s||'')<(b.s||'')?-1:1;});
+  const past=all.filter(function(p){return !p.e||p.e<t;}).sort(function(a,b){return (a.s||'')>(b.s||'')?-1:1;});
+  return cur.concat(past);
+}
+function _cbFaqAnswer(i){
+  const r=(_cb.faq||[])[i];if(!r)return;
+  _cbClearChips();
+  _cbUser(r['질문']);
+  _cbBot(escapeHtml(r['답변']));
+  _cbChips([{label:'다른 질문',fn:function(){_cbPickCat('회사');}},{label:'처음으로',fn:_cbHome,ghost:true}]);
+  _cbLog('회사FAQ',r['질문'],r['답변'],'FAQ');
+}
+function _cbProgAnswer(p,typed){
+  _cbClearChips();
+  if(!typed)_cbUser(p.f||p.n);
+  const tMap={c:'공연',e:'전시',a:'예술교육',r:'대관'};
+  let h='<div class="cb-card-t">🎭 '+escapeHtml(p.f||p.n)+'</div>';
+  if(p.s)h+='기간: '+escapeHtml(p.s===p.e?p.s:(p.s+' ~ '+(p.e||'')));
+  if(p.l)h+='\n장소: '+escapeHtml(p.l);
+  h+='\n구분: '+(tMap[p.t]||'공연');
+  if(p.ss)h+='\n판매 기간: '+escapeHtml(p.ss+(p.se?' ~ '+p.se:''));
+  if(p.m)h+='\n담당자: '+escapeHtml(p.m);
+  if(p.u){
+    const link=String(p.u).charAt(0)==='?'?('https://yeulmaru.github.io/yeulmaru-calandar-2026/'+p.u):p.u;
+    h+='\n<a href="'+escapeHtml(link)+'" target="_blank" rel="noopener">상세 페이지 열기 ↗</a>';
+  }
+  // 홍보 현황 (records에서 프로그램명 매칭)
+  try{
+    const pn=_cbNorm(p.f),pn2=_cbNorm(p.n);
+    const rs=(typeof records!=='undefined'?records:[]).filter(function(r){
+      const v=_cbNorm(r['프로그램']);
+      return v&&(v===pn||v===pn2||(pn&&v.indexOf(pn)>-1)||(pn&&pn.indexOf(v)>-1));
+    });
+    if(rs.length){
+      const cnt={};rs.forEach(function(r){const s=String(r['진행 상태']||'기타').trim();cnt[s]=(cnt[s]||0)+1;});
+      h+='\n<span class="cb-dim">─ 홍보 현황 ─</span>\n총 '+rs.length+'건 ('+Object.keys(cnt).map(function(k){return k+' '+cnt[k];}).join(' · ')+')';
+      const t=_cbTodayISO();
+      const up=rs.filter(function(r){return getRecDateKey(r)>=t;}).sort(function(a,b){return getRecDateKey(a)<getRecDateKey(b)?-1:1;}).slice(0,3);
+      if(up.length){
+        h+='\n다가오는 게시:';
+        up.forEach(function(r){h+='\n· '+escapeHtml(getRecDateKey(r).slice(5)+' '+(r['플랫폼 1']||'')+' — '+(r['콘텐츠 제목']||''));});
+      }
+    }
+  }catch(e){console.warn('[cbProg records]',e);}
+  _cbBot(h);
+  _cbChips([{label:'다른 프로그램',fn:function(){_cbPickCat('프로그램');}},{label:'처음으로',fn:_cbHome,ghost:true}]);
+  _cbLog('프로그램',typed||p.f||p.n,'프로그램 정보 응답',p.f||p.n);
+}
+function _cbSend(){
+  const inp=document.getElementById('cb-in');
+  const q=(inp&&inp.value||'').trim();
+  if(!q)return;
+  inp.value='';
+  _cbClearChips();
+  _cbUser(q);
+  const qn=_cbNorm(q);
+  // 1) 프로그램명 매칭 (카테고리 무관 — 프로그램 이름을 치면 바로 응답)
+  const prog=_cbProgList().find(function(p){
+    const fn=_cbNorm(p.f),nn=_cbNorm(p.n);
+    return (fn&&(fn.indexOf(qn)>-1||qn.indexOf(fn)>-1))||(nn&&(nn.indexOf(qn)>-1||qn.indexOf(nn)>-1));
+  });
+  if(prog&&qn.length>=2){_cbProgAnswer(prog,q);return;}
+  // 2) FAQ 키워드 매칭
+  const tryFaq=function(faq){
+    let best=null,bestScore=0;
+    (faq||[]).forEach(function(r){
+      let score=0;
+      String(r['키워드']||'').split(',').map(function(k){return _cbNorm(k);}).filter(Boolean).forEach(function(k){if(qn.indexOf(k)>-1)score+=2;});
+      const jn=_cbNorm(r['질문']);
+      if(jn&&(jn.indexOf(qn)>-1||qn.indexOf(jn)>-1))score+=3;
+      if(score>bestScore){bestScore=score;best=r;}
+    });
+    return best;
+  };
+  const finish=function(faq){
+    const hit=tryFaq(faq);
+    if(hit){
+      _cbBot(escapeHtml(hit['답변']));
+      _cbChips([{label:'다른 질문',fn:function(){_cbPickCat('회사');}},{label:'처음으로',fn:_cbHome,ghost:true}]);
+      _cbLog('자유입력',q,hit['답변'],hit['질문']);
+    }else{
+      _cbBot('아직 그 질문엔 답을 못 찾았어요 😢\n아래에서 카테고리를 골라 다시 시도하거나, 담당자에게 직접 문의해주세요.');
+      _cbChips([
+        {label:'🏢 회사 관련 문의',fn:function(){_cbPickCat('회사');}},
+        {label:'🎭 사업 프로그램 문의',fn:function(){_cbPickCat('프로그램');}}
+      ]);
+      _cbLog('자유입력',q,'','미응답');
+    }
+  };
+  if(_cb.faq!==null)finish(_cb.faq);
+  else _cbLoadFaq().then(finish);
+}
+
 function showToast(msg,type,html){
   type=type||'success';
   var t=document.getElementById('toast');
