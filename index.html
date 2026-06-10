@@ -10932,9 +10932,15 @@ function openPanel(dateObj,recs){
   var progTotal=openPerfs.length+openExh.length;
   if(progTotal>0){
     var open=_panelProgramsOpen;
+    // 차르르 효과: 자동 펼침이어도 접힌 채 렌더 → 패널 슬라이드 인 후 open 클래스 추가로 전환 재생.
+    // 같은 날짜 재렌더(데이터 새로고침 등)에선 반복 재생 안 함 (날짜 키 기준 1회)
+    var _pAnimKey=dk(dateObj);
+    var _pAnimate=open&&_pAnimKey!==_panelProgLastAnimKey;
+    if(open)_panelProgLastAnimKey=_pAnimKey;
+    var _pCls=(open&&!_pAnimate)?' open':'';
     h+='<div class="panel-prog-wrap">';
-    h+='<div class="panel-prog-head" onclick="togglePanelPrograms()"><span class="panel-prog-arrow'+(open?' open':'')+'" id="panel-prog-arrow">▶</span><span class="panel-prog-title">프로그램 일정</span><span class="panel-prog-cnt">'+progTotal+'</span></div>';
-    h+='<div class="panel-prog-body'+(open?' open':'')+'" id="panel-prog-body">';
+    h+='<div class="panel-prog-head" onclick="togglePanelPrograms()"><span class="panel-prog-arrow'+_pCls+'" id="panel-prog-arrow">▶</span><span class="panel-prog-title">프로그램 일정</span><span class="panel-prog-cnt">'+progTotal+'</span></div>';
+    h+='<div class="panel-prog-body'+_pCls+'" id="panel-prog-body">';
     openPerfs.forEach(function(perf){
       var sd=new Date(perf.s);sd.setHours(0,0,0,0);
       var ed=new Date(perf.e);ed.setHours(0,0,0,0);
@@ -10975,8 +10981,18 @@ function openPanel(dateObj,recs){
   }
   h+='</div>';
   p.innerHTML=h;p.style.display='flex';
+  // 자동 펼침 애니메이션 — 사이드바 슬라이드 인(.25s) 직후 재생
+  if(typeof _pAnimate!=='undefined'&&_pAnimate){
+    setTimeout(function(){
+      var b=document.getElementById('panel-prog-body');
+      var a=document.getElementById('panel-prog-arrow');
+      if(b)b.classList.add('open');
+      if(a)a.classList.add('open');
+    },300);
+  }
 }
 let _panelProgramsOpen=true;   // 셀 클릭으로 패널 열릴 때 프로그램 일정 자동 펼침 (요청: 클릭 없이 바로 보이게)
+let _panelProgLastAnimKey=null; // 차르르 재생한 날짜 키 (같은 날짜 재렌더 반복 방지)
 function togglePanelPrograms(){
   _panelProgramsOpen=!_panelProgramsOpen;
   const body=document.getElementById('panel-prog-body');
@@ -11165,7 +11181,7 @@ function openPanelWithPerfHighlight(perfName, dateKey){
   }, 60);
 }
 
-function closePanel(){panelOpen=false;selected=null;document.getElementById('panel').style.display='none';document.getElementById('main-area').style.marginRight='0';render();}
+function closePanel(){panelOpen=false;selected=null;_panelProgLastAnimKey=null;document.getElementById('panel').style.display='none';document.getElementById('main-area').style.marginRight='0';render();}
 function changeMonth(delta){currentMonth+=delta;if(currentMonth<1){currentMonth=12;currentYear--;}if(currentMonth>12){currentMonth=1;currentYear++;}_weekState={};_calAnimateOnNextRender=true;if(window.matchMedia('(max-width:768px)').matches){render();}else{closePanel();}}
 
 function onPlatChange(){
