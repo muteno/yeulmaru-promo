@@ -7,6 +7,17 @@
 
 ---
 
+## 🆕 세션 (2026-06-10 2차, 원격 클코) — 조회모달 분리·SharePoint 폴더·챗봇·알림 401 수정 (PR #5, 머지 대기)
+
+- **조회 모달 가독성**: 콘텐츠 내용의 `[참고자료 폴더]`를 '자료 경로' 행으로 분리(클릭→하부 팝업 `sub-pop`, 경로별 복사), 본문은 미리보기+'전체 보기'→섹션 구조 팝업+우상단 복사. 파서 `_splitRecContent`(헤더 단위 일반 분해, `_parseRecContent`와 별개).
+- **폴더 선택기 SharePoint**: 'SharePoint 사이트' 섹션(🏢 followedSites + `/sites?search=*` 병합 → 📚 라이브러리 → 📁 폴더, webUrl 저장). **MSAL 스코프 `Sites.Read.All` 추가** — 첫 사용 시 동의 팝업 1회. `_msalFetchDriveChildren`은 itemId='root' 지원.
+- **🚨 알림 크로스유저 전달 버그 수정**: 라이브 Worker `/api/messages`가 `X-App-Password` 게이트 뒤에 있는데 `_msgApiCall`이 헤더를 안 보내 **전 호출 401→localStorage 폴백 = 관리자 상태변경 알림이 신청자에게 실제로 안 가고 있었음** (probe로 확인). `_msgApiCall`에 헤더 추가로 수정(프론트만으로 복구). 수동 경로 13곳은 점검 결과 전부 정상(수신자=신청자 S).
+- **Worker cron 알림**: `autoCancelStalePending`(보류 3일 자동취소)이 유일하게 알림 누락 → `handleAddMessage` 호출 추가. **⚠️ Worker 재배포 필요** (`wrangler deploy`/Quick Edit — cron 알림 + 챗봇 API가 여기 포함).
+- **챗봇 위젯** (우하단 💬, `_chatbotMount` ← initApp): 2단계 진입 [회사 관련 문의]→**챗봇FAQ 시트**(자동생성+시드 4행, `사용`=TRUE만 노출, 운영자가 시트에서 편집) / [사업 프로그램 문의]→PERFS+records(기간·장소·판매기간·담당자·상세링크·홍보현황). 자유 입력=프로그램명→FAQ 키워드 순 매칭. **모든 질의 '챗봇로그' 시트 누적**(ID/KST/사용자/부서/종류/질의/응답/매칭). Worker `/api/chatbot/faq`(GET)·`/api/chatbot/log`(POST).
+- **다음 단계(사용자 승인됨, 3백만 토큰 초과 시 확인 후 진행)**: ① 연간일정 캘린더(761줄 단일 HTML+이미지) → promo 네이티브 탭 통합(+캘린더 백로그 2건 겸사) ② DB 통합(공연ID 공유키 확장, 미매칭 빈칸 허용). 글래스모피즘 리스킨은 시안 후 **폐기 결정**(현 UI 유지).
+
+---
+
 ## 🆕 세션 (2026-06-10, 원격 클코) — 모달감사 B안 수정 + DB 반영 + 판매현황 (전부 main 머지·라이브 검증)
 
 - **모달감사 B안 수정 완료** — 상세는 `docs/260610_모달감사_수정내역.md`. ⚠️ 원본 버그목록(`260610_모달감사_버그목록.md`)은 이전 세션 임시 컨테이너에서 **유실** → 코드 재감사로 재확정 후 수정. Critical 2(이동 POST+DELETE→PATCH, 닫기버튼 edit상태 오염) + 카카오 ±1일, prefill 역파싱(`_parseRecContent`), 일괄 3종, copyRec/saveEntry 신청자(S) 누락, 알림 누락 6경로 pushMessage 추가.
