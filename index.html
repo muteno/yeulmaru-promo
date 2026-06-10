@@ -179,10 +179,13 @@ button{font-family:inherit;cursor:pointer}
 .memo-alarm{position:absolute;top:-3px;right:-3px;width:10px;height:10px;border-radius:50%;background:#e5484d;border:2px solid #fff;display:none}
 .memo-alarm.on{display:block;animation:memoPulse 1.2s infinite}
 @keyframes memoPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.35);opacity:0.55}}
-.sw{width:34px;height:19px;border-radius:10px;background:#cfd3dc;position:relative;cursor:pointer;transition:background .2s;flex:0 0 auto;display:inline-block}
-.sw.on{background:#22c55e}
-.sw-k{position:absolute;top:2px;left:2px;width:15px;height:15px;border-radius:50%;background:#fff;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,0.25)}
-.sw.on .sw-k{left:17px}
+.sw{width:46px;height:20px;border-radius:11px;background:#cfd3dc;position:relative;cursor:pointer;transition:background .2s;flex:0 0 auto;display:inline-block}
+.sw.on{background:var(--accent)}
+.sw-k{position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,0.25)}
+.sw.on .sw-k{left:28px}
+/* 상태 라벨 — OFF: 회색 트랙 우측 / ON: 강조색 트랙 좌측·흰 글자 */
+.sw::after{content:'OFF';position:absolute;right:6px;top:50%;transform:translateY(-50%);font-size:8.5px;font-weight:800;color:#80868f;letter-spacing:0.2px;pointer-events:none;user-select:none}
+.sw.on::after{content:'ON';left:8px;right:auto;color:#fff}
 /* === 날씨 지역 팝오버 === */
 .wx-pop{position:absolute;top:44px;right:0;width:250px;max-width:88vw;background:#fff;border:1px solid rgba(0,0,0,0.08);border-radius:14px;box-shadow:0 14px 38px rgba(0,0,0,0.17);padding:12px;z-index:100000;display:none}
 .wx-pop.show{display:block}
@@ -979,7 +982,8 @@ const _MSAL_CONFIG = {
     storeAuthStateInCookie: false
   }
 };
-const _MSAL_SCOPES = ['Files.Read'];
+// Files.Read.All: 공유받은 폴더(sharedWithMe) 조회용 — 위임 권한, 관리자 동의 불요 (첫 사용 시 동의 팝업 1회)
+const _MSAL_SCOPES = ['Files.Read', 'Files.Read.All'];
 
 const API='https://yeulmaru-promo-api.yeulmarumaster.workers.dev';
 const PLAT_COLORS={
@@ -2364,7 +2368,7 @@ function _memoRender(loading){
   var imp=_memoState.addImp||2;
   pop.innerHTML=''
     +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;gap:8px"><span style="font-size:14px;font-weight:800;color:#2a2a3a">📝 내 할 일 <span style="font-size:12.5px;color:var(--accent);font-weight:800;background:rgba(74,77,231,0.09);padding:1px 8px;border-radius:7px;margin-left:2px">'+_memoDateLabel()+'</span></span>'
-      +'<span style="display:inline-flex;align-items:center;gap:6px"><span style="font-size:11px;color:#888;display:inline-flex;align-items:center;gap:4px">'+(_memoState.alarmOff?'🔕':'🔔')+'<span class="sw'+(_memoState.alarmOff?'':' on')+'" onclick="_memoToggleAlarm()" title="알림 전체 켜기/끄기"><span class="sw-k"></span></span></span></span></div>'
+      +'<span style="display:inline-flex;align-items:center;gap:6px"><span style="font-size:11px;display:inline-flex;align-items:center;gap:6px"><span style="color:var(--accent);font-weight:700">알림</span><span class="sw'+(_memoState.alarmOff?'':' on')+'" onclick="_memoToggleAlarm()" title="알림 전체 켜기/끄기"><span class="sw-k"></span></span></span></span></div>'
     +'<div style="text-align:right;height:14px;margin-bottom:6px"><span id="memo-status" style="font-size:11px;color:#bbb"></span></div>'
     +'<div class="todo-add">'
       +'<input id="m-title" placeholder="해야 할 일" style="width:100%;box-sizing:border-box;margin-bottom:7px" onkeydown="if(event.key===\'Enter\')_memoAdd()">'
@@ -2611,8 +2615,9 @@ function _salesBuild(){
     else if(rows.length>=2)diff=(_salesNum(rows[rows.length-1]['합계좌석'])||0)-(_salesNum(rows[rows.length-2]['합계좌석'])||0);
     var m=master[name];
     // [DB통합] 공연마스터에 없는 공연은 운영대장 폴백: 기준석×회차(=운영행수)로 총오픈석 산출, 장르/구분 보강.
-    var ops=null, salesYear=null;
-    if(!m){ var by=_salesNum(snap['기준일자']); if(by){ salesYear=Math.floor(by/10000); } ops=_opsLookup(name,salesYear); }
+    var by=_salesNum(snap['기준일자']); var salesYear=by?Math.floor(by/10000):null;
+    var ops=null;
+    if(!m){ ops=_opsLookup(name,salesYear); }
     var base=m?m.기본석:(ops&&ops.base?ops.base:_SALES_FALLBACK_SEAT);
     var genre=ops?ops.genre:'';
     var totalOpen=(m&&m.총오픈석)?m.총오픈석:(ops?base*(ops.count||1):base*((m&&m.총회차)||1));
@@ -2627,6 +2632,14 @@ function _salesBuild(){
     if(m&&m.티켓오픈&&m.종료){ if(m.티켓오픈<=today&&today<=m.종료)status='active'; else if(today>m.종료)status='ended'; else status='notyet'; }
     else if(!m&&endDate){ status=(today>endDate)?'ended':(startDate&&today<startDate?'notyet':'active'); }
     else if(dday!==null){ status=dday>=0?'active':'ended'; }
+    // [수정] 판매중 = "마지막 공연일이 아직 안 지난 공연"으로 강제 보정 —
+    // 마스터 판매기간(종료일)이 미래로 잡혀 있어도 공연 자체가 끝났으면 ended (종료 공연이 [1] 현황에 섞이던 문제)
+    var lastShow=null;
+    if(m&&m.ID&&rounds[m.ID]){ rounds[m.ID].forEach(function(d){ if(!lastShow||d>lastShow)lastShow=d; }); }
+    var opsForDates=ops||_opsLookup(name,salesYear);
+    if(opsForDates&&opsForDates.last&&(!lastShow||opsForDates.last>lastShow))lastShow=opsForDates.last;
+    if(!lastShow&&endDate)lastShow=endDate;
+    if(status==='active'&&lastShow&&lastShow<today)status='ended';
     perfs.push({name:name,seats:seats,money:money,diff:diff,occ:occ,totalOpen:totalOpen,dday:dday,dateStr:dateStr,수익성:(m&&m.수익성)?m.수익성:_profitType(name,genre),목표:(m?m.목표:50),startDate:startDate,status:status,genre:genre,gubun:(ops?ops.gubun:''),enriched:(!m&&!!ops)});
   });
   return perfs;
@@ -4093,6 +4106,10 @@ async function adminCompleteWithResult(rowIndex){
       '결과_비고':result.memo||''
     });
     await api('PATCH','/api/records/'+rowIndex,{values: row});
+    // 메시지함 hook — 신청자에게 완료 알림 (단순 완료 경로와 동일하게)
+    try{
+      pushMessage({recipient:rec['신청자']||'',type:'일반',trigger:'예정→완료',before:rec['진행 상태']||'예정',after:'완료',reason:'',refNo:rec['No']||rec['NO']||'',refSummary:(getRecDateKey(rec)+' '+(rec['플랫폼 1']||'')+' '+(rec['콘텐츠 제목']||'')).trim()});
+    }catch(_e){ console.error('[pushMessage adminComplete]', _e); }
     showToast('완료 처리됐어요','success');
     await syncReload(0);
     if(typeof renderPromoBoard==='function')renderPromoBoard();
@@ -4174,6 +4191,12 @@ async function cancelPromoRequest(rowIndex){
   try{
     const row = buildRecordRow(r, {'진행 상태':'취소'});
     await api('PATCH','/api/records/'+rowIndex,{values: row});
+    // 메시지함 hook — 관리자가 타인 신청을 취소한 경우 신청자에게 알림
+    if(!isMine){
+      try{
+        pushMessage({recipient:r['신청자']||'',type:'중요',trigger:'취소',before:status||'예정',after:'취소',reason:'',refNo:r['No']||r['NO']||'',refSummary:(getRecDateKey(r)+' '+(r['플랫폼 1']||'')+' '+(r['콘텐츠 제목']||'')).trim()});
+      }catch(_e){ console.error('[pushMessage cancel]', _e); }
+    }
     await syncReload(0);
     renderPromoBoard();
     showToast('신청이 취소됐어요');
@@ -5448,20 +5471,29 @@ async function bulkApprovePending(){
   const ok = await showConfirm('선택한 '+ids.length+'건을 접수하시겠어요?<br><br><span style="color:#888;font-size:12px">신청 중 → 예정으로 변경됩니다.</span>',{title:'일괄 접수',html:true});
   if(!ok) return;
   showOverlayLoad('일괄 접수 중... (0/'+ids.length+')');
-  let success = 0, failed = 0;
+  let success = 0, failed = 0, skipped = 0, _failReason = '';
   for(let i = 0; i < ids.length; i++){
     const rowIndex = ids[i];
     try{
       const rec = records.find(function(r){return r._rowIndex === rowIndex;});
       if(!rec){failed++;continue;}
+      // [버그수정] 단건 접수와 동일 가드 — 신청 중 상태만 + 카카오/문자 충돌 검증 (일괄 경로 우회 차단)
+      const _st=(rec['진행 상태']||'').toString().trim();
+      if(_st!=='신청 중'){skipped++;continue;}
+      const _ca=canApprove(rec,rowIndex);
+      if(!_ca.ok){failed++;if(!_failReason)_failReason=_ca.reason;continue;}
       const row = buildRecordRow(rec, {'진행 상태': '예정'});
       await api('PATCH', '/api/records/'+rowIndex, {values: row});
       success++;
+      // 메시지함 hook — 단건 접수와 동일하게 신청자에게 알림
+      try{
+        pushMessage({recipient:rec['신청자']||'',type:'일반',trigger:'신청중→예정',before:'신청 중',after:'예정',reason:'',refNo:rec['No']||rec['NO']||'',refSummary:(getRecDateKey(rec)+' '+(rec['플랫폼 1']||'')+' '+(rec['콘텐츠 제목']||'')).trim()});
+      }catch(_e){ console.error('[pushMessage bulkApprove]', _e); }
       showOverlayLoad('일괄 접수 중... ('+(i+1)+'/'+ids.length+')');
     }catch(e){ console.error(e); failed++; }
   }
   hideOverlayLoad();
-  showToast(success+'건 접수 완료'+(failed?' / '+failed+'건 실패':''), failed?'error':'success');
+  showToast(success+'건 접수 완료'+(skipped?' / '+skipped+'건 대상 아님':'')+(failed?' / '+failed+'건 실패':'')+(_failReason?' — '+_failReason:''), failed?'error':'success');
   _pendingChecks.clear();
   await syncReload(0);
   if(typeof renderPromoBoard==='function') renderPromoBoard();
@@ -5611,21 +5643,31 @@ async function bulkCancelPending(){
   const reason=await _renderCancelReasonModal(ids.length);
   if(!reason)return;
   showOverlayLoad('일괄 취소 중... (0/'+ids.length+')');
-  let success=0,failed=0;
-  const ts=new Date().toISOString().slice(0,16).replace('T',' ');
+  let success=0,failed=0,skipped=0;
+  let _myApplBulk='';try{_myApplBulk=sessionStorage.getItem('myApplicant')||'';}catch(e){}
   for(let i=0;i<ids.length;i++){
     const rowIndex=ids[i];
     try{
       const rec=records.find(function(r){return r._rowIndex===rowIndex;});
       if(!rec){failed++;continue;}
+      // [버그수정] 이미 종결된 건은 스킵 (완료 건 일괄취소로 덮어쓰기 방지)
+      const _st=(rec['진행 상태']||'').toString().trim();
+      if(_st==='취소'||_st==='완료'){skipped++;continue;}
       const row = buildRecordRow(rec, {'진행 상태':'취소','취소사유':reason});
       await api('PATCH','/api/records/'+rowIndex,{values: row});
       success++;
+      // 메시지함 hook — 단건 취소와 동일하게 신청자에게 사유 전달 (본인 신청은 제외)
+      const _recip=(rec['신청자']||'').toString().trim();
+      if(_recip&&_recip!==_myApplBulk){
+        try{
+          pushMessage({recipient:_recip,type:'중요',trigger:'취소',before:_st||'예정',after:'취소',reason:reason,refNo:rec['No']||rec['NO']||'',refSummary:(getRecDateKey(rec)+' '+(rec['플랫폼 1']||'')+' '+(rec['콘텐츠 제목']||'')).trim()});
+        }catch(_e){ console.error('[pushMessage bulkCancel]', _e); }
+      }
       showOverlayLoad('일괄 취소 중... ('+(i+1)+'/'+ids.length+')');
     }catch(e){console.error(e);failed++;}
   }
   hideOverlayLoad();
-  showToast(success+'건 취소 완료'+(failed?' / '+failed+'건 실패':''),failed?'error':'success');
+  showToast(success+'건 취소 완료'+(skipped?' / '+skipped+'건 대상 아님':'')+(failed?' / '+failed+'건 실패':''),failed?'error':'success');
   _pendingChecks.clear();
   await syncReload(0);
   if(typeof renderPromoBoard==='function')renderPromoBoard();
@@ -6291,12 +6333,69 @@ function _startChangeWizard(rowIndex){
   document.getElementById('promo-wizard').classList.add('show');
   renderPwStep();
 }
+// [버그수정] 콘텐츠 내용(구조화 텍스트) → _pwData 본문 필드 역파싱 (변경 위저드 prefill용)
+// — 기존엔 kakaoText/folders/smsBody 등이 prefill되지 않아, 플랫폼 step을 거치면
+//   buildPwContentText()가 빈 값으로 콘텐츠 내용을 재생성해 원본 본문이 통째로 소실됐음
+function _parseRecContent(rec){
+  var out={folders:[''],kakaoText:'',instaText:'',blogDirection:'',b2bIntraText:'',b2bLink:'',
+    smsTarget:'',smsBody:'',smsCustom:'',customPlatform:'',freeText:'',intent:'',
+    ageRanges:[{min:30,max:50}],ageAny:false,residence:'',residenceCustom:'',residenceAny:false,genre:'',genreAny:false};
+  var p1=(rec&&rec['플랫폼 1']||'').toString();
+  var p2=(rec&&rec['플랫폼 2']||'').toString();
+  out.smsTarget=(p1==='문자'&&p2==='프로그램 대상 타겟 회원')?'target':(p1==='문자'?'all':'');
+  var raw=(rec&&rec['콘텐츠 내용']||'').toString();
+  if(!raw.trim())return out;
+  // [헤더] 단위 섹션 분해 (buildPwContentText 출력 형식의 역변환)
+  var secs=[],cur=null;
+  raw.split('\n').forEach(function(line){
+    var m=line.match(/^\[(.+)\]$/);
+    if(m){cur={h:m[1],b:[]};secs.push(cur);}
+    else if(cur)cur.b.push(line);
+  });
+  secs.forEach(function(s){
+    var body=s.b.join('\n').replace(/^\n+|\n+$/g,'');
+    if(s.h==='참고자료 폴더'){var fs=body.split('\n').map(function(v){return v.trim();}).filter(Boolean);if(fs.length)out.folders=fs;}
+    else if(s.h==='본문 (76자)')out.kakaoText=body;
+    else if(s.h==='B2B/홈페이지 링크')out.b2bLink=body;
+    else if(s.h==='글 작성 방향')out.blogDirection=body;
+    else if(s.h==='플랫폼명')out.customPlatform=body;
+    else if(s.h==='홍보 의도')out.intent=body;
+    else if(s.h==='타겟'){
+      body.split('\n').forEach(function(l){
+        var mm=l.match(/^- 연령대:\s*(.*)$/);
+        if(mm){var v=mm[1].trim();if(v==='무관'){out.ageAny=true;}else if(v&&v!=='-'){var rs=v.split(',').map(function(x){var p=x.trim().match(/^(\d+)\s*~\s*(\d+)/);return p?{min:Number(p[1]),max:Number(p[2])}:null;}).filter(Boolean);if(rs.length)out.ageRanges=rs;}return;}
+        mm=l.match(/^- 거주지:\s*(.*)$/);
+        if(mm){var v2=mm[1].trim();if(v2==='무관')out.residenceAny=true;else if(v2&&v2!=='-'){out.residence=v2;out.residenceCustom=v2;}return;}
+        mm=l.match(/^- 관심 장르:\s*(.*)$/);
+        if(mm){var v3=mm[1].trim();if(v3==='무관')out.genreAny=true;else if(v3&&v3!=='-')out.genre=v3;return;}
+      });
+    }
+    else if(s.h==='본문'){
+      if(p1==='카카오톡')out.kakaoText=body;
+      else if(p1==='인스타그램')out.instaText=body;
+      else if(p1==='B2B')out.b2bIntraText=body;
+      else if(p1==='문자'){
+        // 합성된 헤더/푸터 제거 → 사용자 작성부만 복원 (형식이 다르면 전체 유지 — 내용 보존 우선)
+        var b=body;
+        try{
+          var _h=getSmsHeader();if(_h&&b.indexOf(_h)===0)b=b.slice(_h.length);
+          var _f=getSmsFooter();var fi=b.lastIndexOf(_f);if(_f&&fi>=0&&fi===b.length-_f.length)b=b.slice(0,fi);
+        }catch(_e){}
+        out.smsBody=b.replace(/^\n+|\n+$/g,'');
+      }
+      else out.freeText=body;
+    }
+  });
+  return out;
+}
 // 기존 row → _pwData 매핑
 function _prefillPwDataFromRec(rec){
   const typeMap={'공연':'c','전시':'e','예술교육':'a','대관':'r'};
+  const c=_parseRecContent(rec);
   _pwData={
     program:rec['프로그램']||'',
     programType:typeMap[rec['콘텐츠 구분']]||'c',
+    programEndDate:'',
     isCustom:false,
     isMonthly:false,
     customName:'',
@@ -6310,7 +6409,27 @@ function _prefillPwDataFromRec(rec){
     memo:rec['비고']||'',
     format:rec['콘텐츠 형식']||'',
     fromCalendar:false,
-    status:rec['진행 상태']||'신청 중'
+    status:rec['진행 상태']||'신청 중',
+    // [버그수정] 본문/폴더/타겟 필드 prefill — 미설정 시 step 4 경유만으로 콘텐츠 내용이 빈 값으로 재생성됨
+    folders:c.folders,
+    kakaoText:c.kakaoText,
+    instaText:c.instaText,
+    blogDirection:c.blogDirection,
+    b2bIntraText:c.b2bIntraText,
+    b2bLink:c.b2bLink,
+    smsTarget:c.smsTarget,
+    smsBody:c.smsBody,
+    smsCustom:c.smsCustom,
+    customPlatform:c.customPlatform,
+    freeText:c.freeText,
+    intent:c.intent,
+    ageRanges:c.ageRanges,
+    ageAny:c.ageAny,
+    residence:c.residence,
+    residenceCustom:c.residenceCustom,
+    residenceAny:c.residenceAny,
+    genre:c.genre,
+    genreAny:c.genreAny
   };
 }
 // 변경 사항 PATCH
@@ -6383,10 +6502,39 @@ async function submitPromoEdit(){
       if(_dateChanged||_platCh){ var _kc=_kakaoSmsConflict(_effPlat,_effDate,_effAppl,_pwEditTarget); if(_kc){showToast('변경 불가: '+_kc,'error');return;} }
     }
   }
+  // [버그수정] 상태를 예정/신청 중으로 되돌리는 변경(자동 승인 포함)도 카카오/문자 충돌 재검증
+  // — 일자·플랫폼을 안 바꾸고 상태만 승인하면 위 블록을 건너뛰어 충돌 검사가 누락되던 우회 차단
+  {
+    var _newSt=patch['진행 상태'];
+    if(_newSt&&_newSt!==(orig['진행 상태']||'')&&(_newSt==='예정'||_newSt==='신청 중')){
+      var _vDate=_pwSelectedSteps.includes(3)?_pwData.date:_recDate(orig);
+      var _vPlat=_pwSelectedSteps.includes(4)?_pwData.plat1:(orig['플랫폼 1']||'');
+      var _vAppl=_pwSelectedSteps.includes(4)?_pwData.applicant:(orig['게시 담당자']||'');
+      var _kc2=_kakaoSmsConflict(_vPlat,_vDate,_vAppl,_pwEditTarget);
+      if(_kc2){showToast('변경 불가: '+_kc2,'error');return;}
+    }
+  }
   showOverlayLoad('변경 사항 저장 중...');
   try{
     const row = buildRecordRow(orig, patch);
     await api('PATCH','/api/records/'+_pwEditTarget,{values: row});
+    // 메시지함 hook — admin이 타인 신청을 변경·승인·상태변경하면 신청자에게 알림
+    try{
+      if(userRole==='admin'){
+        var _ntAppl=(orig['신청자']||'').toString().trim();
+        var _ntMe='';try{_ntMe=sessionStorage.getItem('myApplicant')||'';}catch(_e3){}
+        if(_ntAppl&&_ntAppl!==_ntMe){
+          var _ntBeg=orig['진행 상태']||'';
+          var _ntEnd=patch['진행 상태']||_ntBeg;
+          var _ntCh=_ntEnd!==_ntBeg;
+          pushMessage({recipient:_ntAppl,type:(_ntCh&&(_ntEnd==='취소'||_ntEnd==='보류'))?'중요':'일반',
+            trigger:_ntCh?(_ntBeg+'→'+_ntEnd):'변경',
+            before:_ntBeg,after:_ntEnd,
+            reason:_ntCh?'관리자가 처리했어요':'관리자가 신청 내용을 변경했어요',
+            refNo:orig['No']||orig['NO']||'',refSummary:(getRecDateKey(orig)+' '+(orig['플랫폼 1']||'')+' '+(orig['콘텐츠 제목']||'')).trim()});
+        }
+      }
+    }catch(_e){ console.error('[pushMessage edit]', _e); }
     showToast('변경 사항이 저장됐어요','success');
     closePromoWizard(true);
     await syncReload(0);
@@ -6401,20 +6549,18 @@ async function submitPromoEdit(){
 }
 
 async function closePromoWizard(force){
-  // edit 모드 state 초기화
-  if(_pwMode==='edit'){_pwMode='request';_pwEditTarget=null;_pwSelectedSteps=[];_pwSelectedIdx=0;_pwOriginalRec=null;}
-  // 완료 화면이거나 force면 바로 닫기
-  if(force||_pwStep===99||_pwStep===1&&!_pwData.program&&!_pwData.isCustom){
+  // [버그수정] edit 모드 state는 "실제로 닫을 때만" 초기화 — confirm에서 취소하면 위저드가 열린 채
+  // _pwMode만 'request'로 풀려, 이후 저장이 수정(PATCH) 대신 신규 등록(POST)되어 중복 레코드가 생기던 버그
+  function _doClose(){
+    if(_pwMode==='edit'){_pwMode='request';_pwEditTarget=null;_pwSelectedSteps=[];_pwSelectedIdx=0;_pwOriginalRec=null;}
     document.getElementById('promo-wizard').classList.remove('show');
     document.getElementById('pw-acts').innerHTML='<button class="m-btn cancel" id="pw-back" onclick="promoBack()">이전</button><button class="m-btn save" id="pw-next" onclick="promoNext()">다음</button>';
-    return;
   }
+  // 완료 화면이거나 force면 바로 닫기
+  if(force||_pwStep===99||_pwStep===1&&!_pwData.program&&!_pwData.isCustom){_doClose();return;}
   // 진행 중 → confirm
   const ok=await showConfirm('작성 중인 내용이 사라집니다. 닫을까요?');
-  if(ok){
-    document.getElementById('promo-wizard').classList.remove('show');
-    document.getElementById('pw-acts').innerHTML='<button class="m-btn cancel" id="pw-back" onclick="promoBack()">이전</button><button class="m-btn save" id="pw-next" onclick="promoNext()">다음</button>';
-  }
+  if(ok)_doClose();
 }
 function renderPwStep(){
   const bar=document.getElementById('pw-progress-bar');
@@ -7221,17 +7367,75 @@ async function _msalFetchOneDriveChildren(path){
   }
 }
 
+// 공유받은 항목 (타 유저가 공유한 폴더) — Files.Read.All 필요
+async function _msalFetchSharedWithMe(){
+  const token = await _msalGetToken();
+  if(!token) return null;
+  try {
+    const resp = await fetch('https://graph.microsoft.com/v1.0/me/drive/sharedWithMe', {headers: {'Authorization': 'Bearer ' + token}});
+    if(!resp.ok){
+      const t = await resp.text();
+      throw new Error('Graph ' + resp.status + ': ' + t.slice(0,200));
+    }
+    const data = await resp.json();
+    return (data.value || []).filter(function(it){
+      const ri = it.remoteItem || it;
+      return !!(ri.folder);
+    }).map(function(it){
+      const ri = it.remoteItem || it;
+      const owner = (ri.createdBy && ri.createdBy.user && ri.createdBy.user.displayName) ||
+                    (ri.shared && ri.shared.owner && ri.shared.owner.user && ri.shared.owner.user.displayName) || '';
+      return {
+        id: ri.id,
+        driveId: ri.parentReference && ri.parentReference.driveId,
+        name: it.name || ri.name || '(이름 없음)',
+        hasChildren: !!(ri.folder && ri.folder.childCount > 0),
+        webUrl: ri.webUrl || it.webUrl || '',
+        owner: owner,
+        shared: true
+      };
+    }).filter(function(n){ return !!n.driveId; });
+  } catch(e){
+    console.warn('[fetchSharedWithMe]', e.message);
+    return null;  // 실패해도 내 폴더 흐름은 유지 (호출부에서 안내만)
+  }
+}
+
+// 공유 폴더 하위 탐색 — 원본 드라이브 ID 기반 (path 주소 불가)
+async function _msalFetchDriveChildren(driveId, itemId){
+  const token = await _msalGetToken();
+  if(!token) return null;
+  try {
+    const url = 'https://graph.microsoft.com/v1.0/drives/' + encodeURIComponent(driveId) + '/items/' + encodeURIComponent(itemId) + '/children?$select=id,name,folder,parentReference,webUrl&$top=200&$orderby=name';
+    const resp = await fetch(url, {headers: {'Authorization': 'Bearer ' + token}});
+    if(!resp.ok){
+      const t = await resp.text();
+      throw new Error('Graph ' + resp.status + ': ' + t.slice(0,200));
+    }
+    const data = await resp.json();
+    return (data.value || []).filter(function(it){ return !!it.folder; }).map(function(it){
+      return {id: it.id, driveId: driveId, name: it.name, hasChildren: (it.folder && it.folder.childCount > 0), webUrl: it.webUrl || '', shared: true};
+    });
+  } catch(e){
+    console.error('[fetchDriveChildren]', driveId, itemId, e);
+    showToast('공유 폴더 조회 실패: ' + e.message,'error');
+    return null;
+  }
+}
+
 // ============================================================
 // 폴더 트리 UI 모달
 // ============================================================
 let _folderTreeCurrentIdx = -1;
 let _folderTreeSelectedPath = '';
 let _folderTreeSelectedName = '';
+let _folderTreeSelectedUrl = '';   // 공유 폴더 선택 시 webUrl (빈값 = 내 OneDrive 경로 저장)
 
 async function openFolderTreeModal(idx){
   _folderTreeCurrentIdx = idx;
   _folderTreeSelectedPath = '';
   _folderTreeSelectedName = '';
+  _folderTreeSelectedUrl = '';
   let el = document.getElementById('folder-tree-modal');
   if(!el){
     el = document.createElement('div');
@@ -7255,8 +7459,8 @@ async function openFolderTreeModal(idx){
     '<button id="ftm-confirm-btn" onclick="confirmFolderTreeSelection()" disabled style="padding:8px 18px;border:none;background:var(--accent);color:#fff;border-radius:8px;cursor:pointer;font-family:inherit;font-size:12px;opacity:0.4">선택 (폴더 클릭)</button>'+
     '</div>'+
     '</div></div>';
-  // root children 로드
-  const children = await _msalFetchOneDriveChildren('');
+  // root children + 공유받은 폴더 병렬 로드
+  const [children, shared] = await Promise.all([_msalFetchOneDriveChildren(''), _msalFetchSharedWithMe()]);
   const treeEl = document.getElementById('ftm-tree');
   if(!treeEl) return;
   if(!children){
@@ -7264,11 +7468,23 @@ async function openFolderTreeModal(idx){
     return;
   }
   treeEl.innerHTML = '';
+  const secSt='font-size:11px;font-weight:700;color:#888;letter-spacing:0.5px;padding:6px 4px 4px;user-select:none';
+  // 섹션 1 — 내 OneDrive
+  const myHdr=document.createElement('div'); myHdr.style.cssText=secSt; myHdr.textContent='📂 내 OneDrive'; treeEl.appendChild(myHdr);
   if(children.length === 0){
-    treeEl.innerHTML = '<div style="color:#999;padding:20px;text-align:center">OneDrive에 폴더가 없어요</div>';
-    return;
+    const e1=document.createElement('div'); e1.style.cssText='color:#999;padding:8px 12px;font-size:12px'; e1.textContent='OneDrive에 폴더가 없어요'; treeEl.appendChild(e1);
+  } else {
+    children.forEach(function(child){ treeEl.appendChild(_renderFolderTreeNode(child, '', 0)); });
   }
-  children.forEach(function(child){ treeEl.appendChild(_renderFolderTreeNode(child, '', 0)); });
+  // 섹션 2 — 공유받은 폴더 (타 유저 공유분, Files.Read.All)
+  const shHdr=document.createElement('div'); shHdr.style.cssText=secSt+';margin-top:10px;border-top:1px solid rgba(0,0,0,0.05);padding-top:10px'; shHdr.textContent='🤝 공유받은 폴더'; treeEl.appendChild(shHdr);
+  if(shared===null){
+    const e2=document.createElement('div'); e2.style.cssText='color:#bbb;padding:6px 12px;font-size:11px;line-height:1.5'; e2.textContent='공유받은 폴더를 불러올 수 없어요 (권한 동의가 필요할 수 있어요 — 다시 열면 동의 팝업이 떠요)'; treeEl.appendChild(e2);
+  } else if(shared.length === 0){
+    const e3=document.createElement('div'); e3.style.cssText='color:#bbb;padding:6px 12px;font-size:11px'; e3.textContent='공유받은 폴더가 없어요'; treeEl.appendChild(e3);
+  } else {
+    shared.forEach(function(child){ treeEl.appendChild(_renderFolderTreeNode(child, '', 0)); });
+  }
 }
 
 function _renderFolderTreeNode(node, parentPath, depth){
@@ -7295,7 +7511,10 @@ function _renderFolderTreeNode(node, parentPath, depth){
         return;
       }
       this.textContent = '⌛';
-      const children = await _msalFetchOneDriveChildren(fullPath);
+      // 공유 폴더(타 드라이브)는 path 주소가 불가 — 드라이브 ID 기반으로 탐색
+      const children = node.driveId
+        ? await _msalFetchDriveChildren(node.driveId, node.id)
+        : await _msalFetchOneDriveChildren(fullPath);
       this.textContent = '▼';
       const cd = document.createElement('div');
       cd.className = 'ftm-children';
@@ -7319,6 +7538,12 @@ function _renderFolderTreeNode(node, parentPath, depth){
   nameSpan.textContent = node.name;
   nameSpan.style.cssText = 'flex:1;color:#333;user-select:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
   row.appendChild(nameSpan);
+  if(node.owner){
+    const ownerSpan = document.createElement('span');
+    ownerSpan.textContent = node.owner;
+    ownerSpan.style.cssText = 'flex-shrink:0;color:#aaa;font-size:10px;user-select:none;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+    row.appendChild(ownerSpan);
+  }
   row.onclick = function(e){
     if(e.target === expandBtn) return;
     document.querySelectorAll('.ftm-row[data-selected]').forEach(function(r){
@@ -7331,8 +7556,11 @@ function _renderFolderTreeNode(node, parentPath, depth){
     this.style.fontWeight = '600';
     _folderTreeSelectedPath = fullPath;
     _folderTreeSelectedName = node.name;
+    _folderTreeSelectedUrl = node.shared ? (node.webUrl || '') : '';
     const pathSpan = document.getElementById('ftm-current-path');
-    if(pathSpan) pathSpan.textContent = 'OneDrive - GS칼텍스 예울마루' + fullPath.replace(/\//g, '\\');
+    if(pathSpan) pathSpan.textContent = node.shared
+      ? ('공유받은 폴더' + fullPath.replace(/\//g, '\\') + (node.owner ? ' (' + node.owner + ')' : ''))
+      : ('OneDrive - GS칼텍스 예울마루' + fullPath.replace(/\//g, '\\'));
     const btn = document.getElementById('ftm-confirm-btn');
     if(btn){ btn.disabled = false; btn.style.opacity = '1'; btn.textContent = '✓ 선택: ' + node.name; }
   };
@@ -7346,6 +7574,7 @@ function closeFolderTreeModal(){
   _folderTreeCurrentIdx = -1;
   _folderTreeSelectedPath = '';
   _folderTreeSelectedName = '';
+  _folderTreeSelectedUrl = '';
 }
 
 function confirmFolderTreeSelection(){
@@ -7353,9 +7582,9 @@ function confirmFolderTreeSelection(){
     showToast('폴더를 클릭해서 선택해주세요','error');
     return;
   }
-  // OneDrive - GS칼텍스 예울마루 prefix + 선택 경로 (백슬래시)
+  // 내 OneDrive = 로컬 동기화 경로(백슬래시) / 공유받은 폴더 = 타 드라이브라 로컬 경로가 없어 webUrl 저장
   const PREFIX = 'OneDrive - GS칼텍스 예울마루';
-  const newPath = PREFIX + _folderTreeSelectedPath.replace(/\//g, '\\');
+  const newPath = _folderTreeSelectedUrl || (PREFIX + _folderTreeSelectedPath.replace(/\//g, '\\'));
   if(!_pwData.folders) _pwData.folders = [''];
   _pwData.folders[_folderTreeCurrentIdx] = newPath;
   const input = document.getElementById('pw-folder-' + _folderTreeCurrentIdx);
@@ -9046,7 +9275,11 @@ function _findPerfByName(name){ name=String(name||'').trim(); if(!name)return nu
 function _kakaoSmsConflict(plat1, dateKey, applicant, ignoreRowIndex){
   if(plat1!=='카카오톡'&&plat1!=='문자')return null;
   var isKakao=(plat1==='카카오톡'); var checkDates=[dateKey];
-  if(isKakao){ var d=new Date(dateKey+'T00:00:00'); d.setDate(d.getDate()-1); checkDates.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')); }
+  // [버그수정] 2일 연속 제한은 전날·다음날 양쪽 검사 (기존엔 전날만 검사해 기존 신청 하루 전으로 우회 가능했음)
+  if(isKakao){
+    var d=new Date(dateKey+'T00:00:00'); d.setDate(d.getDate()-1); checkDates.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'));
+    var d2=new Date(dateKey+'T00:00:00'); d2.setDate(d2.getDate()+1); checkDates.push(d2.getFullYear()+'-'+String(d2.getMonth()+1).padStart(2,'0')+'-'+String(d2.getDate()).padStart(2,'0'));
+  }
   var matched=(records||[]).filter(function(r){
     if(ignoreRowIndex!=null && r._rowIndex===ignoreRowIndex)return false;
     var y=r['연도'],m=String(r['월']||'').padStart(2,'0'),dd=String(r['일']||'').padStart(2,'0');
@@ -9062,7 +9295,7 @@ function _kakaoSmsConflict(plat1, dateKey, applicant, ignoreRowIndex){
   var yy=conflict['연도'],mm=String(conflict['월']||'').padStart(2,'0'),dd=String(conflict['일']||'').padStart(2,'0');
   var cDate=mm+'/'+dd, sameDay=(yy+'-'+mm+'-'+dd)===dateKey;
   return sameDay ? ('같은 날('+cDate+') '+plat1+' 신청이 이미 있어요. ('+(conflict['게시 담당자']||'다른 담당자')+')')
-                 : ('전날('+cDate+') 카카오톡 신청이 있어 다음날엔 등록할 수 없어요. ('+(conflict['게시 담당자']||'다른 담당자')+')');
+                 : ('카카오톡은 2일 연속 발송이 불가해요 — '+cDate+' 신청과 연속이에요. ('+(conflict['게시 담당자']||'다른 담당자')+')');
 }
 // 통합 게이트: 새 날짜·시간이 모든 제약(접수/홍보시간대/제외/담당자/판매기간/카카오문자/완료취소)을 통과하는지
 function _validateScheduleChange(rec, newDate, newTime, opts){
@@ -10336,11 +10569,12 @@ function renderCal(){
         // 우클릭 메뉴: 항상 부착 — onEvContextMenu에서 케이스별 분기
         var _ctxAttr=' oncontextmenu="onEvContextMenu(event,'+(r._rowIndex)+',\''+key+'\')"';
         h+='<div class="ev'+(done?' done':'')+(td&&evPast?' ev-past':'')+(applying?' ev-applying':'')+'"'+(function(){
-  // 호버 툴팁: 신청중 + 본인 record(모든 상태)에 표시
-  let _myAppl_v='';try{_myAppl_v=sessionStorage.getItem('myApplicant')||'';}catch(e){}
-  const _isMine_v = _isMineRec(r, _myAppl_v);
-  if(!applying && !_isMine_v) return '';
-  let _tipMsg = (r['신청자']||r['게시 담당자']||'').replace(/"/g,'&quot;')+' 님이 ';
+  // 호버 툴팁: 누구 신청이든 항상 신청자 표시 (기존: 신청중+본인 건만 → 타인이 신청해 승인된 건에 안 떠서 수정)
+  // 신청자(S) 우선 — 폴백인 게시담당자가 '상관 없음'이면 이름으로 쓰지 않음 (S≠P 함정)
+  let _tipName=(r['신청자']||'').toString().trim();
+  if(!_tipName){ const _tp=(r['게시 담당자']||'').toString().trim(); if(_tp&&_tp!=='상관 없음')_tipName=_tp; }
+  if(!_tipName) return '';
+  let _tipMsg = _tipName.replace(/"/g,'&quot;')+' 님이 ';
   if(applying) _tipMsg += '신청 중입니다.';
   else if(done) _tipMsg += '완료한 콘텐츠입니다.';
   else if(st==='취소') _tipMsg += '취소한 콘텐츠입니다.';
@@ -10688,7 +10922,7 @@ function openPanel(dateObj,recs){
     h+='</div>';
   });}
   if(userRole==='admin')h+='<button class="add-btn" onclick="openAdminWizard(\''+dk(dateObj)+'\')">+ 새 콘텐츠 등록</button>';
-  // === 프로그램 (공연/전시) 섹션 (아래, 토글 가능, 기본 접힘) ===
+  // === 프로그램 (공연/전시) 섹션 (아래, 토글 가능, 기본 펼침) ===
   var perfs=getPerfs(dateObj);
   var exh=getExhibitStatus(dateObj);
   var now=new Date();now.setHours(0,0,0,0);
@@ -10742,7 +10976,7 @@ function openPanel(dateObj,recs){
   h+='</div>';
   p.innerHTML=h;p.style.display='flex';
 }
-let _panelProgramsOpen=false;
+let _panelProgramsOpen=true;   // 셀 클릭으로 패널 열릴 때 프로그램 일정 자동 펼침 (요청: 클릭 없이 바로 보이게)
 function togglePanelPrograms(){
   _panelProgramsOpen=!_panelProgramsOpen;
   const body=document.getElementById('panel-prog-body');
@@ -11344,7 +11578,9 @@ async function copyRec(rowIndex,dateKey){
     const [y,m,d]=newDt.date.split('-').map(Number);
     const dn=DAY_NAMES[new Date(y,m-1,d).getDay()]+'요일';
     const ts=newDt.date+' '+newDt.time;
-    // 17개 컬럼 — NO, 입력시간, 연도/월/일/요일은 새로, 나머지 그대로
+    // [버그수정] 신청자(S)·상태추적 컬럼까지 포함한 전체 row — 기존 18컬럼만 POST해
+    // 복사본의 신청자가 비어 "내 신청" 필터·알림·취소 권한이 전부 끊기던 버그
+    let _cpMyAppl='';try{_cpMyAppl=sessionStorage.getItem('myApplicant')||'';}catch(e){}
     const row=[
       records.length+1,
       ts,
@@ -11363,7 +11599,16 @@ async function copyRec(rowIndex,dateKey){
       rec['콘텐츠 내용']||'',
       rec['게시 담당자']||'',
       rec['진행 상태']||'예정',
-      rec['비고']||''
+      rec['비고']||'',
+      rec['신청자']||_cpMyAppl||'',  // S: 신청자 — 원본 유지 (없으면 복사 실행자)
+      '',                             // T: 결과_링크 (새 건이므로 비움)
+      '',                             // U: 결과_첨부URL
+      '',                             // V: 결과_비고
+      '',                             // W: 직전 상태
+      nowKstStr(),                    // X: 상태 변경 KST
+      '',                             // Y: 보류사유
+      '',                             // Z: 재신청사유
+      ''                              // AA: 취소사유
     ];
     await api('POST','/api/records',{values:row});
     // 점등 효과 — 새 날짜 셀
@@ -11544,7 +11789,28 @@ async function saveEntry(){
   // (접수/홍보시간대/제외/판매기간/카카오문자/완료취소 — 관리자 포함)
   const _gv=_validateScheduleChange(isEdit?editing.existing:null,dateKey,ft,{action:isEdit?'change':'submit',plat1:plat1,applicant:document.getElementById('f-author').value,program:document.getElementById('f-program').value,ignoreRowIndex:isEdit?existingRowIndex:null});
   if(!_gv.ok){showToast((isEdit?'변경':'등록')+' 불가: '+_gv.reason,'error');return;}
-  const row=[records.length+1,kstStr,serial,y,m,d,dn+'요일',plat1,plat2,document.getElementById('f-cat').value,document.getElementById('f-program').value,'예술사업팀',title,document.getElementById('f-format').value,document.getElementById('f-content').value,document.getElementById('f-author').value,document.getElementById('f-status').value,document.getElementById('f-memo').value];
+  // [버그수정] 수정은 buildRecordRow로 전체 컬럼 구성(직전 상태/상태 변경 KST 자동 추적 + S열 이후 보존),
+  // 신규는 신청자(S) 포함 전체 row — 기존 18컬럼 POST는 신청자가 비어 내신청/알림이 끊겼음
+  let row;
+  if(isEdit&&existingRowIndex){
+    row=buildRecordRow(editing.existing,{
+      '입력시간(KST)':kstStr,'날짜':serial,'연도':y,'월':m,'일':d,'요일':dn+'요일',
+      '플랫폼 1':plat1,'플랫폼 2':plat2,
+      '콘텐츠 구분':document.getElementById('f-cat').value,
+      '프로그램':document.getElementById('f-program').value,
+      '담당 부서':editing.existing['담당 부서']||'예술사업팀',
+      '콘텐츠 제목':title,
+      '콘텐츠 형식':document.getElementById('f-format').value,
+      '콘텐츠 내용':document.getElementById('f-content').value,
+      '게시 담당자':document.getElementById('f-author').value,
+      '진행 상태':document.getElementById('f-status').value,
+      '비고':document.getElementById('f-memo').value
+    });
+  }else{
+    let _seMyAppl='';try{_seMyAppl=sessionStorage.getItem('myApplicant')||'';}catch(e){}
+    row=[records.length+1,kstStr,serial,y,m,d,dn+'요일',plat1,plat2,document.getElementById('f-cat').value,document.getElementById('f-program').value,'예술사업팀',title,document.getElementById('f-format').value,document.getElementById('f-content').value,document.getElementById('f-author').value,document.getElementById('f-status').value,document.getElementById('f-memo').value,
+      _seMyAppl||'황세웅','','','','',nowKstStr(),'','',''];
+  }
   showOverlayLoad();
   try{
     if(isEdit&&existingRowIndex){
@@ -11558,6 +11824,7 @@ async function saveEntry(){
     await syncReload(isEdit?0:1);
     clickDate(dateKey);
     showToast('저장됐어요');
+    return true;
   }catch(e){showToast('저장 실패: '+e.message,'error');}
   finally{hideOverlayLoad();}
 }
@@ -11577,11 +11844,17 @@ async function approvePromo(){
   showOverlayLoad();
   try{
     // 진행 상태 = "예정"으로 변경 + 시간/날짜 등은 modal 폼에서 현재 값으로
-    const ri=editing.existing._rowIndex;
+    const _apRec=editing.existing;
     // 현재 모달 폼의 값으로 갱신 (관리자가 시간/날짜 조정 가능)
     document.getElementById('f-status').value='예정';
-    await saveEntry();  // saveEntry가 새 row 만들고 기존 row 삭제 (변경 패턴)
-    showToast('승인됐어요');
+    const _saved=await saveEntry();  // 기존 row in-place PATCH
+    if(_saved){
+      // 메시지함 hook — 접수(승인) 알림 (다른 승인 경로와 동일)
+      try{
+        pushMessage({recipient:_apRec['신청자']||'',type:'일반',trigger:'신청중→예정',before:_apRec['진행 상태']||'신청 중',after:'예정',reason:'',refNo:_apRec['No']||_apRec['NO']||'',refSummary:(getRecDateKey(_apRec)+' '+(_apRec['플랫폼 1']||'')+' '+(_apRec['콘텐츠 제목']||'')).trim()});
+      }catch(_e){ console.error('[pushMessage approvePromo]', _e); }
+      showToast('승인됐어요');
+    }
   }catch(e){showToast('승인 실패: '+e.message,'error');}
   finally{hideOverlayLoad();}
 }
@@ -11751,12 +12024,12 @@ async function onCellDrop(ev,toKey){
   // [버그수정] 드래그 이동도 모든 제약 검증 (제외일·홍보시간대·판매기간·카카오문자·완료취소) — 자기 자신 제외
   const _v=_validateScheduleChange(rec,toKey,hhmm,{action:'move',plat1:rec['플랫폼 1'],applicant:rec['게시 담당자'],program:rec['프로그램'],ignoreRowIndex:drag.rowIndex});
   if(!_v.ok){showToast('이동 불가: '+_v.reason,'error');return;}
-  const row=[records.length+1,kstStr,serial,y,m,d,dn+'요일',rec['플랫폼 1']||'',rec['플랫폼 2']||'',rec['콘텐츠 구분']||'',rec['프로그램']||'',rec['담당 부서']||'예술사업팀',rec['콘텐츠 제목']||'',rec['콘텐츠 형식']||'',rec['콘텐츠 내용']||'',rec['게시 담당자']||'',rec['진행 상태']||'예정',rec['비고']||''];
+  // [버그수정] 이동 = 기존 행 in-place PATCH — 이전 POST+DELETE 방식은
+  // ① DELETE 실패 시 중복 레코드 ② 새 행이 18컬럼뿐이라 신청자(S)·결과·사유 컬럼 소실
+  const row=buildRecordRow(rec,{'입력시간(KST)':kstStr,'날짜':serial,'연도':y,'월':m,'일':d,'요일':dn+'요일'});
   showOverlayLoad();
   try{
-    await api('POST','/api/records',{values:row});
-    try{await api('DELETE','/api/records/'+drag.rowIndex);}
-    catch(e){console.error('이동 후 기존 행 삭제 실패:',e);showToast('이동됨. 단, 기존 행 삭제 실패로 중복이 생겼을 수 있어','error');}
+    await api('PATCH','/api/records/'+drag.rowIndex,{values:row});
     await syncReload(0);
     closePanel();
     showToast('이동됐어요');
