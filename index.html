@@ -2612,8 +2612,9 @@ function _salesBuild(){
     else if(rows.length>=2)diff=(_salesNum(rows[rows.length-1]['합계좌석'])||0)-(_salesNum(rows[rows.length-2]['합계좌석'])||0);
     var m=master[name];
     // [DB통합] 공연마스터에 없는 공연은 운영대장 폴백: 기준석×회차(=운영행수)로 총오픈석 산출, 장르/구분 보강.
-    var ops=null, salesYear=null;
-    if(!m){ var by=_salesNum(snap['기준일자']); if(by){ salesYear=Math.floor(by/10000); } ops=_opsLookup(name,salesYear); }
+    var by=_salesNum(snap['기준일자']); var salesYear=by?Math.floor(by/10000):null;
+    var ops=null;
+    if(!m){ ops=_opsLookup(name,salesYear); }
     var base=m?m.기본석:(ops&&ops.base?ops.base:_SALES_FALLBACK_SEAT);
     var genre=ops?ops.genre:'';
     var totalOpen=(m&&m.총오픈석)?m.총오픈석:(ops?base*(ops.count||1):base*((m&&m.총회차)||1));
@@ -2628,6 +2629,14 @@ function _salesBuild(){
     if(m&&m.티켓오픈&&m.종료){ if(m.티켓오픈<=today&&today<=m.종료)status='active'; else if(today>m.종료)status='ended'; else status='notyet'; }
     else if(!m&&endDate){ status=(today>endDate)?'ended':(startDate&&today<startDate?'notyet':'active'); }
     else if(dday!==null){ status=dday>=0?'active':'ended'; }
+    // [수정] 판매중 = "마지막 공연일이 아직 안 지난 공연"으로 강제 보정 —
+    // 마스터 판매기간(종료일)이 미래로 잡혀 있어도 공연 자체가 끝났으면 ended (종료 공연이 [1] 현황에 섞이던 문제)
+    var lastShow=null;
+    if(m&&m.ID&&rounds[m.ID]){ rounds[m.ID].forEach(function(d){ if(!lastShow||d>lastShow)lastShow=d; }); }
+    var opsForDates=ops||_opsLookup(name,salesYear);
+    if(opsForDates&&opsForDates.last&&(!lastShow||opsForDates.last>lastShow))lastShow=opsForDates.last;
+    if(!lastShow&&endDate)lastShow=endDate;
+    if(status==='active'&&lastShow&&lastShow<today)status='ended';
     perfs.push({name:name,seats:seats,money:money,diff:diff,occ:occ,totalOpen:totalOpen,dday:dday,dateStr:dateStr,수익성:(m&&m.수익성)?m.수익성:_profitType(name,genre),목표:(m?m.목표:50),startDate:startDate,status:status,genre:genre,gubun:(ops?ops.gubun:''),enriched:(!m&&!!ops)});
   });
   return perfs;
