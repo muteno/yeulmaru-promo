@@ -451,6 +451,7 @@ button{font-family:inherit;cursor:pointer}
   .mv-content-btn{font-size:13.5px;padding:11px 13px}
 }
 @keyframes bnFade{from{opacity:0}to{opacity:1}}
+@keyframes acctDrop{from{opacity:0;transform:translateY(-10px) scale(.95)}to{opacity:1;transform:translateY(0) scale(1)}}
 @keyframes annualSlideIn{
   0%{transform:translateY(40px) scale(0.96);opacity:0}
   100%{transform:translateY(0) scale(1);opacity:1}
@@ -2797,17 +2798,29 @@ function updateRoleTag(){
 // (관리자 모드 전환 모달/토스트 제거됨 — 권한 전환 기능 폐기)
 function logout(){ showLogoutModal(); }
 function showLogoutModal(){
-  let m=document.getElementById('logout-modal'); if(m)m.remove();
-  m=document.createElement('div'); m.id='logout-modal';
-  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;z-index:99999';
-  m.innerHTML='<div style="background:#fff;border-radius:16px;padding:24px 22px;width:280px;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,0.25)">'
-    +'<div style="font-size:15px;font-weight:700;color:#333;margin-bottom:6px">계정</div>'
-    +'<div style="font-size:12px;color:#999;margin-bottom:20px">'+escapeHtml((sessionStorage.getItem('myApplicant')||'')+' 님')+'</div>'
-    +(userRole==='admin'?'<button type="button" onclick="closeLogoutModal();openAdminPanel()" style="width:100%;padding:12px;background:#fff;border:1px solid #eee;color:#333;border-radius:11px;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:8px">설정 (관리)</button>':'')
-    +'<button type="button" onclick="_doSwitchUser()" style="width:100%;padding:12px;background:var(--accent);color:#fff;border:0;border-radius:11px;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:8px">사용자 전환</button>'
-    +'<button type="button" onclick="_doLogout()" style="width:100%;padding:12px;background:#fff;border:1px solid #eee;color:#e53935;border-radius:11px;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:8px">로그아웃</button>'
-    +'<button type="button" onclick="closeLogoutModal()" style="width:100%;padding:9px;background:none;border:0;color:#aaa;font-size:12px;cursor:pointer">취소</button>'
-    +'</div>';
+  // (260611) 중앙 모달 → 이름 아래 드롭다운 (오버레이 어둡게 안 함, 슬라이드 다운)
+  closeLogoutModal();
+  const anchor=document.getElementById('welcome-msg')||document.getElementById('role-tag');
+  const r=anchor?anchor.getBoundingClientRect():{bottom:56,right:window.innerWidth-20};
+  const m=document.createElement('div'); m.id='logout-modal';
+  m.style.cssText='position:fixed;inset:0;z-index:99999;background:transparent';
+  const menu=document.createElement('div');
+  menu.style.cssText='position:fixed;top:'+(r.bottom+8)+'px;right:'+Math.max(12,window.innerWidth-r.right-4)+'px;min-width:176px;background:rgba(255,255,255,0.97);backdrop-filter:blur(20px) saturate(150%);-webkit-backdrop-filter:blur(20px) saturate(150%);border:1px solid rgba(0,0,0,0.06);border-radius:14px;box-shadow:0 16px 48px rgba(74,77,231,0.18),0 4px 14px rgba(0,0,0,0.08);padding:6px;transform-origin:top right;animation:acctDrop .22s cubic-bezier(.26,1.2,.5,1)';
+  const item=function(label,fn,extra){
+    const b=document.createElement('button');b.type='button';b.textContent=label;
+    b.style.cssText='display:block;width:100%;padding:10px 14px;border:0;background:none;text-align:left;font-size:13px;font-weight:600;color:#333;border-radius:9px;cursor:pointer;font-family:inherit;transition:background .12s;'+(extra||'');
+    b.onmouseenter=function(){b.style.background='rgba(74,77,231,0.07)';};
+    b.onmouseleave=function(){b.style.background='none';};
+    b.onclick=fn;return b;
+  };
+  let _nm='';try{_nm=sessionStorage.getItem('myApplicant')||'';}catch(_e){}
+  const hd=document.createElement('div');hd.style.cssText='padding:8px 14px 6px;font-size:11px;color:#999;font-weight:700';hd.textContent=_nm?_nm+' 님':'계정';
+  menu.appendChild(hd);
+  if(userRole==='admin')menu.appendChild(item('설정 (관리)',function(){closeLogoutModal();openAdminPanel();}));
+  menu.appendChild(item('사용자 전환',function(){_doSwitchUser();}));
+  menu.appendChild(item('로그아웃',function(){_doLogout();},'color:#e53935'));
+  menu.appendChild(item('취소',function(){closeLogoutModal();},'color:#aaa;font-weight:500;font-size:12px'));
+  m.appendChild(menu);
   document.body.appendChild(m);
   m.addEventListener('click',function(e){ if(e.target===m)closeLogoutModal(); });
 }
