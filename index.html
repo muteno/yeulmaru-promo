@@ -7798,6 +7798,8 @@ async function _msalFetchOneDriveChildren(path){
 }
 
 // 공유받은 항목 (타 유저가 공유한 폴더) — Files.Read.All 필요
+// 공유받은 폴더 화이트리스트 — 폴더명(부분일치). 비어있으면 전체 표시.
+const _SHARED_ALLOW=[];
 async function _msalFetchSharedWithMe(){
   const token = await _msalGetToken();
   if(!token) return null;
@@ -7824,7 +7826,13 @@ async function _msalFetchSharedWithMe(){
         owner: owner,
         shared: true
       };
-    }).filter(function(n){ return !!n.driveId; });
+    }).filter(function(n){ return !!n.driveId; })
+    .filter(function(n){
+      // (260611) 공유받은 폴더 화이트리스트 — 비어있으면 전체 표시. 지정 시 해당 폴더만 노출 (표시 필터, 권한 차단 아님)
+      if(!_SHARED_ALLOW.length) return true;
+      var nn=String(n.name).replace(/\s+/g,'').toLowerCase();
+      return _SHARED_ALLOW.some(function(a){ a=String(a).replace(/\s+/g,'').toLowerCase(); return nn.indexOf(a)>-1||a.indexOf(nn)>-1; });
+    });
   } catch(e){
     console.warn('[fetchSharedWithMe]', e.message);
     return null;  // 실패해도 내 폴더 흐름은 유지 (호출부에서 안내만)
@@ -8810,7 +8818,7 @@ function validatePwSubStep(){
       if(!pwHasFolder()){showFieldError('pw-folder-0','참고 자료 경로를 입력해 주세요');return false;}
     }else if(fmt==='이미지'||fmt==='영상'){
       if(!pwHasFolder()){showFieldError('pw-folder-0','참고 자료 경로를 입력해 주세요');return false;}
-      if(p1==='카카오톡'&&_pwData.kakaoText.trim().length<76){if(!_pwMinSkip('pw-kakao-text','카카오톡 본문 76자를 채워 주세요 (현재 '+_pwData.kakaoText.trim().length+'자)'))return false;}
+      // 카카오 본문은 다음 단계(key==='text')에서 검증 — 여기(폴더 단계)서 검증하면 중복 안내
     }else if(fmt==='텍스트'){
       if(p1==='카카오톡'&&_pwData.kakaoText.trim().length<76){if(!_pwMinSkip('pw-kakao-text','카카오톡 본문 76자를 채워 주세요 (현재 '+_pwData.kakaoText.trim().length+'자)'))return false;}
       if(p1==='인스타그램'&&!_pwData.instaText.trim()){if(!_pwMinSkip('pw-insta-text','본문을 입력해 주세요'))return false;}
@@ -11485,7 +11493,10 @@ function openPanel(dateObj,recs){
   var ref=new Date(dateObj);ref.setHours(0,0,0,0);
   var openPerfs=PERFS.filter(function(p){if(p.o!==1||p.t!=='c')return false;var pe=new Date(p.e);pe.setHours(0,0,0,0);return pe>=ref;});
   var openExh=PERFS.filter(function(p){if(p.o!==1||p.t!=='e')return false;var pe=new Date(p.e);pe.setHours(0,0,0,0);return pe>=ref;});
-  var progTotal=openPerfs.length+openExh.length;
+  // (260611) 예술교육·대관도 포함 — 기존 공연/전시만 필터해 화요살롱 등이 패널에서 누락됐음
+  var openEdu=PERFS.filter(function(p){if(p.o!==1||p.t!=='a')return false;var pe=new Date(p.e);pe.setHours(0,0,0,0);return pe>=ref;});
+  var openRent=PERFS.filter(function(p){if(p.o!==1||p.t!=='r')return false;var pe=new Date(p.e);pe.setHours(0,0,0,0);return pe>=ref;});
+  var progTotal=openPerfs.length+openExh.length+openEdu.length+openRent.length;
   if(progTotal>0){
     var open=_panelProgramsOpen;
     // 차르르 효과: 자동 펼침이어도 접힌 채 렌더 → 패널 슬라이드 인 후 open 클래스 추가로 전환 재생.
@@ -11532,6 +11543,25 @@ function openPanel(dateObj,recs){
       h+='<div style="flex:1;min-width:0;overflow:hidden"><div style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+eNameWithArrow+'</div><div style="font-size:10px;color:var(--dim);margin-top:1px">'+escapeHtml(eVenue)+'</div></div>';
       h+='<span style="font-size:11px;font-weight:600;color:#C08070;white-space:nowrap;flex-shrink:0">'+dayNum+'일차</span>';
       h+='</div>';
+    });
+    // 예술교육(교)·대관(대) — 공연 row와 동일 구조, 마크/색만 다름
+    [[openEdu,'교','#2E9E5B','rgba(46,158,91,0.13)'],[openRent,'대','#8a8f9c','rgba(140,143,156,0.13)']].forEach(function(cfg){
+      cfg[0].forEach(function(perf){
+        var sd=new Date(perf.s);sd.setHours(0,0,0,0);
+        var ed=new Date(perf.e);ed.setHours(0,0,0,0);
+        var dd=(ref>=sd&&ref<=ed)?0:Math.round((sd-ref)/86400000);
+        var ddText=dd===0?'D-Day':dd>0?'D-'+dd:'종료';
+        var hasUrl=!!perf.u;
+        var clickAttr=hasUrl?' onclick="openPerfUrl(\''+escapeHtml(perf.u).replace(/'/g,'\\\'')+'\',\''+escapeHtml(perf.f).replace(/'/g,'\\\'')+'\')" title="클릭하면 상세 페이지로 이동"':'';
+        var cursorStyle=hasUrl?'cursor:pointer;':'';
+        var venueP=perf.l||'장소 미정';
+        var nameWithArrow=escapeHtml(perf.f)+(hasUrl?' <span style="font-size:9px;color:'+cfg[2]+';font-weight:500;margin-left:2px">↗</span>':'');
+        h+='<div'+clickAttr+' oncontextmenu="onPerfContextMenu(event,this);return false;" class="panel-perf-row" data-perf-name="'+escapeHtml(perf.f)+'" style="'+cursorStyle+'display:flex;align-items:center;padding:10px 12px;background:'+cfg[3]+';border-radius:10px;margin-bottom:6px;gap:10px;transition:background .15s">';
+        h+='<span style="display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;border-radius:50%;font-size:8px;font-weight:700;background:'+cfg[2]+';color:#fff;flex-shrink:0">'+cfg[1]+'</span>';
+        h+='<div style="flex:1;min-width:0;overflow:hidden"><div style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+nameWithArrow+'</div><div style="font-size:10px;color:var(--dim);margin-top:1px">'+escapeHtml(venueP)+'</div></div>';
+        h+='<span style="font-size:11px;font-weight:600;color:'+cfg[2]+';white-space:nowrap;flex-shrink:0">'+ddText+'</span>';
+        h+='</div>';
+      });
     });
     h+='</div></div>';
   }
