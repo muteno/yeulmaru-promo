@@ -1715,7 +1715,8 @@ async function loadPromoSpecial(){
         time:it['시간']||'',
         person:it['담당자']||'',
         author:it['작성자']||'',
-        kstStr:it['입력시간(KST)']||it['입력시간']||''
+        kstStr:it['입력시간(KST)']||it['입력시간']||'',
+        note:it['비고']||''   // (260611) '완료' = 수동 완료 처리
       };
     });
   }catch(e){
@@ -2592,7 +2593,7 @@ function _wxRenderPop(){
   if(cur.name!=='여수') h+='<button onclick="_wxReset()" style="width:100%;margin-top:5px;padding:5px;border:0;background:none;color:#999;font-size:11px;cursor:pointer;font-family:inherit;text-decoration:underline">여수로 초기화</button>';
   p.innerHTML=h;
 }
-function _wxToggle(ev){ if(ev)ev.stopPropagation(); var p=document.getElementById('wx-pop'); if(!p)return; if(p.classList.contains('show')){p.classList.remove('show');return;} _wxRenderPop(); p.classList.add('show'); var i=document.getElementById('wx-q'); if(i)i.focus(); }
+function _wxToggle(ev){ if(ev)ev.stopPropagation(); var p=document.getElementById('wx-pop'); if(!p)return; if(p.classList.contains('show')){p.classList.remove('show');return;} _ddCloseAll(); _wxRenderPop(); p.classList.add('show'); var i=document.getElementById('wx-q'); if(i)i.focus(); }
 var _wxTimer=null;
 function _wxSearchDebounced(q){ if(_wxTimer)clearTimeout(_wxTimer); _wxTimer=setTimeout(function(){_wxSearch(q);},350); }
 var _WX_KEEP={city:1,town:1,municipality:1,county:1};  // 시 단위(시·군·광역시 등) — 동/리/구/도로 제외
@@ -2661,7 +2662,7 @@ function _presRender(){
   }
   pop.innerHTML=h;
 }
-function _presToggle(ev){ if(ev)ev.stopPropagation(); var pop=document.getElementById('pres-pop'); if(!pop)return; if(pop.classList.contains('show')){pop.classList.remove('show');} else {_presRender();pop.classList.add('show');_presPoll();} }
+function _presToggle(ev){ if(ev)ev.stopPropagation(); var pop=document.getElementById('pres-pop'); if(!pop)return; if(pop.classList.contains('show')){pop.classList.remove('show');} else {_ddCloseAll();_presRender();pop.classList.add('show');_presPoll();} }
 document.addEventListener('click',function(e){ var w=document.getElementById('pres-wrap'),pop=document.getElementById('pres-pop'); if(w&&pop&&pop.classList.contains('show')&&!w.contains(e.target))pop.classList.remove('show'); });
 
 // === 개인 할 일/일정 (관리자 전용, KV /api/memo에 JSON 저장 · 중요도→기한 정렬 · 기한 알람 · 우클릭 완료) ===
@@ -2773,6 +2774,7 @@ async function _memoToggle(ev){
   if(ev)ev.stopPropagation();
   var pop=document.getElementById('memo-pop'); if(!pop)return;
   if(pop.classList.contains('show')){ pop.classList.remove('show'); return; }
+  _ddCloseAll();   // 다른 헤더 팝업 닫고 열기 (배타)
   pop.classList.add('show');
   if(!_memoState.loaded){ _memoRender(true); await _memoLoad(); }
   _memoRender(false);
@@ -2797,7 +2799,11 @@ function updateRoleTag(){
 // (권한 전환 기능 제거됨 — 권한은 담당자 시트 '관리자여부'로 고정, 앱 내 전환 불가)
 // (관리자 모드 전환 모달/토스트 제거됨 — 권한 전환 기능 폐기)
 function logout(){ showLogoutModal(); }
-function _ddCloseAll(){['dd-pop','logout-modal'].forEach(function(id){const d=document.getElementById(id);if(d)d.remove();});}
+function _ddCloseAll(){
+  ['dd-pop','logout-modal'].forEach(function(id){const d=document.getElementById(id);if(d)d.remove();});
+  // (260611) 헤더 팝업류 전부 상호 배타 — 하나 열면 나머지 닫힘 (창 중첩 방지)
+  ['memo-pop','pres-pop','wx-pop','prog-modal'].forEach(function(id){const d=document.getElementById(id);if(d)d.classList.remove('show');});
+}
 function _ddOpen(anchor,builder,minW){
   _ddCloseAll();
   if(!anchor)return;
@@ -4627,6 +4633,11 @@ function openSpecialView(rowIndex){
   const typeStr = it.type || '-';
   const personStr = it.person || '-';
   const labelStr = it.label || '';
+  // (260611) 상태: 자동(종료시각/18시) + 수동(비고='완료') — admin은 여기서도 완료 토글 가능
+  const spSt=_spStatus(it);
+  const spManual=(it.note||'').indexOf('완료')>-1;
+  const stChip='<span style="display:inline-block;padding:3px 10px;border-radius:10px;background:'+(spSt==='완료'?'#DBEAFE':'#E8F5EC')+';color:'+(spSt==='완료'?'#2563EB':'#0F8B4C')+';font-size:11px;font-weight:600">'+spSt+(spManual?' <span style="font-weight:400;opacity:0.7">(수동)</span>':'')+'</span>';
+  const stBtn=userRole==='admin'?' <button onclick="_spToggleDone('+rowIndex+')" style="margin-left:8px;padding:4px 11px;border-radius:8px;border:1px solid '+(spManual?'#ddd':'rgba(37,99,235,0.35)')+';background:'+(spManual?'#f5f5f5':'#EFF6FF')+';color:'+(spManual?'#888':'#2563EB')+';font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">'+(spManual?'완료 해제':'완료 처리')+'</button>':'';
   const html = '<div class="modal-bg show" onclick="if(event.target===this)closeSpecialView()" style="z-index:9100">'
     +'<div class="modal" style="max-width:480px;padding:0;position:relative;text-align:left">'
     +'<div style="padding:24px 24px 0;display:flex;align-items:center;justify-content:space-between">'
@@ -4635,6 +4646,7 @@ function openSpecialView(rowIndex){
     +'</div>'
     +'<div style="padding:16px 24px 24px">'
     +'<div class="mv-section">📅 일정 현황</div>'
+    +'<div class="mv-row"><span class="lbl">상태</span><span class="val">'+stChip+stBtn+'</span></div>'
     +'<div class="mv-row"><span class="lbl">날짜</span><span class="val">'+escapeHtml(dateStr||'-')+'</span></div>'
     +(timeFull?'<div class="mv-row"><span class="lbl">시간</span><span class="val">'+escapeHtml(timeFull)+'</span></div>':'')
     +'<div class="mv-section">📌 상세</div>'
@@ -4655,6 +4667,26 @@ function openSpecialView(rowIndex){
 function closeSpecialView(){
   const el = document.getElementById('special-view-modal');
   if(el) el.innerHTML = '';
+}
+// (260611) 조회 모달에서 완료 수동 토글 — 비고 컬럼에 '완료' 기록/해제 (해제 시 자동 판정 복귀)
+async function _spToggleDone(rowIndex){
+  if(userRole!=='admin'){showToast('관리자만 할 수 있어요','error');return;}
+  const it=(PROMO_SPECIAL||[]).find(function(s){return s._rowIndex===rowIndex;});
+  if(!it)return;
+  const newNote=(it.note||'').indexOf('완료')>-1?'':'완료';
+  showOverlayLoad();
+  try{
+    const values=['',it.kstStr||'',it.id||'',it.start||'',it.end||'',it.time||'',it.type||'',it.label||'',it.person||'',it.author||'',newNote];
+    await api('PATCH','/api/sheet/special/'+rowIndex,{values:values});
+    it.note=newNote;
+    openSpecialView(rowIndex);   // 모달 갱신
+    renderCal();
+    showToast(newNote?'완료로 표시했어요':'완료 표시를 해제했어요 (자동 판정)');
+  }catch(e){
+    showToast('변경 실패: '+(e&&e.message?e.message:e),'error');
+  }finally{
+    hideOverlayLoad();
+  }
 }
 
 // === 전역 ESC 핸들러 — 활성 팝업/모달 우선순위 닫기 ===
@@ -5073,6 +5105,7 @@ function openSpecialEntry(key, editRowIndex){
     '<div id="sp-time-adders" style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;align-items:center"><span style="font-size:10.5px;color:#aaa;margin-right:2px">빠른 종료시간:</span><button type="button" class="sp-time-add" onclick="_addSpTime(-60)">-1시간</button><button type="button" class="sp-time-add" onclick="_addSpTime(-30)">-30분</button><button type="button" class="sp-time-add" onclick="_addSpTime(30)">+30분</button><button type="button" class="sp-time-add" onclick="_addSpTime(60)">+1시간</button><button type="button" class="sp-time-reset" onclick="_resetSpTime()">리셋</button></div>'+
     '<label style="'+lbSt+'">담당자<span style="color:var(--peach);margin-left:3px">*</span> <span style="color:#aaa;font-weight:400;text-transform:none;letter-spacing:0">(복수 선택 가능)</span></label>'+
     personChecks+
+    (isEdit?'<label style="'+lbSt+'">진행 상태</label><label style="display:inline-flex;align-items:center;gap:7px;font-size:13px;cursor:pointer;user-select:none;padding:8px 12px;background:#fff;border:1.5px solid #e0e0e0;border-radius:10px"><input type="checkbox" id="sp-done" '+(((_editingSpecial.note||'').indexOf('완료')>-1)?'checked':'')+' style="accent-color:var(--accent);margin:0">완료 처리 <span style="color:#999;font-size:11px">(해제 시 종료시각 기준 자동 판정)</span></label>':'')+
     '<div style="display:flex;gap:8px;margin-top:18px">'+
     (isEdit?'<button onclick="closeSpecialEntry();deleteSpecialEntry('+_editingSpecial._rowIndex+')" class="m-btn" style="background:#f5f5f5;color:#888;border:1px solid #ddd">삭제</button>':'')+
     '<button onclick="saveSpecialEntry()" class="m-btn save" style="margin-left:auto">저장</button></div>'+
@@ -5433,8 +5466,10 @@ async function saveSpecialEntry(){
   showOverlayLoad();
   try{
     if(isEdit){
-      // 변경 — 기존 행은 첫 담당자로, 추가 선택된 인원은 새 행으로 생성
-      const values=['',editTarget.kstStr||kstStr,editTarget.id||('SP-'+Date.now()),start,end,time||'',type,label,persons[0],editTarget.author||author,''];
+      // 변경 — 기존 행은 첫 담당자로, 추가 선택된 인원은 새 행으로 생성. 비고 = 완료 토글(없으면 기존값 보존)
+      const _doneCb=document.getElementById('sp-done');
+      const noteVal=_doneCb?(_doneCb.checked?'완료':''):(editTarget.note||'');
+      const values=['',editTarget.kstStr||kstStr,editTarget.id||('SP-'+Date.now()),start,end,time||'',type,label,persons[0],editTarget.author||author,noteVal];
       await api('PATCH','/api/sheet/special/'+editTarget._rowIndex,{values:values});
       for(let i=1;i<persons.length;i++){
         await api('POST','/api/sheet/special',{values:['',kstStr,'SP-'+Date.now()+'-'+i,start,end,time||'',type,label,persons[i],author,'']});
@@ -5587,6 +5622,18 @@ function _onColResizeEnd(){
   document.removeEventListener('mousemove',_onColResizeMove);
   document.removeEventListener('mouseup',_onColResizeEnd);
   _colResizeState=null;
+}
+// (260611) 담당자 일정 상태 — 수동 완료(비고='완료') 우선, 아니면 종료시각 경과로 자동 완료.
+// 종료시간 있으면 그 시각, 없으면(미정·시작만) 마지막 날 18:00 기준.
+function _spStatus(it){
+  if(((it&&it.note)||'').indexOf('완료')>-1)return '완료';
+  const endDate=(it&&(it.end||it.start))||'';
+  if(!endDate)return '예정';
+  const p=_parseSpTime((it&&it.time)||'');
+  const endTime=p.e||'18:00';
+  const dt=new Date(endDate+'T'+endTime+':00');
+  if(!isNaN(dt.getTime())&&Date.now()>dt.getTime())return '완료';
+  return '예정';
 }
 // 3단 토글: hide(감추기) → mix(같이 보기) → only(특수일정만)
 function _cycleSpecialMode(){
@@ -6420,8 +6467,9 @@ function renderPromoBoard(){
         const clickAttr=userRole==='admin'?' onclick="_schedReturnFlag=true;closePromoBoard();openSpecialEntry(null,'+r._rowIndex+')"':'';
         html+='<tr class="promo-row"'+clickAttr+' style="border-bottom:1px solid #f0f0f0;cursor:'+(userRole==='admin'?'pointer':'default')+';'+trBg+';'+trBorder+';animation-delay:'+_animDelay+'" onmouseover="this.style.background=\''+hoverBg+'\'" onmouseout="this.style.background=\''+baseBg+'\'">';
         html+='<td title="'+escapeHtml(noTitle)+'" style="padding:10px 12px;text-align:left;color:#aaa;font-variant-numeric:tabular-nums;font-size:11px;font-weight:600;cursor:help">'+escapeHtml(noShort)+'</td>';
-        // 상태: 예정 (콘텐츠 예정과 동일)
-        html+='<td style="padding:10px 12px;text-align:left"><span style="display:inline-block;padding:3px 10px;border-radius:10px;background:#E8F5EC;color:#0F8B4C;font-size:11px;font-weight:600;white-space:nowrap">예정</span></td>';
+        // 상태: 예정/완료 — 수동 완료(비고) 또는 종료시각 경과 시 완료 (색상은 콘텐츠 row와 동일 팔레트)
+        const spSt=_spStatus(it);
+        html+='<td style="padding:10px 12px;text-align:left"><span style="display:inline-block;padding:3px 10px;border-radius:10px;background:'+(spSt==='완료'?'#DBEAFE':'#E8F5EC')+';color:'+(spSt==='완료'?'#2563EB':'#0F8B4C')+';font-size:11px;font-weight:600;white-space:nowrap">'+spSt+'</span></td>';
         html+='<td style="padding:10px 12px;text-align:left;color:#bbb;font-size:11px">-</td>';
         html+='<td style="padding:10px 12px;text-align:left;color:'+(isPast?'#aaa':'#333')+';white-space:nowrap"><span style="font-variant-numeric:tabular-nums">'+rangeStr+'</span>'+todayBadge+'</td>';
         html+='<td style="padding:10px 12px;text-align:left;color:'+(isPast?'#aaa':'#333')+';font-variant-numeric:tabular-nums;white-space:nowrap">'+escapeHtml(timeStr)+(endStr?'<span style="color:#aaa;margin-left:3px">'+escapeHtml(endStr)+'</span>':'')+'</td>';
@@ -7868,12 +7916,14 @@ let _folderTreeCurrentIdx = -1;
 let _folderTreeSelectedPath = '';
 let _folderTreeSelectedName = '';
 let _folderTreeSelectedUrl = '';   // 공유 폴더 선택 시 webUrl (빈값 = 내 OneDrive 경로 저장)
+let _folderTreeSelectedLabel = ''; // (260611) URL 저장 시 동반할 한글 라벨 (예: SharePoint > 예술사업팀 > 문서)
 
 async function openFolderTreeModal(idx){
   _folderTreeCurrentIdx = idx;
   _folderTreeSelectedPath = '';
   _folderTreeSelectedName = '';
   _folderTreeSelectedUrl = '';
+  _folderTreeSelectedLabel = '';
   let el = document.getElementById('folder-tree-modal');
   if(!el){
     el = document.createElement('div');
@@ -7907,30 +7957,31 @@ async function openFolderTreeModal(idx){
   }
   treeEl.innerHTML = '';
   const secSt='font-size:11px;font-weight:700;color:#888;letter-spacing:0.5px;padding:6px 4px 4px;user-select:none';
-  // 섹션 1 — 내 OneDrive
-  const myHdr=document.createElement('div'); myHdr.style.cssText=secSt; myHdr.textContent='📂 내 OneDrive'; treeEl.appendChild(myHdr);
+  const secDiv=';margin-top:10px;border-top:1px solid rgba(0,0,0,0.05);padding-top:10px';
+  // 섹션 1 — 공유받은 SharePoint 사이트 (Sites.Read.All) — (260611) 업무 폴더가 주 사용처라 최상단 + 라이브러리/1단계 폴더 자동 펼침
+  const spHdr=document.createElement('div'); spHdr.style.cssText=secSt; spHdr.textContent='🏢 SharePoint 사이트'; treeEl.appendChild(spHdr);
+  if(spSites===null){
+    const e4=document.createElement('div'); e4.style.cssText='color:#bbb;padding:6px 12px;font-size:11px;line-height:1.5'; e4.textContent='SharePoint 사이트를 불러올 수 없어요 (권한 동의가 필요할 수 있어요 — 다시 열면 동의 팝업이 떠요)'; treeEl.appendChild(e4);
+  } else if(spSites.length === 0){
+    const e5=document.createElement('div'); e5.style.cssText='color:#bbb;padding:6px 12px;font-size:11px'; e5.textContent='접근 가능한 사이트가 없어요'; treeEl.appendChild(e5);
+  } else {
+    spSites.forEach(function(site){ const n=_renderFolderTreeNode(site, '', 0); treeEl.appendChild(n); if(n._expand)n._expand(); });
+  }
+  // 섹션 2 — 내 OneDrive
+  const myHdr=document.createElement('div'); myHdr.style.cssText=secSt+secDiv; myHdr.textContent='📂 내 OneDrive'; treeEl.appendChild(myHdr);
   if(children.length === 0){
     const e1=document.createElement('div'); e1.style.cssText='color:#999;padding:8px 12px;font-size:12px'; e1.textContent='OneDrive에 폴더가 없어요'; treeEl.appendChild(e1);
   } else {
     children.forEach(function(child){ treeEl.appendChild(_renderFolderTreeNode(child, '', 0)); });
   }
-  // 섹션 2 — 공유받은 폴더 (타 유저 공유분, Files.Read.All)
-  const shHdr=document.createElement('div'); shHdr.style.cssText=secSt+';margin-top:10px;border-top:1px solid rgba(0,0,0,0.05);padding-top:10px'; shHdr.textContent='🤝 공유받은 폴더'; treeEl.appendChild(shHdr);
+  // 섹션 3 — 공유받은 폴더 (타 유저 공유분, Files.Read.All)
+  const shHdr=document.createElement('div'); shHdr.style.cssText=secSt+secDiv; shHdr.textContent='🤝 공유받은 폴더'; treeEl.appendChild(shHdr);
   if(shared===null){
     const e2=document.createElement('div'); e2.style.cssText='color:#bbb;padding:6px 12px;font-size:11px;line-height:1.5'; e2.textContent='공유받은 폴더를 불러올 수 없어요 (권한 동의가 필요할 수 있어요 — 다시 열면 동의 팝업이 떠요)'; treeEl.appendChild(e2);
   } else if(shared.length === 0){
     const e3=document.createElement('div'); e3.style.cssText='color:#bbb;padding:6px 12px;font-size:11px'; e3.textContent='공유받은 폴더가 없어요'; treeEl.appendChild(e3);
   } else {
     shared.forEach(function(child){ treeEl.appendChild(_renderFolderTreeNode(child, '', 0)); });
-  }
-  // 섹션 3 — 공유받은 SharePoint 사이트 (Sites.Read.All)
-  const spHdr=document.createElement('div'); spHdr.style.cssText=secSt+';margin-top:10px;border-top:1px solid rgba(0,0,0,0.05);padding-top:10px'; spHdr.textContent='🏢 SharePoint 사이트'; treeEl.appendChild(spHdr);
-  if(spSites===null){
-    const e4=document.createElement('div'); e4.style.cssText='color:#bbb;padding:6px 12px;font-size:11px;line-height:1.5'; e4.textContent='SharePoint 사이트를 불러올 수 없어요 (권한 동의가 필요할 수 있어요 — 다시 열면 동의 팝업이 떠요)'; treeEl.appendChild(e4);
-  } else if(spSites.length === 0){
-    const e5=document.createElement('div'); e5.style.cssText='color:#bbb;padding:6px 12px;font-size:11px'; e5.textContent='접근 가능한 사이트가 없어요'; treeEl.appendChild(e5);
-  } else {
-    spSites.forEach(function(site){ treeEl.appendChild(_renderFolderTreeNode(site, '', 0)); });
   }
 }
 
@@ -7969,7 +8020,8 @@ function _renderFolderTreeNode(node, parentPath, depth){
       const cd = document.createElement('div');
       cd.className = 'ftm-children';
       if(children && children.length > 0){
-        children.forEach(function(c){ cd.appendChild(_renderFolderTreeNode(c, fullPath, depth + 1)); });
+        // 사이트 펼침 시 라이브러리도 자동 펼침 (1단계 폴더까지 바로 보이게) — 폴더부터는 수동
+        children.forEach(function(c){ const cn=_renderFolderTreeNode(c, fullPath, depth + 1); cd.appendChild(cn); if(node.isSite && cn._expand) cn._expand(); });
       } else {
         const empty = document.createElement('div');
         empty.style.cssText = 'color:#bbb;font-size:11px;padding:4px 12px;margin-left:'+((depth+1)*18+22)+'px';
@@ -8008,6 +8060,7 @@ function _renderFolderTreeNode(node, parentPath, depth){
     _folderTreeSelectedPath = fullPath;
     _folderTreeSelectedName = node.name;
     _folderTreeSelectedUrl = node.shared ? (node.webUrl || '') : '';
+    _folderTreeSelectedLabel = node.sp ? ('SharePoint'+fullPath).split('/').join(' > ') : node.shared ? ('공유받은 폴더'+fullPath).split('/').join(' > ') : '';
     const pathSpan = document.getElementById('ftm-current-path');
     if(pathSpan) pathSpan.textContent = node.sp
       ? ('SharePoint' + fullPath.replace(/\//g, '\\'))
@@ -8018,6 +8071,8 @@ function _renderFolderTreeNode(node, parentPath, depth){
     if(btn){ btn.disabled = false; btn.style.opacity = '1'; btn.textContent = '✓ 선택: ' + node.name; }
   };
   wrap.appendChild(row);
+  // (260611) 자동 펼침 훅 — SP 섹션이 사이트→라이브러리→1단계 폴더까지 열어서 보여줄 때 사용
+  if(node.hasChildren){ wrap._expand=function(){ if(!wrap.querySelector('.ftm-children')) expandBtn.onclick({stopPropagation:function(){}}); }; }
   return wrap;
 }
 
@@ -8028,6 +8083,7 @@ function closeFolderTreeModal(){
   _folderTreeSelectedPath = '';
   _folderTreeSelectedName = '';
   _folderTreeSelectedUrl = '';
+  _folderTreeSelectedLabel = '';
 }
 
 function confirmFolderTreeSelection(){
@@ -8035,9 +8091,11 @@ function confirmFolderTreeSelection(){
     showToast('폴더를 클릭해서 선택해주세요','error');
     return;
   }
-  // 내 OneDrive = 로컬 동기화 경로(백슬래시) / 공유받은 폴더 = 타 드라이브라 로컬 경로가 없어 webUrl 저장
+  // 내 OneDrive = 로컬 동기화 경로(백슬래시) / 공유·SP 폴더 = 로컬 경로가 없어 '한글 라벨 — webUrl' 저장 (라벨로 어디인지 알아보게)
   const PREFIX = 'OneDrive - GS칼텍스 예울마루';
-  const newPath = _folderTreeSelectedUrl || (PREFIX + _folderTreeSelectedPath.replace(/\//g, '\\'));
+  const newPath = _folderTreeSelectedUrl
+    ? ((_folderTreeSelectedLabel ? _folderTreeSelectedLabel + ' — ' : '') + _folderTreeSelectedUrl)
+    : (PREFIX + _folderTreeSelectedPath.replace(/\//g, '\\'));
   if(!_pwData.folders) _pwData.folders = [''];
   _pwData.folders[_folderTreeCurrentIdx] = newPath;
   const input = document.getElementById('pw-folder-' + _folderTreeCurrentIdx);
@@ -8718,6 +8776,11 @@ function collectPwSubStep(){
 }
 
 // === Step 4 sub-step 검증 ===
+// (260611) 본문/최소 글자 필수 — 일반 사용자는 강제, 관리자는 confirm으로 스킵 가능
+function _pwMinSkip(fid,msg){
+  if(userRole==='admin'&&confirm('[관리자] '+msg+'\n\n관리자 권한으로 이 검증을 건너뛰고 진행할까요?'))return true;
+  showFieldError(fid,msg);return false;
+}
 function validatePwSubStep(){
   const key=currentPwSubKey();
   if(key==='plat'){
@@ -8747,20 +8810,21 @@ function validatePwSubStep(){
       if(!pwHasFolder()){showFieldError('pw-folder-0','참고 자료 경로를 입력해 주세요');return false;}
     }else if(fmt==='이미지'||fmt==='영상'){
       if(!pwHasFolder()){showFieldError('pw-folder-0','참고 자료 경로를 입력해 주세요');return false;}
+      if(p1==='카카오톡'&&_pwData.kakaoText.trim().length<76){if(!_pwMinSkip('pw-kakao-text','카카오톡 본문 76자를 채워 주세요 (현재 '+_pwData.kakaoText.trim().length+'자)'))return false;}
     }else if(fmt==='텍스트'){
-      if(p1==='카카오톡'&&!_pwData.kakaoText.trim()){showFieldError('pw-kakao-text','본문을 입력해 주세요');return false;}
-      if(p1==='인스타그램'&&!_pwData.instaText.trim()){showFieldError('pw-insta-text','본문을 입력해 주세요');return false;}
-      if(p1==='B2B'&&p2==='GS칼텍스 여수공장 인트라넷'&&!_pwData.b2bIntraText.trim()){showFieldError('pw-b2b-text','본문을 입력해 주세요');return false;}
-      if(p1==='기타'&&!(_pwData.freeText||'').trim()){showFieldError('pw-free-text','본문을 입력해 주세요');return false;}
+      if(p1==='카카오톡'&&_pwData.kakaoText.trim().length<76){if(!_pwMinSkip('pw-kakao-text','카카오톡 본문 76자를 채워 주세요 (현재 '+_pwData.kakaoText.trim().length+'자)'))return false;}
+      if(p1==='인스타그램'&&!_pwData.instaText.trim()){if(!_pwMinSkip('pw-insta-text','본문을 입력해 주세요'))return false;}
+      if(p1==='B2B'&&p2==='GS칼텍스 여수공장 인트라넷'&&!_pwData.b2bIntraText.trim()){if(!_pwMinSkip('pw-b2b-text','본문을 입력해 주세요'))return false;}
+      if(p1==='기타'&&!(_pwData.freeText||'').trim()){if(!_pwMinSkip('pw-free-text','본문을 입력해 주세요'))return false;}
     }
   }else if(key==='text'){
     const p1=_pwData.plat1;
-    if(p1==='카카오톡'&&!_pwData.kakaoText.trim()){showFieldError('pw-kakao-text','본문을 입력해 주세요 (최대 76자)');return false;}
-    if(p1==='인스타그램'&&!_pwData.instaText.trim()){showFieldError('pw-insta-text','본문을 입력해 주세요');return false;}
+    if(p1==='카카오톡'&&_pwData.kakaoText.trim().length<76){if(!_pwMinSkip('pw-kakao-text','카카오톡 본문 76자를 채워 주세요 (현재 '+_pwData.kakaoText.trim().length+'자)'))return false;}
+    if(p1==='인스타그램'&&!_pwData.instaText.trim()){if(!_pwMinSkip('pw-insta-text','본문을 입력해 주세요'))return false;}
   }else if(key==='intent'){
     if(!(_pwData.intent||'').trim()){showFieldError('pw-intent','홍보 의도를 입력해 주세요');return false;}
   }else if(key==='blog'){
-    if(!_pwData.blogDirection||_pwData.blogDirection.length<100){showFieldError('pw-blog-dir','글 작성 방향을 최소 100자 이상 작성해주세요');return false;}
+    if(!_pwData.blogDirection||_pwData.blogDirection.length<100){if(!_pwMinSkip('pw-blog-dir','글 작성 방향을 최소 100자 이상 작성해주세요 (현재 '+(_pwData.blogDirection||'').length+'자)'))return false;}
     if(!pwHasFolder()){showFieldError('pw-folder-0','참고 자료 경로를 입력해 주세요');return false;}
   }else if(key==='b2b_link'){
     if(!_pwData.b2bLink){showFieldError('pw-b2b-link','B2B 또는 홈페이지 링크를 입력해 주세요');return false;}
@@ -8776,7 +8840,7 @@ function validatePwSubStep(){
       if(!_pwData.ageRanges||_pwData.ageRanges.length===0){showToast('연령대를 설정해 주세요','error');return false;}
     }
   }else if(key==='sms_body'){
-    if(!_pwData.smsBody.trim()){showFieldError('pw-sms-body','문자 본문을 입력해 주세요');return false;}
+    if(!_pwData.smsBody.trim()){if(!_pwMinSkip('pw-sms-body','문자 본문을 입력해 주세요'))return false;}
   }else if(key==='author'){
     if(!_pwData.applicant){showFieldError('pw-applicant','게시자를 골라 주세요');return false;}
   }
@@ -10900,7 +10964,22 @@ function doOpenProgFilter(){
   _modalSelected=activePrograms.slice();
   document.querySelectorAll('.prog-tab').forEach(function(b){b.classList.toggle('active',b.dataset.scope===_progScope);});
   renderProgList();
-  document.getElementById('prog-modal').classList.add('show');
+  _ddCloseAll();   // 다른 헤더 팝업 닫기 (배타)
+  const el=document.getElementById('prog-modal');
+  el.classList.add('show');
+  // (260611) 중앙 모달 → 프로그램 필터 버튼 바로 아래 드롭다운 (어두운 배경 없이)
+  const btn=document.querySelector('.prog-btn');
+  const box=el.querySelector('.modal');
+  if(btn&&box){
+    el.style.background='transparent';el.style.backdropFilter='none';el.style.webkitBackdropFilter='none';
+    const r=btn.getBoundingClientRect();
+    let left=Math.min(r.left,window.innerWidth-380-12);if(left<12)left=12;
+    box.style.position='fixed';box.style.margin='0';box.style.maxWidth='92vw';
+    box.style.left=left+'px';box.style.top=(r.bottom+8)+'px';
+    box.style.transformOrigin='top left';
+    box.style.animation='acctDrop .22s cubic-bezier(.26,1.2,.5,1)';
+    box.style.boxShadow='0 16px 48px rgba(74,77,231,0.18),0 4px 14px rgba(0,0,0,0.08)';
+  }
 }
 function showFilterPrompt(){
   var btn=document.querySelector('.prog-btn');
@@ -11858,7 +11937,13 @@ function _splitRecContent(raw){
   return out;
 }
 function _folderLabel(p){
-  try{const s=String(p).replace(/[\\\/]+$/,'').split(/[\\\/]/).pop();return decodeURIComponent(s||p);}catch(e){return String(p);}
+  try{
+    const s=String(p);
+    const m=s.match(/^(.*?)(https?:\/\/\S+)/);   // '한글 라벨 — URL' 형식이면 라벨 우선 (구버전 URL-only는 마지막 세그먼트)
+    if(m){const lb=m[1].replace(/[\s—\-|:]+$/,'').trim();if(lb)return lb;p=m[2];}
+    const seg=String(p).replace(/[\\\/]+$/,'').split(/[\\\/]/).pop();
+    return decodeURIComponent(seg||p);
+  }catch(e){return String(p);}
 }
 function _subPopCopy(btn,text){
   const done=function(){const o=btn.innerHTML;btn.innerHTML='✓ 복사됨';btn.style.color='var(--green)';btn.style.borderColor='var(--green)';setTimeout(function(){btn.innerHTML=o;btn.style.color='';btn.style.borderColor='';},1400);};
@@ -11883,10 +11968,18 @@ function _openSubPop(title,bodyHtml,copyText){
 function openMvFolderPopup(){
   const fs=_mvDetail.folders||[];
   if(!fs.length)return;
+  // URL 포함 줄은 복사 시 URL만 (라벨 — URL 형식·구버전 URL-only 둘 다), 로컬 경로는 전체 복사
+  _mvDetail._fCopy=fs.map(function(f){const m=String(f).match(/https?:\/\/\S+/);return m?m[0]:f;});
   let h='';
   fs.forEach(function(f,i){
-    h+='<div class="sub-path-row"><span class="sub-path-tx">'+escapeHtml(f)+'</span>'+
-       '<button class="sub-pop-copy" onclick="_subPopCopy(this,_mvDetail.folders['+i+'])">⧉ 복사</button></div>';
+    const m=String(f).match(/https?:\/\/\S+/);
+    if(m){
+      h+='<div class="sub-path-row"><span class="sub-path-tx"><a href="'+escapeHtml(m[0])+'" target="_blank" rel="noopener" style="color:var(--accent);font-weight:600;text-decoration:none">'+escapeHtml(_folderLabel(f))+' ↗</a><br><span style="color:#aaa;font-size:10.5px;word-break:break-all">'+escapeHtml(m[0])+'</span></span>'+
+         '<button class="sub-pop-copy" onclick="_subPopCopy(this,_mvDetail._fCopy['+i+'])" title="URL 복사">⧉ 복사</button></div>';
+    } else {
+      h+='<div class="sub-path-row"><span class="sub-path-tx">'+escapeHtml(f)+'</span>'+
+         '<button class="sub-pop-copy" onclick="_subPopCopy(this,_mvDetail._fCopy['+i+'])">⧉ 복사</button></div>';
+    }
   });
   _openSubPop('자료 경로'+(fs.length>1?' ('+fs.length+'개)':''),h,null);
 }
