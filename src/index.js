@@ -838,6 +838,25 @@ var index_default = {
         if (request.method === "GET") return json(await handlePresenceGet(env), env);
       }
 
+      // 개인 할 일 메모 — KV 영구 저장 (key: memo:<이름>). 프론트 _memoLoad/_memoPersist 대응 (260611 추가 — 기존엔 라우트 부재로 저장 실패)
+      if (url.pathname === "/api/memo") {
+        if (request.method === "GET") {
+          const u = String(url.searchParams.get("user") || "").slice(0, 40);
+          if (!u) return json({ error: "no user" }, env, 400);
+          let text = "";
+          try { text = (await env.ops_kv.get("memo:" + u)) || ""; } catch (e) {}
+          return json({ user: u, text }, env);
+        }
+        if (request.method === "POST") {
+          let b = {};
+          try { b = await request.json(); } catch (e) {}
+          const u = String(b.user || "").slice(0, 40);
+          if (!u) return json({ error: "no user" }, env, 400);
+          try { await env.ops_kv.put("memo:" + u, String(b.text || "").slice(0, 100000)); } catch (e) { return json({ error: String(e) }, env, 500); }
+          return json({ ok: true }, env);
+        }
+      }
+
       const token = await getToken(env);
 
       // 홍보기록

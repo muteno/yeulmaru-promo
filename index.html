@@ -688,6 +688,11 @@ button{font-family:inherit;cursor:pointer}
 .sp-time-add{padding:5px 11px;border-radius:8px;border:1px solid #ddd;background:#fff;color:#666;font-size:11px;cursor:pointer;font-family:inherit;transition:all 0.15s;white-space:nowrap;line-height:1;font-weight:500}
 .sp-time-add:hover{border-color:var(--accent);color:var(--accent);background:rgba(74,77,231,0.04)}
 .sp-time-add:disabled{opacity:0.3;cursor:not-allowed}
+.sp-time-add.active{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600;box-shadow:0 0 0 3px rgba(74,77,231,0.2)}
+/* 담당자 일정 완료(종료시각/18시 경과·수동 완료) — 콘텐츠(.ev.done)와 동일하게 취소선 */
+.sp-item.done > *{text-decoration:line-through;text-decoration-color:#888;text-decoration-thickness:1.2px;text-decoration-skip-ink:none}
+.sp-item.done .ev-time,.sp-item.done .ev-plat,.sp-item.done .ev-title span{color:var(--past-text)!important}
+.sp-card.done .sp-card-time,.sp-card.done .sp-card-content>span{text-decoration:line-through;text-decoration-color:#aaa;color:#a8adb8!important}
 .sp-time-reset{padding:5px 11px;border-radius:8px;border:1px solid #eee;background:transparent;color:#aaa;font-size:11px;cursor:pointer;font-family:inherit;transition:all 0.15s;white-space:nowrap;line-height:1}
 .sp-time-reset:hover{color:#666;border-color:#ccc}
 .sp-time-reset:disabled{opacity:0.3;cursor:not-allowed}
@@ -1611,7 +1616,8 @@ function renderSpecialMarquee(d,nm,past){
     const clickAttr=' onclick="event.stopPropagation();openSpecialView('+it._rowIndex+');"';
     const dragAttr=userRole==='admin'?' draggable="true" ondragstart="onSpDragStart(event,'+it._rowIndex+',\''+key+'\')" ondragend="onSpDragEnd(event)"':'';
     const cursorStyle=userRole==='admin'?'cursor:grab':'';
-    inner+='<div class="sp-item"'+ctxAttr+clickAttr+dragAttr+' data-sp-row="'+it._rowIndex+'" style="'+cursorStyle+'" title="'+escapeHtml(tipParts.join(' · '))+(userRole==='admin'?' (우클릭: 변경/삭제 · 드래그: 이동)':'')+'">'+
+    const spDone=_spStatus(it)==='완료';   // (260611) 종료시각/18시 경과 또는 수동 완료 → 취소선
+    inner+='<div class="sp-item'+(spDone?' done':'')+'"'+ctxAttr+clickAttr+dragAttr+' data-sp-row="'+it._rowIndex+'" style="'+cursorStyle+'" title="'+escapeHtml(tipParts.join(' · '))+(userRole==='admin'?' (우클릭: 변경/삭제 · 드래그: 이동)':'')+'">'+
       '<span class="ev-time" style="color:'+timeCol+';font-weight:600">'+escapeHtml(startT)+'</span>'+
       '<span class="ev-plat" style="color:'+timeCol+';font-weight:600">'+escapeHtml(endStr)+'</span>'+
       '<span class="ev-title">'+
@@ -2624,7 +2630,7 @@ function _wxGeo(){
     var p=document.getElementById('wx-pop'); if(p)p.classList.remove('show');
   }, function(err){ _wxRenderResults([], (err&&err.code===1)?'위치 권한이 거부됐어요':'위치를 가져오지 못했어요'); }, {timeout:8000,maximumAge:300000});
 }
-document.addEventListener('click',function(e){ var w=document.getElementById('wx-wrap'),p=document.getElementById('wx-pop'); if(w&&p&&p.classList.contains('show')&&!w.contains(e.target))p.classList.remove('show'); });
+document.addEventListener('click',function(e){ if(e.target&&!document.contains(e.target))return; var w=document.getElementById('wx-wrap'),p=document.getElementById('wx-pop'); if(w&&p&&p.classList.contains('show')&&!w.contains(e.target))p.classList.remove('show'); });
 
 // === 동시 접속자 presence (KV 백엔드 /api/presence) ===
 var _presData={now:0,users:[]};
@@ -2663,7 +2669,7 @@ function _presRender(){
   pop.innerHTML=h;
 }
 function _presToggle(ev){ if(ev)ev.stopPropagation(); var pop=document.getElementById('pres-pop'); if(!pop)return; if(pop.classList.contains('show')){pop.classList.remove('show');} else {_ddCloseAll();_presRender();pop.classList.add('show');_presPoll();} }
-document.addEventListener('click',function(e){ var w=document.getElementById('pres-wrap'),pop=document.getElementById('pres-pop'); if(w&&pop&&pop.classList.contains('show')&&!w.contains(e.target))pop.classList.remove('show'); });
+document.addEventListener('click',function(e){ if(e.target&&!document.contains(e.target))return; var w=document.getElementById('pres-wrap'),pop=document.getElementById('pres-pop'); if(w&&pop&&pop.classList.contains('show')&&!w.contains(e.target))pop.classList.remove('show'); });
 
 // === 개인 할 일/일정 (관리자 전용, KV /api/memo에 JSON 저장 · 중요도→기한 정렬 · 기한 알람 · 우클릭 완료) ===
 var _MEMO_ALARM_MS=3*3600*1000; // 시간 3시간 이내 = 임박(깜빡)
@@ -2786,7 +2792,7 @@ function _memoAlarmRefresh(){
   var alarm=(_memoState.tasks||[]).some(function(t){ return !t.done && _memoDue(t).blink; });  // 오늘 임박/지남 (이월 제외)
   dot.classList.toggle('on',alarm);
 }
-document.addEventListener('click',function(e){ var w=document.getElementById('memo-wrap'),pop=document.getElementById('memo-pop'); if(w&&pop&&pop.classList.contains('show')&&!w.contains(e.target))pop.classList.remove('show'); });
+document.addEventListener('click',function(e){ if(e.target&&!document.contains(e.target))return; /* 팝업 내 토글이 리렌더로 떨어져나간 경우 — 바깥 클릭 아님 */ var w=document.getElementById('memo-wrap'),pop=document.getElementById('memo-pop'); if(w&&pop&&pop.classList.contains('show')&&!w.contains(e.target))pop.classList.remove('show'); });
 
 function updateRoleTag(){
   const el=document.getElementById('role-tag');
@@ -5102,7 +5108,9 @@ function openSpecialEntry(key, editRowIndex){
     '<div style="flex:1"><label style="'+lbSt+'">종료일 <span style="color:#aaa;font-weight:400;text-transform:none;letter-spacing:0">(같으면 단일)</span></label><input id="sp-end" type="date" value="'+today+'" min="'+today+'" onchange="_spEndManuallyChanged=true" style="'+inpSt+'"></div></div>'+
     '<label style="'+lbSt+'">시간<span style="color:var(--peach);margin-left:3px">*</span> <span style="color:#aaa;font-weight:400;text-transform:none;letter-spacing:0">(스크롤 ±10분 / 09:00~18:00 / 휴무·출장 자동)</span></label>'+
     '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><div style="display:flex;gap:4px;align-items:center;flex:1;min-width:160px"><input id="sp-time-start" type="time" step="600" style="'+inpSt+';flex:1" placeholder="시작"><button type="button" class="sp-time-unset" onclick="_toggleSpTimeUnset(\'sp-time-start\',this)">미정</button></div><span style="color:#aaa;font-size:14px">~</span><div style="display:flex;gap:4px;align-items:center;flex:1;min-width:160px"><input id="sp-time-end" type="time" step="600" style="'+inpSt+';flex:1" placeholder="종료"><button type="button" class="sp-time-unset" onclick="_toggleSpTimeUnset(\'sp-time-end\',this)">미정</button></div></div>'+
-    '<div id="sp-time-adders" style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;align-items:center"><span style="font-size:10.5px;color:#aaa;margin-right:2px">빠른 종료시간:</span><button type="button" class="sp-time-add" onclick="_addSpTime(-60)">-1시간</button><button type="button" class="sp-time-add" onclick="_addSpTime(-30)">-30분</button><button type="button" class="sp-time-add" onclick="_addSpTime(30)">+30분</button><button type="button" class="sp-time-add" onclick="_addSpTime(60)">+1시간</button><button type="button" class="sp-time-reset" onclick="_resetSpTime()">리셋</button></div>'+
+    '<div id="sp-time-adders" style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;align-items:center"><span style="font-size:10.5px;color:#aaa;margin-right:2px">빠른 종료시간:</span><button type="button" class="sp-time-add" onclick="_addSpTime(-60)">-1시간</button><button type="button" class="sp-time-add" onclick="_addSpTime(-30)">-30분</button><button type="button" class="sp-time-add" onclick="_addSpTime(30)">+30분</button><button type="button" class="sp-time-add" onclick="_addSpTime(60)">+1시간</button>'+
+    (isEdit?'':'<span style="width:1px;height:14px;background:#e0e0e0;margin:0 2px;flex-shrink:0"></span><button type="button" class="sp-time-add" id="sp-weekly" onclick="this.classList.toggle(\'active\')" title="저장 시 같은 요일·시간으로 이번 달 말까지 매주 일정 생성">매주</button>')+
+    '<button type="button" class="sp-time-reset" onclick="_resetSpTime()">리셋</button></div>'+
     '<label style="'+lbSt+'">담당자<span style="color:var(--peach);margin-left:3px">*</span> <span style="color:#aaa;font-weight:400;text-transform:none;letter-spacing:0">(복수 선택 가능)</span></label>'+
     personChecks+
     (isEdit?'<label style="'+lbSt+'">진행 상태</label><label style="display:inline-flex;align-items:center;gap:7px;font-size:13px;cursor:pointer;user-select:none;padding:8px 12px;background:#fff;border:1.5px solid #e0e0e0;border-radius:10px"><input type="checkbox" id="sp-done" '+(((_editingSpecial.note||'').indexOf('완료')>-1)?'checked':'')+' style="accent-color:var(--accent);margin:0">완료 처리 <span style="color:#999;font-size:11px">(해제 시 종료시각 기준 자동 판정)</span></label>':'')+
@@ -5475,10 +5483,28 @@ async function saveSpecialEntry(){
         await api('POST','/api/sheet/special',{values:['',kstStr,'SP-'+Date.now()+'-'+i,start,end,time||'',type,label,persons[i],author,'']});
       }
     }else{
-      // 신규 — 선택한 인원마다 1행 (복수 동시 추가)
-      for(let i=0;i<persons.length;i++){
-        await api('POST','/api/sheet/special',{values:['',kstStr,'SP-'+Date.now()+'-'+i,start,end,time||'',type,label,persons[i],author,'']});
+      // 신규 — 선택한 인원마다 1행 (복수 동시 추가).
+      // 매주 토글 ON이면 시작일의 달 말까지 +7일 간격으로 반복 생성 (기간 길이 보존, 시리얼 SPW-그룹키)
+      const _wkBtn=document.getElementById('sp-weekly');
+      const _isWeekly=_wkBtn&&_wkBtn.classList.contains('active');
+      const _addDays=function(iso,n){const d=new Date(iso+'T00:00:00');d.setDate(d.getDate()+n);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
+      let occs=[{s:start,e:end}];
+      if(_isWeekly){
+        const _month=start.slice(0,7);
+        const _dur=Math.round((new Date(end+'T00:00:00')-new Date(start+'T00:00:00'))/86400000);
+        for(let k=1;k<6;k++){
+          const ns=_addDays(start,7*k);
+          if(ns.slice(0,7)!==_month)break;
+          occs.push({s:ns,e:_addDays(ns,_dur)});
+        }
       }
+      const _gk=(_isWeekly?'SPW-':'SP-')+Date.now();
+      for(let k=0;k<occs.length;k++){
+        for(let i=0;i<persons.length;i++){
+          await api('POST','/api/sheet/special',{values:['',kstStr,_gk+'-'+k+'-'+i,occs[k].s,occs[k].e,time||'',type,label,persons[i],author,'']});
+        }
+      }
+      _spOccCount=occs.length;
     }
     await loadPromoSpecial();
     closeSpecialEntry();
@@ -5488,7 +5514,7 @@ async function saveSpecialEntry(){
       const d=new Date(selected);
       openPanel(d,getRecsForDate(d));
     }
-    showToast(isEdit?'담당자 일정이 변경했어요':'담당자 일정이 추가했어요 ('+type+')');
+    showToast(isEdit?'담당자 일정이 변경했어요':(typeof _spOccCount!=='undefined'&&_spOccCount>1?'매주 일정 '+_spOccCount+'회를 추가했어요 (이번 달 말까지)':'담당자 일정이 추가했어요 ('+type+')'));
   }catch(e){
     console.error('[saveSpecialEntry 실패]', e);
     const msg = e&&e.message ? e.message : String(e);
@@ -5500,17 +5526,37 @@ async function saveSpecialEntry(){
 // 삭제
 async function deleteSpecialEntry(rowIndex){
   if(userRole!=='admin'){showToast('관리자만 할 수 있어요','error');return;}
-  if(!await showConfirm('이 담당자 일정을 삭제할까요?',{title:'담당자 일정 삭제',okText:'삭제',danger:true}))return;
+  // (260611) 매주 반복 그룹(SPW-): 같은 달의 남은(오늘 이후) 형제 일정이 있으면 함께 삭제 제안.
+  // 개별 삭제를 택해도 형제가 남아있는 한 다음 삭제 때마다 다시 묻는다 (지난 회차는 기록 보존 — 건드리지 않음)
+  const _it=(PROMO_SPECIAL||[]).find(function(s){return s._rowIndex===rowIndex;});
+  let _sibs=[];
+  if(_it&&/^SPW-\d+/.test(_it.id||'')){
+    const _gk=(_it.id.match(/^SPW-\d+/)||[''])[0];
+    const _mon=String(_it.start||'').slice(0,7);
+    const _td=new Date();
+    const _today=_td.getFullYear()+'-'+String(_td.getMonth()+1).padStart(2,'0')+'-'+String(_td.getDate()).padStart(2,'0');
+    _sibs=(PROMO_SPECIAL||[]).filter(function(s){return s._rowIndex!==rowIndex&&(s.id||'').indexOf(_gk)===0&&String(s.start||'').slice(0,7)===_mon&&s.start>=_today;});
+  }
+  let _targets=[rowIndex];
+  if(_sibs.length){
+    const _all=await showConfirm('매주 반복 일정이에요.\n이번 달의 남은 같은 일정 '+(_sibs.length+1)+'건을 함께 삭제할까요?',{title:'담당자 일정 삭제',okText:'함께 삭제',cancelText:'아니요',danger:true});
+    if(_all){_targets=_targets.concat(_sibs.map(function(s){return s._rowIndex;}));}
+    else if(!await showConfirm('이 일정 1건만 삭제할까요?',{title:'담당자 일정 삭제',okText:'이것만 삭제',danger:true}))return;
+  }else{
+    if(!await showConfirm('이 담당자 일정을 삭제할까요?',{title:'담당자 일정 삭제',okText:'삭제',danger:true}))return;
+  }
   showOverlayLoad();
   try{
-    await api('DELETE','/api/sheet/special/'+rowIndex);
+    // 행 삭제는 인덱스가 위로 밀리므로 반드시 큰 rowIndex부터
+    _targets.sort(function(a,b){return b-a;});
+    for(const _ri of _targets){await api('DELETE','/api/sheet/special/'+_ri);}
     await loadPromoSpecial();
     renderCal();
     if(panelOpen&&selected){
       const d=new Date(selected);
       openPanel(d,getRecsForDate(d));
     }
-    showToast('담당자 일정이 삭제됐어요');
+    showToast(_targets.length>1?'매주 일정 '+_targets.length+'건을 삭제했어요':'담당자 일정이 삭제됐어요');
   }catch(e){
     showToast('삭제 실패: '+(e.message||e),'error');
   }finally{
@@ -11421,7 +11467,7 @@ function openPanel(dateObj,recs){
       // 클릭 (admin만)
       var clickAttr=' onclick="event.stopPropagation();openSpecialView('+it._rowIndex+')"';
       var ctxAttr=' oncontextmenu="event.stopPropagation();event.preventDefault();onSpContextMenu(event,'+it._rowIndex+');return false;"';
-      h+='<div class="sp-card"'+clickAttr+ctxAttr+'>';
+      h+='<div class="sp-card'+(_spStatus(it)==='완료'?' done':'')+'"'+clickAttr+ctxAttr+'>';
       h+='<div class="sp-card-time">'+timeHtml+'</div>';
       h+='<div class="sp-card-content">';
       h+='<span class="sp-card-type '+typeClass+'">'+escapeHtml(typeStr)+'</span>';
