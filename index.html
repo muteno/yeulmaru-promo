@@ -1630,6 +1630,28 @@ function renderSpecialMarquee(d,nm,past){
   const areaCtx=userRole==='admin'?' oncontextmenu="onSpAreaContextMenu(event);return false;"':'';
   return '<div class="sp-area"'+areaCtx+' title="담당자 일정'+(userRole==='admin'?' — 우클릭: 변경/삭제':'')+'"><div class="sp-track" data-sp-count="'+items.length+'">'+inner+'</div></div>';
 }
+// (260611) 일정관리 S행 [변경] 버튼 — 완료/변경 선택 메뉴 (완료=즉시 토글, 변경=편집 모달)
+function _spRowMenu(event,rowIndex){
+  event.preventDefault();event.stopPropagation();
+  closeCellContextMenu();
+  const _sp=(PROMO_SPECIAL||[]).find(function(s){return s._rowIndex===rowIndex;});
+  const _manual=_sp&&(_sp.note||'').indexOf('완료')>-1;
+  const menu=document.createElement('div');
+  menu.id='cell-context-menu';
+  menu.style.background='linear-gradient(135deg,#E0F2FE 0%,#F0F9FF 100%)';
+  menu.style.borderColor='rgba(125,211,252,0.5)';
+  menu.innerHTML=
+    '<div class="ccm-item" onclick="closeCellContextMenu();_spToggleDone('+rowIndex+')"><span class="emo">'+(_manual?'↩️':'✔️')+'</span>'+(_manual?'완료 해제':'완료 처리')+'</div>'+
+    '<div class="ccm-item" onclick="closeCellContextMenu();_schedReturnFlag=true;closePromoBoard();openSpecialEntry(null,'+rowIndex+')"><span class="emo">✏️</span>변경</div>';
+  document.body.appendChild(menu);
+  const rect=menu.getBoundingClientRect();
+  menu.style.left=Math.min(event.clientX,window.innerWidth-rect.width-8)+'px';
+  menu.style.top=Math.min(event.clientY,window.innerHeight-rect.height-8)+'px';
+  setTimeout(function(){
+    document.addEventListener('click',closeCellContextMenu,{once:true});
+    document.addEventListener('keydown',function(e){if(e.key==='Escape')closeCellContextMenu();},{once:true});
+  },0);
+}
 // === 특수일정 드래그 이동 ===
 function onSpDragStart(ev,rowIndex,fromKey){
   ev.stopPropagation();
@@ -4674,7 +4696,8 @@ function closeSpecialView(){
   const el = document.getElementById('special-view-modal');
   if(el) el.innerHTML = '';
 }
-// (260611) 조회 모달에서 완료 수동 토글 — 비고 컬럼에 '완료' 기록/해제 (해제 시 자동 판정 복귀)
+// (260611) 완료 수동 토글 — 비고 컬럼에 '완료' 기록/해제 (해제 시 자동 판정 복귀).
+// 호출 위치별로 열려있는 화면만 갱신: 조회 모달 / 캘린더 / 일정관리 보드
 async function _spToggleDone(rowIndex){
   if(userRole!=='admin'){showToast('관리자만 할 수 있어요','error');return;}
   const it=(PROMO_SPECIAL||[]).find(function(s){return s._rowIndex===rowIndex;});
@@ -4685,8 +4708,11 @@ async function _spToggleDone(rowIndex){
     const values=['',it.kstStr||'',it.id||'',it.start||'',it.end||'',it.time||'',it.type||'',it.label||'',it.person||'',it.author||'',newNote];
     await api('PATCH','/api/sheet/special/'+rowIndex,{values:values});
     it.note=newNote;
-    openSpecialView(rowIndex);   // 모달 갱신
+    const _vm=document.getElementById('special-view-modal');
+    if(_vm&&_vm.innerHTML)openSpecialView(rowIndex);
     renderCal();
+    const _pb=document.getElementById('promo-board');
+    if(_pb&&_pb.innerHTML&&typeof renderPromoBoard==='function')renderPromoBoard();
     showToast(newNote?'완료로 표시했어요':'완료 표시를 해제했어요 (자동 판정)');
   }catch(e){
     showToast('변경 실패: '+(e&&e.message?e.message:e),'error');
@@ -5571,10 +5597,13 @@ function onSpContextMenu(event,rowIndex){
   const menu=document.createElement('div');
   menu.id='cell-context-menu';
   if(userRole==='admin'){
-    // admin — 변경/삭제 메뉴 (옅은 하늘색)
+    // admin — 완료/변경/삭제 메뉴 (옅은 하늘색)
+    const _sp=(PROMO_SPECIAL||[]).find(function(s){return s._rowIndex===rowIndex;});
+    const _manual=_sp&&(_sp.note||'').indexOf('완료')>-1;
     menu.style.background='linear-gradient(135deg,#E0F2FE 0%,#F0F9FF 100%)';
     menu.style.borderColor='rgba(125,211,252,0.5)';
     menu.innerHTML=
+      '<div class="ccm-item" onclick="closeCellContextMenu();_spToggleDone('+rowIndex+')"><span class="emo">'+(_manual?'↩️':'✔️')+'</span>'+(_manual?'완료 해제':'완료 처리')+'</div>'+
       '<div class="ccm-item" onclick="closeCellContextMenu();openSpecialEntry(null,'+rowIndex+')"><span class="emo">✏️</span>변경</div>'+
       '<div class="ccm-item" onclick="closeCellContextMenu();deleteSpecialEntry('+rowIndex+')"><span class="emo">🗑️</span>삭제</div>';
   }else{
@@ -6530,8 +6559,8 @@ function renderPromoBoard(){
         // 액션 — admin만 삭제
         html+='<td style="padding:10px 4px;text-align:center;white-space:nowrap">';
         if(userRole==='admin'){
-          // 특수 일정 우측 액션: 변경 (편집 모달). 삭제는 우클릭 메뉴로 이동.
-          html+='<button onclick="event.stopPropagation();openSpecialEntry(null,'+r._rowIndex+')" title="담당자 일정 변경" style="padding:5px 10px;border-radius:8px;border:none;background:transparent;color:#ccc;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;min-width:50px;transition:all .12s" onmouseover="this.innerHTML=\'변경\';this.style.color=\'var(--accent)\';this.style.background=\'rgba(74,77,231,0.08)\';this.style.fontSize=\'12px\'" onmouseout="this.innerHTML=\'—\';this.style.color=\'#ccc\';this.style.background=\'transparent\';this.style.fontSize=\'14px\'">—</button>';
+          // 특수 일정 우측 액션: 클릭 → 완료/변경 선택 메뉴. 삭제는 우클릭 메뉴로.
+          html+='<button onclick="_spRowMenu(event,'+r._rowIndex+')" title="완료 처리 / 변경" style="padding:5px 10px;border-radius:8px;border:none;background:transparent;color:#ccc;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;min-width:50px;transition:all .12s" onmouseover="this.innerHTML=\'변경\';this.style.color=\'var(--accent)\';this.style.background=\'rgba(74,77,231,0.08)\';this.style.fontSize=\'12px\'" onmouseout="this.innerHTML=\'—\';this.style.color=\'#ccc\';this.style.background=\'transparent\';this.style.fontSize=\'14px\'">—</button>';
         }
         html+='</td>';
         html+='</tr>';
