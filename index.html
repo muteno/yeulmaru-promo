@@ -1247,7 +1247,7 @@ table.promo-board-table th:last-child .col-resize-handle{display:none}
         <button class="pres-ava" id="pres-ava" onclick="_presToggle(event)" title="접속자 보기"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.6"/><path d="M5 20c0-3.6 3.2-5.6 7-5.6s7 2 7 5.6"/></svg><span class="pres-dot" id="pres-dot">0</span></button>
         <div class="pres-pop" id="pres-pop"></div>
       </div>
-      <button class="icon-btn" id="admin-gear" onclick="openAdminPanel()" title="관리" aria-label="관리" style="display:none;cursor:pointer">
+      <button class="icon-btn" id="admin-gear" onclick="_ddAdmin(this)" title="관리" aria-label="관리" style="display:none;cursor:pointer">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       </button>
       <button class="msgbox-btn" id="msgbox-btn" onclick="openMsgBox()" title="메시지함" aria-label="메시지함" style="font-family:inherit">
@@ -1255,7 +1255,7 @@ table.promo-board-table th:last-child .col-resize-handle{display:none}
         <span class="msgbox-count" id="msgbox-count" style="display:none">0</span>
       </button>
       <span class="welcome-msg" id="welcome-msg" onclick="logout()" title="계정 메뉴 (설정·로그아웃)" style="font-size:12.5px;color:#888;margin-right:12px;font-family:inherit;cursor:pointer"></span>
-      <span class="role-tag" id="role-tag" onclick="logout()" title="계정 메뉴" style="cursor:pointer"></span>
+      <span class="role-tag" id="role-tag" style="display:none"></span>
     </div>
   </nav>
 
@@ -2797,9 +2797,31 @@ function updateRoleTag(){
 // (권한 전환 기능 제거됨 — 권한은 담당자 시트 '관리자여부'로 고정, 앱 내 전환 불가)
 // (관리자 모드 전환 모달/토스트 제거됨 — 권한 전환 기능 폐기)
 function logout(){ showLogoutModal(); }
+function _ddCloseAll(){['dd-pop','logout-modal'].forEach(function(id){const d=document.getElementById(id);if(d)d.remove();});}
+function _ddOpen(anchor,builder,minW){
+  _ddCloseAll();
+  if(!anchor)return;
+  const r=anchor.getBoundingClientRect();
+  const m=document.createElement('div');m.id='dd-pop';
+  m.style.cssText='position:fixed;inset:0;z-index:99999;background:transparent';
+  const menu=document.createElement('div');
+  menu.style.cssText='position:fixed;top:'+(r.bottom+8)+'px;right:'+Math.max(12,window.innerWidth-r.right-4)+'px;min-width:'+(minW||176)+'px;max-width:94vw;background:rgba(255,255,255,0.97);backdrop-filter:blur(20px) saturate(150%);-webkit-backdrop-filter:blur(20px) saturate(150%);border:1px solid rgba(0,0,0,0.06);border-radius:14px;box-shadow:0 16px 48px rgba(74,77,231,0.18),0 4px 14px rgba(0,0,0,0.08);padding:6px;transform-origin:top right;animation:acctDrop .22s cubic-bezier(.26,1.2,.5,1)';
+  builder(menu);
+  m.appendChild(menu);document.body.appendChild(m);
+  m.addEventListener('click',function(e){if(e.target===m)_ddCloseAll();});
+}
+// 설정(관리) 드롭다운 — 관리자 패널 모달 대신 버튼 아래 메뉴
+function _ddAdmin(btn){
+  _ddOpen(btn,function(menu){
+    const items=[['logs','로그 조회'],['platform','플랫폼 관리'],['users','사용자 관리'],['programs','프로그램 관리'],['applysettings','신청 일정 관리']];
+    menu.innerHTML='<div style="padding:8px 14px 6px;font-size:11px;color:#999;font-weight:700">관리</div>'+items.map(function(it){
+      return '<button type="button" onclick="_ddCloseAll();adminRoute(\''+it[0]+'\')" style="display:block;width:100%;padding:10px 14px;border:0;background:none;text-align:left;font-size:13px;font-weight:600;color:#333;border-radius:9px;cursor:pointer;font-family:inherit;transition:background .12s" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'">'+it[1]+'</button>';
+    }).join('');
+  });
+}
 function showLogoutModal(){
   // (260611) 중앙 모달 → 이름 아래 드롭다운 (오버레이 어둡게 안 함, 슬라이드 다운)
-  closeLogoutModal();
+  _ddCloseAll();
   const anchor=document.getElementById('welcome-msg')||document.getElementById('role-tag');
   const r=anchor?anchor.getBoundingClientRect():{bottom:56,right:window.innerWidth-20};
   const m=document.createElement('div'); m.id='logout-modal';
@@ -2814,7 +2836,7 @@ function showLogoutModal(){
     b.onclick=fn;return b;
   };
   let _nm='';try{_nm=sessionStorage.getItem('myApplicant')||'';}catch(_e){}
-  const hd=document.createElement('div');hd.style.cssText='padding:8px 14px 6px;font-size:11px;color:#999;font-weight:700';hd.textContent=_nm?_nm+' 님':'계정';
+  const hd=document.createElement('div');hd.style.cssText='padding:8px 14px 6px;font-size:11px;color:#999;font-weight:700';hd.textContent=(_nm?_nm+' 님':'계정')+(userRole==='admin'?' · 관리자':' · 일반');
   menu.appendChild(hd);
   if(userRole==='admin')menu.appendChild(item('설정 (관리)',function(){closeLogoutModal();openAdminPanel();}));
   menu.appendChild(item('사용자 전환',function(){_doSwitchUser();}));
@@ -4782,13 +4804,12 @@ async function openMsgBox(){
     if(a.read && !b.read) return 1;
     return a.kst < b.kst ? 1 : -1;
   });
-  let html = '<div class="modal-bg show" onclick="if(event.target===this)closeMsgBox()" style="z-index:9200">';
-  html += '<div class="modal" style="max-width:540px;padding:0;position:relative;text-align:left;max-height:80vh;display:flex;flex-direction:column">';
+  let html = '';
   html += '<div style="padding:20px 24px 14px;border-bottom:1px solid rgba(0,0,0,0.06);display:flex;justify-content:space-between;align-items:center;flex-shrink:0">';
   html += '<h3 style="margin:0;font-size:16px;font-weight:700">\ud83d\udcec 메시지함</h3>';
   html += '<button onclick="closeMsgBox()" style="background:rgba(216,132,85,0.15);border:none;width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:16px;color:var(--peach);font-family:inherit">×</button>';
   html += '</div>';
-  html += '<div style="overflow-y:auto;padding:16px 24px 20px;flex:1">';
+  html += '<div style="overflow-y:auto;max-height:430px;padding:12px 14px 14px">';
   if(myMsgs.length === 0){
     html += '<div style="text-align:center;padding:40px 0;color:#aaa;font-size:13px">받은 메시지가 없습니다.</div>';
   } else {
@@ -4819,19 +4840,10 @@ async function openMsgBox(){
       html += '</div>';
     });
   }
-  html += '</div></div></div>';
-  let el = document.getElementById('msgbox-modal');
-  if(!el){
-    el = document.createElement('div');
-    el.id = 'msgbox-modal';
-    document.body.appendChild(el);
-  }
-  el.innerHTML = html;
+  html += '</div>';
+  _ddOpen(document.getElementById('msgbox-btn'), function(menu){ menu.style.padding='0'; menu.style.minWidth='380px'; menu.innerHTML=html; });
 }
-function closeMsgBox(){
-  const el = document.getElementById('msgbox-modal');
-  if(el) el.innerHTML = '';
-}
+function closeMsgBox(){ _ddCloseAll(); const el=document.getElementById('msgbox-modal'); if(el)el.innerHTML=''; }
 function markMsgRead(id){
   // API PATCH (fire-and-forget)
   _msgApiCall('PATCH', '/api/messages/' + encodeURIComponent(id), {read: true}).then(function(_r){
@@ -8970,7 +8982,7 @@ function adminRoute(id){
 //  - 접수ON (boolean text "true"/"false")
 //  - 접수월 (다중 row, 최대 2개. 각 row 값 = "YYYY-MM")
 //  - 제외 (다중 row, 값 = "일자|시작|종료" 형식)
-//  - 자동_낮에만 (boolean, 17:00 이상 22:00 미만 자동 차단, default true)
+//  - 자동_낮에만 (boolean, 09:00~18:00 외 자동 차단 — 260611 9-6 통일, default true)
 //  - 자동_일요일 (boolean, 일요일 자동 차단, default true)
 //  - 자동_휴무 (boolean, 담당자 휴무일 자동 차단, default false)
 let APPLY_SETTINGS={접수ON:false,접수월:[],자동_낮에만:true,자동_일요일:true,자동_휴무:false};
@@ -9132,7 +9144,7 @@ function renderApplySettings(loadOk){
     html+='<div style="display:flex;align-items:center;gap:14px;margin-bottom:6px;flex-wrap:wrap">';
     html+='<label style="font-size:11px;color:#666;font-weight:600;letter-spacing:0.5px;white-space:nowrap;min-width:64px;padding-left:8px">공통</label>';
     html+='<div style="display:flex;align-items:center;gap:14px;font-size:12px;color:#555">';
-    html+='<label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;user-select:none"><input type="checkbox" '+(APPLY_SETTINGS['자동_낮에만']?'checked':'')+' onchange="setApplyAuto(\'자동_낮에만\',this.checked)" style="margin:0;cursor:pointer;accent-color:var(--accent)">낮에만</label>';
+    html+='<label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;user-select:none"><input type="checkbox" '+(APPLY_SETTINGS['자동_낮에만']?'checked':'')+' onchange="setApplyAuto(\'자동_낮에만\',this.checked)" style="margin:0;cursor:pointer;accent-color:var(--accent)">낮에만 (9~18시)</label>';
     html+='<label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;user-select:none"><input type="checkbox" '+(APPLY_SETTINGS['자동_일요일']?'checked':'')+' onchange="setApplyAuto(\'자동_일요일\',this.checked)" style="margin:0;cursor:pointer;accent-color:var(--accent)">화-토</label>';
     html+='<label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;user-select:none"><input type="checkbox" '+(APPLY_SETTINGS['자동_휴무']?'checked':'')+' onchange="setApplyAuto(\'자동_휴무\',this.checked)" style="margin:0;cursor:pointer;accent-color:var(--accent)">휴무</label>';
     html+='</div>';
@@ -9671,9 +9683,9 @@ function canApplyAtTime(time){
   // time = "HH:MM" — 공통 시간(일자 없는 항목) 체크. 이전 호환용.
   // 제외 범위: start 이상 ~ end 미만 (end 시점은 신청 가능)
   if(!time)return{ok:true};
-  // 자동_낮에만 — 17:00 이상 22:00 미만 차단
+  // 자동_낮에만 — 09:00~18:00 외 차단 (260611 사용자 확정: 9-6 통일, 18:00 정각 허용)
   if(APPLY_SETTINGS['자동_낮에만']){
-    if(time>'17:00'&&time<'22:00')return{ok:false,reason:'낮에만 신청 가능 상태'};
+    if(time<'09:00'||time>'18:00')return{ok:false,reason:'신청 가능 시간은 09:00~18:00이에요'};
   }
   for(const ex of APPLY_EXCLUSIONS){
     if(!ex.date&&ex.start&&ex.end){
@@ -12355,13 +12367,13 @@ function _cbLog(kind,query,answer,match){
 function _chatbotMount(){
   if(document.getElementById('cb-fab'))return;
   const fab=document.createElement('button');
-  fab.id='cb-fab';fab.className='cb-fab';fab.title='예울마루 도우미';
+  fab.id='cb-fab';fab.className='cb-fab';fab.title='예울이';
   fab.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>';
   fab.onclick=_cbToggle;
   document.body.appendChild(fab);
   const win=document.createElement('div');
   win.id='cb-win';win.className='cb-win';
-  win.innerHTML='<div class="cb-hdr"><div class="cb-ava"><img src="image/yeul.png" alt="" style="width:100%;height:100%;border-radius:50%;object-fit:cover"></div><div class="cb-titles"><div class="cb-title">예울마루 도우미</div><div class="cb-sub">자동응답 · 규정/프로그램 문의</div></div><button class="cb-close" onclick="_cbClear()" title="대화 지우기" style="font-size:15px">⟲</button><button class="cb-close" onclick="_cbToggle()">✕</button></div>'+
+  win.innerHTML='<div class="cb-hdr"><div class="cb-ava"><img src="image/yeul.png" alt="" style="width:100%;height:100%;border-radius:50%;object-fit:cover"></div><div class="cb-titles"><div class="cb-title">예울이</div><div class="cb-sub">자동응답 · 규정/프로그램 문의</div></div><button class="cb-close" onclick="_cbClear()" title="대화 지우기" style="font-size:15px">⟲</button><button class="cb-close" onclick="_cbToggle()">✕</button></div>'+
     '<div class="cb-body" id="cb-body"></div>'+
     '<div class="cb-foot"><input class="cb-in" id="cb-in" placeholder="궁금한 내용을 입력하세요" onkeydown="if(event.key===\'Enter\')_cbSend()"><button class="cb-send" onclick="_cbSend()"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg></button></div>';
   document.body.appendChild(win);
@@ -12405,7 +12417,7 @@ function _cbClearChips(){document.querySelectorAll('#cb-body .cb-chiprow').forEa
 function _cbHome(first){
   _cb.cat=null;
   _cbClearChips();
-  _cbBot(first?'안녕하세요! 예울마루 도우미예요 🙋\n어떤 문의인지 먼저 골라주세요.':'무엇이 더 궁금하세요?');
+  _cbBot(first?'안녕하세요? 전 예울이예요 😊\n어떤 문의가 있어 오셨나요?':'무엇이 더 궁금하세요?');
   _cbChips([
     {label:'🏢 회사 규정 질문',fn:function(){_cbPickCat('회사');}},
     {label:'🎭 사업 프로그램 문의',fn:function(){_cbPickCat('프로그램');}}
@@ -12585,7 +12597,7 @@ function _cbRulesSearch(rules,q){
     if(s>0)scored.push({s:s,r:r});
   });
   scored.sort(function(a,b){return b.s-a.s;});
-  return{clarify:false,hits:scored.slice(0,3)};
+  return{clarify:false,hits:scored.slice(0,8)};
 }
 function _cbAsk(t){const inp=document.getElementById('cb-in');if(inp)inp.value=t;_cbSend();}
 function _cbClear(){
@@ -12633,9 +12645,31 @@ function _cbRulesAnswer(q,qn){
       return;
     }
     const best=res.hits[0];
+    // [세분화 260611] 다항목 조항이면 되묻기 — 항목(자식 청크) 칩 제시 후 단정 답변
+    {
+      const bArt=String(best.r['조항']||'');
+      const pArt=bArt.indexOf('-')>=0?bArt.split('-')[0]:bArt;
+      let ask=false;
+      if(bArt.indexOf('-')<0)ask=true;                                  // 부모 직접 히트
+      else{const sib=res.hits.filter(function(h){return String(h.r['조항']||'').indexOf(pArt+'-')===0&&h.s>=best.s-2;});if(sib.length>=2)ask=true;}  // 자식 동률 모호
+      if(ask){
+        const kids=(_cb.rules||[]).filter(function(x){return x['규정명']===best.r['규정명']&&String(x['조항']||'').indexOf(pArt+'-')===0;});
+        if(kids.length>=2){
+          const parent=(_cb.rules||[]).find(function(x){return x['규정명']===best.r['규정명']&&String(x['조항']||'')===pArt;})||best.r;
+          const pTitle=String(parent['제목']||'').split(' — ')[0]||'해당 규정';
+          _cbBot(escapeHtml(pTitle)+'은(는) 경우에 따라 달라요 — 어떤 경우인가요? 🙂');
+          const chips=kids.slice(0,9).map(function(k){const lb=(String(k['제목']).split(' — ')[1]||k['제목']).slice(0,24);return{label:lb,fn:function(){_cbShowRule(k);}};});
+          chips.push({label:'전체 조항 보기',fn:function(){_cbShowRule(parent);},ghost:true});
+          chips.push({label:'처음으로',fn:_cbHome,ghost:true});
+          _cbChips(chips);
+          _cbLog('규정-되묻기',q,'',best.r['규정명']+' '+pArt);
+          return;
+        }
+      }
+    }
     const lead=best.s>=8?'찾았어요! 요 조항에 있어요 🙂\n\n':'딱 맞는지 확실하진 않지만, 가장 가까운 조항이에요 —\n\n';
     _cbBot(lead+_cbRuleCard(best.r)+'\n<span class="cb-dim">더 궁금하면 이어서 물어보세요!</span>');
-    const chips=res.hits.slice(1).map(function(h){return{label:'📖 '+(h.r['조항']||'')+' '+(h.r['제목']||''),fn:function(){_cbShowRule(h.r);}};});
+    const chips=res.hits.slice(1,3).map(function(h){return{label:'📖 '+(h.r['조항']||'')+' '+(h.r['제목']||''),fn:function(){_cbShowRule(h.r);}};});
     chips.push({label:'처음으로',fn:_cbHome,ghost:true});
     _cbChips(chips);
     _cbLog('규정',q,String(best.r['본문']).slice(0,80),(best.r['규정명']||'')+' '+(best.r['조항']||''));
