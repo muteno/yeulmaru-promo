@@ -3963,6 +3963,8 @@ async function openSignageManager(){
     }
   }catch(e){ console.warn('[signage] manifest load',e); }
   const di=document.getElementById('sig-dur'); if(di) di.value=(_sigState.duration/1000);
+  _sigState.savedImages=_sigState.items.map(function(it){return it.name;});
+  _sigState.savedDuration=_sigState.duration;
   _sigRenderList();
 }
 function closeSignageManager(){
@@ -4048,6 +4050,14 @@ async function _sigGh(method,path,bodyObj){
   if(bodyObj) opt.body=JSON.stringify(bodyObj);
   return fetch(url,opt);
 }
+async function _sigFileSha(path,branch){
+  try{
+    const r=await _sigGh('GET',path+'?ref='+encodeURIComponent(branch||'main'));
+    if(!r.ok) return null;
+    const j=await r.json();
+    return (j&&j.sha)?j.sha:null;
+  }catch(e){ return null; }
+}
 async function _sigSave(){
   if(!_sigState) return;
   const patEl=document.getElementById('sig-pat'); const pat=(patEl?patEl.value.trim():'');
@@ -4057,6 +4067,14 @@ async function _sigSave(){
   if(!(dur>=1000)){ showToast('표시 시간은 1초 이상이어야 해요','error'); return; }
   _sigState.duration=dur;
   if(!_sigState.items.length){ showToast('사진을 최소 1장 등록해 주세요','error'); return; }
+  // 변경 없음 감지 — 동일 내용 재저장(되돌리기) 시 깃 sha 충돌/빈 커밋 방지
+  const _curOrder=_sigState.items.map(function(it){return it.name;}).join('\n');
+  const _savedOrder=(_sigState.savedImages||[]).join('\n');
+  const _hasNew=_sigState.items.some(function(it){return it.isNew;});
+  const _hasDel=!!(_sigState.toDelete&&_sigState.toDelete.length);
+  if(!_hasNew && !_hasDel && _curOrder===_savedOrder && dur===_sigState.savedDuration){
+    showToast('변경 사항이 없어요','info'); return;
+  }
   showOverlayLoad('사이니지 저장 중...');
   try{
     const branch=_sigState.branch||'main';
@@ -4081,12 +4099,20 @@ async function _sigSave(){
       if(!dr.ok && dr.status!==404) throw new Error('삭제 실패('+nm+'): '+dr.status);
     }
     _sigState.toDelete=[];
-    // 3) manifest 갱신
+    // 3) manifest 갱신 (sha 충돌/read-lag 시 최신 sha로 1회 재시도)
     const manifest={ images:_sigState.items.map(function(it){return it.name;}), slideDuration:_sigState.duration, updated:_sigYmd(), _comment:'예울마루 사이니지 — promo 앱 사이니지 관리에서 자동 갱신. images 순서=표시 순서.' };
-    const body={ message:'signage: update manifest', content:_b64utf8(JSON.stringify(manifest,null,2)), branch:branch };
-    if(shaByName['manifest.json']) body.sha=shaByName['manifest.json'];
-    const mr=await _sigGh('PUT','signage/manifest.json',body);
-    if(!mr.ok) throw new Error('manifest 저장 실패: '+mr.status);
+    const _mContent=_b64utf8(JSON.stringify(manifest,null,2));
+    const _mkBody=function(sha){ const b={ message:'signage: update manifest', content:_mContent, branch:branch }; if(sha)b.sha=sha; return b; };
+    let mr=await _sigGh('PUT','signage/manifest.json',_mkBody(shaByName['manifest.json']));
+    if(mr.status===409||mr.status===422){
+      await new Promise(function(res){ setTimeout(res,1500); });
+      const fresh=await _sigFileSha('signage/manifest.json',branch);
+      mr=await _sigGh('PUT','signage/manifest.json',_mkBody(fresh));
+    }
+    if(!mr.ok){ let _em=''; try{ _em=((await mr.json())||{}).message||''; }catch(_e){} throw new Error('manifest 저장 실패: '+mr.status+(_em?' — '+_em:'')); }
+    // 저장 성공 — 변경감지 기준 상태 갱신
+    _sigState.savedImages=_sigState.items.map(function(it){return it.name;});
+    _sigState.savedDuration=_sigState.duration;
     hideOverlayLoad();
     showToast('저장 완료 — 약 1~2분 후 배포, 사이니지는 최대 5분 후 갱신','success');
     _sigState._cb=Date.now(); _sigRenderList();
