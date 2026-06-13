@@ -64,6 +64,13 @@ function isFlagOn(v) {
 }
 __name(isFlagOn, "isFlagOn");
 
+// [260613] 앞자리 0이 숫자 서식으로 소실된 PIN(예: 시트 923 ← 실제 0923) 보정 — 4자리 zero-pad 정규화
+function _pin4(v) {
+  const s = String(v == null ? "" : v).trim();
+  return /^\d{1,4}$/.test(s) ? s.padStart(4, "0") : s;
+}
+__name(_pin4, "_pin4");
+
 // === 담당자 시트 캐시 (서브 admin 인증용, 5분 TTL) ===
 var managerCache = { rows: null, expires: 0 };
 async function getManagersCached(token) {
@@ -85,7 +92,7 @@ async function checkAdmin(request, env, token) {
   if (!pin) return { admin: false };
   const rows = await getManagersCached(token);
   const user = rows.find((r) =>
-    String(r["PIN"] || "").trim() === String(pin).trim() &&
+    _pin4(r["PIN"]) === _pin4(pin) &&
     isFlagOn(r["\uAD00\uB9AC\uC790\uC5EC\uBD80"]) &&
     !isFlagOn(r["\uD734\uC9C1\uC5EC\uBD80"])
   );
@@ -804,7 +811,7 @@ var index_default = {
           const matchedRow = rows.find((r) => {
             const rPin = String(r["PIN"] || "").trim();
             const isOnLeave = r["\uD734\uC9C1\uC5EC\uBD80"] === true || r["\uD734\uC9C1\uC5EC\uBD80"] === 1 || String(r["\uD734\uC9C1\uC5EC\uBD80"]).trim() === "1";
-            return rPin === String(pin).trim() && !isOnLeave;
+            return _pin4(rPin) === _pin4(pin) && !isOnLeave;
           });
           if (!matchedRow) {
             return json({ error: "PIN을 찾을 수 없거나 휴직 중인 계정이에요" }, env, 403);

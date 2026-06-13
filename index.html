@@ -2018,6 +2018,8 @@ const _EMAIL_KEYS=['이메일','email','Email','EMAIL','메일','e-mail','E-Mail
 const _PIN_KEYS=['PIN','Pin','pin','PIN(4자리)','PIN 4자리','핀'];
 const _LEAVE_KEYS=['휴직여부','휴직','onLeave','leave'];
 const _ACTIVE_KEYS=['계정여부','활성','계정사용','active','사용여부','계정상태'];
+// [260613] 앞자리 0이 숫자 서식으로 소실된 PIN(예: 시트 923 ← 실제 0923) 보정 — 4자리 zero-pad로 정규화해 비교
+function _pin4(v){var s=String(v==null?'':v).trim();return /^\d{1,4}$/.test(s)?s.padStart(4,'0'):s;}
 
 // MS 이메일 + PIN 인증 (재방문: PIN 입력 경로)
 async function _authWithEmail(email, pin){
@@ -2050,7 +2052,7 @@ async function _authWithEmail(email, pin){
     pins.forEach(p=>{p.value=''});if(pins[0])pins[0].focus();
     return;
   }
-  const storedPin=String(_authGetCol(matched,_PIN_KEYS)||'').trim();
+  const storedPin=_pin4(_authGetCol(matched,_PIN_KEYS));
   const userName=matched['담당자']||'';
 
   // 최초 — PIN 미설정
@@ -2072,8 +2074,8 @@ async function _authWithEmail(email, pin){
     _enterAsManager(matched, newPin, userName); return;
   }
 
-  // 기존 — PIN 비교
-  if(storedPin !== pin){
+  // 기존 — PIN 비교 (4자리 정규화 — 앞자리 0 소실 케이스 흡수)
+  if(storedPin !== _pin4(pin)){
     document.getElementById('login-load').textContent='';
     document.getElementById('login-msg').textContent='PIN이 일치하지 않습니다';
     pins.forEach(p=>{p.value='';p.classList.add('err')});pins[0].focus();
@@ -2151,7 +2153,7 @@ async function goToPinStep(skipEnsure){
     const ps=document.getElementById('pin-step'); if(ps)ps.style.display='none';
     return;
   }
-  const storedPin=String(_authGetCol(matched,_PIN_KEYS)||'').trim();
+  const storedPin=_pin4(_authGetCol(matched,_PIN_KEYS));
   const userName=matched['담당자']||'';
   console.log('[goToPin] storedPin?',!!storedPin,'userName=',userName);
   if(!storedPin){
@@ -10960,6 +10962,9 @@ async function saveSheetRow(slug,rowIndex){
   const cfg=SHEET_CONFIG[slug];
   const fd=new FormData(form);
   const _existRow=rowIndex?(_sheetCache[slug]||[]).find(r=>r._rowIndex===rowIndex):null;
+  // [260613] 관리자 해제 시 비밀번호도 제거 — 관리자였다가 내려간 계정에 비번이 남던 버그
+  const _mgrAdminEl=(slug==='manager')?form.elements['관리자여부']:null;
+  const _mgrIsAdmin=_mgrAdminEl?_mgrAdminEl.checked:(_existRow?isFlagOn(_existRow['관리자여부']):false);
   const values=cfg.columns.map(c=>{
     const el=form.elements[c.key];
     if(c.type==='checkbox'){
@@ -10971,7 +10976,10 @@ async function saveSheetRow(slug,rowIndex){
       return el.checked?'1':'';
     }
     // 텍스트: 폼에 없으면(PIN/비밀번호 등 제외 컬럼) 기존값 보존, 신규면 빈값
-    if(!el)return _existRow?(_existRow[c.key]||''):'';
+    if(!el){
+      if(slug==='manager'&&c.key==='비밀번호'&&!_mgrIsAdmin)return '';  // 관리자 아니면 비밀번호 비움
+      return _existRow?(_existRow[c.key]||''):'';
+    }
     return fd.get(c.key)||'';
   });
   showOverlayLoad('\uC800\uC7A5 \uC911\uC785\uB2C8\uB2E4...');
