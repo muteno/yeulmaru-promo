@@ -13032,6 +13032,8 @@ function _bnavMore(){
 // ============================================================
 // (글 유형 템플릿 제거 — '왜·누구에게·무엇을' 목적·타겟·핵심 메시지 기반으로 재설계)
 var _NB_TONELIB_KEY='nb_tone_lib_v1';
+var _NB_GH={owner:'yeulmaru',repo:'yeulmaru-promo',branch:'main',path:'docs/tone-refs.json'};
+var _NB_PAT_KEY='nb_gh_pat';
 var _NB_DRAFT_KEY='nb_draft_state_v1';
 var _nbState={length:'보통', voice:'정중하고 따뜻한', emoji:true, topic:'', purpose:'', target:'', key1:'', key2:'', key3:'', output:'', _toneDraft:'', escHandler:null};
 
@@ -13047,6 +13049,7 @@ function openNaverBlogTool(){
   if(!el){el=document.createElement('div');el.id='nblog-board';document.body.appendChild(el);}
   // 직전 입력 복원 (분량/말투/주제/본문/초안)
   try{var sv=JSON.parse(localStorage.getItem(_NB_DRAFT_KEY)||'null');if(sv)Object.assign(_nbState,sv);}catch(_e){}
+  try{_nbState._toneLib=JSON.parse(localStorage.getItem(_NB_TONELIB_KEY)||'[]')||[];}catch(_e){_nbState._toneLib=[];}
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeNaverBlogTool)">'
     +'<div class="modal" style="width:96vw;max-width:1080px;height:92vh;max-height:92vh;padding:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:#fff">'
     +'<button class="modal-x" onclick="closeNaverBlogTool()" title="닫기" style="position:absolute;top:14px;right:14px;z-index:10">✕</button>'
@@ -13056,7 +13059,7 @@ function openNaverBlogTool(){
   if(_nbState.escHandler)document.removeEventListener('keydown',_nbState.escHandler);
   _nbState.escHandler=function(e){if(e.key==='Escape')closeNaverBlogTool();};
   document.addEventListener('keydown',_nbState.escHandler);
-  _nbRender();
+  _nbRender();_nbGitRefresh();
 }
 function closeNaverBlogTool(){
   if(_nbState.escHandler)document.removeEventListener('keydown',_nbState.escHandler);
@@ -13068,16 +13071,71 @@ function _nbSaveState(){
 }
 function _nbSet(key,val){_nbState[key]=val;_nbSaveState();_nbRender();}
 
-function _nbToneLib(){try{return JSON.parse(localStorage.getItem(_NB_TONELIB_KEY)||'[]')||[];}catch(e){return [];}}
-function _nbToneSave(arr){try{localStorage.setItem(_NB_TONELIB_KEY,JSON.stringify(arr));}catch(e){}}
-function _nbToneAdd(){
+// 톤 참조 — git(docs/tone-refs.json)에 저장. _nbState._toneLib(메모리 캐시)+localStorage 미러로 즉시 표시, GitHub Contents API로 동기화.
+function _nbToneLib(){return _nbState._toneLib||[];}
+function _nbToneCache(refs,sha){
+  _nbState._toneLib=Array.isArray(refs)?refs:[];
+  if(sha!==undefined)_nbState._toneSha=sha;
+  try{localStorage.setItem(_NB_TONELIB_KEY,JSON.stringify(_nbState._toneLib));}catch(e){}
+}
+function _nbPatHas(){try{return !!(localStorage.getItem(_NB_PAT_KEY)||'');}catch(e){return false;}}
+function _nbPat(force){
+  var p='';try{p=localStorage.getItem(_NB_PAT_KEY)||'';}catch(e){}
+  if(!p||force){
+    p=(window.prompt('톤 참조를 GitHub에 저장하려면 fine-grained PAT(Contents: Read and write, 이 레포)이 필요해요.\n토큰을 붙여넣어 주세요. (이 브라우저에만 저장 · 커밋되지 않음)',p)||'').trim();
+    try{if(p)localStorage.setItem(_NB_PAT_KEY,p);}catch(e){}
+  }
+  return p;
+}
+function _nbGhUrl(){return 'https://api.github.com/repos/'+_NB_GH.owner+'/'+_NB_GH.repo+'/contents/'+_NB_GH.path;}
+async function _nbGitLoad(){
+  var p=_nbPat();if(!p)throw new Error('NO_PAT');
+  var r=await fetch(_nbGhUrl()+'?ref='+_NB_GH.branch,{headers:{'Authorization':'Bearer '+p,'Accept':'application/vnd.github+json'}});
+  if(r.status===404)return {refs:[],sha:null};
+  if(!r.ok)throw new Error('GitHub '+r.status);
+  var d=await r.json(),arr=[];
+  try{arr=JSON.parse(decodeURIComponent(escape(atob((d.content||'').replace(/\s/g,'')))))||[];}catch(e){arr=[];}
+  return {refs:Array.isArray(arr)?arr:[],sha:d.sha};
+}
+async function _nbGitSave(refs,sha){
+  var p=_nbPat();if(!p)throw new Error('NO_PAT');
+  var body={message:'chore: 톤 참조 업데이트 ('+refs.length+'개)',content:btoa(unescape(encodeURIComponent(JSON.stringify(refs,null,2)))),branch:_NB_GH.branch};
+  if(sha)body.sha=sha;
+  var r=await fetch(_nbGhUrl(),{method:'PUT',headers:{'Authorization':'Bearer '+p,'Accept':'application/vnd.github+json','Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(!r.ok)throw new Error('GitHub '+r.status+': '+(await r.text()).slice(0,150));
+  var d=await r.json();return d.content&&d.content.sha;
+}
+async function _nbGitRefresh(){
+  if(!_nbPatHas())return;
+  try{var g=await _nbGitLoad();_nbToneCache(g.refs,g.sha);_nbRender();}catch(e){console.warn('[tone git]',e);}
+}
+function _nbPatSetup(){if(_nbPat(true)){showToast('GitHub 연결됨 — 톤 참조를 불러옵니다','success');_nbGitRefresh();}}
+async function _nbToneAdd(){
   var ta=document.getElementById('nb-tone-input');if(!ta)return;
   var v=(ta.value||'').trim();
   if(v.length<10){showToast('참조할 글을 조금 더 길게 붙여넣어 주세요','error');return;}
-  var arr=_nbToneLib();arr.push({id:'t'+Date.now(),text:v});_nbToneSave(arr);ta.value='';_nbState._toneDraft='';_nbRender();
-  showToast('톤 참조 글을 저장했어요','success');
+  if(!_nbPat()){showToast('GitHub 토큰을 먼저 설정해 주세요','error');return;}
+  var btn=document.getElementById('nb-tone-add');if(btn){btn.disabled=true;btn.textContent='…';}
+  try{
+    var g=await _nbGitLoad();
+    var refs=g.refs.concat([{id:'t'+Date.now(),text:v,ts:new Date().toISOString()}]);
+    var sha=await _nbGitSave(refs,g.sha);
+    _nbToneCache(refs,sha);ta.value='';_nbState._toneDraft='';_nbRender();
+    showToast('톤 참조를 git에 저장했어요','success');
+  }catch(e){
+    showToast('저장 실패: '+String((e&&e.message)||e),'error');
+    var b2=document.getElementById('nb-tone-add');if(b2){b2.disabled=false;b2.textContent='＋';}
+  }
 }
-function _nbToneDel(id){_nbToneSave(_nbToneLib().filter(function(x){return x.id!==id;}));_nbRender();}
+async function _nbToneDel(id){
+  if(!_nbPat()){showToast('GitHub 토큰이 필요해요','error');return;}
+  try{
+    var g=await _nbGitLoad();
+    var refs=g.refs.filter(function(x){return x.id!==id;});
+    var sha=await _nbGitSave(refs,g.sha);
+    _nbToneCache(refs,sha);_nbRender();
+  }catch(e){showToast('삭제 실패: '+String((e&&e.message)||e),'error');}
+}
 
 function _nbRender(){
   var body=document.getElementById('nblog-body');if(!body)return;
@@ -13088,6 +13146,9 @@ function _nbRender(){
   var emoChip='<button type="button" class="nb-chip'+(s.emoji?' on':'')+'" onclick="_nbSet(\'emoji\','+(!s.emoji)+')">😊 이모지</button>';
   var lib=_nbToneLib();
   var libHtml=lib.length? lib.map(function(it){var prev=it.text.replace(/\s+/g,' ').slice(0,70);return '<div class="nb-tone-item"><span>'+escapeHtml(prev)+(it.text.length>70?'…':'')+'</span><button class="x" title="삭제" onclick="_nbToneDel(\''+it.id+'\')">✕</button></div>';}).join('') : '<div class="nb-note">저장된 참조 글이 없어요. 예전에 잘 쓴 블로그 글을 붙여넣고 ＋ 를 누르면, AI가 그 말투·문체를 따라 씁니다.</div>';
+  var gitRow=_nbPatHas()
+   ? '<div class="nb-note" style="margin-top:8px">🔗 GitHub(<code>'+_NB_GH.path+'</code>)에 저장돼요. ＋ 로 추가하면 레포에 커밋되고, 다른 기기·이슈 생성 시에도 자동 참고됩니다. <a href="#" onclick="_nbPatSetup();return false" style="color:var(--accent)">토큰 변경</a></div>'
+   : '<div class="nb-row" style="margin-top:8px"><button type="button" class="nb-btn ghost" onclick="_nbPatSetup()">🔗 GitHub 연결 (git 저장)</button></div><div class="nb-note">연결하면 ＋ 로 추가한 톤 글이 레포에 저장돼 어디서든 불러와져요. (토큰은 이 브라우저에만 저장)</div>';
   var outHtml=s.output? '<textarea id="nb-output" class="nb-out" oninput="_nbState.output=this.value;_nbSaveState()">'+escapeHtml(s.output)+'</textarea>' : '<div class="nb-out-empty"><div style="font-size:30px;margin-bottom:10px">📝</div>주제·목적·타겟과 핵심 메시지를 적고<br><b>[초안 생성]</b>을 누르면<br>여기에 블로그 초안이 나타나요</div>';
   body.innerHTML=''
    +'<div class="nb-wrap">'
@@ -13107,8 +13168,9 @@ function _nbRender(){
      +'<div class="nb-field"><label class="nb-label">✍️ 톤 참조 (선택) — 예전 글의 말투 따라하기</label>'
        +'<div class="nb-row" style="align-items:flex-start;gap:7px">'
          +'<textarea id="nb-tone-input" class="nb-textarea" style="min-height:74px;flex:1" placeholder="예전에 작성한 블로그 글을 붙여넣고 오른쪽 ＋ 를 누르세요. 여러 개 추가할 수 있어요." oninput="_nbState._toneDraft=this.value">'+escapeHtml(s._toneDraft||'')+'</textarea>'
-         +'<button type="button" class="nb-btn primary" title="참조 글 추가" onclick="_nbToneAdd()" style="padding:0;width:42px;height:42px;font-size:20px;flex-shrink:0;border-radius:11px">＋</button>'
+         +'<button type="button" id="nb-tone-add" class="nb-btn primary" title="참조 글 추가" onclick="_nbToneAdd()" style="padding:0;width:42px;height:42px;font-size:20px;flex-shrink:0;border-radius:11px">＋</button>'
        +'</div>'
+       +gitRow
        +libHtml
      +'</div>'
    +'</div>'

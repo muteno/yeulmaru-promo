@@ -9,6 +9,7 @@ on:
 
 permissions:
   issues: write
+  contents: read
 
 jobs:
   draft:
@@ -59,8 +60,17 @@ jobs:
             // --- 프롬프트 (앱 내 도구와 동일한 톤) ---
             const lenMap = {'짧게':'600~900자 내외로 짧고 간결하게','보통':'1,200~1,800자 분량으로','길게':'2,500자 이상 충분히 길고 풍성하게'};
             const lengthGuide = lenMap[length] || lenMap['보통'];
+            // 톤 참조: 이슈 폼 입력 + 레포 저장 라이브러리(docs/tone-refs.json) 합쳐서 사용
+            let savedRefs = [];
+            try {
+              const rf = await github.rest.repos.getContent({ ...context.repo, path: 'docs/tone-refs.json', ref: context.payload.repository.default_branch });
+              savedRefs = JSON.parse(Buffer.from(rf.data.content, 'base64').toString('utf8')) || [];
+            } catch (e) {}
+            const refTexts = [];
+            if (tone) refTexts.push(tone);
+            (Array.isArray(savedRefs) ? savedRefs : []).slice(-5).forEach(function (r) { if (r && r.text) refTexts.push(String(r.text)); });
             let toneBlock = '';
-            if (tone) toneBlock = '\n\n# 톤 참조 — 이전에 작성한 글\n아래 글의 말투, 문장 길이, 어휘, 문단 구성, 이모지 사용 습관을 최대한 비슷하게 따라 써 주세요.\n' + tone.slice(0, 6000);
+            if (refTexts.length) toneBlock = '\n\n# 톤 참조 — 이전에 작성한 글들\n아래 글들의 말투, 문장 길이, 어휘, 문단 구성, 이모지 사용 습관을 최대한 비슷하게 따라 써 주세요.\n' + refTexts.map(function (t, i) { return '[예시 ' + (i + 1) + ']\n' + String(t).slice(0, 4000); }).join('\n\n');
 
             const system = "당신은 GS칼텍스 예울마루(전남 여수의 복합문화예술공간)의 홍보 담당자입니다. 네이버 블로그에 올릴 한국어 포스팅 초안을 작성합니다. 글의 '목적'을 달성하고 '주요 타겟 독자'의 눈높이에 맞추며, 지정된 '핵심 메시지'가 본문에 모두 자연스럽게 담기도록 쓰세요. 독자가 읽기 편한 자연스러운 블로그 문체로 쓰되, 주어진 정보 안에서만 작성하고 없는 사실(가격·일시 등)을 지어내지 마세요. 결과는 '제목 한 줄 + 본문'만, 설명·머리말·코드블록 없이 글 본문 텍스트만 출력하세요.";
             const user = "다음 정보로 네이버 블로그 글 초안을 작성해 주세요.\n\n# 글의 주제\n" + topic + (purpose ? "\n\n# 글의 목적\n" + purpose : "") + (target ? "\n\n# 주요 타겟 독자\n" + target : "") + "\n\n# 꼭 전해야 할 핵심 메시지 (모두 본문에 자연스럽게 녹일 것)\n" + keys.map(function(k,i){return (i+1)+'. '+k;}).join('\n') + "\n\n# 작성 지침\n- 분량: " + lengthGuide + "\n- 말투/톤: " + voice + " 느낌\n- 타겟 독자의 관심사에 맞춰 목적을 이루도록 자연스럽게 구성\n- 이모지: " + (wantEmoji ? "문단 사이에 어울리게 적당히 사용" : "사용하지 않음") + "\n- 해시태그는 넣지 않음\n- 주어진 정보에 없는 구체적 사실(가격·날짜·출연진 등)은 임의로 만들지 말 것" + toneBlock;
