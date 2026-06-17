@@ -1,0 +1,101 @@
+name: 블로그 초안 생성 (AI)
+
+# 'blog-draft' 라벨이 붙은 이슈가 생기면(또는 라벨을 다시 붙이면) 실행.
+# 이슈 폼이 생성 시 라벨을 자동으로 붙입니다. 재시도하려면 라벨을 뗐다 다시 붙이세요.
+# ⚠️ issues 이벤트 워크플로는 '기본 브랜치(main)'에 있는 버전이 실행됩니다 → main 병합 필요.
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  issues: write
+
+jobs:
+  draft:
+    if: github.event.label.name == 'blog-draft'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate blog draft with Claude
+        uses: actions/github-script@v7
+        env:
+          CLAUDE_OAUTH: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN_EMS1130G }}
+        with:
+          script: |
+            const issue = context.payload.issue;
+            const num = issue.number;
+            try { await github.rest.reactions.createForIssue({ ...context.repo, issue_number: num, content: 'eyes' }); } catch (e) {}
+
+            // --- 이슈 폼 본문 파싱 ("### 라벨\n\n값") ---
+            function parseForm(body){
+              const out = {};
+              const segs = (body || '').split(/\n?###\s+/).filter(Boolean);
+              for (const seg of segs){
+                const nl = seg.indexOf('\n');
+                if (nl < 0) continue;
+                const label = seg.slice(0, nl).trim();
+                let val = seg.slice(nl + 1).trim();
+                if (val === '_No response_') val = '';
+                out[label] = val;
+              }
+              return out;
+            }
+            const f = parseForm(issue.body);
+            const topic = (f['글의 주제'] || '').trim();
+            const content = (f['핵심 내용'] || '').trim();
+            const tplLabel = (f['글 유형'] || '자유형').trim();
+            const length = (f['분량'] || '보통').trim();
+            const voice = (f['말투'] || '정중하고 따뜻한').trim();
+            const optBlock = f['옵션'] || '';
+            const wantEmoji = /\[x\]\s*이모지/i.test(optBlock);
+            const wantTags = /\[x\]\s*해시태그/i.test(optBlock);
+            const tone = (f['톤 참조 (선택)'] || f['톤 참조'] || '').trim();
+
+            if (!topic || !content){
+              await github.rest.issues.createComment({ ...context.repo, issue_number: num,
+                body: '⚠️ 주제와 핵심 내용이 비어 있어요. 폼을 다시 채워 새 이슈로 요청해 주세요.' });
+              return;
+            }
+
+            // --- 프롬프트 (앱 내 도구와 동일한 톤) ---
+            const TPL = {'공연 안내':'공연/행사 안내 글','공연 후기':'공연 관람 후기','전시 소개':'전시 소개 글','프로그램 소개':'문화 프로그램 소개 글','행사 스케치':'행사 현장 스케치','자유형':'자유 형식 블로그 글'};
+            const kind = TPL[tplLabel] || '자유 형식 블로그 글';
+            const lenMap = {'짧게':'600~900자 내외로 짧고 간결하게','보통':'1,200~1,800자 분량으로','길게':'2,500자 이상 충분히 길고 풍성하게'};
+            const lengthGuide = lenMap[length] || lenMap['보통'];
+            let toneBlock = '';
+            if (tone) toneBlock = '\n\n# 톤 참조 — 이전에 작성한 글\n아래 글의 말투, 문장 길이, 어휘, 문단 구성, 이모지 사용 습관을 최대한 비슷하게 따라 써 주세요.\n' + tone.slice(0, 6000);
+
+            const system = "당신은 GS칼텍스 예울마루(전남 여수의 복합문화예술공간)의 홍보 담당자입니다. 네이버 블로그에 올릴 한국어 포스팅 초안을 작성합니다. 독자가 읽기 편한 자연스러운 블로그 문체로 쓰되, 주어진 정보 안에서만 작성하고 없는 사실(가격·일시 등)을 지어내지 마세요. 결과는 '제목 한 줄 + 본문'만, 설명·머리말·코드블록 없이 글 본문 텍스트만 출력하세요.";
+            const user = "다음 정보로 " + kind + " 초안을 작성해 주세요.\n\n# 글의 주제\n" + topic + "\n\n# 핵심 내용\n" + content + "\n\n# 작성 지침\n- 분량: " + lengthGuide + "\n- 말투/톤: " + voice + " 느낌\n- 구성: 자연스러운 도입 → 핵심 정보(일시·장소·출연·관람료 등 보기 좋게 정리) → 관람/참여 포인트 → 마무리 인사\n- 이모지: " + (wantEmoji ? "문단 사이에 어울리게 적당히 사용" : "사용하지 않음") + "\n- 해시태그: " + (wantTags ? "맨 끝 줄에 #예울마루 #여수 등 관련 해시태그 8~12개" : "넣지 않음") + "\n- 주어진 정보에 없는 구체적 사실(가격·날짜·출연진 등)은 임의로 만들지 말 것" + toneBlock;
+
+            // --- Claude 호출 (구독 OAuth 토큰: Bearer + oauth 베타) ---
+            const model = 'claude-opus-4-8';
+            let draft = '', errMsg = '';
+            try {
+              const resp = await fetch('https://api.anthropic.com/v1/messages', {
+                method: 'POST',
+                headers: {
+                  'content-type': 'application/json',
+                  'authorization': 'Bearer ' + (process.env.CLAUDE_OAUTH || ''),
+                  'anthropic-beta': 'oauth-2025-04-20',
+                  'anthropic-version': '2023-06-01'
+                },
+                body: JSON.stringify({ model, max_tokens: 4000, system, messages: [{ role: 'user', content: user }] })
+              });
+              if (!resp.ok) {
+                errMsg = 'Anthropic ' + resp.status + ': ' + (await resp.text()).slice(0, 500);
+              } else {
+                const data = await resp.json();
+                draft = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('').trim();
+                if (!draft) errMsg = '빈 응답';
+              }
+            } catch (e) { errMsg = String((e && e.message) || e); }
+
+            if (errMsg) {
+              await github.rest.issues.createComment({ ...context.repo, issue_number: num,
+                body: '❌ 생성 실패\n\n```\n' + errMsg + '\n```\n\n구독 OAuth 토큰의 API 직접 호출이 제한됐을 수 있어요. `blog-draft` 라벨을 뗐다 다시 붙이면 재시도합니다.' });
+              return;
+            }
+
+            await github.rest.issues.createComment({ ...context.repo, issue_number: num,
+              body: '✍️ **AI 초안** · 모델 `' + model + '`\n\n아래를 복사해 네이버 블로그에 붙여넣고 다듬어 주세요.\n\n---\n\n' + draft });
+            try { await github.rest.issues.addLabels({ ...context.repo, issue_number: num, labels: ['draft-done'] }); } catch (e) {}
