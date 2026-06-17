@@ -701,6 +701,77 @@ async function getHolidays(env, year, forceRefresh) {
 }
 __name(getHolidays, "getHolidays");
 
+// === 콘텐츠 제작 — 네이버 블로그 초안 AI 생성 (Claude Messages API 프록시) ===
+// b = {tpl,topic,content,length,voice,tags,emoji,refs:[{text}]}. env.ANTHROPIC_API_KEY 필요.
+// 모델은 env.BLOG_MODEL로 교체 가능(기본 claude-opus-4-8). refs(이전 글)로 톤을 모사.
+async function generateBlogDraft(env, b) {
+  const TPL = {
+    notice: "공연/행사 안내 글",
+    review: "공연 관람 후기",
+    exhibit: "전시 소개 글",
+    program: "문화 프로그램 소개 글",
+    sketch: "행사 현장 스케치",
+    free: "자유 형식 블로그 글"
+  };
+  const kind = TPL[b.tpl] || TPL.free;
+  const lenMap = {
+    "짧게": "600~900자 내외로 짧고 간결하게",
+    "보통": "1,200~1,800자 분량으로",
+    "길게": "2,500자 이상 충분히 길고 풍성하게"
+  };
+  const lengthGuide = lenMap[b.length] || lenMap["보통"];
+  const voice = String(b.voice || "정중하고 따뜻한");
+  const wantTags = b.tags !== false;
+  const wantEmoji = b.emoji !== false;
+  const refs = Array.isArray(b.refs)
+    ? b.refs.map((r) => String((r && r.text) || "").trim()).filter(Boolean).slice(0, 5)
+    : [];
+
+  let toneBlock = "";
+  if (refs.length) {
+    toneBlock = "\n\n# 톤 참조 — 이전에 작성한 글들\n" +
+      "아래 글들의 말투, 문장 길이, 어휘 선택, 문단 구성, 이모지 사용 습관을 최대한 비슷하게 따라 써 주세요.\n" +
+      refs.map((t, i) => "[예시 " + (i + 1) + "]\n" + t.slice(0, 4000)).join("\n\n");
+  }
+
+  const system = "당신은 GS칼텍스 예울마루(전남 여수에 있는 복합문화예술공간)의 홍보 담당자입니다. " +
+    "네이버 블로그에 올릴 한국어 포스팅 초안을 작성합니다. 독자가 읽기 편한 자연스러운 블로그 문체로 쓰되, " +
+    "주어진 정보 안에서만 작성하고 가격·일시 등 없는 사실을 임의로 지어내지 마세요. " +
+    "결과는 곧바로 블로그에 붙여넣을 수 있도록 '제목 한 줄 + 본문'만 출력하고, 설명·머리말·코드블록 없이 글 본문 텍스트만 내보내세요.";
+
+  const user = "다음 정보로 " + kind + " 초안을 작성해 주세요.\n\n" +
+    "# 글의 주제\n" + String(b.topic).trim() + "\n\n" +
+    "# 핵심 내용·관련 정보\n" + String(b.content).trim() + "\n\n" +
+    "# 작성 지침\n" +
+    "- 분량: " + lengthGuide + "\n" +
+    "- 말투/톤: " + voice + " 느낌\n" +
+    "- 구성: 자연스러운 도입 → 핵심 정보(일시·장소·출연·관람료 등은 보기 좋게 정리) → 관람/참여 포인트 → 마무리 인사\n" +
+    "- 이모지: " + (wantEmoji ? "문단 사이에 어울리는 이모지를 적당히 사용" : "이모지는 사용하지 않음") + "\n" +
+    "- 해시태그: " + (wantTags ? "맨 끝 줄에 #예울마루 #여수 등 관련 해시태그 8~12개" : "해시태그는 넣지 않음") + "\n" +
+    "- 주어진 정보에 없는 구체적 사실(가격·날짜·출연진 등)은 임의로 만들지 말 것" +
+    toneBlock;
+
+  const model = env.BLOG_MODEL || "claude-opus-4-8";
+  const resp = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": env.ANTHROPIC_API_KEY,
+      "anthropic-version": "2023-06-01"
+    },
+    body: JSON.stringify({ model, max_tokens: 4000, system, messages: [{ role: "user", content: user }] })
+  });
+  if (!resp.ok) {
+    const errTxt = await resp.text();
+    throw new Error("Anthropic " + resp.status + ": " + errTxt.slice(0, 300));
+  }
+  const data = await resp.json();
+  const text = (data.content || []).filter((x) => x.type === "text").map((x) => x.text).join("").trim();
+  if (!text) throw new Error("빈 응답");
+  return text;
+}
+__name(generateBlogDraft, "generateBlogDraft");
+
 var index_default = {
   async scheduled(event, env, ctx) {
     ctx.waitUntil(autoCancelStalePending(env));
@@ -861,6 +932,24 @@ var index_default = {
           if (!u) return json({ error: "no user" }, env, 400);
           try { await env.ops_kv.put("memo:" + u, String(b.text || "").slice(0, 100000)); } catch (e) { return json({ error: String(e) }, env, 500); }
           return json({ ok: true }, env);
+        }
+      }
+
+      // === 콘텐츠 제작 — 네이버 블로그 초안 AI 생성 (Graph 토큰 불요) ===
+      // ANTHROPIC_API_KEY 미설정 시 503 → 프론트가 로컬 템플릿 생성기로 폴백.
+      if (url.pathname === "/api/content/blog" && request.method === "POST") {
+        if (!env.ANTHROPIC_API_KEY) return json({ error: "no_api_key", note: "ANTHROPIC_API_KEY 미설정" }, env, 503);
+        let bb = {};
+        try { bb = await request.json(); } catch (e) {}
+        const topic = String(bb.topic || "").slice(0, 2000).trim();
+        const content = String(bb.content || "").slice(0, 8000).trim();
+        if (!topic || !content) return json({ error: "주제와 핵심 내용이 필요해요" }, env, 400);
+        try {
+          const text = await generateBlogDraft(env, bb);
+          return json({ text }, env);
+        } catch (e) {
+          console.error("[content/blog]", e);
+          return json({ error: String((e && e.message) || e) }, env, 502);
         }
       }
 
