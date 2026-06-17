@@ -13233,6 +13233,7 @@ async function _nbCmtSend(){
 
 // 톤 참조 — git(docs/tone-refs.json)에 저장. _nbState._toneLib(메모리 캐시)+localStorage 미러로 즉시 표시, GitHub Contents API로 동기화.
 function _nbToneLib(){return _nbState._toneLib||[];}
+function _nbToneToggleList(){_nbState.toneListOpen=!_nbState.toneListOpen;_nbRender();}
 function _nbToneCache(refs,sha){
   _nbState._toneLib=Array.isArray(refs)?refs:[];
   if(sha!==undefined)_nbState._toneSha=sha;
@@ -13315,7 +13316,16 @@ function _nbRender(){
     ? '<div class="nb-field"><label class="nb-label">'+label+'</label><textarea class="nb-input" style="min-height:64px;resize:vertical" placeholder="'+escapeHtml(ph)+'" oninput="_nbFactSet(\''+k+'\',this.value)">'+val+'</textarea></div>'
     : '<div class="nb-field"><label class="nb-label">'+label+'</label><input class="nb-input" placeholder="'+escapeHtml(ph)+'" value="'+val+'" oninput="_nbFactSet(\''+k+'\',this.value)"></div>';}
   var lib=_nbToneLib();
-  var libHtml=lib.length? lib.map(function(it){var prev=it.text.replace(/\s+/g,' ').slice(0,70);return '<div class="nb-tone-item"><span>'+escapeHtml(prev)+(it.text.length>70?'…':'')+'</span><button class="x" title="삭제" onclick="_nbToneDel(\''+it.id+'\')">✕</button></div>';}).join('') : '<div class="nb-note">저장된 참조 글이 없어요. 예전에 잘 쓴 블로그 글을 붙여넣고 ＋ 를 누르면, AI가 그 말투·문체를 따라 씁니다.</div>';
+  // 톤 참조 목록은 기본 숨김(개수만). 펼치면 관리(삭제) — 붙여넣은 샘플 글이 '생성된 초안'으로 오해되지 않도록.
+  var libHtml;
+  if(!lib.length){
+    libHtml='<div class="nb-note">저장된 참조 글이 없어요. 예전에 잘 쓴 블로그 글을 붙여넣고 ＋ 를 누르면, AI가 그 말투·문체를 따라 씁니다.</div>';
+  }else{
+    var listOpen=!!s.toneListOpen;
+    libHtml='<div class="nb-note" style="margin-top:8px;display:flex;align-items:center;gap:6px">🗂 톤 참조 <b>'+lib.length+'개</b> 저장됨 · AI가 이 말투를 참고해요 '
+      +'<a href="#" onclick="_nbToneToggleList();return false" style="color:var(--accent);margin-left:auto">'+(listOpen?'접기 ▴':'관리 ▾')+'</a></div>';
+    if(listOpen)libHtml+=lib.map(function(it){var prev=it.text.replace(/\s+/g,' ').slice(0,70);return '<div class="nb-tone-item"><span>'+escapeHtml(prev)+(it.text.length>70?'…':'')+'</span><button class="x" title="삭제" onclick="_nbToneDel(\''+it.id+'\')">✕</button></div>';}).join('');
+  }
   var gitRow=_nbPatHas()
    ? '<div class="nb-note" style="margin-top:8px">🔗 GitHub(<code>'+_NB_GH.path+'</code>)에 저장돼요. ＋ 로 추가하면 레포에 커밋되고, 다른 기기·이슈 생성 시에도 자동 참고됩니다. <a href="#" onclick="_nbPatSetup();return false" style="color:var(--accent)">토큰 변경</a></div>'
    : '<div class="nb-row" style="margin-top:8px"><button type="button" class="nb-btn ghost" onclick="_nbPatSetup()">🔗 GitHub 연결 (git 저장)</button></div><div class="nb-note">연결하면 ＋ 로 추가한 톤 글이 레포에 저장돼 어디서든 불러와져요. (토큰은 이 브라우저에만 저장)</div>';
