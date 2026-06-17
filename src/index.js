@@ -740,8 +740,8 @@ async function generateBlogDraft(env, b) {
     "결과는 곧바로 블로그에 붙여넣을 수 있도록 '제목 한 줄 + 본문'만 출력하고, 설명·머리말·코드블록 없이 글 본문 텍스트만 내보내세요.";
 
   const user = "다음 정보로 " + kind + " 초안을 작성해 주세요.\n\n" +
-    "# 글의 주제\n" + String(b.topic).trim() + "\n\n" +
-    "# 핵심 내용·관련 정보\n" + String(b.content).trim() + "\n\n" +
+    "# 글의 주제\n" + String(b.topic||"").slice(0,2000).trim() + "\n\n" +
+    "# 핵심 내용·관련 정보\n" + String(b.content||"").slice(0,8000).trim() + "\n\n" +
     "# 작성 지침\n" +
     "- 분량: " + lengthGuide + "\n" +
     "- 말투/톤: " + voice + " 느낌\n" +
@@ -763,7 +763,7 @@ async function generateBlogDraft(env, b) {
   const resp = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers,
-    body: JSON.stringify({ model, max_tokens: 4000, system, messages: [{ role: "user", content: user }] })
+    body: JSON.stringify({ model, max_tokens: (b.length === "길게" ? 8000 : 4000), system, messages: [{ role: "user", content: user }] })
   });
   if (!resp.ok) {
     const errTxt = await resp.text();
