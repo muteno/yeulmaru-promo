@@ -705,15 +705,6 @@ __name(getHolidays, "getHolidays");
 // b = {tpl,topic,content,length,voice,tags,emoji,refs:[{text}]}. env.ANTHROPIC_API_KEY 필요.
 // 모델은 env.BLOG_MODEL로 교체 가능(기본 claude-opus-4-8). refs(이전 글)로 톤을 모사.
 async function generateBlogDraft(env, b) {
-  const TPL = {
-    notice: "공연/행사 안내 글",
-    review: "공연 관람 후기",
-    exhibit: "전시 소개 글",
-    program: "문화 프로그램 소개 글",
-    sketch: "행사 현장 스케치",
-    free: "자유 형식 블로그 글"
-  };
-  const kind = TPL[b.tpl] || TPL.free;
   const lenMap = {
     "짧게": "600~900자 내외로 짧고 간결하게",
     "보통": "1,200~1,800자 분량으로",
@@ -721,8 +712,12 @@ async function generateBlogDraft(env, b) {
   };
   const lengthGuide = lenMap[b.length] || lenMap["보통"];
   const voice = String(b.voice || "정중하고 따뜻한");
-  const wantTags = b.tags !== false;
   const wantEmoji = b.emoji !== false;
+  const topic = String(b.topic || "").slice(0, 2000).trim();
+  const purpose = String(b.purpose || "").slice(0, 1000).trim();
+  const target = String(b.target || "").slice(0, 500).trim();
+  const keys = (Array.isArray(b.keys) ? b.keys : [])
+    .map((k) => String(k || "").trim()).filter(Boolean).slice(0, 5);
   const refs = Array.isArray(b.refs)
     ? b.refs.map((r) => String((r && r.text) || "").trim()).filter(Boolean).slice(0, 5)
     : [];
@@ -735,19 +730,23 @@ async function generateBlogDraft(env, b) {
   }
 
   const system = "당신은 GS칼텍스 예울마루(전남 여수에 있는 복합문화예술공간)의 홍보 담당자입니다. " +
-    "네이버 블로그에 올릴 한국어 포스팅 초안을 작성합니다. 독자가 읽기 편한 자연스러운 블로그 문체로 쓰되, " +
+    "네이버 블로그에 올릴 한국어 포스팅 초안을 작성합니다. 글의 '목적'을 달성하고 '주요 타겟 독자'의 눈높이에 맞추며, " +
+    "지정된 '핵심 메시지'가 본문에 모두 자연스럽게 담기도록 쓰세요. 독자가 읽기 편한 자연스러운 블로그 문체로 쓰되, " +
     "주어진 정보 안에서만 작성하고 가격·일시 등 없는 사실을 임의로 지어내지 마세요. " +
     "결과는 곧바로 블로그에 붙여넣을 수 있도록 '제목 한 줄 + 본문'만 출력하고, 설명·머리말·코드블록 없이 글 본문 텍스트만 내보내세요.";
 
-  const user = "다음 정보로 " + kind + " 초안을 작성해 주세요.\n\n" +
-    "# 글의 주제\n" + String(b.topic||"").slice(0,2000).trim() + "\n\n" +
-    "# 핵심 내용·관련 정보\n" + String(b.content||"").slice(0,8000).trim() + "\n\n" +
+  const user = "다음 정보로 네이버 블로그 글 초안을 작성해 주세요.\n\n" +
+    "# 글의 주제\n" + topic + "\n\n" +
+    (purpose ? "# 글의 목적\n" + purpose + "\n\n" : "") +
+    (target ? "# 주요 타겟 독자\n" + target + "\n\n" : "") +
+    "# 꼭 전해야 할 핵심 메시지 (모두 본문에 자연스럽게 녹일 것)\n" +
+    keys.map((k, i) => (i + 1) + ". " + k).join("\n") + "\n\n" +
     "# 작성 지침\n" +
     "- 분량: " + lengthGuide + "\n" +
     "- 말투/톤: " + voice + " 느낌\n" +
-    "- 구성: 자연스러운 도입 → 핵심 정보(일시·장소·출연·관람료 등은 보기 좋게 정리) → 관람/참여 포인트 → 마무리 인사\n" +
+    "- 타겟 독자의 관심사에 맞춰 목적을 이루도록 자연스럽게 구성\n" +
     "- 이모지: " + (wantEmoji ? "문단 사이에 어울리는 이모지를 적당히 사용" : "이모지는 사용하지 않음") + "\n" +
-    "- 해시태그: " + (wantTags ? "맨 끝 줄에 #예울마루 #여수 등 관련 해시태그 8~12개" : "해시태그는 넣지 않음") + "\n" +
+    "- 해시태그는 넣지 않음\n" +
     "- 주어진 정보에 없는 구체적 사실(가격·날짜·출연진 등)은 임의로 만들지 말 것" +
     toneBlock;
 
@@ -946,8 +945,8 @@ var index_default = {
         let bb = {};
         try { bb = await request.json(); } catch (e) {}
         const topic = String(bb.topic || "").slice(0, 2000).trim();
-        const content = String(bb.content || "").slice(0, 8000).trim();
-        if (!topic || !content) return json({ error: "주제와 핵심 내용이 필요해요" }, env, 400);
+        const keys = (Array.isArray(bb.keys) ? bb.keys : []).map((k) => String(k || "").trim()).filter(Boolean);
+        if (!topic || !keys.length) return json({ error: "주제와 핵심 메시지가 필요해요" }, env, 400);
         try {
           const text = await generateBlogDraft(env, bb);
           return json({ text }, env);

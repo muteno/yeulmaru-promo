@@ -470,7 +470,8 @@ button{font-family:inherit;cursor:pointer}
 /* ═══ HEADER ═══ */
 .hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:0;flex-wrap:wrap;gap:12px;position:sticky;top:56px;z-index:6;background:linear-gradient(135deg,#FDF6F3 0%,#F0EBF5 50%,#EBF0F8 100%);padding:16px 0 12px 0}
 /* ═══ 배너 펫(산책 마스코트) — .hdr 하단 라인(요일 헤더 바로 위)을 좌우로 산책. 공 차는 모션은 webp에 내장, CSS는 좌우 이동만 ═══ */
-.pet{position:absolute;left:clamp(120px,14%,200px);bottom:2px;height:40px;width:auto;pointer-events:none;user-select:none;z-index:6;will-change:transform;filter:drop-shadow(0 3px 3px rgba(0,0,0,.35));animation:petStroll 9s ease-in-out infinite}
+.pet{position:absolute;left:clamp(120px,14%,200px);bottom:2px;height:40px;width:auto;pointer-events:none;user-select:none;z-index:6;will-change:transform,opacity;filter:drop-shadow(0 3px 3px rgba(0,0,0,.35));opacity:0}
+.pet.in{opacity:1;animation:petEnter .75s cubic-bezier(.2,1.25,.4,1) both,petStroll 9s ease-in-out .75s infinite}
 @keyframes petStroll{
   0%{transform:translateX(0) scaleX(1)}
   9%{transform:translateX(136px) scaleX(1)}
@@ -486,7 +487,12 @@ button{font-family:inherit;cursor:pointer}
   98%{transform:translateX(0) scaleX(1)}
   100%{transform:translateX(0) scaleX(1)}
 }
-@media (prefers-reduced-motion:reduce){.pet{animation:none}}
+@keyframes petEnter{
+  0%{opacity:0;transform:translateX(-170px) scaleX(1)}
+  60%{opacity:1}
+  100%{opacity:1;transform:translateX(0) scaleX(1)}
+}
+@media (prefers-reduced-motion:reduce){.pet{opacity:1}.pet.in{animation:none}}
 @media (max-width:768px){.pet{display:none}}
 .month-nav{display:flex;align-items:center;gap:16px}
 .arrow{width:38px;height:38px;border-radius:50%;border:1px solid rgba(0,0,0,0.06);background:var(--glass);backdrop-filter:blur(8px);font-size:18px;display:flex;align-items:center;justify-content:center;color:#666;transition:all .2s;box-shadow:0 2px 8px rgba(0,0,0,0.04)}
@@ -11296,13 +11302,20 @@ function _typeLoop(elId,text,speed){
   }
   setTimeout(tick,100);
 }
+var _petShown=false;
+function _petEnter(){
+  // 데이터 로딩이 끝나면 펫이 왼쪽에서 챠르륵 슬라이드+살짝 오버슈트하며 한 번만 등장
+  if(_petShown)return;_petShown=true;
+  var p=document.querySelector('.pet');if(!p)return;
+  requestAnimationFrame(function(){p.classList.add('in');});
+}
 async function loadData(){
   var cal=document.getElementById('cal');
   if(cal){cal.innerHTML='<div style="text-align:center;padding:60px;color:var(--dim);font-size:14px"><span id="lt"></span></div>';_typeLoop('lt','데이터를 불러오는 중이에요... \uD83D\uDE09',65);}
   try{const d=await api('GET','/api/records');records=(d.records||[]).map(function(r,i){return Object.assign({},r,{_rowIndex:(r._rowIndex!==undefined?r._rowIndex:i+2)});});}catch(e){console.error(e);_typingId++;if(cal)cal.innerHTML='<div style="text-align:center;padding:60px;color:#E24B4A;font-size:14px">데이터 로드 실패</div>';return;}
   // 특별 일정 — 실패해도 records 렌더는 진행
   try{await loadPromoSpecial();}catch(e){console.warn('[loadData] promoSpecial',e);}
-  _typingId++;render();if(typeof _refreshSeenMod==='function')_refreshSeenMod();}
+  _typingId++;render();_petEnter();if(typeof _refreshSeenMod==='function')_refreshSeenMod();}
 
 // SharePoint Graph API 일관성 지연 회피용 - 변경 후 row 수 검증 + 자동 재시도
 async function syncReload(expectedDelta){
@@ -13012,30 +13025,15 @@ function _bnavMore(){
 
 // ============================================================
 // 콘텐츠 제작 — 네이버 블로그 글쓰기 도우미
-//  주제 + 핵심 내용 + (이전 글 톤 참조) → 네이버 블로그용 초안 생성.
+//  주제 + 목적 + 타겟 + 핵심 메시지 3가지 + (톤 참조) → 네이버 블로그용 초안 생성.
 //  생성 흐름: _nbGenerate()가 Worker POST /api/content/blog (Claude API)를 호출해
-//     AI 초안을 만든다(톤 참조 o.refs·말투 o.voice 반영). Worker에 ANTHROPIC_API_KEY가
-//     없거나 오류면 로컬 템플릿 조립(_nbAssembleDraft)으로 자동 폴백한다.
+//     AI 초안을 만든다(목적·타겟·핵심 메시지·톤 참조·말투 반영). Worker 키 없거나
+//     오류면 로컬 임시 조립(_nbAssembleDraft)으로 자동 폴백한다.
 // ============================================================
-var _NB_TEMPLATES=[
-  {id:'notice', label:'공연 안내', emo:'🎫'},
-  {id:'review', label:'공연 후기', emo:'👏'},
-  {id:'exhibit',label:'전시 소개', emo:'🖼️'},
-  {id:'program',label:'프로그램 소개', emo:'📖'},
-  {id:'sketch', label:'행사 스케치', emo:'📷'},
-  {id:'free',   label:'자유형', emo:'✏️'}
-];
-var _NB_TPL_TEXT={
-  notice:{ head:'공연 안내', intro:'오늘은 곧 만나보실 «{topic}» 소식을 전해 드릴게요.', bodyHead:'어떤 공연인가요?', infoHead:'공연 정보', outro:'좋은 무대로 찾아뵙겠습니다. 많은 관심과 예매 부탁드려요!', tags:['공연','공연추천','문화생활'] },
-  review:{  head:'공연 후기', intro:'지난 «{topic}» 현장의 생생한 분위기를 후기로 남겨 봅니다.', bodyHead:'현장 스케치', infoHead:'공연 정보', outro:'다음에도 좋은 무대로 다시 찾아뵐게요. 함께해 주신 모든 분들 감사합니다!', tags:['공연후기','관람후기','문화생활'] },
-  exhibit:{ head:'전시 소개', intro:'이번에 소개해 드릴 전시는 «{topic}»입니다.', bodyHead:'전시 둘러보기', infoHead:'전시 정보', outro:'예술이 머무는 공간, 예울마루에서 만나요. 많은 관람 바랍니다!', tags:['전시','전시추천','전시회'] },
-  program:{ head:'프로그램 소개', intro:'오늘은 «{topic}» 프로그램을 자세히 소개해 드릴게요.', bodyHead:'프로그램 소개', infoHead:'운영 정보', outro:'관심 있는 분들의 많은 참여 기다리겠습니다!', tags:['문화프로그램','예술교육','체험'] },
-  sketch:{  head:'행사 스케치', intro:'«{topic}» 현장의 순간들을 스케치로 담아 보았어요.', bodyHead:'현장 이야기', infoHead:'행사 정보', outro:'함께해 주신 모든 분들께 감사드립니다. 다음 행사도 기대해 주세요!', tags:['행사','이벤트','문화행사'] },
-  free:{    head:'', intro:'오늘은 «{topic}» 이야기를 전해 드릴게요.', bodyHead:'본문', infoHead:'관련 정보', outro:'끝까지 읽어 주셔서 감사합니다 :)', tags:['예울마루','문화생활'] }
-};
+// (글 유형 템플릿 제거 — '왜·누구에게·무엇을' 목적·타겟·핵심 메시지 기반으로 재설계)
 var _NB_TONELIB_KEY='nb_tone_lib_v1';
 var _NB_DRAFT_KEY='nb_draft_state_v1';
-var _nbState={tpl:'notice', length:'보통', voice:'정중하고 따뜻한', tags:true, emoji:true, topic:'', content:'', output:'', escHandler:null};
+var _nbState={length:'보통', voice:'정중하고 따뜻한', emoji:true, topic:'', purpose:'', target:'', key1:'', key2:'', key3:'', output:'', _toneDraft:'', escHandler:null};
 
 // 상단 '콘텐츠 제작' 드롭다운 (네이버 블로그 + 향후 채널 확장)
 function _contentMenuBuild(menu){
@@ -13052,7 +13050,7 @@ function openNaverBlogTool(){
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeNaverBlogTool)">'
     +'<div class="modal" style="width:96vw;max-width:1080px;height:92vh;max-height:92vh;padding:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:#fff">'
     +'<button class="modal-x" onclick="closeNaverBlogTool()" title="닫기" style="position:absolute;top:14px;right:14px;z-index:10">✕</button>'
-    +'<div style="padding:18px 24px;border-bottom:1px solid #eee;font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px">✍️ <span>네이버 블로그 글쓰기 도우미</span><span style="font-size:11px;color:#aaa;font-weight:500">· 주제와 내용을 적으면 블로그 초안을 만들어 드려요</span></div>'
+    +'<div style="padding:18px 24px;border-bottom:1px solid #eee;font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px">✍️ <span>네이버 블로그 글쓰기 도우미</span><span style="font-size:11px;color:#aaa;font-weight:500">· 목적·타겟·핵심 메시지로 블로그 초안을 만들어 드려요</span></div>'
     +'<div id="nblog-body" style="flex:1;overflow:auto;padding:20px 24px;min-width:0;min-height:0"></div>'
     +'</div></div>';
   if(_nbState.escHandler)document.removeEventListener('keydown',_nbState.escHandler);
@@ -13066,7 +13064,7 @@ function closeNaverBlogTool(){
   var el=document.getElementById('nblog-board');if(el)el.innerHTML='';
 }
 function _nbSaveState(){
-  try{localStorage.setItem(_NB_DRAFT_KEY,JSON.stringify({tpl:_nbState.tpl,length:_nbState.length,voice:_nbState.voice,tags:_nbState.tags,emoji:_nbState.emoji,topic:_nbState.topic||'',content:_nbState.content||'',output:_nbState.output||''}));}catch(e){}
+  try{localStorage.setItem(_NB_DRAFT_KEY,JSON.stringify({length:_nbState.length,voice:_nbState.voice,emoji:_nbState.emoji,topic:_nbState.topic||'',purpose:_nbState.purpose||'',target:_nbState.target||'',key1:_nbState.key1||'',key2:_nbState.key2||'',key3:_nbState.key3||'',output:_nbState.output||''}));}catch(e){}
 }
 function _nbSet(key,val){_nbState[key]=val;_nbSaveState();_nbRender();}
 
@@ -13084,29 +13082,33 @@ function _nbToneDel(id){_nbToneSave(_nbToneLib().filter(function(x){return x.id!
 function _nbRender(){
   var body=document.getElementById('nblog-body');if(!body)return;
   var s=_nbState;
-  var tplChips=_NB_TEMPLATES.map(function(t){return '<button type="button" class="nb-chip'+(s.tpl===t.id?' on':'')+'" onclick="_nbSet(\'tpl\',\''+t.id+'\')">'+t.emo+' '+t.label+'</button>';}).join('');
   var lenChips=['짧게','보통','길게'].map(function(l){return '<button type="button" class="nb-chip'+(s.length===l?' on':'')+'" onclick="_nbSet(\'length\',\''+l+'\')">'+l+'</button>';}).join('');
   var voices=[['정중하고 따뜻한','정중·따뜻'],['친근하고 편안한','친근·편안'],['감각적이고 생생한','감각·생생']];
   var voiceChips=voices.map(function(v){return '<button type="button" class="nb-chip'+(s.voice===v[0]?' on':'')+'" onclick="_nbSet(\'voice\',\''+v[0]+'\')">'+v[1]+'</button>';}).join('');
-  var tagChip='<button type="button" class="nb-chip'+(s.tags?' on':'')+'" onclick="_nbSet(\'tags\','+(!s.tags)+')">#해시태그</button>';
   var emoChip='<button type="button" class="nb-chip'+(s.emoji?' on':'')+'" onclick="_nbSet(\'emoji\','+(!s.emoji)+')">😊 이모지</button>';
   var lib=_nbToneLib();
-  var libHtml=lib.length? lib.map(function(it){var prev=it.text.replace(/\s+/g,' ').slice(0,70);return '<div class="nb-tone-item"><span>'+escapeHtml(prev)+(it.text.length>70?'…':'')+'</span><button class="x" title="삭제" onclick="_nbToneDel(\''+it.id+'\')">✕</button></div>';}).join('') : '<div class="nb-note">저장된 참조 글이 없어요. 예전에 잘 쓴 블로그 글을 붙여넣고 저장하면, 이후 AI 작성 단계에서 그 말투·문체를 참고하게 돼요.</div>';
-  var outHtml=s.output? '<textarea id="nb-output" class="nb-out" oninput="_nbState.output=this.value;_nbSaveState()">'+escapeHtml(s.output)+'</textarea>' : '<div class="nb-out-empty"><div style="font-size:30px;margin-bottom:10px">📝</div>왼쪽에 주제와 핵심 내용을 적고<br><b>[초안 생성]</b>을 누르면<br>여기에 블로그 초안이 나타나요</div>';
-  var phContent='아는 정보를 자유롭게 적어 주세요. 예)\n일시 : 2026-06-30 (화) 19:30\n장소 : 예울마루 소극장\n출연 : 이낙준 작가\n관람료 : 전석 2만원\n포인트 : 베스트셀러 작가의 글쓰기 이야기';
+  var libHtml=lib.length? lib.map(function(it){var prev=it.text.replace(/\s+/g,' ').slice(0,70);return '<div class="nb-tone-item"><span>'+escapeHtml(prev)+(it.text.length>70?'…':'')+'</span><button class="x" title="삭제" onclick="_nbToneDel(\''+it.id+'\')">✕</button></div>';}).join('') : '<div class="nb-note">저장된 참조 글이 없어요. 예전에 잘 쓴 블로그 글을 붙여넣고 ＋ 를 누르면, AI가 그 말투·문체를 따라 씁니다.</div>';
+  var outHtml=s.output? '<textarea id="nb-output" class="nb-out" oninput="_nbState.output=this.value;_nbSaveState()">'+escapeHtml(s.output)+'</textarea>' : '<div class="nb-out-empty"><div style="font-size:30px;margin-bottom:10px">📝</div>주제·목적·타겟과 핵심 메시지를 적고<br><b>[초안 생성]</b>을 누르면<br>여기에 블로그 초안이 나타나요</div>';
   body.innerHTML=''
    +'<div class="nb-wrap">'
    +'<div class="nb-col">'
-     +'<div class="nb-col-head">📝 무엇을 쓸까요?</div>'
-     +'<div class="nb-field"><label class="nb-label">글 유형</label><div class="nb-chips">'+tplChips+'</div></div>'
+     +'<div class="nb-col-head">📝 이 글, 왜 쓰나요?</div>'
      +'<div class="nb-field"><label class="nb-label">글의 주제 <span class="req">*</span></label><input id="nb-topic" class="nb-input" placeholder="예: 6월 화요살롱 — 이낙준 작가 초청 강연" value="'+escapeHtml(s.topic||'')+'" oninput="_nbState.topic=this.value;_nbSaveState()"></div>'
-     +'<div class="nb-field"><label class="nb-label">핵심 내용·관련 정보 <span class="req">*</span></label><textarea id="nb-content" class="nb-textarea" placeholder="'+escapeHtml(phContent)+'" oninput="_nbState.content=this.value;_nbSaveState()">'+escapeHtml(s.content||'')+'</textarea></div>'
+     +'<div class="nb-field"><label class="nb-label">글의 목적</label><input id="nb-purpose" class="nb-input" placeholder="예: 예매를 유도하고 싶다 / 행사 분위기를 알리고 싶다" value="'+escapeHtml(s.purpose||'')+'" oninput="_nbState.purpose=this.value;_nbSaveState()"></div>'
+     +'<div class="nb-field"><label class="nb-label">주요 타겟 (독자)</label><input id="nb-target" class="nb-input" placeholder="예: 여수·인근 3040 가족 / 클래식 입문자" value="'+escapeHtml(s.target||'')+'" oninput="_nbState.target=this.value;_nbSaveState()"></div>'
+     +'<div class="nb-field"><label class="nb-label">이 글로 꼭 전하고 싶은 핵심 메시지 3가지 <span class="req">*</span></label>'
+       +'<input id="nb-key1" class="nb-input" style="margin-bottom:7px" placeholder="① 가장 중요한 메시지" value="'+escapeHtml(s.key1||'')+'" oninput="_nbState.key1=this.value;_nbSaveState()">'
+       +'<input id="nb-key2" class="nb-input" style="margin-bottom:7px" placeholder="② 두 번째 메시지" value="'+escapeHtml(s.key2||'')+'" oninput="_nbState.key2=this.value;_nbSaveState()">'
+       +'<input id="nb-key3" class="nb-input" placeholder="③ 세 번째 메시지" value="'+escapeHtml(s.key3||'')+'" oninput="_nbState.key3=this.value;_nbSaveState()">'
+     +'</div>'
      +'<div class="nb-field"><label class="nb-label">분량</label><div class="nb-chips">'+lenChips+'</div></div>'
      +'<div class="nb-field"><label class="nb-label">말투</label><div class="nb-chips">'+voiceChips+'</div></div>'
-     +'<div class="nb-field"><label class="nb-label">옵션</label><div class="nb-chips">'+tagChip+emoChip+'</div></div>'
-     +'<div class="nb-field"><label class="nb-label">✍️ 톤 참조 (선택) — 예전에 쓴 글의 말투 따라하기</label>'
-       +'<textarea id="nb-tone-input" class="nb-textarea" style="min-height:80px" placeholder="이전에 작성한 블로그 글을 붙여넣고 아래 [참조 글 추가]를 누르세요." oninput="_nbState._toneDraft=this.value">'+escapeHtml(s._toneDraft||'')+'</textarea>'
-       +'<div class="nb-row" style="margin-top:8px"><button type="button" class="nb-btn ghost" onclick="_nbToneAdd()">＋ 참조 글 추가</button></div>'
+     +'<div class="nb-field"><label class="nb-label">옵션</label><div class="nb-chips">'+emoChip+'</div></div>'
+     +'<div class="nb-field"><label class="nb-label">✍️ 톤 참조 (선택) — 예전 글의 말투 따라하기</label>'
+       +'<div class="nb-row" style="align-items:flex-start;gap:7px">'
+         +'<textarea id="nb-tone-input" class="nb-textarea" style="min-height:74px;flex:1" placeholder="예전에 작성한 블로그 글을 붙여넣고 오른쪽 ＋ 를 누르세요. 여러 개 추가할 수 있어요." oninput="_nbState._toneDraft=this.value">'+escapeHtml(s._toneDraft||'')+'</textarea>'
+         +'<button type="button" class="nb-btn primary" title="참조 글 추가" onclick="_nbToneAdd()" style="padding:0;width:42px;height:42px;font-size:20px;flex-shrink:0;border-radius:11px">＋</button>'
+       +'</div>'
        +libHtml
      +'</div>'
    +'</div>'
@@ -13118,30 +13120,31 @@ function _nbRender(){
        +'<button type="button" class="nb-btn ghost" onclick="_nbCopy()">📋 복사</button>'
        +'<a class="nb-btn ghost" href="https://blog.naver.com/" target="_blank" rel="noopener" style="text-decoration:none;display:inline-flex;align-items:center">네이버 블로그 열기 ↗</a>'
      +'</div>'
-     +'<div class="nb-note">✨ <b>초안 생성</b>을 누르면 AI가 톤 참조 글과 말투를 반영해 작성해요(서버에 API 키 등록 시). 키가 없으면 입력을 글 유형 틀에 맞춘 템플릿 초안으로 자동 대체됩니다.</div>'
+     +'<div class="nb-note">✨ <b>초안 생성</b>을 누르면 AI가 목적·타겟·핵심 메시지와 톤 참조를 반영해 작성해요. (AI 미연결 시 입력을 정리한 임시 초안으로 대체)</div>'
    +'</div>'
    +'</div>';
 }
 
 async function _nbGenerate(){
-  var topic=(_nbState.topic||'').trim();
-  var content=(_nbState.content||'').trim();
+  var s=_nbState;
+  var topic=(s.topic||'').trim();
+  var keys=[s.key1,s.key2,s.key3].map(function(k){return (k||'').trim();}).filter(Boolean);
   if(!topic){showToast('글의 주제를 입력해 주세요','error');var ti=document.getElementById('nb-topic');if(ti)ti.focus();return;}
-  if(!content){showToast('핵심 내용을 입력해 주세요','error');var ci=document.getElementById('nb-content');if(ci)ci.focus();return;}
-  var o={tpl:_nbState.tpl,topic:topic,content:content,length:_nbState.length,voice:_nbState.voice,tags:_nbState.tags,emoji:_nbState.emoji,refs:_nbToneLib()};
+  if(!keys.length){showToast('전하고 싶은 핵심 메시지를 최소 1개 적어 주세요','error');var ki=document.getElementById('nb-key1');if(ki)ki.focus();return;}
+  var o={topic:topic,purpose:(s.purpose||'').trim(),target:(s.target||'').trim(),keys:keys,length:s.length,voice:s.voice,emoji:s.emoji,refs:_nbToneLib()};
   var btn=document.getElementById('nb-gen-btn'); if(btn){btn.disabled=true;btn.textContent='✍️ 생성 중…';}
   try{
-    // Worker /api/content/blog (Claude API) → AI 생성. 저장된 톤 참조(o.refs)·말투(o.voice) 반영.
+    // Worker /api/content/blog (Claude API) → AI 생성. 목적·타겟·핵심 메시지(o.keys)·톤 참조(o.refs)·말투(o.voice) 반영.
     var r=await api('POST','/api/content/blog',o);
     if(!r||!r.text)throw new Error('빈 응답');
     _nbSetOutput(r.text);
     showToast('AI가 초안을 작성했어요 ✨ 자유롭게 다듬어 보세요','success');
   }catch(e){
-    // AI 미연결(API 키 미설정/배포 전) 또는 오류 → 로컬 템플릿 조립으로 폴백
+    // AI 미연결(API 키 미설정/배포 전) 또는 오류 → 로컬 임시 초안으로 폴백
     _nbSetOutput(_nbAssembleDraft(o));
     var msg=String((e&&e.message)||e);
-    if(msg.indexOf('503')>-1||msg.indexOf('no_api_key')>-1)showToast('AI 미연결 — 템플릿 초안으로 만들었어요 (API 키 등록 시 AI 생성)','success');
-    else showToast('AI 생성 실패 — 템플릿 초안으로 대체했어요','error');
+    if(msg.indexOf('503')>-1||msg.indexOf('no_api_key')>-1)showToast('AI 미연결 — 임시 초안으로 만들었어요','success');
+    else showToast('AI 생성 실패 — 임시 초안으로 대체했어요','error');
   }finally{
     var b2=document.getElementById('nb-gen-btn'); if(b2){b2.disabled=false;b2.innerHTML='⚡ 초안 생성';}
   }
@@ -13151,60 +13154,25 @@ function _nbSetOutput(text){
   setTimeout(function(){var t=document.getElementById('nb-output');if(t)t.scrollTop=0;},30);
 }
 
-// 로컬 초안 조립기 — 입력을 글 유형 틀에 구조화 (AI 연결 전까지의 즉시 생성기)
+// 로컬 임시 초안 — 입력(목적·타겟·핵심 메시지)을 정리해 구조화 (AI 연결 전 폴백)
 function _nbAssembleDraft(o){
-  var T=_NB_TPL_TEXT[o.tpl]||_NB_TPL_TEXT.free;
-  var topic=o.topic.trim();
   var E=function(x){return o.emoji?x:'';};
-  var greet={'정중하고 따뜻한':'안녕하세요, 문화로 일상을 채우는 GS칼텍스 예울마루입니다.','친근하고 편안한':'안녕하세요! 예울마루예요 😊','감각적이고 생생한':'안녕하세요, 예울마루입니다. 오늘은 특별한 소식을 들고 왔어요.'}[o.voice]||'안녕하세요, 예울마루입니다.';
-  if(!o.emoji)greet=greet.replace(/\s*😊/,'');
-  var rawLines=o.content.split(/\n+/).map(function(x){return x.trim();}).filter(Boolean);
-  var infos=[],paras=[];
-  rawLines.forEach(function(l){
-    if(/[:：]/.test(l)&&l.length<=60){infos.push(l.replace(/\s*[:：]\s*/,' : '));}
-    else paras.push(l);
-  });
+  var greet={'정중하고 따뜻한':'안녕하세요, 문화로 일상을 채우는 GS칼텍스 예울마루입니다.','친근하고 편안한':'안녕하세요! 예울마루예요'+(o.emoji?' 😊':''),'감각적이고 생생한':'안녕하세요, 예울마루입니다. 오늘은 특별한 소식을 들고 왔어요.'}[o.voice]||'안녕하세요, 예울마루입니다.';
   var out=[];
-  out.push((T.head?'['+T.head+'] ':'')+topic);
+  out.push((o.topic||'').trim());
   out.push('');
-  out.push(E('🌿 ')+greet+' '+T.intro.replace('{topic}',topic));
+  out.push(E('🌿 ')+greet+' 오늘은 «'+(o.topic||'').trim()+'» 이야기를 전해 드릴게요.');
   out.push('');
-  if(infos.length){
-    out.push(E('📌 ')+T.infoHead);
-    infos.forEach(function(i){out.push('· '+i);});
-    out.push('');
-  }
-  out.push(E('✨ ')+T.bodyHead);
-  if(paras.length){
-    paras.forEach(function(p){out.push(p);out.push('');});
-  }else{
-    out.push('(여기에 '+topic+'에 대한 자세한 이야기를 풀어 주세요.)');
-    out.push('');
-  }
-  if(o.length==='길게'){
-    out.push(E('💡 ')+'이런 분께 추천해요');
-    out.push('· 새로운 문화 경험을 찾고 계신 분');
-    out.push('· 가족·친구와 특별한 시간을 보내고 싶은 분');
-    out.push('· 여수 여행 중 품격 있는 공연을 즐기고 싶은 분');
-    out.push('');
-  }
-  out.push(E('🙌 ')+T.outro);
-  if(o.tags){
-    out.push('');
-    out.push(_nbHashtags(topic,T.tags));
-  }
-  // 짧게: 길어진 본문 사이 빈 줄을 한 번만 유지해 콤팩트하게
-  var joined=out.join('\n').replace(/\n{3,}/g,'\n\n');
-  if(o.length==='짧게')joined=joined.replace(/\n\n/g,'\n').replace(/\n([🌿📌✨💡🙌·#])/g,'\n\n$1');
-  return joined.trim();
-}
-function _nbHashtags(topic,extra){
-  var base=['예울마루','GS칼텍스예울마루','여수','여수가볼만한곳','여수문화'];
-  var toks=topic.replace(/[«»<>〈〉\[\]()]/g,' ').split(/[\s,·]+/).filter(function(w){return w.length>=2;}).slice(0,4);
-  var all=base.concat(extra||[]).concat(toks);
-  var seen={},uniq=[];
-  all.forEach(function(t){t=String(t).replace(/\s/g,'');if(t&&!seen[t]){seen[t]=1;uniq.push(t);}});
-  return uniq.map(function(t){return '#'+t;}).join(' ');
+  if(o.target)out.push(E('🎯 ')+o.target+'께 특히 도움이 될 소식이에요.');
+  if(o.purpose)out.push(E('💬 ')+'('+o.purpose+')');
+  if(o.target||o.purpose)out.push('');
+  out.push(E('✨ ')+'핵심만 짚어 드리면');
+  (o.keys||[]).forEach(function(k,i){out.push((i+1)+'. '+k);});
+  out.push('');
+  out.push('(위 핵심 메시지를 바탕으로 자연스럽게 풀어 써 보세요.)');
+  out.push('');
+  out.push(E('🙌 ')+'예울마루에서 만나요. 많은 관심 부탁드려요!');
+  return out.join('\n').replace(/\n{3,}/g,'\n\n').trim();
 }
 function _nbCopy(){
   var t=_nbState.output||'';
