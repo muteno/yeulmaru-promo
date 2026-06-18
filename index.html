@@ -6374,6 +6374,9 @@ function _getAdminSection(rec, todayKey){
 }
 // admin 신청 대기 목록 펼침 상태 (알림 배지 클릭으로 토글)
 let _showApplyList = false;
+// 스캔 순서(브리프 P1 #3): 지난(3)·취소(4) 섹션은 기본 접힘 → 오늘·예정 우선 노출. 헤더 클릭으로 펼침.
+let _collapsedSecs = new Set([3,4]);
+function _togglePastSec(sec){ if(_collapsedSecs.has(sec)) _collapsedSecs.delete(sec); else _collapsedSecs.add(sec); renderPromoBoard(); }
 // admin 신청 대기 체크박스 — 일괄 처리용 (rowIndex Set)
 let _pendingChecks = new Set();
 function togglePendingCheck(rowIndex, el){
@@ -6967,6 +6970,9 @@ function renderPromoBoard(){
     html+='</tr></thead><tbody>';
     let _adminLastSection=-1;
     let _cancelSectionPrinted=false;
+    // 검색·필터가 걸려 있으면 접힌 섹션도 펼쳐서 결과를 숨기지 않음(검색했는데 안 보이는 함정 방지)
+    const _anyFilter=!!((_promoFilter.q&&_promoFilter.q.trim())||(_promoFilter.colFilters&&Object.keys(_promoFilter.colFilters).length));
+    const _effCollapsed=_anyFilter?new Set():_collapsedSecs;
     const _adminSectionLabels={0:'🔔 신청 대기 중',1:'🎯 오늘 일정',2:'📅 예정된 일정',3:'🗂️ 지난 일정',4:'🚫 취소된 일정'};
     const _adminSectionDescs={0:'체크하면 일괄 처리 가능',1:'오늘 진행할 홍보',2:'다가오는 홍보',3:'과거 기록',4:'취소된 신청'};
     // 사용자 모드: 취소 row를 표 뒤로 이동 (admin은 _getAdminSection이 처리)
@@ -6986,13 +6992,16 @@ function renderPromoBoard(){
           const _sCount=rows.filter(function(rr){return _getAdminSection(rr,todayKey)===_sec;}).length;
           const _sBg=_sec===0?'rgba(216,132,85,0.08)':_sec===1?'rgba(74,77,231,0.06)':_sec===2?'#fafafa':'#f5f5f5';
           const _sBorder=_sec===0?'border-top:2px solid var(--peach);border-bottom:1px solid rgba(216,132,85,0.2)':_sec===1?'border-top:2px solid var(--accent);border-bottom:1px solid rgba(74,77,231,0.15)':'border-top:1px solid #eee;border-bottom:1px solid #eee';
-          let _sectionRowHtml='<tr style="background:'+_sBg+';'+_sBorder+'"><td colspan="11" style="padding:10px 14px">';
+          const _collapsible=(_sec===3||_sec===4);
+          const _isCol=_effCollapsed.has(_sec);
+          const _secAttr=_collapsible?' onclick="_togglePastSec('+_sec+')" title="'+(_isCol?'펼치기':'접기')+'" style="background:'+_sBg+';'+_sBorder+';cursor:pointer"':' style="background:'+_sBg+';'+_sBorder+'"';
+          let _sectionRowHtml='<tr'+_secAttr+'><td colspan="11" style="padding:10px 14px">';
           _sectionRowHtml+='<div style="display:flex;align-items:center;gap:10px;font-size:12px;font-weight:700;color:#333;letter-spacing:0.3px">';
           // 신청 대기 헤더 — 전체 선택 체크박스
           if(_sec===0){
             _sectionRowHtml+='<label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer" onclick="event.stopPropagation()"><input type="checkbox" id="apply-select-all" onchange="toggleAllPending(this)" style="width:14px;height:14px;accent-color:var(--peach);cursor:pointer"><span>'+_adminSectionLabels[_sec]+'</span></label>';
           } else {
-            _sectionRowHtml+=_adminSectionLabels[_sec];
+            _sectionRowHtml+=(_collapsible?'<span style="margin-right:2px;color:#999;font-size:10px">'+(_isCol?'▸':'▾')+'</span>':'')+_adminSectionLabels[_sec];
           }
           _sectionRowHtml+=' <span style="color:#888;font-size:11px;font-weight:500">('+_sCount+'건)</span><span style="color:#aaa;font-size:11px;font-weight:400;margin-left:6px">'+_adminSectionDescs[_sec]+'</span>';
           // 신청 대기 헤더 — 우측 일괄 액션 버튼 (체크 후 노출)
@@ -7006,6 +7015,8 @@ function renderPromoBoard(){
           html+=_sectionRowHtml;
           _adminLastSection=_sec;
         }
+        // 접힌 섹션(지난·취소): 헤더만 노출하고 행은 숨김
+        if(_effCollapsed.has(_sec)) return;
       }
       // === 사용자 모드: 취소 row 첫 만남 시 섹션 헤더 출력 ===
       if(!isAdmin && !r._isSpecial){
