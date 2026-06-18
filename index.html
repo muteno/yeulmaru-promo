@@ -6921,17 +6921,17 @@ function renderPromoBoard(){
   }
   // === 리스트 ===
   if(rows.length===0){
+    // 결과를 좁히는 필터(검색·컬럼·지난감추기·신청자·상태)가 걸려 0건인지 구분 (브리프 #6)
+    const _flt=!!((_promoFilter.q&&_promoFilter.q.trim())||(Object.keys(_promoFilter.colFilters||{}).length)||_promoFilter.hidePast||_promoFilter.applicant||(_promoFilter.status&&_promoFilter.status!=='all'));
     // 본인 신청 보기 모드에서 0건이면 전체 보기 버튼 강조 (admin 제외)
     const canShowAll=!isAdmin&&myApplicant&&_promoFilter.viewMode==='mine';
-    html+='<div style="text-align:center;padding:60px 20px;color:#aaa;font-size:13px">';
-    if(canShowAll){
-      html+='<div style="font-size:32px;margin-bottom:10px">📭</div>';
-      html+='<div style="margin-bottom:14px;color:#666;font-weight:500">아직 본인 신청한 일정이 없어요</div>';
-      html+='<button onclick="_promoFilter.viewMode=\'all\';renderPromoBoard()" style="padding:8px 18px;border-radius:10px;border:1.5px solid var(--accent);background:#fff;color:var(--accent);font-size:13px;font-weight:600;cursor:pointer">👥 다른 사람 신청 보기</button>';
+    if(_flt){
+      html+='<div class="u-empty"><div class="ico">🔍</div><div class="msg">조건에 맞는 일정이 없어요</div><button class="btn btn--neutral btn--sm" onclick="_promoResetFilters()">필터 초기화</button></div>';
+    }else if(canShowAll){
+      html+='<div class="u-empty"><div class="ico">📭</div><div class="msg">아직 본인 신청한 일정이 없어요</div><button class="btn btn--ghost btn--sm" onclick="_promoFilter.viewMode=\'all\';renderPromoBoard()">👥 다른 사람 신청 보기</button></div>';
     }else{
-      html+='신청 내역이 없습니다';
+      html+='<div class="u-empty"><div class="ico">📭</div><div class="msg">신청 내역이 없습니다</div></div>';
     }
-    html+='</div>';
   }else{
     // 정렬 가능 헤더 빌더 (액션 컬럼 제외 모두 정렬 가능) — 비활성에도 ▾ 옅게 표시 (필터 가능 안내)
     function _sh(col,label,width){
@@ -7173,6 +7173,11 @@ function addDaysKey(k,n){
   const d=new Date(k);
   d.setDate(d.getDate()+n);
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+// 결과를 좁히는 필터만 초기화 (보기모드·취소표시는 유지) — 빈 상태 카드의 [필터 초기화]
+function _promoResetFilters(){
+  _promoFilter.q='';_promoFilter.colFilters={};_promoFilter.status='all';_promoFilter.applicant='';_promoFilter.hidePast=false;
+  renderPromoBoard();
 }
 let _promoSearchTimer=null;
 function onPromoSearch(v){
