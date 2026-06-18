@@ -871,6 +871,93 @@ async function extractPromoInfo(env, img) {
 }
 __name(extractPromoInfo, "extractPromoInfo");
 
+// === 외부 OCR 엔진 (비전 차단된 OAuth 대신 — CLOVA / Google Vision으로 텍스트 추출) ===
+// Naver CLOVA OCR (NCP) — 한국어 최강. env: CLOVA_OCR_INVOKE_URL, CLOVA_OCR_SECRET.
+async function ocrClova(env, b64, mime) {
+  const url = env.CLOVA_OCR_INVOKE_URL, secret = env.CLOVA_OCR_SECRET;
+  if (!url || !secret) throw new Error("CLOVA 미설정");
+  const fmt = (String(mime || "").indexOf("png") > -1) ? "png" : "jpg";
+  const body = { version: "V2", requestId: "promo-" + Date.now(), timestamp: Date.now(), images: [{ format: fmt, name: "promo", data: b64 }] };
+  const resp = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json", "X-OCR-SECRET": secret }, body: JSON.stringify(body) });
+  if (!resp.ok) throw new Error("CLOVA " + resp.status + ": " + (await resp.text()).slice(0, 200));
+  const data = await resp.json();
+  const fields = (((data.images || [])[0] || {}).fields) || [];
+  let txt = "";
+  fields.forEach((f) => { txt += (f.inferText || ""); txt += f.lineBreak ? "\n" : " "; });
+  return txt.trim();
+}
+__name(ocrClova, "ocrClova");
+
+// Google Cloud Vision — DOCUMENT_TEXT_DETECTION. env: GOOGLE_VISION_KEY (API 키).
+async function ocrGoogleVision(env, b64) {
+  const key = env.GOOGLE_VISION_KEY;
+  if (!key) throw new Error("Google Vision 미설정");
+  const resp = await fetch("https://vision.googleapis.com/v1/images:annotate?key=" + encodeURIComponent(key), {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ requests: [{ image: { content: b64 }, features: [{ type: "DOCUMENT_TEXT_DETECTION" }], imageContext: { languageHints: ["ko", "en"] } }] })
+  });
+  if (!resp.ok) throw new Error("Google Vision " + resp.status + ": " + (await resp.text()).slice(0, 200));
+  const data = await resp.json();
+  const r0 = (data.responses || [])[0] || {};
+  if (r0.error) throw new Error("Google Vision: " + (r0.error.message || "error"));
+  return String((r0.fullTextAnnotation && r0.fullTextAnnotation.text) || "").trim();
+}
+__name(ocrGoogleVision, "ocrGoogleVision");
+
+// 설정된 엔진으로 OCR 텍스트 추출 (OCR_PROVIDER로 우선순위, 기본 CLOVA→Google 폴백).
+async function runExternalOcr(env, b64, mime) {
+  const pref = String(env.OCR_PROVIDER || "").toLowerCase();
+  const hasClova = !!(env.CLOVA_OCR_INVOKE_URL && env.CLOVA_OCR_SECRET);
+  const hasGoogle = !!env.GOOGLE_VISION_KEY;
+  const order = pref === "google" ? ["google", "clova"] : ["clova", "google"];
+  let lastErr = null;
+  for (const p of order) {
+    try {
+      if (p === "clova" && hasClova) return { text: await ocrClova(env, b64, mime), provider: "clova" };
+      if (p === "google" && hasGoogle) return { text: await ocrGoogleVision(env, b64), provider: "google" };
+    } catch (e) { lastErr = e; }
+  }
+  if (lastErr) throw lastErr;
+  throw new Error("no_ocr_provider");
+}
+__name(runExternalOcr, "runExternalOcr");
+
+// OCR 원문 텍스트 → 육하원칙 JSON (Claude 텍스트 호출; OAuth는 비전과 달리 텍스트는 허용).
+async function structurePromoText(env, rawText) {
+  const model = env.OCR_MODEL || env.BLOG_MODEL || "claude-opus-4-8";
+  const headers = { "content-type": "application/json", "anthropic-version": "2023-06-01" };
+  if (env.ANTHROPIC_AUTH_TOKEN) {
+    headers["authorization"] = "Bearer " + env.ANTHROPIC_AUTH_TOKEN;
+    headers["anthropic-beta"] = "oauth-2025-04-20";
+  } else {
+    headers["x-api-key"] = env.ANTHROPIC_API_KEY;
+  }
+  const system = "당신은 공연·전시 홍보물에서 OCR로 추출한 한국어 텍스트를 받아 사실 정보를 정확히 정리하는 도우미입니다. " +
+    "주어진 텍스트에 실제로 있는 내용만 사용하고, 없거나 불확실하면 빈 문자열로 두세요. 추측·창작 금지.";
+  const sysParam = env.ANTHROPIC_AUTH_TOKEN
+    ? [{ type: "text", text: "You are Claude Code, Anthropic's official CLI for Claude." }, { type: "text", text: system }]
+    : system;
+  const ask = "다음은 홍보물 이미지에서 OCR로 읽은 원문 텍스트입니다(줄 순서가 흐트러졌을 수 있음). " +
+    "아래 JSON 형식으로만 출력하세요. 설명·코드블록·머리말 없이 JSON 객체만.\n\n" +
+    '{ "title":"공연·행사명(부제 포함)", "overview":"무엇을·왜 한두 문장", "when":"일시(날짜·요일·시간, 회차 모두)", ' +
+    '"where":"장소(공연장·홀)", "who":"출연·연주·지휘·주최·주관·기획", "price":"가격(등급별)·할인·예매처·문의", ' +
+    '"detail":"프로그램·곡목·줄거리·관람등급·러닝타임 등 본문용 상세" }\n\n# OCR 원문\n' + String(rawText || "").slice(0, 12000);
+  const resp = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST", headers,
+    body: JSON.stringify({ model, max_tokens: 2000, system: sysParam, messages: [{ role: "user", content: ask }] })
+  });
+  if (!resp.ok) throw new Error("Anthropic " + resp.status + ": " + (await resp.text()).slice(0, 300));
+  const data = await resp.json();
+  let txt = (data.content || []).filter((x) => x.type === "text").map((x) => x.text).join("").trim();
+  txt = txt.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+  let obj = {};
+  try { obj = JSON.parse(txt); } catch (e) { const m = txt.match(/\{[\s\S]*\}/); obj = m ? JSON.parse(m[0]) : { detail: txt }; }
+  const out = {};
+  ["title", "overview", "when", "where", "who", "price", "detail"].forEach((k) => { out[k] = String(obj[k] || "").trim(); });
+  return out;
+}
+__name(structurePromoText, "structurePromoText");
+
 var index_default = {
   async scheduled(event, env, ctx) {
     ctx.waitUntil(autoCancelStalePending(env));
@@ -1051,16 +1138,31 @@ var index_default = {
         }
       }
 
-      // === 홍보물 이미지 OCR — Claude 비전으로 사실 추출 (Graph 토큰 불요) ===
+      // === 홍보물 이미지 OCR (Graph 토큰 불요) ===
+      // 우선순위: ① 외부 OCR(CLOVA/Google Vision) → Claude(텍스트)로 구조화  ② 없으면 Claude 비전(API 키 필요)
       if (url.pathname === "/api/content/ocr" && request.method === "POST") {
-        if (!env.ANTHROPIC_API_KEY && !env.ANTHROPIC_AUTH_TOKEN) return json({ error: "no_api_key", note: "ANTHROPIC_AUTH_TOKEN 또는 ANTHROPIC_API_KEY 미설정" }, env, 503);
         let bb = {};
         try { bb = await request.json(); } catch (e) {}
         const data = String(bb.data || "").replace(/^data:[^,]*,/, "").trim();
+        const mime = bb.mime || "image/jpeg";
         if (!data) return json({ error: "이미지 데이터가 필요해요" }, env, 400);
+        const hasExternal = (env.CLOVA_OCR_INVOKE_URL && env.CLOVA_OCR_SECRET) || env.GOOGLE_VISION_KEY;
+        const hasClaude = env.ANTHROPIC_API_KEY || env.ANTHROPIC_AUTH_TOKEN;
         try {
-          const info = await extractPromoInfo(env, { mime: bb.mime || "image/jpeg", data });
-          return json({ info }, env);
+          if (hasExternal) {
+            const ocr = await runExternalOcr(env, data, mime);
+            if (!ocr.text) return json({ error: "OCR 텍스트가 비어 있어요(이미지·해상도 확인)" }, env, 502);
+            const info = hasClaude
+              ? await structurePromoText(env, ocr.text)
+              : { title: "", overview: "", when: "", where: "", who: "", price: "", detail: ocr.text };
+            return json({ info, provider: ocr.provider }, env);
+          }
+          if (env.ANTHROPIC_API_KEY) {
+            // 외부 OCR 미설정 + API 키 있으면 Claude 비전 직접 (OAuth 비전은 403이라 키 필요)
+            const info = await extractPromoInfo(env, { mime, data });
+            return json({ info, provider: "claude-vision" }, env);
+          }
+          return json({ error: "no_ocr_provider", note: "CLOVA_OCR_*/GOOGLE_VISION_KEY 또는 ANTHROPIC_API_KEY 필요" }, env, 503);
         } catch (e) {
           console.error("[content/ocr]", e);
           return json({ error: String((e && e.message) || e) }, env, 502);
