@@ -823,13 +823,13 @@ async function extractPromoInfo(env, img) {
   } else {
     headers["x-api-key"] = env.ANTHROPIC_API_KEY;
   }
+  const system = "당신은 공연·전시 홍보물(포스터·리플릿) 이미지를 읽어 사실 정보를 정확히 추출하는 도우미입니다. " +
+    "이미지에 실제로 적혀 있는 내용만 추출하세요. 보이지 않거나 확실하지 않은 항목은 빈 문자열로 두고, 절대 추측하거나 지어내지 마세요. " +
+    "한국어로, 적힌 표현을 최대한 그대로 옮기세요.";
   // 구독 OAuth 토큰은 system 첫 블록이 Claude Code 신원이어야 호출 허용(아니면 403 Request not allowed).
   const sysParam = env.ANTHROPIC_AUTH_TOKEN
     ? [{ type: "text", text: "You are Claude Code, Anthropic's official CLI for Claude." }, { type: "text", text: system }]
     : system;
-  const system = "당신은 공연·전시 홍보물(포스터·리플릿) 이미지를 읽어 사실 정보를 정확히 추출하는 도우미입니다. " +
-    "이미지에 실제로 적혀 있는 내용만 추출하세요. 보이지 않거나 확실하지 않은 항목은 빈 문자열로 두고, 절대 추측하거나 지어내지 마세요. " +
-    "한국어로, 적힌 표현을 최대한 그대로 옮기세요.";
   const ask = "이 홍보물에서 정보를 읽어 아래 JSON 형식으로만 출력하세요. 설명·코드블록·머리말 없이 JSON 객체만 출력합니다.\n\n" +
     "{\n" +
     '  "title": "공연·행사명(부제 포함)",\n' +
