@@ -1246,6 +1246,11 @@ table.promo-board-table th:last-child .col-resize-handle{display:none}
 .nb-dots i:nth-child(2){animation-delay:.2s}
 .nb-dots i:nth-child(3){animation-delay:.4s}
 @keyframes nbDot{0%,60%,100%{opacity:.2}30%{opacity:1}}
+.nb-tgt-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.nb-tgt{display:flex;flex-direction:column;gap:3px}
+.nb-tgt-l{font-size:11.5px;color:#888;font-weight:600}
+.nb-tgt-s{padding:8px 10px;font-size:13px}
+@media(max-width:760px){.nb-tgt-grid{grid-template-columns:1fr}}
 .nb-btn{padding:11px 18px;border-radius:11px;font-size:13.5px;font-weight:700;border:0;cursor:pointer;font-family:inherit;transition:transform .15s,box-shadow .15s,background .15s}
 .nb-btn:hover{transform:translateY(-1px)}
 .nb-btn.primary{background:var(--accent);color:#fff;box-shadow:0 6px 16px rgba(74,77,231,0.28)}
@@ -13044,16 +13049,21 @@ var _NB_DRAFT_KEY='nb_draft_state_v2';
 // 1️⃣ 의도·목적 — AIDA(Attention→Interest→Desire→Action) 기반 단일 선택. 빈칸 자유서술 대신 '고르기'로 객관화.
 // 글의 목적은 고정 — 예술 사업(공연·전시·예술교육) 홍보. 사용자가 매번 고르지 않고 시스템이 항상 이 방향으로 씀.
 var _NB_FIXED_PURPOSE='예술 사업(공연·전시·예술교육 프로그램) 홍보 — 수요 계층에 정보를 전달하고, 더 널리 확산시키며, 관심과 구매(예매·참여) 욕구를 촉진하는 온라인 홍보 글.';
-// 1️⃣ 주요 타겟(단일 선택) · 2️⃣ 이 타겟에게 강조할 포인트(다중) — 둘 다 '고르기'로 객관화.
-var _NB_TARGETS=['대학생','워킹맘','가족','전국 단위 마니아'];
-var _NB_HOOKS=['출연진·라인업','작품성·화제성','가격·할인 혜택','함께 가기 좋음','입문자도 쉽게','한정·희소(지금만)'];
+// 1️⃣ 주요 타겟 — 속성별 드롭다운(객관). 2️⃣ 강조 포인트는 주관식 입력(아래 hooks).
+var _NB_TGT_FIELDS=[
+  ['gender','성별',['무관','남성','여성']],
+  ['age','연령/나이',['무관','10대','20대','30대','40대','50대','60대+']],
+  ['family','가족 구성',['무관','1인','연인·부부','자녀 동반 가족','3세대']],
+  ['fan','마니아 여부',['무관','입문·일반','마니아']],
+  ['region','거주지',['무관','여수·인근','전남권','수도권','전국']]
+];
 // 4️⃣ 기본 틀(글 구성) — 옵션. 안 잡으면 레퍼토리(톤 참조) 기반, 잡으면 이 틀에 맞춰 작성. 프리셋 선택 후 직접 편집 가능.
 var _NB_TEMPLATES=[
   ['standard','표준 홍보형','1) 인사 + 공연 한 줄 소개\n2) 공연 개요와 매력 포인트\n3) 핵심 정보(일시·장소·출연·가격)\n4) 이런 분께 추천 / 관람 포인트\n5) 예매 안내 + 따뜻한 마무리'],
   ['review','후기·현장형','1) 방문 계기 / 기대\n2) 현장 분위기 묘사\n3) 공연 하이라이트\n4) 솔직한 감상\n5) 추천 + 다음 공연 안내'],
   ['info','정보 요약형','1) 핵심 정보 먼저 (일시·장소·가격·예매)\n2) 공연 개요\n3) 관람 포인트\n4) 예매 링크 / 문의']
 ];
-var _nbState={length:'보통', voice:'정중하고 따뜻한', emoji:true, targetSel:'', hooks:[], facts:{}, extra:'', tplMode:'auto', tplSel:'', tplText:'', output:'', comments:[], ocrThumb:'', ocrBusy:false, genBusy:false, _toneDraft:'', escHandler:null};
+var _nbState={length:'보통', voice:'정중하고 따뜻한', emoji:true, tgt:{}, hooks:['',''], facts:{}, extra:'', tplMode:'auto', tplSel:'', tplText:'', output:'', comments:[], ocrThumb:'', ocrBusy:false, genBusy:false, _toneDraft:'', escHandler:null};
 
 // 상단 '콘텐츠 제작' 드롭다운 (네이버 블로그 + 향후 채널 확장)
 function _contentMenuBuild(menu){
@@ -13086,13 +13096,16 @@ function closeNaverBlogTool(){
   var el=document.getElementById('nblog-board');if(el)el.innerHTML='';
 }
 function _nbSaveState(){
-  try{localStorage.setItem(_NB_DRAFT_KEY,JSON.stringify({voice:_nbState.voice,emoji:_nbState.emoji,targetSel:_nbState.targetSel||'',hooks:_nbState.hooks||[],facts:_nbState.facts||{},extra:_nbState.extra||'',tplMode:_nbState.tplMode||'auto',tplSel:_nbState.tplSel||'',tplText:_nbState.tplText||'',output:_nbState.output||'',comments:_nbState.comments||[]}));}catch(e){}
+  try{localStorage.setItem(_NB_DRAFT_KEY,JSON.stringify({voice:_nbState.voice,emoji:_nbState.emoji,tgt:_nbState.tgt||{},hooks:_nbState.hooks||['',''],facts:_nbState.facts||{},extra:_nbState.extra||'',tplMode:_nbState.tplMode||'auto',tplSel:_nbState.tplSel||'',tplText:_nbState.tplText||'',output:_nbState.output||'',comments:_nbState.comments||[]}));}catch(e){}
 }
 function _nbSet(key,val){_nbState[key]=val;_nbSaveState();_nbRender();}
 
 // 1️⃣ 의도 단일선택 토글 · 2️⃣ 타겟관점 다중선택 토글
-function _nbSetTarget(i){var v=_NB_TARGETS[i];_nbState.targetSel=(_nbState.targetSel===v?'':v);_nbSaveState();_nbRender();}
-function _nbTogHook(i){var v=_NB_HOOKS[i];var a=_nbState.hooks||(_nbState.hooks=[]);var p=a.indexOf(v);if(p>-1)a.splice(p,1);else a.push(v);_nbSaveState();_nbRender();}
+function _nbTgtSet(k,v){if(!_nbState.tgt)_nbState.tgt={};_nbState.tgt[k]=v;_nbSaveState();}
+// 2️⃣ 강조 포인트 — 주관식 여러 줄(최소 2). ＋ 로 추가, ✕ 로 삭제(2줄 미만이면 자동 보충).
+function _nbHookSet(i,v){if(!_nbState.hooks)_nbState.hooks=['',''];_nbState.hooks[i]=v;_nbSaveState();}
+function _nbHookAdd(){if(!_nbState.hooks)_nbState.hooks=['',''];_nbState.hooks.push('');_nbSaveState();_nbRender();}
+function _nbHookDel(i){if(!_nbState.hooks)return;_nbState.hooks.splice(i,1);while(_nbState.hooks.length<2)_nbState.hooks.push('');_nbSaveState();_nbRender();}
 
 // 3️⃣ 홍보물 OCR — 이미지 선택 → 압축(긴 변 1568·JPEG) → Worker 비전 → 사실 필드 채움(사람이 검증)
 function _nbPickImage(){var f=document.getElementById('nb-ocr-file');if(f)f.click();}
@@ -13149,10 +13162,12 @@ function _nbTplText(v){_nbState.tplText=v;_nbSaveState();}
 // 생성/수정 공통 페이로드 — 고정 목적+강조포인트를 intent에, 타겟을 target에 담아 기존 Worker 필드로(재배포 불필요).
 function _nbBuildPayload(){
   var s=_nbState,F=s.facts||{};
+  var tparts=[];_NB_TGT_FIELDS.forEach(function(f){var v=(s.tgt&&s.tgt[f[0]])||'';if(v)tparts.push(f[1]+' '+v);});
+  var hk=(s.hooks||[]).map(function(x){return String(x||'').trim();}).filter(Boolean);
   var intent=_NB_FIXED_PURPOSE;
-  if((s.hooks||[]).length)intent+=' 이번 글에서 이 타겟에게 특히 강조할 점: '+s.hooks.join(', ')+'.';
+  if(hk.length)intent+=' 이번 글에서 이 타겟에게 특히 강조할 점: '+hk.join(' / ')+'.';
   var topic=String(F.title||'').trim();
-  return {topic:topic,intent:intent,target:s.targetSel||'',
+  return {topic:topic,intent:intent,target:tparts.join(', '),
     facts:{overview:F.overview||'',when:F.when||'',where:F.where||'',who:F.who||'',price:F.price||'',detail:F.detail||''},
     extra:String(s.extra||'').trim(),template:(s.tplMode==='fixed'?String(s.tplText||'').trim():''),keys:[],length:'보통',voice:s.voice,emoji:s.emoji,refs:_nbToneLib()};
 }
@@ -13311,8 +13326,25 @@ function _nbRender(){
   var emoChip='<button type="button" class="nb-chip'+(s.emoji?' on':'')+'" onclick="_nbSet(\'emoji\','+(!s.emoji)+')">😊 이모지</button>';
   var F=s.facts||{};
   // 1️⃣ 주요 타겟(단일) 2️⃣ 강조 포인트(다중) 칩 빌더
-  var tgtHtml=_NB_TARGETS.map(function(t,i){return '<button type="button" class="nb-chip'+(s.targetSel===t?' on':'')+'" onclick="_nbSetTarget('+i+')">'+escapeHtml(t)+'</button>';}).join('');
-  var hookHtml=_NB_HOOKS.map(function(h,i){var on=(s.hooks||[]).indexOf(h)>-1;return '<button type="button" class="nb-chip'+(on?' on':'')+'" onclick="_nbTogHook('+i+')">'+escapeHtml(h)+'</button>';}).join('');
+  // 1️⃣ 타겟 속성 드롭다운
+  var tgtHtml=_NB_TGT_FIELDS.map(function(f){
+    return '<label class="nb-tgt"><span class="nb-tgt-l">'+escapeHtml(f[1])+'</span><select class="nb-input nb-tgt-s" onchange="_nbTgtSet(\''+f[0]+'\',this.value)">'
+      +f[2].map(function(o){var v=(o==='무관'?'':o);return '<option value="'+escapeHtml(v)+'"'+(((s.tgt&&s.tgt[f[0]])||'')===v?' selected':'')+'>'+escapeHtml(o)+'</option>';}).join('')
+      +'</select></label>';
+  }).join('');
+  // 2️⃣ 강조 포인트 주관식 — 최소 2줄, 마지막 줄 ＋ 로 추가
+  if(!_nbState.hooks||!_nbState.hooks.length)_nbState.hooks=['',''];
+  var hooks=_nbState.hooks;
+  var hookRows=hooks.map(function(h,i){
+    var isLast=(i===hooks.length-1);
+    var ph=(i===0?'예: 올해 초연 평점 9.9, 전 세대를 울린 화제작':(i===1?'예: 온 가족이 함께 보기 좋은 따뜻한 이야기':'강조할 점을 한 줄 더'));
+    return '<div class="nb-row" style="gap:7px;margin-bottom:7px;align-items:stretch">'
+      +'<input class="nb-input" style="flex:1" placeholder="'+ph+'" value="'+escapeHtml(h||'')+'" oninput="_nbHookSet('+i+',this.value)">'
+      +(isLast
+        ? '<button type="button" class="nb-btn ghost" title="한 줄 추가" onclick="_nbHookAdd()" style="flex-shrink:0;padding:0 14px;font-size:18px">＋</button>'
+        : (hooks.length>2?'<button type="button" class="nb-btn ghost" title="삭제" onclick="_nbHookDel('+i+')" style="flex-shrink:0;padding:0 13px">✕</button>':'<span style="width:46px;flex-shrink:0"></span>'))
+    +'</div>';
+  }).join('');
   var tplMode=s.tplMode||'auto';
   var tplPick=_NB_TEMPLATES.map(function(t){return '<button type="button" class="nb-chip'+(s.tplSel===t[0]?' on':'')+'" onclick="_nbTplPick(\''+t[0]+'\')">'+escapeHtml(t[1])+'</button>';}).join('');
   function _ff(k,label,ph,big){var val=escapeHtml(F[k]||'');return big
@@ -13339,12 +13371,12 @@ function _nbRender(){
    +'<div class="nb-wrap">'
    +'<div class="nb-col">'
      +'<div class="nb-note" style="margin:0 0 12px;background:#f5f5ff;border:1px solid #ececff;padding:9px 12px;border-radius:9px;color:#555">🎨 <b>예술 프로그램 홍보 글</b>을 만들어요 — 정보 전달·확산·관심/예매 촉진이 목적이에요.</div>'
-     // 1️⃣ 주요 타겟 (단일선택)
-     +'<div style="font-size:13px;font-weight:800;color:var(--accent);margin:2px 0 5px">1️⃣ 주요 타겟은 누구인가요?</div>'
-     +'<div class="nb-field"><div class="nb-chips">'+tgtHtml+'</div></div>'
-     // 2️⃣ 이 타겟에게 강조할 포인트 (다중)
-     +'<div style="font-size:13px;font-weight:800;color:var(--accent);margin:16px 0 5px">2️⃣ 이 타겟에게 무엇을 강조할까요?<span style="font-size:10.5px;font-weight:600;color:#aaa"> · 여러 개 가능</span></div>'
-     +'<div class="nb-field"><div class="nb-chips">'+hookHtml+'</div></div>'
+     // 1️⃣ 주요 타겟 (속성별 드롭다운)
+     +'<div style="font-size:13px;font-weight:800;color:var(--accent);margin:2px 0 5px">1️⃣ 주요 타겟은 누구인가요?<span style="font-size:10.5px;font-weight:600;color:#aaa"> · 해당하는 것만</span></div>'
+     +'<div class="nb-field"><div class="nb-tgt-grid">'+tgtHtml+'</div></div>'
+     // 2️⃣ 이 타겟에게 강조할 점 (주관식, 2줄 이상)
+     +'<div style="font-size:13px;font-weight:800;color:var(--accent);margin:16px 0 5px">2️⃣ 이 타겟에게 무엇을 강조할까요?<span style="font-size:10.5px;font-weight:700;color:#e5484d"> · 2줄 이상 필수</span></div>'
+     +'<div class="nb-field">'+hookRows+'</div>'
      // 3️⃣ 공연 내용 — 상세페이지 업로드 → OCR
      +'<div style="font-size:13px;font-weight:800;color:var(--accent);margin:16px 0 5px">3️⃣ 공연 내용</div>'
      +'<div class="nb-note" style="margin:0 0 7px">공연 상세페이지(포스터·리플릿)를 올리면 정보를 자동으로 읽어요.</div>'
@@ -13355,9 +13387,8 @@ function _nbRender(){
          +(s.ocrThumb?'<img src="'+s.ocrThumb+'" alt="" style="height:44px;border-radius:8px;border:1px solid #eee">':'')
          +(s.ocrThumb&&!s.ocrBusy?'<button type="button" class="nb-btn ghost" onclick="_nbOcrClear()">이미지 지우기</button>':'')
        +'</div>'
-       +'<div class="nb-note">읽고 나면 <b style="color:#e5484d">공연명·일시·장소·출연만 확인</b>해 주세요. (가격·상세 등은 OCR이 읽어 글에 그대로 반영)</div>'
+       +'<div class="nb-note">읽고 나면 <b style="color:#e5484d">일시·장소·출연만 확인</b>해 주세요. (공연명·가격·상세 등은 OCR이 읽어 글에 그대로 반영)</div>'
      +'</div>'
-     +_ff('title','공연·행사명','예: 2026 화요살롱 — 이낙준',false)
      +'<div class="nb-row" style="gap:8px">'
        +'<div style="flex:1;min-width:0">'+_ff('when','일시','날짜·시간',false)+'</div>'
        +'<div style="flex:1;min-width:0">'+_ff('where','장소','공연장·홀',false)+'</div>'
@@ -13415,7 +13446,9 @@ function _nbRender(){
 
 async function _nbGenerate(){
   var o=_nbBuildPayload();
-  if(!o.topic){showToast('공연 상세페이지(이미지)를 올리거나 공연명을 입력해 주세요','error');return;}
+  if(!o.topic){showToast('공연 상세페이지를 올려 공연 정보를 읽어 주세요','error');return;}
+  var hk=(_nbState.hooks||[]).map(function(x){return String(x||'').trim();}).filter(Boolean);
+  if(hk.length<2){showToast('강조할 점을 2줄 이상 적어 주세요','error');return;}
   _nbState.genBusy=true;_nbRender();   // '1차 초안을 작성 중입니다' 애니메이션
   try{
     var r=await api('POST','/api/content/blog',o);
