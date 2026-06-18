@@ -784,13 +784,14 @@ async function generateBlogDraft(env, b) {
   }
 
   const model = env.BLOG_MODEL || "claude-opus-4-8";
-  // 인증: 구독 OAuth 토큰(CLAUDE_CODE_OAUTH_TOKEN 값) 우선, 없으면 API 키.
+  // 인증: ANTHROPIC_API_KEY 우선(앱/비전 호출에 정식 권장), 없으면 구독 OAuth 토큰 폴백.
+  //  ⚠️ 구독 OAuth 토큰은 직접 API 호출(특히 비전)에서 403 "Request not allowed"로 막힘 → API 키 사용 권장.
   const headers = { "content-type": "application/json", "anthropic-version": "2023-06-01" };
-  if (env.ANTHROPIC_AUTH_TOKEN) {
+  if (env.ANTHROPIC_API_KEY) {
+    headers["x-api-key"] = env.ANTHROPIC_API_KEY;
+  } else {
     headers["authorization"] = "Bearer " + env.ANTHROPIC_AUTH_TOKEN;
     headers["anthropic-beta"] = "oauth-2025-04-20";
-  } else {
-    headers["x-api-key"] = env.ANTHROPIC_API_KEY;
   }
   const resp = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -813,11 +814,11 @@ __name(generateBlogDraft, "generateBlogDraft");
 async function extractPromoInfo(env, img) {
   const model = env.OCR_MODEL || env.BLOG_MODEL || "claude-opus-4-8";
   const headers = { "content-type": "application/json", "anthropic-version": "2023-06-01" };
-  if (env.ANTHROPIC_AUTH_TOKEN) {
+  if (env.ANTHROPIC_API_KEY) {
+    headers["x-api-key"] = env.ANTHROPIC_API_KEY;
+  } else {
     headers["authorization"] = "Bearer " + env.ANTHROPIC_AUTH_TOKEN;
     headers["anthropic-beta"] = "oauth-2025-04-20";
-  } else {
-    headers["x-api-key"] = env.ANTHROPIC_API_KEY;
   }
   const system = "당신은 공연·전시 홍보물(포스터·리플릿) 이미지를 읽어 사실 정보를 정확히 추출하는 도우미입니다. " +
     "이미지에 실제로 적혀 있는 내용만 추출하세요. 보이지 않거나 확실하지 않은 항목은 빈 문자열로 두고, 절대 추측하거나 지어내지 마세요. " +
