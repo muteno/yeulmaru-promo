@@ -1187,8 +1187,7 @@ var index_default = {
         }
       }
 
-      // === 홍보물 이미지 OCR (Graph 토큰 불요) ===
-      // 우선순위: ① 외부 OCR(CLOVA/Google Vision) → Claude(텍스트)로 구조화  ② 없으면 Claude 비전(API 키 필요)
+      // === ① OCR만 — 이미지 → 원문 텍스트 (외부 OCR: CLOVA/Google Vision). LLM 안 거침. ===
       if (url.pathname === "/api/content/ocr" && request.method === "POST") {
         let bb = {};
         try { bb = await request.json(); } catch (e) {}
@@ -1196,24 +1195,28 @@ var index_default = {
         const mime = bb.mime || "image/jpeg";
         if (!data) return json({ error: "이미지 데이터가 필요해요" }, env, 400);
         const hasExternal = (env.CLOVA_OCR_INVOKE_URL && env.CLOVA_OCR_SECRET) || env.GOOGLE_VISION_KEY || (env.GOOGLE_SA_EMAIL && env.GOOGLE_SA_PRIVATE_KEY);
-        const hasLlm = env.GEMINI_API_KEY || env.ANTHROPIC_API_KEY || env.ANTHROPIC_AUTH_TOKEN;
+        if (!hasExternal) return json({ error: "no_ocr_provider", note: "CLOVA_OCR_* / GOOGLE_VISION_KEY / GOOGLE_SA_* 중 하나 필요" }, env, 503);
         try {
-          if (hasExternal) {
-            const ocr = await runExternalOcr(env, data, mime);
-            if (!ocr.text) return json({ error: "OCR 텍스트가 비어 있어요(이미지·해상도 확인)" }, env, 502);
-            const info = hasLlm
-              ? await structurePromoText(env, ocr.text)
-              : { title: "", overview: "", when: "", where: "", who: "", price: "", detail: ocr.text };
-            return json({ info, provider: ocr.provider }, env);
-          }
-          if (env.ANTHROPIC_API_KEY) {
-            // 외부 OCR 미설정 + API 키 있으면 Claude 비전 직접 (OAuth 비전은 403이라 키 필요)
-            const info = await extractPromoInfo(env, { mime, data });
-            return json({ info, provider: "claude-vision" }, env);
-          }
-          return json({ error: "no_ocr_provider", note: "CLOVA_OCR_*/GOOGLE_VISION_KEY 또는 ANTHROPIC_API_KEY 필요" }, env, 503);
+          const ocr = await runExternalOcr(env, data, mime);
+          return json({ text: ocr.text || "", provider: ocr.provider }, env);
         } catch (e) {
           console.error("[content/ocr]", e);
+          return json({ error: String((e && e.message) || e) }, env, 502);
+        }
+      }
+
+      // === ② 분석 — OCR 원문 텍스트 → 육하원칙 JSON (LLM: Gemini/Claude). OCR과 분리. ===
+      if (url.pathname === "/api/content/structure" && request.method === "POST") {
+        if (!env.GEMINI_API_KEY && !env.ANTHROPIC_API_KEY && !env.ANTHROPIC_AUTH_TOKEN) return json({ error: "no_api_key", note: "GEMINI_API_KEY 또는 ANTHROPIC_* 미설정" }, env, 503);
+        let bb = {};
+        try { bb = await request.json(); } catch (e) {}
+        const text = String(bb.text || "").trim();
+        if (!text) return json({ error: "분석할 텍스트가 필요해요" }, env, 400);
+        try {
+          const info = await structurePromoText(env, text);
+          return json({ info }, env);
+        } catch (e) {
+          console.error("[content/structure]", e);
           return json({ error: String((e && e.message) || e) }, env, 502);
         }
       }

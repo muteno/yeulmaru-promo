@@ -13066,7 +13066,7 @@ var _NB_TEMPLATES=[
   ['review','후기·현장형','1) 방문 계기 / 기대\n2) 현장 분위기 묘사\n3) 공연 하이라이트\n4) 솔직한 감상\n5) 추천 + 다음 공연 안내'],
   ['info','정보 요약형','1) 핵심 정보 먼저 (일시·장소·가격·예매)\n2) 공연 개요\n3) 관람 포인트\n4) 예매 링크 / 문의']
 ];
-var _nbState={length:'보통', voice:'정중하고 따뜻한', emoji:true, tgt:{}, hooks:['',''], facts:{}, extra:'', tplMode:'auto', tplSel:'', tplText:'', output:'', comments:[], ocrThumb:'', ocrBusy:false, genBusy:false, _toneDraft:'', escHandler:null};
+var _nbState={length:'보통', voice:'정중하고 따뜻한', emoji:true, tgt:{}, hooks:['',''], facts:{}, extra:'', tplMode:'auto', tplSel:'', tplText:'', output:'', comments:[], ocrText:'', ocrThumb:'', ocrBusy:false, analyzeBusy:false, genBusy:false, _toneDraft:'', escHandler:null};
 
 // 상단 '콘텐츠 제작' 드롭다운 (네이버 블로그 + 향후 채널 확장)
 function _contentMenuBuild(menu){
@@ -13099,7 +13099,7 @@ function closeNaverBlogTool(){
   var el=document.getElementById('nblog-board');if(el)el.innerHTML='';
 }
 function _nbSaveState(){
-  try{localStorage.setItem(_NB_DRAFT_KEY,JSON.stringify({voice:_nbState.voice,emoji:_nbState.emoji,tgt:_nbState.tgt||{},hooks:_nbState.hooks||['',''],facts:_nbState.facts||{},extra:_nbState.extra||'',tplMode:_nbState.tplMode||'auto',tplSel:_nbState.tplSel||'',tplText:_nbState.tplText||'',output:_nbState.output||'',comments:_nbState.comments||[]}));}catch(e){}
+  try{localStorage.setItem(_NB_DRAFT_KEY,JSON.stringify({voice:_nbState.voice,emoji:_nbState.emoji,tgt:_nbState.tgt||{},hooks:_nbState.hooks||['',''],facts:_nbState.facts||{},extra:_nbState.extra||'',tplMode:_nbState.tplMode||'auto',tplSel:_nbState.tplSel||'',tplText:_nbState.tplText||'',output:_nbState.output||'',comments:_nbState.comments||[],ocrText:_nbState.ocrText||''}));}catch(e){}
 }
 function _nbSet(key,val){_nbState[key]=val;_nbSaveState();_nbRender();}
 
@@ -13137,23 +13137,43 @@ function _nbCompress(file){
     img.src=url;
   });
 }
+// ① OCR — 이미지에서 원문 텍스트만 가져옴(분석 안 함). 결과는 'OCR 원문' 칸에 채움.
 async function _nbOcrRun(dataURL,mime){
   try{
     var r=await api('POST','/api/content/ocr',{data:dataURL,mime:mime});
     _nbState.ocrBusy=false;
+    _nbState.ocrText=String((r&&r.text)||'');
+    _nbSaveState();_nbRender();
+    if(_nbState.ocrText.trim())showToast('OCR 완료 — 원문 확인 후 [분석]을 눌러요 ✅','success');
+    else showToast('읽은 텍스트가 없어요 (이미지·해상도 확인)','error');
+  }catch(e){
+    _nbState.ocrBusy=false;_nbRender();
+    var m=String((e&&e.message)||e);
+    if(m.indexOf('no_ocr_provider')>-1||m.indexOf('503')>-1)showToast('OCR 엔진 미설정 — Worker 키 확인','error');
+    else showToast('OCR 실패: '+m,'error');
+  }
+}
+// ② 분석 — OCR 원문 → 일시·장소·출연 등으로 정리(LLM). OCR과 분리된 단계.
+async function _nbAnalyze(){
+  var t=String(_nbState.ocrText||'').trim();
+  if(!t){showToast('먼저 홍보물을 올려 OCR 하세요','error');return;}
+  _nbState.analyzeBusy=true;_nbRender();
+  try{
+    var r=await api('POST','/api/content/structure',{text:t});
+    _nbState.analyzeBusy=false;
     if(!r||!r.info)throw new Error('빈 응답');
     var info=r.info,F=_nbState.facts||(_nbState.facts={});
     ['title','overview','when','where','who','price','detail'].forEach(function(k){if(String(info[k]||'').trim())F[k]=String(info[k]).trim();});
     _nbSaveState();_nbRender();
-    showToast('홍보물에서 정보를 읽었어요 — 내용을 확인·수정해 주세요 ✅','success');
+    showToast('분석 완료 — 일시·장소·출연 정리했어요 ✨','success');
   }catch(e){
-    _nbState.ocrBusy=false;_nbRender();
+    _nbState.analyzeBusy=false;_nbRender();
     var m=String((e&&e.message)||e);
-    if(m.indexOf('503')>-1||m.indexOf('no_api_key')>-1)showToast('AI(비전) 미연결 — Worker 배포·키 설정이 필요해요','error');
-    else showToast('OCR 실패: '+m,'error');
+    if(m.indexOf('no_api_key')>-1||m.indexOf('503')>-1)showToast('AI(분석) 미연결 — GEMINI_API_KEY 등 확인','error');
+    else showToast('분석 실패: '+m,'error');
   }
 }
-function _nbOcrClear(){_nbState.ocrThumb='';_nbSaveState();_nbRender();}
+function _nbOcrClear(){_nbState.ocrThumb='';_nbState.ocrText='';_nbSaveState();_nbRender();}
 function _nbFactSet(k,v){if(!_nbState.facts)_nbState.facts={};_nbState.facts[k]=v;_nbSaveState();}
 function _nbExtraSet(v){_nbState.extra=v;_nbSaveState();}
 
@@ -13362,18 +13382,25 @@ function _nbRender(){
      // 2️⃣ 이 타겟에게 강조할 점 (주관식, 2줄 이상)
      +'<div style="font-size:13px;font-weight:800;color:var(--accent);margin:16px 0 5px">2️⃣ 이 타겟에게 무엇을 강조할까요?<span style="font-size:10.5px;font-weight:700;color:#e5484d"> · 2줄 이상 필수</span></div>'
      +'<div class="nb-field">'+hookRows+'</div>'
-     // 3️⃣ 공연 내용 — 상세페이지 업로드 → OCR
+     // 3️⃣ 공연 내용 — ① OCR(원문) → ② 분석(정리). 두 단계 분리.
      +'<div style="font-size:13px;font-weight:800;color:var(--accent);margin:16px 0 5px">3️⃣ 공연 내용</div>'
-     +'<div class="nb-note" style="margin:0 0 7px">공연 상세페이지(포스터·리플릿)를 올리면 정보를 자동으로 읽어요.</div>'
+     +'<div class="nb-note" style="margin:0 0 7px">① 상세페이지 올려 <b>OCR</b> → ② <b>분석</b>으로 일시·장소·출연 정리</div>'
      +'<div class="nb-field">'
        +'<input type="file" id="nb-ocr-file" accept="image/*" style="display:none" onchange="_nbOnFile(this)">'
        +'<div class="nb-row" style="gap:8px;align-items:center;flex-wrap:wrap">'
-         +'<button type="button" class="nb-btn '+(s.ocrBusy?'ghost':'primary')+'" '+(s.ocrBusy?'disabled':'')+' onclick="_nbPickImage()">'+(s.ocrBusy?'⏳ 읽는 중…':'📷 공연 상세페이지 올리기')+'</button>'
+         +'<button type="button" class="nb-btn '+(s.ocrBusy?'ghost':'primary')+'" '+(s.ocrBusy?'disabled':'')+' onclick="_nbPickImage()">'+(s.ocrBusy?'⏳ 읽는 중…':'📷 상세페이지 올려 OCR')+'</button>'
          +(s.ocrThumb?'<img src="'+s.ocrThumb+'" alt="" style="height:44px;border-radius:8px;border:1px solid #eee">':'')
-         +(s.ocrThumb&&!s.ocrBusy?'<button type="button" class="nb-btn ghost" onclick="_nbOcrClear()">이미지 지우기</button>':'')
+         +(s.ocrThumb&&!s.ocrBusy?'<button type="button" class="nb-btn ghost" onclick="_nbOcrClear()">지우기</button>':'')
        +'</div>'
-       +'<div class="nb-note">읽고 나면 <b style="color:#e5484d">일시·장소·출연만 확인</b>해 주세요. (공연명·가격·상세 등은 OCR이 읽어 글에 그대로 반영)</div>'
      +'</div>'
+     // OCR 원문 (수정 가능) + 분석 버튼
+     +'<div class="nb-field"><label class="nb-label">OCR 원문 <span style="color:#bbb;font-weight:500">· 직접 수정 가능 ('+(String(s.ocrText||'').length)+'자)</span></label>'
+       +'<textarea class="nb-input" style="min-height:88px;resize:vertical" placeholder="상세페이지를 올리면 읽은 텍스트가 여기 나와요. (직접 붙여넣어도 됨)" oninput="_nbState.ocrText=this.value;_nbSaveState()">'+escapeHtml(s.ocrText||'')+'</textarea>'
+       +'<div class="nb-row" style="margin-top:7px">'
+         +'<button type="button" class="nb-btn '+((String(s.ocrText||'').trim()&&!s.analyzeBusy)?'primary':'ghost')+'" '+((String(s.ocrText||'').trim()&&!s.analyzeBusy)?'':'disabled')+' onclick="_nbAnalyze()">'+(s.analyzeBusy?'🔍 분석 중…':'🔍 분석 — 일시·장소·출연 정리')+'</button>'
+       +'</div>'
+     +'</div>'
+     // 분석 결과 (검증·수정)
      +'<div class="nb-row" style="gap:8px">'
        +'<div style="flex:1;min-width:0">'+_ff('when','일시','날짜·시간',false)+'</div>'
        +'<div style="flex:1;min-width:0">'+_ff('where','장소','공연장·홀',false)+'</div>'
