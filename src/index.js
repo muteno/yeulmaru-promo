@@ -701,9 +701,58 @@ async function getHolidays(env, year, forceRefresh) {
 }
 __name(getHolidays, "getHolidays");
 
-// === 콘텐츠 제작 — 네이버 블로그 초안 AI 생성 (Claude Messages API 프록시) ===
-// b = {tpl,topic,content,length,voice,tags,emoji,refs:[{text}]}. env.ANTHROPIC_API_KEY 필요.
-// 모델은 env.BLOG_MODEL로 교체 가능(기본 claude-opus-4-8). refs(이전 글)로 톤을 모사.
+// === LLM 공용 호출 — Gemini(무료, 우선) 또는 Claude(API키/OAuth) ===
+// GEMINI_API_KEY 있으면 Gemini, 없으면 Claude. (구독 OAuth는 앱 백엔드에서 403이라 사실상 Claude는 API키 필요)
+async function geminiText(env, system, userText, maxTokens) {
+  const model = env.GEMINI_MODEL || "gemini-2.0-flash";
+  const url = "https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent?key=" + encodeURIComponent(env.GEMINI_API_KEY);
+  const body = {
+    systemInstruction: { parts: [{ text: String(system || "") }] },
+    contents: [{ role: "user", parts: [{ text: String(userText || "") }] }],
+    generationConfig: { maxOutputTokens: maxTokens || 4000, temperature: 0.7 }
+  };
+  const resp = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  if (!resp.ok) throw new Error("Gemini " + resp.status + ": " + (await resp.text()).slice(0, 300));
+  const data = await resp.json();
+  const cand = (data.candidates || [])[0] || {};
+  const text = (((cand.content || {}).parts) || []).map((p) => p.text || "").join("").trim();
+  if (!text) throw new Error("Gemini 빈 응답");
+  return text;
+}
+__name(geminiText, "geminiText");
+
+async function claudeText(env, system, userText, maxTokens) {
+  const model = env.BLOG_MODEL || "claude-opus-4-8";
+  const headers = { "content-type": "application/json", "anthropic-version": "2023-06-01" };
+  if (env.ANTHROPIC_API_KEY) {
+    headers["x-api-key"] = env.ANTHROPIC_API_KEY;
+  } else {
+    headers["authorization"] = "Bearer " + env.ANTHROPIC_AUTH_TOKEN;
+    headers["anthropic-beta"] = "oauth-2025-04-20";
+  }
+  const sysParam = (!env.ANTHROPIC_API_KEY && env.ANTHROPIC_AUTH_TOKEN)
+    ? [{ type: "text", text: "You are Claude Code, Anthropic's official CLI for Claude." }, { type: "text", text: system }]
+    : system;
+  const resp = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST", headers,
+    body: JSON.stringify({ model, max_tokens: maxTokens || 4000, system: sysParam, messages: [{ role: "user", content: userText }] })
+  });
+  if (!resp.ok) throw new Error("Anthropic " + resp.status + ": " + (await resp.text()).slice(0, 300));
+  const data = await resp.json();
+  const text = (data.content || []).filter((x) => x.type === "text").map((x) => x.text).join("").trim();
+  if (!text) throw new Error("빈 응답");
+  return text;
+}
+__name(claudeText, "claudeText");
+
+async function llmText(env, system, userText, maxTokens) {
+  if (env.GEMINI_API_KEY) return geminiText(env, system, userText, maxTokens);
+  return claudeText(env, system, userText, maxTokens);
+}
+__name(llmText, "llmText");
+
+// === 콘텐츠 제작 — 네이버 블로그 초안 AI 생성 ===
+// b = {tpl,topic,content,length,voice,tags,emoji,refs:[{text}]}. LLM = GEMINI_API_KEY 또는 ANTHROPIC_*.
 async function generateBlogDraft(env, b) {
   const lenMap = {
     "짧게": "600~900자 내외로 짧고 간결하게",
@@ -783,32 +832,7 @@ async function generateBlogDraft(env, b) {
       "---\n아래는 이 글의 원래 입력 정보입니다(사실·의도 유지에 참고하세요):\n\n" + user;
   }
 
-  const model = env.BLOG_MODEL || "claude-opus-4-8";
-  // 인증: 구독 OAuth 토큰(ANTHROPIC_AUTH_TOKEN) 우선, 없으면 API 키. OAuth는 system 첫 블록에 Claude Code 신원 필요(403 회피).
-  const headers = { "content-type": "application/json", "anthropic-version": "2023-06-01" };
-  if (env.ANTHROPIC_AUTH_TOKEN) {
-    headers["authorization"] = "Bearer " + env.ANTHROPIC_AUTH_TOKEN;
-    headers["anthropic-beta"] = "oauth-2025-04-20";
-  } else {
-    headers["x-api-key"] = env.ANTHROPIC_API_KEY;
-  }
-  // 구독 OAuth 토큰은 system 첫 블록이 Claude Code 신원이어야 호출 허용(아니면 403 Request not allowed).
-  const sysParam = env.ANTHROPIC_AUTH_TOKEN
-    ? [{ type: "text", text: "You are Claude Code, Anthropic's official CLI for Claude." }, { type: "text", text: system }]
-    : system;
-  const resp = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers,
-    body: JSON.stringify({ model, max_tokens: (b.length === "길게" ? 8000 : 4000), system: sysParam, messages: [{ role: "user", content: user }] })
-  });
-  if (!resp.ok) {
-    const errTxt = await resp.text();
-    throw new Error("Anthropic " + resp.status + ": " + errTxt.slice(0, 300));
-  }
-  const data = await resp.json();
-  const text = (data.content || []).filter((x) => x.type === "text").map((x) => x.text).join("").trim();
-  if (!text) throw new Error("빈 응답");
-  return text;
+  return await llmText(env, system, user, (b.length === "길게" ? 8000 : 4000));
 }
 __name(generateBlogDraft, "generateBlogDraft");
 
@@ -964,33 +988,16 @@ async function runExternalOcr(env, b64, mime) {
 }
 __name(runExternalOcr, "runExternalOcr");
 
-// OCR 원문 텍스트 → 육하원칙 JSON (Claude 텍스트 호출; OAuth는 비전과 달리 텍스트는 허용).
+// OCR 원문 텍스트 → 육하원칙 JSON (LLM: Gemini 우선/Claude).
 async function structurePromoText(env, rawText) {
-  const model = env.OCR_MODEL || env.BLOG_MODEL || "claude-opus-4-8";
-  const headers = { "content-type": "application/json", "anthropic-version": "2023-06-01" };
-  if (env.ANTHROPIC_AUTH_TOKEN) {
-    headers["authorization"] = "Bearer " + env.ANTHROPIC_AUTH_TOKEN;
-    headers["anthropic-beta"] = "oauth-2025-04-20";
-  } else {
-    headers["x-api-key"] = env.ANTHROPIC_API_KEY;
-  }
   const system = "당신은 공연·전시 홍보물에서 OCR로 추출한 한국어 텍스트를 받아 사실 정보를 정확히 정리하는 도우미입니다. " +
     "주어진 텍스트에 실제로 있는 내용만 사용하고, 없거나 불확실하면 빈 문자열로 두세요. 추측·창작 금지.";
-  const sysParam = env.ANTHROPIC_AUTH_TOKEN
-    ? [{ type: "text", text: "You are Claude Code, Anthropic's official CLI for Claude." }, { type: "text", text: system }]
-    : system;
   const ask = "다음은 홍보물 이미지에서 OCR로 읽은 원문 텍스트입니다(줄 순서가 흐트러졌을 수 있음). " +
     "아래 JSON 형식으로만 출력하세요. 설명·코드블록·머리말 없이 JSON 객체만.\n\n" +
     '{ "title":"공연·행사명(부제 포함)", "overview":"무엇을·왜 한두 문장", "when":"일시(날짜·요일·시간, 회차 모두)", ' +
     '"where":"장소(공연장·홀)", "who":"출연·연주·지휘·주최·주관·기획", "price":"가격(등급별)·할인·예매처·문의", ' +
     '"detail":"프로그램·곡목·줄거리·관람등급·러닝타임 등 본문용 상세" }\n\n# OCR 원문\n' + String(rawText || "").slice(0, 12000);
-  const resp = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST", headers,
-    body: JSON.stringify({ model, max_tokens: 2000, system: sysParam, messages: [{ role: "user", content: ask }] })
-  });
-  if (!resp.ok) throw new Error("Anthropic " + resp.status + ": " + (await resp.text()).slice(0, 300));
-  const data = await resp.json();
-  let txt = (data.content || []).filter((x) => x.type === "text").map((x) => x.text).join("").trim();
+  let txt = await llmText(env, system, ask, 2000);
   txt = txt.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
   let obj = {};
   try { obj = JSON.parse(txt); } catch (e) { const m = txt.match(/\{[\s\S]*\}/); obj = m ? JSON.parse(m[0]) : { detail: txt }; }
@@ -1166,7 +1173,7 @@ var index_default = {
       // === 콘텐츠 제작 — 네이버 블로그 초안 AI 생성 (Graph 토큰 불요) ===
       // ANTHROPIC_API_KEY 미설정 시 503 → 프론트가 로컬 템플릿 생성기로 폴백.
       if (url.pathname === "/api/content/blog" && request.method === "POST") {
-        if (!env.ANTHROPIC_API_KEY && !env.ANTHROPIC_AUTH_TOKEN) return json({ error: "no_api_key", note: "ANTHROPIC_AUTH_TOKEN 또는 ANTHROPIC_API_KEY 미설정" }, env, 503);
+        if (!env.GEMINI_API_KEY && !env.ANTHROPIC_API_KEY && !env.ANTHROPIC_AUTH_TOKEN) return json({ error: "no_api_key", note: "GEMINI_API_KEY 또는 ANTHROPIC_* 미설정" }, env, 503);
         let bb = {};
         try { bb = await request.json(); } catch (e) {}
         const topic = String(bb.topic || "").slice(0, 2000).trim();
@@ -1189,12 +1196,12 @@ var index_default = {
         const mime = bb.mime || "image/jpeg";
         if (!data) return json({ error: "이미지 데이터가 필요해요" }, env, 400);
         const hasExternal = (env.CLOVA_OCR_INVOKE_URL && env.CLOVA_OCR_SECRET) || env.GOOGLE_VISION_KEY || (env.GOOGLE_SA_EMAIL && env.GOOGLE_SA_PRIVATE_KEY);
-        const hasClaude = env.ANTHROPIC_API_KEY || env.ANTHROPIC_AUTH_TOKEN;
+        const hasLlm = env.GEMINI_API_KEY || env.ANTHROPIC_API_KEY || env.ANTHROPIC_AUTH_TOKEN;
         try {
           if (hasExternal) {
             const ocr = await runExternalOcr(env, data, mime);
             if (!ocr.text) return json({ error: "OCR 텍스트가 비어 있어요(이미지·해상도 확인)" }, env, 502);
-            const info = hasClaude
+            const info = hasLlm
               ? await structurePromoText(env, ocr.text)
               : { title: "", overview: "", when: "", where: "", who: "", price: "", detail: ocr.text };
             return json({ info, provider: ocr.provider }, env);
