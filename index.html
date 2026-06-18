@@ -1264,6 +1264,23 @@ table.promo-board-table th:last-child .col-resize-handle{display:none}
 .nb-btn:disabled{opacity:.5;cursor:default;transform:none;box-shadow:none}
 .nb-row{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
 .nb-note{font-size:11.5px;color:#a4a4b0;line-height:1.7;margin-top:10px;background:#f7f7fb;border-radius:9px;padding:9px 12px}
+/* 블로그 도우미 — 타겟 칩·아바타·라벨우측 행 */
+.nb-chip{display:inline-flex;align-items:center;gap:4px;padding:5px 11px;border-radius:999px;border:1px solid #e3e3ec;background:#fff;color:#666;font-size:12px;cursor:pointer;font-family:inherit;line-height:1;user-select:none;transition:background .12s,border-color .12s,color .12s}
+.nb-chip:hover{border-color:#c5c5d6}
+.nb-chip.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+.nb-chiprow{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
+.nb-tgt2{display:flex;gap:16px;align-items:center;margin:2px 0 4px}
+.nb-tgt2-av{flex-shrink:0;width:120px;display:flex;flex-direction:column;align-items:center;gap:6px}
+.nb-tgt2-fields{flex:1;min-width:0;display:flex;flex-direction:column;gap:9px}
+.nb-tgt2-fl{font-size:10.5px;color:#9a9aa6;font-weight:700;text-align:center;margin-bottom:4px;letter-spacing:.2px}
+.nb-av-cap{font-size:10.5px;color:#aaa;font-weight:600;text-align:center;line-height:1.3}
+.nb-av-bar{width:90px;height:5px;border-radius:3px;background:#ececf2;overflow:hidden}
+.nb-av-bar>i{display:block;height:100%;background:var(--accent);border-radius:3px;transition:width .35s ease}
+.nb-av-svg{filter:drop-shadow(0 4px 8px rgba(74,77,231,.12))}
+.nb-lr{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:9px}
+.nb-lr-l{font-size:12.5px;font-weight:700;color:#555;flex-shrink:0}
+.nb-lr-r{display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+@media(max-width:760px){.nb-tgt2{flex-direction:column;align-items:stretch}.nb-tgt2-av{flex-direction:row;width:auto;justify-content:center;gap:12px}}
 @media(max-width:760px){.nb-wrap{grid-template-columns:1fr;height:auto;overflow:visible}.nb-col{overflow:visible}.nb-out,.nb-out-empty{min-height:220px}}
 
 /* ============================================================
@@ -13126,8 +13143,7 @@ var _NB_TGT_FIELDS=[
   ['gender','성별',['무관','남성','여성']],
   ['age','연령/나이',['무관','10대','20대','30대','40대','50대','60대+']],
   ['family','가족 구성',['무관','1인','연인·부부','자녀 동반 가족','3세대']],
-  ['fan','마니아 여부',['무관','입문·일반','마니아']],
-  ['region','거주지',['무관','여수·인근','전남권','수도권','전국']]
+  ['fan','마니아 여부',['무관','입문·일반','마니아']]
 ];
 // 4️⃣ 기본 틀(글 구성) — 옵션. 안 잡으면 레퍼토리(톤 참조) 기반, 잡으면 이 틀에 맞춰 작성. 프리셋 선택 후 직접 편집 가능.
 var _NB_TEMPLATES=[
@@ -13153,7 +13169,7 @@ function openNaverBlogTool(){
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeNaverBlogTool)">'
     +'<div class="modal" style="width:96vw;max-width:1080px;height:92vh;max-height:92vh;padding:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:#fff">'
     +'<button class="modal-x" onclick="closeNaverBlogTool()" title="닫기" style="position:absolute;top:14px;right:14px;z-index:10">✕</button>'
-    +'<div style="padding:18px 24px;border-bottom:1px solid #eee;font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px">✍️ <span>네이버 블로그 글쓰기 도우미</span><span style="font-size:11px;color:#aaa;font-weight:500">· 의도·타겟 관점 + 홍보물 OCR로 초안을 만들어 드려요</span></div>'
+    +'<div style="padding:18px 24px;border-bottom:1px solid #eee;font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px">✍️ <span>블로그 글쓰기 도우미</span></div>'
     +'<div id="nblog-body" style="flex:1;overflow:auto;padding:20px 24px;min-width:0;min-height:0"></div>'
     +'</div></div>';
   if(_nbState.escHandler)document.removeEventListener('keydown',_nbState.escHandler);
@@ -13173,7 +13189,44 @@ function _nbSaveState(){
 function _nbSet(key,val){_nbState[key]=val;_nbSaveState();_nbRender();}
 
 // 1️⃣ 의도 단일선택 토글 · 2️⃣ 타겟관점 다중선택 토글
-function _nbTgtSet(k,v){if(!_nbState.tgt)_nbState.tgt={};_nbState.tgt[k]=v;_nbSaveState();}
+function _nbTgtSet(k,v){if(!_nbState.tgt)_nbState.tgt={};_nbState.tgt[k]=((_nbState.tgt[k]===v)?'':v);_nbSaveState();_nbRender();}
+// 타겟 선택에 따라 점점 완성되는 아바타(SVG) — 처음엔 실루엣, 고를수록 색·머리·표정·액세서리 추가.
+// 선택값으로 결정적 시드를 만들어(재렌더 시 흔들림 방지) 랜덤한 느낌만 준다.
+function _nbAvatar(){
+  var t=_nbState.tgt||{};
+  var g=t.gender||'',age=t.age||'',fam=t.family||'',fan=t.fan||'';
+  var filled=[g,age,fam,fan].filter(Boolean).length,anySet=filled>0;
+  var ss=g+'|'+age+'|'+fam+'|'+fan,seed=0,i;for(i=0;i<ss.length;i++)seed=(seed*31+ss.charCodeAt(i))>>>0;
+  function pick(a){return a[seed%a.length];}
+  var skin=anySet?'#F2C9A0':'#DBDBE5';
+  var hairPal=['#3A3340','#5A3A22','#23202C','#6E4A2C','#8A5A34'];
+  var hair=!age?'#CFCFDA':((age==='50대'||age==='60대+')?'#BFBFCB':pick(hairPal));
+  var shirtPal=['#4A4DE7','#2D8AB3','#1A6B3C','#C02872','#D88455','#F5B400'];
+  var shirt=anySet?pick(shirtPal):'#DBDBE5';
+  var P=[];
+  P.push('<ellipse cx="60" cy="143" rx="28" ry="4.5" fill="rgba(40,40,70,.07)"/>');
+  P.push('<path d="M28 150 Q28 106 60 106 Q92 106 92 150 Z" fill="'+shirt+'"/>');
+  P.push('<rect x="53" y="92" width="14" height="20" rx="6" fill="'+skin+'"/>');
+  P.push('<circle cx="60" cy="74" r="25" fill="'+skin+'"/>');
+  if(g==='여성')P.push('<path d="M34 78 Q33 45 60 45 Q87 45 86 78 L86 96 Q83 72 76 70 Q70 58 60 58 Q50 58 44 70 Q37 72 34 96 Z" fill="'+hair+'"/>');
+  else if(g==='남성')P.push('<path d="M37 68 Q41 47 60 47 Q79 47 83 68 Q72 58 60 58 Q48 58 37 68 Z" fill="'+hair+'"/>');
+  else if(age)P.push('<path d="M38 66 Q44 50 60 50 Q76 50 82 66 Q71 58 60 58 Q49 58 38 66 Z" fill="'+hair+'"/>');
+  if(anySet){
+    P.push('<circle cx="51" cy="76" r="2.5" fill="#3A3340"/><circle cx="69" cy="76" r="2.5" fill="#3A3340"/>');
+    P.push('<path d="M52 85 Q60 91 68 85" stroke="#C77B57" stroke-width="2.2" fill="none" stroke-linecap="round"/>');
+    P.push('<circle cx="45" cy="83" r="3.2" fill="rgba(240,150,120,.35)"/><circle cx="75" cy="83" r="3.2" fill="rgba(240,150,120,.35)"/>');
+  }else{
+    P.push('<text x="60" y="82" text-anchor="middle" font-size="22" font-weight="800" fill="#fff">?</text>');
+  }
+  if(fan==='마니아')P.push('<path d="M33 76 Q33 46 60 46 Q87 46 87 76" stroke="#26242E" stroke-width="4" fill="none"/><rect x="28" y="72" width="10" height="17" rx="4.5" fill="#26242E"/><rect x="82" y="72" width="10" height="17" rx="4.5" fill="#26242E"/>');
+  else if(fan==='입문·일반')P.push('<path d="M41 39 l2.3 4.7 5.1 .7 -3.7 3.6 .9 5.1 -4.6 -2.4 -4.6 2.4 .9 -5.1 -3.7 -3.6 5.1 -.7 z" fill="#F5B400" opacity=".9"/>');
+  if(fam==='연인·부부')P.push('<path d="M95 46 q3 -4 6 0 q3 -4 6 0 q0 5 -6 9 q-6 -4 -6 -9 z" fill="#E0568A"/>');
+  else if(fam==='자녀 동반 가족')P.push('<circle cx="99" cy="117" r="12" fill="'+skin+'"/><path d="M87 139 Q87 121 99 121 Q111 121 111 139 Z" fill="'+pick(shirtPal)+'"/>');
+  else if(fam==='3세대')P.push('<circle cx="100" cy="119" r="9.5" fill="'+skin+'"/><path d="M90 139 Q90 123 100 123 Q110 123 110 139 Z" fill="'+pick(shirtPal)+'"/><circle cx="16" cy="123" r="8" fill="'+skin+'"/><path d="M8 140 Q8 127 16 127 Q24 127 24 140 Z" fill="#BFBFCB"/>');
+  var svg='<svg class="nb-av-svg" viewBox="0 0 120 150" width="108" height="135" style="display:block">'+P.join('')+'</svg>';
+  var cap=anySet?('타겟 '+filled+'/4 완성 '+(filled>=4?'🎉':'')):'고를수록 캐릭터가 생겨요';
+  return svg+'<div class="nb-av-bar"><i style="width:'+(filled/4*100)+'%"></i></div><div class="nb-av-cap">'+cap+'</div>';
+}
 // 2️⃣ 강조 포인트 — 주관식 여러 줄(최소 2). ＋ 로 추가, ✕ 로 삭제(2줄 미만이면 자동 보충).
 function _nbHookSet(i,v){if(!_nbState.hooks)_nbState.hooks=['',''];_nbState.hooks[i]=v;_nbSaveState();}
 function _nbHookAdd(){if(!_nbState.hooks)_nbState.hooks=['',''];_nbState.hooks.push('');_nbSaveState();_nbRender();}
@@ -13417,14 +13470,13 @@ function _nbRender(){
   var _scTop=body.scrollTop;   // 재렌더 시 스크롤 위치 보존(선택 때마다 맨 위로 튀는 문제)
   var s=_nbState;
   var voices=[['정중하고 따뜻한','정중하게'],['친근하고 편안한','친근하게']];
-  var voiceChecks=voices.map(function(v){return '<label class="nb-check"><input type="radio" name="nbvoice"'+(s.voice===v[0]?' checked':'')+' onclick="_nbSet(\'voice\',\''+v[0]+'\')"> <span>'+v[1]+'</span></label>';}).join('');
+  var voiceChips=voices.map(function(v){return '<span class="nb-chip'+(s.voice===v[0]?' on':'')+'" onclick="_nbSet(\'voice\',\''+v[0]+'\')">'+escapeHtml(v[1])+'</span>';}).join('');
   var F=s.facts||{};
-  // 1️⃣ 주요 타겟(단일) 2️⃣ 강조 포인트(다중) 칩 빌더
-  // 1️⃣ 타겟 속성 드롭다운
-  var tgtHtml=_NB_TGT_FIELDS.map(function(f){
-    return '<label class="nb-tgt"><span class="nb-tgt-l">'+escapeHtml(f[1])+'</span><select class="nb-input nb-tgt-s" onchange="_nbTgtSet(\''+f[0]+'\',this.value)">'
-      +f[2].map(function(o){var v=(o==='무관'?'':o);return '<option value="'+escapeHtml(v)+'"'+(((s.tgt&&s.tgt[f[0]])||'')===v?' selected':'')+'>'+escapeHtml(o)+'</option>';}).join('')
-      +'</select></label>';
+  // 1️⃣ 타겟 속성 — 칩(선택지) + 옆에 점점 완성되는 아바타
+  var tgtFieldsHtml=_NB_TGT_FIELDS.map(function(f){
+    var cur=(s.tgt&&s.tgt[f[0]])||'';
+    var chips=f[2].map(function(o){var v=(o==='무관'?'':o);var on=(cur===v);return '<span class="nb-chip'+(on?' on':'')+'" onclick="_nbTgtSet(\''+f[0]+'\',\''+v+'\')">'+escapeHtml(o)+'</span>';}).join('');
+    return '<div><div class="nb-tgt2-fl">'+escapeHtml(f[1])+'</div><div class="nb-chiprow">'+chips+'</div></div>';
   }).join('');
   // 2️⃣ 강조 포인트 주관식 — 최소 2줄, 마지막 줄 ＋ 로 추가
   if(!_nbState.hooks||!_nbState.hooks.length)_nbState.hooks=['',''];
@@ -13459,29 +13511,27 @@ function _nbRender(){
   body.innerHTML=''
    +'<div class="nb-wrap">'
    +'<div class="nb-col">'
-     +'<div class="nb-note" style="margin:0 0 12px;background:#f5f5ff;border:1px solid #ececff;padding:9px 12px;border-radius:9px;color:#555">🎨 <b>예술 프로그램 홍보 글</b>을 만들어요 — 정보 전달·확산·관심/예매 촉진이 목적이에요.</div>'
-     // 1️⃣ 주요 타겟 (속성별 드롭다운)
-     +'<div style="font-size:13px;font-weight:800;color:var(--accent);margin:2px 0 5px">1️⃣ 주요 타겟은 누구인가요?<span style="font-size:10.5px;font-weight:600;color:#aaa"> · 해당하는 것만</span></div>'
-     +'<div class="nb-field"><div class="nb-tgt-grid">'+tgtHtml+'</div></div>'
+     // 1️⃣ 주요 타겟 — 칩 + 옆에 점점 완성되는 아바타
+     +'<div style="font-size:13px;font-weight:800;color:var(--accent);margin:2px 0 7px">1️⃣ 주요 타겟은 누구인가요?<span style="font-size:10.5px;font-weight:600;color:#aaa"> · 해당하는 것만</span></div>'
+     +'<div class="nb-field"><div class="nb-tgt2"><div class="nb-tgt2-av">'+_nbAvatar()+'</div><div class="nb-tgt2-fields">'+tgtFieldsHtml+'</div></div></div>'
      // 2️⃣ 이 타겟에게 강조할 점 (주관식, 2줄 이상)
      +'<div style="font-size:13px;font-weight:800;color:var(--accent);margin:16px 0 5px">2️⃣ 이 타겟에게 무엇을 강조할까요?<span style="font-size:10.5px;font-weight:700;color:#e5484d"> · 2줄 이상 필수</span></div>'
      +'<div class="nb-field">'+hookRows+'</div>'
      // 3️⃣ 공연 내용 — 상세페이지 OCR (원문이 글의 바탕)
      +'<div style="font-size:13px;font-weight:800;color:var(--accent);margin:16px 0 5px">3️⃣ 공연 내용</div>'
-     +'<div class="nb-note" style="margin:0 0 7px">상세페이지를 올리면 텍스트가 <b>OCR 원문</b>에 나와요. 그대로 글의 바탕이 됩니다.</div>'
+     +'<div style="font-size:12px;color:#555;font-weight:500;line-height:1.6;margin:0 0 8px">상세페이지를 올리면 텍스트가 <b style="color:var(--accent)">OCR 원문</b>에 나와요. 그대로 글의 바탕이 됩니다.</div>'
      +'<div class="nb-field">'
        +'<input type="file" id="nb-ocr-file" accept="image/*" style="display:none" onchange="_nbOnFile(this)">'
        +'<button type="button" class="nb-upload-btn" '+((s.ocrBusy||(s.ocrFiles&&s.ocrFiles.length>=3))?'disabled':'')+' onclick="_nbPickImage()">'+(s.ocrBusy?'⏳ 읽는 중…':'＋ 상세 페이지 업로드'+((s.ocrFiles&&s.ocrFiles.length)?' ('+s.ocrFiles.length+'/3)':''))+'</button>'
        +((s.ocrFiles&&s.ocrFiles.length)?'<div style="margin-top:8px">'+s.ocrFiles.map(function(f,i){return '<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:#f7f7fb;border:1px solid #ececf3;border-radius:8px;margin-bottom:5px"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12.5px;color:#555">📄 '+escapeHtml(f.name||'이미지')+'</span><button type="button" title="삭제" onclick="_nbOcrFileDel('+i+')" style="border:0;background:none;color:#bbb;cursor:pointer;font-size:15px;line-height:1;padding:0 3px;flex-shrink:0">✕</button></div>';}).join('')+'</div>':'')
      +'</div>'
-     +'<div class="nb-field"><label class="nb-label">OCR 원문 <span style="color:#bbb;font-weight:500">· 직접 수정 가능 ('+(String(s.ocrText||'').length)+'자)</span></label>'
+     +'<div class="nb-field" style="margin-bottom:6px"><label class="nb-label">OCR 원문 <span style="color:#bbb;font-weight:500">· 직접 수정 가능 ('+(String(s.ocrText||'').length)+'자)</span></label>'
        +'<textarea class="nb-input" style="min-height:120px;resize:vertical" placeholder="상세페이지를 올리면 읽은 텍스트가 여기 나와요. (직접 붙여넣어도 됨)" oninput="_nbState.ocrText=this.value;_nbSaveState()">'+escapeHtml(s.ocrText||'')+'</textarea>'
      +'</div>'
-     +'<div style="border-top:1px solid #f0f0f4;margin:16px 0 12px"></div>'
-     // 말투 (라디오 · 2개)
-     +'<div class="nb-field"><label class="nb-label">말투</label><div class="nb-checks">'+voiceChecks+'</div></div>'
-     // 이모지 (체크박스)
-     +'<div class="nb-field"><label class="nb-check"><input type="checkbox"'+(s.emoji?' checked':'')+' onchange="_nbSet(\'emoji\',this.checked)"> <span>😊 이모지 사용</span></label></div>'
+     +'<div style="border-top:1px solid #f0f0f4;margin:6px 0 10px"></div>'
+     // 말투 · 이모지 — 라벨 좌측 / 선택지 우측
+     +'<div class="nb-lr"><span class="nb-lr-l">말투</span><div class="nb-lr-r">'+voiceChips+'</div></div>'
+     +'<div class="nb-lr"><span class="nb-lr-l">이모지</span><div class="nb-lr-r"><span class="nb-chip'+(s.emoji?' on':'')+'" onclick="_nbSet(\'emoji\',true)">😊 사용</span><span class="nb-chip'+(!s.emoji?' on':'')+'" onclick="_nbSet(\'emoji\',false)">안 함</span></div></div>'
    +'</div>'
    +'<div class="nb-col">'
      +'<div class="nb-col-head" style="display:flex;align-items:center;justify-content:space-between">'
