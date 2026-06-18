@@ -970,15 +970,39 @@ async function ocrGoogleVision(env, b64) {
 }
 __name(ocrGoogleVision, "ocrGoogleVision");
 
-// 설정된 엔진으로 OCR 텍스트 추출 (OCR_PROVIDER로 우선순위, 기본 CLOVA→Google 폴백).
+// Gemini 비전 OCR — 멀티모달이 이미지를 직접 읽음(긴 상세페이지에 강함, 내부 타일링). env: GEMINI_API_KEY.
+async function geminiVisionOcr(env, b64, mime) {
+  const model = env.OCR_MODEL || env.GEMINI_MODEL || "gemini-2.0-flash";
+  const url = "https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent?key=" + encodeURIComponent(env.GEMINI_API_KEY);
+  const ask = "이 공연·전시 홍보물(상세페이지) 이미지에 있는 모든 텍스트를 위에서 아래로 빠짐없이 그대로 추출하세요. " +
+    "제목·일시·장소·출연진·프로그램·곡목·가격·예매·문의·작은 글씨·표 안 글자까지 전부. " +
+    "설명이나 요약 없이, 읽은 텍스트만 자연스러운 줄바꿈으로 출력하세요.";
+  const body = {
+    contents: [{ role: "user", parts: [{ inline_data: { mime_type: mime || "image/jpeg", data: b64 } }, { text: ask }] }],
+    generationConfig: { maxOutputTokens: 8192, temperature: 0 }
+  };
+  const resp = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  if (!resp.ok) throw new Error("Gemini Vision " + resp.status + ": " + (await resp.text()).slice(0, 300));
+  const data = await resp.json();
+  const cand = (data.candidates || [])[0] || {};
+  const text = (((cand.content || {}).parts) || []).map((p) => p.text || "").join("").trim();
+  return text;
+}
+__name(geminiVisionOcr, "geminiVisionOcr");
+
+// 설정된 엔진으로 OCR 텍스트 추출 — 기본 Gemini 비전 우선(긴 페이지 강함) → Google → CLOVA.
 async function runExternalOcr(env, b64, mime) {
   const pref = String(env.OCR_PROVIDER || "").toLowerCase();
+  const hasGemini = !!env.GEMINI_API_KEY;
   const hasClova = !!(env.CLOVA_OCR_INVOKE_URL && env.CLOVA_OCR_SECRET);
   const hasGoogle = !!(env.GOOGLE_VISION_KEY || (env.GOOGLE_SA_EMAIL && env.GOOGLE_SA_PRIVATE_KEY));
-  const order = pref === "google" ? ["google", "clova"] : ["clova", "google"];
+  const order = pref === "google" ? ["google", "gemini", "clova"]
+    : pref === "clova" ? ["clova", "gemini", "google"]
+    : ["gemini", "google", "clova"];
   let lastErr = null;
   for (const p of order) {
     try {
+      if (p === "gemini" && hasGemini) return { text: await geminiVisionOcr(env, b64, mime), provider: "gemini" };
       if (p === "clova" && hasClova) return { text: await ocrClova(env, b64, mime), provider: "clova" };
       if (p === "google" && hasGoogle) return { text: await ocrGoogleVision(env, b64), provider: "google" };
     } catch (e) { lastErr = e; }
@@ -1194,7 +1218,7 @@ var index_default = {
         const data = String(bb.data || "").replace(/^data:[^,]*,/, "").trim();
         const mime = bb.mime || "image/jpeg";
         if (!data) return json({ error: "이미지 데이터가 필요해요" }, env, 400);
-        const hasExternal = (env.CLOVA_OCR_INVOKE_URL && env.CLOVA_OCR_SECRET) || env.GOOGLE_VISION_KEY || (env.GOOGLE_SA_EMAIL && env.GOOGLE_SA_PRIVATE_KEY);
+        const hasExternal = env.GEMINI_API_KEY || (env.CLOVA_OCR_INVOKE_URL && env.CLOVA_OCR_SECRET) || env.GOOGLE_VISION_KEY || (env.GOOGLE_SA_EMAIL && env.GOOGLE_SA_PRIVATE_KEY);
         if (!hasExternal) return json({ error: "no_ocr_provider", note: "CLOVA_OCR_* / GOOGLE_VISION_KEY / GOOGLE_SA_* 중 하나 필요" }, env, 503);
         try {
           const ocr = await runExternalOcr(env, data, mime);

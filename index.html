@@ -13120,16 +13120,21 @@ function _nbOnFile(input){
     return _nbOcrRun(r.dataURL,r.mime);
   }).catch(function(e){_nbState.ocrBusy=false;_nbRender();showToast('이미지 처리 실패: '+String((e&&e.message)||e),'error');});
 }
+// OCR용 압축 — 긴 상세페이지 글자 가독성 우선: '폭'만 제한(세로 길이는 넉넉히 허용), 고품질.
 function _nbCompress(file){
   return new Promise(function(res,rej){
     var img=new Image(),url=URL.createObjectURL(file);
     img.onload=function(){
       try{
-        var max=1568,w=img.naturalWidth||img.width,h=img.naturalHeight||img.height,sc=Math.min(1,max/Math.max(w,h));
+        var w=img.naturalWidth||img.width,h=img.naturalHeight||img.height;
+        var maxW=1600,maxH=14000,maxPx=24000000; // 폭 제한·세로 넉넉·총픽셀 안전상한
+        var sc=Math.min(1,maxW/w,maxH/h,Math.sqrt(maxPx/(w*h)));
         var cw=Math.max(1,Math.round(w*sc)),ch=Math.max(1,Math.round(h*sc));
         var c=document.createElement('canvas');c.width=cw;c.height=ch;
         var ctx=c.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,cw,ch);ctx.drawImage(img,0,0,cw,ch);
-        var dataURL=c.toDataURL('image/jpeg',0.85);URL.revokeObjectURL(url);
+        var q=0.92,dataURL=c.toDataURL('image/jpeg',q);
+        while(dataURL.length>7000000&&q>0.5){q-=0.1;dataURL=c.toDataURL('image/jpeg',q);} // 페이로드 한도면 품질만 낮춤
+        URL.revokeObjectURL(url);
         res({dataURL:dataURL,mime:'image/jpeg'});
       }catch(e){URL.revokeObjectURL(url);rej(e);}
     };
