@@ -1251,6 +1251,9 @@ table.promo-board-table th:last-child .col-resize-handle{display:none}
 .nb-tgt-l{font-size:11.5px;color:#888;font-weight:600}
 .nb-tgt-s{padding:8px 10px;font-size:13px}
 @media(max-width:760px){.nb-tgt-grid{grid-template-columns:1fr}}
+.nb-checks{display:flex;flex-wrap:wrap;gap:13px 18px;align-items:center}
+.nb-check{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--text);cursor:pointer;font-weight:600}
+.nb-check input{width:16px;height:16px;accent-color:var(--accent);cursor:pointer;margin:0}
 .nb-btn{padding:11px 18px;border-radius:11px;font-size:13.5px;font-weight:700;border:0;cursor:pointer;font-family:inherit;transition:transform .15s,box-shadow .15s,background .15s}
 .nb-btn:hover{transform:translateY(-1px)}
 .nb-btn.primary{background:var(--accent);color:#fff;box-shadow:0 6px 16px rgba(74,77,231,0.28)}
@@ -13087,7 +13090,7 @@ function openNaverBlogTool(){
   if(_nbState.escHandler)document.removeEventListener('keydown',_nbState.escHandler);
   _nbState.escHandler=function(e){if(e.key==='Escape'){var cm=document.getElementById('nb-cmt-modal');if(cm&&cm.innerHTML){_nbCmtClose();return;}closeNaverBlogTool();}};
   document.addEventListener('keydown',_nbState.escHandler);
-  _nbRender();_nbGitRefresh();
+  _nbRender();
 }
 function closeNaverBlogTool(){
   if(_nbState.escHandler)document.removeEventListener('keydown',_nbState.escHandler);
@@ -13290,40 +13293,27 @@ async function _nbGitRefresh(){
   if(!_nbPatHas())return;
   try{var g=await _nbGitLoad();_nbToneCache(g.refs,g.sha);_nbRender();}catch(e){console.warn('[tone git]',e);}
 }
-function _nbPatSetup(){if(_nbPat(true)){showToast('GitHub 연결됨 — 톤 참조를 불러옵니다','success');_nbGitRefresh();}}
-async function _nbToneAdd(){
+// 톤 참조 — 이 브라우저(localStorage)에 로컬 저장. GitHub 연결 제거(생성 시 payload로 전달되어 그대로 동작).
+function _nbToneAdd(){
   var ta=document.getElementById('nb-tone-input');if(!ta)return;
   var v=(ta.value||'').trim();
   if(v.length<10){showToast('참조할 글을 조금 더 길게 붙여넣어 주세요','error');return;}
-  if(!_nbPat()){showToast('GitHub 토큰을 먼저 설정해 주세요','error');return;}
-  var btn=document.getElementById('nb-tone-add');if(btn){btn.disabled=true;btn.textContent='…';}
-  try{
-    var g=await _nbGitLoad();
-    var refs=g.refs.concat([{id:'t'+Date.now(),text:v,ts:new Date().toISOString()}]);
-    var sha=await _nbGitSave(refs,g.sha);
-    _nbToneCache(refs,sha);ta.value='';_nbState._toneDraft='';_nbRender();
-    showToast('톤 참조를 git에 저장했어요','success');
-  }catch(e){
-    showToast('저장 실패: '+String((e&&e.message)||e),'error');
-    var b2=document.getElementById('nb-tone-add');if(b2){b2.disabled=false;b2.textContent='＋';}
-  }
+  var refs=_nbToneLib().concat([{id:'t'+Date.now(),text:v,ts:new Date().toISOString()}]);
+  _nbToneCache(refs);ta.value='';_nbState._toneDraft='';_nbRender();
+  showToast('톤 참조를 저장했어요','success');
 }
-async function _nbToneDel(id){
-  if(!_nbPat()){showToast('GitHub 토큰이 필요해요','error');return;}
+function _nbToneDel(id){
   try{
-    var g=await _nbGitLoad();
-    var refs=g.refs.filter(function(x){return x.id!==id;});
-    var sha=await _nbGitSave(refs,g.sha);
-    _nbToneCache(refs,sha);_nbRender();
+    var refs=_nbToneLib().filter(function(x){return x.id!==id;});
+    _nbToneCache(refs);_nbRender();
   }catch(e){showToast('삭제 실패: '+String((e&&e.message)||e),'error');}
 }
 
 function _nbRender(){
   var body=document.getElementById('nblog-body');if(!body)return;
   var s=_nbState;
-  var voices=[['정중하고 따뜻한','정중·따뜻'],['친근하고 편안한','친근·편안'],['감각적이고 생생한','감각·생생']];
-  var voiceChips=voices.map(function(v){return '<button type="button" class="nb-chip'+(s.voice===v[0]?' on':'')+'" onclick="_nbSet(\'voice\',\''+v[0]+'\')">'+v[1]+'</button>';}).join('');
-  var emoChip='<button type="button" class="nb-chip'+(s.emoji?' on':'')+'" onclick="_nbSet(\'emoji\','+(!s.emoji)+')">😊 이모지</button>';
+  var voices=[['정중하고 따뜻한','정중하게'],['친근하고 편안한','친근하게']];
+  var voiceChecks=voices.map(function(v){return '<label class="nb-check"><input type="radio" name="nbvoice"'+(s.voice===v[0]?' checked':'')+' onclick="_nbSet(\'voice\',\''+v[0]+'\')"> <span>'+v[1]+'</span></label>';}).join('');
   var F=s.facts||{};
   // 1️⃣ 주요 타겟(단일) 2️⃣ 강조 포인트(다중) 칩 빌더
   // 1️⃣ 타겟 속성 드롭다운
@@ -13346,24 +13336,19 @@ function _nbRender(){
     +'</div>';
   }).join('');
   var tplMode=s.tplMode||'auto';
-  var tplPick=_NB_TEMPLATES.map(function(t){return '<button type="button" class="nb-chip'+(s.tplSel===t[0]?' on':'')+'" onclick="_nbTplPick(\''+t[0]+'\')">'+escapeHtml(t[1])+'</button>';}).join('');
+  var tplPick=_NB_TEMPLATES.map(function(t){return '<label class="nb-check"><input type="radio" name="nbtplpick"'+(s.tplSel===t[0]?' checked':'')+' onclick="_nbTplPick(\''+t[0]+'\')"> <span>'+escapeHtml(t[1])+'</span></label>';}).join('');
   function _ff(k,label,ph,big){var val=escapeHtml(F[k]||'');return big
     ? '<div class="nb-field"><label class="nb-label">'+label+'</label><textarea class="nb-input" style="min-height:64px;resize:vertical" placeholder="'+escapeHtml(ph)+'" oninput="_nbFactSet(\''+k+'\',this.value)">'+val+'</textarea></div>'
     : '<div class="nb-field"><label class="nb-label">'+label+'</label><input class="nb-input" placeholder="'+escapeHtml(ph)+'" value="'+val+'" oninput="_nbFactSet(\''+k+'\',this.value)"></div>';}
   var lib=_nbToneLib();
   // 톤 참조 목록은 기본 숨김(개수만). 펼치면 관리(삭제) — 붙여넣은 샘플 글이 '생성된 초안'으로 오해되지 않도록.
-  var libHtml;
-  if(!lib.length){
-    libHtml='<div class="nb-note">저장된 참조 글이 없어요. 예전에 잘 쓴 블로그 글을 붙여넣고 ＋ 를 누르면, AI가 그 말투·문체를 따라 씁니다.</div>';
-  }else{
+  var libHtml='';
+  if(lib.length){
     var listOpen=!!s.toneListOpen;
-    libHtml='<div class="nb-note" style="margin-top:8px;display:flex;align-items:center;gap:6px">🗂 톤 참조 <b>'+lib.length+'개</b> 저장됨 · AI가 이 말투를 참고해요 '
+    libHtml='<div class="nb-note" style="margin-top:8px;display:flex;align-items:center;gap:6px">🗂 톤 참조 <b>'+lib.length+'개</b> 저장됨 '
       +'<a href="#" onclick="_nbToneToggleList();return false" style="color:var(--accent);margin-left:auto">'+(listOpen?'접기 ▴':'관리 ▾')+'</a></div>';
     if(listOpen)libHtml+=lib.map(function(it){var prev=it.text.replace(/\s+/g,' ').slice(0,70);return '<div class="nb-tone-item"><span>'+escapeHtml(prev)+(it.text.length>70?'…':'')+'</span><button class="x" title="삭제" onclick="_nbToneDel(\''+it.id+'\')">✕</button></div>';}).join('');
   }
-  var gitRow=_nbPatHas()
-   ? '<div class="nb-note" style="margin-top:8px">🔗 GitHub(<code>'+_NB_GH.path+'</code>)에 저장돼요. ＋ 로 추가하면 레포에 커밋되고, 다른 기기·이슈 생성 시에도 자동 참고됩니다. <a href="#" onclick="_nbPatSetup();return false" style="color:var(--accent)">토큰 변경</a></div>'
-   : '<div class="nb-row" style="margin-top:8px"><button type="button" class="nb-btn ghost" onclick="_nbPatSetup()">🔗 GitHub 연결 (git 저장)</button></div><div class="nb-note">연결하면 ＋ 로 추가한 톤 글이 레포에 저장돼 어디서든 불러와져요. (토큰은 이 브라우저에만 저장)</div>';
   var outHtml=s.genBusy
     ? '<div class="nb-out-empty"><div class="nb-writing">✍️</div><div style="margin-top:14px;font-weight:700;color:#666">1차 초안을 작성 중입니다<span class="nb-dots"><i>.</i><i>.</i><i>.</i></span></div><div style="font-size:11.5px;color:#bbb;margin-top:7px">잠시만요, 정성껏 쓰는 중이에요</div></div>'
     : (s.output? '<textarea id="nb-output" class="nb-out" oninput="_nbState.output=this.value;_nbSaveState()">'+escapeHtml(s.output)+'</textarea>' : '<div class="nb-out-empty"><div style="font-size:30px;margin-bottom:10px">📝</div>타겟을 고르고 공연 상세페이지를 올린 뒤<br><b>[초안 생성]</b>을 누르면<br>여기에 블로그 초안이 나타나요</div>');
@@ -13397,27 +13382,29 @@ function _nbRender(){
      // 4️⃣ 참고 자료
      +'<div style="font-size:13px;font-weight:800;color:var(--accent);margin:16px 0 5px">4️⃣ 참고 자료<span style="font-size:10.5px;font-weight:600;color:#aaa"> · 선택</span></div>'
      +'<div class="nb-field"><label class="nb-label" style="color:#999;font-weight:500">보도자료·리뷰 등 글에 참고할 텍스트를 붙여넣어 주세요</label><textarea class="nb-input" style="min-height:64px;resize:vertical" placeholder="예: 보도자료 본문, 출연진 소개, 리뷰 등" oninput="_nbExtraSet(this.value)">'+escapeHtml(s.extra||'')+'</textarea></div>'
-     // 4️⃣ 기본 틀 (글 구성) — 옵션. 안 잡으면 레퍼토리 기반, 잡으면 이 틀에 맞춰
-     +'<div style="font-size:13px;font-weight:800;color:var(--accent);margin:16px 0 4px">📐 기본 틀 (글 구성)<span style="font-size:10.5px;font-weight:600;color:#aaa"> · 선택 (안 잡으면 톤 참조 기반)</span></div>'
-     +'<div class="nb-field"><div class="nb-chips">'
-       +'<button type="button" class="nb-chip'+(tplMode==='auto'?' on':'')+'" onclick="_nbTplMode(\'auto\')">레퍼토리 기반 (기본)</button>'
-       +'<button type="button" class="nb-chip'+(tplMode==='fixed'?' on':'')+'" onclick="_nbTplMode(\'fixed\')">기본 틀 사용</button>'
-     +'</div>'
-     +(tplMode==='auto'
-       ? '<div class="nb-note" style="margin-top:7px">저장된 톤 참조 글들의 구성·흐름을 자연스럽게 따라 써요. (틀을 따로 잡지 않음)</div>'
-       : '<div style="margin-top:8px"><div class="nb-chips">'+tplPick+'</div>'
-         +'<textarea class="nb-input" style="min-height:104px;resize:vertical;margin-top:8px" placeholder="이 구성(틀)에 맞춰 쓰도록 해요. 위에서 고르거나 직접 편집하세요." oninput="_nbTplText(this.value)">'+escapeHtml(s.tplText||'')+'</textarea>'
-         +'<div class="nb-note" style="margin-top:5px">이 순서·구성을 따라 작성해요. 프리셋을 고른 뒤 자유롭게 수정해도 됩니다.</div></div>')
-     +'</div>'
      +'<div style="border-top:1px solid #f0f0f4;margin:16px 0 12px"></div>'
-     +'<div class="nb-field"><label class="nb-label">말투</label><div class="nb-chips">'+voiceChips+'</div></div>'
-     +'<div class="nb-field"><label class="nb-label">옵션</label><div class="nb-chips">'+emoChip+'</div></div>'
-     +'<div class="nb-field"><label class="nb-label">✍️ 톤 참조 (선택) — 예전 글의 말투 따라하기</label>'
+     // 말투 (라디오 · 2개)
+     +'<div class="nb-field"><label class="nb-label">말투</label><div class="nb-checks">'+voiceChecks+'</div></div>'
+     // 이모지 (체크박스)
+     +'<div class="nb-field"><label class="nb-check"><input type="checkbox"'+(s.emoji?' checked':'')+' onchange="_nbSet(\'emoji\',this.checked)"> <span>😊 이모지 사용</span></label></div>'
+     // 📐 기본 틀 (라디오) — 톤 참조 위, 설명 없음
+     +'<div class="nb-field"><label class="nb-label">📐 기본 틀 (글 구성)</label>'
+       +'<div class="nb-checks">'
+         +'<label class="nb-check"><input type="radio" name="nbtpl"'+(tplMode==='auto'?' checked':'')+' onclick="_nbTplMode(\'auto\')"> <span>레퍼토리 기반</span></label>'
+         +'<label class="nb-check"><input type="radio" name="nbtpl"'+(tplMode==='fixed'?' checked':'')+' onclick="_nbTplMode(\'fixed\')"> <span>기본 틀 사용</span></label>'
+       +'</div>'
+       +(tplMode==='fixed'
+         ? '<div style="margin-top:8px"><div class="nb-checks">'+tplPick+'</div>'
+           +'<textarea class="nb-input" style="min-height:104px;resize:vertical;margin-top:8px" placeholder="이 구성(틀)에 맞춰 쓰도록 해요. 위에서 고르거나 직접 편집하세요." oninput="_nbTplText(this.value)">'+escapeHtml(s.tplText||'')+'</textarea></div>'
+         : '')
+     +'</div>'
+     // ✍️ 톤 참조 (로컬 저장)
+     +'<div class="nb-field"><label class="nb-label">✍️ 톤 참조 (선택)</label>'
+       +'<div class="nb-note" style="margin:0 0 7px">예전에 작성한 글을 복사해서 붙여넣으면, 글의 뉘앙스를 재현할 수 있어요.</div>'
        +'<div class="nb-row" style="align-items:flex-start;gap:7px">'
-         +'<textarea id="nb-tone-input" class="nb-textarea" style="min-height:74px;flex:1" placeholder="예전에 작성한 블로그 글을 붙여넣고 오른쪽 ＋ 를 누르세요. 여러 개 추가할 수 있어요." oninput="_nbState._toneDraft=this.value">'+escapeHtml(s._toneDraft||'')+'</textarea>'
+         +'<textarea id="nb-tone-input" class="nb-textarea" style="min-height:74px;flex:1" placeholder="예전 글을 붙여넣고 오른쪽 ＋ 를 누르세요." oninput="_nbState._toneDraft=this.value">'+escapeHtml(s._toneDraft||'')+'</textarea>'
          +'<button type="button" id="nb-tone-add" class="nb-btn primary" title="참조 글 추가" onclick="_nbToneAdd()" style="padding:0;width:42px;height:42px;font-size:20px;flex-shrink:0;border-radius:11px">＋</button>'
        +'</div>'
-       +gitRow
        +libHtml
      +'</div>'
    +'</div>'
@@ -13439,7 +13426,7 @@ function _nbRender(){
          +'</div>'
          +((s.comments&&s.comments.length)?'<div style="margin-top:8px">'+s.comments.map(function(c,i){return '<div style="font-size:11.5px;color:#888;padding:5px 0;border-top:1px dashed #eee"><b style="color:var(--accent)">#'+(i+1)+'</b> '+escapeHtml(c.text)+'</div>';}).join('')+'</div>':'')
        +'</div>'
-       : '<div class="nb-note">✨ <b>초안 생성</b>을 누르면 타겟·강조 포인트·공연 정보·톤 참조를 반영해 1차 초안을 써요. 이후 <b>코멘트</b>로 이어서 다듬으세요.</div>')
+       : '')
    +'</div>'
    +'</div>';
 }
