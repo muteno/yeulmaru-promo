@@ -886,6 +886,12 @@ table.promo-board-table th:last-child .col-resize-handle{display:none}
 .sub-sec-b{white-space:pre-wrap;word-break:break-word;color:#444}
 .sub-path-row{display:flex;align-items:center;gap:8px;background:#fafafa;border:1px solid rgba(0,0,0,0.06);border-radius:10px;padding:9px 12px;margin-bottom:8px}
 .sub-path-tx{flex:1;font-size:12px;color:#444;word-break:break-all;line-height:1.5}
+/* === 조회 모달 인라인 펼침 (구 sub-pop 오버레이 대체) === */
+.mv-inline-detail{margin:6px 0 2px;padding:12px 14px;background:#fafbff;border:1px solid rgba(74,77,231,0.14);border-radius:10px;font-size:13px;line-height:1.6;color:#333;max-height:46vh;overflow-y:auto;animation:fadeUp .16s ease}
+.mv-inline-hdr{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.mv-inline-title{flex:1;font-size:12px;font-weight:700;color:var(--text)}
+.mv-inline-collapse{color:#999}
+.mv-link.open .go,.mv-content-btn.open .go{color:#999}
 /* === 챗봇 위젯 (우측 하단) — 리퀴드 폴리시 === */
 .cb-fab{position:fixed;right:26px;bottom:26px;width:56px;height:56px;border-radius:50%;border:none;background:linear-gradient(135deg,#5B5EF0 0%,#4A4DE7 55%,#3A3DD0 100%);color:#fff;cursor:pointer;z-index:95;display:flex;align-items:center;justify-content:center;box-shadow:0 10px 28px rgba(74,77,231,0.42),0 3px 10px rgba(0,0,0,0.12),inset 0 1px 0 rgba(255,255,255,0.25);transition:transform .22s cubic-bezier(.34,1.4,.64,1),box-shadow .22s;animation:cbPop .45s cubic-bezier(.34,1.56,.64,1) backwards}
 .cb-fab:hover{transform:translateY(-3px) scale(1.05);box-shadow:0 16px 36px rgba(74,77,231,0.5),0 4px 12px rgba(0,0,0,0.14)}
@@ -13200,9 +13206,11 @@ function _openSubPop(title,bodyHtml,copyText){
     '</div></div>';
   document.body.appendChild(el);
 }
-function openMvFolderPopup(){
+// === 모달 안에서 인라인 펼침 (구 sub-pop 오버레이 대체 — 모달 깊이 ≤2 유지) ===
+// 내부 HTML 빌더는 구 _openSubPop 본문과 동일 (복사 동작·라벨 링크·섹션 구조 보존)
+function _mvFolderDetailHtml(){
   const fs=_mvDetail.folders||[];
-  if(!fs.length)return;
+  if(!fs.length)return '';
   // URL 포함 줄은 복사 시 URL만 (라벨 — URL 형식·구버전 URL-only 둘 다), 로컬 경로는 전체 복사
   _mvDetail._fCopy=fs.map(function(f){const m=String(f).match(/https?:\/\/\S+/);return m?m[0]:f;});
   let h='';
@@ -13216,11 +13224,11 @@ function openMvFolderPopup(){
          '<button class="sub-pop-copy" onclick="_subPopCopy(this,_mvDetail._fCopy['+i+'])">⧉ 복사</button></div>';
     }
   });
-  _openSubPop('자료 경로'+(fs.length>1?' ('+fs.length+'개)':''),h,null);
+  return h;
 }
-function openMvContentPopup(){
+function _mvContentDetailHtml(){
   const t=_mvDetail.text||'';
-  if(!t)return;
+  if(!t)return '';
   let h='';let buf=[];
   const flush=function(){if(buf.length){const b=buf.join('\n').replace(/^\n+|\n+$/g,'');if(b)h+='<div class="sub-sec-b">'+escapeHtml(b)+'</div>';buf=[];}};
   t.split('\n').forEach(function(line){
@@ -13229,7 +13237,35 @@ function openMvContentPopup(){
     else buf.push(line);
   });
   flush();
-  _openSubPop('홍보 내용',h,t);
+  return h;
+}
+function toggleMvFolder(){
+  const box=document.getElementById('mv-folder-detail');
+  const link=document.getElementById('mv-folder-link');
+  if(!box)return;
+  const open=box.style.display!=='none'&&box.innerHTML!=='';
+  if(open){box.style.display='none';box.innerHTML='';if(link)link.classList.remove('open');return;}
+  const fs=_mvDetail.folders||[];
+  box.innerHTML='<div class="mv-inline-hdr"><span class="mv-inline-title">자료 경로'+(fs.length>1?' ('+fs.length+'개)':'')+'</span>'+
+    '<button class="sub-pop-copy mv-inline-collapse" onclick="toggleMvFolder()">접기 ▲</button></div>'+
+    _mvFolderDetailHtml();
+  box.style.display='';
+  if(link)link.classList.add('open');
+}
+function toggleMvContent(){
+  const box=document.getElementById('mv-content-detail');
+  const btn=document.getElementById('mv-content-btn');
+  if(!box)return;
+  const open=box.style.display!=='none'&&box.innerHTML!=='';
+  if(open){box.style.display='none';box.innerHTML='';if(btn)btn.classList.remove('open');return;}
+  // 전체 본문 복사 = 구 sub-pop 헤더의 복사 버튼과 동일 (원문 텍스트 _mvDetail.text 복사)
+  _mvDetail._copy=_mvDetail.text||'';
+  box.innerHTML='<div class="mv-inline-hdr"><span class="mv-inline-title">홍보 내용</span>'+
+    '<button class="sub-pop-copy" onclick="_subPopCopy(this,_mvDetail._copy)">⧉ 복사</button>'+
+    '<button class="sub-pop-copy mv-inline-collapse" onclick="toggleMvContent()">접기 ▲</button></div>'+
+    _mvContentDetailHtml();
+  box.style.display='';
+  if(btn)btn.classList.add('open');
 }
 
 function renderReadOnlyView(dateKey,rec,dateObj,dn){
@@ -13295,15 +13331,17 @@ function renderReadOnlyView(dateKey,rec,dateObj,dn){
   html+='<div class="mv-row"><span class="lbl">프로그램</span><span class="val'+(prog?'':' muted')+'" style="color:'+(prog?'var(--accent)':'#aaa')+';font-weight:'+(prog?'600':'400')+'">'+(prog?escapeHtml(prog):'-')+'</span></div>';
   html+='<div class="mv-row"><span class="lbl">구분</span><span class="val">'+escapeHtml(cat||'-')+'</span></div>';
   html+='<div class="mv-row"><span class="lbl">홍보 내용</span><span class="val">'+escapeHtml(title)+(fmt?' <span style="color:#888;font-size:12px">('+escapeHtml(fmt)+')</span>':'')+'</span></div>';
-  // 콘텐츠 내용 → [참고자료 폴더]는 '자료 경로' 행으로 분리, 본문은 클릭 시 하부 팝업 (각각 복사 가능)
+  // 콘텐츠 내용 → [참고자료 폴더]는 '자료 경로' 행으로 분리, 본문은 클릭 시 모달 안에서 펼침 (각각 복사 가능, 별도 오버레이 없음 — 모달 깊이 ≤2)
   const _cd=_splitRecContent(content);
   _mvDetail={folders:_cd.folders,text:_cd.text,_copy:''};
   if(_cd.folders.length){
-    html+='<div class="mv-row" style="align-items:center"><span class="lbl">자료 경로</span><span class="val"><span class="mv-link" onclick="openMvFolderPopup()">📁<span class="tx">'+escapeHtml(_folderLabel(_cd.folders[0]))+'</span>'+(_cd.folders.length>1?'<span style="color:#888;font-weight:500">외 '+(_cd.folders.length-1)+'</span>':'')+'<span style="color:#999;font-size:11px">보기 ›</span></span></span></div>';
+    html+='<div class="mv-row" style="align-items:center"><span class="lbl">자료 경로</span><span class="val"><span class="mv-link" id="mv-folder-link" onclick="toggleMvFolder()">📁<span class="tx">'+escapeHtml(_folderLabel(_cd.folders[0]))+'</span>'+(_cd.folders.length>1?'<span style="color:#888;font-weight:500">외 '+(_cd.folders.length-1)+'</span>':'')+'<span class="go" style="color:#999;font-size:11px">보기 ›</span></span></span></div>';
+    html+='<div class="mv-inline-detail" id="mv-folder-detail" style="display:none"></div>';
   }
   if(_cd.text){
     const _pl=_cd.text.split('\n').filter(function(l){return l.trim()&&!/^\[.+\]$/.test(l.trim());});
-    html+='<div class="mv-content-btn" onclick="openMvContentPopup()"><span class="prev">'+escapeHtml(_pl.length?_pl[0].trim():'내용 보기')+'</span><span class="go">전체 보기 ›</span></div>';
+    html+='<div class="mv-content-btn" id="mv-content-btn" onclick="toggleMvContent()"><span class="prev">'+escapeHtml(_pl.length?_pl[0].trim():'내용 보기')+'</span><span class="go">전체 보기 ›</span></div>';
+    html+='<div class="mv-inline-detail" id="mv-content-detail" style="display:none"></div>';
   }else if(!_cd.folders.length){
     html+='<div class="mv-content empty">내용 없음</div>';
   }
