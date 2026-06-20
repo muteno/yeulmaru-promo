@@ -3537,6 +3537,7 @@ function _anaGo(n){ _anaState.screen=n; _anaRender(); }
 
 /* ---------- 스크린 1: 판매현황 진입 ---------- */
 function _anaScreen1(sc){
+  if(_anaState.cat==='전시'){ _anaExhibScreen1(sc); return; }
   var perfs=_salesBuild();
   // 연도 옵션: 활성 공연이 속한 연도들 (없으면 최신 연도)
   var yrs={}; perfs.filter(function(p){return p.status==='active';}).forEach(function(p){var y=_anaPerfYear(p); if(y)yrs[y]=1;});
@@ -3547,7 +3548,7 @@ function _anaScreen1(sc){
   // 카테고리 탭
   var h='<div class="ana-tabs">';
   h+='<button class="ana-tab'+(_anaState.cat==='공연'?' on':'')+'" onclick="_anaSetCat(\'공연\')">공연</button>';
-  h+='<button class="ana-tab" disabled title="전시 일일판매는 별도 시트 — 준비 중">전시<span class="soon">곧</span></button>';
+  h+='<button class="ana-tab" onclick="_anaSetCat(\'전시\')">전시</button>';
   h+='<button class="ana-tab" disabled title="교육 판매 데이터 준비 중">교육<span class="soon">곧</span></button>';
   h+='</div>';
   // 해당 연도 활성 공연 (전체 = 카테고리 탭 내 모수)
@@ -3595,7 +3596,125 @@ function _anaScreen1(sc){
   sc.innerHTML=h;
 }
 function _anaEsc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
-function _anaSetCat(c){ _anaState.cat=c; _anaRender(); }
+function _anaSetCat(c){
+  _anaState.cat=c; _anaState.exDrillId=null;
+  if(c==='전시' && !(_anaState._exMaster&&_anaState._exDaily)){ _anaExhibLoad(function(){_anaRender();}); return; }
+  _anaRender();
+}
+function _anaExhibLoad(cb){
+  var sc=document.getElementById('ana-screen'); if(sc)sc.innerHTML='<div style="text-align:center;padding:60px;color:#888;font-size:14px">전시 데이터 불러오는 중…</div>';
+  Promise.all([
+    api('GET','/api/ops?sheet='+encodeURIComponent('전시일일')),
+    api('GET','/api/ops?sheet='+encodeURIComponent('전시마스터'))
+  ]).then(function(r){ _anaState._exDaily=r[0]; _anaState._exMaster=r[1]; cb&&cb(); }).catch(function(e){
+    var s2=document.getElementById('ana-screen'); if(s2)s2.innerHTML='<div style="text-align:center;padding:60px;color:#E24B4A">전시 데이터 로드 실패: '+escapeHtml(e.message||String(e))+'</div>';
+  });
+}
+// 전시 = 운영_전시마스터(차원) + 운영_전시일일(사실) → 공연 perf 유사 객체
+function _anaExhibBuild(){
+  var master=(_anaState._exMaster&&_anaState._exMaster.rows)||[];
+  var daily=(_anaState._exDaily&&_anaState._exDaily.rows)||[];
+  var byId={};
+  daily.forEach(function(r){var id=String(r['전시ID']||'').trim();if(!id)return;(byId[id]=byId[id]||[]).push(r);});
+  Object.keys(byId).forEach(function(id){byId[id].sort(function(a,b){return String(a['기준일자']).localeCompare(String(b['기준일자']));});});
+  return master.map(function(m){
+    var id=String(m['전시ID']||'').trim(), ds=byId[id]||[];
+    var occClean=ds.map(function(r){var v=parseFloat(r['점유율']);return isNaN(v)?null:v;}).filter(function(v){return v!=null;});
+    var occ=occClean.length?occClean[occClean.length-1]:(parseFloat(m['최종점유율'])||0);
+    var deltaPP=(occClean.length>1)?(occClean[occClean.length-1]-occClean[occClean.length-2]):null;
+    var sub=String(m['수익성']||'').trim();
+    var profit=(sub==='상업')?'사업성':(sub==='공공'?'예술성':'무료');
+    var st=String(m['상태']||'').trim();
+    var status=(st==='진행중')?'active':(st==='예정'?'notyet':'ended');
+    return {id:id,name:String(m['전시명']||'').trim(),year:parseInt(m['연도'],10)||null,
+      occ:occ,deltaPP:deltaPP,spark:occClean.slice(-7),profit:profit,status:status,
+      목표관객:m['목표관객'],목표금액:m['목표금액'],최종유료:m['최종유료'],최종무료:m['최종무료'],
+      최종총인원:m['최종총인원'],최종매출:m['최종매출'],시작일:m['시작일'],종료일:m['종료일'],운영일수:m['운영일수'],daily:ds};
+  });
+}
+function _anaNum(v){ var n=parseFloat(v); return isNaN(n)?'—':Math.round(n).toLocaleString(); }
+function _anaExhibTabs(){
+  return '<div class="ana-tabs">'
+    +'<button class="ana-tab" onclick="_anaSetCat(\'공연\')">공연</button>'
+    +'<button class="ana-tab on">전시</button>'
+    +'<button class="ana-tab" disabled title="교육 판매 데이터 준비 중">교육<span class="soon">곧</span></button>'
+    +'</div>';
+}
+function _anaExhibScreen1(sc){
+  var ex=_anaExhibBuild();
+  var yrs={}; ex.forEach(function(e){if(e.year)yrs[e.year]=1;});
+  var yrList=Object.keys(yrs).map(Number).sort(function(a,b){return b-a;});
+  if(_anaState.year===null||yrList.indexOf(_anaState.year)<0)_anaState.year=yrList.length?yrList[0]:(new Date().getFullYear());
+  var yr=_anaState.year;
+  var h=_anaExhibTabs();
+  if(_anaState.exDrillId){ return _anaExhibDrillRender(sc,h); }
+  var yrEx=ex.filter(function(e){return e.year===yr && e.profit!=='무료';});
+  var nArt=yrEx.filter(function(e){return e.profit==='예술성';}).length;
+  var nBiz=yrEx.filter(function(e){return e.profit==='사업성';}).length;
+  h+='<div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-bottom:14px">';
+  h+='<div class="ana-seg"><button class="'+(_anaState.profit==='예술성'?'on':'')+'" onclick="_anaSetProfit(\'예술성\')">예술성 '+nArt+'</button><button class="'+(_anaState.profit==='사업성'?'on':'')+'" onclick="_anaSetProfit(\'사업성\')">사업성 '+nBiz+'</button></div>';
+  h+='<select class="ana-sel" onchange="_anaSetYear(this.value)">'+yrList.map(function(y){return '<option value="'+y+'"'+(y===yr?' selected':'')+'>'+y+'년</option>';}).join('')+'</select>';
+  h+='</div>';
+  var rows=yrEx.filter(function(e){return e.profit===_anaState.profit;}).sort(function(a,b){ if((a.status==='active')!==(b.status==='active'))return a.status==='active'?-1:1; return b.occ-a.occ;});
+  h+='<table class="ana-tbl"><thead><tr><td>전시</td><td>최근 7일 추이</td><td style="text-align:right">달성률</td><td style="text-align:right">어제대비</td><td style="text-align:right">누적유료</td><td style="text-align:center">상태</td></tr></thead><tbody>';
+  if(!rows.length){ h+='<tr><td colspan="6"><div class="u-empty"><div class="ico">📭</div><div class="msg">조건에 맞는 전시가 없어요</div></div></td></tr>'; }
+  rows.forEach(function(e){
+    var dpp=e.deltaPP,dStr,dCol;
+    if(dpp===null){dStr='—';dCol='#bbb';}
+    else if(dpp>0.04){dStr='▲ +'+dpp.toFixed(1)+'%p';dCol='#0F8B4C';}
+    else if(dpp<-0.04){dStr='▼ '+dpp.toFixed(1)+'%p';dCol='#E5484D';}
+    else{dStr='— 0.0%p';dCol='#999';}
+    var stCol=(e.status==='active')?'#0F8B4C':(e.status==='notyet'?'#4A4DE7':'#999');
+    var stTxt=(e.status==='active')?'진행중':(e.status==='notyet'?'예정':'종료');
+    h+='<tr class="clk" onclick="_anaExhibDrill(\''+_anaEsc(e.id)+'\')">';
+    h+='<td><div class="ana-row-name">'+escapeHtml(e.name)+'<sub>'+e.profit+' · '+e.year+'</sub></div></td>';
+    h+='<td>'+_anaSpark(e.spark)+'</td>';
+    h+='<td style="text-align:right;color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums">'+e.occ.toFixed(1)+'%</td>';
+    h+='<td style="text-align:right;color:'+dCol+';font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap">'+dStr+'</td>';
+    h+='<td style="text-align:right;font-variant-numeric:tabular-nums;color:#555">'+_anaNum(e.최종유료)+'</td>';
+    h+='<td style="text-align:center;font-size:11.5px;font-weight:700;color:'+stCol+'">'+stTxt+'</td>';
+    h+='</tr>';
+  });
+  h+='</tbody></table>';
+  h+='<div style="color:#bbb;font-size:11px;margin-top:12px">행 클릭 → 전시 상세 · 달성률 = 누계유료/목표관객(원본 점유율, 100%↑=초과달성) · 데이터: 운영_전시일일/전시마스터</div>';
+  sc.innerHTML=h;
+}
+function _anaExhibDrill(id){ _anaState.exDrillId=id; _anaRender(); }
+function _anaExhibBack(){ _anaState.exDrillId=null; _anaRender(); }
+function _anaExhibDrillRender(sc,headTabs){
+  var e=_anaExhibBuild().find(function(x){return x.id===_anaState.exDrillId;});
+  if(!e){ _anaState.exDrillId=null; return _anaExhibScreen1(sc); }
+  var h=headTabs;
+  h+='<button onclick="_anaExhibBack()" style="margin-bottom:12px;padding:6px 12px;border:1px solid #e0e0e8;background:#fafafe;border-radius:8px;font-size:12px;font-weight:600;color:#666;cursor:pointer;font-family:inherit">← 전시 목록</button>';
+  h+='<div style="font-size:18px;font-weight:800;margin-bottom:2px">'+escapeHtml(e.name)+'</div>';
+  h+='<div style="font-size:12px;color:#999;margin-bottom:14px">'+e.profit+' · '+e.year+'년 · '+escapeHtml(String(e.시작일||''))+' ~ '+escapeHtml(String(e.종료일||''))+' · '+(e.status==='active'?'진행중':'종료')+'</div>';
+  var kpi=[['달성률',e.occ.toFixed(1)+'%'],['목표관객',_anaNum(e.목표관객)],['누적유료',_anaNum(e.최종유료)],['누적무료',_anaNum(e.최종무료)],['누적매출',_anaNum(e.최종매출)+'원'],['운영일수',_anaNum(e.운영일수)+'일']];
+  h+='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">';
+  kpi.forEach(function(k){h+='<div style="flex:1;min-width:96px;background:#fafafe;border:1px solid #eef;border-radius:10px;padding:10px 12px"><div style="font-size:10.5px;color:#999;font-weight:600;margin-bottom:3px">'+k[0]+'</div><div style="font-size:15px;font-weight:800;color:#333;font-variant-numeric:tabular-nums">'+k[1]+'</div></div>';});
+  h+='</div>';
+  h+='<div style="font-size:12px;font-weight:700;color:#666;margin-bottom:6px">일별 달성률(점유율) 추이</div>';
+  h+=_anaExhibTrend(e.daily);
+  sc.innerHTML=h;
+}
+function _anaExhibTrend(daily){
+  var pts=(daily||[]).map(function(r){return {d:String(r['기준일자']||''),o:parseFloat(r['점유율'])};}).filter(function(q){return !isNaN(q.o);});
+  if(pts.length<2)return '<div style="color:#bbb;padding:20px;font-size:13px">추이 데이터 부족</div>';
+  var W=720,H=190,padL=40,padR=14,padT=14,padB=26;
+  var ys=pts.map(function(q){return q.o;}); var mn=Math.min.apply(null,ys),mx=Math.max.apply(null,ys); if(mx-mn<1)mx=mn+1; mn=Math.max(0,mn-2);mx=mx+2;
+  var X=function(i){return padL+(W-padL-padR)*i/(pts.length-1);};
+  var Y=function(v){return H-padB-(H-padT-padB)*(v-mn)/(mx-mn);};
+  var line=pts.map(function(q,i){return (i?'L':'M')+X(i).toFixed(1)+' '+Y(q.o).toFixed(1);}).join(' ');
+  var area='M'+X(0).toFixed(1)+' '+(H-padB)+' '+pts.map(function(q,i){return 'L'+X(i).toFixed(1)+' '+Y(q.o).toFixed(1);}).join(' ')+' L'+X(pts.length-1).toFixed(1)+' '+(H-padB)+' Z';
+  var fmtD=function(s){return s.length===8?(s.slice(4,6)+'/'+s.slice(6,8)):s;};
+  var grid=''; [mn,(mn+mx)/2,mx].forEach(function(v){var y=Y(v);grid+='<line x1="'+padL+'" y1="'+y.toFixed(1)+'" x2="'+(W-padR)+'" y2="'+y.toFixed(1)+'" stroke="#f0f0f4"/><text x="'+(padL-6)+'" y="'+(y+3).toFixed(1)+'" text-anchor="end" font-size="9" fill="#bbb">'+v.toFixed(0)+'%</text>';});
+  return '<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;max-width:'+W+'px">'+grid
+    +'<path d="'+area+'" fill="rgba(74,77,231,0.07)"/>'
+    +'<path d="'+line+'" fill="none" stroke="var(--accent)" stroke-width="2"/>'
+    +'<circle cx="'+X(pts.length-1).toFixed(1)+'" cy="'+Y(pts[pts.length-1].o).toFixed(1)+'" r="3.5" fill="var(--accent)"/>'
+    +'<text x="'+padL+'" y="'+(H-8)+'" font-size="9" fill="#999">'+fmtD(pts[0].d)+'</text>'
+    +'<text x="'+(W-padR)+'" y="'+(H-8)+'" text-anchor="end" font-size="9" fill="#999">'+fmtD(pts[pts.length-1].d)+'</text>'
+    +'</svg>';
+}
 function _anaSetProfit(p){ _anaState.profit=p; _anaState.genre='전체'; _anaRender(); }
 function _anaSetGenre(g){ _anaState.genre=g; _anaRender(); }
 function _anaSetYear(y){ _anaState.year=parseInt(y,10); _anaState.genre='전체'; _anaRender(); }
