@@ -886,6 +886,12 @@ table.promo-board-table th:last-child .col-resize-handle{display:none}
 .sub-sec-b{white-space:pre-wrap;word-break:break-word;color:#444}
 .sub-path-row{display:flex;align-items:center;gap:8px;background:#fafafa;border:1px solid rgba(0,0,0,0.06);border-radius:10px;padding:9px 12px;margin-bottom:8px}
 .sub-path-tx{flex:1;font-size:12px;color:#444;word-break:break-all;line-height:1.5}
+/* === 조회 모달 인라인 펼침 (구 sub-pop 오버레이 대체) === */
+.mv-inline-detail{margin:6px 0 2px;padding:12px 14px;background:#fafbff;border:1px solid rgba(74,77,231,0.14);border-radius:10px;font-size:13px;line-height:1.6;color:#333;max-height:46vh;overflow-y:auto;animation:fadeUp .16s ease}
+.mv-inline-hdr{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.mv-inline-title{flex:1;font-size:12px;font-weight:700;color:var(--text)}
+.mv-inline-collapse{color:#999}
+.mv-link.open .go,.mv-content-btn.open .go{color:#999}
 /* === 챗봇 위젯 (우측 하단) — 리퀴드 폴리시 === */
 .cb-fab{position:fixed;right:26px;bottom:26px;width:56px;height:56px;border-radius:50%;border:none;background:linear-gradient(135deg,#5B5EF0 0%,#4A4DE7 55%,#3A3DD0 100%);color:#fff;cursor:pointer;z-index:95;display:flex;align-items:center;justify-content:center;box-shadow:0 10px 28px rgba(74,77,231,0.42),0 3px 10px rgba(0,0,0,0.12),inset 0 1px 0 rgba(255,255,255,0.25);transition:transform .22s cubic-bezier(.34,1.4,.64,1),box-shadow .22s;animation:cbPop .45s cubic-bezier(.34,1.56,.64,1) backwards}
 .cb-fab:hover{transform:translateY(-3px) scale(1.05);box-shadow:0 16px 36px rgba(74,77,231,0.5),0 4px 12px rgba(0,0,0,0.14)}
@@ -1416,6 +1422,22 @@ table.promo-board-table th:last-child .col-resize-handle{display:none}
 table.promo-board-table thead th{position:sticky;top:0;z-index:7;background:var(--accent)}
 table.promo-board-table thead th:first-child{border-top-left-radius:11px}
 table.promo-board-table thead th:last-child{border-top-right-radius:11px}
+/* === UX 브리프 #4 — 필터·정렬 바 통일 (.fbar-*). 판매/사업/일정관리 보드 공용 칩·세그.
+   상태 명료화: 선택 = accent 채움(흰 글씨) · 비선택 = 흰 배경·중립 글씨. .nb-chip.on / .ana-seg button.on 과 동일 시각언어.
+   ⚠️ 필터 LOGIC·state·handler 불변 — 이 클래스는 컨트롤 마크업/스타일만 통일한다. */
+.fbar-lbl{font-size:11px;color:var(--neutral-text);font-weight:600;margin-right:2px}
+/* 세그먼트(상호배타) — 상태탭·수익성·회차·진행일. .fbar-seg 안의 button 들이 한 그룹. */
+.fbar-seg{display:inline-flex;flex-wrap:wrap;gap:6px;align-items:center}
+.fbar-seg button{padding:6px 13px;border-radius:8px;border:1.5px solid var(--neutral-d);background:#fff;color:var(--neutral-text);font-family:inherit;font-size:12px;font-weight:600;line-height:1;cursor:pointer;transition:background .15s,border-color .15s,color .15s}
+.fbar-seg button:hover{border-color:var(--accent);color:var(--accent)}
+.fbar-seg button.on{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 2px 8px rgba(74,77,231,.2)}
+/* 단일 칩(다중 토글) — 같은 시각언어, 선택 시 accent 채움. 내장 체크박스 허용. */
+.fbar-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:8px;border:1.5px solid var(--neutral-d);background:#fff;color:var(--neutral-text);font-family:inherit;font-size:12px;font-weight:600;line-height:1;cursor:pointer;transition:background .15s,border-color .15s,color .15s;user-select:none}
+.fbar-chip:hover{border-color:var(--accent);color:var(--accent)}
+.fbar-chip.on{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 2px 8px rgba(74,77,231,.2)}
+.fbar-chip input{width:14px;height:14px;margin:0;flex-shrink:0;cursor:pointer;accent-color:var(--accent)}
+.fbar-chip.on input{accent-color:#fff}
+.fbar-chip.lock{cursor:not-allowed;opacity:.85}
 </style>
   <!-- MSAL.js for Microsoft OAuth (OneDrive 폴더 트리) — 공식 docs 권장 이중 fallback -->
   <script src="https://alcdn.msauth.net/browser/2.35.0/js/msal-browser.min.js"></script>
@@ -4499,7 +4521,8 @@ function _profitLoad(cb){if(_PROFIT_OVERRIDE){if(cb)cb();return;}_PROFIT_OVERRID
 function _profitType(name,genre){name=String(name||'').trim();genre=String(genre||'').trim();if(_PROFIT_OVERRIDE&&_PROFIT_OVERRIDE[name])return _PROFIT_OVERRIDE[name];if(/브런치|어린이|가족|크리스마스|호두까기|설민석|청소년|연극/.test(name))return '상업성';if(/리사이틀|신년음악회|오페라|플라멩코|실내악|페스티[발벌]|교향|심포니|오케스트라|국립|창작|백건우|모차르트|쇼팽|베토벤|클래식/.test(name))return '공공성';if(genre==='클래식')return '공공성';if(genre==='어린이·가족'||genre==='대중'||genre==='뮤지컬')return '상업성';if(genre==='발레/연극')return '공공성';return '미분류';}
 function _accordionize(bodyId){var body=document.getElementById(bodyId);if(!body)return;var kids=Array.prototype.slice.call(body.children);var groups=[],cur=null;kids.forEach(function(el){var t=(el.textContent||'').trim();if(/^\[\d+\]/.test(t)&&t.length<40){cur={head:el,body:[]};groups.push(cur);}else if(cur){cur.body.push(el);}});groups.forEach(function(g){var wrap=document.createElement('div');g.body.forEach(function(el){wrap.appendChild(el);});g.head.parentNode.insertBefore(wrap,g.head.nextSibling);g.head.style.cursor='pointer';g.head.style.userSelect='none';var ar=document.createElement('span');ar.textContent='▾ ';ar.style.cssText='color:#bbb;font-size:11px';g.head.insertBefore(ar,g.head.firstChild);g.head.onclick=function(){var open=wrap.style.display!=='none';wrap.style.display=open?'none':'';ar.textContent=open?'▸ ':'▾ ';if(!open&&window.Plotly){Array.prototype.slice.call(wrap.querySelectorAll('.plotly')).forEach(function(p){try{Plotly.Plots.resize(p);}catch(e){}});}};});}
 function _profitToggleHtml(cur,fn){var ps=['전체','공공성','상업성'];return '<div style="display:flex;gap:6px;align-items:center;margin:2px 0 8px"><span style="font-size:11px;color:#888;font-weight:600;margin-right:2px">수익성</span>'+ps.map(function(p){var on=(cur||'전체')===p;return '<button onclick="'+fn+'(\''+p+'\')" style="padding:4px 11px;border-radius:7px;border:1.5px solid '+(on?'var(--accent)':'#e0e0e0')+';background:'+(on?'rgba(74,77,231,0.08)':'#fff')+';color:'+(on?'var(--accent)':'#777')+';font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">'+p+'</button>';}).join('')+'</div>';}
-function _chipRow(label,opts,cur,fn){return '<div style="display:flex;gap:6px;align-items:center"><span style="font-size:11px;color:#888;font-weight:600;margin-right:2px">'+label+'</span>'+opts.map(function(o){var on=(cur||opts[0])===o;return '<button onclick="'+fn+'(\''+o+'\')" style="padding:3px 9px;border-radius:7px;border:1.5px solid '+(on?'var(--accent)':'#e0e0e0')+';background:'+(on?'rgba(74,77,231,0.08)':'#fff')+';color:'+(on?'var(--accent)':'#777')+';font-size:10.5px;font-weight:600;cursor:pointer;font-family:inherit">'+o+'</button>';}).join('')+'</div>';}
+// UX #4: 공용 .fbar-seg 세그먼트로 렌더(선택=accent 채움). 핸들러 계약(fn(o)) 불변.
+function _chipRow(label,opts,cur,fn){return '<div class="fbar-seg"><span class="fbar-lbl">'+label+'</span>'+opts.map(function(o){var on=(cur||opts[0])===o;return '<button class="'+(on?'on':'')+'" onclick="'+fn+'(\''+o+'\')">'+o+'</button>';}).join('')+'</div>';}
 function _bizSetRounds(b){_bizState.rounds=b;_bizRender();}
 function _bizSetRunDays(b){_bizState.rundays=b;_bizRender();}
 function _bizSetProfit(p){_bizState.profit=p;_bizRender();}
@@ -4565,7 +4588,7 @@ function _bizRender(){
   years.forEach(function(y){h+='<option value="'+y+'"'+(y===_bizState.year?' selected':'')+'>'+y+'년</option>';});
   h+='</select><div style="display:flex;gap:8px;flex-wrap:wrap">';
   types.forEach(function(t){const on=!!_bizState.types[t];const only=selTypes.length===1&&on;
-    h+='<label style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:8px;border:1.5px solid '+(on?'var(--accent)':'#e0e0e0')+';background:'+(on?'rgba(74,77,231,0.07)':'#fff')+';font-size:12px;font-weight:600;color:'+(on?'var(--accent)':'#888')+';cursor:'+(only?'not-allowed':'pointer')+'"><input type="checkbox" '+(on?'checked':'')+(only?' disabled':'')+' onchange="_bizToggleType(\''+t.replace(/'/g,"\\'")+'\')" style="accent-color:var(--accent)">'+escapeHtml(t)+'</label>';
+    h+='<label class="fbar-chip'+(on?' on':'')+(only?' lock':'')+'"><input type="checkbox" '+(on?'checked':'')+(only?' disabled':'')+' onchange="_bizToggleType(\''+t.replace(/'/g,"\\'")+'\')">'+escapeHtml(t)+'</label>';
   });
   h+='</div></div>';
   if(!list.length){h+='<div style="text-align:center;padding:40px;color:#888">해당 연도/분류 데이터가 없습니다</div>';body.innerHTML=h;return;}
@@ -6632,9 +6655,17 @@ async function deleteSpecialEntry(rowIndex){
   }
   let _targets=[rowIndex];
   if(_sibs.length){
-    const _all=await showConfirm('매주 반복 일정이에요.\n이번 달의 남은 같은 일정 '+(_sibs.length+1)+'건을 함께 삭제할까요?',{title:'담당자 일정 삭제',okText:'함께 삭제',cancelText:'아니요',danger:true});
-    if(_all){_targets=_targets.concat(_sibs.map(function(s){return s._rowIndex;}));}
-    else if(!await showConfirm('이 일정 1건만 삭제할까요?',{title:'담당자 일정 삭제',okText:'이것만 삭제',danger:true}))return;
+    // 2단 확인을 단일 3버튼 다이얼로그로 통합 (모달 깊이 ≤2) — 의미는 동일:
+    //  one=이것만 / all=이번 달 남은 N건 모두 / 취소
+    const _n=_sibs.length+1;
+    const _pick=await showChoice('매주 반복 일정이에요.\n어떻게 삭제할까요?',[
+      {label:'이것만 삭제',value:'one',cls:'danger'},
+      {label:'이번 달 '+_n+'건 모두 삭제',value:'all',cls:'danger'},
+      {label:'취소',value:false,cls:'no'}
+    ],{title:'담당자 일정 삭제'});
+    if(!_pick)return;  // 취소 / Esc / 배경클릭
+    if(_pick==='all'){_targets=_targets.concat(_sibs.map(function(s){return s._rowIndex;}));}
+    // _pick==='one' → _targets는 [rowIndex] 그대로 (지난 회차·다른 형제 미삭제)
   }else{
     if(!await showConfirm('이 담당자 일정을 삭제할까요?',{title:'담당자 일정 삭제',okText:'삭제',danger:true}))return;
   }
@@ -7462,13 +7493,17 @@ function renderPromoBoard(){
   html+='</div>';
   // === 필터 탭 ===
   html+='<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;align-items:center">';
+  // UX #4: 상태 탭을 공용 .fbar-seg 세그먼트로(선택=accent 채움). status·specialMode 핸들러 불변.
   const tabs=[{k:'all',l:'전체'},{k:'pending',l:'신청 중'},{k:'approved',l:'예정'},{k:'done',l:'완료'}];
-  const ctrlStyle='display:inline-flex;align-items:center;padding:6px 14px;height:32px;box-sizing:border-box;border-radius:16px;font-size:12px;line-height:1;cursor:pointer;font-family:inherit';
+  html+='<div class="fbar-seg">';
   tabs.forEach(function(t){
     const on=_promoFilter.status===t.k;
-    html+='<button onclick="_promoFilter.status=\''+t.k+'\';_promoFilter.specialMode=\'mix\';renderPromoBoard()" style="'+ctrlStyle+';border:1.5px solid '+(on?'transparent':'#ddd')+';background:'+(on?'rgba(74,77,231,0.85)':'#fff')+';color:'+(on?'#fff':'#666')+';font-weight:'+(on?'600':'500')+'">'+t.l+'</button>';
+    html+='<button class="'+(on?'on':'')+'" onclick="_promoFilter.status=\''+t.k+'\';_promoFilter.specialMode=\'mix\';renderPromoBoard()">'+t.l+'</button>';
   });
+  html+='</div>';
   // (전체/콘텐츠만/담당자만 토글 제거됨 — 컬럼 필터로 대체. specialMode는 'mix' 유지)
+  // 토글성 pill 컨트롤(내 신청만 등) 공용 스타일 — 검색/체크박스 입력은 별도(Caution 준수).
+  const ctrlStyle='display:inline-flex;align-items:center;padding:6px 14px;height:32px;box-sizing:border-box;border-radius:16px;font-size:12px;line-height:1;cursor:pointer;font-family:inherit';
   // === 본인/전체 토글 (admin은 본인 개념 없어서 숨김) ===
   if(!isAdmin&&myApplicant){
     html+='<span style="width:1px;height:18px;background:#ddd;margin:0 4px"></span>';
@@ -13200,9 +13235,11 @@ function _openSubPop(title,bodyHtml,copyText){
     '</div></div>';
   document.body.appendChild(el);
 }
-function openMvFolderPopup(){
+// === 모달 안에서 인라인 펼침 (구 sub-pop 오버레이 대체 — 모달 깊이 ≤2 유지) ===
+// 내부 HTML 빌더는 구 _openSubPop 본문과 동일 (복사 동작·라벨 링크·섹션 구조 보존)
+function _mvFolderDetailHtml(){
   const fs=_mvDetail.folders||[];
-  if(!fs.length)return;
+  if(!fs.length)return '';
   // URL 포함 줄은 복사 시 URL만 (라벨 — URL 형식·구버전 URL-only 둘 다), 로컬 경로는 전체 복사
   _mvDetail._fCopy=fs.map(function(f){const m=String(f).match(/https?:\/\/\S+/);return m?m[0]:f;});
   let h='';
@@ -13216,11 +13253,11 @@ function openMvFolderPopup(){
          '<button class="sub-pop-copy" onclick="_subPopCopy(this,_mvDetail._fCopy['+i+'])">⧉ 복사</button></div>';
     }
   });
-  _openSubPop('자료 경로'+(fs.length>1?' ('+fs.length+'개)':''),h,null);
+  return h;
 }
-function openMvContentPopup(){
+function _mvContentDetailHtml(){
   const t=_mvDetail.text||'';
-  if(!t)return;
+  if(!t)return '';
   let h='';let buf=[];
   const flush=function(){if(buf.length){const b=buf.join('\n').replace(/^\n+|\n+$/g,'');if(b)h+='<div class="sub-sec-b">'+escapeHtml(b)+'</div>';buf=[];}};
   t.split('\n').forEach(function(line){
@@ -13229,7 +13266,35 @@ function openMvContentPopup(){
     else buf.push(line);
   });
   flush();
-  _openSubPop('홍보 내용',h,t);
+  return h;
+}
+function toggleMvFolder(){
+  const box=document.getElementById('mv-folder-detail');
+  const link=document.getElementById('mv-folder-link');
+  if(!box)return;
+  const open=box.style.display!=='none'&&box.innerHTML!=='';
+  if(open){box.style.display='none';box.innerHTML='';if(link)link.classList.remove('open');return;}
+  const fs=_mvDetail.folders||[];
+  box.innerHTML='<div class="mv-inline-hdr"><span class="mv-inline-title">자료 경로'+(fs.length>1?' ('+fs.length+'개)':'')+'</span>'+
+    '<button class="sub-pop-copy mv-inline-collapse" onclick="toggleMvFolder()">접기 ▲</button></div>'+
+    _mvFolderDetailHtml();
+  box.style.display='';
+  if(link)link.classList.add('open');
+}
+function toggleMvContent(){
+  const box=document.getElementById('mv-content-detail');
+  const btn=document.getElementById('mv-content-btn');
+  if(!box)return;
+  const open=box.style.display!=='none'&&box.innerHTML!=='';
+  if(open){box.style.display='none';box.innerHTML='';if(btn)btn.classList.remove('open');return;}
+  // 전체 본문 복사 = 구 sub-pop 헤더의 복사 버튼과 동일 (원문 텍스트 _mvDetail.text 복사)
+  _mvDetail._copy=_mvDetail.text||'';
+  box.innerHTML='<div class="mv-inline-hdr"><span class="mv-inline-title">홍보 내용</span>'+
+    '<button class="sub-pop-copy" onclick="_subPopCopy(this,_mvDetail._copy)">⧉ 복사</button>'+
+    '<button class="sub-pop-copy mv-inline-collapse" onclick="toggleMvContent()">접기 ▲</button></div>'+
+    _mvContentDetailHtml();
+  box.style.display='';
+  if(btn)btn.classList.add('open');
 }
 
 function renderReadOnlyView(dateKey,rec,dateObj,dn){
@@ -13295,15 +13360,17 @@ function renderReadOnlyView(dateKey,rec,dateObj,dn){
   html+='<div class="mv-row"><span class="lbl">프로그램</span><span class="val'+(prog?'':' muted')+'" style="color:'+(prog?'var(--accent)':'#aaa')+';font-weight:'+(prog?'600':'400')+'">'+(prog?escapeHtml(prog):'-')+'</span></div>';
   html+='<div class="mv-row"><span class="lbl">구분</span><span class="val">'+escapeHtml(cat||'-')+'</span></div>';
   html+='<div class="mv-row"><span class="lbl">홍보 내용</span><span class="val">'+escapeHtml(title)+(fmt?' <span style="color:#888;font-size:12px">('+escapeHtml(fmt)+')</span>':'')+'</span></div>';
-  // 콘텐츠 내용 → [참고자료 폴더]는 '자료 경로' 행으로 분리, 본문은 클릭 시 하부 팝업 (각각 복사 가능)
+  // 콘텐츠 내용 → [참고자료 폴더]는 '자료 경로' 행으로 분리, 본문은 클릭 시 모달 안에서 펼침 (각각 복사 가능, 별도 오버레이 없음 — 모달 깊이 ≤2)
   const _cd=_splitRecContent(content);
   _mvDetail={folders:_cd.folders,text:_cd.text,_copy:''};
   if(_cd.folders.length){
-    html+='<div class="mv-row" style="align-items:center"><span class="lbl">자료 경로</span><span class="val"><span class="mv-link" onclick="openMvFolderPopup()">📁<span class="tx">'+escapeHtml(_folderLabel(_cd.folders[0]))+'</span>'+(_cd.folders.length>1?'<span style="color:#888;font-weight:500">외 '+(_cd.folders.length-1)+'</span>':'')+'<span style="color:#999;font-size:11px">보기 ›</span></span></span></div>';
+    html+='<div class="mv-row" style="align-items:center"><span class="lbl">자료 경로</span><span class="val"><span class="mv-link" id="mv-folder-link" onclick="toggleMvFolder()">📁<span class="tx">'+escapeHtml(_folderLabel(_cd.folders[0]))+'</span>'+(_cd.folders.length>1?'<span style="color:#888;font-weight:500">외 '+(_cd.folders.length-1)+'</span>':'')+'<span class="go" style="color:#999;font-size:11px">보기 ›</span></span></span></div>';
+    html+='<div class="mv-inline-detail" id="mv-folder-detail" style="display:none"></div>';
   }
   if(_cd.text){
     const _pl=_cd.text.split('\n').filter(function(l){return l.trim()&&!/^\[.+\]$/.test(l.trim());});
-    html+='<div class="mv-content-btn" onclick="openMvContentPopup()"><span class="prev">'+escapeHtml(_pl.length?_pl[0].trim():'내용 보기')+'</span><span class="go">전체 보기 ›</span></div>';
+    html+='<div class="mv-content-btn" id="mv-content-btn" onclick="toggleMvContent()"><span class="prev">'+escapeHtml(_pl.length?_pl[0].trim():'내용 보기')+'</span><span class="go">전체 보기 ›</span></div>';
+    html+='<div class="mv-inline-detail" id="mv-content-detail" style="display:none"></div>';
   }else if(!_cd.folders.length){
     html+='<div class="mv-content empty">내용 없음</div>';
   }
@@ -13611,6 +13678,32 @@ function confirmResolve(v){
   document.getElementById('confirm-modal').classList.remove('show');
   if(_confirmKeyHandler){document.removeEventListener('keydown',_confirmKeyHandler);_confirmKeyHandler=null;}
   if(_confirmResolve){var r=_confirmResolve;_confirmResolve=null;r(v);}
+}
+// 3개 이상 선택지를 하나의 다이얼로그로 (confirm-modal 재사용 → 오버레이 1개, 모달 깊이 ≤2)
+// buttons: [{label, value, cls}] — cls 미지정 시 마지막=강조('yes'/danger), 첫=취소('no')
+// 버튼 클릭/Esc/배경클릭 모두 confirmResolve(value) 경유 (취소=false). 반환=선택 value.
+function showChoice(msg, buttons, opts){
+  opts=opts||{};buttons=buttons||[];
+  return new Promise(function(resolve){
+    _confirmResolve=resolve;
+    const titleEl=document.getElementById('confirm-title');
+    const msgEl=document.getElementById('confirm-msg');
+    if(opts.title){titleEl.style.display='';titleEl.textContent=opts.title;}
+    else{titleEl.style.display='none';}
+    if(opts.html){msgEl.innerHTML=msg||'';}else{msgEl.textContent=msg||'';}
+    const acts=document.getElementById('confirm-acts');
+    // value를 전역 레지스트리에 보관 (onclick에서 인덱스로 참조 — 문자열 escape 안전)
+    window._choiceVals=buttons.map(function(b){return b.value;});
+    acts.innerHTML=buttons.map(function(b,i){
+      const cls=b.cls||(i===0?'no':(b.danger?'danger':'yes'));
+      return '<button class="c-btn '+cls+'" onclick="confirmResolve(window._choiceVals['+i+'])">'+escapeHtml(b.label)+'</button>';
+    }).join('');
+    document.getElementById('confirm-modal').classList.add('show');
+    // Esc=취소(false), Enter는 다중 선택에서 모호하므로 무시
+    if(_confirmKeyHandler)document.removeEventListener('keydown',_confirmKeyHandler);
+    _confirmKeyHandler=function(e){if(e.key==='Escape'){e.preventDefault();confirmResolve(false);}};
+    document.addEventListener('keydown',_confirmKeyHandler);
+  });
 }
 
 let _toastTimer=null;
