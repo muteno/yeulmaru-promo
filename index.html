@@ -886,6 +886,12 @@ table.promo-board-table th:last-child .col-resize-handle{display:none}
 .sub-sec-b{white-space:pre-wrap;word-break:break-word;color:#444}
 .sub-path-row{display:flex;align-items:center;gap:8px;background:#fafafa;border:1px solid rgba(0,0,0,0.06);border-radius:10px;padding:9px 12px;margin-bottom:8px}
 .sub-path-tx{flex:1;font-size:12px;color:#444;word-break:break-all;line-height:1.5}
+/* === 조회 모달 인라인 펼침 (구 sub-pop 오버레이 대체) === */
+.mv-inline-detail{margin:6px 0 2px;padding:12px 14px;background:#fafbff;border:1px solid rgba(74,77,231,0.14);border-radius:10px;font-size:13px;line-height:1.6;color:#333;max-height:46vh;overflow-y:auto;animation:fadeUp .16s ease}
+.mv-inline-hdr{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.mv-inline-title{flex:1;font-size:12px;font-weight:700;color:var(--text)}
+.mv-inline-collapse{color:#999}
+.mv-link.open .go,.mv-content-btn.open .go{color:#999}
 /* === 챗봇 위젯 (우측 하단) — 리퀴드 폴리시 === */
 .cb-fab{position:fixed;right:26px;bottom:26px;width:56px;height:56px;border-radius:50%;border:none;background:linear-gradient(135deg,#5B5EF0 0%,#4A4DE7 55%,#3A3DD0 100%);color:#fff;cursor:pointer;z-index:95;display:flex;align-items:center;justify-content:center;box-shadow:0 10px 28px rgba(74,77,231,0.42),0 3px 10px rgba(0,0,0,0.12),inset 0 1px 0 rgba(255,255,255,0.25);transition:transform .22s cubic-bezier(.34,1.4,.64,1),box-shadow .22s;animation:cbPop .45s cubic-bezier(.34,1.56,.64,1) backwards}
 .cb-fab:hover{transform:translateY(-3px) scale(1.05);box-shadow:0 16px 36px rgba(74,77,231,0.5),0 4px 12px rgba(0,0,0,0.14)}
@@ -6649,9 +6655,17 @@ async function deleteSpecialEntry(rowIndex){
   }
   let _targets=[rowIndex];
   if(_sibs.length){
-    const _all=await showConfirm('매주 반복 일정이에요.\n이번 달의 남은 같은 일정 '+(_sibs.length+1)+'건을 함께 삭제할까요?',{title:'담당자 일정 삭제',okText:'함께 삭제',cancelText:'아니요',danger:true});
-    if(_all){_targets=_targets.concat(_sibs.map(function(s){return s._rowIndex;}));}
-    else if(!await showConfirm('이 일정 1건만 삭제할까요?',{title:'담당자 일정 삭제',okText:'이것만 삭제',danger:true}))return;
+    // 2단 확인을 단일 3버튼 다이얼로그로 통합 (모달 깊이 ≤2) — 의미는 동일:
+    //  one=이것만 / all=이번 달 남은 N건 모두 / 취소
+    const _n=_sibs.length+1;
+    const _pick=await showChoice('매주 반복 일정이에요.\n어떻게 삭제할까요?',[
+      {label:'이것만 삭제',value:'one',cls:'danger'},
+      {label:'이번 달 '+_n+'건 모두 삭제',value:'all',cls:'danger'},
+      {label:'취소',value:false,cls:'no'}
+    ],{title:'담당자 일정 삭제'});
+    if(!_pick)return;  // 취소 / Esc / 배경클릭
+    if(_pick==='all'){_targets=_targets.concat(_sibs.map(function(s){return s._rowIndex;}));}
+    // _pick==='one' → _targets는 [rowIndex] 그대로 (지난 회차·다른 형제 미삭제)
   }else{
     if(!await showConfirm('이 담당자 일정을 삭제할까요?',{title:'담당자 일정 삭제',okText:'삭제',danger:true}))return;
   }
@@ -13221,9 +13235,11 @@ function _openSubPop(title,bodyHtml,copyText){
     '</div></div>';
   document.body.appendChild(el);
 }
-function openMvFolderPopup(){
+// === 모달 안에서 인라인 펼침 (구 sub-pop 오버레이 대체 — 모달 깊이 ≤2 유지) ===
+// 내부 HTML 빌더는 구 _openSubPop 본문과 동일 (복사 동작·라벨 링크·섹션 구조 보존)
+function _mvFolderDetailHtml(){
   const fs=_mvDetail.folders||[];
-  if(!fs.length)return;
+  if(!fs.length)return '';
   // URL 포함 줄은 복사 시 URL만 (라벨 — URL 형식·구버전 URL-only 둘 다), 로컬 경로는 전체 복사
   _mvDetail._fCopy=fs.map(function(f){const m=String(f).match(/https?:\/\/\S+/);return m?m[0]:f;});
   let h='';
@@ -13237,11 +13253,11 @@ function openMvFolderPopup(){
          '<button class="sub-pop-copy" onclick="_subPopCopy(this,_mvDetail._fCopy['+i+'])">⧉ 복사</button></div>';
     }
   });
-  _openSubPop('자료 경로'+(fs.length>1?' ('+fs.length+'개)':''),h,null);
+  return h;
 }
-function openMvContentPopup(){
+function _mvContentDetailHtml(){
   const t=_mvDetail.text||'';
-  if(!t)return;
+  if(!t)return '';
   let h='';let buf=[];
   const flush=function(){if(buf.length){const b=buf.join('\n').replace(/^\n+|\n+$/g,'');if(b)h+='<div class="sub-sec-b">'+escapeHtml(b)+'</div>';buf=[];}};
   t.split('\n').forEach(function(line){
@@ -13250,7 +13266,35 @@ function openMvContentPopup(){
     else buf.push(line);
   });
   flush();
-  _openSubPop('홍보 내용',h,t);
+  return h;
+}
+function toggleMvFolder(){
+  const box=document.getElementById('mv-folder-detail');
+  const link=document.getElementById('mv-folder-link');
+  if(!box)return;
+  const open=box.style.display!=='none'&&box.innerHTML!=='';
+  if(open){box.style.display='none';box.innerHTML='';if(link)link.classList.remove('open');return;}
+  const fs=_mvDetail.folders||[];
+  box.innerHTML='<div class="mv-inline-hdr"><span class="mv-inline-title">자료 경로'+(fs.length>1?' ('+fs.length+'개)':'')+'</span>'+
+    '<button class="sub-pop-copy mv-inline-collapse" onclick="toggleMvFolder()">접기 ▲</button></div>'+
+    _mvFolderDetailHtml();
+  box.style.display='';
+  if(link)link.classList.add('open');
+}
+function toggleMvContent(){
+  const box=document.getElementById('mv-content-detail');
+  const btn=document.getElementById('mv-content-btn');
+  if(!box)return;
+  const open=box.style.display!=='none'&&box.innerHTML!=='';
+  if(open){box.style.display='none';box.innerHTML='';if(btn)btn.classList.remove('open');return;}
+  // 전체 본문 복사 = 구 sub-pop 헤더의 복사 버튼과 동일 (원문 텍스트 _mvDetail.text 복사)
+  _mvDetail._copy=_mvDetail.text||'';
+  box.innerHTML='<div class="mv-inline-hdr"><span class="mv-inline-title">홍보 내용</span>'+
+    '<button class="sub-pop-copy" onclick="_subPopCopy(this,_mvDetail._copy)">⧉ 복사</button>'+
+    '<button class="sub-pop-copy mv-inline-collapse" onclick="toggleMvContent()">접기 ▲</button></div>'+
+    _mvContentDetailHtml();
+  box.style.display='';
+  if(btn)btn.classList.add('open');
 }
 
 function renderReadOnlyView(dateKey,rec,dateObj,dn){
@@ -13316,15 +13360,17 @@ function renderReadOnlyView(dateKey,rec,dateObj,dn){
   html+='<div class="mv-row"><span class="lbl">프로그램</span><span class="val'+(prog?'':' muted')+'" style="color:'+(prog?'var(--accent)':'#aaa')+';font-weight:'+(prog?'600':'400')+'">'+(prog?escapeHtml(prog):'-')+'</span></div>';
   html+='<div class="mv-row"><span class="lbl">구분</span><span class="val">'+escapeHtml(cat||'-')+'</span></div>';
   html+='<div class="mv-row"><span class="lbl">홍보 내용</span><span class="val">'+escapeHtml(title)+(fmt?' <span style="color:#888;font-size:12px">('+escapeHtml(fmt)+')</span>':'')+'</span></div>';
-  // 콘텐츠 내용 → [참고자료 폴더]는 '자료 경로' 행으로 분리, 본문은 클릭 시 하부 팝업 (각각 복사 가능)
+  // 콘텐츠 내용 → [참고자료 폴더]는 '자료 경로' 행으로 분리, 본문은 클릭 시 모달 안에서 펼침 (각각 복사 가능, 별도 오버레이 없음 — 모달 깊이 ≤2)
   const _cd=_splitRecContent(content);
   _mvDetail={folders:_cd.folders,text:_cd.text,_copy:''};
   if(_cd.folders.length){
-    html+='<div class="mv-row" style="align-items:center"><span class="lbl">자료 경로</span><span class="val"><span class="mv-link" onclick="openMvFolderPopup()">📁<span class="tx">'+escapeHtml(_folderLabel(_cd.folders[0]))+'</span>'+(_cd.folders.length>1?'<span style="color:#888;font-weight:500">외 '+(_cd.folders.length-1)+'</span>':'')+'<span style="color:#999;font-size:11px">보기 ›</span></span></span></div>';
+    html+='<div class="mv-row" style="align-items:center"><span class="lbl">자료 경로</span><span class="val"><span class="mv-link" id="mv-folder-link" onclick="toggleMvFolder()">📁<span class="tx">'+escapeHtml(_folderLabel(_cd.folders[0]))+'</span>'+(_cd.folders.length>1?'<span style="color:#888;font-weight:500">외 '+(_cd.folders.length-1)+'</span>':'')+'<span class="go" style="color:#999;font-size:11px">보기 ›</span></span></span></div>';
+    html+='<div class="mv-inline-detail" id="mv-folder-detail" style="display:none"></div>';
   }
   if(_cd.text){
     const _pl=_cd.text.split('\n').filter(function(l){return l.trim()&&!/^\[.+\]$/.test(l.trim());});
-    html+='<div class="mv-content-btn" onclick="openMvContentPopup()"><span class="prev">'+escapeHtml(_pl.length?_pl[0].trim():'내용 보기')+'</span><span class="go">전체 보기 ›</span></div>';
+    html+='<div class="mv-content-btn" id="mv-content-btn" onclick="toggleMvContent()"><span class="prev">'+escapeHtml(_pl.length?_pl[0].trim():'내용 보기')+'</span><span class="go">전체 보기 ›</span></div>';
+    html+='<div class="mv-inline-detail" id="mv-content-detail" style="display:none"></div>';
   }else if(!_cd.folders.length){
     html+='<div class="mv-content empty">내용 없음</div>';
   }
@@ -13632,6 +13678,32 @@ function confirmResolve(v){
   document.getElementById('confirm-modal').classList.remove('show');
   if(_confirmKeyHandler){document.removeEventListener('keydown',_confirmKeyHandler);_confirmKeyHandler=null;}
   if(_confirmResolve){var r=_confirmResolve;_confirmResolve=null;r(v);}
+}
+// 3개 이상 선택지를 하나의 다이얼로그로 (confirm-modal 재사용 → 오버레이 1개, 모달 깊이 ≤2)
+// buttons: [{label, value, cls}] — cls 미지정 시 마지막=강조('yes'/danger), 첫=취소('no')
+// 버튼 클릭/Esc/배경클릭 모두 confirmResolve(value) 경유 (취소=false). 반환=선택 value.
+function showChoice(msg, buttons, opts){
+  opts=opts||{};buttons=buttons||[];
+  return new Promise(function(resolve){
+    _confirmResolve=resolve;
+    const titleEl=document.getElementById('confirm-title');
+    const msgEl=document.getElementById('confirm-msg');
+    if(opts.title){titleEl.style.display='';titleEl.textContent=opts.title;}
+    else{titleEl.style.display='none';}
+    if(opts.html){msgEl.innerHTML=msg||'';}else{msgEl.textContent=msg||'';}
+    const acts=document.getElementById('confirm-acts');
+    // value를 전역 레지스트리에 보관 (onclick에서 인덱스로 참조 — 문자열 escape 안전)
+    window._choiceVals=buttons.map(function(b){return b.value;});
+    acts.innerHTML=buttons.map(function(b,i){
+      const cls=b.cls||(i===0?'no':(b.danger?'danger':'yes'));
+      return '<button class="c-btn '+cls+'" onclick="confirmResolve(window._choiceVals['+i+'])">'+escapeHtml(b.label)+'</button>';
+    }).join('');
+    document.getElementById('confirm-modal').classList.add('show');
+    // Esc=취소(false), Enter는 다중 선택에서 모호하므로 무시
+    if(_confirmKeyHandler)document.removeEventListener('keydown',_confirmKeyHandler);
+    _confirmKeyHandler=function(e){if(e.key==='Escape'){e.preventDefault();confirmResolve(false);}};
+    document.addEventListener('keydown',_confirmKeyHandler);
+  });
 }
 
 let _toastTimer=null;
