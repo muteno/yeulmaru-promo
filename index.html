@@ -317,7 +317,8 @@ button{font-family:inherit;cursor:pointer}
   /* === 확인/알림 모달 === */
   .confirm{padding:20px 22px 18px !important;border-radius:16px}
   .confirm-acts{flex-wrap:wrap;gap:8px}
-  .confirm-acts .m-btn{flex:1 1 calc(50% - 4px);min-width:auto}
+  .confirm-acts .m-btn,.confirm-acts .c-btn{flex:1 1 calc(50% - 4px);min-width:auto;padding-left:10px;padding-right:10px}
+  .confirm-acts .c-btn:first-child:nth-last-child(3),.confirm-acts .c-btn:first-child:nth-last-child(3)~.c-btn{flex-basis:100%}
   /* === 홍보 신청 위저드 === */
   .pw-modal{
     max-width:none !important;
@@ -442,7 +443,7 @@ button{font-family:inherit;cursor:pointer}
   .yc-ex-end{flex-direction:column !important}
   .yc-ex-end-v{display:none !important}
   /* (Phase B) 현황 보드 모달 — 풀스크린 */
-  #sales-board .modal,#business-board .modal,#platform-board .modal,#nblog-board .modal{width:100vw !important;max-width:100vw !important;height:100vh !important;max-height:100vh !important;border-radius:0 !important}
+  #sales-board .modal,#business-board .modal,#platform-board .modal,#nblog-board .modal,#analytics-board .modal{width:100vw !important;max-width:100vw !important;height:100vh !important;max-height:100vh !important;border-radius:0 !important}
   /* (Phase B) 가독성 — 작은 글씨 바닥 올리기 */
   .modal label{font-size:12px}
   .mv-row{font-size:14px}
@@ -1964,7 +1965,7 @@ var cperfs=perfs.filter(function(p){return p.t!=='e';});
 if(!cperfs.length)return'';
 var out='';
 for(var i=0;i<cperfs.length;i++){var perf=cperfs[i],fn=perf.f||perf.n,sn=perf.n,dd=perf.dday,lb=perf.t==='e'?'전':perf.t==='a'?'교':perf.t==='r'?'대':'공';
-var nameHtml='<span class="pf">'+fn+'</span><span class="ps">'+sn+'</span>';
+var nameHtml='<span class="pf">'+escapeHtml(fn)+'</span><span class="ps">'+escapeHtml(sn)+'</span>';
 // 좌클릭: 홍보 현황 모달  /  우클릭: 정보 박스 — data-perf-name + this 패턴으로 사이드바와 통일 (escape 안전)
 var safeFn=escapeHtml(fn);
 var dataAttr=' data-perf-name="'+safeFn+'"';
@@ -3593,7 +3594,7 @@ function _anaScreen1(sc){
   h+='<div style="color:#bbb;font-size:11px;margin-top:12px">행 클릭 → 개별 프로그램 분석 · 데이터: 운영_일일입력(공연명 조인) · 마스터=공연마스터/폴백=운영대장 추정</div>';
   sc.innerHTML=h;
 }
-function _anaEsc(s){ return String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
+function _anaEsc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
 function _anaSetCat(c){ _anaState.cat=c; _anaRender(); }
 function _anaSetProfit(p){ _anaState.profit=p; _anaState.genre='전체'; _anaRender(); }
 function _anaSetGenre(g){ _anaState.genre=g; _anaRender(); }
@@ -5532,7 +5533,8 @@ async function approvePromoFromBoard(rowIndex){
   if(!ok)return;
   showOverlayLoad();
   try{
-    const row = buildRecordRow(r, {'진행 상태':'예정'});
+    // 예정 승인 시 재신청사유 소거 — 재신청 1회분이 소비됨(이후 다시 신청중→보류면 정상적으로 재신청 가능)
+    const row = buildRecordRow(r, {'진행 상태':'예정','재신청사유':''});
     await api('PATCH','/api/records/'+rowIndex,{values: row});
     // 메시지함 hook (일반: 신청중→예정)
     try{
@@ -7100,7 +7102,7 @@ async function bulkApprovePending(){
       if(_st!=='신청 중'){skipped++;continue;}
       const _ca=canApprove(rec,rowIndex);
       if(!_ca.ok){failed++;if(!_failReason)_failReason=_ca.reason;continue;}
-      const row = buildRecordRow(rec, {'진행 상태': '예정'});
+      const row = buildRecordRow(rec, {'진행 상태': '예정', '재신청사유': ''});
       await api('PATCH', '/api/records/'+rowIndex, {values: row});
       success++;
       // 메시지함 hook — 단건 접수와 동일하게 신청자에게 알림
@@ -7330,7 +7332,7 @@ function renderPromoBoard(){
     if(_promoFilter.status==='pending'){
       rows=rows.filter(function(r){
         const s=(r['진행 상태']||'').toString().trim();
-        if(s==='신청 중'||s==='보류')return true;
+        if(s==='신청 중')return true;  // 보류는 '신청 중' 아님(별개 상태) → 요약 카운트와 일치, 전체 탭에서만 노출
         if(_promoFilter.showCancelled && s==='취소' && getCancelOrigGroup(r)==='신청 중')return true;
         return false;
       });
@@ -8123,6 +8125,7 @@ async function submitPromoEdit(){
   // admin이 신청 중 항목을 1건 이상 변경하면 자동으로 「예정」으로 승인 (Step 7로 직접 지정한 경우는 admin 선택 우선)
   if(userRole==='admin' && (orig['진행 상태']||'')==='신청 중' && !patch['진행 상태'] && Object.keys(patch).length>0){
     patch['진행 상태']='예정';
+    if((orig['재신청사유']||'').toString().trim())patch['재신청사유']='';  // 재신청 1회분 소비
   }
   if(!Object.keys(patch).length){showToast('변경된 항목이 없어요','error');return;}
   // [버그수정] 일정 관련 항목(일자·시간/프로그램/플랫폼)이 바뀔 때만 해당 제약 재검증 — 제목·메모만 수정은 미차단

@@ -1256,7 +1256,11 @@ var index_default = {
         const row = parseInt(url.pathname.split("/").pop());
         if (isNaN(row)) return json({ error: "Invalid row" }, env, 400);
         if (request.method === "PATCH") return json(await handleUpdateRecord(token, row, await request.json(), role), env);
-        if (request.method === "DELETE") return json(await handleDeleteRecord(token, row, role), env);
+        if (request.method === "DELETE") {
+          const _delAuth = await checkAdmin(request, env, token);
+          if (!_delAuth.admin) return json({ error: "Admin only (record delete)" }, env, 403);
+          return json(await handleDeleteRecord(token, row, role), env);
+        }
       }
 
       // 프로그램 PERFS 로드
