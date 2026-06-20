@@ -6638,9 +6638,17 @@ async function deleteSpecialEntry(rowIndex){
   }
   let _targets=[rowIndex];
   if(_sibs.length){
-    const _all=await showConfirm('매주 반복 일정이에요.\n이번 달의 남은 같은 일정 '+(_sibs.length+1)+'건을 함께 삭제할까요?',{title:'담당자 일정 삭제',okText:'함께 삭제',cancelText:'아니요',danger:true});
-    if(_all){_targets=_targets.concat(_sibs.map(function(s){return s._rowIndex;}));}
-    else if(!await showConfirm('이 일정 1건만 삭제할까요?',{title:'담당자 일정 삭제',okText:'이것만 삭제',danger:true}))return;
+    // 2단 확인을 단일 3버튼 다이얼로그로 통합 (모달 깊이 ≤2) — 의미는 동일:
+    //  one=이것만 / all=이번 달 남은 N건 모두 / 취소
+    const _n=_sibs.length+1;
+    const _pick=await showChoice('매주 반복 일정이에요.\n어떻게 삭제할까요?',[
+      {label:'이것만 삭제',value:'one',cls:'danger'},
+      {label:'이번 달 '+_n+'건 모두 삭제',value:'all',cls:'danger'},
+      {label:'취소',value:false,cls:'no'}
+    ],{title:'담당자 일정 삭제'});
+    if(!_pick)return;  // 취소 / Esc / 배경클릭
+    if(_pick==='all'){_targets=_targets.concat(_sibs.map(function(s){return s._rowIndex;}));}
+    // _pick==='one' → _targets는 [rowIndex] 그대로 (지난 회차·다른 형제 미삭제)
   }else{
     if(!await showConfirm('이 담당자 일정을 삭제할까요?',{title:'담당자 일정 삭제',okText:'삭제',danger:true}))return;
   }
@@ -13649,6 +13657,32 @@ function confirmResolve(v){
   document.getElementById('confirm-modal').classList.remove('show');
   if(_confirmKeyHandler){document.removeEventListener('keydown',_confirmKeyHandler);_confirmKeyHandler=null;}
   if(_confirmResolve){var r=_confirmResolve;_confirmResolve=null;r(v);}
+}
+// 3개 이상 선택지를 하나의 다이얼로그로 (confirm-modal 재사용 → 오버레이 1개, 모달 깊이 ≤2)
+// buttons: [{label, value, cls}] — cls 미지정 시 마지막=강조('yes'/danger), 첫=취소('no')
+// 버튼 클릭/Esc/배경클릭 모두 confirmResolve(value) 경유 (취소=false). 반환=선택 value.
+function showChoice(msg, buttons, opts){
+  opts=opts||{};buttons=buttons||[];
+  return new Promise(function(resolve){
+    _confirmResolve=resolve;
+    const titleEl=document.getElementById('confirm-title');
+    const msgEl=document.getElementById('confirm-msg');
+    if(opts.title){titleEl.style.display='';titleEl.textContent=opts.title;}
+    else{titleEl.style.display='none';}
+    if(opts.html){msgEl.innerHTML=msg||'';}else{msgEl.textContent=msg||'';}
+    const acts=document.getElementById('confirm-acts');
+    // value를 전역 레지스트리에 보관 (onclick에서 인덱스로 참조 — 문자열 escape 안전)
+    window._choiceVals=buttons.map(function(b){return b.value;});
+    acts.innerHTML=buttons.map(function(b,i){
+      const cls=b.cls||(i===0?'no':(b.danger?'danger':'yes'));
+      return '<button class="c-btn '+cls+'" onclick="confirmResolve(window._choiceVals['+i+'])">'+escapeHtml(b.label)+'</button>';
+    }).join('');
+    document.getElementById('confirm-modal').classList.add('show');
+    // Esc=취소(false), Enter는 다중 선택에서 모호하므로 무시
+    if(_confirmKeyHandler)document.removeEventListener('keydown',_confirmKeyHandler);
+    _confirmKeyHandler=function(e){if(e.key==='Escape'){e.preventDefault();confirmResolve(false);}};
+    document.addEventListener('keydown',_confirmKeyHandler);
+  });
 }
 
 let _toastTimer=null;
