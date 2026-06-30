@@ -426,6 +426,7 @@ button{font-family:inherit;cursor:pointer}
   /* drawer/챗봇/토스트 — 하단 네비 위로 */
   .panel{bottom:calc(58px + env(safe-area-inset-bottom)) !important}
   .cb-fab{bottom:calc(74px + env(safe-area-inset-bottom)) !important;right:14px !important;width:48px !important;height:48px !important}
+  .qa-fab{bottom:calc(132px + env(safe-area-inset-bottom)) !important;right:14px !important;padding:8px 13px 8px 11px !important;font-size:11.5px !important}
   .cb-win{bottom:calc(132px + env(safe-area-inset-bottom)) !important}
   .toast{bottom:calc(80px + env(safe-area-inset-bottom))}
   /* 더보기 시트 */
@@ -899,6 +900,13 @@ table.promo-board-table th:last-child .col-resize-handle{display:none}
 .cb-fab:active{transform:scale(0.94)}
 .cb-fab svg{width:26px;height:26px;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.15))}
 .cb-fab::after{content:'';position:absolute;inset:-3px;border-radius:50%;border:2px solid rgba(74,77,231,0.35);animation:cbPulse 2.6s ease-out 1s 3}
+/* === 불편사항 접수(QA) 버튼 — 예울이 FAB 위, 강조 === */
+.qa-fab{position:fixed;right:26px;bottom:94px;z-index:95;display:flex;align-items:center;gap:7px;padding:9px 15px 9px 13px;border:none;border-radius:24px;background:linear-gradient(135deg,#FF8F5E 0%,#FB6A6A 58%,#F2545B 100%);color:#fff;cursor:pointer;font-family:inherit;font-weight:700;font-size:12.5px;box-shadow:0 8px 22px rgba(242,84,91,0.4),0 2px 8px rgba(0,0,0,0.12);transition:transform .22s cubic-bezier(.34,1.4,.64,1),box-shadow .22s;animation:cbPop .5s cubic-bezier(.34,1.56,.64,1) backwards .15s}
+.qa-fab:hover{transform:translateY(-3px) scale(1.04);box-shadow:0 14px 30px rgba(242,84,91,0.5)}
+.qa-fab:active{transform:scale(0.96)}
+.qa-fab svg{width:18px;height:18px;flex:none}
+.qa-fab::after{content:'';position:absolute;inset:-3px;border-radius:24px;border:2px solid rgba(242,84,91,0.45);animation:cbPulse 2.6s ease-out 1.4s 3;pointer-events:none}
+.qa-fab-label{white-space:nowrap;letter-spacing:-0.2px}
 @keyframes cbPop{from{transform:scale(0) rotate(-30deg);opacity:0}to{transform:scale(1) rotate(0);opacity:1}}
 @keyframes cbPulse{0%{transform:scale(1);opacity:.8}70%,100%{transform:scale(1.35);opacity:0}}
 .cb-win{position:fixed;right:26px;bottom:96px;width:350px;height:520px;max-height:calc(100vh - 130px);background:rgba(255,255,255,0.92);-webkit-backdrop-filter:blur(28px) saturate(170%);backdrop-filter:blur(28px) saturate(170%);border:1px solid rgba(255,255,255,0.7);border-radius:24px;box-shadow:0 32px 90px rgba(74,77,231,0.22),0 10px 28px rgba(0,0,0,0.10),inset 0 1px 0 rgba(255,255,255,0.8);z-index:96;display:none;flex-direction:column;overflow:hidden;transform-origin:bottom right}
@@ -1816,6 +1824,7 @@ const VENUE_PINS = [
 ];
 
 let PERFS=[];
+let _perfReady=false;   // [버그수정] 프로그램 로드+updatePerfOpen 완료 여부 — 홍보 위저드 조기 오픈(미로딩 상태) 차단용
 function getPerfs(d){var k=dk(d),now=new Date();now.setHours(0,0,0,0);return PERFS.filter(function(p){return k>=p.s&&k<=p.e}).map(function(p){var sd=new Date(p.s);sd.setHours(0,0,0,0);var ed=new Date(p.e);ed.setHours(0,0,0,0);if(ed<now)return Object.assign({},p,{dday:null});if(now>=sd&&now<=ed)return Object.assign({},p,{dday:0});var diff=Math.round((sd-now)/86400000);return Object.assign({},p,{dday:diff});});}
 function getExhibitStatus(d){
 var k=dk(d),now=new Date();now.setHours(0,0,0,0);
@@ -2583,9 +2592,11 @@ function programToPerf(p){
     n:p['줄임말']||'',
     f:p['풀네임']||'',
     t:typeMap[p['콘텐츠구분']]||'c',
-    o:1,
-    ss:excelSerialToISO(p['판매시작일']),
+    o:0,   // [버그수정] 로딩 중 기본 0(닫힘) — updatePerfOpen() 실행 전 위저드가 열려도 미확정 하반기 공연이 선택지로 새지 않게
+    ss:excelSerialToISO(p['판매시작일']),   // 판매기간 = 사업 분석용(선택). 신청 게이트 아님
     se:excelSerialToISO(p['판매종료일']),
+    ps:excelSerialToISO(p['홍보시작일']),   // 홍보 시작일 — 캘린더 홍보 신청 가능 게이트(필수). 미설정 시 폴백
+    pe:excelSerialToISO(p['홍보종료일']),   // 홍보 종료일 (미설정 시 프로그램 종료일 폴백)
     m:p['담당자']||'',
     l:p['장소']||'',
     u:p['URL']||p['공연 URL']||p['상세 링크']||p['링크']||'',
@@ -2818,7 +2829,8 @@ function tsFilename(label,ext='csv'){
 function updatePerfOpen(){
   var now=new Date();now.setHours(0,0,0,0);
   PERFS.forEach(function(p){
-    // 판매 중 기준: 판매시작일 <= 오늘 <= 판매종료일
+    // p.o = '판매 중' 표시 플래그(사업 분석/현황 표시 전용) — 판매시작일 <= 오늘 <= 판매종료일.
+    // ⚠️ 홍보 신청 가능 게이트가 아님. 신청 가능 여부는 홍보기간(ps~pe)으로 별도 판정(위저드/_validateScheduleChange).
     if(!p.ss||!p.se){p.o=0;return;}
     var ss=new Date(p.ss);ss.setHours(0,0,0,0);
     var se=new Date(p.se);se.setHours(0,0,0,0);
@@ -2826,8 +2838,10 @@ function updatePerfOpen(){
   });
 }
 async function initApp(){
+  _perfReady=false;
   buildNav();startClock();updateRoleTag();
   try{_chatbotMount();}catch(_e){console.warn('[chatbot mount]',_e);}
+  try{_qaMount();}catch(_e){console.warn('[qa mount]',_e);}
   try{_initLongPress();}catch(_e){}
   loadWeather(); if(!window._wxTimer)window._wxTimer=setInterval(loadWeather,1800000);
   _presBeat(); _presPoll(); if(!window._presTimer)window._presTimer=setInterval(function(){_presBeat();_presPoll();},35000);
@@ -2842,6 +2856,7 @@ async function initApp(){
   try{await loadCafeJangdo();}catch(e){console.warn('[initApp loadCafeJangdo]',e);}
   try{await loadApplySettings();}catch(e){console.warn('[initApp loadApplySettings]',e);}
   updatePerfOpen();
+  _perfReady=true;   // 프로그램·홍보기간 로드 완료 — 이제 홍보 위저드 오픈 허용
   loadData();
   // MS(OneDrive) 토큰 미리 확보 — 폴더 선택 때 팝업 안 뜨게 (재방문 silent / 첫 로그인 popup 1회)
   _msalPrefetch();
@@ -7942,6 +7957,11 @@ let _pwSelectedSteps=[];       // [1,3,4] 선택된 step 배열
 let _pwSelectedIdx=0;          // 현재 진행 중 idx
 let _pwOriginalRec=null;       // 원본 row (diff용)
 function openPromoWizard(prefillDate){
+  // [버그수정] 프로그램·홍보기간 로딩 완료 전에는 열지 않음 — 미확정 하반기 공연이 선택지로 새던 현상 차단
+  if(!_perfReady||!PERFS.length){
+    showToast('프로그램 정보를 불러오는 중이에요. 잠시 후 다시 시도해 주세요','info');
+    return;
+  }
   _pwMode='request';
   document.querySelector('#promo-wizard h3').textContent='홍보 신청';
   _pwStep=1;
@@ -8261,9 +8281,9 @@ async function submitPromoEdit(){
       var _dateChanged=_dtCh&&(_pwData.date!==_recDate(orig));  // 날짜 자체가 바뀌었는가 (시간만 변경 구분)
       // 날짜/시간 변경 시: 접수·홍보시간대·제외·담당자 검증
       if(_dtCh){ var _c=canApplyOnDateTime(_effDate,_effTime); if(!_c.ok){showToast('변경 불가: '+_c.reason,'error');return;} }
-      // 날짜 or 프로그램 변경 시: 판매기간 검증
+      // 날짜 or 프로그램 변경 시: 홍보기간 검증 (홍보시작일~홍보종료일, 종료일 미설정 시 프로그램 종료일)
       var _perf=_findPerfByName(_effProg);
-      if(_perf){ if(_perf.ss&&_effDate<_perf.ss){showToast('변경 불가: 프로그램 판매 시작('+_perf.ss+') 전이라 홍보할 수 없어요','error');return;} if(_perf.se&&_effDate>_perf.se){showToast('변경 불가: 프로그램 판매 종료('+_perf.se+') 후라 홍보할 수 없어요','error');return;} }
+      if(_perf){ var _ppe=_perf.pe||_perf.e; if(_perf.ps&&_effDate<_perf.ps){showToast('변경 불가: 홍보 시작('+_perf.ps+') 전이라 홍보할 수 없어요','error');return;} if(_ppe&&_effDate>_ppe){showToast('변경 불가: 홍보 종료('+_ppe+') 후라 홍보할 수 없어요','error');return;} }
       // 카카오/문자 2일연속·중복은 날짜 기반 — 날짜가 바뀌거나 플랫폼이 바뀔 때만 검증(시간/제목만 변경은 제외). 자기 자신 제외
       if(_dateChanged||_platCh){ var _kc=_kakaoSmsConflict(_effPlat,_effDate,_effAppl,_pwEditTarget); if(_kc){showToast('변경 불가: '+_kc,'error');return;} }
     }
@@ -8342,9 +8362,10 @@ function renderPwStep(){
     // 우클릭 진입 시 그 날짜 기준, 일반 진입은 today fallback
     const _refKey=_pwData.date||(function(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');})();
     const activePerfs=PERFS.filter(function(p){
-      if(p.o!==1)return false;
-      // 판매종료일 있는 경우만 체크 (없으면 표시)
-      if(p.se&&p.se<_refKey)return false;
+      // 홍보 신청 가능 = 기준일이 홍보기간 안. 홍보종료일 미설정 시 프로그램 종료일 폴백, 홍보시작일 미설정 시 하한 없음.
+      var _pe=p.pe||p.e;
+      if(!_pe||_pe<_refKey)return false;     // 홍보/프로그램 종료일이 기준일 이전 → 제외
+      if(p.ps&&p.ps>_refKey)return false;     // 홍보 시작 전 → 제외
       return true;
     });
     const groups=[
@@ -11178,8 +11199,9 @@ function _validateScheduleChange(rec, newDate, newTime, opts){
   var chk=canApplyOnDateTime(newDate,newTime); if(!chk.ok)return chk;
   var perf=_findPerfByName(opts.program!=null?opts.program:(rec?rec['프로그램']:''));
   if(perf){
-    if(perf.ss && newDate<perf.ss)return {ok:false, reason:'프로그램 판매 시작('+perf.ss+') 전이라 홍보할 수 없어요'};
-    if(perf.se && newDate>perf.se)return {ok:false, reason:'프로그램 판매 종료('+perf.se+') 후라 홍보할 수 없어요'};
+    var _ppe=perf.pe||perf.e;
+    if(perf.ps && newDate<perf.ps)return {ok:false, reason:'홍보 시작('+perf.ps+') 전이라 홍보할 수 없어요'};
+    if(_ppe && newDate>_ppe)return {ok:false, reason:'홍보 종료('+_ppe+') 후라 홍보할 수 없어요'};
   }
   var kc=_kakaoSmsConflict(opts.plat1, newDate, opts.applicant, opts.ignoreRowIndex);
   if(kc)return {ok:false, reason:kc};
@@ -11937,13 +11959,14 @@ function buildProgramListHtml(programs){
   html+='';
   html+='<button onclick="openProgramForm(null)" style="padding:7px 16px;background:var(--accent);color:#fff;border:0;border-radius:10px;cursor:pointer;font-weight:600;font-size:13px">등록</button>';
   html+='</div>';
-  html+='<table class="adm-tbl"><thead><tr><th>NO</th><th>구분</th><th>풀네임</th><th>줄임말</th><th>판매</th><th>진행</th><th>담당</th><th>장소</th><th></th></tr></thead><tbody>';
+  html+='<table class="adm-tbl"><thead><tr><th>NO</th><th>구분</th><th>풀네임</th><th>줄임말</th><th>홍보</th><th>판매</th><th>진행</th><th>담당</th><th>장소</th><th></th></tr></thead><tbody>';
   programs.forEach(p=>{
     html+='<tr>';
     html+='<td>'+escapeHtml(p['NO']||'')+'</td>';
     html+='<td>'+escapeHtml(p['콘텐츠구분']||'')+'</td>';
     html+='<td style="font-weight:600">'+escapeHtml(p['풀네임']||'')+'</td>';
     html+='<td style="color:#888">'+escapeHtml(p['줄임말']||'')+'</td>';
+    html+='<td style="font-size:11px;white-space:nowrap;color:var(--accent)">'+excelDateDisplay(p['홍보시작일'])+'<br>'+excelDateDisplay(p['홍보종료일'])+'</td>';
     html+='<td style="font-size:11px;white-space:nowrap">'+excelDateDisplay(p['판매시작일'])+'<br>'+excelDateDisplay(p['판매종료일'])+'</td>';
     html+='<td style="font-size:11px;white-space:nowrap">'+excelDateDisplay(p['시작일'])+'<br>'+excelDateDisplay(p['종료일'])+'</td>';
     html+='<td>'+escapeHtml(p['담당자']||'')+'</td>';
@@ -11960,6 +11983,7 @@ function buildProgramListHtml(programs){
 function openProgramForm(rowIndex){
   const existing=rowIndex?_programsCache.find(p=>p._rowIndex===rowIndex):null;
   const nextNo=Math.max(0,..._programsCache.map(p=>Number(p['NO'])||0))+1;
+  const _todayIso=(function(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');})();
   const v={
     NO:existing?existing['NO']:nextNo,
     구분:existing?existing['콘텐츠구분']:(CONTENT_TYPES[0]||'공연'),
@@ -11969,6 +11993,8 @@ function openProgramForm(rowIndex){
     판매종료:existing?excelDateInputValue(existing['판매종료일']):'',
     시작:existing?excelDateInputValue(existing['시작일']):'',
     종료:existing?excelDateInputValue(existing['종료일']):'',
+    홍보시작:existing?(excelDateInputValue(existing['홍보시작일'])||_todayIso):_todayIso,   // 기본값: 오늘
+    홍보종료:existing?(excelDateInputValue(existing['홍보종료일'])||excelDateInputValue(existing['종료일'])):'',   // 기본값: 프로그램 종료일
     담당자:existing?existing['담당자']:'',
     장소:existing?existing['장소']:'대극장'
   };
@@ -11979,8 +12005,11 @@ function openProgramForm(rowIndex){
   html+='<div style="display:flex;gap:10px"><div style="flex:0 0 80px"><label>NO</label><input name="NO" type="number" value="'+v.NO+'" readonly></div><div style="flex:1"><label>콘텐츠구분<span class="req">*</span></label><select name="콘텐츠구분" required onchange="refreshManagerOptions(this.value)">'+CONTENT_TYPES.map(t=>'<option value="'+escapeHtml(t)+'" '+(t===v.구분?'selected':'')+'>'+escapeHtml(t)+'</option>').join('')+'</select></div></div>';
   html+='<div><label>풀네임<span class="req">*</span></label><input name="풀네임" type="text" value="'+escapeHtml(v.풀네임)+'" required></div>';
   html+='<div><label>줄임말<span class="req">*</span></label><input name="줄임말" type="text" value="'+escapeHtml(v.줄임말)+'" required></div>';
-  html+='<div style="display:flex;gap:10px"><div style="flex:1"><label>판매시작일</label><input name="판매시작일" type="date" value="'+v.판매시작+'"></div><div style="flex:1"><label>판매종료일</label><input name="판매종료일" type="date" value="'+v.판매종료+'"></div></div>';
-  html+='<div style="display:flex;gap:10px"><div style="flex:1"><label>시작일<span class="req">*</span></label><input name="시작일" type="date" value="'+v.시작+'" required></div><div style="flex:1"><label>종료일<span class="req">*</span></label><input name="종료일" type="date" value="'+v.종료+'" required></div></div>';
+  html+='<div style="display:flex;gap:10px"><div style="flex:1"><label>시작일<span class="req">*</span></label><input name="시작일" type="date" value="'+v.시작+'" required></div><div style="flex:1"><label>종료일<span class="req">*</span></label><input id="prog-end" name="종료일" type="date" value="'+v.종료+'" required onchange="_progSyncPromoEnd()"></div></div>';
+  // 홍보 신청 가능 기간 (필수) — 기본값: 시작일=오늘, 종료일=프로그램 종료일. 캘린더 홍보 신청 게이트
+  html+='<div style="background:#F6F5FF;border:1px solid rgba(74,77,231,0.15);border-radius:10px;padding:10px 12px"><div style="font-size:11.5px;color:var(--accent);font-weight:700;margin-bottom:7px">📣 홍보 신청 가능 기간 <span style="font-weight:400;color:#888">— 캘린더에서 이 프로그램 홍보를 신청할 수 있는 기간</span></div><div style="display:flex;gap:10px"><div style="flex:1"><label>홍보시작일<span class="req">*</span></label><input id="prog-promo-start" name="홍보시작일" type="date" value="'+v.홍보시작+'" required></div><div style="flex:1"><label>홍보종료일<span class="req">*</span></label><input id="prog-promo-end" name="홍보종료일" type="date" value="'+v.홍보종료+'" required></div></div></div>';
+  // 판매 기간 (선택) — 사업 분석용. 홍보 신청 가능 여부와 무관
+  html+='<div style="display:flex;gap:10px"><div style="flex:1"><label>판매시작일 <span style="font-size:10px;color:#888;font-weight:400">(선택·사업분석용)</span></label><input name="판매시작일" type="date" value="'+v.판매시작+'"></div><div style="flex:1"><label>판매종료일 <span style="font-size:10px;color:#888;font-weight:400">(선택)</span></label><input name="판매종료일" type="date" value="'+v.판매종료+'"></div></div>';
   html+='<div><label>담당자 <span style="font-size:10px;color:#888;font-weight:400">(콘텐츠구분 따라 필터)</span></label><select name="담당자">'+buildManagerOptions(v.구분,v.담당자)+'</select></div>';
   html+='<div><label>장소</label><input name="장소" type="text" value="'+escapeHtml(v.장소)+'"></div>';
   html+='<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px;padding-top:14px;border-top:1px solid #eee">';
@@ -11995,6 +12024,12 @@ function openProgramForm(rowIndex){
 function closeProgramForm(){
   const el=document.getElementById('program-form-modal');
   if(el)el.innerHTML='';
+}
+// 종료일 입력 시 홍보종료일이 비어있으면 자동 동기화 (기본값: 프로그램 종료일)
+function _progSyncPromoEnd(){
+  const endEl=document.getElementById('prog-end');
+  const pe=document.getElementById('prog-promo-end');
+  if(endEl&&pe&&endEl.value&&!pe.value)pe.value=endEl.value;
 }
 
 async function saveProgram(rowIndex){
@@ -12011,7 +12046,9 @@ async function saveProgram(rowIndex){
     isoToExcelSerial(fd.get('시작일')),
     isoToExcelSerial(fd.get('종료일')),
     fd.get('담당자')||'',
-    fd.get('장소')||''
+    fd.get('장소')||'',
+    isoToExcelSerial(fd.get('홍보시작일')),   // K열 (신규 컬럼)
+    isoToExcelSerial(fd.get('홍보종료일'))    // L열 (신규 컬럼)
   ];
   showOverlayLoad('\uC800\uC7A5 \uC911\uC785\uB2C8\uB2E4...');
   try{
@@ -14467,6 +14504,65 @@ function _cbLog(kind,query,answer,match){
     }).catch(function(e){console.warn('[cbLog]',e.message);});
   }catch(e){}
 }
+
+// === 불편사항 접수(QA) — 예울이 FAB 위 강조 버튼 + 접수 모달 ===
+function _qaMount(){
+  if(document.getElementById('qa-fab'))return;
+  const b=document.createElement('button');
+  b.id='qa-fab';b.className='qa-fab';b.title='불편사항 접수';b.onclick=_qaOpen;
+  // 픽토그램: 확성기(메가폰) — "의견을 들려주세요"
+  b.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11v2a1 1 0 0 0 1 1h2l4.5 3.5a1 1 0 0 0 1.5-.9V7.4a1 1 0 0 0-1.5-.9L6 10H4a1 1 0 0 0-1 1z"/><path d="M16 9a3 3 0 0 1 0 6"/><path d="M19 6a7 7 0 0 1 0 12"/></svg><span class="qa-fab-label">불편사항 접수</span>';
+  document.body.appendChild(b);
+}
+function _qaOpen(){
+  try{if(typeof _ddCloseAll==='function')_ddCloseAll();}catch(e){}
+  let el=document.getElementById('qa-modal');
+  if(!el){el=document.createElement('div');el.id='qa-modal';document.body.appendChild(el);}
+  const cats=['오류·버그','사용 불편','기능 제안','기타'];
+  let h='<div class="modal-bg show" style="z-index:9600" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,_qaClose)"><div class="modal" style="width:94vw;max-width:440px;padding:22px;position:relative">';
+  h+='<button class="modal-x" onclick="_qaClose()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:14px;float:none;margin:0;z-index:10">✕</button>';
+  h+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span style="font-size:20px">📣</span><h3 style="margin:0">불편사항 접수</h3></div>';
+  h+='<div style="font-size:12.5px;color:#666;line-height:1.65;margin-bottom:16px">쓰시면서 불편했던 점·오류·바라는 점을 자유롭게 남겨주세요. 담당자가 확인해 개선할게요 🙂</div>';
+  h+='<label style="display:block;font-size:11px;color:#888;font-weight:600;margin-bottom:5px">분류</label>';
+  h+='<select id="qa-cat" style="width:100%;padding:9px 12px;border:1.5px solid rgba(0,0,0,0.08);border-radius:10px;font-size:13px;margin-bottom:13px;box-sizing:border-box;font-family:inherit;background:#F8F7FC">'+cats.map(function(c){return '<option value="'+c+'">'+c+'</option>';}).join('')+'</select>';
+  h+='<label style="display:block;font-size:11px;color:#888;font-weight:600;margin-bottom:5px">내용<span style="color:var(--peach-text,#D88455);margin-left:2px">*</span></label>';
+  h+='<textarea id="qa-text" rows="5" placeholder="예: ○○ 화면에서 △△ 버튼을 누르면 ~~ 하면 좋겠어요" style="width:100%;padding:10px 12px;border:1.5px solid rgba(0,0,0,0.08);border-radius:10px;font-size:13px;box-sizing:border-box;font-family:inherit;background:#F8F7FC;resize:vertical;line-height:1.55"></textarea>';
+  h+='<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px">';
+  h+='<button onclick="_qaClose()" style="padding:9px 18px;border:1px solid rgba(0,0,0,0.08);border-radius:10px;background:#fff;cursor:pointer;font-size:13px">취소</button>';
+  h+='<button id="qa-submit" onclick="_qaSubmit()" style="padding:9px 22px;background:var(--accent);color:#fff;border:0;border-radius:10px;cursor:pointer;font-weight:600;font-size:13px">접수하기</button>';
+  h+='</div></div></div>';
+  el.innerHTML=h;
+  setTimeout(function(){const t=document.getElementById('qa-text');if(t)t.focus();},60);
+}
+function _qaClose(){const el=document.getElementById('qa-modal');if(el)el.innerHTML='';}
+async function _qaSubmit(){
+  const ta=document.getElementById('qa-text'),cat=document.getElementById('qa-cat');
+  const content=((ta&&ta.value)||'').trim();
+  if(content.length<5){showToast('불편하셨던 내용을 조금만 더 적어주세요 (5자 이상)','error');if(ta)ta.focus();return;}
+  const payload={
+    id:'q'+Date.now()+'-'+Math.random().toString(36).slice(2,6),
+    kst:new Date(Date.now()+9*36e5).toISOString().slice(0,16).replace('T',' '),
+    user:sessionStorage.getItem('myApplicant')||'(미상)',
+    dept:sessionStorage.getItem('myUserDept')||'',
+    category:(cat&&cat.value)||'기타',
+    content:content.slice(0,1000)
+  };
+  const btn=document.getElementById('qa-submit');if(btn){btn.disabled=true;btn.textContent='접수 중...';}
+  let okFlag=false;
+  try{
+    await api('POST','/api/qa',payload);okFlag=true;
+  }catch(e){
+    // 폴백: /api/qa 미배포(404 등) 시 챗봇로그 시트에 '불편사항'으로 적재 — 데이터 유실 방지
+    try{
+      await api('POST','/api/chatbot/log',{id:payload.id,kst:payload.kst,user:payload.user,dept:payload.dept,kind:'불편사항',query:'['+payload.category+'] '+payload.content,answer:'',match:''});
+      okFlag=true;
+    }catch(e2){console.warn('[qaSubmit]',e2&&e2.message);}
+  }
+  if(!okFlag){if(btn){btn.disabled=false;btn.textContent='접수하기';}showToast('접수에 실패했어요. 잠시 후 다시 시도해 주세요','error');return;}
+  _qaClose();
+  showToast('소중한 의견 감사합니다! 접수되었어요 🙏','success');
+}
+
 function _chatbotMount(){
   if(document.getElementById('cb-fab'))return;
   const fab=document.createElement('button');
@@ -14596,6 +14692,7 @@ function _cbProgAnswer(p,typed){
   if(p.s)h+='기간: '+escapeHtml(_rangeShort(p.s,p.e));
   if(p.l)h+='\n장소: '+escapeHtml(p.l);
   h+='\n구분: '+(tMap[p.t]||'공연');
+  if(p.ps||p.pe)h+='\n홍보 기간: '+escapeHtml(_rangeShort(p.ps||p.s,p.pe||p.e));
   if(p.ss)h+='\n판매 기간: '+escapeHtml(_rangeShort(p.ss,p.se));
   if(p.m)h+='\n담당자: '+escapeHtml(p.m);
   if(p.u){
