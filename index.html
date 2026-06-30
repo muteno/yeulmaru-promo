@@ -7109,6 +7109,7 @@ function _isMineRec(rec, myAppl){
 // 0=신청 대기, 1=오늘, 2=미래 예정, 3=지난 일정, 4=취소
 function _getAdminSection(rec, todayKey){
   const st = (rec['진행 상태']||'').toString();
+  if(st==='임시') return -1;  // 임시저장은 보드 섹션 분류 대상 아님 (renderPromoBoard에서 이미 제외)
   if(st==='신청 중') return 0;
   if(st==='취소') return 4;
   const dk = (rec['연도']||'')+'-'+String(rec['월']||'').padStart(2,'0')+'-'+String(rec['일']||'').padStart(2,'0');
@@ -8086,7 +8087,7 @@ function _renderChangeMenu(rec){
   var _cmStatus=rec['진행 상태']||'';
   var _cmMyAppl='';try{_cmMyAppl=sessionStorage.getItem('myApplicant')||'';}catch(e){}
   var _cmMine=(typeof _isMineRec==='function')?_isMineRec(rec,_cmMyAppl):((rec['게시 담당자']||'')===_cmMyAppl);
-  var _cmCancelable=(_cmStatus!=='완료'&&_cmStatus!=='취소');
+  var _cmCancelable=(_cmStatus!=='완료'&&_cmStatus!=='취소'&&_cmStatus!=='임시');
   if(_cmMine && _cmCancelable){
     html+='<button class="m-btn" onclick="closeChangeMenu();cancelPromoRequest('+rec._rowIndex+')" style="background:#fff;color:#e5484d;border:1.5px solid #e5484d;font-weight:600;margin-right:auto">신청 취소</button>';
   }
@@ -11356,7 +11357,7 @@ function buildScheduleListHtml(rows){
   // 필터 옵션 추출 (전체 records 기반, 필터 무관)
   const allMonths=[...new Set(records.map(r=>String(r['월']||'')))].filter(Boolean).sort((a,b)=>Number(a)-Number(b));
   const allCats=[...new Set(records.map(r=>r['콘텐츠 구분']||''))].filter(Boolean);
-  const allStatuses=[...new Set(records.map(r=>r['진행 상태']||''))].filter(Boolean);
+  const allStatuses=[...new Set(records.map(r=>r['진행 상태']||''))].filter(function(s){return s&&s!=='임시';});
   
   // 오늘 / 비-오늘 분리 (오늘은 항상 상단 고정)
   const todayRows=rows.filter(r=>getRecDateKey(r)===todayKey);
@@ -12625,6 +12626,7 @@ function renderCal(){
   if(applying) _tipMsg += '신청 중입니다.';
   else if(done) _tipMsg += '완료한 콘텐츠입니다.';
   else if(st==='취소') _tipMsg += '취소한 콘텐츠입니다.';
+  else if(st==='임시') _tipMsg += '임시저장한 콘텐츠입니다.';
   else _tipMsg += '등록한 콘텐츠입니다.';
   return ' data-tooltip="'+_tipMsg+'"';
 })()+' '+(userRole==='admin'&&!applying?'draggable="true" ondragstart="onEvDragStart(event,'+(r._rowIndex)+',\''+key+'\')" ondragend="onEvDragEnd(event)"':'')+' onclick="event.stopPropagation();editRec('+(r._rowIndex)+',\''+key+'\',event,true)"'+_ctxAttr+' style="cursor:'+(userRole==='admin'?'grab':'pointer')+';'+deco+border+'opacity:'+rowOpacity+'"><span class="ev-time" style="color:'+timeCol+';font-weight:600">'+hhmm+'</span><span class="ev-plat" style="color:'+platCol+';font-weight:600"'+(applying?'':' title="'+(p2&&p2!=='-'?p2:p).replace(/"/g,'&quot;')+'"')+'>'+platDisplay(p,p2)+'</span><span class="ev-title" style="color:'+titleCol+'">'+applyingBadge+draftBadge+title+'</span></div>';
@@ -12833,6 +12835,11 @@ function onEvContextMenu(event,rowIndex,dateKey){
         '<div class="ccm-item" onclick="closeCellContextMenu();approvePromoFromBoard('+rowIndex+')"><span class="emo" style="color:#0F8B4C">✓</span>승인 (예정으로)</div>'+
         '<div class="ccm-divider"></div>'+
         '<div class="ccm-item" onclick="closeCellContextMenu();deleteRec('+rowIndex+',\''+dateKey+'\')"><span class="emo">🗑️</span>삭제</div>';
+    }else if(adminStatus==='임시'){
+      // 임시저장 — 이어쓰기 / 삭제
+      menuHtml='<div class="ccm-item" onclick="closeCellContextMenu();_pwResumeDraft('+rowIndex+')"><span class="emo">✏️</span>이어쓰기</div>'+
+        '<div class="ccm-divider"></div>'+
+        '<div class="ccm-item" onclick="closeCellContextMenu();_pwDeleteDraft('+rowIndex+')"><span class="emo">🗑️</span>임시저장 삭제</div>';
     }else{
       // 완료/취소 — 복사 / 삭제 (admin only, 캘린더에선 안 보임. 일정관리 페이지 우클릭만)
       menuHtml='<div class="ccm-item" onclick="closeCellContextMenu();copyRec('+rowIndex+',\''+dateKey+'\')"><span class="emo">📋</span>복사</div>'+
@@ -12859,6 +12866,11 @@ function onEvContextMenu(event,rowIndex,dateKey){
       menuHtml='<div style="padding:10px 14px;font-size:12px;line-height:1.4;background:#fff8e6;border-radius:8px;margin:2px 2px 4px;max-width:220px"><div style="color:var(--accent);font-weight:700;margin-bottom:7px">⏸ 보류된 신청</div><span style="color:#333;font-size:11px">내용 확인 후 재신청 가능</span></div>'+
         '<div class="ccm-item" onclick="closeCellContextMenu();reapplyPromoRequest('+rowIndex+')"><span class="emo" style="color:#0F8B4C">↻</span>재신청</div>'+
         '<div class="ccm-item" onclick="closeCellContextMenu();cancelPromoRequest('+rowIndex+')"><span class="emo" style="color:#E24B4A">✕</span>취소</div>';
+    }else if(status==='임시'){
+      // 본인 + 임시저장 — 이어쓰기 / 삭제
+      menuHtml='<div style="padding:9px 12px;font-size:12px;line-height:1.4;background:#EEF0FF;border-radius:8px;margin:2px 2px 4px;max-width:220px"><div style="color:var(--accent);font-weight:700">📝 임시저장</div><span style="color:#555;font-size:11px">이어쓰기로 마저 작성하세요</span></div>'+
+        '<div class="ccm-item" onclick="closeCellContextMenu();_pwResumeDraft('+rowIndex+')"><span class="emo">✏️</span>이어쓰기</div>'+
+        '<div class="ccm-item" onclick="closeCellContextMenu();_pwDeleteDraft('+rowIndex+')"><span class="emo" style="color:#E24B4A">🗑️</span>삭제</div>';
     }else{
       // 본인 + 완료/취소 — 안내만
       const stColor = status==='완료'?'#2563EB':'#888';
