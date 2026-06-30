@@ -534,6 +534,26 @@ async function handleAddChatLog(token, log) {
 }
 __name(handleAddChatLog, "handleAddChatLog");
 
+// === 불편사항(QA) 접수 — 시트 자동생성 + 적재. 로그인 사용자 POST / admin GET ===
+var QA_SHEET = "불편사항";
+var QA_HEADERS = ["ID", "KST", "사용자", "부서", "분류", "내용", "상태", "처리메모"];
+async function handleAddQa(token, q) {
+  const { driveId, itemId } = await ensureNamedSheet(token, QA_SHEET, QA_HEADERS, null);
+  const { rows } = await handleGetSheet(token, QA_SHEET);
+  const nextRow = rows.length > 0 ? Math.max(...rows.map((r) => r._rowIndex)) + 1 : 2;
+  const values = [
+    q.id || "", q.kst || kstNowText(), q.user || "", q.dept || "",
+    q.category || "기타", q.content || "", "접수", ""
+  ];
+  const lastCol = colLetter(values.length);
+  const addr = `A${nextRow}:${lastCol}${nextRow}`;
+  // 셀을 텍스트 서식으로 먼저 지정 — KST/번호가 Excel 날짜·숫자로 자동변환되는 것 방지
+  await graphPatch(token, `${sheetPathFor(driveId, itemId, QA_SHEET)}/range(address='${addr}')`, { numberFormat: [values.map(() => "@")] });
+  await graphPatch(token, `${sheetPathFor(driveId, itemId, QA_SHEET)}/range(address='${addr}')`, { values: [values] });
+  return { ok: true, row: nextRow };
+}
+__name(handleAddQa, "handleAddQa");
+
 // === 규정 시트 — 사무처리규정 PDF 조항 인제스트 (docs/260610_rules_ingest.mjs) ===
 var RULES_SHEET = "규정";
 var RULES_HEADERS = ["규정명", "조항", "제목", "본문", "키워드"];
@@ -1340,6 +1360,17 @@ var index_default = {
           if (!rAuth.admin) return json({ error: "Admin only" }, env, 403);
           const body = await request.json();
           return json(await writeNamedSheetRows(token, RULES_SHEET, RULES_HEADERS, Array.isArray(body.rows) ? body.rows : []), env);
+        }
+      }
+
+      // === 불편사항(QA) — POST 접수(로그인 사용자) / GET 조회(admin) ===
+      if (url.pathname === "/api/qa") {
+        if (request.method === "POST") return json(await handleAddQa(token, await request.json()), env);
+        if (request.method === "GET") {
+          const qAuth = await checkAdmin(request, env, token);
+          if (!qAuth.admin) return json({ error: "Admin only" }, env, 403);
+          try { const { rows } = await handleGetSheet(token, QA_SHEET); return json({ qa: rows }, env); }
+          catch (e) { return json({ qa: [] }, env); }
         }
       }
 
