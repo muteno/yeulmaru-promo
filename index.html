@@ -907,6 +907,10 @@ table.promo-board-table th:last-child .col-resize-handle{display:none}
 .qa-fab svg{width:18px;height:18px;flex:none}
 .qa-fab::after{content:'';position:absolute;inset:-3px;border-radius:24px;border:2px solid rgba(242,84,91,0.45);animation:cbPulse 2.6s ease-out 1.4s 3;pointer-events:none}
 .qa-fab-label{white-space:nowrap;letter-spacing:-0.2px}
+/* === 카카오 본문 이모지 피커 === */
+.pw-emoji-pop{position:fixed;z-index:10000;width:284px;max-height:208px;overflow-y:auto;background:#fff;border:1px solid rgba(0,0,0,0.1);border-radius:12px;box-shadow:0 14px 44px rgba(0,0,0,0.2);padding:8px;display:flex;flex-wrap:wrap;gap:2px;animation:acctDrop .16s ease}
+.pw-emoji-x{width:32px;height:32px;border:none;background:transparent;border-radius:8px;font-size:19px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
+.pw-emoji-x:hover{background:#F0EEFA}
 @keyframes cbPop{from{transform:scale(0) rotate(-30deg);opacity:0}to{transform:scale(1) rotate(0);opacity:1}}
 @keyframes cbPulse{0%{transform:scale(1);opacity:.8}70%,100%{transform:scale(1.35);opacity:0}}
 .cb-win{position:fixed;right:26px;bottom:96px;width:350px;height:520px;max-height:calc(100vh - 130px);background:rgba(255,255,255,0.92);-webkit-backdrop-filter:blur(28px) saturate(170%);backdrop-filter:blur(28px) saturate(170%);border:1px solid rgba(255,255,255,0.7);border-radius:24px;box-shadow:0 32px 90px rgba(74,77,231,0.22),0 10px 28px rgba(0,0,0,0.10),inset 0 1px 0 rgba(255,255,255,0.8);z-index:96;display:none;flex-direction:column;overflow:hidden;transform-origin:bottom right}
@@ -9819,7 +9823,7 @@ function renderPwSubDetail(body,next){
     if(p1==='카카오톡'){
       html='<div class="pw-question">카카오톡 텍스트를 작성해주세요</div>';
       html+='<div class="pw-hint">30자 이상 76자까지 입력해 주세요</div>';
-      html+='<label style="display:block;font-size:11px;color:#888;margin:14px 0 4px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">본문<span style="color:var(--peach);margin-left:3px">*</span></label>';
+      html+=_pwKakaoLabelBar();
       html+='<textarea id="pw-kakao-text" maxlength="76" rows="4" oninput="pwCharCount(\'pw-kakao-text\',\'pw-kakao-count\',76)" placeholder="30자 이상 76자까지 입력해 주세요" style="width:100%;padding:10px 14px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:12px;font-size:13px;outline:none;box-sizing:border-box;resize:vertical;font-family:inherit;line-height:1.5">'+escapeHtml(_pwData.kakaoText)+'</textarea>';
       html+='<div style="display:flex;justify-content:flex-end;margin-top:6px"><span id="pw-kakao-count" style="font-size:11px;color:#888">'+(_pwData.kakaoText||'').length+' / 76</span></div>';
       body.innerHTML=html;next.textContent='다음';return;
@@ -9866,6 +9870,54 @@ function renderPwSubDetail(body,next){
   next.textContent='다음';
 }
 
+// === 카카오 본문 이모지 피커 ===
+var _PW_EMOJIS=['😊','😄','😍','🥰','😉','😎','🤩','🙂','😆','👍','🙌','👏','🙏','👉','💪','🤝',
+'❤️','🧡','💛','💚','💙','💜','🩷','💖','✨','🌟','⭐','🔥','💯','🎉','🎊','🎁','🎈','🎀',
+'📣','📢','✅','❗','❓','💡','📌','📅','🕐','📍','🎫','🎭','🎨','🎵','🎤','🎬','🎶','🎟️',
+'🌊','🏖️','🌴','🌸','🌷','🌻','☀️','🌙','💧','🍀','🍰','☕','💐','🛍️','🚌'];
+function _pwKakaoLabelBar(){
+  return '<div style="display:flex;justify-content:space-between;align-items:center;margin:14px 0 4px">'+
+    '<label style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">본문<span style="color:var(--peach);margin-left:3px">*</span></label>'+
+    '<button type="button" class="pw-emoji-btn" onclick="_pwEmojiToggle(event)" title="이모지 넣기" style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;background:#FFF7E6;border:1px solid rgba(240,180,80,0.45);border-radius:8px;font-size:11px;cursor:pointer;font-family:inherit;color:#B8860B">😊 이모지</button>'+
+    '</div>';
+}
+function _pwEmojiToggle(ev){
+  if(ev)ev.stopPropagation();
+  var ex=document.getElementById('pw-emoji-pop');
+  if(ex){ex.remove();document.removeEventListener('click',_pwEmojiOutside,true);return;}
+  var btn=ev&&ev.currentTarget;
+  var pop=document.createElement('div');
+  pop.id='pw-emoji-pop';pop.className='pw-emoji-pop';
+  pop.innerHTML=_PW_EMOJIS.map(function(e){return '<button type="button" class="pw-emoji-x" onclick="_pwEmojiInsert(\''+e+'\')">'+e+'</button>';}).join('');
+  document.body.appendChild(pop);
+  var r=btn?btn.getBoundingClientRect():{bottom:120,left:120};
+  var left=Math.max(8,Math.min(r.left||120,window.innerWidth-pop.offsetWidth-8));
+  pop.style.top=((r.bottom||120)+6)+'px';
+  pop.style.left=left+'px';
+  setTimeout(function(){document.addEventListener('click',_pwEmojiOutside,true);},0);
+}
+function _pwEmojiOutside(e){
+  var pop=document.getElementById('pw-emoji-pop');
+  if(!pop)return;
+  if(pop.contains(e.target))return;                                  // 이모지 클릭은 유지
+  if(e.target.closest&&e.target.closest('.pw-emoji-btn'))return;     // 토글 버튼은 자체 처리
+  pop.remove();document.removeEventListener('click',_pwEmojiOutside,true);
+}
+function _pwEmojiInsert(emoji){
+  var ta=document.getElementById('pw-kakao-text');
+  if(!ta)return;
+  var max=parseInt(ta.getAttribute('maxlength'))||76;
+  var start=(ta.selectionStart!=null)?ta.selectionStart:ta.value.length;
+  var end=(ta.selectionEnd!=null)?ta.selectionEnd:ta.value.length;
+  var nv=ta.value.slice(0,start)+emoji+ta.value.slice(end);
+  if(nv.length>max){showToast('최대 '+max+'자까지 입력할 수 있어요','error');return;}
+  ta.value=nv;
+  var pos=start+emoji.length;
+  ta.focus();try{ta.setSelectionRange(pos,pos);}catch(e){}
+  _pwData.kakaoText=ta.value;
+  if(typeof pwCharCount==='function')pwCharCount('pw-kakao-text','pw-kakao-count',max);
+}
+
 // === Step 4 — 텍스트 입력 (카카오/인스타 별도 step) ===
 function renderPwSubText(body,next){
   const p1=_pwData.plat1;
@@ -9873,7 +9925,7 @@ function renderPwSubText(body,next){
   if(p1==='카카오톡'){
     html+='<div class="pw-question">카카오톡 텍스트를 작성해주세요</div>';
     html+='<div class="pw-hint">'+escapeHtml(_pwData.format||'이미지/영상')+' + 텍스트가 함께 발송돼요 · 30자 이상 76자까지 입력해 주세요</div>';
-    html+='<label style="display:block;font-size:11px;color:#888;margin:14px 0 4px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">본문<span style="color:var(--peach);margin-left:3px">*</span></label>';
+    html+=_pwKakaoLabelBar();
     html+='<textarea id="pw-kakao-text" maxlength="76" rows="4" oninput="pwCharCount(\'pw-kakao-text\',\'pw-kakao-count\',76)" placeholder="30자 이상 76자까지 입력해 주세요" style="width:100%;padding:10px 14px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:12px;font-size:13px;outline:none;box-sizing:border-box;resize:vertical;font-family:inherit;line-height:1.5">'+escapeHtml(_pwData.kakaoText)+'</textarea>';
     html+='<div style="display:flex;justify-content:flex-end;margin-top:6px"><span id="pw-kakao-count" style="font-size:11px;color:#888">'+(_pwData.kakaoText||'').length+' / 76</span></div>';
   }else if(p1==='인스타그램'){
