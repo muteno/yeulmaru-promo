@@ -12218,6 +12218,7 @@ async function saveProgram(rowIndex){
   const form=document.getElementById('prog-form');
   if(!form)return;
   const fd=new FormData(form);
+  if(!rowIndex){try{await loadPrograms();}catch(_e){}}   // [검증반영] 신규 저장 직전 프로그램 재조회 → _genProgramId 순번을 최신 캐시로 계산(동시/연속 등록 완화). 완전 차단은 Worker 유일성 몫.
   // ⚠️ 실제 '프로그램' 시트 컬럼: A~J(NO·콘텐츠구분·풀네임·줄임말·판매시작·판매종료·시작·종료·담당자·장소)
   //    · K=URL · L=프로그램ID(구'공연ID') · M=홍보시작일 · N=홍보종료일. URL/프로그램ID는 폼에 필드가 없으니 기존 값 보존(신규·빈값은 시작일 기반 자동 부여).
   const existing=rowIndex?(_programsCache.find(p=>p._rowIndex===rowIndex)||null):null;
@@ -14397,7 +14398,7 @@ function _nbBuildPayload(){
   return {topic:topic,intent:intent,target:tparts.join(', '),
     facts:{overview:F.overview||'',when:F.when||'',where:F.where||'',who:F.who||'',price:F.price||'',detail:F.detail||''},
     ocrText:String(s.ocrText||'').trim(),   // 홍보물 OCR 원문이 사실의 바탕(분석 단계 없이 그대로 전달)
-    extra:String(s.extra||'').trim(),template:(s.tplMode==='fixed'?String(s.tplText||'').trim():''),keys:[],length:'보통',voice:s.voice,emoji:s.emoji,refs:_nbToneLib()};
+    extra:String(s.extra||'').trim(),template:(s.tplMode==='fixed'?String(s.tplText||'').trim():''),keys:[],length:'보통',voice:s.voice,emoji:s.emoji,refs:(_nbToneLib()||[]).slice(-5).map(function(r){return {text:String((r&&r.text)||'').slice(0,4000)};})};   // [검증반영] 톤 참조는 워크플로가 쓰는 만큼(최근5개·각4000자)만 실어 dispatch payload 비대·422 방지
 }
 // 초안 다듬기 — 기존 초안 + 수정 요청을 함께 보내 재생성
 async function _nbRefine(){
