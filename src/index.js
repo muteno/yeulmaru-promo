@@ -554,6 +554,18 @@ async function handleAddQa(token, q) {
 }
 __name(handleAddQa, "handleAddQa");
 
+// 불편사항 상태/처리메모 업데이트 (admin) — 상태=G열, 처리메모=H열 (QA_HEADERS 기준)
+async function handleUpdateQa(token, q) {
+  const rowIndex = Number(q.rowIndex);
+  if (!rowIndex || rowIndex < 2) throw new Error("bad rowIndex");
+  const { driveId, itemId } = await ensureNamedSheet(token, QA_SHEET, QA_HEADERS, null);
+  const addr = `G${rowIndex}:H${rowIndex}`;
+  await graphPatch(token, `${sheetPathFor(driveId, itemId, QA_SHEET)}/range(address='${addr}')`, { numberFormat: [["@", "@"]] });
+  await graphPatch(token, `${sheetPathFor(driveId, itemId, QA_SHEET)}/range(address='${addr}')`, { values: [[q.status || "접수", q.memo || ""]] });
+  return { ok: true, row: rowIndex };
+}
+__name(handleUpdateQa, "handleUpdateQa");
+
 // === 규정 시트 — 사무처리규정 PDF 조항 인제스트 (docs/260610_rules_ingest.mjs) ===
 var RULES_SHEET = "규정";
 var RULES_HEADERS = ["규정명", "조항", "제목", "본문", "키워드"];
@@ -1440,6 +1452,11 @@ var index_default = {
           if (!qAuth.admin) return json({ error: "Admin only" }, env, 403);
           try { const { rows } = await handleGetSheet(token, QA_SHEET); return json({ qa: rows }, env); }
           catch (e) { return json({ qa: [] }, env); }
+        }
+        if (request.method === "PATCH") {
+          const qpAuth = await checkAdmin(request, env, token);
+          if (!qpAuth.admin) return json({ error: "Admin only" }, env, 403);
+          return json(await handleUpdateQa(token, await request.json()), env);
         }
       }
 
