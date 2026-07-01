@@ -8299,7 +8299,7 @@ async function submitPromoEdit(){
       if(_dtCh){ var _c=canApplyOnDateTime(_effDate,_effTime); if(!_c.ok){showToast('변경 불가: '+_c.reason,'error');return;} }
       // 날짜 or 프로그램 변경 시: 홍보기간 검증 (홍보시작일~홍보종료일, 종료일 미설정 시 프로그램 종료일)
       var _perf=_findPerfByName(_effProg);
-      if(_perf){ var _ppe=_perf.pe||_perf.e; if(_perf.ps&&_effDate<_perf.ps){showToast('변경 불가: 홍보 시작('+_perf.ps+') 전이라 홍보할 수 없어요','error');return;} if(_ppe&&_effDate>_ppe){showToast('변경 불가: 홍보 종료('+_ppe+') 후라 홍보할 수 없어요','error');return;} }
+      if(_perf){ if(_progCh && !_perf.ps && PERFS.some(function(x){return x.ps;})){showToast('변경 불가: 이 프로그램은 홍보 노출일이 지정되지 않았어요 (홍보 대상 아님)','error');return;} var _ppe=_perf.pe||_perf.e; if(_perf.ps&&_effDate<_perf.ps){showToast('변경 불가: 홍보 시작('+_perf.ps+') 전이라 홍보할 수 없어요','error');return;} if(_ppe&&_effDate>_ppe){showToast('변경 불가: 홍보 종료('+_ppe+') 후라 홍보할 수 없어요','error');return;} }
       // 카카오/문자 2일연속·중복은 날짜 기반 — 날짜가 바뀌거나 플랫폼이 바뀔 때만 검증(시간/제목만 변경은 제외). 자기 자신 제외
       if(_dateChanged||_platCh){ var _kc=_kakaoSmsConflict(_effPlat,_effDate,_effAppl,_pwEditTarget); if(_kc){showToast('변경 불가: '+_kc,'error');return;} }
     }
@@ -8394,7 +8394,8 @@ function renderPwStep(){
       var _pe=p.pe||p.e;
       if(!_pe||_pe<_refKey)return false;      // 종료일(없으면 공연종료일)이 기준일 이전 → 제외
       if(!_anyPromo)return true;              // 과도기(노출일 0개) → 전체 노출 폴백
-      if(!p.ps||p.ps>_refKey)return false;    // 노출일 미설정 or 노출일 전 → 제외 (전 카테고리)
+      if(!p.ps)return false;                  // opt-in: 노출일 미설정 → 제외 (전 카테고리)
+      if(p.ps>_refKey && _pwData.fromCalendar)return false;  // 캘린더(특정 날짜) 진입 시 그 날짜에 노출 전이면 제외. navbar 진입은 미래 노출 프로그램도 목록 표시 — 실제 날짜는 Step3·제출 시 검증(F2)
       return true;
     });
     const groups=[
@@ -11350,7 +11351,7 @@ function _validateScheduleChange(rec, newDate, newTime, opts){
     var _ppe=perf.pe||perf.e;
     // 전 콘텐츠 opt-in: 노출일(홍보시작일) 미지정 프로그램은 신규 홍보 신청 불가.
     // 과도기 폴백: 노출일 가진 프로그램이 하나도 없으면 opt-in 미적용(구 동작)
-    if(action==='submit' && !perf.ps && (typeof PERFS!=='undefined'&&PERFS.some(function(x){return x.ps;})))return {ok:false, reason:'이 프로그램은 홍보 노출일이 지정되지 않아 홍보 신청할 수 없어요'};
+    if((action==='submit'||action==='copy') && !perf.ps && (typeof PERFS!=='undefined'&&PERFS.some(function(x){return x.ps;})))return {ok:false, reason:'이 프로그램은 홍보 노출일이 지정되지 않아 홍보할 수 없어요 (F3: 복사 포함)'};
     if(perf.ps && newDate<perf.ps)return {ok:false, reason:'홍보 시작('+perf.ps+') 전이라 홍보할 수 없어요'};
     if(_ppe && newDate>_ppe)return {ok:false, reason:'홍보 종료('+_ppe+') 후라 홍보할 수 없어요'};
   }
