@@ -1051,6 +1051,28 @@ async function structurePromoText(env, rawText) {
 }
 __name(structurePromoText, "structurePromoText");
 
+// === 블로그 초안 GitHub 연동 (서버 시크릿 PAT) ===
+// 브라우저에 GitHub 토큰을 두지 않기 위해 dispatch/폴링을 Worker가 대행한다.
+// PAT는 env.GITHUB_PAT(대체: GH_BLOG_PAT / GITHUB_TOKEN) — Cloudflare 시크릿. repo/branch는 env로 오버라이드 가능.
+function ghBlogCfg(env) {
+  return {
+    pat: env.GITHUB_PAT || env.GH_BLOG_PAT || env.GITHUB_TOKEN || "",
+    repo: env.GITHUB_REPO || "yeulmaru/yeulmaru-promo",
+    branch: env.GITHUB_BRANCH || "main"
+  };
+}
+__name(ghBlogCfg, "ghBlogCfg");
+
+// GitHub Contents API의 base64(개행 포함) → UTF-8 문자열
+function ghDecodeB64(b64) {
+  const clean = String(b64 || "").replace(/\s/g, "");
+  if (!clean) return "";
+  const bin = atob(clean);
+  const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+  return new TextDecoder("utf-8").decode(bytes);
+}
+__name(ghDecodeB64, "ghDecodeB64");
+
 var index_default = {
   async scheduled(event, env, ctx) {
     ctx.waitUntil(autoCancelStalePending(env));
@@ -1261,6 +1283,51 @@ var index_default = {
           return json({ info }, env);
         } catch (e) {
           console.error("[content/structure]", e);
+          return json({ error: String((e && e.message) || e) }, env, 502);
+        }
+      }
+
+      // === 블로그 초안 트리거 — 브라우저 대신 Worker가 repository_dispatch[nb-blog] 호출 (PAT=서버 시크릿) ===
+      // 로그인 사용자(X-App-Password)면 사용 가능. 실제 글쓰기는 Actions(nb-blog.yml)가 수행 → drafts/<id>.json.
+      if (url.pathname === "/api/blog/dispatch" && request.method === "POST") {
+        const cfg = ghBlogCfg(env);
+        if (!cfg.pat) return json({ error: "no_github_pat", note: "Worker에 GITHUB_PAT 시크릿 미설정" }, env, 503);
+        let bb = {};
+        try { bb = await request.json(); } catch (e) {}
+        const payload = (bb && typeof bb.payload === "object" && bb.payload) ? bb.payload : (bb || {});
+        const id = String(payload.id || ("nb" + Date.now() + Math.floor(Math.random() * 1e3))).replace(/[^A-Za-z0-9_-]/g, "").slice(0, 64);
+        const client_payload = Object.assign({}, payload, { id, mode: payload.mode === "structure" ? "structure" : "blog" });
+        try {
+          const gr = await fetch(`https://api.github.com/repos/${cfg.repo}/dispatches`, {
+            method: "POST",
+            headers: { "Authorization": "Bearer " + cfg.pat, "Accept": "application/vnd.github+json", "Content-Type": "application/json", "User-Agent": "yeulmaru-promo-worker" },
+            body: JSON.stringify({ event_type: "nb-blog", client_payload })
+          });
+          if (gr.ok) return json({ ok: true, id }, env);
+          const txt = (await gr.text()).slice(0, 200);
+          return json({ error: gr.status === 401 || gr.status === 403 ? "github_denied" : "dispatch_failed", status: gr.status, note: txt }, env, 502);
+        } catch (e) {
+          return json({ error: String((e && e.message) || e) }, env, 502);
+        }
+      }
+      // === 블로그 초안 결과 폴링 — drafts/<id>.json 있으면 파싱해 반환, 아직이면 404 ===
+      if (url.pathname === "/api/blog/draft" && request.method === "GET") {
+        const cfg = ghBlogCfg(env);
+        if (!cfg.pat) return json({ error: "no_github_pat" }, env, 503);
+        const id = String(url.searchParams.get("id") || "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 64);
+        if (!id) return json({ error: "id required" }, env, 400);
+        try {
+          const gr = await fetch(`https://api.github.com/repos/${cfg.repo}/contents/drafts/${id}.json?ref=${encodeURIComponent(cfg.branch)}&t=${Date.now()}`, {
+            headers: { "Authorization": "Bearer " + cfg.pat, "Accept": "application/vnd.github+json", "User-Agent": "yeulmaru-promo-worker" }
+          });
+          if (gr.status === 404) return json({ ready: false }, env, 404);
+          if (!gr.ok) return json({ error: "github " + gr.status }, env, 502);
+          const d = await gr.json();
+          let draft = null;
+          try { draft = JSON.parse(ghDecodeB64(d.content || "")); } catch (e) { draft = null; }
+          if (!draft) return json({ ready: false, error: "parse_failed" }, env, 502);
+          return json({ ready: true, draft }, env);
+        } catch (e) {
           return json({ error: String((e && e.message) || e) }, env, 502);
         }
       }
