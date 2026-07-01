@@ -10,7 +10,7 @@
 
 | 플랫폼 | 키(이름) | 비밀? | 사는 곳 | 용도 |
 |---|---|---|---|---|
-| **GitHub** | Fine-grained **PAT** | 🔒 | 브라우저 `localStorage.nb_gh_pat` (앱에서 1회 입력) | 블로그 도우미: 초안 생성 트리거 + 결과 읽기 + 톤 저장 |
+| **GitHub** | Fine-grained **PAT** | 🔒 | **Cloudflare Worker 시크릿** `GITHUB_PAT` (260701 브라우저→서버 이관) | 블로그 도우미: 초안 생성 트리거 + 결과 폴링 (Worker가 대행) |
 | **GitHub** | `CLAUDE_CODE_OAUTH_TOKEN_EMS1130G` | 🔒 | Repo → Settings → Secrets → **Actions** | 초안 생성 엔진 (`claude -p` opus 4.8) |
 | **Cloudflare** | `APP_PASSWORD` | 🔒 | Worker Variables/Secrets | 일반 사용자 앱 비번 (X-App-Password) |
 | **Cloudflare** | `ADMIN_PASSWORD` | 🔒 | Worker Variables/Secrets | 관리자/슈퍼 비번 = **DB 스크립트 `DB_PW` 값** |
@@ -30,15 +30,16 @@
 - **레포**: `yeulmaru/yeulmaru-promo` (Public) · **사이트**: https://yeulmaru.github.io/yeulmaru-promo/
 - **계정**: `yeulmarulicense@gmail.com`
 
-### 1-a. Fine-grained PAT — 블로그 글쓰기 도우미 (브라우저용) ⭐ *지금 막힌 그거*
-- **무엇**: Fine-grained Personal Access Token
-- **권한(필수)**: Repository access = *Only select repositories* → `yeulmaru-promo` / Repository permissions → **Contents: Read and write**
-  - ⚠️ 토스트 **"Contents: write 필요"** = 지금 넣은 토큰에 이 권한이 없다는 뜻.
-- **용도**: 브라우저가 직접 호출 ①`POST /dispatches` (초안 생성 트리거 = repository_dispatch[nb-blog]) ②`GET /contents/drafts/<id>.json` (결과 폴링) ③`PUT /contents/docs/tone-refs.json` (톤 참조 저장)
-- **발급**: https://github.com/settings/personal-access-tokens/new → Resource owner `yeulmaru` → Only select repositories `yeulmaru-promo` → Permissions: **Contents → Read and write** → Generate
-- **앱에 넣는 법**: 블로그 도우미에서 [⚡ 초안 생성] 누르면 프롬프트 1회 → 붙여넣기. **이 브라우저에만(localStorage `nb_gh_pat`) 저장, 커밋 안 됨.**
-- **다시 넣기/교체**: 브라우저 콘솔에서 `localStorage.removeItem('nb_gh_pat')` 후 다시 생성 누르면 재입력 프롬프트.
-- **참고**: classic PAT(repo scope)도 동작하나 fine-grained 권장. 만료일은 짧게(7~90일) 잡고 만료 시 재발급.
+### 1-a. Fine-grained PAT — 블로그 글쓰기 도우미 (⚠️ 260701 브라우저→Worker 시크릿 이관)
+- **무엇**: Fine-grained Personal Access Token — **이제 브라우저가 아니라 Cloudflare Worker가 보유**(서버 시크릿 `GITHUB_PAT`). 브라우저엔 GitHub 토큰이 전혀 없다.
+  - *왜 옮겼나*: 브라우저 저장은 ①공개 사이트라 토큰 노출 위험 ②그 브라우저에서만 동작(사용자마다 개별 입력). 서버 시크릿 1개로 통일 → 로그인 사용자 누구나 사용, 노출 위험 제거.
+- **권한(필수)**: Repository access = *Only select repositories* → `yeulmaru-promo` / Repository permissions → **Contents: Read and write** (repository_dispatch 트리거 + drafts 파일 읽기에 필요)
+  - ⚠️ 예전 토스트 **"Contents: write 필요"** = 그 토큰에 이 권한이 없다는 뜻 (이제 서버 PAT가 이 권한을 가져야 함).
+- **용도**: Worker가 대행 ①`POST /dispatches` (초안 생성 트리거 = repository_dispatch[nb-blog]) ②`GET /contents/drafts/<id>.json` (결과 폴링). 프론트는 `POST /api/blog/dispatch`·`GET /api/blog/draft?id=`로 **Worker만** 호출(X-App-Password 게이트). 톤 참조는 이제 localStorage 전용(GitHub 저장 폐지).
+- **발급**: https://github.com/settings/personal-access-tokens/new → Resource owner `yeulmaru` → Only select repositories `yeulmaru-promo` → Permissions: **Contents → Read and write** → Generate → 값 복사
+- **Worker에 넣는 법**: Cloudflare 대시보드 → Workers & Pages → `yeulmaru-promo-api` → Settings → Variables and Secrets → **Secret 추가 `GITHUB_PAT`** = 복사한 값 → 저장 → 배포. (또는 `wrangler secret put GITHUB_PAT`) 대체 이름 `GH_BLOG_PAT`/`GITHUB_TOKEN`도 인식. repo/branch는 `GITHUB_REPO`/`GITHUB_BRANCH`로 오버라이드(기본 `yeulmaru/yeulmaru-promo`·`main`).
+- **회전(교체)**: GitHub에서 Regenerate → 새 값을 Worker 시크릿 `GITHUB_PAT`에 갱신 → 재배포. **브라우저는 건드릴 것 없음.** 만료일은 짧게(7~90일).
+- **미설정 시**: 시크릿 없으면 `/api/blog/dispatch`가 503 → 프론트가 '초안 생성이 서버에 아직 설정되지 않았어요' 토스트. 앱 나머지 기능은 무관하게 정상.
 
 ### 1-b. Actions Secret `CLAUDE_CODE_OAUTH_TOKEN_EMS1130G` — 초안 생성 엔진
 - **무엇**: Claude **구독(Max) OAuth 토큰** (`sk-ant-oat…`), 계정 `ems1130g@gmail.com`
@@ -95,9 +96,9 @@
 ## 🔁 키 흐름 한 줄 요약
 
 ```
-블로그 초안:  브라우저 + GitHub PAT(Contents:write) ──dispatch──▶ Actions(nb-blog.yml)
+블로그 초안:  브라우저(X-App-Password) ──▶ Worker(GITHUB_PAT) ──dispatch──▶ Actions(nb-blog.yml)
               Actions가 CLAUDE_CODE_OAUTH_TOKEN으로 claude -p 실행 ──▶ drafts/<id>.json
-              브라우저가 PAT로 결과 폴링해 화면 표시
+              브라우저 ──▶ Worker가 PAT로 결과 폴링·디코드해 화면 표시
 데이터(시트): 브라우저 + APP_PASSWORD/Sub-PIN ──▶ Worker ──AZURE_*──▶ Graph ──▶ SharePoint Excel
 OCR:          브라우저 ──▶ Worker(GEMINI_API_KEY) ──▶ 텍스트
 로그인:       브라우저 ──MSAL clientId──▶ MS 신원  +  담당자 PIN(시트)
