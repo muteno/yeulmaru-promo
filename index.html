@@ -14124,11 +14124,12 @@ var _NB_DRAFT_KEY='nb_draft_state_v2';
 // 글의 목적은 고정 — 예술 사업(공연·전시·예술교육) 홍보. 사용자가 매번 고르지 않고 시스템이 항상 이 방향으로 씀.
 var _NB_FIXED_PURPOSE='예술 사업(공연·전시·예술교육 프로그램) 홍보 — 수요 계층에 정보를 전달하고, 더 널리 확산시키며, 관심과 구매(예매·참여) 욕구를 촉진하는 온라인 홍보 글.';
 // 1️⃣ 주요 타겟 — 속성별 드롭다운(객관). 2️⃣ 강조 포인트는 주관식 입력(아래 hooks).
+// [key, 라벨, 선택방식, 옵션]. single=하나만(무관 포함), multi=여러 개(무관 칩 자동), toggle=on/off 하나.
 var _NB_TGT_FIELDS=[
-  ['gender','성별',['무관','남성','여성']],
-  ['age','연령',['무관','10대','20대','30대','40대','50대','60대+']],
-  ['family','가족 구성',['무관','1인','연인·부부','자녀 동반 가족','3세대']],
-  ['fan','마니아 여부',['무관','입문·일반','마니아']]
+  ['gender','성별','single',['무관','남성','여성']],
+  ['age','연령','multi',['10대','20대','30대','40대','50대','60대+']],
+  ['family','가족 구성','multi',['1인','부부만','자녀 동반','2세대 이상']],
+  ['fan','마니아 여부','toggle',['마니아']]
 ];
 // 4️⃣ 기본 틀(글 구성) — 옵션. 안 잡으면 레퍼토리(톤 참조) 기반, 잡으면 이 틀에 맞춰 작성. 프리셋 선택 후 직접 편집 가능.
 var _NB_TEMPLATES=[
@@ -14152,6 +14153,7 @@ function openNaverBlogTool(){
   try{var sv=JSON.parse(localStorage.getItem(_NB_DRAFT_KEY)||'null');if(sv)Object.assign(_nbState,sv);}catch(_e){}
   try{_nbState._toneLib=JSON.parse(localStorage.getItem(_NB_TONELIB_KEY)||'[]')||[];}catch(_e){_nbState._toneLib=[];}
   try{localStorage.removeItem('nb_gh_pat');}catch(_e){}   // 구 브라우저 PAT 잔재 제거 — 이제 Worker가 토큰 보유(브라우저 무토큰)
+  _nbTgtNormalize();   // 옛 단일값 tgt → 새 다중선택 구조로 정규화(호환)
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeNaverBlogTool)">'
     +'<div class="modal" style="width:96vw;max-width:1080px;height:92vh;max-height:92vh;padding:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:#fff">'
     +'<button class="modal-x" onclick="closeNaverBlogTool()" title="닫기" style="position:absolute;top:14px;right:14px;z-index:10">✕</button>'
@@ -14175,37 +14177,59 @@ function _nbSaveState(){
 function _nbSet(key,val){_nbState[key]=val;_nbSaveState();_nbRender();}
 
 // 1️⃣ 의도 단일선택 토글 · 2️⃣ 타겟관점 다중선택 토글
+// 단일(성별): 같은 값 재클릭=해제. 다중(연령·가족): 배열 토글, v=''이면 무관(비움). on/off(마니아): boolean.
 function _nbTgtSet(k,v){if(!_nbState.tgt)_nbState.tgt={};_nbState.tgt[k]=((_nbState.tgt[k]===v)?'':v);_nbSaveState();_nbRender();}
+function _nbTgtMulti(k,v){if(!_nbState.tgt)_nbState.tgt={};var a=Array.isArray(_nbState.tgt[k])?_nbState.tgt[k].slice():[];if(v===''){a=[];}else{var i=a.indexOf(v);if(i>=0)a.splice(i,1);else a.push(v);}_nbState.tgt[k]=a;_nbSaveState();_nbRender();}
+function _nbTgtBool(k){if(!_nbState.tgt)_nbState.tgt={};_nbState.tgt[k]=!_nbState.tgt[k];_nbSaveState();_nbRender();}
+// 저장된 옛 형식(단일 문자열) → 새 형식(age/family=배열, fan=boolean) 정규화. 유효 옵션만 남김.
+function _nbTgtNormalize(){
+  var t=_nbState.tgt||{},F={age:['10대','20대','30대','40대','50대','60대+'],family:['1인','부부만','자녀 동반','2세대 이상']};
+  if(typeof t.gender!=='string')t.gender='';
+  ['age','family'].forEach(function(k){var v=t[k],a=Array.isArray(v)?v:(v&&typeof v==='string'?[v]:[]);t[k]=a.filter(function(x){return F[k].indexOf(x)>=0;});});
+  t.fan=(t.fan===true)||(t.fan==='마니아');
+  _nbState.tgt=t;
+}
+// 연령 배열 → 연속구간 범위 텍스트 (['20대','30대','50대'] → '20대~30대, 50대')
+function _nbAgeRangeText(arr){
+  var order=['10대','20대','30대','40대','50대','60대+'];
+  var sel=order.filter(function(a){return arr.indexOf(a)>=0;});
+  if(!sel.length)return '';
+  var out=[],i=0;
+  while(i<sel.length){var j=i;while(j+1<sel.length&&order.indexOf(sel[j+1])===order.indexOf(sel[j])+1)j++;out.push(i===j?sel[i]:(sel[i]+'~'+sel[j]));i=j+1;}
+  return out.join(', ');
+}
 // 타겟 선택에 따라 점점 완성되는 아바타(SVG) — 처음엔 실루엣, 고를수록 색·머리·표정·액세서리 추가.
 // 선택값으로 결정적 시드를 만들어(재렌더 시 흔들림 방지) 랜덤한 느낌만 준다.
 // 타겟 선택에 따라 완성되는 아바타 — DiceBear personas(무료·SVG). 고정 시드=같은 인물이 점점 완성.
 // 처음엔 실루엣(brightness0), 고를수록 회색→풀컬러로 '현상'되는 느낌. 선택값을 외모 옵션에 매핑.
 function _nbAvatar(){
   var t=_nbState.tgt||{};
-  var g=t.gender||'',age=t.age||'',fam=t.family||'',fan=t.fan||'';
-  var filled=[g,age,fam,fan].filter(Boolean).length,anySet=filled>0;
-  var ss=g+'|'+age+'|'+fam+'|'+fan,seed=0,i;for(i=0;i<ss.length;i++)seed=(seed*31+ss.charCodeAt(i))>>>0;
+  var g=t.gender||'';
+  var ageArr=Array.isArray(t.age)?t.age:[],famArr=Array.isArray(t.family)?t.family:[],fanOn=!!t.fan;
+  var order=['10대','20대','30대','40대','50대','60대+'];
+  var ageRep=order.filter(function(a){return ageArr.indexOf(a)>=0;})[0]||'';   // 대표 연령(가장 어린 쪽)
+  var hasKid=famArr.indexOf('자녀 동반')>=0||famArr.indexOf('2세대 이상')>=0,famRep=famArr[0]||'';
+  var filled=[g,ageArr.length?'y':'',famArr.length?'y':'',fanOn?'y':''].filter(Boolean).length,anySet=filled>0;
+  var ss=g+'|'+ageArr.join(',')+'|'+famArr.join(',')+'|'+(fanOn?'m':''),seed=0,i;for(i=0;i<ss.length;i++)seed=(seed*31+ss.charCodeAt(i))>>>0;
   function pick(a){return a[seed%a.length];}
   var base='https://api.dicebear.com/9.x/personas/svg';
   var q=['seed=yeulmaru-promo','backgroundColor=transparent'];
   if(g==='여성')q.push('hair='+pick(['long','bobCut','bobBangs','extraLong','straightBun','curlyBun','pigtails']));
   else if(g==='남성')q.push('hair='+pick(['shortCombover','buzzcut','fade','cap','sideShave','shortComboverChops']));
-  if(age==='50대'||age==='60대+')q.push('hairColor=b9b9c4');
-  else if(age)q.push('hairColor='+pick(['362c47','6c4545','1e1b29','5a3a22']));
-  if(fan==='마니아')q.push('eyes=sunglasses');
-  else if(fan==='입문·일반')q.push('eyes=happy');
-  if(fam==='자녀 동반 가족'||fam==='3세대')q.push('mouth=bigSmile');
-  else if(fam==='연인·부부')q.push('mouth=smile');
+  if(ageRep==='50대'||ageRep==='60대+')q.push('hairColor=b9b9c4');
+  else if(ageRep)q.push('hairColor='+pick(['362c47','6c4545','1e1b29','5a3a22']));
+  if(fanOn)q.push('eyes=sunglasses');
+  if(hasKid)q.push('mouth=bigSmile');
+  else if(famRep==='부부만')q.push('mouth=smile');
   var url=base+'?'+q.join('&');
   // 완성도에 따른 '현상' 효과 (0=실루엣 → 4=풀컬러)
   var filt=(filled===0)?'brightness(0) opacity(.18)':('grayscale('+((4-filled)/4).toFixed(2)+') opacity('+(0.72+filled/4*0.28).toFixed(2)+')');
   var img='<img class="nb-av-img" src="'+url+'" width="112" height="112" alt="타겟 캐릭터" style="filter:'+filt+';transition:filter .4s ease" '
     +'onerror="this.style.display=\'none\';var c=this.nextElementSibling;if(c)c.style.display=\'flex\'">'
     +'<div style="display:none;width:112px;height:112px;align-items:center;justify-content:center;font-size:46px;opacity:.5">🧑</div>'; // 망 차단 시 폴백
-  // 자녀 동반/3세대 → 작은 동반 캐릭터
+  // 자녀 동반/2세대 이상 → 작은 동반(아이) 캐릭터
   var extra='';
-  if(fam==='자녀 동반 가족')extra='<img src="'+base+'?seed=ch'+(seed%97)+'&backgroundColor=transparent&scale=120" width="44" height="44" alt="" style="position:absolute;right:2px;bottom:24px;filter:grayscale('+((4-filled)/4).toFixed(2)+')">';
-  else if(fam==='3세대')extra='<img src="'+base+'?seed=el'+(seed%97)+'&backgroundColor=transparent&hairColor=cfcfd6" width="40" height="40" alt="" style="position:absolute;left:0;bottom:24px"><img src="'+base+'?seed=kd'+(seed%97)+'&backgroundColor=transparent&scale=120" width="38" height="38" alt="" style="position:absolute;right:0;bottom:24px">';
+  if(hasKid)extra='<img src="'+base+'?seed=ch'+(seed%97)+'&backgroundColor=transparent&scale=120" width="44" height="44" alt="" style="position:absolute;right:2px;bottom:24px;filter:grayscale('+((4-filled)/4).toFixed(2)+')">';
   var cap=anySet?('타겟 '+filled+'/4 완성 '+(filled>=4?'🎉':'')):'고를수록 캐릭터가 완성돼요';
   return '<div style="position:relative;display:flex;align-items:center;justify-content:center;width:100%;min-height:112px">'+img+extra+'</div>'
     +'<div class="nb-av-bar"><i style="width:'+(filled/4*100)+'%"></i></div><div class="nb-av-cap">'+cap+'</div>';
@@ -14315,7 +14339,12 @@ function _nbTplText(v){_nbState.tplText=v;_nbSaveState();}
 // 생성/수정 공통 페이로드 — 고정 목적+강조포인트를 intent에, 타겟을 target에 담아 기존 Worker 필드로(재배포 불필요).
 function _nbBuildPayload(){
   var s=_nbState,F=s.facts||{};
-  var tparts=[];_NB_TGT_FIELDS.forEach(function(f){var v=(s.tgt&&s.tgt[f[0]])||'';if(v)tparts.push(f[1]+' '+v);});
+  var tparts=[];_NB_TGT_FIELDS.forEach(function(f){
+    var key=f[0],label=f[1],type=f[2];
+    if(type==='multi'){var arr=Array.isArray(s.tgt&&s.tgt[key])?s.tgt[key]:[];if(arr.length)tparts.push(label+' '+(key==='age'?_nbAgeRangeText(arr):arr.join('·')));}
+    else if(type==='toggle'){if(s.tgt&&s.tgt[key])tparts.push('마니아 대상');}
+    else{var v=(s.tgt&&s.tgt[key])||'';if(v)tparts.push(label+' '+v);}
+  });
   var hk=(s.hooks||[]).map(function(x){return String(x||'').trim();}).filter(Boolean);
   var intent=_NB_FIXED_PURPOSE;
   if(hk.length)intent+=' 이번 글에서 이 타겟에게 특히 강조할 점: '+hk.join(' / ')+'.';
@@ -14439,9 +14468,19 @@ function _nbRender(){
   var F=s.facts||{};
   // 1️⃣ 타겟 속성 — 칩(선택지) + 옆에 점점 완성되는 아바타
   var tgtFieldsHtml=_NB_TGT_FIELDS.map(function(f){
-    var cur=(s.tgt&&s.tgt[f[0]])||'';
-    var chips=f[2].map(function(o){var v=(o==='무관'?'':o);var on=(cur===v);return '<span class="nb-chip'+(on?' on':'')+'" onclick="_nbTgtSet(\''+f[0]+'\',\''+v+'\')">'+escapeHtml(o)+'</span>';}).join('');
-    return '<div><div class="nb-tgt2-fl">'+escapeHtml(f[1])+'</div><div class="nb-chiprow">'+chips+'</div></div>';
+    var key=f[0],label=f[1],type=f[2],opts=f[3],chips='';
+    if(type==='multi'){
+      var arr=Array.isArray(s.tgt&&s.tgt[key])?s.tgt[key]:[];
+      chips='<span class="nb-chip'+(arr.length===0?' on':'')+'" onclick="_nbTgtMulti(\''+key+'\',\'\')">무관</span>'
+        +opts.map(function(o){return '<span class="nb-chip'+(arr.indexOf(o)>=0?' on':'')+'" onclick="_nbTgtMulti(\''+key+'\',\''+o+'\')">'+escapeHtml(o)+'</span>';}).join('');
+    }else if(type==='toggle'){
+      var onb=!!(s.tgt&&s.tgt[key]);
+      chips=opts.map(function(o){return '<span class="nb-chip'+(onb?' on':'')+'" onclick="_nbTgtBool(\''+key+'\')">'+escapeHtml(o)+(onb?' ✓':'')+'</span>';}).join('');
+    }else{
+      var cur=(s.tgt&&s.tgt[key])||'';
+      chips=opts.map(function(o){var v=(o==='무관'?'':o);return '<span class="nb-chip'+((cur===v)?' on':'')+'" onclick="_nbTgtSet(\''+key+'\',\''+v+'\')">'+escapeHtml(o)+'</span>';}).join('');
+    }
+    return '<div><div class="nb-tgt2-fl">'+escapeHtml(label)+'</div><div class="nb-chiprow">'+chips+'</div></div>';
   }).join('');
   // 2️⃣ 강조 포인트 주관식 — 최소 2줄, 마지막 줄 ＋ 로 추가
   if(!_nbState.hooks||!_nbState.hooks.length)_nbState.hooks=['',''];
