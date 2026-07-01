@@ -2605,7 +2605,7 @@ function programToPerf(p){
     m:p['담당자']||'',
     l:p['장소']||'',
     u:p['URL']||p['공연 URL']||p['상세 링크']||p['링크']||'',
-    id:String(p['공연ID']||'').trim()   // [정규화] 운영 DB 공유키 — records 저장 시 동반
+    id:String(p['프로그램ID']||p['공연ID']||'').trim()   // [정규화] 프로그램 시트 공유키(헤더='프로그램ID', 구'공연ID' 폴백) — records 저장 시 동반
   };
 }
 // SharePoint에서 프로그램 시트 fetch → PERFS 채우기
@@ -12199,12 +12199,24 @@ function _progPromoToggle(){
   }
 }
 
+// [정규화] 새 프로그램ID 자동생성 — 시작일(ISO) → YYMMDD + 그날 순번 _NN (records·색인 조인키와 동일 형식). 시작일 없으면 빈값(수동 부여 대상).
+function _genProgramId(iso){
+  var d=String(iso||'').replace(/[^0-9]/g,'');   // '2026-01-09' → '20260109'
+  if(d.length<8) return '';
+  var yy=d.slice(2,8);   // '260109'
+  var n=0;
+  (typeof _programsCache!=='undefined'&&_programsCache?_programsCache:[]).forEach(function(p){
+    var pid=String(p['프로그램ID']||p['공연ID']||'').trim();
+    if(pid.indexOf(yy+'_')===0)n++;   // 같은 시작일 기존 개수 → 순번
+  });
+  return yy+'_'+String(n+1).padStart(2,'0');   // 예: 260109_01
+}
 async function saveProgram(rowIndex){
   const form=document.getElementById('prog-form');
   if(!form)return;
   const fd=new FormData(form);
   // ⚠️ 실제 '프로그램' 시트 컬럼: A~J(NO·콘텐츠구분·풀네임·줄임말·판매시작·판매종료·시작·종료·담당자·장소)
-  //    · K=URL · L=공연ID · M=홍보시작일 · N=홍보종료일. URL/공연ID는 폼에 필드가 없으니 기존 값 보존.
+  //    · K=URL · L=프로그램ID(구'공연ID') · M=홍보시작일 · N=홍보종료일. URL/프로그램ID는 폼에 필드가 없으니 기존 값 보존(신규·빈값은 시작일 기반 자동 부여).
   const existing=rowIndex?(_programsCache.find(p=>p._rowIndex===rowIndex)||null):null;
   const values=[
     Number(fd.get('NO'))||'',               // A NO
@@ -12218,7 +12230,7 @@ async function saveProgram(rowIndex){
     fd.get('담당자')||'',                    // I 담당자
     fd.get('장소')||'',                      // J 장소
     existing?(existing['URL']||''):'',       // K URL (기존 보존)
-    existing?(existing['공연ID']||''):'',    // L 공연ID (기존 보존)
+    (existing&&(existing['프로그램ID']||existing['공연ID']))||_genProgramId(fd.get('시작일')),    // L 프로그램ID: 기존 보존, 신규·빈값이면 시작일 기반 자동생성(YYMMDD_NN)
     isoToExcelSerial(fd.get('홍보시작일')),  // M 홍보시작일(노출일) — 공연 opt-in
     isoToExcelSerial(fd.get('종료일'))       // N 홍보종료일 = 공연 종료일로 통합
   ];
