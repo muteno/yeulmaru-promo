@@ -1296,7 +1296,9 @@ var index_default = {
         try { bb = await request.json(); } catch (e) {}
         const payload = (bb && typeof bb.payload === "object" && bb.payload) ? bb.payload : (bb || {});
         const id = String(payload.id || ("nb" + Date.now() + Math.floor(Math.random() * 1e3))).replace(/[^A-Za-z0-9_-]/g, "").slice(0, 64);
-        const client_payload = Object.assign({}, payload, { id, mode: payload.mode === "structure" ? "structure" : "blog" });
+        // GitHub repository_dispatch는 client_payload 최상위 속성 10개 제한 → 전부 d 한 겹에 담아 우회(nb-blog.yml이 d를 풀어 읽음).
+        const inner = Object.assign({}, payload, { id, mode: payload.mode === "structure" ? "structure" : "blog" });
+        const client_payload = { d: inner };
         try {
           const gr = await fetch(`https://api.github.com/repos/${cfg.repo}/dispatches`, {
             method: "POST",
