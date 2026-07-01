@@ -8386,10 +8386,15 @@ function renderPwStep(){
     // 우클릭 진입 시 그 날짜 기준, 일반 진입은 today fallback
     const _refKey=_pwData.date||(function(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');})();
     const activePerfs=PERFS.filter(function(p){
-      // 홍보 신청 가능 = 기준일이 홍보기간 안. 홍보종료일 미설정 시 프로그램 종료일 폴백, 홍보시작일 미설정 시 하한 없음.
+      // 홍보 노출 규칙(2026-07): 공연(c)은 '홍보시작일(노출일)'이 입력된 것만 홍보 신청 가능(opt-in).
+      // 전시·예술교육·대관은 종료 전이면 항상 노출. 홍보종료일은 공연 종료일로 통합(_pe=p.pe||p.e).
       var _pe=p.pe||p.e;
-      if(!_pe||_pe<_refKey)return false;     // 홍보/프로그램 종료일이 기준일 이전 → 제외
-      if(p.ps&&p.ps>_refKey)return false;     // 홍보 시작 전 → 제외
+      if(!_pe||_pe<_refKey)return false;      // 종료일이 기준일 이전 → 제외 (전 카테고리)
+      if(p.t==='c'){                          // 공연: 노출일(홍보시작일) 있어야 홍보 대상
+        if(!p.ps||p.ps>_refKey)return false;  // 노출일 미설정 or 노출일 전 → 제외
+        return true;
+      }
+      if(p.ps&&p.ps>_refKey)return false;     // 전시/교육/대관: 노출일 설정 시 그 전엔 제외
       return true;
     });
     const groups=[
@@ -11346,6 +11351,8 @@ function _validateScheduleChange(rec, newDate, newTime, opts){
   var perf=_findPerfByName(opts.program!=null?opts.program:(rec?rec['프로그램']:''));
   if(perf){
     var _ppe=perf.pe||perf.e;
+    // 공연 opt-in: 노출일(홍보시작일) 미지정 공연은 신규 홍보 신청 불가 (전시·교육·대관은 항상 허용)
+    if(action==='submit' && perf.t==='c' && !perf.ps)return {ok:false, reason:'이 공연은 홍보 노출일이 지정되지 않아 홍보 신청할 수 없어요'};
     if(perf.ps && newDate<perf.ps)return {ok:false, reason:'홍보 시작('+perf.ps+') 전이라 홍보할 수 없어요'};
     if(_ppe && newDate>_ppe)return {ok:false, reason:'홍보 종료('+_ppe+') 후라 홍보할 수 없어요'};
   }
@@ -12112,7 +12119,9 @@ function buildProgramListHtml(programs){
     html+='<td>'+escapeHtml(p['콘텐츠구분']||'')+'</td>';
     html+='<td style="font-weight:600">'+escapeHtml(p['풀네임']||'')+'</td>';
     html+='<td style="color:#888">'+escapeHtml(p['줄임말']||'')+'</td>';
-    html+='<td style="font-size:11px;white-space:nowrap;color:var(--accent)">'+excelDateDisplay(p['홍보시작일'])+'<br>'+excelDateDisplay(p['홍보종료일'])+'</td>';
+    var _promoStart=excelDateDisplay(p['홍보시작일']);
+    var _promoCell=(_promoStart!=='-')?('노출 '+_promoStart):((p['콘텐츠구분']==='공연')?'<span style="color:#c0392b">홍보 안 함</span>':'<span style="color:#888">상시</span>');
+    html+='<td style="font-size:11px;white-space:nowrap;color:var(--accent)">'+_promoCell+'</td>';
     html+='<td style="font-size:11px;white-space:nowrap">'+excelDateDisplay(p['판매시작일'])+'<br>'+excelDateDisplay(p['판매종료일'])+'</td>';
     html+='<td style="font-size:11px;white-space:nowrap">'+excelDateDisplay(p['시작일'])+'<br>'+excelDateDisplay(p['종료일'])+'</td>';
     html+='<td>'+escapeHtml(p['담당자']||'')+'</td>';
@@ -12139,8 +12148,7 @@ function openProgramForm(rowIndex){
     판매종료:existing?excelDateInputValue(existing['판매종료일']):'',
     시작:existing?excelDateInputValue(existing['시작일']):'',
     종료:existing?excelDateInputValue(existing['종료일']):'',
-    홍보시작:existing?(excelDateInputValue(existing['홍보시작일'])||_todayIso):_todayIso,   // 기본값: 오늘
-    홍보종료:existing?(excelDateInputValue(existing['홍보종료일'])||excelDateInputValue(existing['종료일'])):'',   // 기본값: 프로그램 종료일
+    홍보시작:existing?excelDateInputValue(existing['홍보시작일']):'',   // 노출일(opt-in) — 비우면 공연은 홍보 대상에서 제외
     담당자:existing?existing['담당자']:'',
     장소:existing?existing['장소']:'대극장'
   };
@@ -12151,9 +12159,9 @@ function openProgramForm(rowIndex){
   html+='<div style="display:flex;gap:10px"><div style="flex:0 0 80px"><label>NO</label><input name="NO" type="number" value="'+v.NO+'" readonly></div><div style="flex:1"><label>콘텐츠구분<span class="req">*</span></label><select name="콘텐츠구분" required onchange="refreshManagerOptions(this.value)">'+CONTENT_TYPES.map(t=>'<option value="'+escapeHtml(t)+'" '+(t===v.구분?'selected':'')+'>'+escapeHtml(t)+'</option>').join('')+'</select></div></div>';
   html+='<div><label>풀네임<span class="req">*</span></label><input name="풀네임" type="text" value="'+escapeHtml(v.풀네임)+'" required></div>';
   html+='<div><label>줄임말<span class="req">*</span></label><input name="줄임말" type="text" value="'+escapeHtml(v.줄임말)+'" required></div>';
-  html+='<div style="display:flex;gap:10px"><div style="flex:1"><label>시작일<span class="req">*</span></label><input name="시작일" type="date" value="'+v.시작+'" required></div><div style="flex:1"><label>종료일<span class="req">*</span></label><input id="prog-end" name="종료일" type="date" value="'+v.종료+'" required onchange="_progSyncPromoEnd()"></div></div>';
-  // 홍보 신청 가능 기간 (필수) — 기본값: 시작일=오늘, 종료일=프로그램 종료일. 캘린더 홍보 신청 게이트
-  html+='<div style="background:#F6F5FF;border:1px solid rgba(74,77,231,0.15);border-radius:10px;padding:10px 12px"><div style="font-size:11.5px;color:var(--accent);font-weight:700;margin-bottom:7px">📣 홍보 신청 가능 기간 <span style="font-weight:400;color:#888">— 캘린더에서 이 프로그램 홍보를 신청할 수 있는 기간</span></div><div style="display:flex;gap:10px"><div style="flex:1"><label>홍보시작일<span class="req">*</span></label><input id="prog-promo-start" name="홍보시작일" type="date" value="'+v.홍보시작+'" required></div><div style="flex:1"><label>홍보종료일<span class="req">*</span></label><input id="prog-promo-end" name="홍보종료일" type="date" value="'+v.홍보종료+'" required></div></div></div>';
+  html+='<div style="display:flex;gap:10px"><div style="flex:1"><label>시작일<span class="req">*</span></label><input name="시작일" type="date" value="'+v.시작+'" required></div><div style="flex:1"><label>종료일<span class="req">*</span></label><input id="prog-end" name="종료일" type="date" value="'+v.종료+'" required></div></div>';
+  // 홍보 노출 시작일(노출일) — 공연은 이 값이 있어야 홍보 신청 대상이 됨(opt-in). 홍보 종료는 공연 종료일과 동일하게 자동 적용.
+  html+='<div style="background:#F6F5FF;border:1px solid rgba(74,77,231,0.15);border-radius:10px;padding:10px 12px"><div style="font-size:11.5px;color:var(--accent);font-weight:700;margin-bottom:7px">📣 홍보 노출 시작일 <span style="font-weight:400;color:#888">— 이 날짜부터 캘린더에서 홍보 신청 가능. <b>공연</b>은 비워두면 홍보 대상에서 제외돼요 (전시·예술교육·대관은 비워도 항상 노출). 홍보 종료는 공연 종료일과 동일.</span></div><div style="display:flex;gap:10px"><div style="flex:1"><label>홍보시작일(노출일)</label><input id="prog-promo-start" name="홍보시작일" type="date" value="'+v.홍보시작+'"></div></div></div>';
   // 판매 기간 (선택) — 사업 분석용. 홍보 신청 가능 여부와 무관
   html+='<div style="display:flex;gap:10px"><div style="flex:1"><label>판매시작일 <span style="font-size:10px;color:#888;font-weight:400">(선택·사업분석용)</span></label><input name="판매시작일" type="date" value="'+v.판매시작+'"></div><div style="flex:1"><label>판매종료일 <span style="font-size:10px;color:#888;font-weight:400">(선택)</span></label><input name="판매종료일" type="date" value="'+v.판매종료+'"></div></div>';
   html+='<div><label>담당자 <span style="font-size:10px;color:#888;font-weight:400">(콘텐츠구분 따라 필터)</span></label><select name="담당자">'+buildManagerOptions(v.구분,v.담당자)+'</select></div>';
@@ -12171,12 +12179,6 @@ function closeProgramForm(){
   const el=document.getElementById('program-form-modal');
   if(el)el.innerHTML='';
 }
-// 종료일 입력 시 홍보종료일이 비어있으면 자동 동기화 (기본값: 프로그램 종료일)
-function _progSyncPromoEnd(){
-  const endEl=document.getElementById('prog-end');
-  const pe=document.getElementById('prog-promo-end');
-  if(endEl&&pe&&endEl.value&&!pe.value)pe.value=endEl.value;
-}
 
 async function saveProgram(rowIndex){
   const form=document.getElementById('prog-form');
@@ -12193,8 +12195,8 @@ async function saveProgram(rowIndex){
     isoToExcelSerial(fd.get('종료일')),
     fd.get('담당자')||'',
     fd.get('장소')||'',
-    isoToExcelSerial(fd.get('홍보시작일')),   // K열 (신규 컬럼)
-    isoToExcelSerial(fd.get('홍보종료일'))    // L열 (신규 컬럼)
+    isoToExcelSerial(fd.get('홍보시작일')),   // K열 홍보시작일(노출일) — 공연 opt-in
+    isoToExcelSerial(fd.get('종료일'))        // L열 홍보종료일 = 공연 종료일로 통합
   ];
   showOverlayLoad('\uC800\uC7A5 \uC911\uC785\uB2C8\uB2E4...');
   try{
