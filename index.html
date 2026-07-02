@@ -8367,12 +8367,15 @@ async function closePromoWizard(force){
     if(ok)_doClose();
     return;
   }
-  // 신청/이어쓰기 작성 중 → 임시저장 제안
-  const save=await showConfirm('작성 중인 내용을 임시저장할까요?',{title:'임시저장',okText:'임시저장',cancelText:'아니요'});
-  if(save){ if(await _pwSaveDraft())_doClose(); return; }
-  // 임시저장 안 함 → 그냥 닫을지 / 계속 작성할지
-  const discard=await showConfirm('저장하지 않고 닫을까요? 작성 중인 내용이 사라져요.',{okText:'닫기',cancelText:'계속 작성',danger:true});
-  if(discard)_doClose();
+  // 신청/이어쓰기 작성 중 → 한 창에서 3지선다: 계속 작성 | 임시 저장 | 닫기
+  const choice=await showChoice('작성 중인 내용을 어떻게 할까요?',[
+    {label:'계속 작성',value:'continue'},
+    {label:'임시 저장',value:'save'},
+    {label:'닫기',value:'close',danger:true}
+  ],{title:'임시저장'});
+  if(choice==='save'){ if(await _pwSaveDraft())_doClose(); return; }
+  if(choice==='close'){ _doClose(); return; }
+  // 'continue' 또는 Esc/배경 클릭(false) → 계속 작성 (아무 동작 없음)
 }
 function renderPwStep(){
   const bar=document.getElementById('pw-progress-bar');
@@ -8458,10 +8461,13 @@ function renderPwStep(){
     let html='<div class="pw-question">콘텐츠 제목을 지어주세요</div>';
     html+='<div class="pw-hint">관리자가 알아보기 쉬운 콘텐츠 제목을 입력해 주세요</div>';
     html+='<label style="display:block;font-size:11px;color:#888;margin:14px 0 4px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">콘텐츠 제목<span style="color:var(--peach);margin-left:3px">*</span></label>';
-    html+='<input id="pw-title" type="text" value="'+escapeHtml(_pwData.title)+'" placeholder="예: 6월 공연 홍보" style="width:100%;padding:10px 14px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:12px;font-size:13px;outline:none;box-sizing:border-box">';
+    // 콘텐츠 제목 자동 프리필: 선택한 프로그램의 줄임말 + 공백 (제목 비어있을 때만; 사용자가 이어서 입력·삭제 가능)
+    var _titleVal=_pwData.title;
+    if(!_titleVal){ var _tperf=_findPerfByName(_pwData.program); var _tshort=(_tperf&&_tperf.n||'').trim(); if(_tshort)_titleVal=_tshort+' '; }
+    html+='<input id="pw-title" type="text" value="'+escapeHtml(_titleVal)+'" placeholder="예: 6월 공연 홍보" style="width:100%;padding:10px 14px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:12px;font-size:13px;outline:none;box-sizing:border-box">';
     body.innerHTML=html;
     next.textContent='다음';
-    setTimeout(function(){const el=document.getElementById('pw-title');if(el)el.focus();},50);
+    setTimeout(function(){const el=document.getElementById('pw-title');if(el){el.focus();try{const _l=el.value.length;el.setSelectionRange(_l,_l);}catch(_e){}}},50);
   }else if(_pwStep===3){
     // Step 3: 언제 홍보할까요? (날짜 + 시간 30분 단위 + 판매기간 검증)
     let html='<div class="pw-question">언제 홍보할까요?</div>';
@@ -8806,7 +8812,7 @@ function collectPwStep(){
     if(el)_pwData.s_applicant=el.value;
   }
 }
-function validatePwStep(){
+async function validatePwStep(){
   if(_pwStep===1){
     if(_pwData.isCustom){
       if(!_pwData.customCat){showFieldError('pw-custom-cat','콘텐츠 구분을 골라 주세요');return false;}
@@ -8831,7 +8837,7 @@ function validatePwStep(){
     }
     // 판매기간 검증은 경고만, 진행은 허용
   }else if(_pwStep===4){
-    return validatePwSubStep();
+    return await validatePwSubStep();
   }
   return true;
 }
@@ -8885,7 +8891,7 @@ function promoBack(){
 }
 async function promoNext(){
   collectPwStep();
-  if(!validatePwStep())return;
+  if(!(await validatePwStep()))return;
   // === edit 모드: 선택된 step만 순차 진행, 끝에 Step 5(확인) ===
   if(_pwMode==='edit'){
     // Step 5 (확인 화면)에서 next 클릭 = 저장
@@ -10296,11 +10302,21 @@ function collectPwSubStep(){
 
 // === Step 4 sub-step 검증 ===
 // (260611) 본문/최소 글자 필수 — 일반 사용자는 강제, 관리자는 confirm으로 스킵 가능
-function _pwMinSkip(fid,msg){
-  if(userRole==='admin'&&confirm('[관리자] '+msg+'\n\n관리자 권한으로 이 검증을 건너뛰고 진행할까요?'))return true;
+async function _pwMinSkip(fid,msg,opts){
+  opts=opts||{};
+  // 관리자: 기존대로 확인 후 검증 건너뛰기
+  if(userRole==='admin'){
+    if(confirm('[관리자] '+msg+'\n\n관리자 권한으로 이 검증을 건너뛰고 진행할까요?'))return true;
+    showFieldError(fid,msg);return false;
+  }
+  // 문자 등 스킵 불가 필드(noUserSkip): 일반 사용자는 그대로 차단
+  if(opts.noUserSkip){ showFieldError(fid,msg); return false; }
+  // 일반 사용자: 내용 미입력/부족 시 — 홍보 담당자 임의 게시 안내 후 진행 여부(가운데 정렬)
+  const _ok=await showConfirm('<div style="text-align:center;line-height:1.75">홍보 담당자가 임의로 내용을 게시해요.<br>그대로 진행하시나요? 😉</div>',{html:true,title:'',okText:'네, 진행할게요',cancelText:'직접 작성'});
+  if(_ok)return true;
   showFieldError(fid,msg);return false;
 }
-function validatePwSubStep(){
+async function validatePwSubStep(){
   const key=currentPwSubKey();
   if(key==='plat'){
     if(!_pwData.plat1){showFieldError('pw-plat1','플랫폼을 골라 주세요');return false;}
@@ -10327,19 +10343,19 @@ function validatePwSubStep(){
       if(!pwHasFolder()){showFieldError('pw-folder-0','참고 자료 경로를 입력해 주세요');return false;}
       // 카카오 본문은 다음 단계(key==='text')에서 검증 — 여기(폴더 단계)서 검증하면 중복 안내
     }else if(fmt==='텍스트'){
-      if(p1==='카카오톡'&&_pwData.kakaoText.trim().length<30){if(!_pwMinSkip('pw-kakao-text','최소 30자는 입력해주세요. (현재 '+_pwData.kakaoText.trim().length+'자)'))return false;}
-      if(p1==='인스타그램'&&!_pwData.instaText.trim()){if(!_pwMinSkip('pw-insta-text','본문을 입력해 주세요'))return false;}
-      if(p1==='B2B'&&p2==='GS칼텍스 여수공장 인트라넷'&&!_pwData.b2bIntraText.trim()){if(!_pwMinSkip('pw-b2b-text','본문을 입력해 주세요'))return false;}
-      if(p1==='기타'&&!(_pwData.freeText||'').trim()){if(!_pwMinSkip('pw-free-text','본문을 입력해 주세요'))return false;}
+      if(p1==='카카오톡'&&_pwData.kakaoText.trim().length<30){if(!(await _pwMinSkip('pw-kakao-text','최소 30자는 입력해주세요. (현재 '+_pwData.kakaoText.trim().length+'자)')))return false;}
+      if(p1==='인스타그램'&&!_pwData.instaText.trim()){if(!(await _pwMinSkip('pw-insta-text','본문을 입력해 주세요')))return false;}
+      if(p1==='B2B'&&p2==='GS칼텍스 여수공장 인트라넷'&&!_pwData.b2bIntraText.trim()){if(!(await _pwMinSkip('pw-b2b-text','본문을 입력해 주세요')))return false;}
+      if(p1==='기타'&&!(_pwData.freeText||'').trim()){if(!(await _pwMinSkip('pw-free-text','본문을 입력해 주세요')))return false;}
     }
   }else if(key==='text'){
     const p1=_pwData.plat1;
-    if(p1==='카카오톡'&&_pwData.kakaoText.trim().length<30){if(!_pwMinSkip('pw-kakao-text','최소 30자는 입력해주세요. (현재 '+_pwData.kakaoText.trim().length+'자)'))return false;}
-    if(p1==='인스타그램'&&!_pwData.instaText.trim()){if(!_pwMinSkip('pw-insta-text','본문을 입력해 주세요'))return false;}
+    if(p1==='카카오톡'&&_pwData.kakaoText.trim().length<30){if(!(await _pwMinSkip('pw-kakao-text','최소 30자는 입력해주세요. (현재 '+_pwData.kakaoText.trim().length+'자)')))return false;}
+    if(p1==='인스타그램'&&!_pwData.instaText.trim()){if(!(await _pwMinSkip('pw-insta-text','본문을 입력해 주세요')))return false;}
   }else if(key==='intent'){
     if(!(_pwData.intent||'').trim()){showFieldError('pw-intent','홍보 의도를 입력해 주세요');return false;}
   }else if(key==='blog'){
-    if(!_pwData.blogDirection||_pwData.blogDirection.length<100){if(!_pwMinSkip('pw-blog-dir','글 작성 방향을 최소 100자 이상 작성해주세요 (현재 '+(_pwData.blogDirection||'').length+'자)'))return false;}
+    if(!_pwData.blogDirection||_pwData.blogDirection.length<100){if(!(await _pwMinSkip('pw-blog-dir','글 작성 방향을 최소 100자 이상 작성해주세요 (현재 '+(_pwData.blogDirection||'').length+'자)')))return false;}
     if(!pwHasFolder()){showFieldError('pw-folder-0','참고 자료 경로를 입력해 주세요');return false;}
   }else if(key==='b2b_link'){
     if(!_pwData.b2bLink){showFieldError('pw-b2b-link','B2B 또는 홈페이지 링크를 입력해 주세요');return false;}
@@ -10355,7 +10371,7 @@ function validatePwSubStep(){
       if(!_pwData.ageRanges||_pwData.ageRanges.length===0){showToast('연령대를 설정해 주세요','error');return false;}
     }
   }else if(key==='sms_body'){
-    if(!_pwData.smsBody.trim()){if(!_pwMinSkip('pw-sms-body','문자 본문을 입력해 주세요'))return false;}
+    if(!_pwData.smsBody.trim()){if(!(await _pwMinSkip('pw-sms-body','문자 본문을 입력해 주세요',{noUserSkip:true})))return false;}
   }else if(key==='author'){
     if(!_pwData.applicant){showFieldError('pw-applicant','게시자를 골라 주세요');return false;}
   }
