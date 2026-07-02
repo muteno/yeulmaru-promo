@@ -8091,7 +8091,7 @@ function _batchRender(){
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeBatchWizard)"><div class="modal" style="width:min(880px,96vw);max-height:90vh;display:flex;flex-direction:column;position:relative"><button class="modal-x" onclick="closeBatchWizard()" style="position:absolute;top:14px;right:14px;z-index:10">✕</button>'
     +'<div style="padding-bottom:10px;border-bottom:1px solid #eee;margin-bottom:10px"><h3 style="margin:0">📋 일정 등록 <span style="font-size:12px;color:#888;font-weight:400">· 여러 건 한 번에</span></h3><div style="font-size:11.5px;color:#888;margin-top:4px">등록할 프로그램을 체크하고 홍보 일시·위치·내용을 정하세요. <b>홍보 위치는 복수 선택</b> 가능(위치마다 1건). 상세(본문·타겟)는 등록 후 각 건에서. <span style="color:#bbb">(열 경계 드래그로 너비 조절)</span></div></div>'
     +'<div style="overflow:auto;flex:1;border-radius:10px;border:1px solid #f0f0f0"><table class="promo-board-table batch-board-table" style="width:100%;border-collapse:collapse;font-size:12.5px;table-layout:fixed"><thead><tr style="background:rgba(74,77,231,0.95);color:#fff;font-size:11px;letter-spacing:0.3px">'
-    + _batchSh('sel','✓',44) + _batchSh('program','프로그램',210) + _batchSh('datetime','홍보 일시',124) + _batchSh('plat','홍보 위치',150) + '<th data-col="content" style="padding:9px 8px;text-align:center;color:#fff">홍보 내용 입력</th>'
+    + _batchSh('sel','✓',44) + _batchSh('program','프로그램',210) + _batchSh('datetime','홍보 일시',124) + _batchSh('plat','홍보 위치 <button onclick="event.stopPropagation();_batchBulkPlat(this)" style="margin-left:5px;font-size:9px;font-weight:700;color:#fff;background:rgba(255,255,255,0.28);border:0;border-radius:5px;padding:2px 7px;cursor:pointer">일괄</button>',180) + '<th data-col="content" style="padding:9px 8px;text-align:center;color:#fff">홍보 내용 입력</th>'
     +'</tr></thead><tbody>'+body+'</tbody></table></div>'
     +'<div style="display:flex;gap:8px;align-items:center;padding-top:10px;border-top:1px solid #eee;margin-top:10px"><span id="batch-foot" style="font-size:12px;color:#888"></span><button class="m-btn cancel" onclick="closeBatchWizard()" style="margin-left:auto">취소</button><button id="batch-sub" class="m-btn save" onclick="_batchSubmit()">0건 등록</button></div></div></div>';
   _batchFooter();
@@ -8135,17 +8135,19 @@ function _batchOpenDt(i,anchor){
     if(!chk.ok){ showToast(chk.reason,'error'); d.value=r.date||''; return; }
     r.date=d.value; if(!r.checked)r.checked=true; _batchSyncRow(i); t.focus(); try{t.showPicker&&t.showPicker();}catch(e){}
   };
-  t.onchange=function(){ r.time=t.value; if(!r.checked)r.checked=true; _batchSyncRow(i); _batchClosePop(); };  // 네이티브 선택 = 자동 닫힘
+  t.onchange=function(){ r.time=_batchRound10(t.value); if(!r.checked)r.checked=true; _batchSyncRow(i); _batchClosePop(); };  // 네이티브 선택 = 자동 닫힘(10분 반올림)
   setTimeout(function(){ try{d.focus(); d.showPicker&&d.showPicker();}catch(e){} },40);
 }
 function _batchDtDone(i){
   var r=_batchState&&_batchState.rows[i]; if(!r)return;
-  var t=document.getElementById('bdt-t'); if(t)r.time=t.value;
+  var t=document.getElementById('bdt-t'); if(t)r.time=_batchRound10(t.value);
   var chk=_validateScheduleChange(null,r.date,r.time||'10:00',{action:'submit',program:r.program,applicant:''});
   if(!chk.ok){ showToast(chk.reason,'error'); return; }
   if(!r.checked)r.checked=true; _batchSyncRow(i); _batchClosePop();
 }
 function _batchTimeWheel(e,inp){ e.preventDefault(); var v=(inp.value||'10:00').split(':'); var mins=(+v[0]||0)*60+(+v[1]||0); mins+=(e.deltaY<0?10:-10); if(mins<0)mins=1430; if(mins>1439)mins=0; mins=Math.round(mins/10)*10; inp.value=String(Math.floor(mins/60)).padStart(2,'0')+':'+String(mins%60).padStart(2,'0'); }
+// 시각 10분 단위 강제 (타이핑·피커로 10분 아닌 값 들어와도 반올림)
+function _batchRound10(v){ var a=(v||'10:00').split(':'); var m=(+a[0]||0)*60+(+a[1]||0); m=Math.round(m/10)*10; if(m<0)m=0; if(m>1439)m=1430; return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0'); }
 function _batchOpenPl(i,anchor){
   var r=_batchState&&_batchState.rows[i]; if(!r)return; var plats=_batchPlatList();
   var html='<div style="font-size:11px;color:#888;margin-bottom:6px;font-weight:600">홍보 위치 (복수 선택)</div>'
@@ -8154,6 +8156,21 @@ function _batchOpenPl(i,anchor){
   _batchPop(anchor,html);
 }
 function _batchTogPlat(i,p){ var r=_batchState&&_batchState.rows[i]; if(!r)return; var k=r.plats.indexOf(p); if(k>-1)r.plats.splice(k,1); else r.plats.push(p); if(r.plats.length&&!r.checked)r.checked=true; _batchSyncRow(i); }
+// 홍보 위치 일괄 적용 — 체크된 행(2개 이상) 전체에 선택 위치 반영. 다른 컬럼은 개별만.
+function _batchBulkPlat(anchor){
+  if(!_batchState)return;
+  var checkedRows=_batchState.rows.filter(function(r){return r.checked;});
+  if(checkedRows.length<2){ showToast('홍보 위치를 일괄 적용하려면 프로그램을 2개 이상 먼저 선택해주세요','info'); return; }
+  var plats=_batchPlatList();
+  var html='<div style="font-size:11px;color:#888;margin-bottom:6px;font-weight:600">홍보 위치 일괄 적용 <span style="color:var(--accent)">'+checkedRows.length+'개 프로그램</span></div>'
+    +plats.map(function(p){ var allHave=checkedRows.every(function(r){return r.plats.indexOf(p)>-1;}); return '<label style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:7px;cursor:pointer;font-size:12.5px" onmouseover="this.style.background=\'#f3f4fb\'" onmouseout="this.style.background=\'\'"><input type="checkbox" '+(allHave?'checked':'')+' onchange="_batchBulkPlatSet(&quot;'+escapeHtml(p).replace(/"/g,'&quot;')+'&quot;,this.checked)" style="accent-color:var(--accent);width:15px;height:15px;margin:0">'+escapeHtml(p)+'</label>'; }).join('')
+    +'<button onclick="_batchClosePop()" style="width:100%;margin-top:6px;padding:7px;border:0;background:var(--accent);color:#fff;border-radius:7px;cursor:pointer;font-size:12px;font-weight:600">완료</button>';
+  _batchPop(anchor,html);
+}
+function _batchBulkPlatSet(p,on){
+  if(!_batchState)return;
+  _batchState.rows.forEach(function(r,i){ if(!r.checked)return; var k=r.plats.indexOf(p); if(on&&k<0)r.plats.push(p); else if(!on&&k>=0)r.plats.splice(k,1); _batchSyncRow(i); });
+}
 // 행(프로그램/여백) 클릭 → 자동 체크 토글. 셀 내 인터랙션(체크박스·일시·위치·내용)은 각자 동작하므로 제외
 function _batchRowClick(e,i){ var tg=e.target; if(tg&&tg.closest&&tg.closest('input,button,#bdt-'+i+',#bpl-'+i+',#bct-'+i))return; var r=_batchState&&_batchState.rows[i]; if(!r)return; _batchChk(i,!r.checked); var cb=document.getElementById('bchk-'+i); if(cb)cb.checked=r.checked; }
 // 미입력 항목 강조 (빨간 점등 + 셀 위 안내 라벨) / 해제 / 포커스 이동
