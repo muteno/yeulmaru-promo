@@ -81,6 +81,48 @@ async function getManagersCached(token) {
 }
 __name(getManagersCached, "getManagersCached");
 
+// === 시트 GET 캐시 (읽기 전용 라우팅 전용 — 성능) ===
+// ⚠️ handleAddSheetRow/handleAddRecord 등이 내부에서 handleGetSheet/handleGetRecords를 직접 호출해
+//    다음 행 번호(nextRow)를 계산한다 → 그 경로는 절대 캐시를 타면 안 됨(stale → 남의 행 덮어쓰기).
+//    그래서 캐시는 GET 응답 라우팅에서만 사용하고, 쓰기 핸들러 내부 조회는 캐시를 우회한다.
+// ⚠️ records는 신청/변경이 잦고 즉시 반영돼야 해 캐시하지 않음(/api/records는 handleGetRecords 그대로).
+// ⚠️ Cloudflare Worker는 isolate별 in-memory라 무효화가 100% 즉시 전파되진 않음(최악 TTL 만큼 지연).
+//    → 거의 안 바뀌는 마스터는 5분, 변동성 있는 special/applysettings는 30초로 차등.
+var TTL_MASTER = 5 * 60 * 1000, TTL_SHORT = 30 * 1000;
+var TTL_BY_SLUG = { platform: TTL_MASTER, content: TTL_MASTER, manager: TTL_MASTER, program: TTL_MASTER, special: TTL_SHORT, applysettings: TTL_SHORT };
+var sheetCache = {};       // slug -> { data, expires }
+var programsCache = { data: null, expires: 0 };
+var opsCache = {};         // opsSheetName -> { data, expires }
+async function getSheetCached(token, sheetName, slug) {
+  const c = sheetCache[slug];
+  if (c && Date.now() < c.expires) return c.data;
+  const data = await handleGetSheet(token, sheetName);
+  sheetCache[slug] = { data, expires: Date.now() + (TTL_BY_SLUG[slug] || TTL_SHORT) };
+  return data;
+}
+__name(getSheetCached, "getSheetCached");
+async function getProgramsCached(token) {
+  if (programsCache.data && Date.now() < programsCache.expires) return programsCache.data;
+  const data = await handleGetPrograms(token);
+  programsCache = { data, expires: Date.now() + TTL_MASTER };
+  return data;
+}
+__name(getProgramsCached, "getProgramsCached");
+async function getOpsCached(token, opsName) {
+  const c = opsCache[opsName];
+  if (c && Date.now() < c.expires) return c.data;
+  const data = await handleGetSheet(token, opsName);
+  opsCache[opsName] = { data, expires: Date.now() + TTL_MASTER };
+  return data;
+}
+__name(getOpsCached, "getOpsCached");
+function invalidateSheetCache(slug) {
+  if (slug) delete sheetCache[slug];
+  if (slug === "program") programsCache = { data: null, expires: 0 };
+  if (slug === "manager") managerCache = { rows: null, expires: 0 };  // checkAdmin 즉시 반영
+}
+__name(invalidateSheetCache, "invalidateSheetCache");
+
 // === Admin 권한 통합 검증 (슈퍼 admin OR 서브 admin) ===
 // 슈퍼: X-App-Password = ADMIN_PASSWORD
 // 서브: X-App-Password = APP_PASSWORD AND X-Sub-Admin-PIN 매칭 + 관리자여부=true + 휴직 아님
@@ -337,6 +379,7 @@ async function handleAddSheetRow(token, sheetName, body, role, slug) {
   const lastCol = colLetter(body.values.length);
   await graphPatch(token, `${sheetPathFor(driveId, itemId, sheetName)}/range(address='A${nextRow}:${lastCol}${nextRow}')`, { values: [body.values] });
   if (slug !== "log") await logToSheet(token, role, "CREATE", sheetName, nextRow, summarize(body.values));
+  invalidateSheetCache(slug);
   return { ok: true, row: nextRow };
 }
 __name(handleAddSheetRow, "handleAddSheetRow");
@@ -346,6 +389,7 @@ async function handleUpdateSheetRow(token, sheetName, row, body, role, slug) {
   const lastCol = colLetter(body.values.length);
   await graphPatch(token, `${sheetPathFor(driveId, itemId, sheetName)}/range(address='A${row}:${lastCol}${row}')`, { values: [body.values] });
   if (slug !== "log") await logToSheet(token, role, "UPDATE", sheetName, row, summarize(body.values));
+  invalidateSheetCache(slug);
   return { ok: true };
 }
 __name(handleUpdateSheetRow, "handleUpdateSheetRow");
@@ -357,6 +401,7 @@ async function handleDeleteSheetRow(token, sheetName, row, role, slug) {
   const lastCol = colLetter(numCols);
   await graphPatch(token, `${sheetPathFor(driveId, itemId, sheetName)}/range(address='A${row}:${lastCol}${row}')`, { values: [Array(numCols).fill("")] });
   if (slug !== "log") await logToSheet(token, role, "DELETE", sheetName, row, "");
+  invalidateSheetCache(slug);
   return { ok: true };
 }
 __name(handleDeleteSheetRow, "handleDeleteSheetRow");
@@ -1366,7 +1411,7 @@ var index_default = {
 
       // 프로그램 PERFS 로드
       if (url.pathname === "/api/programs") {
-        if (request.method === "GET") return json({ programs: await handleGetPrograms(token) }, env);
+        if (request.method === "GET") return json({ programs: await getProgramsCached(token) }, env);
       }
 
       // 마스터 시트 CRUD
@@ -1387,7 +1432,7 @@ var index_default = {
 
         // 일반 시트
         if (request.method === "GET" && parts.length === 3) {
-          return json(await handleGetSheet(token, sheetName), env);
+          return json(await getSheetCached(token, sheetName, slug), env);
         }
         if (request.method !== "GET") {
           const auth = await checkAdmin(request, env, token);
@@ -1468,7 +1513,7 @@ var index_default = {
           const sheet = url.searchParams.get("sheet");
           if (sheet) {
             try {
-              const { headers, rows } = await handleGetSheet(token, opsSheetName(sheet));
+              const { headers, rows } = await getOpsCached(token, opsSheetName(sheet));
               return json({ sheet, headers, rows, count: rows.length }, env);
             } catch (e) {
               return json({ sheet, headers: [], rows: [], count: 0, note: "시트 없음 (미동기화)" }, env);
@@ -1485,6 +1530,7 @@ var index_default = {
           const body = await request.json();
           if (!body.sheet) return json({ error: "sheet name required" }, env, 400);
           const rows = Array.isArray(body.rows) ? body.rows : [];
+          opsCache = {};  // ops 쓰기 → ops 캐시 전체 무효화(대상 시트 소수)
           if (body.mode === "append") return json(await opsAppendRows(token, body.sheet, rows), env);
           return json(await opsWriteSheet(token, body.sheet, body.headers || [], rows), env);
         }

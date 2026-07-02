@@ -1686,8 +1686,7 @@ const DAYS=['화','수','목','금','토','일'];
 const DAY_NAMES=['일','월','화','수','목','금','토'];
 const MENUS=[
   {label:'캘린더',id:'cal'},
-  {label:'일정 확인 및 관리',id:'schedule'},
-  {label:'홍보 신청',id:'promo'},
+  {label:'일정 관리',id:'schedule'},
   {label:'콘텐츠 제작',id:'content'},
   {label:'플랫폼 현황',id:'platform'},
   {label:'사업 현황',id:'business'},
@@ -2855,14 +2854,18 @@ async function initApp(){
   if(userRole==='admin' && !sessionStorage.getItem('subAdminPin')){
     try{sessionStorage.removeItem('myApplicant');}catch(e){}
   }
-  try{await loadPrograms();}catch(e){console.warn('[initApp loadPrograms]',e);}
-  try{await loadAllMasters();}catch(e){console.warn('[initApp loadAllMasters]',e);}
-  try{await loadPromoSpecial();}catch(e){console.warn('[initApp loadPromoSpecial]',e);}
-  try{await loadCafeJangdo();}catch(e){console.warn('[initApp loadCafeJangdo]',e);}
-  try{await loadApplySettings();}catch(e){console.warn('[initApp loadApplySettings]',e);}
-  updatePerfOpen();
-  _perfReady=true;   // 프로그램·홍보기간 로드 완료 — 이제 홍보 위저드 오픈 허용
-  loadData();
+  // [로딩 성능] 초기 데이터 로더 병렬화 — 서로 독립인데 순차 await로 폭포수처럼 쌓여 있던 걸 동시 출발로 전환.
+  //   · 캘린더(records+특별일정)를 먼저 그리고, 프로그램/마스터/카페·장도/접수설정은 백그라운드 병렬로 채움.
+  //   · 순서 의존성은 loadPrograms→updatePerfOpen 하나뿐(나머지 로더 결과는 updatePerfOpen이 안 씀).
+  //   · loadPromoSpecial 중복 호출 제거 — loadData가 이미 특별일정을 로드함.
+  loadData();  // records + 특별일정 → render() : 캘린더 즉시 표시
+  var _pPrograms=loadPrograms().then(function(){ updatePerfOpen(); _perfReady=true; }).catch(function(e){console.warn('[initApp loadPrograms]',e);});
+  Promise.all([
+    _pPrograms,
+    loadAllMasters().catch(function(e){console.warn('[initApp loadAllMasters]',e);}),
+    loadCafeJangdo().catch(function(e){console.warn('[initApp loadCafeJangdo]',e);}),
+    loadApplySettings().catch(function(e){console.warn('[initApp loadApplySettings]',e);})
+  ]);
   // MS(OneDrive) 토큰 미리 확보 — 폴더 선택 때 팝업 안 뜨게 (재방문 silent / 첫 로그인 popup 1회)
   _msalPrefetch();
 }
@@ -3234,11 +3237,10 @@ function buildNav(){
       if(m.id==='content'){_ddOpen(b,_contentMenuBuild,210);return;}
       if(m.id==='annual'){openAnnualCalendar();return;}
       if(m.id==='admin'){openAdminPanel();return;}
-      if(m.id==='schedule'){openPromoBoard();return;}
+      if(m.id==='schedule'){_ddOpen(b,_scheduleMenuBuild,210);return;}
       if(m.id==='platform'){openPlatformBoard();return;}
       if(m.id==='business'){openBusinessBoard();return;}
       if(m.id==='sales'){openSalesBoard();return;}
-      if(m.id==='promo'){openPromoWizard();return;}
       document.querySelectorAll('.nav-btn').forEach(x=>x.classList.remove('on'));b.classList.add('on');movePill(b,pill);
     };
     b.onmouseenter=()=>movePill(b,pill);
@@ -8024,6 +8026,112 @@ function openAdminWizard(dateKey){
   // 진행 상태는 submitPromoRequest에서 userRole==='admin'이면 '예정'으로 자동 저장
   openPromoWizard(dateKey);
 }
+
+// ═══════════════════════════════════════════════════════════
+// ═══ 배치(복수) 신청 — '일정 등록' (1차: 프로그램 복수 + 날짜·시간·플랫폼·제목) ═══
+// 여러 프로그램을 한 번에 골라 각 날짜/시간/플랫폼/제목을 지정하고 순차 등록.
+// 본문·타겟 등 상세는 등록 후 각 건을 변경 위저드로 채움(1차 청사진).
+// _buildRecRow·_validateScheduleChange·프로그램 필터를 재사용하고, 기존 스텝머신(renderPwStep)은
+// 건드리지 않는 독립 모달이라 단건 신청 회귀 위험 0. admin/user 공통(제출 시 진행상태 자동 분기).
+var _batchRows=[];      // {program, programType, programEnd, date, time, plat1, plat2, title}
+var _batchPrefill='';
+var _batchInp='padding:5px 8px;background:#F8F7FC;border:1px solid rgba(0,0,0,0.08);border-radius:8px;font-size:12px;font-family:inherit;box-sizing:border-box;';
+function openBatchWizard(prefillDate){
+  if(!_perfReady||!PERFS.length){ showToast('프로그램 정보를 불러오는 중이에요. 잠시 후 다시 시도해 주세요','info'); return; }
+  _batchRows=[]; _batchPrefill=prefillDate||'';
+  var el=document.getElementById('batch-wizard');
+  if(!el){ el=document.createElement('div'); el.id='batch-wizard'; document.body.appendChild(el); }
+  _batchRender();
+}
+function closeBatchWizard(){ var el=document.getElementById('batch-wizard'); if(el)el.innerHTML=''; }
+function _batchActivePerfs(){
+  // 위저드 Step1과 동일한 홍보 노출 opt-in 필터 (기준일 = prefill 또는 오늘)
+  var _refKey=_batchPrefill||getTodayKey();
+  var _anyPromo=PERFS.some(function(p){return p.ps;});
+  return PERFS.filter(function(p){
+    var _pe=p.pe||p.e;
+    if(!_pe||_pe<_refKey)return false;
+    if(!_anyPromo)return true;
+    if(!p.ps)return false;
+    return true;
+  });
+}
+function _batchPlatOptions(sel){
+  var plats=[...new Set((PLATFORMS||[]).map(function(r){return r['플랫폼1'];}).filter(Boolean))];
+  if(!plats.length)plats=['카카오톡','인스타그램','블로그·맘카페','B2B','문자','기타'];
+  return '<option value="">플랫폼</option>'+plats.map(function(p){return '<option value="'+escapeHtml(p)+'"'+(p===sel?' selected':'')+'>'+escapeHtml(p)+'</option>';}).join('');
+}
+function _batchRender(){
+  var el=document.getElementById('batch-wizard'); if(!el)return;
+  var perfs=_batchActivePerfs();
+  var groups=[{k:'c',label:'공연'},{k:'e',label:'전시'},{k:'a',label:'예술교육'},{k:'r',label:'대관'}];
+  var selNames=_batchRows.map(function(r){return r.program;});
+  var pickHtml='';
+  groups.forEach(function(g){
+    var items=perfs.filter(function(p){return p.t===g.k;});
+    if(!items.length)return;
+    pickHtml+='<div style="font-size:11px;color:var(--accent);font-weight:700;margin:10px 0 4px">'+g.label+'</div><div style="display:flex;flex-wrap:wrap;gap:6px">';
+    items.forEach(function(p){
+      var on=selNames.indexOf(p.f)>-1;
+      pickHtml+='<label class="nb-chip'+(on?' on':'')+'" style="cursor:pointer;display:inline-flex;align-items:center;gap:5px"><input type="checkbox" value="'+p.f.replace(/"/g,'&quot;')+'" onchange="_batchToggleProg(this.value)"'+(on?' checked':'')+' style="margin:0">'+escapeHtml(p.f)+'</label>';
+    });
+    pickHtml+='</div>';
+  });
+  if(!pickHtml)pickHtml='<div style="color:#aaa;font-size:12.5px;padding:10px">지금 홍보 신청 가능한 프로그램이 없어요.</div>';
+  var rowsHtml='';
+  if(_batchRows.length===0){
+    rowsHtml='<div style="text-align:center;color:#aaa;font-size:13px;padding:26px">위에서 홍보할 프로그램을 선택하세요</div>';
+  }else{
+    rowsHtml='<table style="width:100%;border-collapse:collapse;font-size:12.5px"><thead><tr style="color:#888;font-size:11px"><th style="text-align:left;padding:6px">프로그램</th><th style="padding:6px">날짜</th><th style="padding:6px">시간</th><th style="padding:6px">플랫폼</th><th style="text-align:left;padding:6px">콘텐츠 제목</th><th></th></tr></thead><tbody>';
+    _batchRows.forEach(function(r,i){
+      rowsHtml+='<tr style="border-top:1px solid #eee"><td style="padding:6px;max-width:150px;word-break:break-all">'+escapeHtml(r.program)+'</td>'
+        +'<td style="padding:6px"><input type="date" value="'+escapeHtml(r.date)+'" onchange="_batchSet('+i+',&quot;date&quot;,this.value)" style="'+_batchInp+'"></td>'
+        +'<td style="padding:6px"><input type="time" step="1800" value="'+escapeHtml(r.time)+'" onchange="_batchSet('+i+',&quot;time&quot;,this.value)" style="'+_batchInp+'width:88px"></td>'
+        +'<td style="padding:6px"><select onchange="_batchSet('+i+',&quot;plat1&quot;,this.value)" style="'+_batchInp+'">'+_batchPlatOptions(r.plat1)+'</select></td>'
+        +'<td style="padding:6px"><input type="text" value="'+escapeHtml(r.title)+'" placeholder="제목" onchange="_batchSet('+i+',&quot;title&quot;,this.value)" style="'+_batchInp+'min-width:130px"></td>'
+        +'<td style="padding:6px;white-space:nowrap"><button onclick="_batchDupRow('+i+')" title="같은 프로그램 다른 날짜 추가" style="border:0;background:none;cursor:pointer;color:var(--accent);font-size:16px">＋</button><button onclick="_batchDelRow('+i+')" title="삭제" style="border:0;background:none;cursor:pointer;color:#e5484d;font-size:14px">✕</button></td></tr>';
+    });
+    rowsHtml+='</tbody></table>';
+  }
+  var cnt=_batchRows.length;
+  el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeBatchWizard)"><div class="modal" style="width:min(780px,94vw);max-height:88vh;display:flex;flex-direction:column;position:relative"><button class="modal-x" onclick="closeBatchWizard()" style="position:absolute;top:14px;right:14px;z-index:10">✕</button><div style="padding-bottom:12px;border-bottom:1px solid #eee;margin-bottom:12px"><h3 style="margin:0">📋 일정 등록 <span style="font-size:12px;color:#888;font-weight:400">· 여러 건 한 번에</span></h3><div style="font-size:11.5px;color:#888;margin-top:4px">프로그램을 골라 날짜·시간·플랫폼·제목을 정하고 한 번에 등록하세요. 본문·타겟 등 상세는 등록 후 각 건에서 채우면 돼요.</div></div><div style="overflow:auto;flex:1"><div style="margin-bottom:14px">'+pickHtml+'</div>'+rowsHtml+'</div><div style="display:flex;gap:8px;align-items:center;padding-top:12px;border-top:1px solid #eee;margin-top:12px"><span style="font-size:12px;color:#888">'+cnt+'건</span><button class="m-btn cancel" onclick="closeBatchWizard()" style="margin-left:auto">취소</button><button class="m-btn save" onclick="_batchSubmit()"'+(cnt?'':' disabled')+' style="'+(cnt?'':'opacity:.5;')+'">'+cnt+'건 등록</button></div></div></div>';
+}
+function _batchToggleProg(name){
+  var idx=_batchRows.map(function(r){return r.program;}).indexOf(name);
+  if(idx>-1){ _batchRows=_batchRows.filter(function(r){return r.program!==name;}); }
+  else{ var p=_findPerfByName(name); _batchRows.push({program:name, programType:(p&&p.t)||'c', programEnd:(p&&p.e)||'', date:_batchPrefill||getTodayKey(), time:'10:00', plat1:'', plat2:'', title:((p&&p.n)?p.n+' ':'')}); }
+  _batchRender();
+}
+function _batchSet(i,f,v){ if(_batchRows[i])_batchRows[i][f]=v; }
+function _batchDupRow(i){ var r=_batchRows[i]; if(!r)return; _batchRows.splice(i+1,0,Object.assign({},r)); _batchRender(); }
+function _batchDelRow(i){ _batchRows.splice(i,1); _batchRender(); }
+async function _batchSubmit(){
+  if(!_batchRows.length)return;
+  // 1) 사전 검증 (건별) — 하나라도 막히면 등록 안 함
+  var errs=[];
+  _batchRows.forEach(function(r,i){
+    if(!r.date){errs.push((i+1)+'행: 날짜 없음');return;}
+    if(!r.plat1){errs.push((i+1)+'행('+r.program+'): 플랫폼 미선택');return;}
+    if(!(r.title||'').trim()){errs.push((i+1)+'행('+r.program+'): 제목 없음');return;}
+    var v=_validateScheduleChange(null,r.date,r.time,{action:'submit',plat1:r.plat1,program:r.program,applicant:''});
+    if(!v.ok)errs.push((i+1)+'행('+r.program+'): '+v.reason);
+  });
+  if(errs.length){ showToast('등록 불가 — '+errs.length+'건:\n'+errs.slice(0,6).join('\n'),'error'); return; }
+  // 2) 순차 POST (병렬 금지 — 서버가 매 건 nextRow 재계산). No=기준No+i(중복 방지)
+  showOverlayLoad('0/'+_batchRows.length+' 등록 중...');
+  var baseNo=records.length+1, ok=0, fail=[];
+  var status=(userRole==='admin'?'예정':'신청 중');
+  for(var i=0;i<_batchRows.length;i++){
+    var r=_batchRows[i];
+    var pw={program:r.program,programType:r.programType,programEndDate:r.programEnd,title:(r.title||'').trim(),plat1:r.plat1,plat2:r.plat2||'',format:'',date:r.date,time:r.time||'10:00',applicant:'',memo:'',folders:[],kakaoText:'',instaText:'',blogDirection:'',b2bIntraText:'',b2bLink:'',smsBody:'',smsTarget:'',customPlatform:'',freeText:'',intent:'',ageRanges:[],ageAny:false,residence:'',residenceCustom:'',residenceAny:false,genre:'',genreAny:false};
+    try{ var row=_buildRecRow(pw,status,baseNo+i,false); await api('POST','/api/records',{values:row}); ok++; showOverlayLoad(ok+'/'+_batchRows.length+' 등록 중...'); }
+    catch(e){ fail.push((i+1)+'행('+r.program+'): '+e.message); }
+  }
+  await syncReload();
+  hideOverlayLoad();
+  if(fail.length){ showToast(ok+'건 완료 / '+fail.length+'건 실패:\n'+fail.slice(0,6).join('\n'),'error'); _batchRender(); }
+  else{ closeBatchWizard(); showToast(ok+'건 모두 등록됐어요 🎉','success'); }
+}
 // ═══════════════════════════════════════════════════════════
 // ═══ 변경 위저드 (편집 모드) ═══
 // ═══════════════════════════════════════════════════════════
@@ -8945,63 +9053,53 @@ async function promoNext(){
   }
   await submitPromoRequest();
 }
+// === records 29컬럼 row 빌더 (단건 submit·임시저장·배치 공용 = 컬럼 순서 단일 진실원) ===
+// ⚠️ resolvePwFormat/buildPwContentText가 전역 _pwData를 직접 참조하므로, 임의 pwData로 계산하려면
+//    전역을 임시 스왑해야 한다(finally 복원). 단건=자기자신 스왑(무해), 배치=항목별 pwData 스왑.
+//    positional 배열이라 컬럼 순서가 바뀌면 여기 한 곳만 고치면 됨(브런치Ⅲ류 손상 예방).
+function _buildRecRow(pwData, status, no, draftFlag){
+  const _save=_pwData;
+  _pwData=pwData;
+  try{
+    const typeMap={'c':'공연','e':'전시','a':'예술교육','r':'대관'};
+    const cat=typeMap[pwData.programType]||pwData.programType||'기타';
+    const dateStr=pwData.date||(function(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');})();
+    const _p=dateStr.split('-').map(Number),y=_p[0],m=_p[1],d=_p[2];
+    const DAYS=['일','월','화','수','목','금','토'];
+    const dn=DAYS[new Date(y,m-1,d).getDay()];
+    const ts=dateStr+' '+(pwData.time||'10:00')+':00';
+    const serial=Math.floor(Date.UTC(y,m-1,d)/86400000)+25569;
+    const format=resolvePwFormat();
+    const content=buildPwContentText();
+    let _myAppl='';try{_myAppl=sessionStorage.getItem('myApplicant')||'';}catch(e){}
+    const requesterName=_myAppl||'황세웅';
+    return [
+      no, ts, serial, y,m,d, dn+'요일',
+      pwData.plat1||'', pwData.plat2||'-', cat, pwData.program||'',
+      '예술사업팀', pwData.title||'', format, content,
+      pwData.applicant||'', status, pwData.memo||'', requesterName,
+      '',  // T: 결과_링크
+      '',  // U: 결과_첨부URL
+      '',  // V: 결과_비고
+      '',  // W: 직전 상태 (등록 시점은 빈값)
+      nowKstStr(),  // X: 상태 변경 KST
+      '', '', '',
+      _recPerfId(pwData.program||''),  // AB: 공연ID
+      draftFlag?'Y':''  // AC: 임시저장 플래그 ('Y'=임시, ''=정식/이어쓰기 제출)
+    ];
+  }finally{ _pwData=_save; }
+}
 async function submitPromoRequest(){
   // ===== 신청 직전 재검증 (통합 게이트: 접수/홍보시간대/제외/담당자/판매기간/카카오문자) =====
   const _v=_validateScheduleChange(null,_pwData.date,_pwData.time,{action:'submit',plat1:_pwData.plat1,applicant:_pwData.applicant,program:_pwData.program});
   if(!_v.ok){showToast('신청 불가: '+_v.reason,'error');return;}
   showOverlayLoad();
   try{
-    const typeMap={'c':'공연','e':'전시','a':'예술교육','r':'대관'};
-    const cat=typeMap[_pwData.programType]||_pwData.programType||'기타';
-    const[y,m,d]=_pwData.date.split('-').map(Number);
-    const DAYS=['일','월','화','수','목','금','토'];
-    const dn=DAYS[new Date(y,m-1,d).getDay()];
-    const ts=_pwData.date+' '+_pwData.time+':00';
-    const serial=Math.floor(Date.UTC(y,m-1,d)/86400000)+25569;
-    // 콘텐츠 형식 결정 (플랫폼별)
-    const format=resolvePwFormat();
-    // 콘텐츠 내용 — 구조화 텍스트 (사람이 SharePoint 셀에서 직접 읽기 좋게)
-    const content=buildPwContentText();
-    // 신청자 — user 본인 식별 (localStorage.myApplicant 우선)
-    let _myAppl='';try{_myAppl=sessionStorage.getItem('myApplicant')||'';}catch(e){}
-    // 신청자(S) 결정 로직 (통일):
-    // - 일반 user: localStorage.myApplicant (로그인 시 PIN→userName으로 저장)
-    // - 서브 admin: 동일 (admin 진입 시에도 myApplicant 유지됨)
-    // - 슈퍼 admin: myApplicant 없음 → 황세웅으로 fallback (DB 동일 레벨)
-    // → DB 관점에서 모든 등록은 사람 이름 단위 (admin/user 마커 없음)
-    const requesterName = _myAppl || '황세웅';
     // 임시저장 이어쓰기 제출이면 그 행을 PATCH해 전환 (No 보존 · 중복 행 방지)
     const _draftRec=_pwData._draftRow?records.find(function(r){return r._rowIndex===_pwData._draftRow;}):null;
     const _subNo=_draftRec?(_draftRec['No']||_draftRec['NO']||records.length+1):records.length+1;
-    const row=[
-      _subNo,
-      ts,
-      serial,
-      y,m,d,
-      dn+'요일',
-      _pwData.plat1,
-      _pwData.plat2||'-',
-      cat,
-      _pwData.program,
-      '예술사업팀',
-      _pwData.title,
-      format,
-      content,
-      _pwData.applicant,
-      (userRole==='admin' ? '예정' : '신청 중'),
-      _pwData.memo||'',
-      requesterName,
-      '',  // T: 결과_링크
-      '',  // U: 결과_첨부URL
-      '',  // V: 결과_비고
-      '',  // W: 직전 상태 (등록 시점은 빈값)
-      nowKstStr(),  // X: 상태 변경 KST
-      '',
-      '',
-      '',
-      _recPerfId(_pwData.program),  // AB: 공연ID
-      ''   // AC: 임시저장 — 실제 신청은 빈값 (이어쓰기 제출이면 'Y'→'' 전환되어 _DRAFTS에서 빠지고 records로 편입)
-    ];
+    // 29컬럼 row = 공용 빌더(단건/임시저장/배치 단일 진실원). 진행상태 admin='예정'/user='신청 중'
+    const row=_buildRecRow(_pwData, (userRole==='admin'?'예정':'신청 중'), _subNo, false);
     if(_pwData._draftRow){
       await api('PATCH','/api/records/'+_pwData._draftRow,{values:row});
     }else{
@@ -9031,29 +9129,10 @@ async function submitPromoRequest(){
 // _pwData → records row (status='임시'). 신규=POST, 이어쓰기(_draftRow)=PATCH. 검증·알림 없음.
 async function _pwSaveDraft(){
   try{
-    const typeMap={'c':'공연','e':'전시','a':'예술교육','r':'대관'};
-    const cat=typeMap[_pwData.programType]||_pwData.programType||'기타';
-    const dateStr=_pwData.date||(function(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');})();
-    const[y,m,d]=dateStr.split('-').map(Number);
-    const DAYS=['일','월','화','수','목','금','토'];
-    const dn=DAYS[new Date(y,m-1,d).getDay()];
-    const ts=dateStr+' '+(_pwData.time||'10:00')+':00';
-    const serial=Math.floor(Date.UTC(y,m-1,d)/86400000)+25569;
-    const format=resolvePwFormat();
-    const content=buildPwContentText();
-    let _myAppl='';try{_myAppl=sessionStorage.getItem('myApplicant')||'';}catch(e){}
-    const requesterName=_myAppl||'황세웅';
     const _draftRec=_pwData._draftRow?records.find(function(r){return r._rowIndex===_pwData._draftRow;}):null;
     const _no=_draftRec?(_draftRec['No']||_draftRec['NO']||records.length+1):records.length+1;
-    const row=[
-      _no, ts, serial, y,m,d, dn+'요일',
-      _pwData.plat1||'', _pwData.plat2||'-', cat, _pwData.program||'',
-      '예술사업팀', _pwData.title||'', format, content,
-      _pwData.applicant||'', '임시', _pwData.memo||'', requesterName,
-      '','','','', nowKstStr(), '','','',
-      _recPerfId(_pwData.program||''),
-      'Y'   // AC: 임시저장 플래그 (records 분리 키). 진행 상태='임시'는 사람이 읽기 위한 표시·폴백
-    ];
+    // 29컬럼 row = 공용 빌더. 진행상태='임시', AC='Y'(records↔_DRAFTS 분리 키)
+    const row=_buildRecRow(_pwData, '임시', _no, true);
     showOverlayLoad('임시저장 중...');
     if(_pwData._draftRow){
       await api('PATCH','/api/records/'+_pwData._draftRow,{values:row});
@@ -12375,9 +12454,11 @@ function _petEnter(){
 async function loadData(){
   var cal=document.getElementById('cal');
   if(cal){cal.innerHTML='<div style="text-align:center;padding:60px;color:var(--dim);font-size:14px"><span id="lt"></span></div>';_typeLoop('lt','데이터를 불러오는 중이에요... \uD83D\uDE09',65);}
+  // [로딩 성능] records와 특별일정을 병렬 fetch (서로 독립) — 순차 대기 제거
+  var _spP=loadPromoSpecial().catch(function(e){console.warn('[loadData] promoSpecial',e);});
   try{const d=await api('GET','/api/records');var _all=(d.records||[]).map(function(r,i){return Object.assign({},r,{_rowIndex:(r._rowIndex!==undefined?r._rowIndex:i+2)});});_DRAFTS=_all.filter(_isDraftRec);records=_all.filter(function(r){return !_isDraftRec(r);});}catch(e){console.error(e);_typingId++;if(cal)cal.innerHTML='<div style="text-align:center;padding:60px;color:#E24B4A;font-size:14px">데이터 로드 실패</div>';return;}
-  // 특별 일정 — 실패해도 records 렌더는 진행
-  try{await loadPromoSpecial();}catch(e){console.warn('[loadData] promoSpecial',e);}
+  // 특별 일정 — 위에서 병렬 출발한 것 완료 대기 (실패해도 records 렌더는 진행)
+  try{await _spP;}catch(e){}
   _typingId++;render();_petEnter();if(typeof _refreshSeenMod==='function')_refreshSeenMod();}
 
 // SharePoint Graph API 일관성 지연 회피용 - 변경 후 row 수 검증 + 자동 재시도
@@ -12481,8 +12562,11 @@ function loadHolidays(year){
 // === 카페/장도 운영시간 (DB 운영_카페일정 / 운영_장도) — 날짜 패널 서비스 안내용 ===
 var _cafeHours={},_jangdoHours={};
 async function loadCafeJangdo(){
-  try{ var c=await api('GET','/api/ops?sheet='+encodeURIComponent('카페일정')); ((c&&c.rows)||[]).forEach(function(r){var d=(r['날짜']||'').toString().trim();if(d)_cafeHours[d]=(r['운영시간']||'').toString().trim();}); }catch(e){}
-  try{ var j=await api('GET','/api/ops?sheet='+encodeURIComponent('장도')); ((j&&j.rows)||[]).forEach(function(r){var d=(r['날짜']||'').toString().trim();if(d)_jangdoHours[d]=(r['입도가능시간']||'').toString().trim();}); }catch(e){}
+  // [로딩 성능] 카페일정·장도 = 서로 독립 → 병렬 fetch
+  await Promise.all([
+    api('GET','/api/ops?sheet='+encodeURIComponent('카페일정')).then(function(c){ ((c&&c.rows)||[]).forEach(function(r){var d=(r['날짜']||'').toString().trim();if(d)_cafeHours[d]=(r['운영시간']||'').toString().trim();}); }).catch(function(){}),
+    api('GET','/api/ops?sheet='+encodeURIComponent('장도')).then(function(j){ ((j&&j.rows)||[]).forEach(function(r){var d=(r['날짜']||'').toString().trim();if(d)_jangdoHours[d]=(r['입도가능시간']||'').toString().trim();}); }).catch(function(){})
+  ]);
 }
 // 모바일이면 자동으로 오늘 날짜 panel 열기 (drawer 항상 표시)
 function autoOpenMobilePanel(){
@@ -14207,6 +14291,13 @@ var _NB_TEMPLATES=[
 var _nbState={length:'보통', voice:'정중하고 따뜻한', emoji:true, tgt:{}, hooks:['',''], facts:{}, extra:'', tplMode:'auto', tplSel:'', tplText:'', output:'', comments:[], ocrText:'', ocrFiles:[], ocrThumb:'', ocrBusy:false, analyzeBusy:false, genBusy:false, _toneDraft:'', escHandler:null};
 
 // 상단 '콘텐츠 제작' 드롭다운 (네이버 블로그 + 향후 채널 확장)
+// 일정 관리 드롭다운 — 일정 등록(배치 위저드, 기본) / 일정 확인(기존 보드)
+function _scheduleMenuBuild(menu){
+  var itemCss='display:flex;align-items:center;gap:10px;width:100%;padding:11px 14px;border:0;text-align:left;font-size:13px;font-weight:600;color:#333;border-radius:9px;cursor:pointer;font-family:inherit;transition:background .12s';
+  menu.innerHTML='<div style="padding:8px 14px 6px;font-size:11px;color:#999;font-weight:700">일정</div>'
+    +'<button type="button" onclick="_ddCloseAll();openBatchWizard()" style="'+itemCss+';background:rgba(74,77,231,0.06)" onmouseenter="this.style.background=\'rgba(74,77,231,0.12)\'" onmouseleave="this.style.background=\'rgba(74,77,231,0.06)\'"><span style="font-size:16px">📋</span><span style="flex:1">일정 등록</span><span style="font-size:10px;color:var(--accent);font-weight:700">기본</span></button>'
+    +'<button type="button" onclick="_ddCloseAll();openPromoBoard()" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'"><span style="font-size:16px">📅</span>일정 확인</button>';
+}
 function _contentMenuBuild(menu){
   menu.innerHTML='<div style="padding:8px 14px 6px;font-size:11px;color:#999;font-weight:700">콘텐츠 제작</div>'
     +'<button type="button" onclick="_ddCloseAll();openNaverBlogTool()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 14px;border:0;background:none;text-align:left;font-size:13px;font-weight:600;color:#333;border-radius:9px;cursor:pointer;font-family:inherit;transition:background .12s" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'"><span style="font-size:16px">📝</span>네이버 블로그</button>'
