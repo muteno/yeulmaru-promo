@@ -750,6 +750,10 @@ table.promo-board-table th{position:relative;overflow:hidden}
 .col-resize-handle:hover{background:rgba(255,255,255,0.35)}
 .col-resize-handle.dragging{background:rgba(255,255,255,0.65)}
 table.promo-board-table th:last-child .col-resize-handle{display:none}
+/* 배치 등록 미입력 강조 (빨간 점등 펄스) */
+.batch-miss{outline:1.5px solid #e5484d;outline-offset:-1px;border-radius:7px;animation:batchMiss .9s ease-in-out infinite}
+@keyframes batchMiss{0%,100%{box-shadow:0 0 0 0 rgba(229,72,77,0.5)}50%{box-shadow:0 0 0 5px rgba(229,72,77,0)}}
+.batch-miss-lbl{font-size:9px;color:#e5484d;font-weight:600;margin-bottom:2px}
 .p-card{display:flex;flex-direction:column;gap:6px;padding:10px 12px;background:rgba(255,255,255,0.7);backdrop-filter:blur(8px);border-radius:var(--radius);margin-bottom:8px;border:1px solid var(--glass-border);box-shadow:0 2px 8px rgba(0,0,0,0.03);transition:all .2s;cursor:pointer}
 .p-card:hover{box-shadow:0 4px 16px rgba(74,77,231,0.1);transform:translateY(-1px);border-color:rgba(74,77,231,0.2)}
 .p-card.done{opacity:0.55}
@@ -8060,18 +8064,20 @@ function _batchSh(col,label,w){
   var sw=(_batchColWidths&&_batchColWidths[col])||w;
   return '<th data-col="'+col+'" style="padding:9px 8px;text-align:center;'+(sw?'width:'+sw+'px;':'')+'color:#fff;position:relative;user-select:none">'+label+'<span class="col-resize-handle" onmousedown="_onColResizeStart(event,this.parentElement)"></span></th>';
 }
-function _batchBadge(t){ var b=_BATCH_CAT[t]||['기타','#8a8f9c']; return '<span style="display:inline-block;font-size:9.5px;font-weight:700;color:#fff;background:'+b[1]+';padding:1px 6px;border-radius:5px">'+b[0]+'</span>'; }
+// 캘린더 셀 카테고리 마크(동그라미 공/전/교/대) 그대로 — 제목 앞 인라인
+function _batchBadge(t){ var b=_BATCH_CAT[t]||['기타','#8a8f9c']; var lb=t==='e'?'전':t==='a'?'교':t==='r'?'대':(t==='c'?'공':'기'); return '<span style="display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;border-radius:50%;font-size:9px;font-weight:700;color:#fff;background:'+b[1]+';flex-shrink:0;margin-right:5px">'+lb+'</span>'; }
 function _batchDtLabel(r){ if(!r.date)return '<span style="color:#aaa">날짜·시각 선택</span>'; return escapeHtml(r.date.slice(5).replace('-','/'))+' '+escapeHtml(r.time||'10:00'); }
 function _batchPlLabel(r){ if(!r.plats.length)return '<span style="color:#aaa">위치 선택</span>'; return escapeHtml(r.plats.join(', ')); }
 function _batchContentCell(r,i){
   if(r.contentTouched)return '<input type="text" value="'+escapeHtml(r.content)+'" oninput="_batchSet('+i+',&quot;content&quot;,this.value)" placeholder="홍보 내용 입력" style="'+_batchCellInp+'">';
-  return '<span onclick="_batchContentEdit('+i+')" style="cursor:text;display:inline-block;padding:4px 2px">'+escapeHtml(r.short||'')+' <span style="color:#555;font-style:italic">(+)입력</span></span>';
+  // 편집 전: 줄임말(회색 기울임) + (+)입력(강조색 20% 배경 칩) — 서로 분리돼 보이게
+  return '<span onclick="_batchContentEdit('+i+')" style="cursor:text;display:inline-flex;align-items:center;gap:4px;padding:2px"><span style="color:#555;font-style:italic">'+escapeHtml(r.short||'')+'</span><span style="background:rgba(74,77,231,0.2);color:var(--accent);font-style:italic;padding:1px 7px;border-radius:6px;font-size:11px">(+)입력</span></span>';
 }
 // 각 행 = 부분 업데이트 대상 (id로 조회). 초기 렌더 후 재렌더 없이 셀/배경만 갱신 → 깜빡임 0.
 function _batchRowHtml(r,i){
-  return '<tr id="brow-'+i+'" style="border-top:1px solid #eee'+(r.checked?';background:rgba(74,77,231,0.03)':'')+'">'
-    +'<td style="text-align:center;padding:6px 4px"><input id="bchk-'+i+'" type="checkbox" '+(r.checked?'checked':'')+' onchange="_batchChk('+i+',this.checked)" style="width:16px;height:16px;cursor:pointer;accent-color:var(--accent)"></td>'
-    +'<td style="text-align:left;padding:6px 8px;overflow:hidden"><div style="margin-bottom:2px">'+_batchBadge(r.programType)+'</div><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+escapeHtml(r.program)+'">'+escapeHtml(r.program)+'</div></td>'
+  return '<tr id="brow-'+i+'" onclick="_batchRowClick(event,'+i+')" style="cursor:pointer;border-top:1px solid #eee'+(r.checked?';background:rgba(74,77,231,0.03)':'')+'">'
+    +'<td style="text-align:center;padding:6px 4px"><input id="bchk-'+i+'" type="checkbox" '+(r.checked?'checked':'')+' onchange="_batchChk('+i+',this.checked)" onclick="event.stopPropagation()" style="width:16px;height:16px;cursor:pointer;accent-color:var(--accent)"></td>'
+    +'<td style="text-align:left;padding:6px 8px;overflow:hidden"><div style="display:flex;align-items:center;overflow:hidden">'+_batchBadge(r.programType)+'<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+escapeHtml(r.program)+'">'+escapeHtml(r.program)+'</span></div></td>'
     +'<td style="text-align:left;padding:6px 4px"><div id="bdt-'+i+'" onclick="_batchOpenDt('+i+',this)" style="cursor:pointer;padding:5px 7px;background:#F8F7FC;border:1px solid rgba(0,0,0,0.08);border-radius:7px;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+_batchDtLabel(r)+'</div></td>'
     +'<td style="text-align:left;padding:6px 4px"><div id="bpl-'+i+'" onclick="_batchOpenPl('+i+',this)" style="cursor:pointer;padding:5px 7px;background:#F8F7FC;border:1px solid rgba(0,0,0,0.08);border-radius:7px;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+_batchPlLabel(r)+'</div></td>'
     +'<td id="bct-'+i+'" style="text-align:left;padding:6px 4px">'+_batchContentCell(r,i)+'</td>'
@@ -8098,7 +8104,7 @@ function _batchFooter(){
   var b=document.getElementById('batch-sub'); if(b){ b.disabled=!tot; b.style.opacity=tot?'1':'.5'; b.textContent=tot+'건 등록'; }
 }
 // 부분 갱신 (재렌더 없이 해당 행/셀만) — 체크 깜빡임 제거
-function _batchSyncRow(i){ var r=_batchState&&_batchState.rows[i]; if(!r)return;
+function _batchSyncRow(i){ var r=_batchState&&_batchState.rows[i]; if(!r)return; _batchClearMiss(i);
   var tr=document.getElementById('brow-'+i); if(tr)tr.style.background=r.checked?'rgba(74,77,231,0.03)':'';
   var cb=document.getElementById('bchk-'+i); if(cb)cb.checked=r.checked;
   var dt=document.getElementById('bdt-'+i); if(dt)dt.innerHTML=_batchDtLabel(r);
@@ -8107,7 +8113,7 @@ function _batchSyncRow(i){ var r=_batchState&&_batchState.rows[i]; if(!r)return;
 }
 function _batchChk(i,ch){ var r=_batchState&&_batchState.rows[i]; if(!r)return; r.checked=ch; var tr=document.getElementById('brow-'+i); if(tr)tr.style.background=ch?'rgba(74,77,231,0.03)':''; _batchFooter(); }
 function _batchSet(i,f,v){ if(_batchState&&_batchState.rows[i])_batchState.rows[i][f]=v; }
-function _batchContentEdit(i){ var r=_batchState&&_batchState.rows[i]; if(!r)return; r.contentTouched=true; var td=document.getElementById('bct-'+i); if(!td)return; td.innerHTML=_batchContentCell(r,i); var inp=td.querySelector('input'); if(inp){ inp.focus(); try{var L=inp.value.length;inp.setSelectionRange(L,L);}catch(e){} } }
+function _batchContentEdit(i){ var r=_batchState&&_batchState.rows[i]; if(!r)return; r.contentTouched=true; _batchClearMiss(i); var td=document.getElementById('bct-'+i); if(!td)return; td.innerHTML=_batchContentCell(r,i); var inp=td.querySelector('input'); if(inp){ inp.focus(); try{var L=inp.value.length;inp.setSelectionRange(L,L);}catch(e){} } }
 // 셀 팝업 (fixed, 앵커 아래) — 홍보 일시/위치 공용
 function _batchClosePop(){ var p=document.getElementById('batch-pop'); if(p)p.remove(); }
 function _batchPop(anchor,html){
@@ -8121,12 +8127,25 @@ function _batchPop(anchor,html){
 }
 function _batchOpenDt(i,anchor){
   var r=_batchState&&_batchState.rows[i]; if(!r)return;
-  _batchPop(anchor,'<div style="font-size:11px;color:#888;margin-bottom:6px;font-weight:600">홍보 일시</div><input type="date" id="bdt-d" value="'+escapeHtml(r.date)+'" style="'+_batchCellInp+';margin-bottom:6px"><input type="time" id="bdt-t" step="1800" value="'+escapeHtml(r.time||'10:00')+'" style="'+_batchCellInp+'">');
+  _batchPop(anchor,'<div style="font-size:11px;color:#888;margin-bottom:6px;font-weight:600">홍보 일시</div><input type="date" id="bdt-d" value="'+escapeHtml(r.date)+'" style="'+_batchCellInp+';margin-bottom:6px"><input type="time" id="bdt-t" step="600" value="'+escapeHtml(r.time||'10:00')+'" onwheel="_batchTimeWheel(event,this)" title="마우스 휠로 10분 단위 조정" style="'+_batchCellInp+'"><button onclick="_batchDtDone('+i+')" style="width:100%;margin-top:8px;padding:7px;border:0;background:var(--accent);color:#fff;border-radius:7px;cursor:pointer;font-size:12px;font-weight:600">완료</button>');
   var d=document.getElementById('bdt-d'), t=document.getElementById('bdt-t');
-  d.onchange=function(){ r.date=d.value; if(!r.checked)r.checked=true; _batchSyncRow(i); t.focus(); try{t.showPicker&&t.showPicker();}catch(e){} };
-  t.onchange=function(){ r.time=t.value; if(!r.checked)r.checked=true; _batchSyncRow(i); _batchClosePop(); };
+  d.onchange=function(){
+    // 홍보 불가 기간 검증 — 벗어나면 되돌림
+    var chk=_validateScheduleChange(null,d.value,r.time||'10:00',{action:'submit',program:r.program,applicant:''});
+    if(!chk.ok){ showToast(chk.reason,'error'); d.value=r.date||''; return; }
+    r.date=d.value; if(!r.checked)r.checked=true; _batchSyncRow(i); t.focus(); try{t.showPicker&&t.showPicker();}catch(e){}
+  };
+  t.onchange=function(){ r.time=t.value; if(!r.checked)r.checked=true; _batchSyncRow(i); _batchClosePop(); };  // 네이티브 선택 = 자동 닫힘
   setTimeout(function(){ try{d.focus(); d.showPicker&&d.showPicker();}catch(e){} },40);
 }
+function _batchDtDone(i){
+  var r=_batchState&&_batchState.rows[i]; if(!r)return;
+  var t=document.getElementById('bdt-t'); if(t)r.time=t.value;
+  var chk=_validateScheduleChange(null,r.date,r.time||'10:00',{action:'submit',program:r.program,applicant:''});
+  if(!chk.ok){ showToast(chk.reason,'error'); return; }
+  if(!r.checked)r.checked=true; _batchSyncRow(i); _batchClosePop();
+}
+function _batchTimeWheel(e,inp){ e.preventDefault(); var v=(inp.value||'10:00').split(':'); var mins=(+v[0]||0)*60+(+v[1]||0); mins+=(e.deltaY<0?10:-10); if(mins<0)mins=1430; if(mins>1439)mins=0; mins=Math.round(mins/10)*10; inp.value=String(Math.floor(mins/60)).padStart(2,'0')+':'+String(mins%60).padStart(2,'0'); }
 function _batchOpenPl(i,anchor){
   var r=_batchState&&_batchState.rows[i]; if(!r)return; var plats=_batchPlatList();
   var html='<div style="font-size:11px;color:#888;margin-bottom:6px;font-weight:600">홍보 위치 (복수 선택)</div>'
@@ -8135,25 +8154,30 @@ function _batchOpenPl(i,anchor){
   _batchPop(anchor,html);
 }
 function _batchTogPlat(i,p){ var r=_batchState&&_batchState.rows[i]; if(!r)return; var k=r.plats.indexOf(p); if(k>-1)r.plats.splice(k,1); else r.plats.push(p); if(r.plats.length&&!r.checked)r.checked=true; _batchSyncRow(i); }
+// 행(프로그램/여백) 클릭 → 자동 체크 토글. 셀 내 인터랙션(체크박스·일시·위치·내용)은 각자 동작하므로 제외
+function _batchRowClick(e,i){ var tg=e.target; if(tg&&tg.closest&&tg.closest('input,button,#bdt-'+i+',#bpl-'+i+',#bct-'+i))return; var r=_batchState&&_batchState.rows[i]; if(!r)return; _batchChk(i,!r.checked); var cb=document.getElementById('bchk-'+i); if(cb)cb.checked=r.checked; }
+// 미입력 항목 강조 (빨간 점등 + 셀 위 안내 라벨) / 해제 / 포커스 이동
+var _BATCH_MISS={date:['bdt-','날짜·시각을 선택해주세요'],plat:['bpl-','홍보 위치를 선택해주세요'],content:['bct-','홍보 내용을 입력해주세요']};
+function _batchMarkMiss(i,field){ var m=_BATCH_MISS[field]; if(!m)return; var cell=document.getElementById(m[0]+i); if(!cell)return; cell.classList.add('batch-miss'); var td=cell.closest('td'); if(td&&!td.querySelector('.batch-miss-lbl')){ var lb=document.createElement('div'); lb.className='batch-miss-lbl'; lb.textContent=m[1]; td.insertBefore(lb,td.firstChild); } }
+function _batchClearMiss(i){ ['bdt-','bpl-','bct-'].forEach(function(p){ var c=document.getElementById(p+i); if(c)c.classList.remove('batch-miss'); }); var tr=document.getElementById('brow-'+i); if(tr)tr.querySelectorAll('.batch-miss-lbl').forEach(function(l){l.remove();}); }
+function _batchFocusMiss(fm){ var m=_BATCH_MISS[fm.field]; if(!m)return; var cel=document.getElementById(m[0]+fm.i); if(cel&&cel.scrollIntoView)cel.scrollIntoView({behavior:'smooth',block:'center'}); setTimeout(function(){ if(fm.field==='content'){ _batchContentEdit(fm.i); var inp=document.querySelector('#bct-'+fm.i+' input'); if(inp)inp.focus(); } else if(fm.field==='plat'){ var a=document.getElementById('bpl-'+fm.i); if(a)_batchOpenPl(fm.i,a); } else if(fm.field==='date'){ var a2=document.getElementById('bdt-'+fm.i); if(a2)_batchOpenDt(fm.i,a2); } },200); }
 async function _batchSubmit(){
   if(!_batchState)return;
   // 체크된 행 × 선택 플랫폼 = 등록 job (플랫폼 복수 → 위치마다 1건)
+  // 1) 체크된 행 미입력 검사 → 빨간 점등 + 라벨 + 첫 항목 포커스
+  var firstMiss=null, anyChecked=false;
+  _batchState.rows.forEach(function(r,i){
+    if(!r.checked)return; anyChecked=true; _batchClearMiss(i);
+    var miss=(!r.date)?'date':(!r.plats.length)?'plat':(!String(r.content||'').trim())?'content':null;
+    if(miss){ _batchMarkMiss(i,miss); if(!firstMiss)firstMiss={i:i,field:miss}; }
+  });
+  if(!anyChecked){ showToast('등록할 프로그램을 체크해주세요','info'); return; }
+  if(firstMiss){ _batchFocusMiss(firstMiss); showToast('입력하지 않은 항목이 있어요 — 빨갛게 표시된 곳을 채워주세요','error'); return; }
+  // 2) job 전개(위치마다 1건) + 홍보 불가 기간 검증
   var jobs=[];
-  _batchState.rows.forEach(function(r){
-    if(!r.checked)return;
-    var pls=r.plats.length?r.plats:[''];
-    pls.forEach(function(pl){ jobs.push({program:r.program,programType:r.programType,programEnd:r.programEnd,date:r.date,time:r.time,plat1:pl,content:String(r.content||'').trim()}); });
-  });
-  if(!jobs.length){ showToast('등록할 프로그램을 체크해주세요','info'); return; }
-  // 사전 검증 (건별) — 하나라도 막히면 등록 안 함
+  _batchState.rows.forEach(function(r){ if(!r.checked)return; r.plats.forEach(function(pl){ jobs.push({program:r.program,programType:r.programType,programEnd:r.programEnd,date:r.date,time:r.time,plat1:pl,content:String(r.content||'').trim()}); }); });
   var errs=[];
-  jobs.forEach(function(j){
-    if(!j.date){errs.push(j.program+': 날짜 없음');return;}
-    if(!j.plat1){errs.push(j.program+': 홍보 위치(플랫폼) 미선택');return;}
-    if(!j.content){errs.push(j.program+': 홍보 내용 없음');return;}
-    var v=_validateScheduleChange(null,j.date,j.time,{action:'submit',plat1:j.plat1,program:j.program,applicant:''});
-    if(!v.ok)errs.push(j.program+'('+j.plat1+'): '+v.reason);
-  });
+  jobs.forEach(function(j){ var v=_validateScheduleChange(null,j.date,j.time,{action:'submit',plat1:j.plat1,program:j.program,applicant:''}); if(!v.ok)errs.push(j.program+'('+j.plat1+'): '+v.reason); });
   if(errs.length){ showToast('등록 불가 — '+errs.length+'건:\n'+errs.slice(0,6).join('\n'),'error'); return; }
   // 순차 POST (병렬 금지 — 서버가 매 건 nextRow 재계산). No=기준No+i(중복 방지)
   showOverlayLoad('0/'+jobs.length+' 등록 중...');
