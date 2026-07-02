@@ -6929,13 +6929,16 @@ function _onColResizeEnd(){
   if(_colResizeState.handle)_colResizeState.handle.classList.remove('dragging');
   document.body.style.userSelect='';
   document.body.style.cursor='';
-  // localStorage 저장
+  // localStorage 저장 — 배치 표(batch-board-table)는 별도 키로 분기(일정 보드 폭 보존)
+  var _rt=_colResizeState.th.closest('table');
+  var _isB=_rt&&_rt.classList.contains('batch-board-table');
+  var _selc=_isB?'table.batch-board-table th[data-col]':'table.promo-board-table th[data-col]';
   const widths={};
-  document.querySelectorAll('table.promo-board-table th[data-col]').forEach(function(t){
+  document.querySelectorAll(_selc).forEach(function(t){
     widths[t.dataset.col]=t.offsetWidth;
   });
-  try{localStorage.setItem('promoBoardColWidths_v2',JSON.stringify(widths));}catch(e){}
-  _colWidths=widths;
+  try{localStorage.setItem(_isB?'batchColWidths':'promoBoardColWidths_v2',JSON.stringify(widths));}catch(e){}
+  if(_isB)_batchColWidths=widths; else _colWidths=widths;
   document.removeEventListener('mousemove',_onColResizeMove);
   document.removeEventListener('mouseup',_onColResizeEnd);
   _colResizeState=null;
@@ -8028,108 +8031,102 @@ function openAdminWizard(dateKey){
 }
 
 // ═══════════════════════════════════════════════════════════
-// ═══ 배치(복수) 신청 — '일정 등록' (1차: 프로그램 복수 + 날짜·시간·플랫폼·제목) ═══
-// 여러 프로그램을 한 번에 골라 각 날짜/시간/플랫폼/제목을 지정하고 순차 등록.
-// 본문·타겟 등 상세는 등록 후 각 건을 변경 위저드로 채움(1차 청사진).
-// _buildRecRow·_validateScheduleChange·프로그램 필터를 재사용하고, 기존 스텝머신(renderPwStep)은
-// 건드리지 않는 독립 모달이라 단건 신청 회귀 위험 0. admin/user 공통(제출 시 진행상태 자동 분기).
-var _batchRows=[];      // {program, programType, programEnd, date, time, plat1, plat2, title}
-var _batchPrefill='';
-var _batchInp='padding:5px 8px;background:#F8F7FC;border:1px solid rgba(0,0,0,0.08);border-radius:8px;font-size:12px;font-family:inherit;box-sizing:border-box;';
+// ═══ 배치(복수) 신청 — '일정 등록' (프로그램 리스트 표 + 체크 선택 + 인라인 입력) ═══
+// opt-in 프로그램 전체를 '일정 관리' 보드 스타일(promo-board-table) 표로 나열 → 체크로 선택 →
+// 행별 날짜·홍보시각·홍보위치(플랫폼 복수)·홍보내용 인라인 입력 → 체크된 행만 순차 등록.
+// 홍보 위치(플랫폼) 복수 = 위치마다 records 1건. 상세(본문·타겟)는 등록 후 각 건 변경 위저드로.
+// _buildRecRow·_validateScheduleChange·프로그램 필터·컬럼 리사이즈(_onColResizeStart) 재사용,
+// 기존 스텝머신(renderPwStep) 무개조 → 단건 회귀 0. admin/user 공통(진행상태 자동 분기).
+var _batchState=null;   // { rows:[{program,programType,programEnd,checked,date,time,plats:[],content}] }
+var _batchColWidths={};
+try{ var _bcw0=localStorage.getItem('batchColWidths'); if(_bcw0)_batchColWidths=JSON.parse(_bcw0)||{}; }catch(e){}
+var _batchCellInp='padding:5px 6px;background:#F8F7FC;border:1px solid rgba(0,0,0,0.08);border-radius:7px;font-size:12px;font-family:inherit;box-sizing:border-box;text-align:center;width:100%';
 function openBatchWizard(prefillDate){
   if(!_perfReady||!PERFS.length){ showToast('프로그램 정보를 불러오는 중이에요. 잠시 후 다시 시도해 주세요','info'); return; }
-  _batchRows=[]; _batchPrefill=prefillDate||'';
+  var _refKey=prefillDate||getTodayKey();
+  var _anyPromo=PERFS.some(function(p){return p.ps;});
+  var perfs=PERFS.filter(function(p){ var _pe=p.pe||p.e; if(!_pe||_pe<_refKey)return false; if(!_anyPromo)return true; if(!p.ps)return false; return true; });
+  _batchState={ rows: perfs.map(function(p){ return {program:p.f, programType:p.t, programEnd:p.e||'', checked:false, date:prefillDate||getTodayKey(), time:'10:00', plats:[], content:((p.n||'')?p.n+' ':'')}; }) };
   var el=document.getElementById('batch-wizard');
   if(!el){ el=document.createElement('div'); el.id='batch-wizard'; document.body.appendChild(el); }
   _batchRender();
 }
 function closeBatchWizard(){ var el=document.getElementById('batch-wizard'); if(el)el.innerHTML=''; }
-function _batchActivePerfs(){
-  // 위저드 Step1과 동일한 홍보 노출 opt-in 필터 (기준일 = prefill 또는 오늘)
-  var _refKey=_batchPrefill||getTodayKey();
-  var _anyPromo=PERFS.some(function(p){return p.ps;});
-  return PERFS.filter(function(p){
-    var _pe=p.pe||p.e;
-    if(!_pe||_pe<_refKey)return false;
-    if(!_anyPromo)return true;
-    if(!p.ps)return false;
-    return true;
-  });
-}
-function _batchPlatOptions(sel){
-  var plats=[...new Set((PLATFORMS||[]).map(function(r){return r['플랫폼1'];}).filter(Boolean))];
-  if(!plats.length)plats=['카카오톡','인스타그램','블로그·맘카페','B2B','문자','기타'];
-  return '<option value="">플랫폼</option>'+plats.map(function(p){return '<option value="'+escapeHtml(p)+'"'+(p===sel?' selected':'')+'>'+escapeHtml(p)+'</option>';}).join('');
+function _batchPlatList(){ var pl=[...new Set((PLATFORMS||[]).map(function(r){return r['플랫폼1'];}).filter(Boolean))]; if(!pl.length)pl=['카카오톡','인스타그램','블로그·맘카페','B2B','문자','기타']; return pl; }
+function _batchSh(col,label,w){
+  var sw=(_batchColWidths&&_batchColWidths[col])||w;
+  return '<th data-col="'+col+'" style="padding:9px 8px;text-align:center;'+(sw?'width:'+sw+'px;':'')+'color:#fff;position:relative;user-select:none">'+label+'<span class="col-resize-handle" onmousedown="_onColResizeStart(event,this.parentElement)"></span></th>';
 }
 function _batchRender(){
-  var el=document.getElementById('batch-wizard'); if(!el)return;
-  var perfs=_batchActivePerfs();
+  var el=document.getElementById('batch-wizard'); if(!el||!_batchState)return;
+  var rows=_batchState.rows;
   var groups=[{k:'c',label:'공연'},{k:'e',label:'전시'},{k:'a',label:'예술교육'},{k:'r',label:'대관'}];
-  var selNames=_batchRows.map(function(r){return r.program;});
-  var pickHtml='';
+  var plats=_batchPlatList();
+  var body='';
   groups.forEach(function(g){
-    var items=perfs.filter(function(p){return p.t===g.k;});
-    if(!items.length)return;
-    pickHtml+='<div style="font-size:11px;color:var(--accent);font-weight:700;margin:10px 0 4px">'+g.label+'</div><div style="display:flex;flex-wrap:wrap;gap:6px">';
-    items.forEach(function(p){
-      var on=selNames.indexOf(p.f)>-1;
-      pickHtml+='<label class="nb-chip'+(on?' on':'')+'" style="cursor:pointer;display:inline-flex;align-items:center;gap:5px"><input type="checkbox" value="'+p.f.replace(/"/g,'&quot;')+'" onchange="_batchToggleProg(this.value)"'+(on?' checked':'')+' style="margin:0">'+escapeHtml(p.f)+'</label>';
+    var idxs=[]; rows.forEach(function(r,i){ if(r.programType===g.k)idxs.push(i); });
+    if(!idxs.length)return;
+    body+='<tr><td colspan="6" style="background:rgba(74,77,231,0.06);color:var(--accent);font-weight:700;font-size:11px;padding:5px 10px;text-align:left">'+g.label+'</td></tr>';
+    idxs.forEach(function(i){
+      var r=rows[i];
+      var chips=plats.map(function(p){ var on=r.plats.indexOf(p)>-1; return '<span onclick="_batchTogPlat('+i+',&quot;'+escapeHtml(p).replace(/"/g,'&quot;')+'&quot;)" style="display:inline-block;margin:1px 2px;padding:2px 8px;border-radius:11px;font-size:10.5px;cursor:pointer;border:1px solid '+(on?'var(--accent)':'#ddd')+';background:'+(on?'var(--accent)':'#fff')+';color:'+(on?'#fff':'#777')+'">'+escapeHtml(p)+'</span>'; }).join('');
+      body+='<tr style="border-top:1px solid #eee'+(r.checked?';background:rgba(74,77,231,0.03)':'')+'">'
+        +'<td style="text-align:center;padding:6px 4px"><input type="checkbox" '+(r.checked?'checked':'')+' onchange="_batchTogRow('+i+',this.checked)" style="width:16px;height:16px;cursor:pointer;accent-color:var(--accent)"></td>'
+        +'<td style="text-align:center;padding:6px 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+escapeHtml(r.program)+'">'+escapeHtml(r.program)+'</td>'
+        +'<td style="text-align:center;padding:6px 4px"><input type="date" value="'+escapeHtml(r.date)+'" onchange="_batchSet('+i+',&quot;date&quot;,this.value)" style="'+_batchCellInp+'"></td>'
+        +'<td style="text-align:center;padding:6px 4px"><input type="time" step="1800" value="'+escapeHtml(r.time)+'" onchange="_batchSet('+i+',&quot;time&quot;,this.value)" style="'+_batchCellInp+'"></td>'
+        +'<td style="text-align:center;padding:6px 4px;line-height:1.9">'+chips+'</td>'
+        +'<td style="text-align:center;padding:6px 4px"><div style="display:flex;gap:2px;align-items:center"><input type="text" value="'+escapeHtml(r.content)+'" onchange="_batchSet('+i+',&quot;content&quot;,this.value)" placeholder="홍보 내용" style="'+_batchCellInp+';text-align:left;flex:1;min-width:60px"><button onclick="_batchAddContent('+i+')" title="기존 내용 뒤에 이어서 입력" style="border:0;background:none;color:var(--accent);cursor:pointer;font-size:10.5px;white-space:nowrap;padding:0 2px">(+)입력</button></div></td>'
+        +'</tr>';
     });
-    pickHtml+='</div>';
   });
-  if(!pickHtml)pickHtml='<div style="color:#aaa;font-size:12.5px;padding:10px">지금 홍보 신청 가능한 프로그램이 없어요.</div>';
-  var rowsHtml='';
-  if(_batchRows.length===0){
-    rowsHtml='<div style="text-align:center;color:#aaa;font-size:13px;padding:26px">위에서 홍보할 프로그램을 선택하세요</div>';
-  }else{
-    rowsHtml='<table style="width:100%;border-collapse:collapse;font-size:12.5px"><thead><tr style="color:#888;font-size:11px"><th style="text-align:left;padding:6px">프로그램</th><th style="padding:6px">날짜</th><th style="padding:6px">시간</th><th style="padding:6px">플랫폼</th><th style="text-align:left;padding:6px">콘텐츠 제목</th><th></th></tr></thead><tbody>';
-    _batchRows.forEach(function(r,i){
-      rowsHtml+='<tr style="border-top:1px solid #eee"><td style="padding:6px;max-width:150px;word-break:break-all">'+escapeHtml(r.program)+'</td>'
-        +'<td style="padding:6px"><input type="date" value="'+escapeHtml(r.date)+'" onchange="_batchSet('+i+',&quot;date&quot;,this.value)" style="'+_batchInp+'"></td>'
-        +'<td style="padding:6px"><input type="time" step="1800" value="'+escapeHtml(r.time)+'" onchange="_batchSet('+i+',&quot;time&quot;,this.value)" style="'+_batchInp+'width:88px"></td>'
-        +'<td style="padding:6px"><select onchange="_batchSet('+i+',&quot;plat1&quot;,this.value)" style="'+_batchInp+'">'+_batchPlatOptions(r.plat1)+'</select></td>'
-        +'<td style="padding:6px"><input type="text" value="'+escapeHtml(r.title)+'" placeholder="제목" onchange="_batchSet('+i+',&quot;title&quot;,this.value)" style="'+_batchInp+'min-width:130px"></td>'
-        +'<td style="padding:6px;white-space:nowrap"><button onclick="_batchDupRow('+i+')" title="같은 프로그램 다른 날짜 추가" style="border:0;background:none;cursor:pointer;color:var(--accent);font-size:16px">＋</button><button onclick="_batchDelRow('+i+')" title="삭제" style="border:0;background:none;cursor:pointer;color:#e5484d;font-size:14px">✕</button></td></tr>';
-    });
-    rowsHtml+='</tbody></table>';
-  }
-  var cnt=_batchRows.length;
-  el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeBatchWizard)"><div class="modal" style="width:min(780px,94vw);max-height:88vh;display:flex;flex-direction:column;position:relative"><button class="modal-x" onclick="closeBatchWizard()" style="position:absolute;top:14px;right:14px;z-index:10">✕</button><div style="padding-bottom:12px;border-bottom:1px solid #eee;margin-bottom:12px"><h3 style="margin:0">📋 일정 등록 <span style="font-size:12px;color:#888;font-weight:400">· 여러 건 한 번에</span></h3><div style="font-size:11.5px;color:#888;margin-top:4px">프로그램을 골라 날짜·시간·플랫폼·제목을 정하고 한 번에 등록하세요. 본문·타겟 등 상세는 등록 후 각 건에서 채우면 돼요.</div></div><div style="overflow:auto;flex:1"><div style="margin-bottom:14px">'+pickHtml+'</div>'+rowsHtml+'</div><div style="display:flex;gap:8px;align-items:center;padding-top:12px;border-top:1px solid #eee;margin-top:12px"><span style="font-size:12px;color:#888">'+cnt+'건</span><button class="m-btn cancel" onclick="closeBatchWizard()" style="margin-left:auto">취소</button><button class="m-btn save" onclick="_batchSubmit()"'+(cnt?'':' disabled')+' style="'+(cnt?'':'opacity:.5;')+'">'+cnt+'건 등록</button></div></div></div>';
+  if(!body)body='<tr><td colspan="6" style="text-align:center;color:#aaa;padding:26px">지금 홍보 신청 가능한 프로그램이 없어요</td></tr>';
+  var selCnt=rows.filter(function(r){return r.checked;}).length;
+  var totalCnt=rows.filter(function(r){return r.checked;}).reduce(function(a,r){return a+Math.max(1,r.plats.length);},0);
+  el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeBatchWizard)"><div class="modal" style="width:min(900px,96vw);max-height:90vh;display:flex;flex-direction:column;position:relative"><button class="modal-x" onclick="closeBatchWizard()" style="position:absolute;top:14px;right:14px;z-index:10">✕</button>'
+    +'<div style="padding-bottom:10px;border-bottom:1px solid #eee;margin-bottom:10px"><h3 style="margin:0">📋 일정 등록 <span style="font-size:12px;color:#888;font-weight:400">· 여러 건 한 번에</span></h3><div style="font-size:11.5px;color:#888;margin-top:4px">등록할 프로그램을 체크하고 날짜·홍보 시각·홍보 위치·홍보 내용을 정하세요. <b>홍보 위치(플랫폼)는 복수 선택</b> 가능 — 위치마다 한 건씩 등록돼요. 상세(본문·타겟)는 등록 후 각 건에서 채우면 돼요. <span style="color:#bbb">(열 경계를 끌어 너비 조절)</span></div></div>'
+    +'<div style="overflow:auto;flex:1;border-radius:10px;border:1px solid #f0f0f0"><table class="promo-board-table batch-board-table" style="width:100%;border-collapse:collapse;font-size:12.5px;table-layout:fixed"><thead><tr style="background:rgba(74,77,231,0.95);color:#fff;font-size:11px;letter-spacing:0.3px">'
+    + _batchSh('sel','✓',46) + _batchSh('program','프로그램',190) + _batchSh('date','날짜',132) + _batchSh('time','홍보 시각',96) + _batchSh('plat','홍보 위치',200) + '<th data-col="content" style="padding:9px 8px;text-align:center;color:#fff">홍보 내용</th>'
+    +'</tr></thead><tbody>'+body+'</tbody></table></div>'
+    +'<div style="display:flex;gap:8px;align-items:center;padding-top:10px;border-top:1px solid #eee;margin-top:10px"><span style="font-size:12px;color:#888">'+selCnt+'개 프로그램 · <b style="color:var(--accent)">'+totalCnt+'건</b> 등록 예정</span><button class="m-btn cancel" onclick="closeBatchWizard()" style="margin-left:auto">취소</button><button class="m-btn save" onclick="_batchSubmit()"'+(totalCnt?'':' disabled')+' style="'+(totalCnt?'':'opacity:.5;')+'">'+totalCnt+'건 등록</button></div></div></div>';
 }
-function _batchToggleProg(name){
-  var idx=_batchRows.map(function(r){return r.program;}).indexOf(name);
-  if(idx>-1){ _batchRows=_batchRows.filter(function(r){return r.program!==name;}); }
-  else{ var p=_findPerfByName(name); _batchRows.push({program:name, programType:(p&&p.t)||'c', programEnd:(p&&p.e)||'', date:_batchPrefill||getTodayKey(), time:'10:00', plat1:'', plat2:'', title:((p&&p.n)?p.n+' ':'')}); }
-  _batchRender();
-}
-function _batchSet(i,f,v){ if(_batchRows[i])_batchRows[i][f]=v; }
-function _batchDupRow(i){ var r=_batchRows[i]; if(!r)return; _batchRows.splice(i+1,0,Object.assign({},r)); _batchRender(); }
-function _batchDelRow(i){ _batchRows.splice(i,1); _batchRender(); }
+function _batchTogRow(i,ch){ if(_batchState&&_batchState.rows[i]){_batchState.rows[i].checked=ch;_batchRender();} }
+function _batchTogPlat(i,p){ var r=_batchState&&_batchState.rows[i]; if(!r)return; var k=r.plats.indexOf(p); if(k>-1)r.plats.splice(k,1); else r.plats.push(p); if(r.plats.length&&!r.checked)r.checked=true; _batchRender(); }
+function _batchSet(i,f,v){ if(_batchState&&_batchState.rows[i])_batchState.rows[i][f]=v; }
+function _batchAddContent(i){ var r=_batchState&&_batchState.rows[i]; if(!r)return; var add=prompt('기존 홍보 내용 뒤에 이어서 추가할 내용을 입력하세요',''); if(add==null)return; add=String(add).trim(); if(!add)return; r.content=String(r.content||'').replace(/\s+$/,'')+' '+add; _batchRender(); }
 async function _batchSubmit(){
-  if(!_batchRows.length)return;
-  // 1) 사전 검증 (건별) — 하나라도 막히면 등록 안 함
+  if(!_batchState)return;
+  // 체크된 행 × 선택 플랫폼 = 등록 job (플랫폼 복수 → 위치마다 1건)
+  var jobs=[];
+  _batchState.rows.forEach(function(r){
+    if(!r.checked)return;
+    var pls=r.plats.length?r.plats:[''];
+    pls.forEach(function(pl){ jobs.push({program:r.program,programType:r.programType,programEnd:r.programEnd,date:r.date,time:r.time,plat1:pl,content:String(r.content||'').trim()}); });
+  });
+  if(!jobs.length){ showToast('등록할 프로그램을 체크해주세요','info'); return; }
+  // 사전 검증 (건별) — 하나라도 막히면 등록 안 함
   var errs=[];
-  _batchRows.forEach(function(r,i){
-    if(!r.date){errs.push((i+1)+'행: 날짜 없음');return;}
-    if(!r.plat1){errs.push((i+1)+'행('+r.program+'): 플랫폼 미선택');return;}
-    if(!(r.title||'').trim()){errs.push((i+1)+'행('+r.program+'): 제목 없음');return;}
-    var v=_validateScheduleChange(null,r.date,r.time,{action:'submit',plat1:r.plat1,program:r.program,applicant:''});
-    if(!v.ok)errs.push((i+1)+'행('+r.program+'): '+v.reason);
+  jobs.forEach(function(j){
+    if(!j.date){errs.push(j.program+': 날짜 없음');return;}
+    if(!j.plat1){errs.push(j.program+': 홍보 위치(플랫폼) 미선택');return;}
+    if(!j.content){errs.push(j.program+': 홍보 내용 없음');return;}
+    var v=_validateScheduleChange(null,j.date,j.time,{action:'submit',plat1:j.plat1,program:j.program,applicant:''});
+    if(!v.ok)errs.push(j.program+'('+j.plat1+'): '+v.reason);
   });
   if(errs.length){ showToast('등록 불가 — '+errs.length+'건:\n'+errs.slice(0,6).join('\n'),'error'); return; }
-  // 2) 순차 POST (병렬 금지 — 서버가 매 건 nextRow 재계산). No=기준No+i(중복 방지)
-  showOverlayLoad('0/'+_batchRows.length+' 등록 중...');
+  // 순차 POST (병렬 금지 — 서버가 매 건 nextRow 재계산). No=기준No+i(중복 방지)
+  showOverlayLoad('0/'+jobs.length+' 등록 중...');
   var baseNo=records.length+1, ok=0, fail=[];
   var status=(userRole==='admin'?'예정':'신청 중');
-  for(var i=0;i<_batchRows.length;i++){
-    var r=_batchRows[i];
-    var pw={program:r.program,programType:r.programType,programEndDate:r.programEnd,title:(r.title||'').trim(),plat1:r.plat1,plat2:r.plat2||'',format:'',date:r.date,time:r.time||'10:00',applicant:'',memo:'',folders:[],kakaoText:'',instaText:'',blogDirection:'',b2bIntraText:'',b2bLink:'',smsBody:'',smsTarget:'',customPlatform:'',freeText:'',intent:'',ageRanges:[],ageAny:false,residence:'',residenceCustom:'',residenceAny:false,genre:'',genreAny:false};
-    try{ var row=_buildRecRow(pw,status,baseNo+i,false); await api('POST','/api/records',{values:row}); ok++; showOverlayLoad(ok+'/'+_batchRows.length+' 등록 중...'); }
-    catch(e){ fail.push((i+1)+'행('+r.program+'): '+e.message); }
+  for(var i=0;i<jobs.length;i++){
+    var j=jobs[i];
+    var pw={program:j.program,programType:j.programType,programEndDate:j.programEnd,title:j.content,plat1:j.plat1,plat2:'',format:'',date:j.date,time:j.time||'10:00',applicant:'',memo:'',folders:[],kakaoText:'',instaText:'',blogDirection:'',b2bIntraText:'',b2bLink:'',smsBody:'',smsTarget:'',customPlatform:'',freeText:'',intent:'',ageRanges:[],ageAny:false,residence:'',residenceCustom:'',residenceAny:false,genre:'',genreAny:false};
+    try{ var row=_buildRecRow(pw,status,baseNo+i,false); await api('POST','/api/records',{values:row}); ok++; showOverlayLoad(ok+'/'+jobs.length+' 등록 중...'); }
+    catch(e){ fail.push(j.program+'('+j.plat1+'): '+e.message); }
   }
   await syncReload();
   hideOverlayLoad();
-  if(fail.length){ showToast(ok+'건 완료 / '+fail.length+'건 실패:\n'+fail.slice(0,6).join('\n'),'error'); _batchRender(); }
+  if(fail.length){ showToast(ok+'건 완료 / '+fail.length+'건 실패:\n'+fail.slice(0,6).join('\n'),'error'); }
   else{ closeBatchWizard(); showToast(ok+'건 모두 등록됐어요 🎉','success'); }
 }
 // ═══════════════════════════════════════════════════════════
