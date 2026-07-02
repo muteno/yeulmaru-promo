@@ -8032,9 +8032,12 @@ function openPromoWizard(prefillDate, batchJob){
     _pwData.program=batchJob.program; _pwData.programType=batchJob.programType; _pwData.programEndDate=batchJob.programEnd||'';
     _pwData.date=batchJob.date; _pwData.time=batchJob.time||'10:00'; _pwData.plat1=batchJob.plat1; _pwData.title=batchJob.content||'';
     _pwData.fromCalendar=false;
-    _pwStep=4; _pwSubStep=1;
+    _pwStep=4;
+    // 홍보 위치(플랫폼)는 이미 정해졌으니 플랫폼 선택 단계 스킵 → 본문부터. 세부 채널(plat2)이 필요한 B2B/문자/기타만 plat 단계 유지
+    var _p2need=(batchJob.plat1==='기타')||PLATFORMS.some(function(p){return p['플랫폼1']===batchJob.plat1&&p['플랫폼2']&&p['플랫폼2']!=='-';});
+    _pwSubStep=_p2need?1:2;
     var _bn=(_pwBatchTotal-((_pwBatchQueue&&_pwBatchQueue.length)||0)), _bt=_pwBatchTotal;
-    try{ document.querySelector('#promo-wizard h3').textContent='홍보 내용 입력 ('+_bn+'/'+_bt+') · '+escapeHtml(batchJob.program)+' · '+escapeHtml(batchJob.plat1); }catch(e){}
+    try{ document.querySelector('#promo-wizard h3').textContent='홍보 내용 입력 ('+_bn+'/'+_bt+') · '+batchJob.program+' · '+batchJob.plat1; }catch(e){}
   }
   renderPwStep();
 }
@@ -9909,17 +9912,23 @@ function renderPwStep4(body,next){
   const subs=getPwSubSteps();
   const subLabel=' — '+subs.length+'개 중 '+_pwSubStep;
   document.getElementById('pw-steplabel').textContent='Step '+_pwStep+' / '+PW_TOTAL+subLabel;
-  if(key==='plat')return renderPwSubPlat(body,next);
-  if(key==='format')return renderPwSubFormat(body,next);
-  if(key==='detail')return renderPwSubDetail(body,next);
-  if(key==='text')return renderPwSubText(body,next);
-  if(key==='intent')return renderPwSubIntent(body,next);
-  if(key==='blog')return renderPwSubBlog(body,next);
-  if(key==='b2b_link')return renderPwSubB2BLink(body,next);
-  if(key==='sms_target')return renderPwSubSmsTarget(body,next);
-  if(key==='sms_body')return renderPwSubSmsBody(body,next);
-  if(key==='author')return renderPwSubAuthor(body,next);
-  body.innerHTML='<div class="pw-question">단계를 불러올 수 없어요</div>';
+  if(key==='plat')renderPwSubPlat(body,next);
+  else if(key==='format')renderPwSubFormat(body,next);
+  else if(key==='detail')renderPwSubDetail(body,next);
+  else if(key==='text')renderPwSubText(body,next);
+  else if(key==='intent')renderPwSubIntent(body,next);
+  else if(key==='blog')renderPwSubBlog(body,next);
+  else if(key==='b2b_link')renderPwSubB2BLink(body,next);
+  else if(key==='sms_target')renderPwSubSmsTarget(body,next);
+  else if(key==='sms_body')renderPwSubSmsBody(body,next);
+  else if(key==='author')renderPwSubAuthor(body,next);
+  else { body.innerHTML='<div class="pw-question">단계를 불러올 수 없어요</div>'; return; }
+  // [배치 순차] 확정된 컨텍스트(공연 · 홍보 날짜 · 플랫폼) 배너 — 각 본문 화면 상단 고정
+  if(_pwBatchQueue!=null){
+    var _p2=(_pwData.plat2&&_pwData.plat2!=='-')?' › '+escapeHtml(_pwData.plat2):'';
+    var _bh='<div style="display:flex;flex-wrap:wrap;align-items:center;gap:7px;padding:10px 13px;margin-bottom:14px;background:rgba(74,77,231,0.06);border:1px solid rgba(74,77,231,0.16);border-radius:10px;font-size:12px"><b style="color:var(--accent)">'+escapeHtml(_pwData.program||'')+'</b><span style="color:#c8c8d4">·</span><span style="color:#555">'+escapeHtml(_pwData.date||'')+' '+escapeHtml(_pwData.time||'')+'</span><span style="color:#c8c8d4">·</span><span style="color:#555">'+escapeHtml(_pwData.plat1||'')+_p2+'</span></div>';
+    body.insertAdjacentHTML('afterbegin',_bh);
+  }
 }
 
 // === Step 4 — 플랫폼 선택 ===
