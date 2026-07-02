@@ -8037,63 +8037,104 @@ function openAdminWizard(dateKey){
 // 홍보 위치(플랫폼) 복수 = 위치마다 records 1건. 상세(본문·타겟)는 등록 후 각 건 변경 위저드로.
 // _buildRecRow·_validateScheduleChange·프로그램 필터·컬럼 리사이즈(_onColResizeStart) 재사용,
 // 기존 스텝머신(renderPwStep) 무개조 → 단건 회귀 0. admin/user 공통(진행상태 자동 분기).
-var _batchState=null;   // { rows:[{program,programType,programEnd,checked,date,time,plats:[],content}] }
+var _batchState=null;   // { rows:[{program,programType,programEnd,short,checked,date,time,plats:[],content,contentTouched}] }
 var _batchColWidths={};
 try{ var _bcw0=localStorage.getItem('batchColWidths'); if(_bcw0)_batchColWidths=JSON.parse(_bcw0)||{}; }catch(e){}
-var _batchCellInp='padding:5px 6px;background:#F8F7FC;border:1px solid rgba(0,0,0,0.08);border-radius:7px;font-size:12px;font-family:inherit;box-sizing:border-box;text-align:center;width:100%';
+var _batchCellInp='padding:5px 6px;background:#F8F7FC;border:1px solid rgba(0,0,0,0.08);border-radius:7px;font-size:12px;font-family:inherit;box-sizing:border-box;width:100%';
+var _BATCH_CAT={c:['공연','var(--accent)'],e:['전시','#E0876F'],a:['예술교육','#2E9E5B'],r:['대관','#8a8f9c']};
 function openBatchWizard(prefillDate){
   if(!_perfReady||!PERFS.length){ showToast('프로그램 정보를 불러오는 중이에요. 잠시 후 다시 시도해 주세요','info'); return; }
   var _refKey=prefillDate||getTodayKey();
   var _anyPromo=PERFS.some(function(p){return p.ps;});
+  var _ord={c:0,e:1,a:2,r:3};
   var perfs=PERFS.filter(function(p){ var _pe=p.pe||p.e; if(!_pe||_pe<_refKey)return false; if(!_anyPromo)return true; if(!p.ps)return false; return true; });
-  _batchState={ rows: perfs.map(function(p){ return {program:p.f, programType:p.t, programEnd:p.e||'', checked:false, date:prefillDate||getTodayKey(), time:'10:00', plats:[], content:((p.n||'')?p.n+' ':'')}; }) };
+  perfs.sort(function(a,b){ return (_ord[a.t]==null?9:_ord[a.t])-(_ord[b.t]==null?9:_ord[b.t]); });
+  _batchState={ rows: perfs.map(function(p){ var sh=(p.n||''); return {program:p.f, programType:p.t, programEnd:p.e||'', short:sh, checked:false, date:prefillDate||getTodayKey(), time:'10:00', plats:[], content:(sh?sh+' ':''), contentTouched:false}; }) };
   var el=document.getElementById('batch-wizard');
   if(!el){ el=document.createElement('div'); el.id='batch-wizard'; document.body.appendChild(el); }
   _batchRender();
 }
-function closeBatchWizard(){ var el=document.getElementById('batch-wizard'); if(el)el.innerHTML=''; }
+function closeBatchWizard(){ _batchClosePop(); var el=document.getElementById('batch-wizard'); if(el)el.innerHTML=''; }
 function _batchPlatList(){ var pl=[...new Set((PLATFORMS||[]).map(function(r){return r['플랫폼1'];}).filter(Boolean))]; if(!pl.length)pl=['카카오톡','인스타그램','블로그·맘카페','B2B','문자','기타']; return pl; }
 function _batchSh(col,label,w){
   var sw=(_batchColWidths&&_batchColWidths[col])||w;
   return '<th data-col="'+col+'" style="padding:9px 8px;text-align:center;'+(sw?'width:'+sw+'px;':'')+'color:#fff;position:relative;user-select:none">'+label+'<span class="col-resize-handle" onmousedown="_onColResizeStart(event,this.parentElement)"></span></th>';
 }
+function _batchBadge(t){ var b=_BATCH_CAT[t]||['기타','#8a8f9c']; return '<span style="display:inline-block;font-size:9.5px;font-weight:700;color:#fff;background:'+b[1]+';padding:1px 6px;border-radius:5px">'+b[0]+'</span>'; }
+function _batchDtLabel(r){ if(!r.date)return '<span style="color:#aaa">날짜·시각 선택</span>'; return escapeHtml(r.date.slice(5).replace('-','/'))+' '+escapeHtml(r.time||'10:00'); }
+function _batchPlLabel(r){ if(!r.plats.length)return '<span style="color:#aaa">위치 선택</span>'; return escapeHtml(r.plats.join(', ')); }
+function _batchContentCell(r,i){
+  if(r.contentTouched)return '<input type="text" value="'+escapeHtml(r.content)+'" oninput="_batchSet('+i+',&quot;content&quot;,this.value)" placeholder="홍보 내용 입력" style="'+_batchCellInp+'">';
+  return '<span onclick="_batchContentEdit('+i+')" style="cursor:text;display:inline-block;padding:4px 2px">'+escapeHtml(r.short||'')+' <span style="color:#555;font-style:italic">(+)입력</span></span>';
+}
+// 각 행 = 부분 업데이트 대상 (id로 조회). 초기 렌더 후 재렌더 없이 셀/배경만 갱신 → 깜빡임 0.
+function _batchRowHtml(r,i){
+  return '<tr id="brow-'+i+'" style="border-top:1px solid #eee'+(r.checked?';background:rgba(74,77,231,0.03)':'')+'">'
+    +'<td style="text-align:center;padding:6px 4px"><input id="bchk-'+i+'" type="checkbox" '+(r.checked?'checked':'')+' onchange="_batchChk('+i+',this.checked)" style="width:16px;height:16px;cursor:pointer;accent-color:var(--accent)"></td>'
+    +'<td style="text-align:left;padding:6px 8px;overflow:hidden"><div style="margin-bottom:2px">'+_batchBadge(r.programType)+'</div><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+escapeHtml(r.program)+'">'+escapeHtml(r.program)+'</div></td>'
+    +'<td style="text-align:left;padding:6px 4px"><div id="bdt-'+i+'" onclick="_batchOpenDt('+i+',this)" style="cursor:pointer;padding:5px 7px;background:#F8F7FC;border:1px solid rgba(0,0,0,0.08);border-radius:7px;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+_batchDtLabel(r)+'</div></td>'
+    +'<td style="text-align:left;padding:6px 4px"><div id="bpl-'+i+'" onclick="_batchOpenPl('+i+',this)" style="cursor:pointer;padding:5px 7px;background:#F8F7FC;border:1px solid rgba(0,0,0,0.08);border-radius:7px;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+_batchPlLabel(r)+'</div></td>'
+    +'<td id="bct-'+i+'" style="text-align:left;padding:6px 4px">'+_batchContentCell(r,i)+'</td>'
+    +'</tr>';
+}
 function _batchRender(){
   var el=document.getElementById('batch-wizard'); if(!el||!_batchState)return;
   var rows=_batchState.rows;
-  var groups=[{k:'c',label:'공연'},{k:'e',label:'전시'},{k:'a',label:'예술교육'},{k:'r',label:'대관'}];
-  var plats=_batchPlatList();
-  var body='';
-  groups.forEach(function(g){
-    var idxs=[]; rows.forEach(function(r,i){ if(r.programType===g.k)idxs.push(i); });
-    if(!idxs.length)return;
-    body+='<tr><td colspan="6" style="background:rgba(74,77,231,0.06);color:var(--accent);font-weight:700;font-size:11px;padding:5px 10px;text-align:left">'+g.label+'</td></tr>';
-    idxs.forEach(function(i){
-      var r=rows[i];
-      var chips=plats.map(function(p){ var on=r.plats.indexOf(p)>-1; return '<span onclick="_batchTogPlat('+i+',&quot;'+escapeHtml(p).replace(/"/g,'&quot;')+'&quot;)" style="display:inline-block;margin:1px 2px;padding:2px 8px;border-radius:11px;font-size:10.5px;cursor:pointer;border:1px solid '+(on?'var(--accent)':'#ddd')+';background:'+(on?'var(--accent)':'#fff')+';color:'+(on?'#fff':'#777')+'">'+escapeHtml(p)+'</span>'; }).join('');
-      body+='<tr style="border-top:1px solid #eee'+(r.checked?';background:rgba(74,77,231,0.03)':'')+'">'
-        +'<td style="text-align:center;padding:6px 4px"><input type="checkbox" '+(r.checked?'checked':'')+' onchange="_batchTogRow('+i+',this.checked)" style="width:16px;height:16px;cursor:pointer;accent-color:var(--accent)"></td>'
-        +'<td style="text-align:center;padding:6px 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+escapeHtml(r.program)+'">'+escapeHtml(r.program)+'</td>'
-        +'<td style="text-align:center;padding:6px 4px"><input type="date" value="'+escapeHtml(r.date)+'" onchange="_batchSet('+i+',&quot;date&quot;,this.value)" style="'+_batchCellInp+'"></td>'
-        +'<td style="text-align:center;padding:6px 4px"><input type="time" step="1800" value="'+escapeHtml(r.time)+'" onchange="_batchSet('+i+',&quot;time&quot;,this.value)" style="'+_batchCellInp+'"></td>'
-        +'<td style="text-align:center;padding:6px 4px;line-height:1.9">'+chips+'</td>'
-        +'<td style="text-align:center;padding:6px 4px"><div style="display:flex;gap:2px;align-items:center"><input type="text" value="'+escapeHtml(r.content)+'" onchange="_batchSet('+i+',&quot;content&quot;,this.value)" placeholder="홍보 내용" style="'+_batchCellInp+';text-align:left;flex:1;min-width:60px"><button onclick="_batchAddContent('+i+')" title="기존 내용 뒤에 이어서 입력" style="border:0;background:none;color:var(--accent);cursor:pointer;font-size:10.5px;white-space:nowrap;padding:0 2px">(+)입력</button></div></td>'
-        +'</tr>';
-    });
-  });
-  if(!body)body='<tr><td colspan="6" style="text-align:center;color:#aaa;padding:26px">지금 홍보 신청 가능한 프로그램이 없어요</td></tr>';
-  var selCnt=rows.filter(function(r){return r.checked;}).length;
-  var totalCnt=rows.filter(function(r){return r.checked;}).reduce(function(a,r){return a+Math.max(1,r.plats.length);},0);
-  el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeBatchWizard)"><div class="modal" style="width:min(900px,96vw);max-height:90vh;display:flex;flex-direction:column;position:relative"><button class="modal-x" onclick="closeBatchWizard()" style="position:absolute;top:14px;right:14px;z-index:10">✕</button>'
-    +'<div style="padding-bottom:10px;border-bottom:1px solid #eee;margin-bottom:10px"><h3 style="margin:0">📋 일정 등록 <span style="font-size:12px;color:#888;font-weight:400">· 여러 건 한 번에</span></h3><div style="font-size:11.5px;color:#888;margin-top:4px">등록할 프로그램을 체크하고 날짜·홍보 시각·홍보 위치·홍보 내용을 정하세요. <b>홍보 위치(플랫폼)는 복수 선택</b> 가능 — 위치마다 한 건씩 등록돼요. 상세(본문·타겟)는 등록 후 각 건에서 채우면 돼요. <span style="color:#bbb">(열 경계를 끌어 너비 조절)</span></div></div>'
+  var body=''; rows.forEach(function(r,i){ body+=_batchRowHtml(r,i); });
+  if(!body)body='<tr><td colspan="5" style="text-align:center;color:#aaa;padding:26px">지금 홍보 신청 가능한 프로그램이 없어요</td></tr>';
+  el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeBatchWizard)"><div class="modal" style="width:min(880px,96vw);max-height:90vh;display:flex;flex-direction:column;position:relative"><button class="modal-x" onclick="closeBatchWizard()" style="position:absolute;top:14px;right:14px;z-index:10">✕</button>'
+    +'<div style="padding-bottom:10px;border-bottom:1px solid #eee;margin-bottom:10px"><h3 style="margin:0">📋 일정 등록 <span style="font-size:12px;color:#888;font-weight:400">· 여러 건 한 번에</span></h3><div style="font-size:11.5px;color:#888;margin-top:4px">등록할 프로그램을 체크하고 홍보 일시·위치·내용을 정하세요. <b>홍보 위치는 복수 선택</b> 가능(위치마다 1건). 상세(본문·타겟)는 등록 후 각 건에서. <span style="color:#bbb">(열 경계 드래그로 너비 조절)</span></div></div>'
     +'<div style="overflow:auto;flex:1;border-radius:10px;border:1px solid #f0f0f0"><table class="promo-board-table batch-board-table" style="width:100%;border-collapse:collapse;font-size:12.5px;table-layout:fixed"><thead><tr style="background:rgba(74,77,231,0.95);color:#fff;font-size:11px;letter-spacing:0.3px">'
-    + _batchSh('sel','✓',46) + _batchSh('program','프로그램',190) + _batchSh('date','날짜',132) + _batchSh('time','홍보 시각',96) + _batchSh('plat','홍보 위치',200) + '<th data-col="content" style="padding:9px 8px;text-align:center;color:#fff">홍보 내용</th>'
+    + _batchSh('sel','✓',44) + _batchSh('program','프로그램',210) + _batchSh('datetime','홍보 일시',124) + _batchSh('plat','홍보 위치',150) + '<th data-col="content" style="padding:9px 8px;text-align:center;color:#fff">홍보 내용 입력</th>'
     +'</tr></thead><tbody>'+body+'</tbody></table></div>'
-    +'<div style="display:flex;gap:8px;align-items:center;padding-top:10px;border-top:1px solid #eee;margin-top:10px"><span style="font-size:12px;color:#888">'+selCnt+'개 프로그램 · <b style="color:var(--accent)">'+totalCnt+'건</b> 등록 예정</span><button class="m-btn cancel" onclick="closeBatchWizard()" style="margin-left:auto">취소</button><button class="m-btn save" onclick="_batchSubmit()"'+(totalCnt?'':' disabled')+' style="'+(totalCnt?'':'opacity:.5;')+'">'+totalCnt+'건 등록</button></div></div></div>';
+    +'<div style="display:flex;gap:8px;align-items:center;padding-top:10px;border-top:1px solid #eee;margin-top:10px"><span id="batch-foot" style="font-size:12px;color:#888"></span><button class="m-btn cancel" onclick="closeBatchWizard()" style="margin-left:auto">취소</button><button id="batch-sub" class="m-btn save" onclick="_batchSubmit()">0건 등록</button></div></div></div>';
+  _batchFooter();
 }
-function _batchTogRow(i,ch){ if(_batchState&&_batchState.rows[i]){_batchState.rows[i].checked=ch;_batchRender();} }
-function _batchTogPlat(i,p){ var r=_batchState&&_batchState.rows[i]; if(!r)return; var k=r.plats.indexOf(p); if(k>-1)r.plats.splice(k,1); else r.plats.push(p); if(r.plats.length&&!r.checked)r.checked=true; _batchRender(); }
+function _batchFooter(){
+  if(!_batchState)return; var rows=_batchState.rows;
+  var sel=rows.filter(function(r){return r.checked;}).length;
+  var tot=rows.filter(function(r){return r.checked;}).reduce(function(a,r){return a+Math.max(1,r.plats.length);},0);
+  var s=document.getElementById('batch-foot'); if(s)s.innerHTML=sel+'개 프로그램 · <b style="color:var(--accent)">'+tot+'건</b> 등록 예정';
+  var b=document.getElementById('batch-sub'); if(b){ b.disabled=!tot; b.style.opacity=tot?'1':'.5'; b.textContent=tot+'건 등록'; }
+}
+// 부분 갱신 (재렌더 없이 해당 행/셀만) — 체크 깜빡임 제거
+function _batchSyncRow(i){ var r=_batchState&&_batchState.rows[i]; if(!r)return;
+  var tr=document.getElementById('brow-'+i); if(tr)tr.style.background=r.checked?'rgba(74,77,231,0.03)':'';
+  var cb=document.getElementById('bchk-'+i); if(cb)cb.checked=r.checked;
+  var dt=document.getElementById('bdt-'+i); if(dt)dt.innerHTML=_batchDtLabel(r);
+  var pl=document.getElementById('bpl-'+i); if(pl)pl.innerHTML=_batchPlLabel(r);
+  _batchFooter();
+}
+function _batchChk(i,ch){ var r=_batchState&&_batchState.rows[i]; if(!r)return; r.checked=ch; var tr=document.getElementById('brow-'+i); if(tr)tr.style.background=ch?'rgba(74,77,231,0.03)':''; _batchFooter(); }
 function _batchSet(i,f,v){ if(_batchState&&_batchState.rows[i])_batchState.rows[i][f]=v; }
-function _batchAddContent(i){ var r=_batchState&&_batchState.rows[i]; if(!r)return; var add=prompt('기존 홍보 내용 뒤에 이어서 추가할 내용을 입력하세요',''); if(add==null)return; add=String(add).trim(); if(!add)return; r.content=String(r.content||'').replace(/\s+$/,'')+' '+add; _batchRender(); }
+function _batchContentEdit(i){ var r=_batchState&&_batchState.rows[i]; if(!r)return; r.contentTouched=true; var td=document.getElementById('bct-'+i); if(!td)return; td.innerHTML=_batchContentCell(r,i); var inp=td.querySelector('input'); if(inp){ inp.focus(); try{var L=inp.value.length;inp.setSelectionRange(L,L);}catch(e){} } }
+// 셀 팝업 (fixed, 앵커 아래) — 홍보 일시/위치 공용
+function _batchClosePop(){ var p=document.getElementById('batch-pop'); if(p)p.remove(); }
+function _batchPop(anchor,html){
+  _batchClosePop(); var rc=anchor.getBoundingClientRect(); var w=Math.max(210,rc.width);
+  var ov=document.createElement('div'); ov.id='batch-pop'; ov.style.cssText='position:fixed;inset:0;z-index:100000;background:transparent';
+  var pop=document.createElement('div');
+  pop.style.cssText='position:fixed;top:'+(rc.bottom+4)+'px;left:'+Math.max(8,Math.min(rc.left,window.innerWidth-w-8))+'px;min-width:'+w+'px;max-width:94vw;background:#fff;border:1px solid #e1e1ec;border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,0.16);padding:9px';
+  pop.innerHTML=html; ov.appendChild(pop); document.body.appendChild(ov);
+  ov.addEventListener('mousedown',function(e){ if(e.target===ov)_batchClosePop(); });
+  return pop;
+}
+function _batchOpenDt(i,anchor){
+  var r=_batchState&&_batchState.rows[i]; if(!r)return;
+  _batchPop(anchor,'<div style="font-size:11px;color:#888;margin-bottom:6px;font-weight:600">홍보 일시</div><input type="date" id="bdt-d" value="'+escapeHtml(r.date)+'" style="'+_batchCellInp+';margin-bottom:6px"><input type="time" id="bdt-t" step="1800" value="'+escapeHtml(r.time||'10:00')+'" style="'+_batchCellInp+'">');
+  var d=document.getElementById('bdt-d'), t=document.getElementById('bdt-t');
+  d.onchange=function(){ r.date=d.value; if(!r.checked)r.checked=true; _batchSyncRow(i); t.focus(); try{t.showPicker&&t.showPicker();}catch(e){} };
+  t.onchange=function(){ r.time=t.value; if(!r.checked)r.checked=true; _batchSyncRow(i); _batchClosePop(); };
+  setTimeout(function(){ try{d.focus(); d.showPicker&&d.showPicker();}catch(e){} },40);
+}
+function _batchOpenPl(i,anchor){
+  var r=_batchState&&_batchState.rows[i]; if(!r)return; var plats=_batchPlatList();
+  var html='<div style="font-size:11px;color:#888;margin-bottom:6px;font-weight:600">홍보 위치 (복수 선택)</div>'
+    +plats.map(function(p){ var on=r.plats.indexOf(p)>-1; return '<label style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:7px;cursor:pointer;font-size:12.5px" onmouseover="this.style.background=\'#f3f4fb\'" onmouseout="this.style.background=\'\'"><input type="checkbox" '+(on?'checked':'')+' onchange="_batchTogPlat('+i+',&quot;'+escapeHtml(p).replace(/"/g,'&quot;')+'&quot;)" style="accent-color:var(--accent);width:15px;height:15px;margin:0">'+escapeHtml(p)+'</label>'; }).join('')
+    +'<button onclick="_batchClosePop()" style="width:100%;margin-top:6px;padding:7px;border:0;background:var(--accent);color:#fff;border-radius:7px;cursor:pointer;font-size:12px;font-weight:600">완료</button>';
+  _batchPop(anchor,html);
+}
+function _batchTogPlat(i,p){ var r=_batchState&&_batchState.rows[i]; if(!r)return; var k=r.plats.indexOf(p); if(k>-1)r.plats.splice(k,1); else r.plats.push(p); if(r.plats.length&&!r.checked)r.checked=true; _batchSyncRow(i); }
 async function _batchSubmit(){
   if(!_batchState)return;
   // 체크된 행 × 선택 플랫폼 = 등록 job (플랫폼 복수 → 위치마다 1건)
