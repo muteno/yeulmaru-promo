@@ -2855,14 +2855,18 @@ async function initApp(){
   if(userRole==='admin' && !sessionStorage.getItem('subAdminPin')){
     try{sessionStorage.removeItem('myApplicant');}catch(e){}
   }
-  try{await loadPrograms();}catch(e){console.warn('[initApp loadPrograms]',e);}
-  try{await loadAllMasters();}catch(e){console.warn('[initApp loadAllMasters]',e);}
-  try{await loadPromoSpecial();}catch(e){console.warn('[initApp loadPromoSpecial]',e);}
-  try{await loadCafeJangdo();}catch(e){console.warn('[initApp loadCafeJangdo]',e);}
-  try{await loadApplySettings();}catch(e){console.warn('[initApp loadApplySettings]',e);}
-  updatePerfOpen();
-  _perfReady=true;   // 프로그램·홍보기간 로드 완료 — 이제 홍보 위저드 오픈 허용
-  loadData();
+  // [로딩 성능] 초기 데이터 로더 병렬화 — 서로 독립인데 순차 await로 폭포수처럼 쌓여 있던 걸 동시 출발로 전환.
+  //   · 캘린더(records+특별일정)를 먼저 그리고, 프로그램/마스터/카페·장도/접수설정은 백그라운드 병렬로 채움.
+  //   · 순서 의존성은 loadPrograms→updatePerfOpen 하나뿐(나머지 로더 결과는 updatePerfOpen이 안 씀).
+  //   · loadPromoSpecial 중복 호출 제거 — loadData가 이미 특별일정을 로드함.
+  loadData();  // records + 특별일정 → render() : 캘린더 즉시 표시
+  var _pPrograms=loadPrograms().then(function(){ updatePerfOpen(); _perfReady=true; }).catch(function(e){console.warn('[initApp loadPrograms]',e);});
+  Promise.all([
+    _pPrograms,
+    loadAllMasters().catch(function(e){console.warn('[initApp loadAllMasters]',e);}),
+    loadCafeJangdo().catch(function(e){console.warn('[initApp loadCafeJangdo]',e);}),
+    loadApplySettings().catch(function(e){console.warn('[initApp loadApplySettings]',e);})
+  ]);
   // MS(OneDrive) 토큰 미리 확보 — 폴더 선택 때 팝업 안 뜨게 (재방문 silent / 첫 로그인 popup 1회)
   _msalPrefetch();
 }
@@ -12375,9 +12379,11 @@ function _petEnter(){
 async function loadData(){
   var cal=document.getElementById('cal');
   if(cal){cal.innerHTML='<div style="text-align:center;padding:60px;color:var(--dim);font-size:14px"><span id="lt"></span></div>';_typeLoop('lt','데이터를 불러오는 중이에요... \uD83D\uDE09',65);}
+  // [로딩 성능] records와 특별일정을 병렬 fetch (서로 독립) — 순차 대기 제거
+  var _spP=loadPromoSpecial().catch(function(e){console.warn('[loadData] promoSpecial',e);});
   try{const d=await api('GET','/api/records');var _all=(d.records||[]).map(function(r,i){return Object.assign({},r,{_rowIndex:(r._rowIndex!==undefined?r._rowIndex:i+2)});});_DRAFTS=_all.filter(_isDraftRec);records=_all.filter(function(r){return !_isDraftRec(r);});}catch(e){console.error(e);_typingId++;if(cal)cal.innerHTML='<div style="text-align:center;padding:60px;color:#E24B4A;font-size:14px">데이터 로드 실패</div>';return;}
-  // 특별 일정 — 실패해도 records 렌더는 진행
-  try{await loadPromoSpecial();}catch(e){console.warn('[loadData] promoSpecial',e);}
+  // 특별 일정 — 위에서 병렬 출발한 것 완료 대기 (실패해도 records 렌더는 진행)
+  try{await _spP;}catch(e){}
   _typingId++;render();_petEnter();if(typeof _refreshSeenMod==='function')_refreshSeenMod();}
 
 // SharePoint Graph API 일관성 지연 회피용 - 변경 후 row 수 검증 + 자동 재시도
@@ -12481,8 +12487,11 @@ function loadHolidays(year){
 // === 카페/장도 운영시간 (DB 운영_카페일정 / 운영_장도) — 날짜 패널 서비스 안내용 ===
 var _cafeHours={},_jangdoHours={};
 async function loadCafeJangdo(){
-  try{ var c=await api('GET','/api/ops?sheet='+encodeURIComponent('카페일정')); ((c&&c.rows)||[]).forEach(function(r){var d=(r['날짜']||'').toString().trim();if(d)_cafeHours[d]=(r['운영시간']||'').toString().trim();}); }catch(e){}
-  try{ var j=await api('GET','/api/ops?sheet='+encodeURIComponent('장도')); ((j&&j.rows)||[]).forEach(function(r){var d=(r['날짜']||'').toString().trim();if(d)_jangdoHours[d]=(r['입도가능시간']||'').toString().trim();}); }catch(e){}
+  // [로딩 성능] 카페일정·장도 = 서로 독립 → 병렬 fetch
+  await Promise.all([
+    api('GET','/api/ops?sheet='+encodeURIComponent('카페일정')).then(function(c){ ((c&&c.rows)||[]).forEach(function(r){var d=(r['날짜']||'').toString().trim();if(d)_cafeHours[d]=(r['운영시간']||'').toString().trim();}); }).catch(function(){}),
+    api('GET','/api/ops?sheet='+encodeURIComponent('장도')).then(function(j){ ((j&&j.rows)||[]).forEach(function(r){var d=(r['날짜']||'').toString().trim();if(d)_jangdoHours[d]=(r['입도가능시간']||'').toString().trim();}); }).catch(function(){})
+  ]);
 }
 // 모바일이면 자동으로 오늘 날짜 panel 열기 (drawer 항상 표시)
 function autoOpenMobilePanel(){
