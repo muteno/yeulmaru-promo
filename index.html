@@ -8037,7 +8037,7 @@ function openPromoWizard(prefillDate, batchJob){
     var _p2need=(batchJob.plat1==='기타')||PLATFORMS.some(function(p){return p['플랫폼1']===batchJob.plat1&&p['플랫폼2']&&p['플랫폼2']!=='-';});
     _pwSubStep=_p2need?1:2;
     var _bn=(_pwBatchTotal-((_pwBatchQueue&&_pwBatchQueue.length)||0)), _bt=_pwBatchTotal;
-    try{ document.querySelector('#promo-wizard h3').textContent='홍보 내용 입력 ('+_bn+'/'+_bt+') · '+batchJob.program+' · '+batchJob.plat1; }catch(e){}
+    try{ document.querySelector('#promo-wizard h3').innerHTML='홍보 내용 입력 (<span style="color:var(--accent)">'+_bn+'</span>/'+_bt+')'; }catch(e){}
   }
   renderPwStep();
 }
@@ -9910,8 +9910,12 @@ function currentPwSubKey(){
 function renderPwStep4(body,next){
   const key=currentPwSubKey();
   const subs=getPwSubSteps();
-  const subLabel=' — '+subs.length+'개 중 '+_pwSubStep;
-  document.getElementById('pw-steplabel').textContent='Step '+_pwStep+' / '+PW_TOTAL+subLabel;
+  // 스텝 라벨: 배치 순차일 때만 'N개 중 M'의 수치를 강조색(단건은 기존 그대로 유지)
+  if(_pwBatchQueue!=null){
+    document.getElementById('pw-steplabel').innerHTML='Step '+_pwStep+' / '+PW_TOTAL+' — <span style="color:var(--accent);font-weight:700">'+subs.length+'</span>개 중 <span style="color:var(--accent);font-weight:700">'+_pwSubStep+'</span>';
+  }else{
+    document.getElementById('pw-steplabel').textContent='Step '+_pwStep+' / '+PW_TOTAL+' — '+subs.length+'개 중 '+_pwSubStep;
+  }
   if(key==='plat')renderPwSubPlat(body,next);
   else if(key==='format')renderPwSubFormat(body,next);
   else if(key==='detail')renderPwSubDetail(body,next);
@@ -9923,10 +9927,19 @@ function renderPwStep4(body,next){
   else if(key==='sms_body')renderPwSubSmsBody(body,next);
   else if(key==='author')renderPwSubAuthor(body,next);
   else { body.innerHTML='<div class="pw-question">단계를 불러올 수 없어요</div>'; return; }
-  // [배치 순차] 확정된 컨텍스트(공연 · 홍보 날짜 · 플랫폼) 배너 — 각 본문 화면 상단 고정
+  // [배치 순차] 확정된 컨텍스트 — '• 공연 개요' 박스(프로그램/홍보 일시/플랫폼). 값만 강조, 라벨은 일반. 줄간격 넉넉히.
   if(_pwBatchQueue!=null){
     var _p2=(_pwData.plat2&&_pwData.plat2!=='-')?' › '+escapeHtml(_pwData.plat2):'';
-    var _bh='<div style="display:flex;flex-wrap:wrap;align-items:center;gap:7px;padding:10px 13px;margin-bottom:14px;background:rgba(74,77,231,0.06);border:1px solid rgba(74,77,231,0.16);border-radius:10px;font-size:12px"><b style="color:var(--accent)">'+escapeHtml(_pwData.program||'')+'</b><span style="color:#c8c8d4">·</span><span style="color:#555">'+escapeHtml(_pwData.date||'')+' '+escapeHtml(_pwData.time||'')+'</span><span style="color:#c8c8d4">·</span><span style="color:#555">'+escapeHtml(_pwData.plat1||'')+_p2+'</span></div>';
+    var _dt=(_pwData.date||''); var _dtShort=(_dt.length>=10?_dt.slice(5):_dt);   // 연도 제거 → MM-DD
+    var _when=escapeHtml((_dtShort+' '+(_pwData.time||'')).trim());
+    var _lbl='color:#666', _acc='color:var(--accent);font-weight:700';
+    var _bh=''
+      +'<div style="font-size:12px;font-weight:700;color:#555;margin:0 0 6px;padding-left:1px">• 공연 개요</div>'
+      +'<div style="padding:13px 15px;margin-bottom:16px;background:rgba(74,77,231,0.06);border:1px solid rgba(74,77,231,0.16);border-radius:10px;font-size:12.5px;line-height:1.75">'
+        +'<div><span style="'+_lbl+'">• 프로그램: </span>'+escapeHtml(_pwData.program||'')+'</div>'
+        +'<div><span style="'+_lbl+'">• 홍보 일시: </span><span style="'+_acc+'">'+_when+'</span></div>'
+        +'<div><span style="'+_lbl+'">• 플랫폼: </span><span style="'+_acc+'">'+escapeHtml(_pwData.plat1||'')+_p2+'</span></div>'
+      +'</div>';
     body.insertAdjacentHTML('afterbegin',_bh);
   }
 }
