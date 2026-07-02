@@ -12719,11 +12719,15 @@ function renderCal(){
         h+='<div class="c-count">'+doneCount+'/'+filteredRecs.length+'</div>';
       }
       h+='<div class="c-inner"><div class="'+dnCls+'">'+(td&&!nm?'<span style="color:var(--accent);font-weight:700">'+d.getDate()+'</span>':d.getDate())+(holName?'<span class="hol-pill" title="'+escapeHtml(holName)+'">'+escapeHtml(holName)+'</span>':'')+renderPerfsHtml(perfs,td,past,key)+'</div>';
+      var _mineAppl='';try{_mineAppl=sessionStorage.getItem('myApplicant')||'';}catch(e){}
       filteredRecs.forEach(r=>{
         var p=r['플랫폼 1']||'',p2=r['플랫폼 2']||'',title=r['콘텐츠 제목']||'',col=platColor(p),st=r['진행 상태']||'예정';
         var done=st==='완료';
         var applying=st==='신청 중';
         var draft=st==='임시';
+        var isMine=_isMineRec(r,_mineAppl);
+        // 드래그 이동 가능: 관리자(신청중 외) / 일반 사용자는 본인 '신청 중' 건만 (변경 권한과 동일)
+        var _canDrag=(userRole==='admin'&&!applying)||(userRole!=='admin'&&isMine&&applying);
         var ts=r['입력시간(KST)'],hhmm='';
         if(typeof ts==='string'&&ts.indexOf(' ')>-1)hhmm=ts.split(' ')[1];
         else if(typeof ts==='number'){var tm=Math.round((ts%1)*1440),hh=Math.floor(tm/60),mm=tm%60;hhmm=String(hh).padStart(2,'0')+':'+String(mm).padStart(2,'0');}
@@ -12752,7 +12756,7 @@ function renderCal(){
   else if(st==='임시') _tipMsg += '임시저장한 콘텐츠입니다.';
   else _tipMsg += '등록한 콘텐츠입니다.';
   return ' data-tooltip="'+_tipMsg+'"';
-})()+' '+(userRole==='admin'&&!applying?'draggable="true" ondragstart="onEvDragStart(event,'+(r._rowIndex)+',\''+key+'\')" ondragend="onEvDragEnd(event)"':'')+' onclick="event.stopPropagation();editRec('+(r._rowIndex)+',\''+key+'\',event,true)"'+_ctxAttr+' style="cursor:'+(userRole==='admin'?'grab':'pointer')+';'+deco+border+'opacity:'+rowOpacity+'"><span class="ev-time" style="color:'+timeCol+';font-weight:600">'+hhmm+'</span><span class="ev-plat" style="color:'+platCol+';font-weight:600"'+(applying?'':' title="'+(p2&&p2!=='-'?p2:p).replace(/"/g,'&quot;')+'"')+'>'+platDisplay(p,p2)+'</span><span class="ev-title" style="color:'+titleCol+'">'+applyingBadge+draftBadge+title+'</span></div>';
+})()+' '+(_canDrag?'draggable="true" ondragstart="onEvDragStart(event,'+(r._rowIndex)+',\''+key+'\')" ondragend="onEvDragEnd(event)"':'')+' onclick="event.stopPropagation();editRec('+(r._rowIndex)+',\''+key+'\',event,true)"'+_ctxAttr+' style="cursor:'+(_canDrag?'grab':'pointer')+';'+deco+border+'opacity:'+rowOpacity+'"><span class="ev-time" style="color:'+timeCol+';font-weight:600">'+hhmm+'</span><span class="ev-plat" style="color:'+platCol+';font-weight:600"'+(applying?'':' title="'+(p2&&p2!=='-'?p2:p).replace(/"/g,'&quot;')+'"')+'>'+platDisplay(p,p2)+'</span><span class="ev-title" style="color:'+titleCol+'">'+applyingBadge+draftBadge+title+'</span></div>';
       });
       h+='</div>';
       h+=renderExhibitBadge(d,nm,past);
@@ -15517,15 +15521,15 @@ function onCellDragLeave(ev){
   if(!ev.currentTarget.contains(ev.relatedTarget))ev.currentTarget.classList.remove('drag-over');
 }
 async function onCellDrop(ev,toKey){
-  if(userRole!=='admin')return;
   ev.preventDefault();
   ev.currentTarget.classList.remove('drag-over');
   if(!_drag)return;
   const drag=Object.assign({},_drag);
   _drag=null;
   if(drag.fromKey===toKey)return;
-  // 특수일정 이동
+  // 특수일정(담당자 일정) 이동 — 관리자 전용
   if(drag.sp){
+    if(userRole!=='admin')return;
     const it=PROMO_SPECIAL.find(function(s){return s._rowIndex===drag.rowIndex;});
     if(!it){showToast('담당자 일정을 찾을 수 없어요','error');return;}
     const ok=await showConfirm('담당자 일정을 '+toKey+'(으)로 이동할까요?');
@@ -15566,11 +15570,15 @@ async function onCellDrop(ev,toKey){
     }
     return;
   }
-  // === 기존 콘텐츠 이동 ===
-  const ok=await showConfirm('정말로 일정을 이동할까요?');
-  if(!ok)return;
+  // === 기존 콘텐츠 이동 — 관리자 전체 / 일반 사용자는 본인 '신청 중' 건만 ===
   const rec=records.find(function(r){return r._rowIndex===drag.rowIndex;});
   if(!rec){showToast('레코드를 찾을 수 없어요','error');return;}
+  if(userRole!=='admin'){
+    var _dma='';try{_dma=sessionStorage.getItem('myApplicant')||'';}catch(e){}
+    if(!_isMineRec(rec,_dma)||String(rec['진행 상태']||'').trim()!=='신청 중'){showToast('본인 신청 중인 건만 옮길 수 있어요','error');return;}
+  }
+  const ok=await showConfirm('정말로 일정을 이동할까요?');
+  if(!ok)return;
   const[y,m,d]=toKey.split('-').map(Number),dateObj=new Date(y,m-1,d),dn=DAY_NAMES[dateObj.getDay()];
   const serial=Math.floor(Date.UTC(y,m-1,d)/86400000)+25569;
   var ts=rec['입력시간(KST)'],hhmm='10:00';
