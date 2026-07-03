@@ -5845,19 +5845,26 @@ async function cancelPromoRequest(rowIndex){
   if(status==='완료'){showToast('완료된 신청은 취소할 수 없어요','error');return;}
   if(status==='취소'){showToast('이미 취소된 신청이에요','error');return;}
   if(status==='예정'&&!isAdmin){showToast('예정(승인)된 신청은 취소할 수 없어요. 관리자에게 문의해 주세요','error');return;}
-  // 확인
+  // 확인 — 관리자가 '타인 신청'을 취소하면 일괄 취소·재신청 취소·cancelWithReason과 동일하게
+  //   취소 사유를 입력받아 신청자에게 사유까지 전달. 본인 신청 취소는 사유 없이 간단 확인.
   const title=r['콘텐츠 제목']||'(제목 없음)';
-  const ok=await showConfirm('"'+title+'"\n\n이 홍보 신청을 취소할까요?');
-  if(!ok)return;
-  // PATCH — 전체 row의 진행 상태만 '취소'로 변경 (다른 필드 유지)
+  let reason='';
+  if(isMine){
+    const ok=await showConfirm('"'+title+'"\n\n이 홍보 신청을 취소할까요?');
+    if(!ok)return;
+  }else{
+    reason=await _renderCancelReasonModal(1);
+    if(!reason)return;
+  }
+  // PATCH — 진행 상태='취소' (+ 대행 취소 시 취소사유 기록), 다른 필드 유지
   showOverlayLoad();
   try{
-    const row = buildRecordRow(r, {'진행 상태':'취소'});
+    const row = buildRecordRow(r, {'진행 상태':'취소','취소사유':reason});
     await api('PATCH','/api/records/'+rowIndex,{values: row});
-    // 메시지함 hook — 관리자가 타인 신청을 취소한 경우 신청자에게 알림
+    // 메시지함 hook — 관리자가 타인 신청을 취소한 경우 신청자에게 사유까지 알림
     if(!isMine){
       try{
-        pushMessage({recipient:r['신청자']||'',type:'중요',trigger:'취소',before:status||'예정',after:'취소',reason:'',refNo:r['No']||r['NO']||'',refSummary:(getRecDateKey(r)+' '+(r['플랫폼 1']||'')+' '+(r['콘텐츠 제목']||'')).trim()});
+        pushMessage({recipient:r['신청자']||'',type:'중요',trigger:'취소',before:status||'예정',after:'취소',reason:reason,refNo:r['No']||r['NO']||'',refSummary:(getRecDateKey(r)+' '+(r['플랫폼 1']||'')+' '+(r['콘텐츠 제목']||'')).trim()});
       }catch(_e){ console.error('[pushMessage cancel]', _e); }
     }
     await syncReload(0);
@@ -8518,6 +8525,18 @@ async function submitPromoEdit(){
       if(_kc2){showToast('변경 불가: '+_kc2,'error');return;}
     }
   }
+  // [취소 사유 통일] 관리자가 상태를 '취소'로 바꾸면 단건 취소(cancelWithReason)·일괄 취소·재신청 취소와
+  //   동일하게 취소 사유를 입력받아 신청자에게 사유까지 전달. 본인(신청자=관리자) 건은 사유 없이 진행.
+  var _cxReason='';
+  if(patch['진행 상태']==='취소' && (orig['진행 상태']||'')!=='취소'){
+    var _cxMe='';try{_cxMe=sessionStorage.getItem('myApplicant')||'';}catch(_ce){}
+    var _cxMine=!!_cxMe && (orig['신청자']||'').toString().trim()===_cxMe;
+    if(!_cxMine){
+      _cxReason=await _renderCancelReasonModal(1);
+      if(!_cxReason)return;   // 사유 미입력/모달 닫힘 → 저장 중단
+      patch['취소사유']=_cxReason;
+    }
+  }
   showOverlayLoad('변경 사항 저장 중...');
   try{
     if(patch['프로그램']!==undefined)patch['공연ID']=_recPerfId(patch['프로그램']);  // [정규화] 프로그램 변경 → ID 동기화
@@ -8535,7 +8554,7 @@ async function submitPromoEdit(){
           pushMessage({recipient:_ntAppl,type:(_ntCh&&(_ntEnd==='취소'||_ntEnd==='보류'))?'중요':'일반',
             trigger:_ntCh?(_ntBeg+'→'+_ntEnd):'변경',
             before:_ntBeg,after:_ntEnd,
-            reason:_ntCh?'관리자가 처리했어요':'관리자가 신청 내용을 변경했어요',
+            reason:(_ntEnd==='취소'&&_cxReason)?_cxReason:(_ntCh?'관리자가 처리했어요':'관리자가 신청 내용을 변경했어요'),
             refNo:orig['No']||orig['NO']||'',refSummary:(getRecDateKey(orig)+' '+(orig['플랫폼 1']||'')+' '+(orig['콘텐츠 제목']||'')).trim()});
         }
       }
