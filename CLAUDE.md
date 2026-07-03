@@ -7,6 +7,14 @@
 >
 > 이 파일은 **매 세션 새 Claude에게 넘기는 인계서**다. 여기 적힌 건 "이미 정해진 사실"이니 다시 캐묻거나 추측으로 뒤집지 말 것. 코드 세부(컬럼순서·함수 시그니처)는 `index.html`을 직접 검색. 과거 전체 이력은 `docs/CLAUDE_full_backup_260601.md`.
 
+## 🎨 디자인 기틀 (필수 — UI 만지기 전에 읽어라, 260703 고정)
+
+- **SSOT = `docs/디자인기틀.md`** — `:root` 2블록 토큰(32+26개) + 정본 컴포넌트 11종(`.btn` 8변형·`.u-*`·`.sw`·`.icon-btn`·`.toast`·`.chip`·`.modal`·`nb-*` 등). **기틀에 있는 형태만 구현.**
+- **새 raw hex 금지** — 새 색은 `:root` 토큰으로만 정의하고 `var()` 사용. 새 `:root` 블록·고아 토큰·이중 정의도 금지 (`tools/check_design.py`가 baseline 래칫으로 검사).
+- **기틀에 없는 값/형태가 필요하면 작업 멈추고 운영자에게 질문**(필요 이유 + 가장 가까운 기존 후보 제시). 임의 창작 절대 금지 — 승인분만 편입.
+- **3층 방어가 자동으로 돈다**: 세션 시작 시 계약·토큰 주입(`.claude/hooks/design_digest.py`) → `index.html`·`signage` 편집 직후 게이트(`.claude/hooks/design_gate.py`, 위반=exit 2 → 같은 턴 자가수정) → 커밋 게이트(`.githooks/pre-commit`). 수동 검사: `python3 tools/check_design.py`
+- **운영자 승인분 편입 3점 세트**: `:root` 토큰 추가 → `docs/디자인기틀.md` 등재 → `check_design.py` baseline 갱신+**사유 주석**. (알려진 부채 — kakao 이중정의·빨강 2종·고아 13개 등 — 는 기틀 문서 §6에 동결 목록, 청산은 운영자 판단 대기)
+
 ---
 
 ## 🆕 세션 (2026-07-01 2차, 원격 클코 web) — 홍보 전 콘텐츠 opt-in + 폼 ON/OFF + URL·ID 버그 수정 + 불편사항 관리 (PR #67·#72 머지·라이브)
