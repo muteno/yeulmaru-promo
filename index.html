@@ -5405,7 +5405,6 @@ function _pmapEnsureStyle(){
    +'.pm-mapdiv{position:absolute;inset:0;background:var(--neutral)}'
    +'.pm-map-loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--dim);font-size:13px}'
    +'.pm-fmap{position:absolute;inset:0;overflow:hidden;background:var(--neutral)}'
-   +'.pm-fmap::after{content:"";position:absolute;inset:0;background:rgba(74,77,231,.04);pointer-events:none;z-index:0}'
    +'.pm-fdot{position:absolute;transform:translate(-50%,-50%);cursor:pointer;opacity:0;animation:pmFPop .35s ease forwards;z-index:2}'
    +'@keyframes pmFPop{from{opacity:0;transform:translate(-50%,-50%) scale(.4)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}'
    +'.pm-fdot .pm-mk{position:relative}'
@@ -5756,10 +5755,11 @@ function _pmapCloseIw(){
 // 전체 뷰=도시 집계 배지, 도시 선택=거점 마커. 네이버 연결되면 실지도로 자동 교체.
 const _PMAP_FB_MAPS={
   // fit=contain(전체: 세 도시 다 보이게 여백) / cover(도시별: 꽉 채움). 실좌표는 Web Mercator로 투영.
-  all:{z:11,x0:1748,y0:811,w:1024,h:768,file:'image/promomap-all.jpg',fit:'contain'},
-  '여수':{z:13,x0:6999,y0:3250,w:1024,h:768,file:'image/promomap-yeosu.jpg',fit:'cover'},
-  '순천':{z:13,x0:6995,y0:3244,w:1024,h:1024,file:'image/promomap-suncheon.jpg',fit:'cover'},
-  '광양':{z:13,x0:7000,y0:3245,w:1024,h:768,file:'image/promomap-gwangyang.jpg',fit:'cover'}
+  // file=미니멀 basemap(Positron nolabels) · ov=강조색 오버레이(도로 20%·동경계 50%, 같은 타일좌표라 정렬 정확)
+  all:{z:11,x0:1748,y0:811,w:1024,h:768,file:'image/promomap-all.jpg',ov:'image/promomap-ov-all.png',fit:'contain'},
+  '여수':{z:13,x0:6999,y0:3250,w:1024,h:768,file:'image/promomap-yeosu.jpg',ov:'image/promomap-ov-yeosu.png',fit:'cover'},
+  '순천':{z:13,x0:6995,y0:3244,w:1024,h:1024,file:'image/promomap-suncheon.jpg',ov:'image/promomap-ov-suncheon.png',fit:'cover'},
+  '광양':{z:13,x0:7000,y0:3245,w:1024,h:768,file:'image/promomap-gwangyang.jpg',ov:'image/promomap-ov-gwangyang.png',fit:'cover'}
 };
 // lat/lng → 컨테이너 내 % 위치. cover 크롭/contain 여백까지 반영(마커가 지도와 정확히 정렬).
 function _pmapFbPos(lat,lng,m,cw,ch){
@@ -5805,9 +5805,11 @@ function _pmapRenderFallback(note){
       i++;
     }
   }
+  // 오버레이(강조색 도로·동경계) 위 + basemap 아래, 같은 size/position으로 정렬
+  const imgs=(m.ov?('url('+m.ov+'),'):'')+'url('+m.file+')';
   const bg=(m.fit==='contain')
-    ?'background-image:url('+m.file+');background-size:contain;background-repeat:no-repeat;background-position:center;background-color:var(--neutral)'
-    :'background-image:url('+m.file+');background-size:cover;background-position:center';
+    ?'background-image:'+imgs+';background-size:contain;background-repeat:no-repeat;background-position:center;background-color:var(--neutral)'
+    :'background-image:'+imgs+';background-size:cover;background-position:center';
   div.innerHTML='<div class="pm-fmap" style="'+bg+'">'+h
     +'<div class="pm-fco" id="pm-fco"></div>'
     +'<div class="pm-fmap-note">'+escapeHtml(_pmapState.fbNote||'약식 위치도')+' · © OpenStreetMap · CARTO</div>'
