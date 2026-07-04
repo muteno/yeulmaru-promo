@@ -12097,6 +12097,8 @@ function buildSheetListHtml(slug,rows){
       const _hasPin = !!(r['PIN']||'');
       const _userName = escapeHtml(r['담당자']||'사용자');
       const _email = (r['이메일']||'').trim();
+      // 이메일 재설정 버튼 (초기화 좌측) — 봉투 아이콘, 2회 입력 일치 시 O열 갱신
+      html+='<button class="adm-btn" style="color:var(--accent);border-color:var(--accent);margin-right:4px" onclick="openEmailReset('+r._rowIndex+',\''+_userName.replace(/'/g,"\\'")+'\',\''+_email.replace(/'/g,"\\'")+'\')" title="이메일 재설정'+(_email?' (현재: '+escapeHtml(_email)+')':' (미설정)')+'">✉</button>';
       const _btnTitle = _hasPin?'PIN 초기화 — 사용자 다음 접속 때 새로 설정':'PIN 미설정 (사용자가 첫 접속 때 설정)';
       const _btnStyle = _hasPin?'background:#fff8f3;color:#b35a30;border:1.5px solid #e5c4a8':'background:#f5f5f5;color:#aaa;border:1.5px solid #e0e0e0';
       html+='<button class="adm-btn" style="'+_btnStyle+';margin-right:4px" '+((_hasPin&&_email)?'':'disabled')+' onclick="resetUserPin('+r._rowIndex+',\''+_userName.replace(/'/g,"\\'")+'\',\''+_email.replace(/'/g,"\\'")+'\')" title="'+_btnTitle+'">\uD83D\uDD11 초기화</button>';
@@ -12139,6 +12141,59 @@ async function resetUserPin(rowIndex, userName, email){
     showToast('초기화 실패: '+e.message,'error');
   }finally{
     if(typeof hideOverlayLoad==='function')hideOverlayLoad();
+  }
+}
+
+// === 이메일 재설정 (관리자가 manager 목록 ✉ 버튼에서 호출) ===
+// 2회 입력 일치 시 담당자 시트 이메일(O열) 갱신. positional: 기존 행 값 보존 + 이메일만 교체.
+// (Worker set-pin이 이메일로 사용자 매칭 → 이메일이 로그인 키라 재설정 기능 필요)
+function openEmailReset(rowIndex, userName, curEmail){
+  const _cur = curEmail?('현재 '+escapeHtml(curEmail)):'미설정';
+  let html='<div class="modal-bg show" style="z-index:9600" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeEmailReset)"><div class="modal" style="width:94vw;max-width:380px;padding:24px;position:relative">';
+  html+='<button class="modal-x" onclick="closeEmailReset()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:14px;float:none;margin:0;z-index:10">✕</button>';
+  html+='<h3 style="margin:0 0 4px;text-align:left">✉ 이메일 재설정</h3>';
+  html+='<p style="margin:0 0 16px;color:var(--dim);font-size:13px"><b>'+escapeHtml(userName||'사용자')+'</b> 님 · '+_cur+'</p>';
+  html+='<form id="email-reset-form" onsubmit="event.preventDefault();saveEmailReset('+rowIndex+')" style="display:flex;flex-direction:column;gap:12px">';
+  html+='<div><label>새 이메일<span class="req">*</span></label><input id="er-email1" type="email" required placeholder="name@gscf.or.kr" autocomplete="off"></div>';
+  html+='<div><label>이메일 확인<span class="req">*</span></label><input id="er-email2" type="email" required placeholder="한 번 더 입력해 주세요" autocomplete="off"></div>';
+  html+='<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:4px;padding-top:14px;border-top:1px solid var(--border)">';
+  html+='<button type="button" onclick="closeEmailReset()" style="padding:9px 18px;border:1px solid rgba(0,0,0,0.08);border-radius:10px;background:var(--surface-solid);cursor:pointer;font-size:13px">취소</button>';
+  html+='<button type="submit" style="padding:9px 22px;background:var(--accent);color:var(--surface-solid);border:0;border-radius:10px;cursor:pointer;font-weight:600;font-size:13px">저장</button>';
+  html+='</div></form></div></div>';
+  let el=document.getElementById('email-reset-modal');
+  if(!el){el=document.createElement('div');el.id='email-reset-modal';document.body.appendChild(el);}
+  el.innerHTML=html;
+  setTimeout(function(){var i=document.getElementById('er-email1');if(i)i.focus();},50);
+}
+function closeEmailReset(){
+  const el=document.getElementById('email-reset-modal');
+  if(el)el.innerHTML='';
+}
+async function saveEmailReset(rowIndex){
+  const e1=((document.getElementById('er-email1')||{}).value||'').trim();
+  const e2=((document.getElementById('er-email2')||{}).value||'').trim();
+  if(!e1||!e2){showToast('이메일을 두 번 모두 입력해 주세요','error');return;}
+  if(e1!==e2){showToast('두 이메일이 일치하지 않아요','error');return;}
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e1)){showToast('이메일 형식이 올바르지 않아요','error');return;}
+  const exist=(_sheetCache['manager']||[]).find(r=>r._rowIndex===rowIndex);
+  if(!exist){showToast('행 정보를 못 찾았어요. 목록을 새로고침 해주세요','error');return;}
+  // positional 저장 — 기존 행 값은 그대로 보존하고 이메일(O열)만 교체
+  const values=SHEET_CONFIG['manager'].columns.map(c=>{
+    if(c.key==='이메일')return e1;
+    const v=exist[c.key];
+    return (v===undefined||v===null)?'':v;
+  });
+  showOverlayLoad('저장 중입니다...');
+  try{
+    await api('PATCH','/api/sheet/manager/'+rowIndex,{values});
+    MANAGERS=[];await loadManagers();PR_MANAGERS=MANAGERS.filter(m=>isFlagOn(m['홍보여부']));populateMasterDropdowns();
+    await renderSheetList('manager');
+    closeEmailReset();
+    showToast('이메일이 변경되었어요','success');
+  }catch(e){
+    showToast('저장 실패: '+e.message,'error');
+  }finally{
+    hideOverlayLoad();
   }
 }
 
@@ -12207,8 +12262,8 @@ function openSheetForm(slug,rowIndex){
     html+='<div><label>이메일<span class="req">*</span></label><input name="이메일" type="email" value="'+escapeHtml(_val('이메일'))+'" required placeholder="name@gscf.or.kr"></div>';
     html+='<div><label style="display:flex;align-items:center;gap:8px;background:#fafafa;padding:12px;border-radius:10px;border:1px solid rgba(0,0,0,0.06);cursor:pointer;margin:0;text-transform:none;letter-spacing:0;color:#333;font-size:13px;font-weight:600"><input type="checkbox" name="휴직여부"'+(_onFlag('휴직여부')?' checked':'')+' style="width:18px;height:18px;cursor:pointer;margin:0"> 휴직</label></div>';
     const _bizCols=[['홍보여부','홍보'],['기관여부','기관'],['공연여부','공연'],['전시여부','전시'],['예술교육여부','교육'],['대관여부','대관']];
-    html+='<div><label style="margin-bottom:6px">담당 업무</label><div style="display:flex;flex-wrap:wrap;gap:8px">';
-    _bizCols.forEach(function(pair){var k=pair[0],lb=pair[1];html+='<label style="display:flex;align-items:center;gap:6px;background:#fafafa;padding:9px 14px;border-radius:10px;border:1px solid rgba(0,0,0,0.06);cursor:pointer;margin:0;text-transform:none;letter-spacing:0;color:#333;font-size:13px;font-weight:600"><input type="checkbox" name="'+k+'"'+(_onFlag(k)?' checked':'')+' style="width:17px;height:17px;cursor:pointer;margin:0"> '+lb+'</label>';});
+    html+='<div><label style="margin-bottom:6px">담당 업무</label><div style="display:flex;justify-content:center;align-items:center;flex-wrap:nowrap;gap:14px">';
+    _bizCols.forEach(function(pair){var k=pair[0],lb=pair[1];html+='<label style="display:flex;align-items:center;gap:5px;cursor:pointer;margin:0;text-transform:none;letter-spacing:0;color:#333;font-size:13px;font-weight:600;white-space:nowrap"><input type="checkbox" name="'+k+'"'+(_onFlag(k)?' checked':'')+' style="width:17px;height:17px;cursor:pointer;margin:0"> '+lb+'</label>';});
     html+='</div></div>';
     const _admLocked=!_isSuperAdmin();
     const _admLockAttr=_admLocked?' disabled':'';
