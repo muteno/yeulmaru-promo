@@ -5381,6 +5381,15 @@ function _pmapDotHtml(s,size){
   return '<div class="pm-halo" style="width:'+halo+'px;height:'+halo+'px;background:var('+tok+')'+(pend?';opacity:.22':'')+'"></div>'
     +'<div class="pm-dot'+(pend?' pend':'')+'" style="width:'+size+'px;height:'+size+'px;background:var('+tok+')"></div>';
 }
+// 도시 집계 = 원 안에 숫자(핀 대신). 색 = 행정구역 색과 맞춤(기존 토큰).
+const _PMAP_CITY_TOK={'여수':'--peach-text','순천':'--c3','광양':'--c4'};
+function _pmapCityCircleHtml(city,count){
+  const tok=_PMAP_CITY_TOK[city]||'--accent';
+  const sz=Math.round(42+Math.min(count,30)*0.7);
+  const fs=Math.round(sz*0.42);
+  return '<div class="pm-cnum" style="--cc:var('+tok+');width:'+sz+'px;height:'+sz+'px;font-size:'+fs+'px">'+count+'</div>'
+    +'<div class="pm-cnum-lb" style="--cc:var('+tok+')">'+escapeHtml(city)+'</div>';
+}
 function _pmapDestroy(){
   if(!_pmapState)return;
   if(_pmapState.clock)clearInterval(_pmapState.clock);
@@ -5491,6 +5500,11 @@ function _pmapEnsureStyle(){
    +'.pm-badge--city{font-size:12.5px;padding:7px 13px;border-radius:12px;box-shadow:var(--elev)}'
    +'.pm-badge--city b{color:var(--accent);font-weight:800}'
    +'.pm-badge--city span{font-weight:600;color:var(--dim);font-size:11px}'
+   +'.pm-cnum{border-radius:50%;background:var(--glass-surface);backdrop-filter:blur(6px);border:2.5px solid var(--cc);color:var(--cc);font-weight:800;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 12px rgba(26,26,46,.18),0 0 0 3px var(--surface-solid);font-variant-numeric:tabular-nums;cursor:pointer;transition:filter .15s}'
+   +'.pm-cnum:hover{filter:brightness(1.06)}'
+   +'.pm-cnum-lb{position:absolute;top:100%;left:50%;transform:translateX(-50%);margin-top:5px;font-size:11px;font-weight:800;color:var(--cc);white-space:nowrap;pointer-events:none;text-shadow:0 1px 4px var(--surface-solid),0 0 3px var(--surface-solid)}'
+   +'.pm-cwrap{position:absolute;transform:translate(-50%,-50%);animation:pmFade .35s ease both}'
+   +'@keyframes pmFade{from{opacity:0}to{opacity:1}}'
    +'.pm-pop{opacity:0;animation:pmPop .38s cubic-bezier(.2,.9,.3,1.35) forwards}'
    +'@keyframes pmPop{from{opacity:0;transform:translate(-50%,calc(-100% - 3px)) scale(.55)}to{opacity:1;transform:translate(-50%,calc(-100% - 13px)) scale(1)}}'
    +'.pm-tmode{display:flex;gap:6px;padding:4px 6px 10px}'
@@ -5788,7 +5802,7 @@ function _pmapRenderFallback(note){
       if(!cs.length)return;
       const p=_pmapFbPos(_PMAP_CITY[c].lat,_PMAP_CITY[c].lng,m,cw,ch);
       h+='<div class="pm-fdot" style="left:'+p.x+'%;top:'+p.y+'%;animation-delay:'+(i*130)+'ms" onclick="_pmapSetCity(\''+c+'\')">'
-        +'<div class="pm-badge pm-badge--city" style="position:static;transform:none"><b>'+c+'</b><span>거점 '+cs.length+'</span></div>'
+        +_pmapCityCircleHtml(c,cs.length)
         +'</div>';
       i++;
     });
@@ -5875,7 +5889,7 @@ function _pmapUpdateBadges(force){
     Object.keys(_PMAP_CITY).forEach(function(city){
       const cs=spots.filter(function(s){return s.city===city;});
       if(!cs.length)return;
-      const html=wrap('<div class="pm-badge pm-badge--city pm-pop" style="animation-delay:'+(i*130)+'ms" onclick="_pmapRow(\'c|'+city+'\')"><b>'+city+'</b><span>거점 '+cs.length+'</span></div>');
+      const html=wrap('<div class="pm-cwrap" style="animation-delay:'+(i*130)+'ms;cursor:pointer" onclick="_pmapRow(\'c|'+city+'\')">'+_pmapCityCircleHtml(city,cs.length)+'</div>');
       _pmapState.badges.push(new naver.maps.Marker({position:new naver.maps.LatLng(_PMAP_CITY[city].lat,_PMAP_CITY[city].lng),map:_pmapState.map,zIndex:40,icon:{content:html,anchor:new naver.maps.Point(0,0)}}));
       i++;
     });
