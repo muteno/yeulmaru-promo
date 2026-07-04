@@ -25,13 +25,15 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # ── baseline ──────────────────────────────────────────────────────────────
 # index raw hex: 1797 → 1827 = PR#80 로딩 성능(798da91)+배치 위저드 시리즈(febb8d9~3e09e94) +30 (260703 재실측)
-BASE_HEX_INDEX = 1827
+# 1827 → 1825 = PR#93 이메일 재설정 -1 + 홍보 현황 지도 대시보드(플랫폼현황 빈상태 #888 제거) -1 (260704 청산)
+BASE_HEX_INDEX = 1825
 BASE_HEX_SIGNAGE = 2          # signage/index.html: #000·#333
 BASE_ROOT_INDEX = 2           # L14(기본 팔레트 32토큰) + L1322(뉴트럴·z·c1~c6 26토큰)
 BASE_ROOT_SIGNAGE = 0
 # 고아 토큰(정의만 있고 var() 사용 0회) — 청산은 운영자 판단 대기(지시서 260703 §6-4)
+# 260704: --muted 청산(홍보 지도 대시보드 피드 빈상태에서 사용 시작) 13→12
 BASE_ORPHANS = {
-    '--blog', '--border2', '--c1', '--etc', '--insta', '--kakao', '--muted',
+    '--blog', '--border2', '--c1', '--etc', '--insta', '--kakao',
     '--surface', '--youtube', '--z-confirm', '--z-nav', '--z-sticky', '--z-toast',
 }
 # 이중 정의 — :root L27 #C8900A vs L1331 #F5B400(CSS는 후자 승). 청산 대기(지시서 §6-1)

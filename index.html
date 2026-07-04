@@ -1830,6 +1830,26 @@ const VENUE_PINS = [
   }
 ];
 
+// === 📡 홍보 현황 지도 거점 (여수·순천·광양) — 플랫폼 현황 기본 대시보드용 ===
+// DID 협력기관(DID_PARTNERS, 실측 지오코딩)은 런타임에 합쳐짐(_pmapAllSpots).
+// ⚠️ approx:true = 구역 대표 지점(추정 좌표) — 실측 확정되면 이 배열만 교정하면 됨.
+const PROMO_MAP_SPOTS=[
+  { id:'venue-mangma', name:'예울마루 (망마)', city:'여수', kind:'venue', lat:34.7506153, lng:127.6654125, status:'운영중', units:6, venue:'망마',
+    media:['DID 3대 (7·4·3층)','전광판 (4F 입구)','전광판 (공연 시 — 매표소·로비)'] },
+  { id:'venue-jangdo', name:'장도', city:'여수', kind:'venue', lat:34.7461, lng:127.6648, status:'운영중', units:3, venue:'장도', signage:true, approx:true,
+    media:['DID (진섬다리 입구)','DID (장도 입구 — 사이니지)','가로등 현수기 (장도)'] },
+  { id:'board-ungcheon', name:'전광판 (웅천·신월 사거리)', city:'여수', kind:'board', lat:34.7472, lng:127.6449, status:'예정', units:1, approx:true,
+    media:['전광판 — 개통 예정'] },
+  { id:'sign-friendwater', name:'입간판 (웅천친수공원)', city:'여수', kind:'print', lat:34.7469, lng:127.6541, status:'운영중', units:1, approx:true,
+    media:['입간판 2면 (1:1)'] },
+  { id:'lamp-yeosu', name:'가로등 현수기 — 여수시내', city:'여수', kind:'print', lat:34.7604, lng:127.6623, status:'운영중', units:1, zone:true, approx:true, note:'배치도 제공 예정',
+    media:['가로등 현수기 (여수시내 일원)'] },
+  { id:'lamp-suncheon', name:'가로등 현수기 — 순천', city:'순천', kind:'print', lat:34.9506, lng:127.4872, status:'운영중', units:1, zone:true, approx:true, note:'배치도 제공 예정',
+    media:['가로등 현수기 (순천 일원)'] },
+  { id:'lamp-gwangyang', name:'가로등 현수기 — 광양', city:'광양', kind:'print', lat:34.9403, lng:127.6959, status:'운영중', units:1, zone:true, approx:true, note:'배치도 제공 예정',
+    media:['가로등 현수기 (광양 일원)'] }
+];
+
 let PERFS=[];
 let _perfReady=false;   // [버그수정] 프로그램 로드+updatePerfOpen 완료 여부 — 홍보 위저드 조기 오픈(미로딩 상태) 차단용
 let _DRAFTS=[];         // 임시저장 전용 배열 — loadData에서 '임시저장' 컬럼으로 records와 분리(집계/관리에 구조적으로 안 섞임)
@@ -4809,7 +4829,10 @@ function openPlatformBoard(){
     + '<div class="modal platform-modal" style="width:96vw;max-width:1400px;height:92vh;max-height:92vh;padding:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:#fff">'
     + '<button class="modal-x" onclick="closePlatformBoard()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:14px;float:none;margin:0;z-index:10">✕</button>'
     + '<div style="padding:18px 24px;border-bottom:1px solid #eee;font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px">🗺️ <span>플랫폼 현황</span>'
-      + (userRole==='admin' ? '<button onclick="openSignageManager()" title="사이니지 송출 사진 관리" style="margin-left:auto;margin-right:40px;font-size:12px;font-weight:600;padding:7px 14px;border:1px solid var(--accent);color:var(--accent);background:#fff;border-radius:9px;cursor:pointer;font-family:inherit">📺 사이니지 관리</button>' : '')
+      + '<div style="margin-left:auto;margin-right:40px;display:flex;gap:8px;align-items:center">'
+      + '<button onclick="_pmapHome()" title="홍보 현황 지도 (여수·순천·광양)" style="font-size:12px;font-weight:600;padding:7px 14px;border:1px solid var(--accent);color:var(--surface-solid);background:var(--accent);border-radius:9px;cursor:pointer;font-family:inherit">📡 홍보 지도</button>'
+      + (userRole==='admin' ? '<button onclick="openSignageManager()" title="사이니지 송출 사진 관리" style="font-size:12px;font-weight:600;padding:7px 14px;border:1px solid var(--accent);color:var(--accent);background:#fff;border-radius:9px;cursor:pointer;font-family:inherit">📺 사이니지 관리</button>' : '')
+      + '</div>'
     + '</div>'
     + '<div style="display:flex;flex:1;overflow:hidden;min-height:0">'
     + '<div id="platform-tree" style="width:340px;flex-shrink:0;min-width:220px;border-right:1px solid #eee;overflow:auto;padding:12px 8px;background:#fafafa"></div>'
@@ -4832,6 +4855,7 @@ function closePlatformBoard(){
   if(_platformState && _platformState.escHandler){
     document.removeEventListener('keydown', _platformState.escHandler);
   }
+  _pmapDestroy();
   _platformState = null;
   const el = document.getElementById('platform-board');
   if(el) el.innerHTML = '';
@@ -5294,6 +5318,292 @@ function closeDidPartnerDetail(){
   }
   if(el) el.innerHTML = '';
 }
+// === 📡 홍보 현황 지도 대시보드 (여수·순천·광양) — 플랫폼 현황 기본 화면 ===
+// 운영센터 대시보드 구성(좌 통계 카드·활동 피드 + 우 지도·거점 콜아웃)을 디자인 기틀 토큰만으로 구현.
+// 거점 데이터 = PROMO_MAP_SPOTS(상단 const) + DID_PARTNERS 합성. 기존 DID 지도/조감도는 콜아웃에서 재사용.
+let _pmapState=null;
+const _PMAP_KINDS={
+  venue:{label:'예울마루',tok:'--accent'},
+  did:{label:'협력기관 DID',tok:'--c5'},
+  board:{label:'전광판',tok:'--c4'},
+  print:{label:'현수기·입간판',tok:'--c2'}
+};
+const _PMAP_CITY={
+  '여수':{lat:34.752,lng:127.662,zoom:12},
+  '순천':{lat:34.9506,lng:127.4872,zoom:12},
+  '광양':{lat:34.9403,lng:127.6959,zoom:12}
+};
+function _pmapAllSpots(){
+  const out=PROMO_MAP_SPOTS.slice();
+  for(const p of DID_PARTNERS){
+    if(p.status==='미설치'||p.lat==null||p.lng==null)continue;
+    out.push({ id:'did-'+p.id, name:p.name, city:'여수', kind:'did', lat:p.lat, lng:p.lng, units:1,
+      status:p.status==='설치완료'?'운영중':'예정', media:['협력기관 DID 1대'], didRef:p.id, addr:p.addr||'' });
+  }
+  return out;
+}
+function _pmapVisible(){
+  if(!_pmapState)return[];
+  return _pmapAllSpots().filter(function(s){
+    return (_pmapState.kind==='all'||s.kind===_pmapState.kind)&&(_pmapState.city==='all'||s.city===_pmapState.city);
+  });
+}
+function _pmapDestroy(){
+  if(!_pmapState)return;
+  if(_pmapState.clock)clearInterval(_pmapState.clock);
+  if(_pmapState.markers)_pmapState.markers.forEach(function(m){try{m.setMap&&m.setMap(null);}catch(e){}});
+  if(_pmapState.iw){try{_pmapState.iw.close();}catch(e){}}
+  if(_pmapState.map){try{_pmapState.map.destroy&&_pmapState.map.destroy();}catch(e){}}
+  _pmapState=null;
+}
+function _pmapHome(){
+  if(!_platformState)return;
+  _platformState.selected=null;
+  renderPlatformTree();
+  renderPlatformDetail();
+}
+function _pmapEnsureStyle(){
+  if(document.getElementById('pm-style'))return;
+  const ss=document.createElement('style');
+  ss.id='pm-style';
+  ss.textContent='.pm-wrap{display:flex;flex-direction:column;height:100%;min-height:0}'
+   +'.pm-hdr{display:flex;align-items:center;gap:14px;padding:16px 22px 12px;flex-shrink:0}'
+   +'.pm-title{font-size:17px;font-weight:800;color:var(--text);display:flex;align-items:center;gap:8px}'
+   +'.pm-title-sub{font-size:12px;font-weight:600;color:var(--dim)}'
+   +'.pm-clock{margin-left:auto;font-size:12.5px;font-weight:700;color:var(--accent);background:var(--accent-light);padding:6px 12px;border-radius:var(--r-btn);letter-spacing:.4px;font-variant-numeric:tabular-nums}'
+   +'.pm-body{display:flex;flex:1;min-height:0;gap:14px;padding:0 22px 18px}'
+   +'.pm-side{width:232px;flex-shrink:0;display:flex;flex-direction:column;gap:10px;min-height:0}'
+   +'.pm-cards{display:flex;flex-direction:column;gap:10px}'
+   +'.pm-card{background:var(--glass-surface);border:1px solid var(--glass-bd);border-radius:var(--radius);box-shadow:var(--glass-shadow);padding:12px 14px}'
+   +'.pm-card-l{font-size:11px;font-weight:700;color:var(--dim);margin-bottom:4px}'
+   +'.pm-card-n{font-size:26px;font-weight:800;color:var(--accent);line-height:1.1;font-variant-numeric:tabular-nums}'
+   +'.pm-card-n small{font-size:12px;font-weight:700;color:var(--dim);margin-left:3px}'
+   +'.pm-card-s{font-size:11px;color:var(--dim);margin-top:4px}'
+   +'.pm-feed-hd{font-size:11px;font-weight:700;color:var(--dim);margin:4px 2px 0}'
+   +'.pm-feed{flex:1;min-height:0;overflow:auto;background:var(--glass-surface);border:1px solid var(--glass-bd);border-radius:var(--radius);box-shadow:var(--glass-shadow);padding:6px}'
+   +'.pm-feed-item{display:flex;align-items:center;gap:7px;padding:7px 8px;border-radius:8px;font-size:11.5px}'
+   +'.pm-feed-item:hover{background:var(--peach-light)}'
+   +'.pm-feed-date{color:var(--dim);font-weight:700;flex-shrink:0;font-variant-numeric:tabular-nums}'
+   +'.pm-feed-txt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)}'
+   +'.pm-feed-st{font-weight:700;flex-shrink:0;font-size:10.5px}'
+   +'.pm-feed-empty{padding:20px 10px;text-align:center;color:var(--muted);font-size:12px}'
+   +'.pm-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:10px;min-height:0}'
+   +'.pm-ctrl{display:flex;align-items:center;gap:6px;flex-wrap:wrap}'
+   +'.pm-ctrl-sep{width:1px;height:18px;background:var(--border);margin:0 4px}'
+   +'.pm-fbtn{padding:6px 12px;border:1.5px solid var(--border);background:var(--surface-solid);color:var(--neutral-text);border-radius:var(--r-btn);cursor:pointer;font-size:12px;font-weight:600;font-family:inherit;transition:all .15s;display:inline-flex;align-items:center;gap:6px}'
+   +'.pm-fbtn:hover{border-color:var(--accent);color:var(--accent)}'
+   +'.pm-fbtn.on{background:var(--accent);color:var(--surface-solid);border-color:var(--accent)}'
+   +'.pm-kdot{width:8px;height:8px;border-radius:50%;display:inline-block}'
+   +'.pm-mapdiv{flex:1;min-height:280px;border-radius:var(--radius-lg);overflow:hidden;border:1px solid var(--glass-bd);box-shadow:var(--glass-shadow);background:var(--neutral);position:relative}'
+   +'.pm-map-loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--dim);font-size:13px}'
+   +'.pm-mk{position:relative;cursor:pointer}'
+   +'.pm-dot{border-radius:50%;border:2.5px solid var(--surface-solid);box-shadow:0 2px 10px var(--accent-glow)}'
+   +'.pm-dot.pend{opacity:.6}'
+   +'.pm-pulse::after{content:"";position:absolute;inset:-6px;border-radius:50%;border:2px solid var(--accent);animation:pmPulse 1.8s ease-out infinite;pointer-events:none}'
+   +'@keyframes pmPulse{0%{transform:scale(.7);opacity:.9}100%{transform:scale(1.7);opacity:0}}'
+   +'.pm-mk-label{position:absolute;top:100%;left:50%;transform:translateX(-50%);margin-top:5px;background:var(--glass-surface);border:1px solid var(--glass-bd);backdrop-filter:blur(6px);color:var(--text);font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:8px;white-space:nowrap;box-shadow:var(--glass-shadow);pointer-events:none}'
+   +'.pm-callout{background:var(--glass-surface);backdrop-filter:blur(10px);border:1px solid var(--glass-bd);border-radius:var(--r-pop);box-shadow:var(--elev);padding:13px 15px;min-width:230px;max-width:300px;font-family:inherit;position:relative}'
+   +'.pm-co-x{position:absolute;top:8px;right:8px;border:0;background:transparent;color:var(--dim);cursor:pointer;font-size:13px;padding:2px 6px;border-radius:6px;font-family:inherit}'
+   +'.pm-co-x:hover{background:var(--neutral)}'
+   +'.pm-co-hd{display:flex;align-items:center;gap:7px;font-size:13.5px;font-weight:800;color:var(--text);padding-right:20px}'
+   +'.pm-co-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}'
+   +'.pm-co-st{font-size:10px;font-weight:800;padding:2px 7px;border-radius:7px;flex-shrink:0}'
+   +'.pm-co-st.run{background:var(--accent-light);color:var(--accent)}'
+   +'.pm-co-st.pend{background:var(--neutral);color:var(--neutral-text)}'
+   +'.pm-co-meta{font-size:11px;color:var(--dim);margin:5px 0 0}'
+   +'.pm-co-sec{font-size:10.5px;font-weight:800;color:var(--dim);margin:11px 0 5px;padding-top:9px;border-top:1px solid var(--border)}'
+   +'.pm-co-li{font-size:12px;color:var(--text);padding:3px 0;display:flex;gap:6px;align-items:baseline}'
+   +'.pm-co-li::before{content:"·";color:var(--accent);font-weight:800}'
+   +'.pm-co-thumbs{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px}'
+   +'.pm-co-thumbs img{width:44px;height:33px;object-fit:cover;border-radius:6px;border:1px solid var(--border);background:var(--neutral)}'
+   +'.pm-co-note{font-size:10.5px;color:var(--dim);margin-top:8px;background:var(--peach-light);border-radius:8px;padding:5px 8px}'
+   +'.pm-co-acts{display:flex;gap:6px;margin-top:11px}'
+   +'@media(max-width:900px){.pm-body{flex-direction:column;overflow:auto}.pm-side{width:100%}.pm-cards{display:grid;grid-template-columns:1fr 1fr;gap:8px}.pm-feed{max-height:180px;flex:none}.pm-mapdiv{min-height:340px;flex:none;height:60vh}}';
+  document.head.appendChild(ss);
+}
+function _pmapRenderDashboard(c){
+  _pmapDestroy();
+  _pmapEnsureStyle();
+  _pmapState={kind:'all',city:'all',map:null,markers:[],iw:null,clock:null,manifest:null};
+  c.style.padding='0';
+  c.innerHTML='<div class="pm-wrap">'
+    +'<div class="pm-hdr"><div class="pm-title">📡 홍보 현황 지도 <span class="pm-title-sub">여수 · 순천 · 광양 홍보 매체 운영 현황</span></div><div class="pm-clock" id="pm-clock"></div></div>'
+    +'<div class="pm-body">'
+    +'<div class="pm-side"><div class="pm-cards" id="pm-cards"></div><div class="pm-feed-hd">최근 홍보 신청</div><div class="pm-feed" id="pm-feed"></div></div>'
+    +'<div class="pm-main"><div class="pm-ctrl" id="pm-ctrl"></div><div class="pm-mapdiv" id="pm-mapdiv"><div class="pm-map-loading">지도를 불러오는 중…</div></div></div>'
+    +'</div></div>';
+  _pmapRenderCards();
+  _pmapRenderCtrl();
+  const feedEl=document.getElementById('pm-feed');
+  if(feedEl)feedEl.innerHTML=_pmapFeedHtml();
+  _pmapTickClock();
+  _pmapState.clock=setInterval(_pmapTickClock,1000);
+  _loadNaverMaps(_pmapInitMap);
+  fetch('signage/manifest.json?t='+Date.now(),{cache:'no-store'})
+    .then(function(r){return r.ok?r.json():null;})
+    .then(function(d){ if(!_pmapState||!d)return; _pmapState.manifest=d; _pmapRenderCards(); })
+    .catch(function(){});
+}
+function _pmapTickClock(){
+  const el=document.getElementById('pm-clock');
+  if(!el)return;
+  const n=new Date(),p=function(x){return String(x).padStart(2,'0');};
+  el.textContent=n.getFullYear()+'.'+p(n.getMonth()+1)+'.'+p(n.getDate())+' ('+DAY_NAMES[n.getDay()]+') '+p(n.getHours())+':'+p(n.getMinutes())+':'+p(n.getSeconds());
+}
+function _pmapRenderCards(){
+  const el=document.getElementById('pm-cards');
+  if(!el||!_pmapState)return;
+  const spots=_pmapAllSpots();
+  const act=spots.filter(function(s){return s.status==='운영중';}).length;
+  const pend=spots.length-act;
+  const didC=_didCounts();
+  const units=didC.done+PROMO_MAP_SPOTS.filter(function(s){return s.status==='운영중';}).reduce(function(a,s){return a+(s.units||1);},0);
+  const mf=_pmapState.manifest;
+  const tk=getTodayKey(),ym=tk.slice(0,7);
+  let mCnt=0,todayCnt=0;
+  (((typeof records!=='undefined')&&records)||[]).forEach(function(r){
+    const st=String(r['진행 상태']||'');
+    if(st==='취소'||st==='임시')return;
+    const k=getRecDateKey(r);
+    if(k.slice(0,7)===ym){mCnt++;if(k===tk)todayCnt++;}
+  });
+  const card=function(l,n,unit,s){return '<div class="pm-card"><div class="pm-card-l">'+l+'</div><div class="pm-card-n">'+n+'<small>'+unit+'</small></div><div class="pm-card-s">'+s+'</div></div>';};
+  el.innerHTML=card('홍보 거점',spots.length,'곳','운영 '+act+' · 예정 '+pend)
+    +card('운영 매체',units,'대','협력기관 DID '+didC.done+'대 포함')
+    +card('송출 콘텐츠',mf?((mf.images||[]).length):'—','건',mf?('사이니지 · '+((mf.slideDuration||8000)/1000)+'초 간격'):'사이니지 연동 중…')
+    +card('이번 달 홍보',mCnt,'건','오늘 '+todayCnt+'건');
+}
+function _pmapFeedHtml(){
+  const rs=((((typeof records!=='undefined')&&records)||[]).slice())
+    .filter(function(r){const st=String(r['진행 상태']||'');return st!=='취소'&&st!=='임시';})
+    .sort(function(a,b){return getRecDateKey(b).localeCompare(getRecDateKey(a));})
+    .slice(0,9);
+  if(!rs.length)return '<div class="pm-feed-empty">최근 신청 내역이 없어요</div>';
+  return rs.map(function(r){
+    const k=getRecDateKey(r);
+    const st=statusToPrimary(r['진행 상태']);
+    const stTok=st==='완료'?'--green':(st==='예정'?'--accent':'--c2');
+    return '<div class="pm-feed-item"><span class="pm-feed-date">'+escapeHtml(k.slice(5))+'</span>'
+      +'<span class="pm-feed-txt">'+escapeHtml(String(r['플랫폼 1']||'—'))+' · '+escapeHtml(String(r['콘텐츠 제목']||r['프로그램']||'(제목 없음)'))+'</span>'
+      +'<span class="pm-feed-st" style="color:var('+stTok+')">'+escapeHtml(st||'')+'</span></div>';
+  }).join('');
+}
+function _pmapRenderCtrl(){
+  const el=document.getElementById('pm-ctrl');
+  if(!el||!_pmapState)return;
+  const spots=_pmapAllSpots();
+  let h='';
+  [['all','전체'],['여수','여수'],['순천','순천'],['광양','광양']].forEach(function(c){
+    h+='<button class="pm-fbtn'+(_pmapState.city===c[0]?' on':'')+'" onclick="_pmapSetCity(\''+c[0]+'\')">'+c[1]+'</button>';
+  });
+  h+='<span class="pm-ctrl-sep"></span>';
+  h+='<button class="pm-fbtn'+(_pmapState.kind==='all'?' on':'')+'" onclick="_pmapSetKind(\'all\')">전체 매체</button>';
+  for(const k in _PMAP_KINDS){
+    const cnt=spots.filter(function(s){return s.kind===k;}).length;
+    h+='<button class="pm-fbtn'+(_pmapState.kind===k?' on':'')+'" onclick="_pmapSetKind(\''+k+'\')"><span class="pm-kdot" style="background:var('+_PMAP_KINDS[k].tok+')"></span>'+_PMAP_KINDS[k].label+' '+cnt+'</button>';
+  }
+  el.innerHTML=h;
+}
+function _pmapSetCity(c){ if(!_pmapState)return; _pmapState.city=c; _pmapRenderCtrl(); _pmapDrawMarkers(); _pmapFit(); }
+function _pmapSetKind(k){ if(!_pmapState)return; _pmapState.kind=k; _pmapRenderCtrl(); _pmapDrawMarkers(); }
+function _pmapInitMap(){
+  if(!_pmapState)return;
+  const div=document.getElementById('pm-mapdiv');
+  if(!div)return;
+  div.innerHTML='';
+  const map=new naver.maps.Map(div,{
+    center:new naver.maps.LatLng(34.85,127.58),
+    zoom:10,
+    mapTypeControl:false, scaleControl:false, logoControl:true, mapDataControl:false,
+    zoomControl:true, zoomControlOptions:{position:naver.maps.Position.TOP_RIGHT}
+  });
+  _pmapState.map=map;
+  _pmapState.iw=new naver.maps.InfoWindow({borderWidth:0,backgroundColor:'transparent',disableAnchor:true,pixelOffset:new naver.maps.Point(0,-14)});
+  _pmapDrawMarkers();
+  _pmapFit();
+}
+function _pmapFit(){
+  if(!_pmapState||!_pmapState.map)return;
+  const c=_pmapState.city;
+  if(c!=='all'&&_PMAP_CITY[c]){
+    _pmapState.map.morph(new naver.maps.LatLng(_PMAP_CITY[c].lat,_PMAP_CITY[c].lng),_PMAP_CITY[c].zoom);
+    return;
+  }
+  const vis=_pmapVisible().filter(function(s){return s.lat!=null&&s.lng!=null;});
+  if(!vis.length)return;
+  let b=null;
+  vis.forEach(function(s){
+    const ll=new naver.maps.LatLng(s.lat,s.lng);
+    if(!b)b=new naver.maps.LatLngBounds(ll,ll); else b.extend(ll);
+  });
+  try{ _pmapState.map.fitBounds(b,{top:70,right:70,bottom:70,left:70}); }
+  catch(e){ try{ _pmapState.map.fitBounds(b); }catch(e2){} }
+}
+function _pmapDrawMarkers(){
+  if(!_pmapState||!_pmapState.map)return;
+  _pmapState.markers.forEach(function(m){try{m.setMap(null);}catch(e){}});
+  _pmapState.markers=[];
+  if(_pmapState.iw){try{_pmapState.iw.close();}catch(e){}}
+  const groups=_groupByCoord(_pmapVisible());
+  for(const key in groups){
+    const grp=groups[key];
+    grp.forEach(function(s,i){
+      const off=_offsetCoord(s.lat,s.lng,i,grp.length);
+      const tok=(_PMAP_KINDS[s.kind]||_PMAP_KINDS.did).tok;
+      const pend=s.status!=='운영중';
+      const size=s.kind==='venue'?20:(s.zone?18:14);
+      const label=(s.kind==='venue'||s.zone)?('<div class="pm-mk-label">'+escapeHtml(s.kind==='venue'?s.name:s.city+' · 현수기')+'</div>'):'';
+      const html='<div class="pm-mk'+(s.kind==='venue'?' pm-pulse':'')+'" style="width:'+size+'px;height:'+size+'px">'
+        +'<div class="pm-dot'+(pend?' pend':'')+'" style="width:'+size+'px;height:'+size+'px;background:var('+tok+')"></div>'
+        +label+'</div>';
+      const mk=new naver.maps.Marker({
+        position:new naver.maps.LatLng(off[0],off[1]),
+        map:_pmapState.map, title:s.name,
+        zIndex:s.kind==='venue'?30:(s.zone?20:10),
+        icon:{content:html,anchor:new naver.maps.Point(size/2,size/2)}
+      });
+      naver.maps.Event.addListener(mk,'click',function(){_pmapOpenCallout(s,mk);});
+      _pmapState.markers.push(mk);
+    });
+  }
+}
+function _pmapOpenCallout(s,mk){
+  if(!_pmapState||!_pmapState.iw)return;
+  const kd=_PMAP_KINDS[s.kind]||_PMAP_KINDS.did;
+  const pend=s.status!=='운영중';
+  let items='';
+  (s.media||[]).forEach(function(m){items+='<div class="pm-co-li">'+escapeHtml(m)+'</div>';});
+  let extra='';
+  if(s.kind==='did'){
+    const p=DID_PARTNERS.find(function(x){return x.id===s.didRef;});
+    if(p&&(p.mgr||p.tel))extra+='<div class="pm-co-li">'+escapeHtml(p.mgr?(p.mgr+(p.tel?' · '+p.tel:'')):p.tel)+'</div>';
+    extra+='<div class="pm-co-note">송출 콘텐츠 관리 연동 예정 (Phase A2)</div>';
+  }
+  if(s.signage){
+    const mf=_pmapState.manifest;
+    if(mf&&mf.images&&mf.images.length){
+      extra+='<div class="pm-co-sec">지금 송출 중 — '+mf.images.length+'건 · '+((mf.slideDuration||8000)/1000)+'초 간격</div>'
+        +'<div class="pm-co-thumbs">'+mf.images.map(function(n){return '<img src="signage/'+encodeURI(n)+'" alt="" loading="lazy">';}).join('')+'</div>';
+    }else{
+      extra+='<div class="pm-co-note">송출 콘텐츠 불러오는 중…</div>';
+    }
+  }
+  if(s.note)extra+='<div class="pm-co-note">📋 '+escapeHtml(s.note)+'</div>';
+  if(s.approx)extra+='<div class="pm-co-note">📍 구역 대표 지점 — 좌표는 확정 후 교정 예정</div>';
+  let acts='';
+  if(s.kind==='did'&&s.didRef)acts+='<button class="btn btn--primary btn--sm" onclick="openDidPartnerDetail(\''+s.didRef+'\')">상세 보기</button>';
+  if(s.venue)acts+='<button class="btn btn--neutral btn--sm" onclick="openVenueMap(\''+s.venue+'\')">🛰️ 조감도</button>';
+  const html='<div class="pm-callout">'
+    +'<button class="pm-co-x" onclick="_pmapCloseIw()" aria-label="닫기">✕</button>'
+    +'<div class="pm-co-hd"><span class="pm-co-dot" style="background:var('+kd.tok+')"></span><span>'+escapeHtml(s.name)+'</span><span class="pm-co-st '+(pend?'pend':'run')+'">'+(pend?'예정':'운영중')+'</span></div>'
+    +'<div class="pm-co-meta">'+escapeHtml(kd.label)+' · '+escapeHtml(s.city)+(s.addr?' · '+escapeHtml(s.addr):'')+'</div>'
+    +'<div class="pm-co-sec">이 위치의 홍보물</div>'+items+extra
+    +(acts?'<div class="pm-co-acts">'+acts+'</div>':'')
+    +'</div>';
+  _pmapState.iw.setContent(html);
+  _pmapState.iw.open(_pmapState.map,mk);
+}
+function _pmapCloseIw(){ if(_pmapState&&_pmapState.iw){try{_pmapState.iw.close();}catch(e){}} }
 // === 예울마루 조감도 핀맵 (Phase A2-3) ===
 let _venueMapState = null;
 function openVenueMap(venueFilter){
@@ -5603,9 +5913,12 @@ function renderPlatformDetail(){
   const c = document.getElementById('platform-detail');
   if(!c || !_platformState) return;
   if(!_platformState.selected){
-    c.innerHTML = '<div style="color:#888;text-align:center;padding:80px 20px;font-size:14px;line-height:1.6">좌측에서 매체를 선택해 주세요</div>';
+    // 기본 화면 = 홍보 현황 지도 대시보드 (여수·순천·광양)
+    _pmapRenderDashboard(c);
     return;
   }
+  _pmapDestroy();
+  c.style.padding='24px';
   const node = _platformState.nodes[_platformState.selected];
   if(!node){ c.innerHTML = ''; return; }
   const it = node.item;
