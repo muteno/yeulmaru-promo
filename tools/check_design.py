@@ -29,7 +29,9 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # 1825 → 1822 = 홍보 지도 v4 — 플랫폼 트리 인라인 #eee·#fafafa 토큰화 -2, 사이니지 관리 버튼 제거(#fff) -1 (260704 청산)
 # 1822 → 1823 = PWA 설치 지원(운영자 요청 260704) — <meta name="theme-color"> +1 (HTML 스펙상 리터럴 필수, var() 불가)
 # 1823 → 1824 = PR#96(사용자 등록 이메일 후속, 구 baseline 1827 기준 통과분) rebase 이월 — #aaa +1 (260704)
-BASE_HEX_INDEX = 1824
+# 1824 → 1758 = 유일 레드 확립(운영자 확정 260704: B=--danger 유일 레드·A=--danger-btn 위험 버튼 전용)
+#               — #E24B4A 44→1(-43)·#e5484d 32→9(-23, 토큰정의 2 + 차트 var() 불가 리터럴 8 잔존) 청산
+BASE_HEX_INDEX = 1758
 BASE_HEX_SIGNAGE = 2          # signage/index.html: #000·#333
 BASE_ROOT_INDEX = 2           # L14(기본 팔레트 32토큰) + L1322(뉴트럴·z·c1~c6 26토큰)
 BASE_ROOT_SIGNAGE = 0
