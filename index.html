@@ -2041,8 +2041,8 @@ let selected=null,editing=null,panelOpen=false,activeFilters=[],activePrograms=[
 const pins=document.querySelectorAll('.pin');
 pins.forEach((el,i)=>{
   // PIN 마스킹 — 입력 중(focus)인 칸만 숫자 노출, 칸을 벗어나면 즉시 ●로 가림 (어깨너머 훔쳐보기 방지)
-  el.addEventListener('focus',()=>{el.type='text';});
-  el.addEventListener('blur',()=>{el.type='password';});
+  el.addEventListener('focus',()=>{el.type='text';el.style.setProperty('-webkit-text-security','none');});
+  el.addEventListener('blur',()=>{el.type='password';el.style.removeProperty('-webkit-text-security');});
   el.addEventListener('input',()=>{el.classList.remove('err');if(el.value.length===1&&i<3)pins[i+1].focus();if(i===3&&el.value.length===1)tryLogin();});
   el.addEventListener('keyup',()=>{if(el.value.length===1&&i<3)pins[i+1].focus();});
   el.addEventListener('keydown',e=>{if(e.key==='Backspace'&&!el.value&&i>0)pins[i-1].focus();});
@@ -2384,9 +2384,18 @@ async function initLoginScreen(){
     //  아래 수동 "계속" 버튼을 보여준다 (등록X/휴직/네트워크 실패 시 무한루프 방지).
     if(!window._autoPinDone){
       window._autoPinDone=true;
-      step.innerHTML='<div style="font-size:15px;color:var(--accent);font-weight:700;margin-bottom:3px;word-break:break-all">'+escapeHtml(email)+'</div><div style="font-size:11px;color:#aaa;margin:10px 0 4px">PIN 입력 화면으로 이동 중...</div>';
-      if(typeof goToPinStep==='function'){ setTimeout(function(){goToPinStep(true);},0); }
-      return;
+      // [260704 보안수정] _msalGetEmailSilent는 MSAL 캐시가 비어도 localStorage.lastLoginEmail(표시 전용)을
+      //  반환한다. 이메일만 믿고 자동 진입하면 로그아웃/시크릿창/공용PC에서 MS 토큰 검증 없이 PIN 화면에
+      //  도달해 2FA(MS신원+PIN)가 PIN 단독으로 약화된다. → 실제 라이브 MSAL 세션(getActiveAccount +
+      //  acquireTokenSilent 실검증)일 때만 skipEnsure 자동 진입하고, 아니면 아래 수동 "계속" 버튼으로 폴백
+      //  (수동 goToPinStep()은 _msalEnsureToken으로 실제 MS 재인증을 강제함).
+      let _live=false;
+      try{ _live=await _msalHasLiveSession(); }catch(e){}
+      if(_live){
+        step.innerHTML='<div style="font-size:15px;color:var(--accent);font-weight:700;margin-bottom:3px;word-break:break-all">'+escapeHtml(email)+'</div><div style="font-size:11px;color:#aaa;margin:10px 0 4px">PIN 입력 화면으로 이동 중...</div>';
+        if(typeof goToPinStep==='function'){ setTimeout(function(){goToPinStep(true);},0); }
+        return;
+      }
     }
     step.innerHTML='<div style="font-size:15px;color:var(--accent);font-weight:700;margin-bottom:3px;word-break:break-all">'+escapeHtml(email)+'</div>'
       +'<div style="font-size:11px;color:#aaa;margin-bottom:18px">이 Microsoft 계정으로 로그인됩니다</div>'
@@ -12147,7 +12156,7 @@ async function resetUserPin(rowIndex, userName, email){
     showToast(userName+' 님 PIN 초기화 완료. 다음 접속 때 새로 설정합니다');
     MANAGERS = [];
     await loadManagers();
-    PR_MANAGERS = MANAGERS.filter(m=>isFlagOn(m['정보활용']));
+    PR_MANAGERS = MANAGERS.filter(m=>isFlagOn(m['홍보여부']));
     await renderSheetList('manager');
   }catch(e){
     console.error('[resetUserPin]', e);
@@ -12293,7 +12302,7 @@ function openSheetForm(slug,rowIndex){
     html+='<div><label>이메일<span class="req">*</span></label><input name="이메일" type="email" value="'+escapeHtml(_val('이메일'))+'" required placeholder="name@gscf.or.kr"></div>';
     html+='<div><label style="display:flex;align-items:center;gap:8px;background:#fafafa;padding:12px;border-radius:10px;border:1px solid rgba(0,0,0,0.06);cursor:pointer;margin:0;text-transform:none;letter-spacing:0;color:#333;font-size:13px;font-weight:600"><input type="checkbox" name="휴직여부"'+(_onFlag('휴직여부')?' checked':'')+' style="width:18px;height:18px;cursor:pointer;margin:0"> 휴직</label></div>';
     const _bizCols=[['홍보여부','홍보'],['기관여부','기관'],['공연여부','공연'],['전시여부','전시'],['예술교육여부','교육'],['대관여부','대관']];
-    html+='<div><label style="margin-bottom:6px">담당 업무</label><div style="display:flex;justify-content:center;align-items:center;flex-wrap:nowrap;gap:14px">';
+    html+='<div><label style="margin-bottom:6px">담당 업무</label><div style="display:flex;justify-content:center;align-items:center;flex-wrap:wrap;gap:10px 14px">';
     _bizCols.forEach(function(pair){var k=pair[0],lb=pair[1];html+='<label style="display:flex;align-items:center;gap:5px;cursor:pointer;margin:0;text-transform:none;letter-spacing:0;color:#333;font-size:13px;font-weight:600;white-space:nowrap"><input type="checkbox" name="'+k+'"'+(_onFlag(k)?' checked':'')+' style="width:17px;height:17px;cursor:pointer;margin:0"> '+lb+'</label>';});
     html+='</div></div>';
     const _admLocked=!_isSuperAdmin();
