@@ -509,19 +509,36 @@ __name(handleGetMessages, "handleGetMessages");
 
 async function handleAddMessage(token, msg) {
   const { driveId, itemId } = await ensureMessagesSheet(token);
-  const { rows } = await handleGetSheet(token, MSG_SHEET);
-  const nextRow = rows.length > 0 ? Math.max(...rows.map((r) => r._rowIndex)) + 1 : 2;
+  const sheetPath = sheetPathFor(driveId, itemId, MSG_SHEET);
   const values = [
     msg.id || "", msg.recipient || "", msg.type || "일반", msg.trigger || "",
     msg.before || "", msg.after || "", msg.reason || "", msg.refNo || "",
     msg.refSummary || "", msg.kst || kstNowText(), msg.read ? "TRUE" : "FALSE"
   ];
   const lastCol = colLetter(values.length);
-  const addr = `A${nextRow}:${lastCol}${nextRow}`;
-  // 셀을 텍스트 서식으로 먼저 지정 — KST/번호가 Excel 날짜·숫자로 자동변환되는 것 방지
-  await graphPatch(token, `${sheetPathFor(driveId, itemId, MSG_SHEET)}/range(address='${addr}')`, { numberFormat: [values.map(() => "@")] });
-  await graphPatch(token, `${sheetPathFor(driveId, itemId, MSG_SHEET)}/range(address='${addr}')`, { values: [values] });
-  return { ok: true, row: nextRow };
+  // ⚠️ 비원자 append 경합 방어(분신술 H2): nextRow를 계산해 쓴 뒤 그 행 A열을 read-back 검증한다.
+  //   내 id가 아니면(동시/근접 POST가 read-lag 틈에 같은 행 선점) 재계산 후 재시도 → 다중 관리자
+  //   팬아웃·교차세션에서 같은 행을 겹쳐써 알림이 유실되던 것 차단. 성공 시엔 write가 read로 전파
+  //   확정된 상태라 프론트 순차 await의 다음 수신자 GET이 이 행을 반드시 보게 돼 lag 유실도 줄인다.
+  let row = 2;
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const { rows } = await handleGetSheet(token, MSG_SHEET);
+    // 멱등: 같은 id가 이미 있으면(재시도·중복 POST) 재기록 없이 성공 반환 — 중복 알림 방지
+    if (msg.id) { const dup = rows.find((r) => String(r["ID"] || "") === String(msg.id)); if (dup) return { ok: true, row: dup._rowIndex, dedup: true }; }
+    row = rows.length > 0 ? Math.max(...rows.map((r) => r._rowIndex)) + 1 : 2;
+    const addr = `A${row}:${lastCol}${row}`;
+    // 셀을 텍스트 서식으로 먼저 지정 — KST/번호가 Excel 날짜·숫자로 자동변환되는 것 방지
+    await graphPatch(token, `${sheetPath}/range(address='${addr}')`, { numberFormat: [values.map(() => "@")] });
+    await graphPatch(token, `${sheetPath}/range(address='${addr}')`, { values: [values] });
+    if (!msg.id) break;  // 검증할 키 없음 — 기존 동작 유지
+    try {
+      const chk = await graphGet(token, `${sheetPath}/range(address='A${row}')`);
+      const got = chk && chk.values && chk.values[0] ? String(chk.values[0][0]) : "";
+      if (got === String(msg.id)) break;  // 내 것 확정 — 성공
+    } catch (e) { break; }  // 검증 조회 실패 시 무한 재시도 방지 — 일단 성공 간주
+    await new Promise((r) => setTimeout(r, 250 * (attempt + 1)));  // 짧은 backoff 후 재계산
+  }
+  return { ok: true, row };
 }
 __name(handleAddMessage, "handleAddMessage");
 
