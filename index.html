@@ -5396,10 +5396,8 @@ function _pmapEnsureStyle(){
   ss.textContent='.pm-wrap{position:relative;width:100%;height:100%;min-height:0;overflow:hidden}'
    +'.pm-mapdiv{position:absolute;inset:0;background:var(--neutral)}'
    +'.pm-map-loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--dim);font-size:13px}'
-   +'.pm-fmap{position:absolute;inset:0;overflow:hidden;background:var(--bg)}'
-   +'.pm-fmap::before{content:"";position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:52px 52px;opacity:.5;pointer-events:none}'
-   +'.pm-fzone{position:absolute;transform:translate(-50%,-50%);border-radius:50%;background:var(--accent-glow);border:1px solid var(--glass-bd);pointer-events:none;z-index:1}'
-   +'.pm-fzone-lb{position:absolute;transform:translate(-50%,-50%);font-size:13px;font-weight:800;color:var(--dim);letter-spacing:.1em;pointer-events:none;z-index:1}'
+   +'.pm-fmap{position:absolute;inset:0;overflow:hidden;background:var(--neutral)}'
+   +'.pm-fmap::after{content:"";position:absolute;inset:0;background:rgba(255,255,255,.12);pointer-events:none;z-index:0}'
    +'.pm-fdot{position:absolute;transform:translate(-50%,-50%);cursor:pointer;opacity:0;animation:pmFPop .35s ease forwards;z-index:2}'
    +'@keyframes pmFPop{from{opacity:0;transform:translate(-50%,-50%) scale(.4)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}'
    +'.pm-fdot .pm-mk{position:relative}'
@@ -5518,11 +5516,11 @@ function _pmapRenderDashboard(c){
   _pmapRenderCards();
   _pmapRenderCtrl();
   _pmapApplyPanels();
-  // 지도는 항상 즉시 뜬다: 약식 위치도 먼저 → 네이버 연결 성공 시 자동 교체
-  _pmapRenderFallback('네이버 지도 연결 중 — 연결되면 실지도로 자동 전환');
+  // 지도는 항상 즉시 뜬다: OSM 기반 정적 지도 먼저 → 네이버 연결 성공 시 인터랙티브 지도로 자동 교체
+  _pmapRenderFallback('여수·순천·광양 홍보 거점 지도 (OSM)');
   setTimeout(function(){
     if(_pmapState&&!_pmapState.map){
-      _pmapState.fbNote='네이버 지도 미연결 — 약식 위치도로 표시 중 (마커·검색·메뉴 정상 동작)';
+      _pmapState.fbNote='OSM 지도 · 네이버 연결 시 확대·이동 지원';
       const n=document.querySelector('#pm-mapdiv .pm-fmap-note');
       if(n)n.textContent=_pmapState.fbNote;
     }
@@ -5738,17 +5736,24 @@ function _pmapCloseIw(){
   if(f)f.innerHTML='';
 }
 // === 약식 위치도(폴백 지도) — 네이버 미연결/실패 시에도 지도가 항상 뜨고 그 위에 거점 표기 (운영자 확정 260704) ===
-// 실좌표(lat/lng)를 % 투영해 마커 배치. 전체 뷰=도시 집계 배지, 도시 선택=거점 마커. 네이버 연결되면 자동 교체.
-const _PMAP_FB_BOUNDS={
-  all:{latMin:34.66,latMax:35.04,lngMin:127.34,lngMax:127.82},
-  '여수':{latMin:34.715,latMax:34.79,lngMin:127.60,lngMax:127.73},
-  '순천':{latMin:34.90,latMax:35.00,lngMin:127.42,lngMax:127.56},
-  '광양':{latMin:34.89,latMax:34.99,lngMin:127.64,lngMax:127.76}
+// 실제 지도 배경 = OSM 타일을 미리 구운 정적 이미지(image/promomap-*.jpg, 외부 의존 0). 마커는 Web Mercator로 투영.
+// 전체 뷰=도시 집계 배지, 도시 선택=거점 마커. 네이버 연결되면 실지도로 자동 교체.
+const _PMAP_FB_MAPS={
+  // fit=contain(전체: 세 도시 다 보이게 여백) / cover(도시별: 꽉 채움). 실좌표는 Web Mercator로 투영.
+  all:{z:11,x0:1748,y0:811,w:1024,h:768,file:'image/promomap-all.jpg',fit:'contain'},
+  '여수':{z:13,x0:6999,y0:3250,w:1024,h:768,file:'image/promomap-yeosu.jpg',fit:'cover'},
+  '순천':{z:13,x0:6995,y0:3244,w:1024,h:1024,file:'image/promomap-suncheon.jpg',fit:'cover'},
+  '광양':{z:13,x0:7000,y0:3245,w:1024,h:768,file:'image/promomap-gwangyang.jpg',fit:'cover'}
 };
-function _pmapProj(lat,lng,b){
-  const x=(lng-b.lngMin)/(b.lngMax-b.lngMin)*100;
-  const y=(b.latMax-lat)/(b.latMax-b.latMin)*100;
-  return { x:Math.max(3,Math.min(97,x)), y:Math.max(6,Math.min(92,y)) };
+// lat/lng → 컨테이너 내 % 위치. cover 크롭/contain 여백까지 반영(마커가 지도와 정확히 정렬).
+function _pmapFbPos(lat,lng,m,cw,ch){
+  const n=Math.pow(2,m.z);
+  const xt=(lng+180)/360*n;
+  const yt=(1-Math.asinh(Math.tan(lat*Math.PI/180))/Math.PI)/2*n;
+  const ix=(xt-m.x0)*256, iy=(yt-m.y0)*256;
+  const scale=(m.fit==='contain')?Math.min(cw/m.w, ch/m.h):Math.max(cw/m.w, ch/m.h);
+  const offX=(m.w*scale-cw)/2, offY=(m.h*scale-ch)/2;
+  return { x:(ix*scale-offX)/cw*100, y:(iy*scale-offY)/ch*100 };
 }
 function _pmapRenderFallback(note){
   if(!_pmapState)return;
@@ -5756,7 +5761,8 @@ function _pmapRenderFallback(note){
   if(!div)return;
   if(note)_pmapState.fbNote=note;
   const city=_pmapState.city;
-  const b=_PMAP_FB_BOUNDS[city]||_PMAP_FB_BOUNDS.all;
+  const m=_PMAP_FB_MAPS[city]||_PMAP_FB_MAPS.all;
+  const cw=div.clientWidth||m.w, ch=div.clientHeight||m.h;
   let h='';
   if(city==='all'){
     const spots=_pmapVisible();
@@ -5764,9 +5770,7 @@ function _pmapRenderFallback(note){
     Object.keys(_PMAP_CITY).forEach(function(c){
       const cs=spots.filter(function(s){return s.city===c;});
       if(!cs.length)return;
-      const p=_pmapProj(_PMAP_CITY[c].lat,_PMAP_CITY[c].lng,b);
-      const zr=Math.max(64,Math.min(150,34+cs.length*4));
-      h+='<div class="pm-fzone" style="left:'+p.x+'%;top:'+p.y+'%;width:'+zr+'px;height:'+zr+'px"></div>';
+      const p=_pmapFbPos(_PMAP_CITY[c].lat,_PMAP_CITY[c].lng,m,cw,ch);
       h+='<div class="pm-fdot" style="left:'+p.x+'%;top:'+p.y+'%;animation-delay:'+(i*130)+'ms" onclick="_pmapSetCity(\''+c+'\')">'
         +'<div class="pm-badge pm-badge--city" style="position:static;transform:none"><b>'+c+'</b><span>거점 '+cs.length+'</span></div>'
         +'</div>';
@@ -5777,7 +5781,7 @@ function _pmapRenderFallback(note){
     let i=0;
     for(const k in groups){
       const g=groups[k],s=g[0];
-      const p=_pmapProj(s.lat,s.lng,b);
+      const p=_pmapFbPos(s.lat,s.lng,m,cw,ch);
       const tok=(_PMAP_KINDS[s.kind]||_PMAP_KINDS.did).tok;
       const pend=s.status!=='운영중';
       const size=s.kind==='venue'?20:(s.zone?18:14);
@@ -5789,9 +5793,12 @@ function _pmapRenderFallback(note){
       i++;
     }
   }
-  div.innerHTML='<div class="pm-fmap">'+h
+  const bg=(m.fit==='contain')
+    ?'background-image:url('+m.file+');background-size:contain;background-repeat:no-repeat;background-position:center;background-color:var(--neutral)'
+    :'background-image:url('+m.file+');background-size:cover;background-position:center';
+  div.innerHTML='<div class="pm-fmap" style="'+bg+'">'+h
     +'<div class="pm-fco" id="pm-fco"></div>'
-    +'<div class="pm-fmap-note">'+escapeHtml(_pmapState.fbNote||'약식 위치도')+'</div>'
+    +'<div class="pm-fmap-note">'+escapeHtml(_pmapState.fbNote||'약식 위치도')+' · © OpenStreetMap</div>'
     +'</div>';
 }
 function _pmapFbSpot(id,mi){
@@ -5799,10 +5806,10 @@ function _pmapFbSpot(id,mi){
   const co=document.getElementById('pm-fco');
   if(!s||!co)return;
   const wrap=co.parentElement;
-  const b=(_pmapState&&_PMAP_FB_BOUNDS[_pmapState.city])||_PMAP_FB_BOUNDS.all;
-  const p=_pmapProj(s.lat,s.lng,b);
-  co.innerHTML=_pmapCalloutHtml(s);
+  const m=(_pmapState&&_PMAP_FB_MAPS[_pmapState.city])||_PMAP_FB_MAPS.all;
   const W=wrap.offsetWidth||600,H=wrap.offsetHeight||400;
+  const p=_pmapFbPos(s.lat,s.lng,m,W,H);
+  co.innerHTML=_pmapCalloutHtml(s);
   let x=W*p.x/100+16, y=H*p.y/100-20;
   x=Math.max(8,Math.min(x,W-300));
   y=Math.max(8,Math.min(y,H-170));
