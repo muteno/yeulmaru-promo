@@ -1481,10 +1481,10 @@ table.promo-board-table thead th:last-child{border-top-right-radius:11px}
     <div id="pin-step" style="display:none">
       <div id="pin-account" style="font-size:12px;color:#888;text-align:center;margin-bottom:14px"></div>
       <div class="pin-wrap">
-        <input class="pin" type="text" maxlength="1" inputmode="numeric" autocomplete="off">
-        <input class="pin" type="text" maxlength="1" inputmode="numeric" autocomplete="off">
-        <input class="pin" type="text" maxlength="1" inputmode="numeric" autocomplete="off">
-        <input class="pin" type="text" maxlength="1" inputmode="numeric" autocomplete="off">
+        <input class="pin" type="password" maxlength="1" inputmode="numeric" autocomplete="off">
+        <input class="pin" type="password" maxlength="1" inputmode="numeric" autocomplete="off">
+        <input class="pin" type="password" maxlength="1" inputmode="numeric" autocomplete="off">
+        <input class="pin" type="password" maxlength="1" inputmode="numeric" autocomplete="off">
       </div>
       <div id="login-msg"></div>
       <div id="login-load"></div>
@@ -2040,6 +2040,9 @@ let selected=null,editing=null,panelOpen=false,activeFilters=[],activePrograms=[
 // PIN
 const pins=document.querySelectorAll('.pin');
 pins.forEach((el,i)=>{
+  // PIN 마스킹 — 입력 중(focus)인 칸만 숫자 노출, 칸을 벗어나면 즉시 ●로 가림 (어깨너머 훔쳐보기 방지)
+  el.addEventListener('focus',()=>{el.type='text';});
+  el.addEventListener('blur',()=>{el.type='password';});
   el.addEventListener('input',()=>{el.classList.remove('err');if(el.value.length===1&&i<3)pins[i+1].focus();if(i===3&&el.value.length===1)tryLogin();});
   el.addEventListener('keyup',()=>{if(el.value.length===1&&i<3)pins[i+1].focus();});
   el.addEventListener('keydown',e=>{if(e.key==='Backspace'&&!el.value&&i>0)pins[i-1].focus();});
@@ -2376,6 +2379,15 @@ async function initLoginScreen(){
   try{ email=await _msalGetEmailSilent(); }catch(e){}
   if(email){
     _loginEmail=email;
+    // [260704] 이미 MS 로그인된 상태면 "계속" 클릭 없이 자동으로 PIN 단계로 이동 (재방문 편의).
+    //  ⚠️ 1회만 — goToPinStep이 실패해 initLoginScreen으로 되돌아오면(_autoPinDone=true) 자동 진입을 멈추고
+    //  아래 수동 "계속" 버튼을 보여준다 (등록X/휴직/네트워크 실패 시 무한루프 방지).
+    if(!window._autoPinDone){
+      window._autoPinDone=true;
+      step.innerHTML='<div style="font-size:15px;color:var(--accent);font-weight:700;margin-bottom:3px;word-break:break-all">'+escapeHtml(email)+'</div><div style="font-size:11px;color:#aaa;margin:10px 0 4px">PIN 입력 화면으로 이동 중...</div>';
+      if(typeof goToPinStep==='function'){ setTimeout(function(){goToPinStep(true);},0); }
+      return;
+    }
     step.innerHTML='<div style="font-size:15px;color:var(--accent);font-weight:700;margin-bottom:3px;word-break:break-all">'+escapeHtml(email)+'</div>'
       +'<div style="font-size:11px;color:#aaa;margin-bottom:18px">이 Microsoft 계정으로 로그인됩니다</div>'
       +'<button type="button" onclick="goToPinStep()" style="width:100%;padding:12px;background:var(--accent);color:#fff;border:0;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer">계속</button>'
@@ -2475,7 +2487,8 @@ function _enterPinInputStep(){
   },500);
 }function backToAccountStep(){
   if(sessionStorage.getItem('pw')){console.log('[backToAccount] blocked — pw exists, reload artifact');return;}
-  window._pinActive=false; _fullLogout();
+  // 사용자가 명시적으로 계정을 다시 고르는 흐름 → 자동 PIN 진입 방지(수동 버튼 표시)
+  window._pinActive=false; window._autoPinDone=true; _fullLogout();
   const ps=document.getElementById('pin-step'); if(ps)ps.style.display='none';
   const a=document.getElementById('account-step'); if(a)a.style.display=''; if(typeof initLoginScreen==='function'){ try{initLoginScreen();}catch(e){console.error('[backToAccount->init]',e);} }
   pins.forEach(function(x){x.value='';x.classList.remove('err');});
@@ -12154,11 +12167,12 @@ function openEmailReset(rowIndex, userName, curEmail){
   html+='<h3 style="margin:0 0 4px;text-align:left">✉ 이메일 재설정</h3>';
   html+='<p style="margin:0 0 16px;color:var(--dim);font-size:13px"><b>'+escapeHtml(userName||'사용자')+'</b> 님 · '+_cur+'</p>';
   html+='<form id="email-reset-form" onsubmit="event.preventDefault();saveEmailReset('+rowIndex+')" style="display:flex;flex-direction:column;gap:12px">';
-  html+='<div><label>새 이메일<span class="req">*</span></label><input id="er-email1" type="email" required placeholder="name@gscf.or.kr" autocomplete="off"></div>';
-  html+='<div><label>이메일 확인<span class="req">*</span></label><input id="er-email2" type="email" required placeholder="한 번 더 입력해 주세요" autocomplete="off"></div>';
+  html+='<div><label>새 이메일<span class="req">*</span></label><input id="er-email1" type="email" required placeholder="name@gscf.or.kr" autocomplete="off" oninput="_emailResetCheck()"></div>';
+  html+='<div><label>이메일 확인<span class="req">*</span></label><input id="er-email2" type="email" required placeholder="한 번 더 입력해 주세요" autocomplete="off" oninput="_emailResetCheck()"></div>';
+  html+='<div id="er-match" style="font-size:12px;min-height:15px;margin-top:-4px;font-weight:600"></div>';
   html+='<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:4px;padding-top:14px;border-top:1px solid var(--border)">';
   html+='<button type="button" onclick="closeEmailReset()" style="padding:9px 18px;border:1px solid rgba(0,0,0,0.08);border-radius:10px;background:var(--surface-solid);cursor:pointer;font-size:13px">취소</button>';
-  html+='<button type="submit" style="padding:9px 22px;background:var(--accent);color:var(--surface-solid);border:0;border-radius:10px;cursor:pointer;font-weight:600;font-size:13px">저장</button>';
+  html+='<button type="submit" id="er-save" style="padding:9px 22px;background:var(--accent);color:var(--surface-solid);border:0;border-radius:10px;cursor:pointer;font-weight:600;font-size:13px">저장</button>';
   html+='</div></form></div></div>';
   let el=document.getElementById('email-reset-modal');
   if(!el){el=document.createElement('div');el.id='email-reset-modal';document.body.appendChild(el);}
@@ -12168,6 +12182,23 @@ function openEmailReset(rowIndex, userName, curEmail){
 function closeEmailReset(){
   const el=document.getElementById('email-reset-modal');
   if(el)el.innerHTML='';
+}
+// 이메일 재설정 — 두 칸 실시간 일치 검사 (불일치 즉시 안내 + 저장 버튼 비활성)
+function _emailResetCheck(){
+  var i1=document.getElementById('er-email1'),i2=document.getElementById('er-email2');
+  var msg=document.getElementById('er-match'),btn=document.getElementById('er-save');
+  if(!i1||!i2||!msg)return;
+  var e1=(i1.value||'').trim(),e2=(i2.value||'').trim();
+  if(!e2){ msg.textContent=''; if(btn){btn.disabled=false;btn.style.opacity='';} return; }
+  if(e1===e2){
+    msg.textContent='✓ 이메일이 일치해요';
+    msg.style.color='var(--green)';
+    if(btn){btn.disabled=false;btn.style.opacity='';btn.style.cursor='pointer';}
+  }else{
+    msg.textContent='✕ 이메일이 일치하지 않아요';
+    msg.style.color='var(--peach-text)';
+    if(btn){btn.disabled=true;btn.style.opacity='0.5';btn.style.cursor='not-allowed';}
+  }
 }
 async function saveEmailReset(rowIndex){
   const e1=((document.getElementById('er-email1')||{}).value||'').trim();

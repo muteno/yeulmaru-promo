@@ -29,7 +29,9 @@
 - **이메일 = 로그인 키**: `set-pin`이 `이메일`로 사용자 매칭 → 이메일 없으면 PIN 설정·로그인 불가라서 등록 폼에서 **필수(required)** 로 함. (기존 계정은 스크린샷상 전원 이메일 보유.)
 - **후속(같은 세션) UI 보강**: ① 등록 폼 담당 업무 체크박스 = 배경/테두리 **도형 제거 후 한 줄 중앙정렬**(6종: 홍보·기관·공연·전시·교육·대관). ② 사용자 관리 **목록 각 행에 ✉ 이메일 재설정 버튼**(초기화 좌측) 추가 → `openEmailReset`/`saveEmailReset` 모달(새 이메일 **2회 입력 일치** 시 저장). 저장은 positional PATCH로 **이메일(O열)만 교체하고 PIN·비밀번호·관리자 등 나머지 컬럼 원본 보존**(`_sheetCache` 기존값 그대로). 색은 기존 기틀 토큰(`var(--accent)`·`var(--dim)`·`var(--surface-solid)`)만 써서 디자인 게이트 통과(raw hex 1826/1827, 오히려 1 감소).
 - **⚠️ 라이브 반영 = PR 머지 필요**: GitHub Pages는 **main 브랜치**에서 빌드 → 이 작업 브랜치(`claude/user-registration-email-0d5qfy`) push만으론 라이브 미반영. **PR #93 머지 후** GitHub Pages 빌드(1~2분) → 캐시버스트(`Ctrl+Shift+R`)로 확인.
-- **검증**: JS 문법(node --check) · 디자인 게이트(1826/1827) · columns 15열 정합 · positional 저장 시뮬(신규 등록: 계정여부→M열·이메일→O열 / 이메일 재설정: 이메일만 교체·나머지 보존) 전부 통과. **라이브 저장/조회 최종 확인은 PR 머지·배포 후** 실제 등록 → 시트 O열 값 확인 필요.
+- **후속2(로그인/PIN 개선, PR #93 머지 후 새 브랜치)**: ① **PIN 입력 마스킹** — `.pin` input `type=password` 기본 + focus 시 text/blur 시 password 토글(`pins.forEach` 리스너). **입력 중인 칸만 숫자 노출, 다음 칸으로 넘어가면 이전 칸 즉시 ●** (사용자 지적: 어깨너머로 4자리 다 보이던 취약점). ② **로그인 자동 PIN** — `initLoginScreen`에서 `_msalGetEmailSilent` 성공(이미 MS 로그인 상태)이면 '계속' 버튼 없이 `goToPinStep(true)` 자동 진입(`_resumePin`과 동일 방식이라 COOP 안전). **⚠️ 무한루프 가드 `window._autoPinDone`** — 1회만 자동, goToPinStep 실패로 `initLoginScreen` 되돌아오면(등록X·휴직·네트워크) 자동 멈추고 수동 '계속' 버튼 폴백. `backToAccountStep`도 `_autoPinDone=true`(계정 전환 시 자동 진입 방지). ③ **이메일 재설정 모달 실시간 검사** `_emailResetCheck`(두 칸 일치/불일치 즉시 안내 + 불일치 시 저장 버튼 비활성, 색은 var(--green)/var(--peach-text)).
+- **✅ 권한·본인신청 반영 확인(코드 검증)**: 담당자 시트 `관리자여부` 수동 변경 → 그 사용자 **다음 로그인** 시 `_enterAsManager`(2350)가 `matched['관리자여부']`로 role=admin/user 결정(15열 정합으로 N열 안 밀려 정확). 신청 → `_buildRecRow`가 `sessionStorage.myApplicant`를 **신청자(S열)** 에 저장 → `_isMineRec`(신청자 기준) 본인 필터 정상.
+- **검증**: JS 문법(node --check) · 디자인 게이트(1827/1827) · columns 15열 정합 · positional 시뮬 · PIN/로그인 신규요소 grep 전부 통과. **⚠️ 로그인 흐름은 함정 영역 — 라이브 사용자 테스트 필수**: 재방문(세션無·MS로그인有)→PIN 자동 / 등록X 계정→수동 폴백(무한루프 없음) / '계정 다시 선택'→전환 정상 / PIN 마스킹 육안 확인. **라이브 반영은 PR 머지·배포 후.**
 
 ---
 
