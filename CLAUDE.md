@@ -54,6 +54,18 @@
 
 ---
 
+## 🆕 세션 (2026-07-04 2차, 원격 클코 web) — 일정관리 보드 일괄 변경(다중선택 → 일괄 이동/취소) (PR 작업 중)
+
+- **🎯 요청**: 일정관리 보드(`renderPromoBoard`)에서 **[일정 변경] 누르면 다중선택 토글 모드** → 체크한 것들 **일괄 일정변경/취소**(자기 권한 있는 것만). "기존 신청/변경 로직 그대로 재사용"이 사용자 지시.
+- **설계 원칙**: renderPromoBoard(480줄, 핵심 화면)를 최소 침습. **선택 바는 모달 하단 고정**(openPromoBoard의 `promo-board-body` 형제 `#edit-mode-bar`)이라 렌더 로직 안 건드림. 색은 전부 기존 토큰(`var()`)·rgba로 디자인 게이트 유지(1827/1827).
+- **1단계(선택 UI)**: 전역 `_editMode`/`_editChecks`, `_editableRec(r)`(특수일정·완료/취소/임시 제외 + admin이거나 `_isMineRec` 본인). 필터바에 `_toggleEditMode()` [✎ 일정 변경] 토글. 행 NO셀에 `_editMode&&_editableRec`면 체크박스(`data-edit-row`, `_toggleEditCheck`), 편집모드인데 변경불가면 흐림. 하단 바 `_updateEditBar`(N건 선택 + 액션). 기존 신청대기 `_pendingChecks`(접수용)와 별개 분기.
+- **2단계(실행 — 전부 기존 로직 재사용)**: ① **일괄 이동 `_bulkMoveSchedule`**: 모달 2방식(`특정 날짜로 통일` date+time / `N일 이동` `addDaysKey`, 시간 유지). 각 건 **`_validateScheduleChange(rec,newDate,newTime,{action:'move',...ignoreRowIndex})`**(완료취소/접수시간대/홍보기간 검증 + 자기 제외) → 통과분만 **submitPromoEdit Step3와 동일한 날짜 파생필드 patch**(연/월/일/요일/입력시간/시리얼) → `buildRecordRow`→PATCH 순차. admin이 신청중 이동 시 자동 예정+신청자 알림, 검증 실패건 스킵(사유 토스트). ② **일괄 취소 `_bulkCancelSchedule`**: `bulkCancelPending` 로직 복제(_editChecks 기반 + `_editableRec` 가드 + 취소사유 모달 + 종결 스킵 + 신청자 알림).
+- **검증**: 문법(node --check) · 디자인 게이트(1827/1827) · 날짜 변환 시뮬(통일/±N일 연월일요일시리얼 정확) 통과. **⚠️ records PATCH(데이터 변경)라 라이브 테스트 필수** — 실제 선택→이동/취소 후 시트·캘린더 반영, 권한 필터(남의 것 흐림), 검증 스킵 동작 확인. **분신술(멀티에이전트) 적대적 검증 권장**(데이터 변경 + 다중선택 엣지케이스).
+
+---
+
+---
+
 ## 🆕 세션 (2026-07-01 2차, 원격 클코 web) — 홍보 전 콘텐츠 opt-in + 폼 ON/OFF + URL·ID 버그 수정 + 불편사항 관리 (PR #67·#72 머지·라이브)
 
 - **🚨 '프로그램' 시트 실제 컬럼 레이아웃(함정 — 다음 세션 필독)**: `A`NO·`B`콘텐츠구분·`C`풀네임·`D`줄임말·`E`판매시작일·`F`판매종료일·`G`시작일·`H`종료일·`I`담당자·`J`장소·**`K`URL**·**`L`공연ID**(#71 이후 헤더 '프로그램ID'로 개명, 코드는 `프로그램ID→공연ID` 폴백)·**`M`홍보시작일**·**`N`홍보종료일**. ⚠️ **`saveProgram`은 positional 14컬럼 배열**로 저장한다 — 시트 컬럼 순서가 바뀌면 반드시 이 배열도 동기화. (구 버전이 홍보 날짜를 K/L에 써서 URL·공연ID를 덮어써 **브런치Ⅲ 손상**시킨 버그가 있었음 → 지금은 URL(K)·프로그램ID(L) 기존값 보존, 홍보는 M/N.)
