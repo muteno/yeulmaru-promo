@@ -7102,7 +7102,7 @@ function openPromoBoard(){
   _promoFilter.viewMode='mine';  // 비관리자: 열 때마다 '내 신청만' 기본 (admin은 이 값 무시)
   _promoFilter.colFilters={};
   _promoFilter.sortBy='';_promoFilter.sortDir='asc';
-  const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closePromoBoard)"><div class="modal pb-modal" style="width:96vw;max-width:1100px;height:88vh;max-height:88vh;overflow:hidden;padding:0;position:relative;display:flex;flex-direction:column"><button class="modal-x" onclick="closePromoBoard()" title="닫기" aria-label="닫기" style="position:absolute;top:16px;right:18px;float:none;margin:0;z-index:10">✕</button><div id="promo-board-body" style="flex:1;overflow:auto;padding:26px 30px 26px 30px;text-align:center;color:#888">로딩 중...</div></div></div>';
+  const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closePromoBoard)"><div class="modal pb-modal" style="width:96vw;max-width:1100px;height:88vh;max-height:88vh;overflow:hidden;padding:0;position:relative;display:flex;flex-direction:column"><button class="modal-x" onclick="closePromoBoard()" title="닫기" aria-label="닫기" style="position:absolute;top:16px;right:18px;float:none;margin:0;z-index:10">✕</button><div id="promo-board-body" style="flex:1;overflow:auto;padding:26px 30px 26px 30px;text-align:center;color:#888">로딩 중...</div><div id="edit-mode-bar" style="display:none;align-items:center;gap:12px;padding:12px 24px;border-top:1px solid rgba(0,0,0,0.08);background:var(--surface-solid)"><span style="font-size:13px;font-weight:700;color:var(--accent)"><span id="edit-mode-count">0건 선택</span></span><span style="font-size:11px;color:var(--dim)">변경할 신청을 체크하세요 · 완료/취소·남의 신청은 선택 불가</span><div id="edit-mode-actions" style="display:none;gap:8px;margin-left:auto"><button onclick="_bulkMoveSchedule()" style="padding:8px 16px;border-radius:9px;border:0;background:var(--accent);color:var(--surface-solid);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">📅 일괄 일정 이동</button><button onclick="_bulkCancelSchedule()" style="padding:8px 16px;border-radius:9px;border:1.5px solid var(--peach-text);background:var(--surface-solid);color:var(--peach-text);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">✕ 일괄 취소</button></div></div></div></div>';
   let el=document.getElementById('promo-board');
   if(!el){el=document.createElement('div');el.id='promo-board';document.body.appendChild(el);}
   el.innerHTML=html;
@@ -7176,6 +7176,29 @@ let _showApplyList = false;
 // 스캔 순서(브리프 P1 #3): 지난(3)·취소(4) 섹션은 기본 접힘 → 오늘·예정 우선 노출. 헤더 클릭으로 펼침.
 let _collapsedSecs = new Set([3,4]);
 function _togglePastSec(sec){ if(_collapsedSecs.has(sec)) _collapsedSecs.delete(sec); else _collapsedSecs.add(sec); renderPromoBoard(); }
+// === [260704] 일정 일괄 변경 모드 — 다중선택 후 일괄 이동/취소 (일정관리 보드) ===
+let _editMode=false;            // 일괄 변경 모드 ON/OFF ([일정 변경] 토글)
+let _editChecks=new Set();      // 선택된 rowIndex
+// 변경 가능한 행? — 특수일정·종결(완료/취소/임시) 제외 + 권한(admin이거나 본인 신청)
+function _editableRec(r){
+  if(!r||r._isSpecial)return false;
+  const st=String(r['진행 상태']||'').trim();
+  if(st==='완료'||st==='취소'||st==='임시')return false;
+  if(userRole==='admin')return true;
+  let my='';try{my=sessionStorage.getItem('myApplicant')||'';}catch(e){}
+  return _isMineRec(r,my);
+}
+function _toggleEditMode(){ _editMode=!_editMode; if(!_editMode)_editChecks.clear(); renderPromoBoard(); }
+function _toggleEditCheck(rowIndex,el){ if(el.checked)_editChecks.add(rowIndex); else _editChecks.delete(rowIndex); _updateEditBar(); }
+function _updateEditBar(){
+  const bar=document.getElementById('edit-mode-bar'); if(!bar)return;
+  bar.style.display=_editMode?'flex':'none';
+  const cnt=document.getElementById('edit-mode-count'); if(cnt)cnt.textContent=_editChecks.size+'건 선택';
+  const act=document.getElementById('edit-mode-actions'); if(act)act.style.display=_editChecks.size>0?'flex':'none';
+}
+// (2단계에서 실제 실행 연결 예정 — 지금은 선택 UI만)
+function _bulkMoveSchedule(){ showToast('선택 '+_editChecks.size+'건 — 일괄 일정 이동은 다음 업데이트에서 연결됩니다','info'); }
+function _bulkCancelSchedule(){ showToast('선택 '+_editChecks.size+'건 — 일괄 취소는 다음 업데이트에서 연결됩니다','info'); }
 // admin 신청 대기 체크박스 — 일괄 처리용 (rowIndex Set)
 let _pendingChecks = new Set();
 function togglePendingCheck(rowIndex, el){
@@ -7697,6 +7720,9 @@ function renderPromoBoard(){
   // (전체/콘텐츠만/담당자만 토글 제거됨 — 컬럼 필터로 대체. specialMode는 'mix' 유지)
   // 토글성 pill 컨트롤(내 신청만 등) 공용 스타일 — 검색/체크박스 입력은 별도(Caution 준수).
   const ctrlStyle='display:inline-flex;align-items:center;padding:6px 14px;height:32px;box-sizing:border-box;border-radius:16px;font-size:12px;line-height:1;cursor:pointer;font-family:inherit';
+  // === [일정 변경] 다중선택 모드 토글 (admin·user 공통 — 본인 것만 체크 가능) ===
+  html+='<span style="width:1px;height:18px;background:rgba(0,0,0,0.13);margin:0 4px"></span>';
+  html+='<button onclick="_toggleEditMode()" title="여러 신청을 체크해서 한 번에 일정 이동/취소" style="'+ctrlStyle+';border:1.5px solid '+(_editMode?'var(--accent)':'rgba(0,0,0,0.13)')+';background:'+(_editMode?'var(--accent)':'var(--surface-solid)')+';color:'+(_editMode?'var(--surface-solid)':'var(--text)')+';font-weight:600">'+(_editMode?'✓ 변경 모드':'✎ 일정 변경')+'</button>';
   // === 본인/전체 토글 (admin은 본인 개념 없어서 숨김) ===
   if(!isAdmin&&myApplicant){
     html+='<span style="width:1px;height:18px;background:#ddd;margin:0 4px"></span>';
@@ -7928,8 +7954,13 @@ function renderPromoBoard(){
       // 플랫폼 (P1 › P2)
       const platHtml=escapeHtml(plat1||'-')+(plat2?'<span style="color:#bbb;margin:0 4px">›</span>'+escapeHtml(plat2):'');
       html+='<tr class="promo-row" onclick="openPromoBoardRow(\''+dateKey+'\','+r._rowIndex+',true)" oncontextmenu="onEvContextMenu(event,'+r._rowIndex+',\''+dateKey+'\');return false;" style="border-bottom:1px solid #f0f0f0;cursor:pointer;'+trBg+';'+trBorder+';animation-delay:'+_animDelay+'" onmouseover="this.style.background=\''+hoverBg+'\'" onmouseout="this.style.background=\''+baseBg+'\'">';
-      // === admin 신청 대기 row — NO 셀 안에 체크박스 prefix ===
-      if(isAdmin && (r['진행 상태']||'')==='신청 중'){
+      // === NO 셀 — 편집모드: 일괄변경 체크박스 / admin 신청대기: 접수 체크박스 / 그 외: 일반 ===
+      if(_editMode && _editableRec(r)){
+        const _ec=_editChecks.has(r._rowIndex)?'checked':'';
+        html+='<td style="padding:10px 8px;text-align:left;white-space:nowrap" onclick="event.stopPropagation()"><label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" data-edit-row="'+r._rowIndex+'" '+_ec+' onchange="_toggleEditCheck('+r._rowIndex+', this)" onclick="event.stopPropagation()" style="width:14px;height:14px;accent-color:var(--accent);cursor:pointer"><span title="'+escapeHtml(noTitle)+'" style="color:var(--past-text);font-variant-numeric:tabular-nums;font-size:11px;font-weight:600">'+escapeHtml(noShort)+'</span></label></td>';
+      } else if(_editMode){
+        html+='<td title="변경 권한이 없거나 종결된 일정이에요" style="padding:10px 12px;text-align:left;color:var(--muted);font-variant-numeric:tabular-nums;font-size:11px;font-weight:600;cursor:not-allowed">'+escapeHtml(noShort)+'</td>';
+      } else if(isAdmin && (r['진행 상태']||'')==='신청 중'){
         const _chkAttr = _pendingChecks.has(r._rowIndex) ? 'checked' : '';
         html+='<td style="padding:10px 8px;text-align:left;white-space:nowrap" onclick="event.stopPropagation()"><label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" data-pending-row="'+r._rowIndex+'" '+_chkAttr+' onchange="togglePendingCheck('+r._rowIndex+', this)" onclick="event.stopPropagation()" style="width:14px;height:14px;accent-color:var(--peach);cursor:pointer"><span title="'+escapeHtml(noTitle)+'" style="color:#aaa;font-variant-numeric:tabular-nums;font-size:11px;font-weight:600">'+escapeHtml(noShort)+'</span></label></td>';
       } else {
@@ -7964,6 +7995,8 @@ function renderPromoBoard(){
   if(isAdmin && _pendingChecks.size > 0){
     setTimeout(updateBulkActionsUI, 50);
   }
+  // 일괄 변경 모드 하단 바 상태 동기화
+  setTimeout(_updateEditBar, 50);
 }
 // 요약 카드 헬퍼
 function summaryCard(emo,label,count,color,bg,scope){
