@@ -5644,10 +5644,18 @@ function _pmapInitMap(){
   if(!_pmapState)return;
   const div=document.getElementById('pm-mapdiv');
   if(!div)return;
-  div.innerHTML='';
+  // ⚠️ 폴백(약식 지도)을 지우지 않는다. 네이버는 그 위 오버레이 레이어에 생성하고,
+  //    타일이 '실제로' 로드(tilesloaded)된 게 확인될 때만 폴백을 걷어낸다.
+  //    → 네이버가 인증실패로 빈 화면이어도 지도가 사라지지 않음(폴백 유지).
+  let nv=document.getElementById('pm-navlayer');
+  if(nv&&nv.parentNode)nv.parentNode.removeChild(nv);
+  nv=document.createElement('div');
+  nv.id='pm-navlayer';
+  nv.style.cssText='position:absolute;inset:0;z-index:1;opacity:0;transition:opacity .35s ease';
+  div.appendChild(nv);
   let map;
   try{
-    map=new naver.maps.Map(div,{
+    map=new naver.maps.Map(nv,{
       center:new naver.maps.LatLng(34.85,127.58),
       zoom:10,
       mapTypeControl:false, scaleControl:false, logoControl:true, mapDataControl:false,
@@ -5655,21 +5663,32 @@ function _pmapInitMap(){
     });
   }catch(e){
     console.error('[pmap] 지도 생성 실패',e);
-    _pmapRenderFallback('⚠️ 지도 생성 실패 — 약식 위치도로 표시 중');
-    return;
+    if(nv.parentNode)nv.parentNode.removeChild(nv);
+    return; // 폴백 그대로 유지
   }
-  _pmapState.map=map;
-  _pmapState.iw=new naver.maps.InfoWindow({borderWidth:0,backgroundColor:'transparent',disableAnchor:true,pixelOffset:new naver.maps.Point(0,-14)});
-  _pmapDrawMarkers();
-  _pmapFit();
-  // 줌/이동 멈출 때마다 계층 배지 티어 갱신 (도시 배지 ↔ 거점 배지 촤르륵)
-  naver.maps.Event.addListener(map,'idle',function(){_pmapUpdateBadges();});
-  // 모달 오픈 직후 레이아웃 확정 전에 초기화됐을 경우 대비 — 사이즈 재계산 킥 (흰 지도 방어)
+  let confirmed=false;
+  const commit=function(){
+    if(confirmed||!_pmapState||_pmapState.map)return;
+    confirmed=true;
+    _pmapState.map=map;
+    _pmapState.iw=new naver.maps.InfoWindow({borderWidth:0,backgroundColor:'transparent',disableAnchor:true,pixelOffset:new naver.maps.Point(0,-14)});
+    nv.style.opacity='1';
+    const fb=div.querySelector('.pm-fmap'); if(fb)fb.parentNode.removeChild(fb); // 네이버 확정 → 폴백 걷어냄
+    _pmapDrawMarkers();
+    _pmapFit();
+    naver.maps.Event.addListener(map,'idle',function(){_pmapUpdateBadges();});
+    setTimeout(function(){ if(_pmapState&&_pmapState.map===map){ try{ naver.maps.Event.trigger(map,'resize'); _pmapFit(); }catch(e){} } },400);
+  };
+  naver.maps.Event.once(map,'tilesloaded',commit);
+  // 타일이 안 뜨면(인증실패·차단·네트워크) 네이버 폐기하고 폴백 유지
   setTimeout(function(){
-    if(_pmapState&&_pmapState.map===map){
-      try{ naver.maps.Event.trigger(map,'resize'); _pmapFit(); }catch(e){}
-    }
-  },450);
+    if(confirmed||!_pmapState)return;
+    try{ map.destroy&&map.destroy(); }catch(e){}
+    if(nv.parentNode)nv.parentNode.removeChild(nv);
+    _pmapState.map=null;
+    const n=div.querySelector('.pm-fmap-note');
+    if(n)n.textContent='약식 위치도 · 네이버 지도 미표시(키/네트워크) · © OpenStreetMap · CARTO';
+  },4000);
 }
 function _pmapFit(){
   if(!_pmapState||!_pmapState.map)return;
