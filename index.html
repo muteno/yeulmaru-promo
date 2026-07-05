@@ -14255,6 +14255,22 @@ function renderCal(){
   var _isThisM=currentYear===new Date().getFullYear()&&currentMonth===new Date().getMonth()+1;
   var _todayDi=_isThisM?(new Date().getDay()-2+7)%7:-1;
   document.getElementById('cal-head-wrap').innerHTML='<div class="cal-head">'+DAYS.map((d,i)=>{var cls='dh';if(i===4)cls+=' sat';if(i===5)cls+=' sun';var st=i<5?'border-right:1px solid var(--border);':'';if(i===_todayDi&&_todayDi<6)st+='background:var(--accent);color:#fff;';return'<div class="'+cls+'" style="'+st+'">'+d+'</div>';}).join('')+'</div>';let h='';
+  // 자동 접힘(운영자 260705): 이번 주의 남은 표시일이 일요일뿐이면(오늘=일요일, 또는 오늘=월요일→직전 주) 그 주를 접는다.
+  //  단 그 일요일에 프로그램 행사(getPerfs)나 홍보 일정(getRecsForDate)이 있으면 접지 않음(운영자 조건).
+  //  사용자가 클릭해 펼치면(_weekState='expanded') 재접힘 없음. 월 변경 시 _weekState 리셋으로 자연 소멸.
+  if(isThisMonth){
+    try{
+      var _nd=new Date(),_dow=_nd.getDay(),_autoWi=-1;
+      if(_dow===0){_autoWi=twIdx;}
+      else if(_dow===1){var _yd=new Date(_nd);_yd.setDate(_nd.getDate()-1);var _yk=dk(_yd);_autoWi=weeks.findIndex(function(w){return w.some(function(d){return dk(d)===_yk;});});}
+      if(_autoWi>=0&&_weekState[_autoWi]===undefined){
+        var _sunD=weeks[_autoWi][5];
+        var _sunEv=_sunD?getRecsForDate(_sunD).length:0;
+        var _sunPf=(_sunD&&typeof getPerfs==='function')?((getPerfs(_sunD)||[]).length):0;
+        if(!_sunEv&&!_sunPf)_weekState[_autoWi]='collapsed';
+      }
+    }catch(_e){}
+  }
   weeks.forEach((week,wi)=>{
     const isTW=wi===twIdx;
     // 접힘 판단 — 자동 접힘 비활성화. 명시 호출만 (현재 UI 없음)
