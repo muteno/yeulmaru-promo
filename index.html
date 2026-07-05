@@ -52,6 +52,15 @@
   --radius:16px;--radius-lg:20px;--radius-xl:24px;
 }
 body{background:var(--bg);color:var(--text);min-height:100vh}
+/* 앱 배경 메시 — 로그인 유동 배경과 같은 5개 토큰의 정적 근사를 상시 배치, 전면 유리(nav·캘린더)의 글래스가 실제로 비치게(운영자 260705).
+   색 = 토큰 var() + 같은 토큰 리터럴의 alpha 변주(§3.5②, 전례 아래 L64 rgba(240,196,184,.5))만. 고정 1레이어·애니 없음 = 연산 0. 로그인 화면은 자체 배경이 위를 덮음. */
+body::before{content:'';position:fixed;inset:0;z-index:-1;pointer-events:none;background:
+ radial-gradient(44% 56% at 18% 22%, var(--accent-light) 0%, transparent 70%),
+ radial-gradient(50% 62% at 84% 18%, var(--peach-light) 0%, transparent 72%),
+ radial-gradient(42% 54% at 74% 84%, rgba(240,196,184,.6) 0%, transparent 70%),
+ radial-gradient(36% 46% at 20% 88%, rgba(74,77,231,.10) 0%, transparent 72%),
+ radial-gradient(30% 42% at 52% 50%, rgba(216,132,85,.07) 0%, transparent 70%),
+ var(--bg)}
 button{font-family:inherit;cursor:pointer}
 
 .pf{}.ps{display:none}
@@ -3483,6 +3492,7 @@ function buildNav(){
   menus.forEach(m=>{
     const b=document.createElement('button');b.className='nav-btn'+(m.id==='cal'?' on':'')+(m.id==='admin'?' nav-admin':'');b.textContent=m.label;
     b.onclick=()=>{
+      clearTimeout(b._hovT);  // 클릭 직후 호버 타이머가 뒤늦게 재오픈하지 않게
       closeMobileNav();  // 메뉴 클릭 시 모바일 드롭다운 자동 닫힘
       if(m.id==='content'){_ddOpen(b,_contentMenuBuild,210);return;}
       if(m.id==='annual'){openAnnualCalendar();return;}
@@ -3493,7 +3503,11 @@ function buildNav(){
       if(m.id==='sales'){openSalesBoard();return;}
       document.querySelectorAll('.nav-btn').forEach(x=>x.classList.remove('on'));b.classList.add('on');movePill(b,pill);
     };
-    b.onmouseenter=()=>movePill(b,pill);
+    // 세부메뉴 보유 메뉴(콘텐츠 제작·일정 관리) = 1초 이상 호버 시 자동 드롭다운(운영자 260705). 다른 팝업이 열려 있으면 안 뺏음.
+    var _sub=(m.id==='content')?_contentMenuBuild:(m.id==='schedule')?_scheduleMenuBuild:null;
+    b.onmouseenter=()=>{ movePill(b,pill);
+      if(_sub){ clearTimeout(b._hovT); b._hovT=setTimeout(function(){ if(!document.getElementById('dd-pop'))_ddOpen(b,_sub,210); },1000); } };
+    b.onmouseleave=()=>{ clearTimeout(b._hovT); };
     c.appendChild(b);
   });
   c.onmouseleave=()=>{const a=c.querySelector('.nav-btn.on');if(a)movePill(a,pill);};
