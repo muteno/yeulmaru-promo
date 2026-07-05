@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>상단 메뉴 활성 구분 플레이그라운드</title>
+<style>
+  /* 색 정본 = index.html :root — 시안 스냅샷(라이브 이식 시 var() 토큰 계승) */
+  :root { --accent:#4A4DE7; --accent-rgb:74,77,231; --c2:#D88455; --c2-rgb:216,132,85;
+    --accent-light:#E8E8FD; --text:#1A1A2E; --mut:#6E6B7E; --pg:#F5F3F8; --panel:#fff;
+    --line:rgba(26,26,46,.1); --ease:cubic-bezier(.22,.61,.36,1); }
+  * { box-sizing:border-box; margin:0; -webkit-tap-highlight-color:transparent; }
+  body { background:var(--pg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Apple SD Gothic Neo','Malgun Gothic',sans-serif;
+    line-height:1.6; padding:22px 14px 90px; max-width:920px; margin:0 auto; }
+  h1 { font-size:19px; font-weight:800; letter-spacing:-.3px; }
+  p.d { font-size:12.5px; color:var(--mut); margin-top:2px; }
+  p.d b { color:var(--accent); }
+
+  /* ── 무대 = 코발트 nav + 앱 상단부 실물 재현 ── */
+  .stagewrap { display:flex; justify-content:center; margin-top:14px; }
+  .stage { position:relative; width:min(860px,96vw); border-radius:18px; overflow:hidden;
+    border:1px solid var(--line); box-shadow:0 24px 64px rgba(26,26,46,.14);
+    --inA:.92; --pillA:.95; --pillR:18px; --ubH:3px; --dotSz:6px; --wgt:700; --hovA:1; }
+  .mesh { position:absolute; inset:0; z-index:0; background:
+    radial-gradient(50% 64% at 14% 18%, rgba(74,77,231,.20) 0%, transparent 70%),
+    radial-gradient(44% 56% at 86% 16%, rgba(240,196,184,.72) 0%, transparent 72%),
+    radial-gradient(46% 58% at 76% 86%, rgba(216,132,85,.28) 0%, transparent 70%),
+    radial-gradient(36% 48% at 55% 45%, rgba(240,196,184,.36) 0%, transparent 70%),
+    linear-gradient(135deg,#FDF6F3 0%,#F0EBF5 50%,#EBF0F8 100%); }
+  .nav { position:relative; z-index:2; display:flex; align-items:center; justify-content:space-between;
+    height:56px; padding:0 22px; background:var(--accent); border-bottom:1px solid rgba(255,255,255,.14); }
+  .stage[data-tone="g85"] .nav { background:rgba(var(--accent-rgb),.85); backdrop-filter:blur(24px) saturate(1.4); -webkit-backdrop-filter:blur(24px) saturate(1.4); }
+  .stage[data-tone="g70"] .nav { background:rgba(var(--accent-rgb),.70); backdrop-filter:blur(24px) saturate(1.4); -webkit-backdrop-filter:blur(24px) saturate(1.4); }
+  .logo { font-size:14px; font-weight:800; color:rgba(255,255,255,.95); letter-spacing:2px; flex:none; margin-right:10px; }
+  .menus { position:relative; display:flex; gap:var(--mgap,2px); }
+  .mb { position:relative; z-index:1; padding:9px var(--mpx,14px); border:0; border-radius:20px; background:transparent;
+    font:500 var(--mfs,13px)/1 inherit; color:rgba(255,255,255,var(--inA)); cursor:pointer; white-space:nowrap;
+    transition:color .2s, font-weight .05s; }
+  .mb.on { font-weight:var(--wgt); }
+  /* 활성 글자색 강제 오버라이드(자동 = 스타일별 기본) */
+  .stage[data-actc="custom"] .mb.on { color:var(--actC) !important; }
+  .rIcons { display:flex; gap:8px; flex:none; }
+  .rIcons i { width:30px; height:30px; border-radius:50%; background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.18); }
+
+  /* 인디케이터(단일 요소, 슬라이드 = left/width 전이 — 라이브 movePill 문법) */
+  .ind { position:absolute; z-index:0; pointer-events:none; transition:all .35s var(--ease); opacity:0; }
+  .stage[data-anim="fade"] .ind { transition:opacity .3s ease; }
+  .stage[data-anim="none"] .ind { transition:none; }
+  .stage[data-style="pillW"] .ind, .stage[data-style="pillS"] .ind { top:0; bottom:0; border-radius:var(--pillR); opacity:1; }
+  .stage[data-style="pillW"] .ind { background:rgba(255,255,255,var(--pillA)); box-shadow:0 3px 10px rgba(26,26,46,.18); }
+  .stage[data-style="pillS"] .ind { background:var(--c2); box-shadow:0 3px 10px rgba(var(--c2-rgb),.4); }
+  .stage[data-style="under"] .ind { top:auto; bottom:2px; height:var(--ubH); border-radius:99px; background:var(--c2); opacity:1; }
+  .stage[data-style="dot"] .ind { top:3px; bottom:auto; height:var(--dotSz); width:var(--dotSz) !important; border-radius:50%; background:var(--c2); opacity:1; }
+  .stage[data-style="txtS"] .ind, .stage[data-style="txtW"] .ind { opacity:0; }
+  /* 활성 글자색 — 스타일별 */
+  .stage[data-style="pillW"] .mb.on { color:var(--accent); }
+  .stage[data-style="pillS"] .mb.on { color:#fff; }
+  .stage[data-style="under"] .mb.on, .stage[data-style="dot"] .mb.on { color:#fff; }
+  .stage[data-style="txtS"] .mb.on { color:var(--c2); }
+  .stage[data-style="txtW"] .mb.on { color:#fff; }
+  /* 호버 */
+  .stage[data-hov="bright"] .mb:not(.on):hover { color:rgba(255,255,255,var(--hovA)); }
+  .stage[data-hov="pill"] .mb:not(.on):hover { background:rgba(255,255,255,.14); color:#fff; }
+  .stage[data-hov="none"] .mb:not(.on):hover { color:rgba(255,255,255,var(--inA)); }
+
+  /* 아래 컨텍스트(헤더+캘린더 힌트) */
+  .below { position:relative; z-index:1; padding:16px 22px 0; height:210px; }
+  .mnav { display:flex; align-items:center; gap:12px; }
+  .mnav .arw { width:30px; height:30px; border-radius:50%; background:rgba(255,255,255,.6); border:1px solid rgba(255,255,255,.7); display:grid; place-items:center; color:#888; font-size:15px; }
+  .mnav b { font-size:24px; color:var(--accent); font-weight:800; } .mnav span { font-size:14px; color:#888; }
+  .calhint { margin-top:12px; border-radius:14px 14px 0 0; border:1px solid rgba(255,255,255,.7); border-bottom:none;
+    background:rgba(255,255,255,.17); backdrop-filter:blur(20px) saturate(1.5); -webkit-backdrop-filter:blur(20px) saturate(1.5); height:150px; overflow:hidden; }
+  .calhint .dhs { display:grid; grid-template-columns:repeat(6,1fr); border-bottom:1px solid rgba(0,0,0,.09); }
+  .calhint .dhs span { padding:9px 0; text-align:center; font-size:12px; font-weight:700; color:#666; }
+  .calhint .cells { display:grid; grid-template-columns:repeat(6,1fr); height:100%; }
+  .calhint .cells i { border-right:1px solid rgba(0,0,0,.05); border-bottom:1px solid rgba(0,0,0,.05); background:rgba(255,255,255,.14); }
+
+  /* ── 컨트롤(첨부 플레이그라운드 문법 미러) ── */
+  .panel { margin-top:16px; padding:14px 16px 16px; border:1px solid var(--line); border-radius:14px; background:var(--panel); }
+  .row { display:flex; align-items:center; gap:9px; flex-wrap:wrap; margin-top:11px; }
+  .row:first-child { margin-top:0; }
+  .lab { font-size:12px; color:var(--mut); font-weight:700; min-width:78px; }
+  .chip { padding:7px 12px; border-radius:999px; border:1px solid var(--line); background:var(--pg); color:var(--text);
+    font:700 12px/1 inherit; cursor:pointer; transition:transform .18s var(--ease), background .2s, border-color .2s, color .2s; touch-action:manipulation; }
+  .chip:active { transform:scale(.93); }
+  .chip.on { background:rgba(var(--accent-rgb),.12); border-color:rgba(var(--accent-rgb),.45); color:var(--accent); }
+  .chip.play { border-color:rgba(var(--c2-rgb),.5); color:var(--c2); }
+  input[type=range] { flex:1; min-width:110px; accent-color:var(--accent); }
+  .val { font-size:12px; color:var(--text); font-variant-numeric:tabular-nums; min-width:52px; text-align:right; }
+  .sum { margin-top:16px; padding:12px 14px; border:1px dashed rgba(var(--accent-rgb),.4); border-radius:12px; background:rgba(var(--accent-rgb),.05); font-size:12.5px; line-height:1.8; }
+  .sum b { color:var(--accent); }
+  .sum .copy { float:right; margin-left:10px; }
+</style>
+</head>
+<body>
+<h1>상단 메뉴 활성 구분 플레이그라운드</h1>
+<p class="d">260705 · 코발트 nav 위 <b>현재 메뉴 구분 방식</b> 고르기 — 메뉴를 직접 클릭해보고, 스타일·전환·세부 변수를 조합한 뒤 맨 밑 <b>요약 복사</b>해서 보내줘. (색은 전부 앱 토큰 스냅샷: 코발트 --accent · 살몬 --c2)</p>
+
+<div class="stagewrap">
+<div class="stage" id="st" data-style="pillW" data-anim="slide" data-hov="bright">
+  <div class="mesh"></div>
+  <nav class="nav">
+    <span class="logo">YEULMARU</span>
+    <div class="menus" id="menus">
+      <div class="ind" id="ind"></div>
+      <button class="mb on">캘린더</button><button class="mb">일정 관리</button><button class="mb">콘텐츠 제작</button>
+      <button class="mb">플랫폼 현황</button><button class="mb">사업 현황</button><button class="mb">판매 현황</button><button class="mb">연간 일정</button>
+    </div>
+    <div class="rIcons"><i></i><i></i></div>
+  </nav>
+  <div class="below">
+    <div class="mnav"><span class="arw">‹</span><span><b>7</b> <span>2026</span></span><span class="arw">›</span></div>
+    <div class="calhint">
+      <div class="dhs"><span>화</span><span>수</span><span>목</span><span>금</span><span style="color:#3B7DD8">토</span><span style="color:#D64545">일</span></div>
+      <div class="cells"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="panel">
+  <div class="row" id="rStyle"><span class="lab">활성 스타일</span>
+    <button class="chip on" data-style="pillW">흰 필 반전 ★추천</button>
+    <button class="chip" data-style="pillS">살몬 필</button>
+    <button class="chip" data-style="under">살몬 언더바</button>
+    <button class="chip" data-style="dot">상단 도트</button>
+    <button class="chip" data-style="txtS">살몬 글자(현행)</button>
+    <button class="chip" data-style="txtW">흰 글자+굵게</button></div>
+  <div class="row" id="rAnim"><span class="lab">전환 방식</span>
+    <button class="chip on" data-anim="slide">슬라이드(현행 pill 문법)</button>
+    <button class="chip" data-anim="fade">페이드</button>
+    <button class="chip" data-anim="none">즉시</button></div>
+  <div class="row" id="rWgt"><span class="lab">활성 굵기</span>
+    <button class="chip" data-wgt="600">600</button><button class="chip on" data-wgt="700">700</button><button class="chip" data-wgt="800">800</button></div>
+  <div class="row"><span class="lab">비활성 글자</span><input type="range" id="inA" min="55" max="100" value="92"><span class="val" id="inAV">92%</span></div>
+  <div class="row"><span class="lab">필 불투명</span><input type="range" id="pillA" min="60" max="100" value="95"><span class="val" id="pillAV">95%</span>
+    <span class="lab" style="min-width:0">필 라운드</span><input type="range" id="pillR" min="8" max="20" value="18" style="min-width:80px"><span class="val" id="pillRV">18px</span></div>
+  <div class="row"><span class="lab">언더바 두께</span><input type="range" id="ubH" min="2" max="5" value="3"><span class="val" id="ubHV">3px</span>
+    <span class="lab" style="min-width:0">도트 크기</span><input type="range" id="dotSz" min="4" max="9" value="6" style="min-width:80px"><span class="val" id="dotSzV">6px</span></div>
+  <div class="row" id="rHov"><span class="lab">호버 효과</span>
+    <button class="chip on" data-hov="bright">글자 밝아짐</button>
+    <button class="chip" data-hov="pill">옅은 흰 필</button>
+    <button class="chip" data-hov="none">없음</button></div>
+  <div class="row" id="rActc"><span class="lab">활성 글자색</span>
+    <button class="chip on" data-actc="auto">자동(스타일 기본)</button>
+    <button class="chip" data-actc="#4A4DE7">코발트</button>
+    <button class="chip" data-actc="#D88455">살몬</button>
+    <button class="chip" data-actc="#fff">흰색</button>
+    <button class="chip" data-actc="#1A1A2E">잉크(텍스트색)</button></div>
+  <div class="row" id="rTone"><span class="lab">nav 톤</span>
+    <button class="chip on" data-tone="solid">코발트 불투명(현행)</button>
+    <button class="chip" data-tone="g85">유리 85%</button>
+    <button class="chip" data-tone="g70">유리 70%</button></div>
+  <div class="row"><span class="lab">메뉴 글자</span><input type="range" id="mfs" min="12" max="15" value="13"><span class="val" id="mfsV">13px</span>
+    <span class="lab" style="min-width:0">좌우 여백</span><input type="range" id="mpx" min="10" max="24" value="14" style="min-width:80px"><span class="val" id="mpxV">16px</span></div>
+  <div class="row"><span class="lab">메뉴 간격</span><input type="range" id="mgap" min="0" max="14" value="2"><span class="val" id="mgapV">2px</span></div>
+  <div class="row"><span class="lab">시연</span><button class="chip play" id="tour">▶ 메뉴 자동 순회</button>
+    <span class="lab" style="min-width:0;font-weight:600">← 2초 간격으로 활성이 이동하는 걸 관찰 (다시 누르면 정지)</span></div>
+  <div class="sum" id="sum"><button class="chip copy" id="copyBtn">복사</button><b>현재 조합</b><br><span id="sumTxt"></span></div>
+</div>
+
+<script>
+(() => {
+  const st = document.getElementById('st'), menus = document.getElementById('menus'), ind = document.getElementById('ind');
+  const btns = [...menus.querySelectorAll('.mb')];
+  const S = { style:'pillW', styleTxt:'흰 필 반전', anim:'슬라이드', hov:'글자 밝아짐', wgt:'700', actc:'자동', tone:'코발트 불투명',
+    vals:{ inA:'92%', pillA:'95%', pillR:'18px', ubH:'3px', dotSz:'6px', mfs:'13px', mpx:'14px', mgap:'2px' } };
+  let tourTimer = 0;
+
+  function moveInd(b) {
+    const r = b.getBoundingClientRect(), p = menus.getBoundingClientRect();
+    const style = st.dataset.style;
+    if (style === 'dot') { ind.style.left = (r.left - p.left + r.width/2 - parseFloat(getComputedStyle(st).getPropertyValue('--dotSz'))/2) + 'px'; ind.style.width = ''; }
+    else if (style === 'under') { const w = r.width * .58; ind.style.left = (r.left - p.left + (r.width - w)/2) + 'px'; ind.style.width = w + 'px'; }
+    else { ind.style.left = (r.left - p.left) + 'px'; ind.style.width = r.width + 'px'; }
+    if (st.dataset.anim === 'fade') { ind.style.opacity = 0; requestAnimationFrame(() => requestAnimationFrame(() => ind.style.opacity = '')); }
+  }
+  function activate(b) { btns.forEach(x => x.classList.remove('on')); b.classList.add('on'); moveInd(b); }
+  btns.forEach(b => b.addEventListener('click', () => activate(b)));
+
+  const pick = (rowId, attr, fn) => document.getElementById(rowId).addEventListener('click', e => {
+    const c = e.target.closest('.chip'); if (!c || c.classList.contains('play') || c.dataset[attr] == null) return;
+    [...e.currentTarget.querySelectorAll('.chip[data-' + attr.toLowerCase() + ']')].forEach(x => x.classList.remove('on')); c.classList.add('on'); fn(c);
+  });
+  pick('rStyle', 'style', c => { st.dataset.style = c.dataset.style; S.style = c.dataset.style; S.styleTxt = c.textContent.replace(' ★추천',''); moveInd(menus.querySelector('.mb.on')); sum(); });
+  pick('rAnim', 'anim', c => { st.dataset.anim = c.dataset.anim; S.anim = c.textContent; sum(); });
+  pick('rWgt', 'wgt', c => { st.style.setProperty('--wgt', c.dataset.wgt); S.wgt = c.dataset.wgt; sum(); });
+  pick('rHov', 'hov', c => { st.dataset.hov = c.dataset.hov; S.hov = c.textContent; sum(); });
+  pick('rActc', 'actc', c => { const v = c.dataset.actc;
+    if (v === 'auto') { st.dataset.actc = 'auto'; } else { st.dataset.actc = 'custom'; st.style.setProperty('--actC', v); }
+    S.actc = c.textContent + (v === 'auto' ? '' : ' ' + v); sum(); });
+  pick('rTone', 'tone', c => { st.dataset.tone = c.dataset.tone; S.tone = c.textContent; sum(); });
+
+  const range = (id, cssVar, fmt, fn) => { const el = document.getElementById(id); el.addEventListener('input', () => {
+    const v = fmt(el.value); st.style.setProperty(cssVar, v.css); document.getElementById(id + 'V').textContent = v.txt; S.vals[id] = v.txt; if (fn) fn(); sum(); }); };
+  range('inA', '--inA', v => ({ css: v/100, txt: v + '%' }));
+  range('pillA', '--pillA', v => ({ css: v/100, txt: v + '%' }));
+  range('pillR', '--pillR', v => ({ css: v + 'px', txt: v + 'px' }));
+  range('ubH', '--ubH', v => ({ css: v + 'px', txt: v + 'px' }), () => moveInd(menus.querySelector('.mb.on')));
+  range('dotSz', '--dotSz', v => ({ css: v + 'px', txt: v + 'px' }), () => moveInd(menus.querySelector('.mb.on')));
+  range('mfs', '--mfs', v => ({ css: v + 'px', txt: v + 'px' }), () => moveInd(menus.querySelector('.mb.on')));
+  range('mpx', '--mpx', v => ({ css: v + 'px', txt: v + 'px' }), () => moveInd(menus.querySelector('.mb.on')));
+  range('mgap', '--mgap', v => ({ css: v + 'px', txt: v + 'px' }), () => moveInd(menus.querySelector('.mb.on')));
+
+  document.getElementById('tour').addEventListener('click', e => {
+    if (tourTimer) { clearInterval(tourTimer); tourTimer = 0; e.target.textContent = '▶ 메뉴 자동 순회'; return; }
+    let i = btns.indexOf(menus.querySelector('.mb.on'));
+    tourTimer = setInterval(() => { i = (i + 1) % btns.length; activate(btns[i]); }, 2000);
+    e.target.textContent = '⏸ 순회 정지';
+  });
+
+  function sum() {
+    const v = S.vals, detail = S.style==='pillW'||S.style==='pillS' ? `(불투명 ${v.pillA}·라운드 ${v.pillR})`
+      : S.style==='under' ? `(두께 ${v.ubH})` : S.style==='dot' ? `(크기 ${v.dotSz})` : '';
+    document.getElementById('sumTxt').textContent =
+      `활성 ${S.styleTxt}${detail} · 글자색 ${S.actc} · 전환 ${S.anim} · 굵기 ${S.wgt} · 비활성 ${v.inA} · 호버 ${S.hov} · nav ${S.tone} · 메뉴글자 ${v.mfs}(여백 ${v.mpx}·간격 ${v.mgap})`;
+  }
+  document.getElementById('copyBtn').addEventListener('click', async e => {
+    try { await navigator.clipboard.writeText(document.getElementById('sumTxt').textContent); e.target.textContent = '복사됨 ✓'; }
+    catch { e.target.textContent = '길게 눌러 복사'; }
+    setTimeout(() => e.target.textContent = '복사', 1400);
+  });
+  sum(); requestAnimationFrame(() => moveInd(menus.querySelector('.mb.on')));
+  window.addEventListener('resize', () => moveInd(menus.querySelector('.mb.on')));
+})();
+</script>
+</body>
+</html>
