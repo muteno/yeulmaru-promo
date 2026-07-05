@@ -48,8 +48,9 @@ button{font-family:inherit;cursor:pointer}
 .c:not(.past):not(.nm):hover{background:rgba(240,196,184,0.5) !important}
 
 /* ═══ LOGIN ═══ */
-#login{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;gap:32px;background:#fff}
-.login-card{background:#fff;border-radius:var(--radius-xl);padding:48px 44px;text-align:center;animation:fadeUp .5s ease}
+#login{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;gap:32px;background:#fff;position:relative;overflow:hidden}
+#loginShader{position:absolute;inset:0;width:100%;height:100%;z-index:0;display:block}
+.login-card{background:#fff;border-radius:var(--radius-xl);padding:48px 44px;text-align:center;animation:fadeUp .5s ease;position:relative;z-index:1}
 .login-welcome{font-family:'ClassyVogue',serif;font-size:42px;font-weight:400;color:var(--accent);letter-spacing:4px;margin-bottom:24px}
 .login-sub{font-size:13px;color:var(--dim);margin-bottom:32px}
 .pin-wrap{display:flex;gap:12px;justify-content:center}
@@ -1483,6 +1484,7 @@ table.promo-board-table thead th:last-child{border-top-right-radius:11px}
 
 <!-- ═══ LOGIN ═══ -->
 <div id="login">
+  <canvas id="loginShader" aria-hidden="true"></canvas>
   <div class="login-card">
     <div class="login-welcome">YEULMARU</div>
     
@@ -2397,8 +2399,81 @@ function _enterAsManager(matched, pin, userName){
 }
 
 // MS 로그인 버튼 (토큰 無 → popup) — 첫 방문/다른 기기
+// ═══ 로그인 도입 배경 셰이더 (paper-design/shaders mesh-gradient GLSL 이식) ═══
+//  · 색은 index.html :root 토큰을 getComputedStyle로 읽어 주입 → raw hex 창작 0 (제1 절대명령 준수)
+//  · 로그인 화면에서만 애니메이션, 화면 사라지면 RAF 자동 정지 → 앱 사용 중 연산 부담 0
+//  · WebGL2 미지원 브라우저는 #login 흰 배경 폴백
+var _loginGL=null,_loginRAF=null,_loginT0=0,_loginU=null;
+function _hexToVec4(h){h=(h||'').trim();if(h[0]==='#')h=h.slice(1);if(h.length===3)h=h[0]+h[0]+h[1]+h[1]+h[2]+h[2];return [parseInt(h.slice(0,2),16)/255,parseInt(h.slice(2,4),16)/255,parseInt(h.slice(4,6),16)/255,1];}
+function stopLoginShader(){ if(_loginRAF){cancelAnimationFrame(_loginRAF);_loginRAF=null;} }
+function _loginShaderFrame(now){
+  var gl=_loginGL, cv=gl&&gl.canvas, login=document.getElementById('login');
+  if(!gl||!cv||!login||login.style.display==='none'||login.offsetParent===null){ stopLoginShader(); return; }
+  var d=Math.min(window.devicePixelRatio||1,2);
+  var w=(cv.clientWidth*d)|0, h=(cv.clientHeight*d)|0;
+  if(w>0&&h>0&&(cv.width!==w||cv.height!==h)){ cv.width=w;cv.height=h;gl.viewport(0,0,w,h);gl.uniform2f(_loginU.res,w,h); }
+  gl.uniform1f(_loginU.time,(now-_loginT0)/1000*0.35);   // speed 0.35 (은은)
+  gl.drawArrays(gl.TRIANGLES,0,3);
+  _loginRAF=requestAnimationFrame(_loginShaderFrame);
+}
+function startLoginShader(){
+  try{
+    if(_loginRAF)return;
+    var cv=document.getElementById('loginShader'), login=document.getElementById('login');
+    if(!cv||!login) return;
+    if(!_loginGL){
+      var gl=cv.getContext('webgl2'); if(!gl) return;   // 미지원 = 흰 배경 폴백
+      var VERT='#version 300 es\nin vec2 p;out vec2 v_objectUV;uniform vec2 u_res;void main(){gl_Position=vec4(p,0.,1.);vec2 uv=p*0.5;uv.x*=u_res.x/max(1.,u_res.y);v_objectUV=uv;}';
+      var FRAG='#version 300 es\n'
+        +'precision mediump float;\n'
+        +'uniform float u_time;uniform vec2 u_res;\n'
+        +'uniform vec4 u_colors[10];uniform float u_colorsCount;\n'
+        +'uniform float u_distortion;uniform float u_swirl;uniform float u_grainMixer;uniform float u_grainOverlay;\n'
+        +'in vec2 v_objectUV;out vec4 fragColor;\n'
+        +'#define TWO_PI 6.28318530718\n#define PI 3.14159265358979323846\n'
+        +'vec2 rotate(vec2 uv,float th){return mat2(cos(th),sin(th),-sin(th),cos(th))*uv;}\n'
+        +'float hash21(vec2 p){p=fract(p*vec2(0.3183099,0.3678794))+0.1;p+=dot(p,p+19.19);return fract(p.x*p.y);}\n'
+        +'float valueNoise(vec2 st){vec2 i=floor(st);vec2 f=fract(st);float a=hash21(i);float b=hash21(i+vec2(1.,0.));float c=hash21(i+vec2(0.,1.));float d=hash21(i+vec2(1.,1.));vec2 u=f*f*(3.-2.*f);return mix(mix(a,b,u.x),mix(c,d,u.x),u.y);}\n'
+        +'float noise(vec2 n,vec2 s){return valueNoise(n+s);}\n'
+        +'vec2 getPosition(int i,float t){float a=float(i)*.37;float b=.6+fract(float(i)/3.)*.9;float c=.8+fract(float(i+1)/4.);float x=sin(t*b+a);float y=cos(t*c+a*1.5);return .5+.5*vec2(x,y);}\n'
+        +'void main(){\n'
+        +'vec2 uv=v_objectUV;uv+=.5;vec2 grainUV=uv*1000.;\n'
+        +'float grain=noise(grainUV,vec2(0.));float mixerGrain=.4*u_grainMixer*(grain-.5);\n'
+        +'float t=.5*(u_time+41.5);\n'
+        +'float radius=smoothstep(0.,1.,length(uv-.5));float center=1.-radius;\n'
+        +'for(float i=1.;i<=2.;i++){uv.x+=u_distortion*center/i*sin(t+i*.4*smoothstep(.0,1.,uv.y))*cos(.2*t+i*2.4*smoothstep(.0,1.,uv.y));uv.y+=u_distortion*center/i*cos(t+i*2.*smoothstep(.0,1.,uv.x));}\n'
+        +'vec2 uvRotated=uv;uvRotated-=vec2(.5);float angle=3.*u_swirl*radius;uvRotated=rotate(uvRotated,-angle);uvRotated+=vec2(.5);\n'
+        +'vec3 color=vec3(0.);float opacity=0.;float totalWeight=0.;\n'
+        +'for(int i=0;i<10;i++){if(i>=int(u_colorsCount))break;vec2 pos=getPosition(i,t)+mixerGrain;vec3 cf=u_colors[i].rgb*u_colors[i].a;float of=u_colors[i].a;float dist=length(uvRotated-pos);dist=pow(dist,3.5);float weight=1./(dist+1e-3);color+=cf*weight;opacity+=of*weight;totalWeight+=weight;}\n'
+        +'color/=max(1e-4,totalWeight);opacity/=max(1e-4,totalWeight);\n'
+        +'float go=valueNoise(rotate(grainUV,1.)+vec2(3.));go=mix(go,valueNoise(rotate(grainUV,2.)+vec2(-1.)),.5);go=pow(go,1.3);float gv=go*2.-1.;vec3 gcol=vec3(step(0.,gv));float gs=u_grainOverlay*abs(gv);gs=pow(gs,.8);color=mix(color,gcol,.35*gs);opacity+=.5*gs;opacity=clamp(opacity,0.,1.);\n'
+        +'fragColor=vec4(color,opacity);\n}';
+      function _mk(type,src){var s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)){console.warn('[loginShader]',gl.getShaderInfoLog(s));}return s;}
+      var prog=gl.createProgram();gl.attachShader(prog,_mk(gl.VERTEX_SHADER,VERT));gl.attachShader(prog,_mk(gl.FRAGMENT_SHADER,FRAG));gl.linkProgram(prog);
+      if(!gl.getProgramParameter(prog,gl.LINK_STATUS)){console.warn('[loginShader]',gl.getProgramInfoLog(prog));return;}
+      gl.useProgram(prog);
+      var b=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,b);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
+      var lp=gl.getAttribLocation(prog,'p');gl.enableVertexAttribArray(lp);gl.vertexAttribPointer(lp,2,gl.FLOAT,false,0,0);
+      _loginU={res:gl.getUniformLocation(prog,'u_res'),time:gl.getUniformLocation(prog,'u_time')};
+      // 색 = :root 브랜드 토큰(라이트 톤 3 + 인디고·살몬 포인트 2). 값은 계승, 창작 없음.
+      var cs=getComputedStyle(document.documentElement);
+      var toks=['--accent-light','--peach-light','--peach','--accent','--peach-text'];
+      for(var i=0;i<toks.length;i++){ gl.uniform4fv(gl.getUniformLocation(prog,'u_colors['+i+']'),_hexToVec4(cs.getPropertyValue(toks[i]))); }
+      gl.uniform1f(gl.getUniformLocation(prog,'u_colorsCount'),toks.length);
+      gl.uniform1f(gl.getUniformLocation(prog,'u_distortion'),0.8);
+      gl.uniform1f(gl.getUniformLocation(prog,'u_swirl'),0.5);
+      gl.uniform1f(gl.getUniformLocation(prog,'u_grainMixer'),0.0);
+      gl.uniform1f(gl.getUniformLocation(prog,'u_grainOverlay'),0.0);
+      _loginGL=gl;
+    }
+    _loginT0=performance.now();
+    _loginRAF=requestAnimationFrame(_loginShaderFrame);
+  }catch(e){ console.warn('[loginShader] start fail',e); }
+}
+
 let _loginEmail='';
 async function initLoginScreen(){
+  if(typeof startLoginShader==='function')startLoginShader();
   if(window._pinActive){console.log('[initLogin] blocked: pin active');return;}
   console.log('[initLogin] CALLED from:',new Error().stack.split('\n').slice(1,4).join(' | '));
   const step=document.getElementById('account-step');
