@@ -35,7 +35,12 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 #               danger→var(danger-btn)·kakao→var(c6)·blog→var(green)·etc→var(c5)·past-text→var(muted)
 #               ·surface→var(glass-surface)·glass-border/glass-bd→var(glass)·nm-bg→var(past-bg)·off-bg→var(border2)
 #               ("여기서 색 더 안 만듦" = 팔레트 폐쇄 확정. 대표 토큰만 raw 값 보유)
-BASE_HEX_INDEX = 1745
+# 1745 → 1661 = 앱 전체 글래스 통일(운영자 확정 "다 앱내에도 통일"): 칩/버튼 resting을 pm-fbtn 글래스 톤
+#               (var(--glass-surface)+blur(8px)+var(--glass-bd)+var(--glass-shadow)+var(--text))으로 통일.
+#               명명 16종 + ana-xbtn·adm-btn·m-btn.cancel + 인라인(닫기원형·모달푸터·페이지네이션·뷰모드·사이니지) 치환으로
+#               raw hex -84(#fff·#ddd·#e0e0e0·#666·#888 등 → 토큰). select류(ana-sel 등)는 non-glass로 통일 유지.
+# 1661 → 1658 = 완결성 재검증 반영: 일정 페이지네이션 숫자 버튼(inactive)도 형제 이전/다음과 동일 글래스 톤으로 통일(-3)
+BASE_HEX_INDEX = 1658
 BASE_HEX_SIGNAGE = 2          # signage/index.html: #000·#333
 BASE_ROOT_INDEX = 2           # L14(기본 팔레트 32토큰) + L1322(뉴트럴·z·c1~c6 26토큰)
 BASE_ROOT_SIGNAGE = 0
