@@ -1,0 +1,401 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>진입 톤온톤 플레이그라운드 (260705 시안)</title>
+</head>
+<body>
+<style>
+/* ── 페이지 크롬(플레이그라운드 자체) — 라이트/다크 대응. 무대(.stage) 안은 실제 앱 = 라이트 고정 ── */
+:root{
+  --pg-bg:#F5F3F8; --pg-text:#1A1A2E; --pg-dim:#6E6B7E; --pg-panel:#FFFFFF;
+  --pg-line:rgba(26,26,46,.10); --pg-chip:#EFEDF5;
+  --ac:#4A4DE7; --ac-soft:#E8E8FD; --ac-on:#FFFFFF;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --pg-bg:#17161F; --pg-text:#ECEAF4; --pg-dim:#9B98AC; --pg-panel:#211F2C;
+    --pg-line:rgba(236,234,244,.13); --pg-chip:#2A2838;
+    --ac:#8486F2; --ac-soft:rgba(132,134,242,.18); --ac-on:#14131C;
+  }
+}
+:root[data-theme="dark"]{
+  --pg-bg:#17161F; --pg-text:#ECEAF4; --pg-dim:#9B98AC; --pg-panel:#211F2C;
+  --pg-line:rgba(236,234,244,.13); --pg-chip:#2A2838;
+  --ac:#8486F2; --ac-soft:rgba(132,134,242,.18); --ac-on:#14131C;
+}
+:root[data-theme="light"]{
+  --pg-bg:#F5F3F8; --pg-text:#1A1A2E; --pg-dim:#6E6B7E; --pg-panel:#FFFFFF;
+  --pg-line:rgba(26,26,46,.10); --pg-chip:#EFEDF5;
+  --ac:#4A4DE7; --ac-soft:#E8E8FD; --ac-on:#FFFFFF;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--pg-bg);color:var(--pg-text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Apple SD Gothic Neo','Malgun Gothic',Roboto,sans-serif;line-height:1.55;-webkit-font-smoothing:antialiased}
+.wrap{max-width:940px;margin:0 auto;padding:36px 20px 64px;display:flex;flex-direction:column;gap:22px}
+.hd .eyebrow{font-size:11px;font-weight:700;letter-spacing:.14em;color:var(--ac);text-transform:uppercase;margin:0 0 10px}
+.hd h1{font-size:clamp(20px,3.4vw,27px);font-weight:800;letter-spacing:-.01em;margin:0 0 10px;text-wrap:balance}
+.hd .lede{font-size:14px;color:var(--pg-dim);margin:0;max-width:62ch}
+.hd .lede b{color:var(--pg-text)}
+
+/* 컨트롤 */
+.controls{display:flex;flex-direction:column;gap:12px;background:var(--pg-panel);border:1px solid var(--pg-line);border-radius:16px;padding:16px 18px}
+.grp{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.lbl{font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--pg-dim);min-width:74px}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chip{border:1px solid var(--pg-line);background:var(--pg-chip);color:var(--pg-text);font:inherit;font-size:12.5px;font-weight:600;padding:7px 13px;border-radius:999px;cursor:pointer;transition:background .15s,color .15s,border-color .15s}
+.chip:hover{border-color:var(--ac)}
+.chip.on{background:var(--ac);color:var(--ac-on);border-color:var(--ac)}
+.chip:focus-visible,.btn:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+.grp.play{gap:10px;border-top:1px solid var(--pg-line);padding-top:14px;margin-top:2px}
+.btn{font:inherit;font-size:13.5px;font-weight:700;padding:10px 20px;border-radius:12px;border:0;cursor:pointer;background:var(--ac);color:var(--ac-on);transition:opacity .15s,transform .12s}
+.btn:hover{opacity:.9}
+.btn:active{transform:scale(.98)}
+.btn[disabled]{opacity:.45;cursor:default}
+.btn.ghost{background:transparent;color:var(--pg-dim);border:1px solid var(--pg-line)}
+.seq{font-size:11.5px;color:var(--pg-dim);font-variant-numeric:tabular-nums}
+
+/* ── 무대: 실제 앱 목업 (라이트 고정 — 앱 토큰을 그대로 계승) ── */
+.stage{
+  --accent:#4A4DE7; --accent-light:#E8E8FD; --peach:#F0C4B8; --peach-light:#FBF0EC;
+  --peach-text:#D88455; --tx:#1A1A2E; --dim:#888; --muted:#bbb;
+  --glass:rgba(255,255,255,.55);
+  --elev:0 20px 56px rgba(74,77,231,.16),0 6px 18px rgba(26,26,46,.07);
+  --bgGrad:linear-gradient(135deg,#FDF6F3 0%,#F0EBF5 50%,#EBF0F8 100%);
+  --c2:#D88455; --c3:#1A6B3C; --c4:#C02872; --c5:#2D8AB3; --c6:#F5B400;
+  position:relative;aspect-ratio:16/10;border-radius:18px;overflow:hidden;
+  border:1px solid var(--pg-line);box-shadow:0 18px 48px rgba(26,26,46,.12);
+  container-type:inline-size;background:var(--bgGrad);
+}
+.scene{position:absolute;inset:0}
+
+/* 로그인 씬 — 배경은 앱 그라데이션 위에 유동 메시(셰이더 CSS 근사) */
+.scn-login{z-index:2;display:flex;align-items:center;justify-content:center;background:var(--bgGrad);transition:opacity .45s ease}
+.scn-login.fade{opacity:0}
+.mesh{position:absolute;inset:-24%;filter:blur(26px) saturate(1.15);transition:opacity .65s ease;
+  background:
+   radial-gradient(42% 55% at 22% 28%, #E8E8FD 0%, transparent 70%),
+   radial-gradient(48% 60% at 80% 22%, #FBF0EC 0%, transparent 72%),
+   radial-gradient(40% 52% at 70% 78%, #F0C4B8 0%, transparent 70%),
+   radial-gradient(34% 44% at 28% 82%, rgba(74,77,231,.34) 0%, transparent 72%),
+   radial-gradient(30% 40% at 52% 50%, rgba(216,132,85,.26) 0%, transparent 70%),
+   #fff;
+  animation:drift 14s ease-in-out infinite alternate}
+.mesh.dissolve{opacity:0}
+@keyframes drift{from{transform:rotate(0deg) scale(1)}to{transform:rotate(7deg) scale(1.14)}}
+.mock-card{position:relative;z-index:1;width:46cqw;max-width:380px;padding:5.2cqw 4.6cqw;text-align:center;
+  background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.55);border-radius:24px;
+  -webkit-backdrop-filter:blur(16px) saturate(1.2);backdrop-filter:blur(16px) saturate(1.2);
+  box-shadow:var(--elev);transition:transform .48s cubic-bezier(.4,.05,.2,1),opacity .48s ease}
+.mock-card.lift{transform:translateY(-26px) scale(.97);opacity:0}
+.mc-logo{font-size:3cqw;font-weight:800;color:var(--tx);opacity:.85;letter-spacing:.02em;white-space:nowrap}
+.mc-logo .thin{font-weight:400}
+.mc-logo .ac{color:var(--accent)}
+.mc-mail{font-size:1.6cqw;color:var(--accent);opacity:.85;margin:2.4cqw 0 3cqw}
+.pinrow{display:flex;gap:1.8cqw;justify-content:center}
+.pdot{width:1.9cqw;height:1.9cqw;border-radius:50%;border:.22cqw solid var(--muted);opacity:.8;transition:background .18s,border-color .18s,transform .18s}
+.pdot.fill{background:var(--accent);border-color:var(--accent);transform:scale(1.08)}
+.mc-back{margin-top:3.4cqw;font-size:1.5cqw;color:var(--muted);text-decoration:underline}
+
+/* 글래스 베일 */
+.veil{position:absolute;inset:0;z-index:4;pointer-events:none;opacity:0;
+  background:rgba(255,255,255,.32);-webkit-backdrop-filter:blur(22px) saturate(1.2);backdrop-filter:blur(22px) saturate(1.2);
+  transition:opacity .3s ease}
+.veil.on{opacity:1;transition:opacity .26s ease}
+.veil.off{opacity:0;transition:opacity .5s ease}
+
+/* 앱 씬 */
+.scn-app{z-index:1;background:var(--bgGrad);display:flex;flex-direction:column}
+.mock-nav,.mock-hdr,.mock-calwrap{transition:opacity .4s ease,transform .4s ease}
+.pre{opacity:0;transform:translateY(10px)}
+.noanim .mock-nav,.noanim .mock-hdr,.noanim .mock-calwrap{transition:none}
+.mock-nav{display:flex;align-items:center;justify-content:space-between;height:7.4cqw;padding:0 3cqw;
+  background:var(--glass);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);border-bottom:1px solid rgba(255,255,255,.55)}
+.mn-l{display:flex;align-items:center;gap:1.4cqw}
+.mn-logo{font-size:1.9cqw;font-weight:800;color:var(--accent);letter-spacing:.18em}
+.mn-beta{background:#1a1a1a;color:#fff;font-style:italic;font-weight:700;font-size:1.15cqw;padding:.25cqw 1cqw;border-radius:999px}
+.mn-r{display:flex;align-items:center;gap:1.2cqw}
+.mn-ic{width:2.6cqw;height:2.6cqw;border-radius:50%;background:rgba(26,26,46,.07)}
+.mn-user{font-size:1.45cqw;color:var(--dim)}
+.mock-hdr{display:flex;align-items:center;gap:2.4cqw;padding:2.4cqw 3.4cqw 1.6cqw}
+.mh-nav{display:flex;align-items:center;gap:1.6cqw}
+.mh-arrow{width:3cqw;height:3cqw;border-radius:50%;border:1px solid rgba(255,255,255,.6);background:var(--glass);display:grid;place-items:center;font-size:1.8cqw;color:var(--dim)}
+.mh-month{font-size:2.6cqw;font-weight:800;color:var(--tx)}
+.mh-year{font-size:1.7cqw;color:var(--dim);margin-left:.8cqw;font-weight:400}
+.mh-chips{display:flex;gap:1.2cqw}
+.mh-chip{display:flex;align-items:center;gap:.8cqw;padding:.9cqw 1.7cqw;background:var(--glass);border:1px solid rgba(255,255,255,.55);border-radius:999px;font-size:1.35cqw;color:#666;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.mh-dot{width:1cqw;height:1cqw;border-radius:50%}
+.mock-calwrap{flex:1;padding:0 3.4cqw 3cqw;display:flex;flex-direction:column;min-height:0}
+.mock-cal{flex:1;background:var(--glass);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);
+  border:1px solid rgba(255,255,255,.55);border-radius:14px;box-shadow:0 8px 32px rgba(74,77,231,.08),0 2px 8px rgba(0,0,0,.04);
+  display:flex;flex-direction:column;overflow:hidden;position:relative}
+.cal-dh{display:grid;grid-template-columns:repeat(6,1fr);background:rgba(255,255,255,.5);border-bottom:1px solid rgba(0,0,0,.09)}
+.cal-dh span{padding:1.2cqw .6cqw;text-align:center;font-size:1.45cqw;font-weight:700;color:#666}
+.cal-dh .sat{color:#3B7DD8}
+.cal-body{flex:1;position:relative;min-height:0}
+.cal-grid{position:absolute;inset:0;display:grid;grid-template-columns:repeat(6,1fr);grid-template-rows:repeat(3,1fr)}
+.cell{border-right:1px solid rgba(0,0,0,.055);border-bottom:1px solid rgba(0,0,0,.055);padding:.8cqw;position:relative;
+  opacity:0;transform:translateY(6px);transition:opacity .35s ease,transform .35s ease}
+.cell:nth-child(6n){border-right:none}
+.cell.in{opacity:1;transform:none}
+.cell.today{background:rgba(230,240,255,.8)}
+.cell.past .dnum{color:#bbb}
+.dnum{font-size:1.35cqw;font-weight:600;color:#555}
+.pills{display:flex;flex-direction:column;gap:.55cqw;margin-top:.7cqw}
+.pill{font-size:1.15cqw;font-weight:600;color:#fff;padding:.35cqw .9cqw;border-radius:999px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.92}
+
+/* 로딩 변형 */
+.loadlayer{position:absolute;inset:0;display:none}
+.loadlayer.show{display:block}
+.ld-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.6cqw}
+.ld-type{font-size:1.7cqw;color:#888;min-height:2.4cqw}
+.skel-grid{position:absolute;inset:0;display:grid;grid-template-columns:repeat(6,1fr);grid-template-rows:repeat(3,1fr)}
+.skcell{border-right:1px solid rgba(0,0,0,.055);border-bottom:1px solid rgba(0,0,0,.055);padding:.9cqw}
+.skcell:nth-child(6n){border-right:none}
+.skbar{height:1.15cqw;border-radius:999px;background:rgba(0,0,0,.05);margin-bottom:.7cqw}
+.skbar.sm{width:38%}.skbar.md{width:64%}.skbar.lg{width:82%}
+.shimmer{position:absolute;inset:0;overflow:hidden;pointer-events:none}
+.shimmer::after{content:'';position:absolute;top:0;bottom:0;width:34%;left:-40%;
+  background:linear-gradient(100deg,transparent 0%,rgba(255,255,255,.5) 50%,transparent 100%);
+  animation:sweep 1.5s ease-in-out infinite}
+@keyframes sweep{to{left:120%}}
+.ld-logo{font-size:2.7cqw;font-weight:800;letter-spacing:.22em;color:var(--accent);animation:pulse 1.5s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:.45}50%{opacity:1}}
+.ld-dots{display:flex;gap:.9cqw}
+.ld-dots i{width:1cqw;height:1cqw;border-radius:50%;background:var(--accent);opacity:.5;animation:bnc 1.1s ease-in-out infinite}
+.ld-dots i:nth-child(2){animation-delay:.15s}
+.ld-dots i:nth-child(3){animation-delay:.3s}
+@keyframes bnc{0%,100%{transform:translateY(0);opacity:.4}50%{transform:translateY(-.9cqw);opacity:1}}
+
+/* 설명·각주 */
+.desc{background:var(--pg-panel);border:1px solid var(--pg-line);border-radius:16px;padding:16px 18px;display:flex;flex-direction:column;gap:10px}
+.desc .row{display:flex;gap:10px;align-items:baseline}
+.desc .tag{flex:none;font-size:10.5px;font-weight:800;letter-spacing:.08em;color:var(--ac);background:var(--ac-soft);padding:3px 9px;border-radius:999px}
+.desc p{margin:0;font-size:13.5px;color:var(--pg-text)}
+.fine{font-size:12px;color:var(--pg-dim);margin:0;max-width:70ch}
+@media (max-width:560px){ .stage{aspect-ratio:4/3} .lbl{min-width:100%} }
+@media (prefers-reduced-motion: reduce){ .mesh{animation:none} .shimmer::after{animation-duration:3s} }
+</style>
+
+<main class="wrap">
+  <header class="hd">
+    <p class="eyebrow">yeulmaru-promo · 진입 연출 시안</p>
+    <h1>로그인 → 캘린더 진입, 톤온톤 연출 고르기</h1>
+    <p class="lede">PIN 화면에 유동 배경이 안 뜨던 건 이미 수정됨(첫 화면과 동일한 유리 카드 + 유동 배경). 아래는 그다음 구간 — <b>PIN 성공 → 앱 진입 전환</b>과 <b>캘린더 데이터 로딩</b> 연출 후보다. 칩으로 조합을 고르고 ▶ 재생으로 처음부터 끝까지 확인.</p>
+  </header>
+
+  <section class="controls" aria-label="연출 선택">
+    <div class="grp"><span class="lbl">진입 전환</span><div class="chips" id="tChips"></div></div>
+    <div class="grp"><span class="lbl">캘린더 로딩</span><div class="chips" id="lChips"></div></div>
+    <div class="grp play">
+      <button class="btn" id="playBtn">▶ PIN부터 재생</button>
+      <button class="btn ghost" id="resetBtn">처음 화면</button>
+      <span class="seq" id="seqLabel"></span>
+    </div>
+  </section>
+
+  <div class="stage" id="stage" role="img" aria-label="로그인에서 캘린더까지 진입 연출 미리보기">
+    <!-- 앱 씬 (아래층) -->
+    <div class="scene scn-app" id="scnApp">
+      <div class="mock-nav" id="mNav">
+        <div class="mn-l"><span class="mn-logo">YEULMARU</span><span class="mn-beta">Beta</span></div>
+        <div class="mn-r"><span class="mn-ic"></span><span class="mn-ic"></span><span class="mn-ic"></span><span class="mn-user">홍보팀 ○○○님</span></div>
+      </div>
+      <div class="mock-hdr" id="mHdr">
+        <div class="mh-nav"><span class="mh-arrow">‹</span><span><span class="mh-month">7월</span><span class="mh-year">2026</span></span><span class="mh-arrow">›</span></div>
+        <div class="mh-chips">
+          <span class="mh-chip"><span class="mh-dot" style="background:#4A4DE7"></span>예울마루 12</span>
+          <span class="mh-chip"><span class="mh-dot" style="background:#F5B400"></span>카카오 8</span>
+          <span class="mh-chip"><span class="mh-dot" style="background:#2D8AB3"></span>DID 5</span>
+        </div>
+      </div>
+      <div class="mock-calwrap" id="mCalwrap">
+        <div class="mock-cal">
+          <div class="cal-dh"><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span class="sat">토</span></div>
+          <div class="cal-body">
+            <div class="cal-grid" id="calGrid"></div>
+            <div class="loadlayer" id="ld0"><div class="ld-center"><span class="ld-type" id="typeEl"></span></div></div>
+            <div class="loadlayer" id="ld1"><div class="skel-grid" id="skelGrid"></div><div class="shimmer"></div></div>
+            <div class="loadlayer" id="ld2"><div class="ld-center"><span class="ld-logo">YEULMARU</span><span class="ld-dots"><i></i><i></i><i></i></span></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 로그인 씬 (위층) -->
+    <div class="scene scn-login" id="scnLogin">
+      <div class="mesh" id="mesh"></div>
+      <div class="mock-card" id="mCard">
+        <div class="mc-logo"><b>GS</b> <span class="thin">Caltex</span> <b class="ac">YEULMARU</b></div>
+        <div class="mc-mail"><b>ems1130@gscf.or.kr</b> 로 로그인</div>
+        <div class="pinrow"><span class="pdot"></span><span class="pdot"></span><span class="pdot"></span><span class="pdot"></span></div>
+        <div class="mc-back">← 계정 다시 선택</div>
+      </div>
+    </div>
+
+    <div class="veil" id="veil"></div>
+  </div>
+
+  <section class="desc" aria-live="polite">
+    <div class="row"><span class="tag">전환</span><p id="tDesc"></p></div>
+    <div class="row"><span class="tag">로딩</span><p id="lDesc"></p></div>
+  </section>
+
+  <p class="fine">색·유리·그림자 수치는 전부 앱 <code>:root</code> 토큰 값 그대로(새 색 창작 0). 무대 배경의 유동 메시는 실제 WebGL 셰이더의 CSS 근사이고, 실구현에서는 로그인 화면의 실제 셰이더를 그대로 쓴다. 추천 조합 = <b>카드 리프트 디졸브 + 글래스 스켈레톤</b>.</p>
+</main>
+
+<script>
+(function(){
+'use strict';
+var T=[
+ {id:'t0',name:'현행 · 즉시 전환',d:'로그인이 뚝 꺼지고 앱이 바로 뜸. 가장 빠르지만 배경 톤이 한 번 끊긴다.'},
+ {id:'t1',name:'크로스페이드',d:'로그인 화면이 0.45초 동안 녹아 사라지며 앱이 드러남. 최소 비용으로 이어지는 무난한 선택.'},
+ {id:'t2',name:'글래스 베일',d:'반투명 유리막이 화면을 덮었다 걷히며 앱 공개. 유리 모티프를 전환 그 자체에 사용.'},
+ {id:'t3',name:'카드 리프트 디졸브 ★추천',d:'PIN 카드가 살짝 떠오르며 사라지고, 유동 배경이 앱 그라데이션으로 디졸브 → 네비·헤더·캘린더가 순서대로 스르륵. 배경이 한 번도 끊기지 않는 톤온톤.'}
+];
+var L=[
+ {id:'l0',name:'현행 · 타자기 문구',d:'"데이터를 불러오는 중이에요…" 타자기 문구. 현행 유지안.'},
+ {id:'l1',name:'글래스 스켈레톤 ★추천',d:'캘린더 자리를 유리 셀 스켈레톤이 미리 잡고 광택이 은은하게 흐름 → 실제 캘린더로 자연스럽게 바뀜.'},
+ {id:'l2',name:'로고 펄스',d:'YEULMARU 워드마크가 숨쉬듯 깜빡이는 로딩. 브랜드 각인형, 화면은 가장 고요.'}
+];
+var sel={t:'t3',l:'l1'}, playing=false;
+
+var $=function(id){return document.getElementById(id);};
+function chips(listEl,arr,key){
+  arr.forEach(function(v){
+    var b=document.createElement('button');
+    b.className='chip'+(sel[key]===v.id?' on':''); b.type='button'; b.textContent=v.name;
+    b.onclick=function(){ if(playing)return; sel[key]=v.id; render(listEl,arr,key); descs(); play(); };
+    listEl.appendChild(b);
+  });
+}
+function render(listEl,arr,key){ listEl.innerHTML=''; chips(listEl,arr,key); }
+function descs(){
+  $('tDesc').textContent=T.filter(function(v){return v.id===sel.t;})[0].d;
+  $('lDesc').textContent=L.filter(function(v){return v.id===sel.l;})[0].d;
+}
+chips($('tChips'),T,'t'); chips($('lChips'),L,'l'); descs();
+
+/* 캘린더 목업 데이터 — 색 = 앱 토큰(예울 --accent · 카카오 --c6 · DID --c5 · 인스타 --c4 · 블로그 --c3 · 현수기 --c2) */
+var EV={ac:'#4A4DE7',ka:'#F5B400',di:'#2D8AB3',in_:'#C02872',bl:'#1A6B3C',hy:'#D88455'};
+var CELLS=[
+ {d:1,past:1},{d:2,past:1,p:[['ka','카카오톡']]},{d:3,past:1},{d:4,past:1,p:[['ac','예울 공연'],['di','DID']]},{d:5,today:1,p:[['ka','카카오톡']]},{d:6,p:[['in_','인스타']]},
+ {d:8,p:[['ac','예울 전시']]},{d:9},{d:10,p:[['bl','블로그'],['ka','카카오톡']]},{d:11},{d:12,p:[['di','DID']]},{d:13,p:[['hy','현수기']]},
+ {d:15},{d:16,p:[['ac','예울 공연']]},{d:17,p:[['ka','카카오톡'],['in_','인스타']]},{d:18},{d:19,p:[['bl','블로그']]},{d:20}
+];
+function buildCal(){
+  var g=$('calGrid'); g.innerHTML='';
+  CELLS.forEach(function(c){
+    var el=document.createElement('div');
+    el.className='cell'+(c.today?' today':'')+(c.past?' past':'');
+    var h='<span class="dnum">'+c.d+'</span>';
+    if(c.p){ h+='<div class="pills">'+c.p.map(function(pp){return '<span class="pill" style="background:'+EV[pp[0]]+'">'+pp[1]+'</span>';}).join('')+'</div>'; }
+    el.innerHTML=h; g.appendChild(el);
+  });
+}
+function buildSkel(){
+  var g=$('skelGrid'); g.innerHTML='';
+  var sizes=['md','','lg sm','md','sm','lg','','md sm','lg','','sm','md','lg','','md','sm lg','','md'];
+  for(var i=0;i<18;i++){
+    var el=document.createElement('div'); el.className='skcell';
+    var parts=(sizes[i]||'').split(' ').filter(Boolean);
+    el.innerHTML='<div class="skbar sm" style="width:22%"></div>'+parts.map(function(s){return '<div class="skbar '+s+'"></div>';}).join('');
+    g.appendChild(el);
+  }
+}
+buildCal(); buildSkel();
+
+var typeTimer=null;
+function typeLoop(){
+  var msg='데이터를 불러오는 중이에요... 😉', i=0, el=$('typeEl');
+  clearInterval(typeTimer); el.textContent='';
+  typeTimer=setInterval(function(){ i++; if(i>msg.length+14)i=0; el.textContent=msg.slice(0,Math.min(i,msg.length)); },60);
+}
+function stopType(){ clearInterval(typeTimer); typeTimer=null; }
+
+function wait(ms){ return new Promise(function(r){ setTimeout(r,ms); }); }
+var appEls=function(){ return [$('mNav'),$('mHdr'),$('mCalwrap')]; };
+
+function resetStage(){
+  stopType();
+  var lg=$('scnLogin'); lg.style.display='flex'; lg.classList.remove('fade');
+  $('mesh').classList.remove('dissolve');
+  $('mCard').classList.remove('lift');
+  $('veil').className='veil';
+  document.querySelectorAll('.pdot').forEach(function(p){p.classList.remove('fill');});
+  var app=$('scnApp'); app.classList.add('noanim');
+  appEls().forEach(function(e){e.classList.add('pre');});
+  ['ld0','ld1','ld2'].forEach(function(id){$(id).classList.remove('show');});
+  document.querySelectorAll('#calGrid .cell').forEach(function(c){c.classList.remove('in');});
+  void app.offsetHeight; app.classList.remove('noanim');
+  $('seqLabel').textContent='';
+}
+
+function showApp(stagger){
+  var els=appEls();
+  if(!stagger){ var app=$('scnApp'); app.classList.add('noanim'); els.forEach(function(e){e.classList.remove('pre');}); void app.offsetHeight; app.classList.remove('noanim'); return Promise.resolve(); }
+  els.forEach(function(e,i){ setTimeout(function(){e.classList.remove('pre');},i*95); });
+  return wait(95*els.length+300);
+}
+
+async function doTransition(){
+  var lg=$('scnLogin');
+  if(sel.t==='t0'){ lg.style.display='none'; await showApp(false); return; }
+  if(sel.t==='t1'){ await showApp(false); lg.classList.add('fade'); await wait(480); lg.style.display='none'; return; }
+  if(sel.t==='t2'){
+    var v=$('veil'); v.classList.add('on'); await wait(300);
+    lg.style.display='none'; await showApp(false); await wait(120);
+    v.classList.remove('on'); v.classList.add('off'); await wait(520); v.className='veil'; return;
+  }
+  /* t3 카드 리프트 디졸브 */
+  $('mCard').classList.add('lift'); await wait(240);
+  $('mesh').classList.add('dissolve'); await wait(520);
+  lg.style.display='none';
+  await showApp(true);
+}
+
+function showLoading(){
+  var id={l0:'ld0',l1:'ld1',l2:'ld2'}[sel.l];
+  $(id).classList.add('show');
+  if(sel.l==='l0')typeLoop();
+}
+function hideLoading(){ stopType(); ['ld0','ld1','ld2'].forEach(function(id){$(id).classList.remove('show');}); }
+
+function popCalendar(){
+  document.querySelectorAll('#calGrid .cell').forEach(function(c,i){ setTimeout(function(){c.classList.add('in');},i*24); });
+}
+
+async function play(){
+  if(playing)return; playing=true;
+  $('playBtn').disabled=true;
+  resetStage();
+  var lab=$('seqLabel');
+  await wait(420);
+  lab.textContent='PIN 입력…';
+  var dots=document.querySelectorAll('.pdot');
+  for(var i=0;i<dots.length;i++){ dots[i].classList.add('fill'); await wait(165); }
+  await wait(380);
+  lab.textContent='전환…';
+  await doTransition();
+  lab.textContent='데이터 로딩…';
+  showLoading();
+  await wait(1650);
+  hideLoading();
+  lab.textContent='캘린더 등장';
+  popCalendar();
+  await wait(900);
+  lab.textContent='';
+  playing=false; $('playBtn').disabled=false;
+}
+
+$('playBtn').onclick=function(){ play(); };
+$('resetBtn').onclick=function(){ if(!playing)resetStage(); };
+
+resetStage();
+setTimeout(play,650);
+})();
+</script>
+
+</body>
+</html>
