@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>캘린더 플레이그라운드</title>
+<style>
+  /* 색 정본 = index.html :root — 시안 스냅샷(라이브 이식 시 var() 토큰 계승) */
+  :root { --accent:#4A4DE7; --accent-rgb:74,77,231; --c2:#D88455; --c2-rgb:216,132,85;
+    --text:#1A1A2E; --mut:#6E6B7E; --pg:#F5F3F8; --panel:#fff; --line:rgba(26,26,46,.1);
+    --kakao:#C8900A; --insta:#C02872; --blog:#1B7A34; --sms:#8B5CF6; --ease:cubic-bezier(.22,.61,.36,1); }
+  * { box-sizing:border-box; margin:0; -webkit-tap-highlight-color:transparent; }
+  body { background:var(--pg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Apple SD Gothic Neo','Malgun Gothic',sans-serif;
+    line-height:1.6; padding:22px 14px 90px; max-width:1020px; margin:0 auto; }
+  h1 { font-size:19px; font-weight:800; letter-spacing:-.3px; }
+  p.d { font-size:12.5px; color:var(--mut); margin-top:2px; }
+  p.d b { color:var(--accent); }
+
+  /* ── 무대 ── */
+  .stagewrap { display:flex; justify-content:center; margin-top:14px; }
+  .stage { position:relative; width:min(960px,96vw); border-radius:18px; overflow:hidden;
+    border:1px solid var(--line); box-shadow:0 24px 64px rgba(26,26,46,.14); padding:18px 18px 22px;
+    --panelA:.08; --blur:26px; --sat:1.6; --cellA:.14; --lineA:.09; --cellH:96px;
+    --pastA:.02; --pastTxt:.45; --evFs:11.5px; --evGap:3px; --todayA:.8; }
+  .mesh { position:absolute; inset:0; z-index:0; transition:opacity .3s; background:
+    radial-gradient(50% 64% at 14% 18%, rgba(74,77,231,.20) 0%, transparent 70%),
+    radial-gradient(44% 56% at 86% 16%, rgba(240,196,184,.72) 0%, transparent 72%),
+    radial-gradient(46% 58% at 76% 86%, rgba(216,132,85,.28) 0%, transparent 70%),
+    radial-gradient(36% 48% at 55% 45%, rgba(240,196,184,.36) 0%, transparent 70%),
+    linear-gradient(135deg,#FDF6F3 0%,#F0EBF5 50%,#EBF0F8 100%); }
+  .stage[data-mesh="soft"] .mesh { opacity:.5; }
+  .stage[data-mesh="bold"] .mesh { filter:saturate(1.35); }
+  .hdrm { position:relative; z-index:1; display:flex; align-items:center; gap:10px; margin-bottom:12px; }
+  .hdrm .arw { width:28px; height:28px; border-radius:50%; background:rgba(255,255,255,.6); border:1px solid rgba(255,255,255,.7); display:grid; place-items:center; color:#888; font-size:14px; }
+  .hdrm b { font-size:22px; color:var(--accent); font-weight:800; } .hdrm span { font-size:13px; color:#888; }
+
+  .cal { position:relative; z-index:1; border-radius:14px; overflow:hidden;
+    background:rgba(255,255,255,var(--panelA));
+    backdrop-filter:blur(var(--blur)) saturate(var(--sat)); -webkit-backdrop-filter:blur(var(--blur)) saturate(var(--sat));
+    border:1px solid rgba(255,255,255,.7); box-shadow:0 8px 32px rgba(74,77,231,.08),0 2px 8px rgba(0,0,0,.04); }
+  .dhs { display:grid; grid-template-columns:repeat(6,1fr); border-bottom:1px solid rgba(0,0,0,calc(var(--lineA) + .02)); }
+  .dh { padding:10px 6px; text-align:center; font-size:13px; font-weight:700; color:#666; position:relative; }
+  .dh.sat { color:#3B7DD8; } .dh.sun { color:#D64545; }
+  .stage[data-thead="fill"] .dh.today { background:var(--accent); color:#fff; }
+  .stage[data-thead="bar"] .dh.today::after { content:''; position:absolute; left:25%; right:25%; bottom:3px; height:3px; border-radius:99px; background:var(--c2); }
+  .stage[data-thead="bar"] .dh.today { color:var(--accent); }
+  .grid { display:grid; grid-template-columns:repeat(6,1fr); }
+  .cc { position:relative; height:var(--cellH); padding:6px 8px; overflow:hidden;
+    border-right:1px solid rgba(0,0,0,var(--lineA)); border-bottom:1px solid rgba(0,0,0,var(--lineA));
+    background:rgba(255,255,255,var(--cellA)); }
+  .cc:nth-child(6n) { border-right:none; }
+  .cc:nth-child(n+13) { border-bottom:none; }
+  .dn { font-size:12px; font-weight:600; color:#555; }
+  .cc.sat .dn { color:#3B7DD8; } .cc.sun .dn { color:#D64545; }
+  /* 과거일 3모드 */
+  .cc.past { background:rgba(0,0,0,var(--pastA)); }
+  .cc.past .dn, .cc.past .ev { opacity:var(--pastTxt); }
+  .stage[data-past="dim"] .cc.past .ev, .stage[data-past="dim"] .cc.past .dn { opacity:calc(var(--pastTxt) * .6); }
+  .stage[data-past="hatch"] .cc.past { background:repeating-linear-gradient(45deg, rgba(0,0,0,.028) 0 6px, rgba(0,0,0,0) 6px 12px); }
+  /* 일요일 컬럼 톤 */
+  .stage[data-sun="gray"] .cc.sun:not(.today) { background:rgba(0,0,0,.10); }
+  /* 오늘 강조 4모드 */
+  .stage[data-today="tint"] .cc.today { background:rgba(230,240,255,var(--todayA)); }
+  .stage[data-today="ring"] .cc.today { box-shadow:inset 0 0 0 2px var(--accent); background:rgba(74,77,231,.05); }
+  .stage[data-today="ringS"] .cc.today { box-shadow:inset 0 0 0 2px var(--c2); background:rgba(216,132,85,.06); }
+  .stage[data-today="none"] .cc.today { background:rgba(255,255,255,var(--cellA)); }
+  .cc .cnt { position:absolute; top:4px; right:6px; font-size:9px; color:rgba(0,0,0,.4); font-weight:600; font-variant-numeric:tabular-nums; }
+
+  /* ── 일정(이벤트) 표시 3모드 ── */
+  .evs { display:flex; flex-direction:column; gap:var(--evGap); margin-top:4px; }
+  .ev { font-size:var(--evFs); line-height:1.35; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:#333; }
+  .ev .t { color:#888; font-weight:600; margin-right:3px; font-variant-numeric:tabular-nums; }
+  .ev b { font-weight:700; margin-right:3px; }
+  .ev.pk b { color:var(--kakao); } .ev.pi b { color:var(--insta); } .ev.pb b { color:var(--blog); } .ev.ps b { color:var(--sms); }
+  .ev.sp b { color:var(--accent); }
+  /* 색점 모드 */
+  .stage[data-ev="dot"] .ev b { color:#333 !important; }
+  .stage[data-ev="dot"] .ev::before { content:''; display:inline-block; width:6px; height:6px; border-radius:50%; margin-right:5px; vertical-align:1px; background:#999; }
+  .stage[data-ev="dot"] .ev.pk::before { background:var(--kakao); } .stage[data-ev="dot"] .ev.pi::before { background:var(--insta); }
+  .stage[data-ev="dot"] .ev.pb::before { background:var(--blog); } .stage[data-ev="dot"] .ev.ps::before { background:var(--sms); }
+  .stage[data-ev="dot"] .ev.sp::before { background:var(--accent); }
+  /* 칩 모드 */
+  .stage[data-ev="chip"] .ev { border-radius:6px; padding:2px 6px; color:#fff; }
+  .stage[data-ev="chip"] .ev .t, .stage[data-ev="chip"] .ev b { color:rgba(255,255,255,.9); }
+  .stage[data-ev="chip"] .ev.pk { background:rgba(200,144,10,.88); } .stage[data-ev="chip"] .ev.pi { background:rgba(192,40,114,.88); }
+  .stage[data-ev="chip"] .ev.pb { background:rgba(27,122,52,.88); } .stage[data-ev="chip"] .ev.ps { background:rgba(139,92,246,.88); }
+  .stage[data-ev="chip"] .ev.sp { background:rgba(74,77,231,.88); }
+  /* 완료 표시 */
+  .stage[data-done="strike"] .ev.done { text-decoration:line-through; opacity:.55; }
+  .stage[data-done="dim"] .ev.done { opacity:.4; }
+
+  /* ── 컨트롤 ── */
+  .panel { margin-top:16px; padding:14px 16px 16px; border:1px solid var(--line); border-radius:14px; background:var(--panel); }
+  .row { display:flex; align-items:center; gap:9px; flex-wrap:wrap; margin-top:11px; }
+  .row:first-child { margin-top:0; }
+  .lab { font-size:12px; color:var(--mut); font-weight:700; min-width:84px; }
+  .chip { padding:7px 12px; border-radius:999px; border:1px solid var(--line); background:var(--pg); color:var(--text);
+    font:700 12px/1 inherit; cursor:pointer; transition:transform .18s var(--ease), background .2s, border-color .2s, color .2s; touch-action:manipulation; }
+  .chip:active { transform:scale(.93); }
+  .chip.on { background:rgba(var(--accent-rgb),.12); border-color:rgba(var(--accent-rgb),.45); color:var(--accent); }
+  .chip.play { border-color:rgba(var(--c2-rgb),.5); color:var(--c2); }
+  input[type=range] { flex:1; min-width:100px; accent-color:var(--accent); }
+  .val { font-size:12px; color:var(--text); font-variant-numeric:tabular-nums; min-width:48px; text-align:right; }
+  .sum { margin-top:16px; padding:12px 14px; border:1px dashed rgba(var(--accent-rgb),.4); border-radius:12px; background:rgba(var(--accent-rgb),.05); font-size:12.5px; line-height:1.8; }
+  .sum b { color:var(--accent); }
+  .sum .copy { float:right; margin-left:10px; }
+</style>
+</head>
+<body>
+<h1>캘린더 플레이그라운드</h1>
+<p class="d">260705 · 캘린더의 <b>유리·셀·과거일·오늘·일정 표시</b>를 전부 실시간 조합 — 값을 만지고 마음에 들면 맨 밑 <b>요약 복사</b>해서 보내줘. (색 = 앱 토큰·플랫폼 확립색 스냅샷 · 데이터 = 라이브 7월 근사)</p>
+
+<div class="stagewrap">
+<div class="stage" id="st" data-past="tint" data-today="tint" data-thead="fill" data-ev="text" data-done="strike" data-sun="gray" data-mesh="now">
+  <div class="mesh"></div>
+  <div class="hdrm"><span class="arw">‹</span><span><b>7</b> <span>2026</span></span><span class="arw">›</span></div>
+  <div class="cal">
+    <div class="dhs"><span class="dh">화</span><span class="dh">수</span><span class="dh">목</span><span class="dh">금</span><span class="dh sat">토</span><span class="dh sun today">일</span></div>
+    <div class="grid" id="grid"></div>
+  </div>
+</div>
+</div>
+
+<div class="panel">
+  <div class="row"><span class="lab">패널 유리</span><input type="range" id="panelA" min="0" max="50" value="8"><span class="val" id="panelAV">8%</span>
+    <span class="lab" style="min-width:0">blur</span><input type="range" id="blur" min="0" max="40" value="26" style="min-width:80px"><span class="val" id="blurV">26px</span></div>
+  <div class="row"><span class="lab">채도 부스트</span><input type="range" id="sat" min="10" max="22" value="16"><span class="val" id="satV">1.6</span>
+    <span class="lab" style="min-width:0">셀 배경</span><input type="range" id="cellA" min="0" max="50" value="14" style="min-width:80px"><span class="val" id="cellAV">14%</span></div>
+  <div class="row"><span class="lab">격자선</span><input type="range" id="lineA" min="3" max="20" value="9"><span class="val" id="lineAV">9%</span>
+    <span class="lab" style="min-width:0">셀 높이</span><input type="range" id="cellH" min="80" max="130" value="96" style="min-width:80px"><span class="val" id="cellHV">96px</span></div>
+  <div class="row" id="rPast"><span class="lab">과거일</span>
+    <button class="chip on" data-past="tint">회색 틴트(현행)</button>
+    <button class="chip" data-past="dim">더 흐리게</button>
+    <button class="chip" data-past="hatch">빗금</button>
+    <span class="lab" style="min-width:0">과거 글자</span><input type="range" id="pastTxt" min="20" max="80" value="45" style="min-width:80px"><span class="val" id="pastTxtV">45%</span></div>
+  <div class="row" id="rToday"><span class="lab">오늘 셀</span>
+    <button class="chip on" data-today="tint">연블루 틴트(현행)</button>
+    <button class="chip" data-today="ring">코발트 링</button>
+    <button class="chip" data-today="ringS">살몬 링</button>
+    <button class="chip" data-today="none">없음</button></div>
+  <div class="row" id="rThead"><span class="lab">오늘 요일칸</span>
+    <button class="chip on" data-thead="fill">코발트 채움(현행)</button>
+    <button class="chip" data-thead="bar">살몬 언더바(nav와 통일)</button>
+    <button class="chip" data-thead="none">없음</button></div>
+  <div class="row" id="rEv"><span class="lab">일정 표시</span>
+    <button class="chip on" data-ev="text">색 글자(현행)</button>
+    <button class="chip" data-ev="dot">색점+검정 글자</button>
+    <button class="chip" data-ev="chip">색 칩(배경 채움)</button></div>
+  <div class="row"><span class="lab">일정 글자</span><input type="range" id="evFs" min="10" max="14" value="11" step="0.5"><span class="val" id="evFsV">11.5px</span>
+    <span class="lab" style="min-width:0">줄 간격</span><input type="range" id="evGap" min="1" max="8" value="3" style="min-width:80px"><span class="val" id="evGapV">3px</span></div>
+  <div class="row" id="rDone"><span class="lab">완료 일정</span>
+    <button class="chip on" data-done="strike">취소선(현행)</button>
+    <button class="chip" data-done="dim">흐림만</button></div>
+  <div class="row" id="rSun"><span class="lab">일요일 컬럼</span>
+    <button class="chip on" data-sun="gray">회색 톤(현행)</button>
+    <button class="chip" data-sun="clean">일반 셀과 동일</button></div>
+  <div class="row" id="rMesh"><span class="lab">배경 메시</span>
+    <button class="chip" data-mesh="soft">연하게</button>
+    <button class="chip on" data-mesh="now">현행</button>
+    <button class="chip" data-mesh="bold">진하게</button></div>
+  <div class="row" id="rDen"><span class="lab">데이터 밀도</span>
+    <button class="chip on" data-den="norm">보통(라이브 근사)</button>
+    <button class="chip" data-den="busy">바쁜 주 시뮬</button></div>
+  <div class="sum" id="sum"><button class="chip copy" id="copyBtn">복사</button><b>현재 조합</b><br><span id="sumTxt"></span></div>
+</div>
+
+<script>
+(() => {
+  const st = document.getElementById('st'), grid = document.getElementById('grid');
+  // 라이브 7월 근사 데이터 — cls: pk카카오 pi인스타 pb블로그 ps문자 sp특별(회의)
+  const BASE = [
+    { d:7 }, { d:8, ev:[['15:00','ps','문자','조재혁 리사이틀 T/O'],['15:00','pi','인스타','티켓 오픈'],['14:30','sp','회의','황세웅']] },
+    { d:9, ev:[['05:03','pi','인스타','브런치 Ⅲ'],['05:03','ps','문자','브런치 Ⅲ']] },
+    { d:10, ev:[['15:00','ps','문자','뮤지컬 <달 샤베트> T/O'],['15:50','pk','카카오','뮤지컬 <달 샤베트> T/O']] },
+    { d:11, sat:1, ev:[['17:00','pb','블로그','9월 브런치 콘서트 홍보']] }, { d:12, sun:1 },
+    { d:14, past:1, ev:[['14:00','pi','인스타','러커스더스콜 T/O',1],['15:00','ps','문자','러커스더스콜 T/O',1]] },
+    { d:15, past:1, ev:[['14:30','sp','회의','황세웅',1]] }, { d:16, past:1 }, { d:17, past:1, hol:'제헌절' },
+    { d:18, sat:1, past:1, ev:[['17:00','pb','블로그','조재혁 피아노 리사이틀 홍보',1]] }, { d:19, sun:1, past:1 },
+    { d:21, ev:[['10:00','pk','카카오','GS칼텍스 예울마루 기획전시 <숨:쉬는 SUM> 오픈'],['10:00','pi','인스타','숨쉬는섬']] },
+    { d:22, ev:[['14:00','pi','인스타','그날들 T/O'],['15:00','ps','문자','그날들 티켓오픈'],['14:30','sp','회의','황세웅']] },
+    { d:23 }, { d:24 }, { d:25, sat:1 }, { d:26, sun:1, today:1, ev:[['15:00','pk','카카오','여수섬 T/O']] },
+  ];
+  const BUSY_EXTRA = [['09:00','pk','카카오','오전 홍보'],['11:30','pi','인스타','스토리 업로드'],['13:00','pb','블로그','상세 포스팅'],['16:00','ps','문자','발송'],['18:00','pk','카카오','저녁 리마인드']];
+  const S = { past:'회색 틴트(현행)', today:'연블루 틴트(현행)', thead:'코발트 채움(현행)', ev:'색 글자(현행)', done:'취소선(현행)', sun:'회색 톤(현행)', mesh:'현행', den:'보통',
+    vals:{ panelA:'8%', blur:'26px', sat:'1.6', cellA:'14%', lineA:'9%', cellH:'96px', pastTxt:'45%', evFs:'11.5px', evGap:'3px' } };
+
+  function render(busy) {
+    grid.innerHTML = '';
+    BASE.forEach(c => {
+      const el = document.createElement('div');
+      el.className = 'cc' + (c.sat?' sat':'') + (c.sun?' sun':'') + (c.past?' past':'') + (c.today?' today':'');
+      let evs = (c.ev||[]).slice();
+      if (busy && !c.past && evs.length) evs = evs.concat(BUSY_EXTRA.map(e=>e.slice()));
+      let h = '<span class="dn">' + c.d + (c.hol?' <span style="color:#D64545;font-weight:700;font-size:10px">'+c.hol+'</span>':'') + '</span>';
+      if (evs.length) h += '<span class="cnt">' + evs.filter(e=>e[4]).length + '/' + evs.length + '</span>';
+      h += '<div class="evs">' + evs.map(e =>
+        '<div class="ev ' + e[1] + (e[4]?' done':'') + '"><span class="t">' + e[0] + '</span><b>' + e[2] + '</b>' + e[3] + '</div>').join('') + '</div>';
+      el.innerHTML = h; grid.appendChild(el);
+    });
+  }
+
+  const pick = (rowId, attr, fn) => document.getElementById(rowId).addEventListener('click', e => {
+    const c = e.target.closest('.chip'); if (!c || c.dataset[attr] == null) return;
+    [...e.currentTarget.querySelectorAll('.chip[data-' + attr.toLowerCase() + ']')].forEach(x => x.classList.remove('on')); c.classList.add('on'); fn(c);
+  });
+  pick('rPast','past', c => { st.dataset.past = c.dataset.past; S.past = c.textContent; sum(); });
+  pick('rToday','today', c => { st.dataset.today = c.dataset.today; S.today = c.textContent; sum(); });
+  pick('rThead','thead', c => { st.dataset.thead = c.dataset.thead; S.thead = c.textContent; sum(); });
+  pick('rEv','ev', c => { st.dataset.ev = c.dataset.ev; S.ev = c.textContent; sum(); });
+  pick('rDone','done', c => { st.dataset.done = c.dataset.done; S.done = c.textContent; sum(); });
+  pick('rSun','sun', c => { st.dataset.sun = c.dataset.sun; S.sun = c.textContent; sum(); });
+  pick('rMesh','mesh', c => { st.dataset.mesh = c.dataset.mesh; S.mesh = c.textContent; sum(); });
+  pick('rDen','den', c => { S.den = c.textContent; render(c.dataset.den === 'busy'); sum(); });
+
+  const range = (id, cssVar, fmt) => { const el = document.getElementById(id); el.addEventListener('input', () => {
+    const v = fmt(el.value); st.style.setProperty(cssVar, v.css); document.getElementById(id + 'V').textContent = v.txt; S.vals[id] = v.txt; sum(); }); };
+  range('panelA','--panelA', v => ({ css:v/100, txt:v+'%' }));
+  range('blur','--blur', v => ({ css:v+'px', txt:v+'px' }));
+  range('sat','--sat', v => ({ css:v/10, txt:(v/10).toFixed(1) }));
+  range('cellA','--cellA', v => ({ css:v/100, txt:v+'%' }));
+  range('lineA','--lineA', v => ({ css:v/100, txt:v+'%' }));
+  range('cellH','--cellH', v => ({ css:v+'px', txt:v+'px' }));
+  range('pastTxt','--pastTxt', v => ({ css:v/100, txt:v+'%' }));
+  range('evFs','--evFs', v => ({ css:v+'px', txt:v+'px' }));
+  range('evGap','--evGap', v => ({ css:v+'px', txt:v+'px' }));
+
+  function sum() {
+    const v = S.vals;
+    document.getElementById('sumTxt').textContent =
+      `유리 ${v.panelA}(blur ${v.blur}·채도 ${v.sat}) · 셀 ${v.cellA}(격자 ${v.lineA}·높이 ${v.cellH}) · 과거 ${S.past}(글자 ${v.pastTxt}) · 오늘 ${S.today}/요일칸 ${S.thead} · 일정 ${S.ev}(${v.evFs}·간격 ${v.evGap}) · 완료 ${S.done} · 일요일 ${S.sun} · 메시 ${S.mesh}`;
+  }
+  document.getElementById('copyBtn').addEventListener('click', async e => {
+    try { await navigator.clipboard.writeText(document.getElementById('sumTxt').textContent); e.target.textContent = '복사됨 ✓'; }
+    catch { e.target.textContent = '길게 눌러 복사'; }
+    setTimeout(() => e.target.textContent = '복사', 1400);
+  });
+  render(false); sum();
+})();
+</script>
+</body>
+</html>
