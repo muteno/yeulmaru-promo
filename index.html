@@ -636,6 +636,8 @@ button{font-family:inherit;cursor:pointer}
 .mon-sub .mev{font-size:9px;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text);margin-top:2px}
 .mon-sub.past .mev,.mon-sub.past .dn{opacity:.33}
 .mon-sub.nm{cursor:default}
+/* 선택 음영 = 일·월 한 덩어리(운영자 260706 "음영도 하나") — 서브셀 인라인 bg를 sel 음영으로 덮음 */
+.c.sunmon.sel .mon-sub{background:rgba(74,77,231,.07) !important}
 /* 분할 요일 헤더(일|월) */
 .dh.dh-split{display:flex;padding:0;align-items:stretch}
 .dh.dh-split i{font-style:normal;display:grid;place-items:center;padding:10px 0}
@@ -657,7 +659,8 @@ button{font-family:inherit;cursor:pointer}
 .c.today{background:var(--today-bg)}
 
 
-.c.sel{box-shadow:inset 0 0 0 2px var(--accent);background:rgba(74,77,231,0.04)}
+/* 선택 = 음영 우선(운영자 260706 "테두리 말고 음영") — 인라인 bg를 이기도록 !important, 일·월 통합 셀 전체 한 덩어리 */
+.c.sel{box-shadow:inset 0 0 0 2px var(--accent);background:rgba(74,77,231,.07) !important}
 .perf-tag{font-size:9px;font-weight:600;color:#333;background:#F0C4B8;padding:2px 7px;border-radius:6px;margin-left:6px;white-space:nowrap;letter-spacing:0.3px;vertical-align:middle;line-height:1}
 .dn{font-size:13px;font-weight:600;margin-bottom:2px;color:var(--text);display:flex;align-items:center;flex-wrap:nowrap;min-width:0;gap:5px}
 .dn.nm{color:rgba(0,0,0,0.1)}
@@ -14311,11 +14314,14 @@ function renderCal(){
     const justOpened=_justExpandedWeek===wi;
     h+=`<div class="week${isTW?' tw':''}${justOpened?' just-opened':''}${_calAnim}" style="${wi<weeks.length-1?'':'border-bottom:none;'}${_calDelay}">`;
     week.forEach((d,di)=>{
-      const key=dk(d),nm=d.getMonth()+1!==currentMonth,td=isToday(d),past=isThisMonth&&isPast(d)&&!td,isSat=di===4,isSun=di===5,isSel=selected===key||(di===5&&selected===dk(new Date(d.getFullYear(),d.getMonth(),d.getDate()+1))),recs=nm?[]:getRecsForDate(d);   // 일·월 = 구분되되 한몸: 월요일 선택도 통합 셀 전체에 선택 링(운영자 260706)
+      const key=dk(d),nm=d.getMonth()+1!==currentMonth,td=isToday(d),past=isThisMonth&&isPast(d)&&!td,isSat=di===4,isSun=di===5;
+      // 일·월 = 구분되되 한몸(운영자 260706): 선택·오늘 음영이 통합 셀 전체에 하나로
+      var _moD=null,_moTd=false; if(isSun){_moD=new Date(d.getFullYear(),d.getMonth(),d.getDate()+1);_moTd=isToday(_moD);}
+      const isSel=selected===key||(isSun&&_moD&&selected===dk(_moD)),recs=nm?[]:getRecsForDate(d);
       // 비-홍보일(자동_일요일 ON 시 일·월) — readonly 느낌으로 옅은 회색
       var _offDay=!nm&&APPLY_SETTINGS&&APPLY_SETTINGS['자동_일요일']&&(d.getDay()===0||d.getDay()===1);
       let bg='rgba(255,255,255,0)';   // 셀 0%(운영자 확정 조합 260705) — 유리 패널이 톤 담당
-      if(nm)bg='var(--nm-bg)';else if(td)bg='var(--today-bg)';else if(past)bg='var(--past-bg)';   // 일요일 회색(off-bg) 제거 = 일반 셀과 동일(운영자 확정)
+      if(nm)bg='var(--nm-bg)';else if(td||_moTd)bg='var(--today-bg)';else if(past)bg='var(--past-bg)';   // 오늘 음영 = 일·월 통합 셀 전체 하나(운영자 260706)
       let dnCls='dn';if(nm)dnCls+=' nm';else if(past)dnCls+=' past';else if(isSat)dnCls+=' sat';else if(isSun)dnCls+=' sun';
       var holName=(!nm)?(_holidays[key]||''):'';if(holName)dnCls+=' hol';
       h+=`<div class="c cell${nm?' nm':''}${past?' past':''}${td?' today':''}${isSun?' sunmon':''}${isSel?' sel':''}${_justCopiedDateKey===key?' just-copied-cell':''}" data-cell data-key="${key}" onclick="if(event.target.closest('.perf-badge')||event.target.closest('.mon-sub'))return;clickDate('${key}')" oncontextmenu="if(event.target.closest('.perf-badge')||event.target.closest('.mon-sub'))return;onCellContextMenu(event,'${key}')"${nm?'':` ondragover="onCellDragOver(event)" ondragleave="onCellDragLeave(event)" ondrop="onCellDrop(event,'${key}')"`} style="background:${bg};${di<5?'border-right:1px solid rgba(0,0,0,.07)':''}${nm?'cursor:default':'cursor:pointer'}">`;
@@ -14378,12 +14384,12 @@ function renderCal(){
       else h+='<div class="cell-corner" title="일정 패널 열기" onclick="event.stopPropagation();clickDate(\''+key+'\')">◢</div>';
       // 일·월 통합 칸: 우측 1/4 = 월요일 서브셀(자체 날짜·일정·클릭·드롭, 운영자 260706)
       if(isSun){
-        var _mo=new Date(d);_mo.setDate(d.getDate()+1);
-        var mKey=dk(_mo),mNm=_mo.getMonth()+1!==currentMonth,mTd=isToday(_mo),mPast=isThisMonth&&isPast(_mo)&&!mTd;
+        var _mo=_moD;
+        var mKey=dk(_mo),mNm=_mo.getMonth()+1!==currentMonth,mTd=_moTd,mPast=isThisMonth&&isPast(_mo)&&!mTd;
         var mRecs=mNm?[]:getRecsForDate(_mo);
         if(activeFilters.length>0){var _mg=[{label:'카카오',match:['카카오']},{label:'인스타',match:['인스타']},{label:'블로그·맘카페',match:['블로그','맘카페']},{label:'B2B',match:['B2B']},{label:'문자',match:['문자']}];var _mm=[];activeFilters.forEach(function(af){_mg.forEach(function(g){if(g.label===af)_mm=_mm.concat(g.match);});});mRecs=mRecs.filter(function(r){var p=r['플랫폼 1']||'';return _mm.some(function(m){return p.indexOf(m)>-1;});});}
         if(activePrograms.length>0){mRecs=mRecs.filter(function(r){return activePrograms.indexOf(r['프로그램']||'')>-1;});}
-        var mBg=mNm?'var(--nm-bg)':mTd?'var(--today-bg)':mPast?'var(--past-bg)':'rgba(255,255,255,0)';
+        var mBg=mNm?'var(--nm-bg)':(td||mTd)?'var(--today-bg)':mPast?'var(--past-bg)':'rgba(255,255,255,0)';   // 오늘 음영 = 통합 셀과 하나
         h+='<div class="mon-sub'+(mPast?' past':'')+(mNm?' nm':'')+'" data-cell data-key="'+mKey+'"'+(mNm?'':' onclick="event.stopPropagation();clickDate(\''+mKey+'\')" oncontextmenu="event.stopPropagation();onCellContextMenu(event,\''+mKey+'\')" ondragover="onCellDragOver(event)" ondragleave="onCellDragLeave(event)" ondrop="onCellDrop(event,\''+mKey+'\')"')+' style="background:'+mBg+'"'+(mNm?'':' title="'+(_mo.getMonth()+1)+'/'+_mo.getDate()+' (월)"')+'>'
           +'<div class="dn'+(mPast?' past':(mNm?' nm':' sun'))+'">'+(mNm?'':(mTd?'<span style="color:var(--accent);font-weight:700">'+_mo.getDate()+'</span>':_mo.getDate()))+'</div>';
         mRecs.slice().sort(function(a,b){function tk(r){var ts=r['입력시간(KST)'];if(typeof ts==='string'&&ts.indexOf(' ')>-1)return ts.split(' ')[1];if(typeof ts==='number'){var tm=Math.round((ts%1)*1440);return String(Math.floor(tm/60)).padStart(2,'0')+':'+String(tm%60).padStart(2,'0');}return '99:99';}return tk(a).localeCompare(tk(b));}).forEach(function(r){
