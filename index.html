@@ -1622,7 +1622,7 @@ table.promo-board-table thead th:last-child{border-top-right-radius:11px}
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
         <span class="msgbox-count" id="msgbox-count" style="display:none">0</span>
       </button>
-      <span class="welcome-msg" id="welcome-msg" onclick="logout()" title="계정 메뉴 (설정·로그아웃)" style="font-size:12.5px;color:rgba(255,255,255,.7);margin-right:12px;font-family:inherit;cursor:pointer"></span>
+      <span class="welcome-msg" id="welcome-msg" onclick="logout()" title="계정 메뉴 (설정·로그아웃)" style="font-size:12.5px;color:rgba(255,255,255,.85);margin-right:12px;font-family:inherit;cursor:pointer"></span>
       <span class="role-tag" id="role-tag" style="display:none"></span>
     </div>
   </nav>
@@ -13861,7 +13861,7 @@ function startClock(){
       let _name = '';
       try{ _name = sessionStorage.getItem('myApplicant') || ''; }catch(e){}
       if(_name){
-        _wel.innerHTML = '<span style="white-space:nowrap"><b style="color:var(--accent);font-weight:700">'+_name.replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</b><span style="margin-left:4px">님</span></span>';
+        _wel.innerHTML = '<span style="white-space:nowrap"><b style="color:rgba(255,255,255,.95);font-weight:700">'+_name.replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</b><span style="margin-left:4px">님</span></span>';
       } else {
         _wel.innerHTML = '';
       }
@@ -14318,7 +14318,7 @@ function renderCal(){
       if(nm)bg='var(--nm-bg)';else if(td)bg='var(--today-bg)';else if(past)bg='var(--past-bg)';   // 일요일 회색(off-bg) 제거 = 일반 셀과 동일(운영자 확정)
       let dnCls='dn';if(nm)dnCls+=' nm';else if(past)dnCls+=' past';else if(isSat)dnCls+=' sat';else if(isSun)dnCls+=' sun';
       var holName=(!nm)?(_holidays[key]||''):'';if(holName)dnCls+=' hol';
-      h+=`<div class="c cell${nm?' nm':''}${past?' past':''}${td?' today':''}${isSun?' sunmon':''}${isSel?' sel':''}${_justCopiedDateKey===key?' just-copied-cell':''}" data-cell data-key="${key}" onclick="if(event.target.closest('.perf-badge')||event.target.closest('.mon-sub'))return;clickDate('${key}')" oncontextmenu="if(event.target.closest('.perf-badge')||event.target.closest('.mon-sub'))return;onCellContextMenu(event,'${key}')"${nm?'':` ondragover="onCellDragOver(event)" ondragleave="onCellDragLeave(event)" ondrop="onCellDrop(event,'${key}')"`} style="background:${bg};${di<5?'border-right:1px solid rgba(0,0,0,.07)':''}${nm?'cursor:default':'cursor:pointer'}">`;
+      h+=`<div class="c cell${nm?' nm':''}${past?' past':''}${td?' today':''}${isSun&&!nm?' sunmon':''}${isSel?' sel':''}${_justCopiedDateKey===key?' just-copied-cell':''}" data-cell data-key="${key}" onclick="if(event.target.closest('.perf-badge')||event.target.closest('.mon-sub'))return;clickDate('${key}')" oncontextmenu="if(event.target.closest('.perf-badge')||event.target.closest('.mon-sub'))return;onCellContextMenu(event,'${key}')"${nm?'':` ondragover="onCellDragOver(event)" ondragleave="onCellDragLeave(event)" ondrop="onCellDrop(event,'${key}')"`} style="background:${bg};${di<5?'border-right:1px solid rgba(0,0,0,.07)':''}${nm?'cursor:default':'cursor:pointer'}">`;
       var perfs=nm?[]:getPerfs(d);var filteredRecs=recs;if(activeFilters.length>0){var allGroups=[{label:'카카오',match:['카카오']},{label:'인스타',match:['인스타']},{label:'블로그·맘카페',match:['블로그','맘카페']},{label:'B2B',match:['B2B']},{label:'문자',match:['문자']}];var activeMatches=[];activeFilters.forEach(function(af){allGroups.forEach(function(g){if(g.label===af)activeMatches=activeMatches.concat(g.match);});});filteredRecs=filteredRecs.filter(function(r){var p=r['플랫폼 1']||'';return activeMatches.some(function(m){return p.indexOf(m)>-1;});});}if(activePrograms.length>0){filteredRecs=filteredRecs.filter(function(r){var prog=r['프로그램']||'';return activePrograms.indexOf(prog)>-1;});}
       // 시간순 정렬 (입력시간 HH:MM 기준)
       filteredRecs=filteredRecs.slice().sort(function(a,b){
@@ -14377,7 +14377,8 @@ function renderCal(){
       // 우하단 대각선 코너 — 내용이 많아도 항상 패널을 열 수 있는 전용 구역 (이번 달 셀만)
       else h+='<div class="cell-corner" title="일정 패널 열기" onclick="event.stopPropagation();clickDate(\''+key+'\')">◢</div>';
       // 일·월 통합 칸: 우측 1/4 = 월요일 서브셀(자체 날짜·일정·클릭·드롭, 운영자 260706)
-      if(isSun){
+      // ⚠️ 다음 달(nm) 일요일은 분할 안 함 — 서브셀 월요일이 nm이라 날짜·일정 다 빈 칸이라, 다른 다음달 셀(토 등)과 달리 세로선+빈칸으로 잘려 보여 어색(운영자 260706 "똑같은 다음달인데 일요일만 저렇게")
+      if(isSun&&!nm){
         var _mo=new Date(d);_mo.setDate(d.getDate()+1);
         var mKey=dk(_mo),mNm=_mo.getMonth()+1!==currentMonth,mTd=isToday(_mo),mPast=isThisMonth&&isPast(_mo)&&!mTd;
         var mRecs=mNm?[]:getRecsForDate(_mo);
