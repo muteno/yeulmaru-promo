@@ -641,7 +641,8 @@ button{font-family:inherit;cursor:pointer}
 .dh.dh-split i{font-style:normal;display:grid;place-items:center;padding:10px 0}
 .dh.dh-split .p-sun{flex:3}
 .dh.dh-split .p-mon{flex:1;border-left:1px solid rgba(0,0,0,.07);color:var(--dim)}
-.dh.dh-split .p-on{background:var(--accent);color:rgba(255,255,255,1)}
+/* 오늘 요일칸 = 코발트 글자 + 살몬 언더바(nav 활성과 통일 — 운영자 260706 "코발트 채움 너무 강렬") */
+.dh.dh-split .p-on{color:var(--accent);font-weight:800;box-shadow:inset 0 -3px 0 var(--c2)}
 .c:last-child{border-right:none}
 .c.nm{background:var(--nm-bg)}
 .c.past{background:var(--past-bg)}
@@ -1605,10 +1606,7 @@ table.promo-board-table thead th:last-child{border-top-right-radius:11px}
     </div>
     <div class="nav-center" id="nav-menus"></div>
     <div class="nav-right">
-      <div id="wx-wrap" style="position:relative;display:none">
-        <div id="wx-widget" title="클릭하여 지역 변경" onclick="_wxToggle(event)" style="display:flex;align-items:center;gap:8px;padding:4px 11px;border-radius:14px;background:linear-gradient(135deg,#eef2ff,#f7f9ff);border:1px solid #e7eaf6;cursor:pointer;font-family:inherit"></div>
-        <div class="wx-pop" id="wx-pop"></div>
-      </div>
+      <!-- 날씨 위젯 제거(운영자 260706 "최대한 간결하게") — loadWeather 계열 함수는 골격 보존, wx-wrap 부재 시 자동 no-op -->
       <div id="memo-wrap" style="position:relative;display:none">
         <button class="icon-btn" id="memo-btn" onclick="_memoToggle(event)" title="내 일정 메모" aria-label="내 메모" style="cursor:pointer"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg><span class="memo-alarm" id="memo-alarm"></span></button>
         <div class="memo-pop" id="memo-pop"></div>
@@ -3124,7 +3122,7 @@ async function initApp(){
   try{_chatbotMount();}catch(_e){console.warn('[chatbot mount]',_e);}
   try{_qaMount();}catch(_e){console.warn('[qa mount]',_e);}
   try{_initLongPress();}catch(_e){}
-  loadWeather(); if(!window._wxTimer)window._wxTimer=setInterval(loadWeather,1800000);
+  // 날씨 위젯 제거(운영자 260706) — loadWeather 호출·타이머 중단(함수 골격 보존)
   _presBeat(); _presPoll(); if(!window._presTimer)window._presTimer=setInterval(function(){_presBeat();_presPoll();},35000);
   _memoLoad().then(_memoAlarmRefresh); if(!window._memoTimer)window._memoTimer=setInterval(_memoAlarmRefresh,60000);  // 메모/알림 = 전체 사용자
   // 슈퍼 admin (subAdminPin 없음)만 myApplicant 정리. 서브 admin은 본인 신원 유지.
@@ -14240,14 +14238,11 @@ const _SNS_GROUPS=[
 ];
 function renderChips(){
   const c=document.getElementById('chips');
-  // SNS 칩 상시 나열 제거(운영자 260705 "별로 중요하지도 않은데 떠서") → SNS 필터 버튼 하나로 접음(팝오버 = openSnsFilter)
-  var snsActive=activeFilters.length>0;
-  var snsBadge=snsActive?'<span class="prog-count-badge">'+activeFilters.length+'</span>':'';
-  var snsBtn='<button class="prog-btn'+(snsActive?' active':'')+'" onclick="openSnsFilter(this)" title="SNS 필터" style="width:auto;padding:0 13px;border-radius:16px;font-size:11px;font-weight:700;font-family:inherit;letter-spacing:.5px">SNS'+snsBadge+'</button>';
+  // SNS 필터 버튼 제거(운영자 260706 "일단 없애") — openSnsFilter/_snsBuild 골격 보존, 프로그램 필터만 노출
   var progActive=activePrograms.length>0;
   var progBadge=progActive?'<span class="prog-count-badge">'+activePrograms.length+'</span>':'';
   var progBtn='<button class="prog-btn'+(progActive?' active':'')+'" onclick="openProgFilter()" title="프로그램별 필터"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>'+progBadge+'</button>';
-  c.innerHTML=snsBtn+progBtn;
+  c.innerHTML=progBtn;
 }
 // SNS 필터 팝오버 — 기존 칩 마크업·toggleFilter/clearFilters 그대로 재사용, 표시만 팝으로 이동
 function _snsBuild(menu){
@@ -14275,7 +14270,7 @@ function renderCal(){
   // 마지막 칸 = 일(3/4)·월(1/4) 분할(운영자 260706) — 오늘 하이라이트는 해당 파트에만
   document.getElementById('cal-head-wrap').innerHTML='<div class="cal-head">'+DAYS.map((d,i)=>{var cls='dh';if(i===4)cls+=' sat';if(i===5)cls+=' sun';
     if(i===5){var _dw=_isThisM?new Date().getDay():-1;return '<div class="'+cls+' dh-split"><i class="p-sun'+(_dw===0?' p-on':'')+'">일</i><i class="p-mon'+(_dw===1?' p-on':'')+'">월</i></div>';}
-    var st='border-right:1px solid rgba(0,0,0,.07);';if(i===_todayDi)st+='background:var(--accent);color:#fff;';return'<div class="'+cls+'" style="'+st+'">'+d+'</div>';}).join('')+'</div>';let h='';
+    var st='border-right:1px solid rgba(0,0,0,.07);';if(i===_todayDi)st+='color:var(--accent);font-weight:800;box-shadow:inset 0 -3px 0 var(--c2);';return'<div class="'+cls+'" style="'+st+'">'+d+'</div>';}).join('')+'</div>';let h='';
   // 자동 접힘(운영자 260705): 이번 주의 남은 표시일이 일요일뿐이면(오늘=일요일, 또는 오늘=월요일→직전 주) 그 주를 접는다.
   //  단 그 일요일에 프로그램 행사(getPerfs)나 홍보 일정(getRecsForDate)이 있으면 접지 않음(운영자 조건).
   //  사용자가 클릭해 펼치면(_weekState='expanded') 재접힘 없음. 월 변경 시 _weekState 리셋으로 자연 소멸.
@@ -14316,7 +14311,7 @@ function renderCal(){
     const justOpened=_justExpandedWeek===wi;
     h+=`<div class="week${isTW?' tw':''}${justOpened?' just-opened':''}${_calAnim}" style="${wi<weeks.length-1?'':'border-bottom:none;'}${_calDelay}">`;
     week.forEach((d,di)=>{
-      const key=dk(d),nm=d.getMonth()+1!==currentMonth,td=isToday(d),past=isThisMonth&&isPast(d)&&!td,isSat=di===4,isSun=di===5,isSel=selected===key,recs=nm?[]:getRecsForDate(d);
+      const key=dk(d),nm=d.getMonth()+1!==currentMonth,td=isToday(d),past=isThisMonth&&isPast(d)&&!td,isSat=di===4,isSun=di===5,isSel=selected===key||(di===5&&selected===dk(new Date(d.getFullYear(),d.getMonth(),d.getDate()+1))),recs=nm?[]:getRecsForDate(d);   // 일·월 = 구분되되 한몸: 월요일 선택도 통합 셀 전체에 선택 링(운영자 260706)
       // 비-홍보일(자동_일요일 ON 시 일·월) — readonly 느낌으로 옅은 회색
       var _offDay=!nm&&APPLY_SETTINGS&&APPLY_SETTINGS['자동_일요일']&&(d.getDay()===0||d.getDay()===1);
       let bg='rgba(255,255,255,0)';   // 셀 0%(운영자 확정 조합 260705) — 유리 패널이 톤 담당
