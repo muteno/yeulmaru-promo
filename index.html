@@ -15846,7 +15846,7 @@ function _scheduleMenuBuild(menu){
   menu.innerHTML='<div style="padding:8px 14px 6px;font-size:11px;color:#999;font-weight:700">일정</div>'
     +'<button type="button" onclick="_ddCloseAll();openBatchWizard()" style="'+itemCss+';background:rgba(74,77,231,0.06)" onmouseenter="this.style.background=\'rgba(74,77,231,0.12)\'" onmouseleave="this.style.background=\'rgba(74,77,231,0.06)\'"><span style="font-size:16px">📋</span><span style="flex:1">일정 등록</span><span style="font-size:10px;color:var(--accent);font-weight:700">기본</span></button>'
     +'<button type="button" onclick="_ddCloseAll();openPromoBoard()" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'"><span style="font-size:16px">📅</span>일정 확인</button>'
-    +'<button type="button" onclick="_ddCloseAll();openTicketReg()" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'"><span style="font-size:16px">🎫</span><span style="flex:1">티켓 등록 신청</span><span style="font-size:10px;color:var(--dim);font-weight:600">PPT→엑셀</span></button>';
+    +'<button type="button" onclick="_ddCloseAll();openTicketReg()" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'"><span style="font-size:16px">🎫</span>티켓 등록 신청</button>';
 }
 function _contentMenuBuild(menu){
   menu.innerHTML='<div style="padding:8px 14px 6px;font-size:11px;color:#999;font-weight:700">콘텐츠 제작</div>'
@@ -15924,7 +15924,7 @@ function _tktRender(){
   var sec='font-size:12px;font-weight:800;color:var(--accent);margin:20px 0 2px;display:flex;align-items:center;gap:6px';
   var grid2='display:grid;grid-template-columns:1fr 1fr;gap:0 14px';
   var grid4='display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:0 14px';
-  var inp=function(key,req,ph,type){return _tktLabel(key,key,req)+'<input type="'+(type||'text')+'" value="'+escapeHtml(f[key])+'" placeholder="'+escapeHtml(ph||'')+'" oninput="_tktIn(\''+key+'\',this.value)">';};
+  var inp=function(key,req,ph,type,unit){var ob=unit?' onblur="_tktUnit(\''+key+'\',\''+unit+'\',this)"':'';return _tktLabel(key,key,req)+'<input type="'+(type||'text')+'" value="'+escapeHtml(f[key])+'" placeholder="'+escapeHtml(ph||'')+'" oninput="_tktIn(\''+key+'\',this.value)"'+ob+'>';};
   // 1) 공연 정보
   h+='<div style="'+sec+'">공연 정보</div><div style="'+grid2+'">'
     +'<div>'+inp('제목',1,'예: 뮤지컬 <러커스 더 스쿨>')+'</div>'
@@ -15936,8 +15936,8 @@ function _tktRender(){
     +'<div>'+inp('장소',1,'예: GS칼텍스 예울마루 대극장')+'</div>'
     +'<div style="'+grid4.replace('1fr 1fr 1fr 1fr','1fr 1fr 1fr')+'">'
       +'<div>'+inp('관람연령',0,'예: 초등학생')+'</div>'
-      +'<div>'+inp('러닝타임',0,'예: 약 75')+'</div>'
-      +'<div>'+inp('인터미션',0,'예: 20 / 없음')+'</div>'
+      +'<div>'+inp('러닝타임',0,'예: 약 75','text','분')+'</div>'
+      +'<div>'+inp('인터미션',0,'예: 20 / 없음','text','분')+'</div>'
     +'</div></div>';
   // 2) 티켓 오픈 일정
   h+='<div style="'+sec+'">티켓 오픈 일정 <span style="font-weight:600;color:var(--dim)">— PPT에 없는 항목이라 직접 입력이 필요해요</span></div><div style="'+grid4+'">'
@@ -15987,6 +15987,14 @@ function _tktRender(){
   b.innerHTML=h;
 }
 function _tktIn(k,v){if(_tktState)_tktState.f[k]=v;}
+// 단위 필드 blur — 값이 숫자로 끝나면 끝에 단위 자동 부착(이미 단위 있거나 비숫자·공란이면 그대로). 엑셀 셀 패치 땐 양식 고정 라벨과 겹치지 않게 단위를 다시 스트립한다.
+function _tktUnit(k,unit,el){
+  if(!_tktState)return;
+  var v=(_tktState.f[k]||'').trim();
+  if(v&&/\d\s*$/.test(v))v=v.replace(/\s+$/,'')+unit;
+  _tktState.f[k]=v;
+  if(el)el.value=v;
+}
 function _tktSeatIn(i,k,v){if(_tktState)_tktState.seats[i][k]=v;}
 
 // ── PPT 업로드 → 파싱 ──
@@ -16273,8 +16281,9 @@ function _tktBuild(){
         s1=_tktCellRepl(s1,'G8',f['장소'].trim());
         var age=f['관람연령'].trim().replace(/\s*이상\s*$/,''); // 옆 칸 '세·이상' 고정 라벨과 중복 방지
         s1=_tktCellRepl(s1,'AA6',age);
-        s1=_tktCellRepl(s1,'AB7',f['러닝타임'].trim());
-        s1=_tktCellRepl(s1,'AA8',f['인터미션'].trim());
+        var rtime=f['러닝타임'].trim().replace(/\s*분\s*$/,''); // 옆 칸(AD7) '분' 고정 라벨과 중복 방지
+        s1=_tktCellRepl(s1,'AB7',rtime);
+        s1=_tktCellRepl(s1,'AA8',f['인터미션'].trim().replace(/\s*분\s*$/,'')); // 옆 칸(AC8) '분' 고정 라벨과 중복 방지
         s1=_tktCellRepl(s1,'G21',f['검색키워드'].trim());
         s1=_tktCellRepl(s1,'E30',f['할인정보']);
         s1=_tktCellRepl(s1,'E33','   ▣ 출연 : '+f['출연'].trim());
@@ -16317,7 +16326,7 @@ function _tktBuild(){
         s2=_tktFCache(s2,'D8','   ◎ 공연 기간 : '+f['기간'].trim());
         s2=_tktFCache(s2,'D9','   ◎ 공연 시간 : '+f['시간'].trim());
         s2=_tktFCache(s2,'D10','   ◎ 공연 장소 : '+f['장소'].trim());
-        s2=_tktFCache(s2,'D12','   ◎ 기타 정보 : \n    - 관람연령 : '+(age?age+' 이상':'')+'\n    - 관람시간 : '+(f['러닝타임'].trim()?f['러닝타임'].trim()+'분':'')+'\n    - 할인정보 : '+f['할인정보']);
+        s2=_tktFCache(s2,'D12','   ◎ 기타 정보 : \n    - 관람연령 : '+(age?age+' 이상':'')+'\n    - 관람시간 : '+(rtime?rtime+'분':'')+'\n    - 할인정보 : '+f['할인정보']);
         s2=_tktFCache(s2,'D16','   ◎ 협찬 : '+f['후원'].trim());
         fs['xl/worksheets/sheet2.xml']=s2;
         // ─ 시트2 장르 체크박스 (전부 해제 후 선택만 체크)
