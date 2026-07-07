@@ -3762,7 +3762,7 @@ function _salesBuild(){
   var master={},masterById={};
   ((_salesState.master&&_salesState.master.rows)||[]).map(_salesNorm).forEach(function(m){
     var name=String(m['사업명']||'').trim(); if(!name)return;
-    var ent={기본석:_salesNum(m['기준석'])||_SALES_FALLBACK_SEAT,총회차:_salesNum(m['총회차'])||1,총오픈석:_salesNum(m['총오픈석']),목표:_salesNum(m['목표점유율'])||50,수익성:String(m['수익성']||'').trim(),티켓오픈:_salesDate(m['티켓오픈일']),종료:_salesDate(m['종료일']),시작:_salesDate(m['시작일']),ID:String(m['ID']||'').trim()};
+    var ent={기본석:_salesNum(m['기준석'])||_SALES_FALLBACK_SEAT,총회차:_salesNum(m['총회차'])||1,총오픈석:_salesNum(m['총오픈석']),목표:_salesNum(m['목표점유율'])||50,수익성:String(m['수익성']||'').trim(),티켓오픈:_salesDate(m['티켓오픈일']),종료:_salesDate(m['종료일']),시작:_salesDate(m['시작일']),ID:String(m['ID']||'').trim(),상태:String(m['상태']||'').trim()};
     master[name]=ent; if(ent.ID)masterById[ent.ID]=ent;
   });
   var rounds={};
@@ -3815,7 +3815,35 @@ function _salesBuild(){
     var spark=rows.slice(-7).map(function(r){return totalOpen>0?Math.min((_salesNum(r['합계좌석'])||0)/totalOpen*100,100):0;});
     var deltaPP=(diff!==null&&totalOpen>0)?diff/totalOpen*100:null;
     var source=m?'master':(ops?'fallback':'none');
-    perfs.push({name:name,seats:seats,money:money,diff:diff,occ:occ,totalOpen:totalOpen,dday:dday,dateStr:dateStr,수익성:(m&&m.수익성)?m.수익성:_profitType(name,genre),목표:(m?m.목표:50),startDate:startDate,status:status,genre:genre,gubun:(ops?ops.gubun:''),enriched:(!m&&!!ops),spark:spark,deltaPP:deltaPP,source:source});
+    perfs.push({name:name,seats:seats,money:money,diff:diff,occ:occ,totalOpen:totalOpen,dday:dday,dateStr:dateStr,수익성:(m&&m.수익성)?m.수익성:_profitType(name,genre),목표:(m?m.목표:50),startDate:startDate,status:status,genre:genre,gubun:(ops?ops.gubun:''),enriched:(!m&&!!ops),spark:spark,deltaPP:deltaPP,source:source,_mid:((m&&m.ID)||rid||'')});
+  });
+  // [판매중 노출] 일일입력 실적이 아직 없어도, 공연마스터 '상태=판매중'(또는 티켓오픈~종료 기간)인 공연은
+  // 레일·판매보드에 "집계 전(0석)" 카드로 노출 — 티켓 오픈 직후 데이터 공백기에도 홍보계획과 함께 판매현황이 읽히게(운영자 260707).
+  // noData:true → 평균 점유율 모수에서 제외(_srailRenderInner·_salesRender)해 통계 희석 방지. 나눗셈·차트·스파크는 기존 가드로 이미 안전.
+  var seenNames={}, seenIds={}; perfs.forEach(function(p){ seenNames[_uName(p.name)]=1; if(p._mid)seenIds[p._mid]=1; });
+  Object.keys(master).forEach(function(nm){
+    if(seenNames[_uName(nm)]||(master[nm].ID&&seenIds[master[nm].ID]))return;   // 이름 또는 공연ID로 이미 만든 공연 = 중복 방지(ID 조인·이름 괴리 케이스 포함)
+    var mm=master[nm];
+    var selling=(mm.상태==='판매중')||(mm.티켓오픈&&mm.종료&&mm.티켓오픈<=today&&today<=mm.종료);
+    if(!selling)return;
+    // 종료 강제 보정(위 active 판정과 동일 원칙): 마지막 공연일이 지났으면 판매중 아님
+    var lastShow=null;
+    if(mm.ID&&rounds[mm.ID])rounds[mm.ID].forEach(function(d){ if(!lastShow||d>lastShow)lastShow=d; });
+    // 재연 오매칭 방어: 연도 힌트(_opsLookup ±1년 가드) 전달 — 마스터 종료/시작/티켓오픈 연도 기준(기존 active 판정 _opsLookup(name,salesYear)과 정합)
+    var yrHint=mm.종료||mm.시작||mm.티켓오픈; yrHint=yrHint?yrHint.getFullYear():today.getFullYear();
+    var opsF=(mm.ID?_opsLookupById(mm.ID):null)||_opsLookup(nm,yrHint);
+    if(opsF&&opsF.last&&(!lastShow||opsF.last>lastShow))lastShow=opsF.last;
+    if(!lastShow&&mm.종료)lastShow=mm.종료;
+    if(lastShow&&lastShow<today)return;
+    var base2=mm.기본석||_SALES_FALLBACK_SEAT;
+    var totalOpen2=mm.총오픈석||(opsF?base2*(opsF.count||1):base2*(mm.총회차||1));
+    var start2=mm.시작||(opsF&&opsF.first?opsF.first:null);
+    var dday2=start2?Math.round((start2-today)/86400000):null;
+    var dateStr2='';
+    if(mm.ID&&rounds[mm.ID])dateStr2=_salesFmtDates(rounds[mm.ID]);
+    else if(start2){var ws2=['일','월','화','수','목','금','토'];dateStr2=(start2.getMonth()+1)+'.'+start2.getDate()+'('+ws2[start2.getDay()]+')';}
+    var genre2=opsF?opsF.genre:'';
+    perfs.push({name:nm,seats:0,money:0,diff:null,occ:0,totalOpen:totalOpen2,dday:dday2,dateStr:dateStr2,수익성:mm.수익성||_profitType(nm,genre2),목표:mm.목표||50,startDate:start2,status:'active',genre:genre2,gubun:(opsF?opsF.gubun:''),enriched:false,spark:[],deltaPP:null,source:'master',noData:true});
   });
   return perfs;
 }
@@ -3948,10 +3976,12 @@ function _srailCard(p){
   return '<div class="srail-card" role="button" tabindex="0" onclick="_srailDrill(\''+_anaEsc(p.name)+'\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click();}" title="'+escapeHtml(p.name)+' — 개별 분석 (레일 안에서 열려요)">'
     +'<div class="srail-r1"><span class="srail-name">'+escapeHtml(p.name)+'</span>'+(dd?'<span class="srail-dday" style="color:'+_salesDdayColor(p.dday)+'">'+dd+'</span>':'')+'</div>'
     +'<div class="srail-meta">'+escapeHtml(meta)+'</div>'
-    +'<div class="srail-r2"><span class="srail-occ">'+p.occ.toFixed(1)+'%</span><span class="srail-delta '+dCls+'">'+dStr+'</span></div>'
+    +'<div class="srail-r2">'+(p.noData
+        ?'<span class="srail-occ" style="font-size:14px;color:var(--dim)">집계 전</span><span class="srail-delta fl">첫 일일입력 대기</span>'
+        :'<span class="srail-occ">'+p.occ.toFixed(1)+'%</span><span class="srail-delta '+dCls+'">'+dStr+'</span>')+'</div>'
     +'<div class="srail-spark">'+_srailSpark(p.spark)+'</div>'
     +'<div class="srail-bar"><i style="width:'+Math.min(p.occ,100).toFixed(1)+'%"></i><b style="left:'+Math.min(tgt,100)+'%"></b></div>'
-    +'<div class="srail-r3"><span>'+p.seats.toLocaleString()+' / '+p.totalOpen.toLocaleString()+'석</span><span class="tgt '+(gap>=0?'ok':'bad')+'">목표 '+tgt+'% '+(gap>=0?'+':'')+gap.toFixed(1)+'%p</span></div>'
+    +'<div class="srail-r3"><span>'+p.seats.toLocaleString()+' / '+p.totalOpen.toLocaleString()+'석</span>'+(p.noData?'<span class="tgt">목표 '+tgt+'%</span>':'<span class="tgt '+(gap>=0?'ok':'bad')+'">목표 '+tgt+'% '+(gap>=0?'+':'')+gap.toFixed(1)+'%p</span>')+'</div>'
     +'</div>';
 }
 function _srailRender(){
@@ -3966,7 +3996,7 @@ function _srailRenderInner(els){
   var perfs; try{ perfs=_salesBuild(); }catch(e){ console.warn('[srail build]',e); perfs=[]; }
   // 판매중만 · 공연일 임박순(진행 중 D+ 최상단, 미상은 마지막) · 동률이면 점유율 낮은 순(주의 대상 위로)
   var actives=perfs.filter(function(p){return p.status==='active';})
-    .sort(function(a,b){ var ad=(a.dday===null?9e9:a.dday), bd=(b.dday===null?9e9:b.dday); if(ad!==bd)return ad-bd; return a.occ-b.occ; });
+    .sort(function(a,b){ var ad=(a.dday===null?9e9:a.dday), bd=(b.dday===null?9e9:b.dday); if(ad!==bd)return ad-bd; if(!!a.noData!==!!b.noData)return a.noData?1:-1; return a.occ-b.occ; });
   // 인라인 드릴 상태 — 대상 공연이 갱신 후 사라졌으면(판매 종료 등) 목록으로 복귀
   if(_srailView.mode==='drill'){
     var dp=actives.find(function(p){return p.name===_srailView.name;});
@@ -3978,13 +4008,14 @@ function _srailRenderInner(els){
   if(els.sum){
     if(actives.length){
       var sum=0,has=false; actives.forEach(function(p){ if(p.diff!==null&&!isNaN(p.diff)){sum+=p.diff;has=true;} });
-      var avg=actives.reduce(function(s,p){return s+p.occ;},0)/actives.length;
+      var wd=actives.filter(function(p){return !p.noData;});   // 평균 점유율은 실적 있는 공연만(집계 전 0% 희석 방지)
+      var avg=wd.length?wd.reduce(function(s,p){return s+p.occ;},0)/wd.length:0;
       var dHtml;
       if(!has)dHtml='<span>어제 증감 수집 전</span>';
       else if(sum>0)dHtml='<span>어제 <b style="color:var(--green)">▲ +'+sum.toLocaleString()+'석</b></span>';
       else if(sum<0)dHtml='<span>어제 <b style="color:var(--danger)">▼ '+sum.toLocaleString()+'석</b></span>';
       else dHtml='<span>어제 <b>±0석</b></span>';
-      els.sum.innerHTML=dHtml+'<span>·</span><span>단순평균 점유율 <b style="color:var(--accent)">'+avg.toFixed(1)+'%</b></span>';
+      els.sum.innerHTML=dHtml+'<span>·</span><span>단순평균 점유율 <b style="color:var(--accent)">'+(wd.length?avg.toFixed(1)+'%':'집계 전')+'</b></span>';
       els.sum.style.display='';
     } else els.sum.style.display='none';
   }
@@ -4002,7 +4033,7 @@ function _srailRenderDrill(els,p,activeCount){
   if(els.asof)els.asof.textContent=_srailAsof();
   if(els.sum)els.sum.style.display='none';   // 드릴 중엔 목록 요약 대신 개별 지표
   var ax=_anaProfitAxis(p['수익성']);
-  var occ=p.occ, dpp=p.deltaPP, tgt=p.목표||50, gap=occ-tgt;
+  var occ=p.occ, dpp=p.deltaPP, tgt=p.목표||50, gap=occ-tgt, noData=!!p.noData;
   // 어제대비 (분석 보드 드릴과 동일 임계·표기)
   var dStr,dCol;
   if(dpp===null){dStr='수집 전';dCol='var(--dim)';}
@@ -4017,7 +4048,8 @@ function _srailRenderDrill(els,p,activeCount){
   var medTxt=(peerMed!==null)?('또래('+peers.length+'건) 중앙값 '+peerMed.toFixed(0)+'% 대비 '+(occ-peerMed>=0?'+':'')+(occ-peerMed).toFixed(0)+'%p'):'비교할 또래 종료공연 없음';
   // 다음 액션 (분석 보드 드릴과 동일 판정)
   var act;
-  if(p.startDate&&ddTxt.indexOf('D+')===0)act='판매 종료 — 결과 리뷰 권장';
+  if(noData)act='첫 판매 실적 입력 대기 — 일일입력하면 추이·목표 대비가 표시돼요';
+  else if(p.startDate&&ddTxt.indexOf('D+')===0)act='판매 종료 — 결과 리뷰 권장';
   else if(gap< -8)act='⚠ 목표 대비 부진 — 추가 홍보/프로모션 검토';
   else if(peerMed!==null&&occ<peerMed-5)act='또래 평균 하회 — 채널 확대 검토';
   else if(gap>=0)act='목표 달성권 — 현 페이스 유지';
@@ -4026,13 +4058,15 @@ function _srailRenderDrill(els,p,activeCount){
   h+='<div class="srail-dhd"><button class="ana-back" style="margin-bottom:0;padding:4px 10px;font-size:11px" onclick="_srailBack()">← 목록</button><span class="srail-dname" title="'+escapeHtml(p.name)+'">'+escapeHtml(p.name)+'</span></div>';
   h+='<div class="srail-meta" style="margin-bottom:8px">'+escapeHtml((p.genre||'기타')+' · '+ax+' · 오픈석 '+p.totalOpen.toLocaleString()+'석'+(p.dateStr?' · '+p.dateStr:''))+'</div>';
   h+='<div class="ana-kpis">';
-  h+='<div class="ana-kpi"><div class="lab">현재 누적 점유율</div><div class="val">'+occ.toFixed(1)+'%</div></div>';
+  h+='<div class="ana-kpi"><div class="lab">현재 누적 점유율</div><div class="val">'+(noData?'집계 전':occ.toFixed(1)+'%')+'</div></div>';
   h+='<div class="ana-kpi"><div class="lab">어제대비</div><div class="val" style="color:'+dCol+'">'+dStr+'</div></div>';
-  h+='<div class="ana-kpi"><div class="lab">목표 / 차이</div><div class="val">'+tgt+'%</div><div class="sub2" style="color:'+(gap>=0?'var(--green)':'var(--danger)')+'">'+(gap>=0?'+':'')+gap.toFixed(1)+'%p</div></div>';
+  h+='<div class="ana-kpi"><div class="lab">목표 / 차이</div><div class="val">'+tgt+'%</div>'+(noData?'':'<div class="sub2" style="color:'+(gap>=0?'var(--green)':'var(--danger)')+'">'+(gap>=0?'+':'')+gap.toFixed(1)+'%p</div>')+'</div>';
   h+='<div class="ana-kpi"><div class="lab">공연일</div><div class="val">'+ddTxt+'</div></div>';
   h+='</div>';
   h+='<div class="srail-chart">'+_srailDrillSvg(p)+'</div>';
-  h+='<div class="ana-line"><span class="ic">'+(gap>=0?'🟢':'🟠')+'</span><span><b>상황</b> — 목표 '+tgt+'% '+(gap>=0?'달성':'미달')+' ('+(gap>=0?'+':'')+gap.toFixed(1)+'%p) · '+medTxt+'</span></div>';
+  h+=(noData
+    ?'<div class="ana-line"><span class="ic">🎫</span><span><b>상황</b> — 판매 실적 집계 전 (티켓 오픈됨, 첫 일일입력 대기)</span></div>'
+    :'<div class="ana-line"><span class="ic">'+(gap>=0?'🟢':'🟠')+'</span><span><b>상황</b> — 목표 '+tgt+'% '+(gap>=0?'달성':'미달')+' ('+(gap>=0?'+':'')+gap.toFixed(1)+'%p) · '+medTxt+'</span></div>');
   h+='<div class="ana-line"><span class="ic">📣</span><span><b>효과 채널</b> — '+_anaTopChannel(p.name)+'</span></div>';
   h+='<div class="ana-line"><span class="ic">⚡</span><span><b>최대 레버</b> — '+_anaTopLever(_anaDailySeries(p))+'</span></div>';
   h+='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:2px"><span class="ana-next">▶ '+act+'</span><button class="ana-chip" onclick="_srailOpenBoard(\''+_anaEsc(p.name)+'\')" title="분석 보드에서 비슷한 공연 비교까지 크게 보기">크게 보기</button></div>';
@@ -4197,7 +4231,7 @@ function _anaScreen1(sc){
     h+='<tr class="clk" onclick="_anaDrill(\''+_anaEsc(p.name)+'\')">';
     h+='<td><div class="ana-row-name">'+escapeHtml(p.name)+'<sub>'+ax+' · '+escapeHtml(p.genre||'기타')+'</sub></div></td>';
     h+='<td>'+_anaSpark(p.spark)+'</td>';
-    h+='<td style="text-align:right;color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums">'+p.occ.toFixed(1)+'%</td>';
+    h+='<td style="text-align:right;color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums">'+(p.noData?'<span style="color:var(--dim);font-weight:600">집계 전</span>':p.occ.toFixed(1)+'%')+'</td>';
     h+='<td style="text-align:right;color:'+dCol+';font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap">'+dStr+'</td>';
     h+='<td style="text-align:center"><span class="ana-badge '+bd[0]+'">'+bd[1]+'</span></td>';
     h+='</tr>';
@@ -4380,7 +4414,7 @@ function _anaScreen2(sc){
   var peerOcc=peers.map(function(q){return q.occ;}).sort(function(a,b){return a-b;});
   var peerMed=peerOcc.length?peerOcc[Math.floor(peerOcc.length/2)]:null;
   // KPI 계산
-  var occ=p.occ, dpp=p.deltaPP, tgt=p.목표||50, gap=occ-tgt;
+  var occ=p.occ, dpp=p.deltaPP, tgt=p.목표||50, gap=occ-tgt, noData=!!p.noData;
   var ddTxt='-';
   if(p.startDate){ var today=new Date();today.setHours(0,0,0,0); var dd=Math.round((p.startDate-today)/86400000); ddTxt=dd>0?('D-'+dd):(dd===0?'D-Day':'D+'+(-dd)); }
   var h='<button class="ana-back" onclick="_anaGo(1)">← 목록으로</button>';
@@ -4389,15 +4423,17 @@ function _anaScreen2(sc){
   // 🎯 현재 상황
   h+='<div class="ana-kbox"><div style="font-size:13px;font-weight:800;color:#333;margin-bottom:10px">🎯 현재 상황</div>';
   h+='<div class="ana-kpis">';
-  h+='<div class="ana-kpi"><div class="lab">현재 누적 점유율</div><div class="val">'+occ.toFixed(1)+'%</div></div>';
+  h+='<div class="ana-kpi"><div class="lab">현재 누적 점유율</div><div class="val">'+(noData?'집계 전':occ.toFixed(1)+'%')+'</div></div>';
   var dStr,dCol; if(dpp===null){dStr='데이터 수집 전';dCol='#999';} else if(dpp>0.04){dStr='▲ +'+dpp.toFixed(1)+'%p';dCol='#0F8B4C';} else if(dpp<-0.04){dStr='▼ '+dpp.toFixed(1)+'%p';dCol='var(--danger)';} else {dStr='보합';dCol='#999';}
   h+='<div class="ana-kpi"><div class="lab">어제대비</div><div class="val" style="font-size:17px;color:'+dCol+'">'+dStr+'</div></div>';
-  h+='<div class="ana-kpi"><div class="lab">목표 / 차이</div><div class="val" style="font-size:18px">'+tgt+'%</div><div class="sub2" style="color:'+(gap>=0?'#0F8B4C':'var(--danger)')+'">'+(gap>=0?'+':'')+gap.toFixed(1)+'%p</div></div>';
+  h+='<div class="ana-kpi"><div class="lab">목표 / 차이</div><div class="val" style="font-size:18px">'+tgt+'%</div>'+(noData?'':'<div class="sub2" style="color:'+(gap>=0?'#0F8B4C':'var(--danger)')+'">'+(gap>=0?'+':'')+gap.toFixed(1)+'%p</div>')+'</div>';
   h+='<div class="ana-kpi"><div class="lab">공연일</div><div class="val" style="font-size:18px">'+ddTxt+'</div></div>';
   h+='</div>';
   // 3 lines (정직: 보유 데이터로만)
   var medTxt = (peerMed!==null)? ('또래('+ax+' 종료공연 '+peers.length+'건) 중앙값 '+peerMed.toFixed(0)+'% 대비 '+(occ-peerMed>=0?'+':'')+(occ-peerMed).toFixed(0)+'%p') : '비교할 또래 종료공연이 아직 없어요';
-  h+='<div class="ana-line"><span class="ic">'+(gap>=0?'🟢':'🟠')+'</span><span><b>상황</b> — 목표 '+tgt+'% 대비 '+(gap>=0?'달성 ':'미달 ')+'('+(gap>=0?'+':'')+gap.toFixed(1)+'%p) · '+medTxt+'</span></div>';
+  h+=(noData
+    ?'<div class="ana-line"><span class="ic">🎫</span><span><b>상황</b> — 판매 실적 집계 전 (티켓 오픈됨, 첫 일일입력 대기)</span></div>'
+    :'<div class="ana-line"><span class="ic">'+(gap>=0?'🟢':'🟠')+'</span><span><b>상황</b> — 목표 '+tgt+'% 대비 '+(gap>=0?'달성 ':'미달 ')+'('+(gap>=0?'+':'')+gap.toFixed(1)+'%p) · '+medTxt+'</span></div>');
   // 가장 효과적 채널 — records에서 이 공연 홍보 플랫폼 집계(보유 데이터). 없으면 정직 표기.
   var chTxt=_anaTopChannel(p.name);
   h+='<div class="ana-line"><span class="ic">📣</span><span><b>가장 효과적 채널</b> — '+chTxt+'</span></div>';
@@ -4406,7 +4442,8 @@ function _anaScreen2(sc){
   h+='<div class="ana-line"><span class="ic">⚡</span><span><b>최대 레버</b> — '+lvTxt+'</span></div>';
   // Next Action chip
   var act;
-  if(p.startDate&&ddTxt.indexOf('D+')===0)act='판매 종료 — 결과 리뷰 권장';
+  if(noData)act='첫 판매 실적 입력 대기 — 일일입력하면 추이·목표 대비가 표시돼요';
+  else if(p.startDate&&ddTxt.indexOf('D+')===0)act='판매 종료 — 결과 리뷰 권장';
   else if(gap< -8)act='⚠ 목표 대비 부진 — 추가 홍보/프로모션 검토';
   else if(peerMed!==null&&occ<peerMed-5)act='또래 평균 하회 — 채널 확대 검토';
   else if(gap>=0)act='목표 달성권 — 현 페이스 유지';
@@ -4780,7 +4817,7 @@ function _salesTable(list,isActive){
     h+='<td style="padding:8px 10px;text-align:right;color:var(--peach-text);font-weight:600;font-variant-numeric:tabular-nums">'+p.seats.toLocaleString()+'</td>';
     h+='<td style="padding:8px 10px;text-align:right;color:'+diffCol+';font-variant-numeric:tabular-nums">'+diffStr+'</td>';
     h+='<td style="padding:8px 10px;text-align:right;color:#999;font-variant-numeric:tabular-nums">'+p.totalOpen.toLocaleString()+'</td>';
-    h+='<td style="padding:8px 10px;text-align:right;color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums">'+p.occ.toFixed(1)+'</td>';
+    h+='<td style="padding:8px 10px;text-align:right;color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums">'+(p.noData?'<span style="color:var(--dim);font-weight:600">집계 전</span>':p.occ.toFixed(1))+'</td>';
     h+='<td style="padding:8px 10px;text-align:right;color:#444;font-variant-numeric:tabular-nums">'+_salesMoneyMan(p.money)+'</td>';
     h+='</tr>';
   });
@@ -5105,13 +5142,16 @@ function _salesRender(){
   }
   var active=perfs.filter(function(p){return p.status==='active';}).sort(function(a,b){return (a.startDate&&b.startDate)?(a.startDate-b.startDate):0;});
   var ended=perfs.filter(function(p){return p.status==='ended';}).sort(function(a,b){return (a.startDate&&b.startDate)?(b.startDate-a.startDate):0;});
-  var avgOcc=active.length?active.reduce(function(a,p){return a+p.occ;},0)/active.length:0;
-  var comm=active.filter(function(p){return p.수익성==='상업성';}), pub=active.filter(function(p){return p.수익성==='공공성';});
+  var wd=active.filter(function(p){return !p.noData;});   // 평균은 실적 있는 공연만(집계 전 0% 희석 방지 · 레일 _srailRenderInner와 동형). '판매중 공연' 카운트는 active 전체 유지.
+  var avgOcc=wd.length?wd.reduce(function(a,p){return a+p.occ;},0)/wd.length:0;
+  var comm=wd.filter(function(p){return p.수익성==='상업성';}), pub=wd.filter(function(p){return p.수익성==='공공성';});
   var avgComm=comm.length?comm.reduce(function(a,p){return a+p.occ;},0)/comm.length:0;
   var avgPub=pub.length?pub.reduce(function(a,p){return a+p.occ;},0)/pub.length:0;
   var h='';
   h+='<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px">';
-  h+=_salesKpiCard('판매중 공연',active.length+'개')+_salesKpiCard('평균 점유율',avgOcc.toFixed(1)+'%')+_salesKpiCard('상업성',avgComm.toFixed(1)+'%',1)+_salesKpiCard('공공성',avgPub.toFixed(1)+'%',1);
+  // KPI 라벨: 모수 0인데 같은 수익성의 집계 전(noData) 공연만 있으면 '0.0%' 대신 '집계 전'(평균 점유율 표기와 일관)
+  var hasND=function(t){return active.some(function(p){return p.noData&&p.수익성===t;});};
+  h+=_salesKpiCard('판매중 공연',active.length+'개')+_salesKpiCard('평균 점유율',wd.length?avgOcc.toFixed(1)+'%':'집계 전')+_salesKpiCard('상업성',comm.length?avgComm.toFixed(1)+'%':(hasND('상업성')?'집계 전':avgComm.toFixed(1)+'%'),1)+_salesKpiCard('공공성',pub.length?avgPub.toFixed(1)+'%':(hasND('공공성')?'집계 전':avgPub.toFixed(1)+'%'),1);
   h+='</div>';
   h+='<div style="font-size:14px;font-weight:700;color:#333;margin:6px 0 10px">[1] 공연 현황</div>';
   h+=_salesTable(active,true);
