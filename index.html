@@ -2913,10 +2913,11 @@ const SHEET_CONFIG={
   manager:{
     title:'사용자 관리',
     inlineEdit:true,
-    // ⚠️ 이 배열 순서 = 실제 '담당자' 시트 물리적 컬럼 순서(A~O)와 1:1 매칭.
+    // ⚠️ 이 배열 순서 = 실제 '담당자' 시트 물리적 컬럼 순서(A~P)와 1:1 매칭.
     // saveSheetRow/saveInlineRow가 positional(A열부터 순서대로)로 저장하므로 절대 순서를 바꾸지 말 것.
-    // A담당부서 B담당자 C직위 D휴직 E홍보 F기관 G공연 H전시 I예술교육 J대관 K PIN L비밀번호 M계정 N관리자 O이메일
+    // A담당부서 B담당자 C직위 D휴직 E홍보 F기관 G공연 H전시 I예술교육 J대관 K PIN L비밀번호 M계정 N관리자 O이메일 P전화번호
     // (260704: 세로막대형 열 제거로 관리자/이메일이 한 칸 당겨짐 + 기관여부 열 반영 + 이메일 신규)
+    // (260707: P열 전화번호 맨 끝 append — 티켓 등록 신청 담당자 자동 채움용. ⚠️ 시트 P1 헤더 셀에 '전화번호' 기입해야 읽힘)
     columns:[
       {key:'담당부서',label:'담당부서',type:'text'},
       {key:'담당자',label:'이름',type:'text',required:true},
@@ -2932,7 +2933,8 @@ const SHEET_CONFIG={
       {key:'비밀번호',label:'비밀번호',type:'text',hidden:true},
       {key:'계정여부',label:'활성',type:'checkbox'},
       {key:'관리자여부',label:'관리자',type:'checkbox'},
-      {key:'이메일',label:'이메일',type:'text'}
+      {key:'이메일',label:'이메일',type:'text'},
+      {key:'전화번호',label:'전화번호',type:'text'}
     ]
   }
 };
@@ -15869,7 +15871,7 @@ var _TKT_SEAT_ROWS=[23,24,25,26,27,28]; // 시트1 좌석등급 행 (템플릿 6
 var _tktState=null;
 
 function _tktDefaultState(){
-  return {src:'',busy:false,auto:{},
+  return {src:'',busy:false,auto:{},paste:'',ocrBusy:false,teamOnly:true,sel:{'공연':'','세금계산서':'','티켓링크':''},
     f:{'제목':'','부제목':'','기간':'','시간':'','장소':'','관람연령':'','러닝타임':'','인터미션':'','장르':'','부가장르':'해당없음','검색키워드':'','할인정보':'','출연':'','후원':'','공연내용':'','오픈일시':'','공지노출':'','마감일시':'','선오픈':'해당 없음','가격요약':'',
        '담당자명':'','담당자휴대폰':'','담당자이메일':'','세금담당자명':'','세금휴대폰':'','세금이메일':'','티켓링크ID':'','티켓링크이름':'','티켓링크연락처':''},
     seats:[{},{},{},{},{},{}].map(function(){return {'등급':'','권종':'','정가':'','석수':'','비고':''};})};
@@ -15899,6 +15901,15 @@ function openTicketReg(){
     +'<div id="tkt-body" style="flex:1;overflow:auto;padding:20px 24px;min-height:0"></div>'
     +'</div></div>';
   _tktRender();
+  // 담당자 목록 보장 + 티켓링크 가입자 기본 선택(회사 티켓링크 계정 소유자 — 직원 이력에서 자동)
+  var _st=_tktState;
+  var applyDef=function(){
+    if(_st!==_tktState)return;
+    if(!_st.sel['티켓링크']&&!String(_st.f['티켓링크ID']||'').trim()&&(MANAGERS||[]).some(function(x){return x&&x['담당자']==='황세웅';}))_tktPickPerson('티켓링크','황세웅');
+    else _tktRender(); // 목록 늦게 도착 시 select 옵션 갱신
+  };
+  if(typeof MANAGERS!=='undefined'&&MANAGERS&&MANAGERS.length)applyDef();
+  else if(typeof loadManagers==='function'){try{loadManagers().then(applyDef).catch(function(){});}catch(e){}}
 }
 function closeTicketReg(){
   _tktState=null; // 입력 내용 파기
@@ -15907,7 +15918,8 @@ function closeTicketReg(){
 
 // ── 렌더 ──
 function _tktLabel(key,txt,req){
-  var badge=_tktState.auto[key]?' <span style="color:var(--green);font-weight:700;text-transform:none;letter-spacing:0">· PPT 자동</span>':'';
+  var a=_tktState.auto[key];
+  var badge=a?(' <span style="color:var(--green);font-weight:700;text-transform:none;letter-spacing:0">· '+escapeHtml(a===true?'PPT':a)+' 자동</span>'):'';
   return '<label>'+txt+(req?'<span class="req">*</span>':'')+badge+'</label>';
 }
 function _tktRender(){
@@ -15920,6 +15932,17 @@ function _tktRender(){
     +'<div style="flex:1;min-width:0"><div style="font-size:13.5px;font-weight:700;color:var(--accent)">운영계획(안) PPT를 끌어다 놓거나 클릭해서 선택</div>'
     +'<div id="tkt-src-status" style="font-size:12px;color:var(--dim);margin-top:3px">'+(st.src?('📌 '+escapeHtml(st.src)+' — 자동 채움 완료 (아래 값 확인·수정)'):'공연 개요·가격 정책·할인 정책을 읽어 자동으로 칸을 채워요. PPT 없이 직접 입력해도 돼요.')+'</div></div>'
     +'<input type="file" id="tkt-file" accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation" style="display:none;width:auto" onchange="_tktOnFile(this)">'
+    +'</div>';
+  // 0.5) 판매 개요 소스 — ② 이미지(OCR) ③ 직접 붙여넣기. PPT에 없는 오픈·마감 일시 등 빈 칸만 채움
+  h+='<div style="margin-top:10px;border:1px solid var(--border);border-radius:var(--r-pop);padding:12px 14px">'
+    +'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">'
+    +'<span style="font-size:12px;font-weight:800;color:var(--accent)">판매 개요로 마저 채우기</span>'
+    +'<span style="font-size:11.5px;color:var(--dim);flex:1;min-width:180px">티켓 오픈·마감 일시 등 PPT에 없는 항목 — 이미 입력된 값은 안 덮어써요</span>'
+    +'<button type="button" class="btn btn--sm btn--neutral" '+(st.ocrBusy?'disabled':'')+' onclick="_tktPickImg()">'+(st.ocrBusy?'⏳ 읽는 중…':'🖼 개요 이미지 (OCR)')+'</button>'
+    +'<input type="file" id="tkt-img" accept="image/*" style="display:none;width:auto" onchange="_tktOnImg(this)">'
+    +'</div>'
+    +'<textarea id="tkt-paste" rows="3" style="margin-top:8px" placeholder="판매 개요·홈페이지 공지 내용을 붙여넣고 [반영] — 예) 티켓 오픈 : 2026. 7. 8(수) 16:00" oninput="_tktState.paste=this.value">'+escapeHtml(st.paste)+'</textarea>'
+    +'<div style="display:flex;justify-content:flex-end;margin-top:6px"><button type="button" class="btn btn--sm btn--primary" onclick="_tktPasteApply()">붙여넣은 내용 반영</button></div>'
     +'</div>';
   var sec='font-size:12px;font-weight:800;color:var(--accent);margin:20px 0 2px;display:flex;align-items:center;gap:6px';
   var grid2='display:grid;grid-template-columns:1fr 1fr;gap:0 14px';
@@ -15965,9 +15988,19 @@ function _tktRender(){
     +'</div>'
     +inp('검색키워드',0,'예: 러커스, 청소년 뮤지컬 (쉼표로 구분)')
     +_tktLabel('공연내용','공연 내용 (오픈 공지문)',0)+'<textarea rows="5" oninput="_tktIn(\'공연내용\',this.value)" placeholder="PPT 공연소개에서 자동으로 채워져요">'+escapeHtml(f['공연내용'])+'</textarea>';
-  // 5.5) 담당자 연락처 — 공개 저장소에 안 담아둔 개인 항목(비우면 다운로드 후 엑셀에서 수기)
+  // 5.5) 담당자 연락처 — 직원 이력(담당자 시트)에서 사람 선택 → 이메일·전화 자동, 수정 가능(비우면 엑셀에서 수기)
   var cInp=function(key,label,ph){return '<div>'+_tktLabel(key,label,0)+'<input type="text" value="'+escapeHtml(f[key])+'" placeholder="'+escapeHtml(ph||'')+'" oninput="_tktIn(\''+key+'\',this.value)"></div>';};
-  h+='<div style="'+sec+'">기획사 담당자 연락처 <span style="font-weight:600;color:var(--dim)">— 개인정보라 양식에 안 담아둔 항목 · 비우면 다운로드 후 엑셀 38~40·54행에 직접</span></div><div style="'+grid2+'">'
+  h+='<div style="'+sec+'">기획사 담당자 연락처 <span style="font-weight:600;color:var(--dim);flex:1">— 사람을 고르면 직원 이력의 이메일·전화가 들어가요 · 비우면 엑셀 38~40·54행에 직접</span>'
+    +'<label style="display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--text);font-weight:600;text-transform:none;letter-spacing:0;cursor:pointer;margin:0"><input type="checkbox" '+(st.teamOnly?'checked':'')+' onchange="_tktTeamOnly(this.checked)" style="width:auto;margin:0"> 예술사업팀만</label></div>';
+  var ppl=_tktPpl();
+  var selBox=function(which,label){
+    var cur=st.sel[which]||'';
+    var opts='<option value="">직접 입력</option>'+ppl.map(function(m){var n=m['담당자'];return '<option value="'+escapeHtml(n)+'"'+(cur===n?' selected':'')+'>'+escapeHtml(n+(m['직위']?' · '+m['직위']:''))+'</option>';}).join('');
+    if(cur&&!ppl.some(function(m){return m['담당자']===cur;}))opts+='<option value="'+escapeHtml(cur)+'" selected>'+escapeHtml(cur)+'</option>'; // 필터 밖 선택 유지
+    return '<div>'+_tktLabel('_sel'+which,label,0)+'<select onchange="_tktPickPerson(\''+which+'\',this.value)">'+opts+'</select></div>';
+  };
+  h+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 14px">'+selBox('공연','공연 담당자 선택')+selBox('세금계산서','세금계산서 담당자 선택')+selBox('티켓링크','티켓링크 가입자 선택')+'</div>';
+  h+='<div style="'+grid2+'">'
     +cInp('담당자명','공연 담당자명','비우면 양식 기본값 유지')
     +cInp('담당자휴대폰','공연 담당자 휴대폰','예: 010-0000-0000')
     +cInp('담당자이메일','공연 담당자 E-mail','')
@@ -15988,6 +16021,80 @@ function _tktRender(){
 }
 function _tktIn(k,v){if(_tktState)_tktState.f[k]=v;}
 function _tktSeatIn(i,k,v){if(_tktState)_tktState.seats[i][k]=v;}
+
+// ── 담당자 선택 (직원 이력 = 담당자 시트, P열 전화번호·O열 이메일) ──
+function _tktPpl(){
+  var all=(typeof MANAGERS!=='undefined'&&MANAGERS)?MANAGERS:[];
+  var st=_tktState;
+  var list=all.filter(function(m){return m&&m['담당자'];});
+  if(st&&st.teamOnly)list=list.filter(function(m){return String(m['담당부서']||'').indexOf('예술사업')>=0;});
+  return list;
+}
+function _tktTeamOnly(on){if(!_tktState)return;_tktState.teamOnly=!!on;_tktRender();}
+function _tktPickPerson(which,name){
+  var st=_tktState;if(!st)return;
+  st.sel[which]=name||'';
+  if(name){
+    var m=((typeof MANAGERS!=='undefined'&&MANAGERS)||[]).filter(function(x){return x&&x['담당자']===name;})[0];
+    if(m){
+      var mail=String(m['이메일']||'').trim(),tel=String(m['전화번호']||'').trim();
+      if(which==='공연'){st.f['담당자명']=name;st.f['담당자휴대폰']=tel;st.f['담당자이메일']=mail;}
+      else if(which==='세금계산서'){st.f['세금담당자명']=name;st.f['세금휴대폰']=tel;st.f['세금이메일']=mail;}
+      else{st.f['티켓링크ID']=mail;st.f['티켓링크이름']=name+'(GS칼텍스 예울마루)';st.f['티켓링크연락처']=tel;}
+      if(!mail&&!tel)showToast(name+' — 직원 이력에 이메일·전화번호가 비어 있어요 (사용자 관리에서 기입)','error');
+    }
+  }
+  _tktRender();
+}
+
+// ── 판매 개요 소스 ② 이미지 OCR (블로그 도우미의 압축·/api/content/ocr 재사용) ──
+function _tktPickImg(){var f=document.getElementById('tkt-img');if(f)f.click();}
+function _tktOnImg(input){
+  var file=input&&input.files&&input.files[0];if(!file)return;input.value='';
+  if(!/^image\//.test(file.type||'')){showToast('이미지 파일을 올려 주세요','error');return;}
+  if(file.size>25*1024*1024){showToast('이미지가 너무 커요(25MB 제한)','error');return;}
+  var st=_tktState;if(!st||st.ocrBusy)return;
+  st.ocrBusy=true;_tktRender();
+  var _st=st; // 세대 가드 — 닫힘/재열림 후 늦게 온 결과 폐기
+  _nbCompress(file).then(function(r){
+    return api('POST','/api/content/ocr',{data:r.dataURL,mime:r.mime});
+  }).then(function(r){
+    if(_st!==_tktState)return;
+    _st.ocrBusy=false;
+    var t=String((r&&r.text)||'').trim();
+    if(!t){_tktRender();showToast('읽은 텍스트가 없어요 — 이미지 해상도를 확인해 주세요','error');return;}
+    _st.paste=(_st.paste?(_st.paste+'\n\n'):'')+t; // 원문을 붙여넣기 칸에 쌓아 확인·수정 가능하게
+    _tktApplyOverview(t,'이미지');
+  }).catch(function(e){
+    if(_st!==_tktState)return;
+    _st.ocrBusy=false;_tktRender();
+    var m=String((e&&e.message)||e);
+    showToast(m.indexOf('no_ocr_provider')>-1||m.indexOf('503')>-1?'OCR 엔진 미설정 — Worker 키 확인':'OCR 실패: '+m,'error');
+  });
+}
+// ── 판매 개요 소스 ③ 직접 붙여넣기 ──
+function _tktPasteApply(){
+  var st=_tktState;if(!st)return;
+  var t=String(st.paste||'').trim();
+  if(!t){showToast('붙여넣을 내용을 먼저 입력해 주세요','error');return;}
+  _tktApplyOverview(t,'붙여넣기');
+}
+// 개요 텍스트 → 빈 칸만 채움(이미 입력·PPT 추출값은 보존)
+function _tktApplyOverview(text,srcLabel){
+  var st=_tktState;if(!st)return;
+  var kv=_tktKvScan(String(text||'').split(/\r?\n/));
+  var got=_tktKvFields(kv);
+  if(!String(st.f['장르']||'').trim()){var g=_tktGenreOf(String(text||'').slice(0,400));if(g)got['장르']=g;}
+  var filled=[],kept=0;
+  Object.keys(got).forEach(function(k){
+    if(got[k]==='')return;
+    if(String(st.f[k]||'').trim()===''||(k==='선오픈'&&st.f[k]==='해당 없음')){st.f[k]=got[k];st.auto[k]=srcLabel;filled.push(k);}
+    else if(st.f[k]!==got[k])kept++;
+  });
+  _tktRender();
+  if(filled.length)showToast('판매 개요('+srcLabel+')에서 '+filled.length+'개 채움: '+filled.join('·')+(kept?' · 기존 값 '+kept+'개 유지':''),'success');
+  else showToast('새로 채울 항목이 없어요 — 이미 입력됐거나 인식 가능한 키(티켓 오픈 등)가 없어요','error');
+}
 
 // ── PPT 업로드 → 파싱 ──
 function _tktOnDrop(e){
@@ -16015,8 +16122,8 @@ function _tktParseFile(file){
       if(_st!==_tktState)return;
       var slides=xmls.map(_tktSlideParse);
       var got=_tktExtract(slides);
-      Object.keys(got.f).forEach(function(k){if(got.f[k]!==''){_tktState.f[k]=got.f[k];_tktState.auto[k]=true;}});
-      if(got.seats.length){_tktState.seats=_tktDefaultState().seats;got.seats.slice(0,6).forEach(function(s,i){_tktState.seats[i]=s;});_tktState.auto['좌석']=true;}
+      Object.keys(got.f).forEach(function(k){if(got.f[k]!==''){_tktState.f[k]=got.f[k];_tktState.auto[k]='PPT';}});
+      if(got.seats.length){_tktState.seats=_tktDefaultState().seats;got.seats.slice(0,6).forEach(function(s,i){_tktState.seats[i]=s;});_tktState.auto['좌석']='PPT';}
       _tktState.src=file.name;
       _tktRender();
       var need=['오픈일시'].concat(_tktState.f['제목']?[]:['제목']).concat(_tktState.f['장르']?[]:['장르']);
@@ -16066,62 +16173,113 @@ function _tktSlideParse(xml){
   }
   return {lines:lines,bodies:bodies,tables:tables};
 }
-// 고정 포맷 운영계획(안)에서 필드 추출
-function _tktExtract(slides){
-  var f={'제목':'','기간':'','시간':'','장소':'','관람연령':'','러닝타임':'','인터미션':'','장르':'','할인정보':'','공연내용':'','가격요약':''};
-  var seats=[];
-  var allLines=[],allTables=[];
-  slides.forEach(function(s){allLines=allLines.concat(s.lines);allTables=allTables.concat(s.tables);});
-  // 1) key:value 줄 — 키의 공백 제거 후 매칭 ("공  연  명" 대응)
+// ── 공용 텍스트 파서 (PPT·개요 이미지 OCR·붙여넣기 공유) ──
+// 줄 목록 → 정규화 키:값 맵. "공  연  명" 공백 제거 · 알려진 키가 값 없이 나오면 다음 줄을 값으로(OCR 줄바꿈 대응)
+var _TKT_KV_KEYS={'공연명':1,'공연제목':1,'일시':1,'공연일시':1,'일정':1,'공연기간':1,'장소':1,'공연장소':1,'티켓가격':1,'가격':1,'입장료':1,'관람시간':1,'공연시간':1,'러닝타임':1,'관람연령':1,'관람등급':1,'티켓오픈':1,'티켓오픈일':1,'티켓오픈일시':1,'오픈일시':1,'오픈일':1,'오픈일정':1,'판매오픈':1,'일반오픈':1,'티켓판매오픈':1,'티켓판매오픈일':1,'선오픈':1,'티켓링크선오픈':1,'판매마감':1,'판매마감일':1,'마감':1,'마감일':1,'티켓판매마감일':1,'판매종료':1,'판매기간':1,'할인':1,'할인정보':1,'출연':1,'후원':1,'협찬':1};
+function _tktKvScan(lines){
   var kv={};
-  allLines.forEach(function(ln){
-    var m=/^\s*([^:：]{1,14})[:：](.+)$/.exec(ln);
-    if(!m)return;
-    var k=m[1].replace(/\s+/g,''),v=m[2].trim();
-    if(!kv[k])kv[k]=v;
-  });
-  if(kv['공연명'])f['제목']=kv['공연명'];
-  else{ // 폴백: 표지 제목에서 "운영계획(안)" 꼬리 제거
-    var t0=(slides[0]&&slides[0].lines[slides[0].lines.length-1])||'';
-    slides[0]&&slides[0].lines.forEach(function(l){if(/운영\s*계획/.test(l))t0=l;});
-    f['제목']=t0.replace(/운영\s*계획\s*\(?안?\)?\s*$/,'').replace(/^\s*\d{4}\s*/,'').trim();
-  }
-  // 2) 일시 → 기간 + 회차 시간
-  var dt=kv['일시']||kv['공연일시']||kv['일정']||'';
-  if(dt){
-    var dm=/(\d{4})\s*[.년]\s*(\d{1,2})\s*[.월]\s*(\d{1,2})\s*일?\s*\(([^)]*)\)\s*(?:[~∼〜-]\s*(?:(\d{4})\s*[.년]\s*)?(?:(\d{1,2})\s*[.월]\s*)?(\d{1,2})\s*일?\s*\(([^)]*)\))?/.exec(dt);
-    if(dm){
-      var y1=+dm[1],mo1=+dm[2],d1=+dm[3],w1=dm[4].replace(/요일/,'');
-      var y2=dm[5]?+dm[5]:y1,mo2=dm[6]?+dm[6]:mo1,d2=dm[7]?+dm[7]:d1,w2=dm[8]?dm[8].replace(/요일/,''):w1;
-      f['기간']=y1+'년 '+mo1+'월 '+d1+'일('+w1+') ~ '+y2+'년 '+mo2+'월 '+d2+'일('+w2+')';
-      var rest=dt.slice(dm.index+dm[0].length).replace(/\*.*$/,'').trim(); // 뒤 각주(*) 제거
-      if(/\d{1,2}:\d{2}/.test(rest))f['시간']=rest.replace(/\s+/g,' ');
+  for(var i=0;i<lines.length;i++){
+    var ln=String(lines[i]||'');
+    var m=/^\s*([^:：]{1,16})[:：](.*)$/.exec(ln);
+    if(m){
+      var k=m[1].replace(/\s+/g,''),v=m[2].trim();
+      if(!v&&_TKT_KV_KEYS[k]){for(var j=i+1;j<lines.length;j++){var nx=String(lines[j]||'').trim();if(nx){v=nx;break;}}}
+      if(v&&!kv[k])kv[k]=v;
+    }else{
+      var k2=ln.replace(/\s+/g,'');
+      if(_TKT_KV_KEYS[k2]&&!kv[k2]){for(var j2=i+1;j2<lines.length;j2++){var nx2=String(lines[j2]||'').trim();if(nx2){kv[k2]=nx2;break;}}}
     }
-    if(!f['시간']){var tm=dt.match(/\d{1,2}:\d{2}(?:.*\d{1,2}:\d{2})*/);if(tm)f['시간']=tm[0];}
   }
-  // 3) 장소 — 극장명만 오면 예울마루 접두
+  return kv;
+}
+// '일시' 문자열 → {기간, 시간}
+function _tktParseSchedule(dt){
+  var out={'기간':'','시간':''};
+  var dm=/(\d{4})\s*[.년]\s*(\d{1,2})\s*[.월]\s*(\d{1,2})\s*일?\s*\(([^)]*)\)\s*(?:[~∼〜-]\s*(?:(\d{4})\s*[.년]\s*)?(?:(\d{1,2})\s*[.월]\s*)?(\d{1,2})\s*일?\s*\(([^)]*)\))?/.exec(dt);
+  if(dm){
+    var y1=+dm[1],mo1=+dm[2],d1=+dm[3],w1=dm[4].replace(/요일/,'');
+    var y2=dm[5]?+dm[5]:y1,mo2=dm[6]?+dm[6]:mo1,d2=dm[7]?+dm[7]:d1,w2=dm[8]?dm[8].replace(/요일/,''):w1;
+    out['기간']=y1+'년 '+mo1+'월 '+d1+'일('+w1+') ~ '+y2+'년 '+mo2+'월 '+d2+'일('+w2+')';
+    var rest=dt.slice(dm.index+dm[0].length).replace(/\*.*$/,'').trim(); // 뒤 각주(*) 제거
+    if(/\d{1,2}:\d{2}/.test(rest))out['시간']=rest.replace(/\s+/g,' ');
+  }
+  if(!out['시간']){var tm=dt.match(/\d{1,2}:\d{2}(?:.*\d{1,2}:\d{2})*/);if(tm)out['시간']=tm[0];}
+  return out;
+}
+// 한국어 일시 → datetime-local 값 ('2026. 7. 8(수) 16:00'·'7월 8일 오후 4시' 등 · 시간 없으면 '' — 오픈시간 필수라 날짜만으론 안 채움)
+function _tktKoDT(s){
+  s=String(s||'');
+  var d=/(?:(\d{4})\s*[.년\/-]\s*)?(\d{1,2})\s*[.월\/-]\s*(\d{1,2})\s*일?/.exec(s);
+  if(!d)return '';
+  var y=d[1]?+d[1]:(new Date(Date.now()+9*3600e3)).getUTCFullYear(); // 연도 생략 = 당해년(KST)
+  var mo=+d[2],dd=+d[3];
+  if(mo<1||mo>12||dd<1||dd>31)return '';
+  var rest=s.slice(d.index+d[0].length);
+  var tm=/(\d{1,2})\s*[:시]\s*(\d{1,2})?/.exec(rest);
+  if(!tm)return '';
+  var hh=+tm[1],mi=tm[2]?+tm[2]:0;
+  if(/오후|PM/i.test(rest)&&hh<12)hh+=12;
+  if(hh>23||mi>59)return '';
+  var p2=function(n){return String(n).padStart(2,'0');};
+  return y+'-'+p2(mo)+'-'+p2(dd)+'T'+p2(hh)+':'+p2(mi);
+}
+// 장르 추정 (키워드)
+function _tktGenreOf(text){
+  var g=String(text||'');
+  return /뮤지컬/.test(g)?'뮤지컬':(/(클래식|리사이틀|오케스트라|교향|필하모닉|피아노|바이올린|첼로|무용|발레|합창|오페라)/.test(g)?'클래식/무용':(/콘서트|밴드|재즈/.test(g)?'콘서트':(/연극/.test(g)?'연극':(/(아동|어린이|가족)/.test(g)?'가족&아동':(/(전시|축제)/.test(g)?'전시/축제':'')))));
+}
+// kv 맵 → 필드 후보(값 있는 것만) — PPT·개요 텍스트 공용
+function _tktKvFields(kv){
+  var f={};
+  if(kv['공연명']||kv['공연제목'])f['제목']=kv['공연명']||kv['공연제목'];
+  var dt=kv['일시']||kv['공연일시']||kv['일정']||kv['공연기간']||'';
+  if(dt){var sch=_tktParseSchedule(dt);if(sch['기간'])f['기간']=sch['기간'];if(sch['시간'])f['시간']=sch['시간'];}
   var pl=kv['장소']||kv['공연장소']||'';
-  if(pl){f['장소']=/예울마루/.test(pl)?pl:('GS칼텍스 예울마루 '+pl);}
-  // 4) 관람시간 → 러닝타임·인터미션
+  if(pl)f['장소']=/예울마루/.test(pl)?pl:('GS칼텍스 예울마루 '+pl);
   var rt=kv['관람시간']||kv['공연시간']||kv['러닝타임']||'';
   if(rt){
     var rm=/약?\s*(\d+)\s*분/.exec(rt);if(rm)f['러닝타임']='약 '+rm[1];
     var im=/인터미션\s*[:：]?\s*(없음|(\d+)\s*분?)/.exec(rt);
     if(im)f['인터미션']=im[2]?im[2]:'없음';
   }
-  // 5) 관람연령 — 의뢰서 AA6 옆 '세·이상' 고정 라벨에 맞춰 값만 추출.
-  //    "전체관람가"→"전체" 특례 · "만 7세 이상"→"7" · 꼬리(이상/관람/가능)만 제거해 중간 글자 훼손 방지
+  // 관람연령 — 의뢰서 AA6 옆 '세·이상' 고정 라벨에 맞춰 값만("전체관람가"→"전체"·"만 7세"→"7"·꼬리만 제거)
   var ag=kv['관람연령']||kv['관람등급']||'';
   if(ag){
     if(/전체\s*(관람|이용)?\s*가/.test(ag))f['관람연령']='전체';
     else f['관람연령']=ag.replace(/이상[\s\S]*$/,'').replace(/(\s*(관람|가능))+\s*$/,'').replace(/만\s*(\d+)\s*세?/,'$1').replace(/(\d+)\s*세/,'$1').trim();
   }
-  // 6) 티켓 가격 요약 (만원 단위로 축약)
   var pr=kv['티켓가격']||kv['가격']||kv['입장료']||'';
   if(pr)f['가격요약']=pr.replace(/(\d{1,3}(?:,\d{3})+|\d{5,})\s*원/g,function(_,n){var num=parseInt(n.replace(/,/g,''),10);return (num%10000===0)?(num/10000+'만원'):(n+'원');});
-  // 7) 장르 추정 (제목+표지)
-  var gsrc=f['제목']+' '+allLines.slice(0,6).join(' ');
-  f['장르']=/뮤지컬/.test(gsrc)?'뮤지컬':(/(클래식|리사이틀|오케스트라|교향|필하모닉|피아노|바이올린|첼로|무용|발레|합창|오페라)/.test(gsrc)?'클래식/무용':(/콘서트|밴드|재즈/.test(gsrc)?'콘서트':(/연극/.test(gsrc)?'연극':(/(아동|어린이|가족)/.test(gsrc)?'가족&아동':(/(전시|축제)/.test(gsrc)?'전시/축제':'')))));
+  // 티켓 오픈·마감 (판매 개요의 핵심 — datetime-local로 변환돼 입력칸에 들어감)
+  var op=kv['티켓오픈']||kv['티켓오픈일']||kv['티켓오픈일시']||kv['오픈일시']||kv['오픈일']||kv['오픈일정']||kv['판매오픈']||kv['일반오픈']||kv['티켓판매오픈']||kv['티켓판매오픈일']||'';
+  if(op){var d1=_tktKoDT(op);if(d1)f['오픈일시']=d1;}
+  var cl=kv['판매마감']||kv['판매마감일']||kv['마감']||kv['마감일']||kv['티켓판매마감일']||kv['판매종료']||'';
+  if(!cl&&kv['판매기간']){var pp=kv['판매기간'].split(/[~∼〜]/);if(pp.length>1)cl=pp[pp.length-1];} // "티켓오픈 ~ 9. 2(목) 17:00"
+  if(cl){var d2=_tktKoDT(cl);if(d2)f['마감일시']=d2;}
+  var so=kv['선오픈']||kv['티켓링크선오픈']||'';
+  if(so)f['선오픈']=/없|해당\s*무/.test(so)?'해당 없음':so;
+  if(kv['출연'])f['출연']=kv['출연'];
+  if(kv['후원']||kv['협찬'])f['후원']=kv['후원']||kv['협찬'];
+  if(kv['할인']||kv['할인정보'])f['할인정보']=kv['할인']||kv['할인정보'];
+  return f;
+}
+
+// 고정 포맷 운영계획(안)에서 필드 추출
+function _tktExtract(slides){
+  var f={'제목':'','기간':'','시간':'','장소':'','관람연령':'','러닝타임':'','인터미션':'','장르':'','할인정보':'','공연내용':'','가격요약':'','오픈일시':'','마감일시':'','선오픈':'','출연':'','후원':''};
+  var seats=[];
+  var allLines=[],allTables=[];
+  slides.forEach(function(s){allLines=allLines.concat(s.lines);allTables=allTables.concat(s.tables);});
+  // 1~6) key:value 공용 파서 (오픈·마감 키 포함)
+  var kvf=_tktKvFields(_tktKvScan(allLines));
+  Object.keys(kvf).forEach(function(k){if(kvf[k]!=='')f[k]=kvf[k];});
+  if(!f['제목']){ // 폴백: 표지 제목에서 "운영계획(안)" 꼬리 제거
+    var t0=(slides[0]&&slides[0].lines[slides[0].lines.length-1])||'';
+    slides[0]&&slides[0].lines.forEach(function(l){if(/운영\s*계획/.test(l))t0=l;});
+    f['제목']=t0.replace(/운영\s*계획\s*\(?안?\)?\s*$/,'').replace(/^\s*\d{4}\s*/,'').trim();
+  }
+  // 7) 장르 추정 (제목+표지 — 가격 등 kv 항목은 위 공용 파서가 처리)
+  f['장르']=_tktGenreOf(f['제목']+' '+allLines.slice(0,6).join(' '));
   // 8) 좌석 표 — 헤더에 좌석수+티켓가격 있는 표
   allTables.forEach(function(tb){
     if(seats.length)return;
@@ -16146,9 +16304,10 @@ function _tktExtract(slides){
   if(um)seats.push({'등급':'','권종':'유보석','정가':'','석수':um[1],'비고':'홀딩'});
   var om=/미오픈\s*\(?(\d+)/.exec(foot);
   if(om)seats.push({'등급':'','권종':'OP','정가':'','석수':om[1],'비고':'미오픈'});
-  // 10) 할인 표 → 의뢰서 텍스트 ([1] 플랫폼 전용 / [2] 특별)
+  // 10) 할인 표 → 의뢰서 텍스트 ([1] 플랫폼 전용 / [2] 특별) — 구조적인 표가 kv 한 줄 값보다 우선
+  var discTb=false;
   allTables.forEach(function(tb){
-    if(f['할인정보'])return;
+    if(discTb)return;
     if(!tb.length)return;
     // 매출분석 표 오인 방지 — '할인명' 헤더 또는 (할인율+대상) 조합일 때만 할인표로 인정
     var hd2=tb[0].join(' ');
@@ -16166,7 +16325,7 @@ function _tktExtract(slides){
     var out=[],n=1;
     if(plat.length){out.push('['+n+'] 플랫폼 전용 할인');plat.forEach(function(l,i){out.push(' '+n+'-'+(i+1)+')'+l);});n++;}
     if(spec.length){out.push((plat.length?'\n':'')+'['+n+'] 특별 할인');spec.forEach(function(l,i){out.push(' '+n+'-'+(i+1)+')'+l);});}
-    f['할인정보']=out.join('\n');
+    f['할인정보']=out.join('\n');discTb=true;
   });
   // 11) 공연내용 — "1) 공연내용" 도형의 다음 줄들 (다음 번호 절 전까지)
   slides.forEach(function(s){
