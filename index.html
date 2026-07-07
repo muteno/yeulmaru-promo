@@ -3864,6 +3864,7 @@ function _srailAlignTop(){
   var h=hdr.offsetHeight;
   if(h>0)rail.style.paddingTop=(24+h)+'px';
 }
+var _srailExErr=false;   // 전시 시트 로드 실패 표시(공연은 살리고 전시만 생략 — 목록 하단 정직 표기)
 function _srailInit(force){
   if(typeof _salesState==='undefined'||!_salesState)return;   // 부트 파싱중 방어(분신술 4호 HIGH — initApp의 setTimeout과 이중 안전)
   var els=_srailEls(); if(!els.body)return;
@@ -3871,8 +3872,13 @@ function _srailInit(force){
   // 레일이 숨는 폭(≤1200px)에선 데이터도 안 당긴다(모바일 낭비 방지, 분신술 1호 LOW) — 넓어지면 resize에서 1회 재시도
   if(window.innerWidth<=1200)return;
   _srailAlignTop();
-  if(force){ _salesState.master=null;_salesState.daily=null;_salesState.rounds=null;_salesState.ops=null;_salesState._opsIdx=null; }
-  if(_salesState.daily&&_salesState.master&&_salesState.rounds&&_salesState.ops){ _srailRender(); return; }
+  // 전시 캐시 = 분석 보드와 공유(_anaState._exDaily/_exMaster) — 레일이 선채우면 분석 보드 전시 탭도 즉시 열림
+  _anaState=_anaState||{screen:1,cat:'공연',profit:'예술성',genre:'전체',year:null,drillName:null,xstep:3,cmp:{tray:[],bars:false}};
+  if(force){
+    _salesState.master=null;_salesState.daily=null;_salesState.rounds=null;_salesState.ops=null;_salesState._opsIdx=null;
+    _anaState._exDaily=null;_anaState._exMaster=null;
+  }
+  if(_salesState.daily&&_salesState.master&&_salesState.rounds&&_salesState.ops&&_anaState._exDaily&&_anaState._exMaster){ _srailRender(); return; }
   if(_srailBusy&&!force)return;   // force = 스톨 뚫고 재발사 허용(세대 토큰이 구응답 폐기)
   _srailBusy=true;
   var gen=++_srailGen;
@@ -3882,11 +3888,17 @@ function _srailInit(force){
     _salesState.master?Promise.resolve(_salesState.master):api('GET','/api/ops?sheet='+encodeURIComponent('공연마스터')),
     _salesState.rounds?Promise.resolve(_salesState.rounds):api('GET','/api/ops?sheet='+encodeURIComponent('회차상세')),
     // ops: force면 _bizState.raw(구본) 재사용 없이 진짜 재fetch(분신술 4호 LOW — "다시 불러오기" 문구 정합)
-    _salesState.ops?Promise.resolve(_salesState.ops):((!force&&_bizState&&_bizState.raw)?Promise.resolve(_bizState.raw):api('GET','/api/ops?sheet='+encodeURIComponent('세부운영관리대장(정리)')))
+    _salesState.ops?Promise.resolve(_salesState.ops):((!force&&_bizState&&_bizState.raw)?Promise.resolve(_bizState.raw):api('GET','/api/ops?sheet='+encodeURIComponent('세부운영관리대장(정리)'))),
+    // 전시 2시트 — 실패해도 공연 레일은 살린다(개별 catch → null → 하단 정직 표기)
+    _anaState._exDaily?Promise.resolve(_anaState._exDaily):api('GET','/api/ops?sheet='+encodeURIComponent('전시일일')).catch(function(e){console.warn('[srail 전시일일]',e);return null;}),
+    _anaState._exMaster?Promise.resolve(_anaState._exMaster):api('GET','/api/ops?sheet='+encodeURIComponent('전시마스터')).catch(function(e){console.warn('[srail 전시마스터]',e);return null;})
   ]).then(function(res){
     if(gen!==_srailGen)return;   // 구세대 응답 폐기
     _salesState.daily=res[0];_salesState.master=res[1];_salesState.rounds=res[2];_salesState.ops=res[3];_salesState._opsIdx=null;
     if(_bizState)_bizState.raw=res[3];   // 사업 보드 캐시도 같은 최신본으로 동기(비force면 동일 객체라 no-op)
+    _srailExErr=!(res[4]&&res[5]);
+    if(res[4])_anaState._exDaily=res[4];
+    if(res[5])_anaState._exMaster=res[5];
     _srailBusy=false; _srailRender();
   }).catch(function(e){
     if(gen!==_srailGen)return;
@@ -3912,12 +3924,31 @@ function _panelRailReflow(){
   p.style.width=(w>360?w:360)+'px';
   document.getElementById('main-area').style.marginRight=(w>=360?0:(360-w))+'px';
 }
-// 최신 일일입력 기준일 — 헤더 '기준 M.D' 표기
+// 최신 입력 기준일 — 헤더 '기준 M.D' 표기 (공연 일일입력 + 전시일일 중 최신)
 function _srailAsof(){
-  var rows=((_salesState.daily&&_salesState.daily.rows)||[]).map(_salesNorm); var mx=0;
-  rows.forEach(function(r){ var v=parseInt(String(r['기준일자']||'').replace(/[^0-9]/g,''),10); if(!isNaN(v)&&v>mx)mx=v; });
+  var mx=0;
+  function scan(rows){ (rows||[]).forEach(function(r){ var v=parseInt(String(r['기준일자']||'').replace(/[^0-9]/g,''),10); if(!isNaN(v)&&v>mx)mx=v; }); }
+  scan(((_salesState.daily&&_salesState.daily.rows)||[]).map(_salesNorm));
+  if(_anaState&&_anaState._exDaily)scan(_anaState._exDaily.rows);
   if(!mx)return '';
   return '기준 '+(Math.floor(mx/100)%100)+'.'+(mx%100);
+}
+// 진행중 전시 목록 — 분석 보드 _anaExhibBuild 재사용(무료 전시는 달성률 개념이 없어 분석 보드와 동일하게 제외)
+function _srailExhibs(){
+  if(!(_anaState&&_anaState._exDaily&&_anaState._exMaster))return [];
+  try{
+    return _anaExhibBuild().filter(function(e){return e.status==='active'&&e.profit!=='무료';}).map(function(e){
+      var sd=_salesDate(e.시작일), ed=_salesDate(e.종료일), today=new Date(); today.setHours(0,0,0,0);
+      e._kind='ex';
+      e._dday=sd?Math.round((sd-today)/86400000):null;          // 정렬 축 = 공연과 동일(시작일 기준, 진행중=음수)
+      e._endD=ed?Math.round((ed-today)/86400000):null;          // 표시 = 종료까지
+      var last=(e.daily&&e.daily.length)?e.daily[e.daily.length-1]:null;
+      e._paid=last?_salesNum(last['누계유료']):null; if(e._paid===null)e._paid=_salesNum(e.최종유료);
+      e._total=last?_salesNum(last['누계총인원']):null; if(e._total===null)e._total=_salesNum(e.최종총인원);
+      e._goal=_salesNum(e.목표관객);
+      return e;
+    });
+  }catch(err){ console.warn('[srail exhib]',err); return []; }
 }
 // 스파크라인(최근 7일 점유율) — _anaSpark 계승·레일용 가변폭(viewBox 스케일) + 면 채움. 색 = accent 토큰·alpha 변주만.
 function _srailSpark(arr){
@@ -3945,13 +3976,33 @@ function _srailCard(p){
   var meta=(p.genre||'기타')+' · '+_anaProfitAxis(p['수익성'])+(p.dateStr?' · '+p.dateStr:'');
   var dd=_salesDdayStr(p.dday);
   // title=순수 HTML 속성 → escapeHtml / onclick=JS 문자열 → _anaEsc (컨텍스트별 이스케이프 분리, 분신술 5호 MED)
-  return '<div class="srail-card" role="button" tabindex="0" onclick="_srailDrill(\''+_anaEsc(p.name)+'\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click();}" title="'+escapeHtml(p.name)+' — 개별 분석 (레일 안에서 열려요)">'
+  return '<div class="srail-card" role="button" tabindex="0" onclick="_srailDrill(\'perf\',\''+_anaEsc(p.name)+'\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click();}" title="'+escapeHtml(p.name)+' — 개별 분석 (레일 안에서 열려요)">'
     +'<div class="srail-r1"><span class="srail-name">'+escapeHtml(p.name)+'</span>'+(dd?'<span class="srail-dday" style="color:'+_salesDdayColor(p.dday)+'">'+dd+'</span>':'')+'</div>'
     +'<div class="srail-meta">'+escapeHtml(meta)+'</div>'
     +'<div class="srail-r2"><span class="srail-occ">'+p.occ.toFixed(1)+'%</span><span class="srail-delta '+dCls+'">'+dStr+'</span></div>'
     +'<div class="srail-spark">'+_srailSpark(p.spark)+'</div>'
     +'<div class="srail-bar"><i style="width:'+Math.min(p.occ,100).toFixed(1)+'%"></i><b style="left:'+Math.min(tgt,100)+'%"></b></div>'
     +'<div class="srail-r3"><span>'+p.seats.toLocaleString()+' / '+p.totalOpen.toLocaleString()+'석</span><span class="tgt '+(gap>=0?'ok':'bad')+'">목표 '+tgt+'% '+(gap>=0?'+':'')+gap.toFixed(1)+'%p</span></div>'
+    +'</div>';
+}
+function _srailMD(v){ var d=_salesDate(v); return d?((d.getMonth()+1)+'.'+d.getDate()):''; }
+function _srailNumTxt(v){ return (v===null||v===undefined||isNaN(v))?'—':Math.round(v).toLocaleString(); }
+// 전시 카드 — 분석 보드 전시 목록(달성률·어제대비·누적유료) 계승. ⚠️ 달성률 = 누계유료/목표관객(좌석 점유 아님, 100%↑=초과달성)
+function _srailCardEx(e){
+  var dpp=e.deltaPP, dCls, dStr;
+  if(dpp===null||dpp===undefined){ dCls='fl'; dStr='어제대비 —'; }
+  else if(dpp>0.04){ dCls='up'; dStr='▲ +'+dpp.toFixed(1)+'%p'; }
+  else if(dpp<-0.04){ dCls='dn'; dStr='▼ '+dpp.toFixed(1)+'%p'; }
+  else { dCls='fl'; dStr='— 0.0%p'; }
+  var meta='전시 · '+e.profit+((e.시작일||e.종료일)?(' · '+_srailMD(e.시작일)+'~'+_srailMD(e.종료일)):'');
+  var dd=(e._endD===null||e._endD===undefined)?'':('종료 '+_salesDdayStr(e._endD));
+  return '<div class="srail-card" role="button" tabindex="0" onclick="_srailDrill(\'ex\',\''+_anaEsc(e.id)+'\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click();}" title="'+escapeHtml(e.name)+' — 개별 분석 (레일 안에서 열려요)">'
+    +'<div class="srail-r1"><span class="srail-name">'+escapeHtml(e.name)+'</span>'+(dd?'<span class="srail-dday" style="color:'+_salesDdayColor(e._endD)+'">'+dd+'</span>':'')+'</div>'
+    +'<div class="srail-meta">'+escapeHtml(meta)+'</div>'
+    +'<div class="srail-r2"><span class="srail-occ">'+e.occ.toFixed(1)+'%</span><span class="srail-delta '+dCls+'">'+dStr+'</span><span style="font-size:10px;color:var(--muted);font-weight:600">달성률</span></div>'
+    +'<div class="srail-spark">'+_srailSpark(e.spark)+'</div>'
+    +'<div class="srail-bar"><i style="width:'+Math.min(e.occ,100).toFixed(1)+'%"></i></div>'
+    +'<div class="srail-r3"><span>유료 '+_srailNumTxt(e._paid)+' / 목표 '+_srailNumTxt(e._goal)+'명</span><span>총 '+_srailNumTxt(e._total)+'명</span></div>'
     +'</div>';
 }
 function _srailRender(){
@@ -3964,38 +4015,47 @@ function _srailRender(){
 }
 function _srailRenderInner(els){
   var perfs; try{ perfs=_salesBuild(); }catch(e){ console.warn('[srail build]',e); perfs=[]; }
-  // 판매중만 · 공연일 임박순(진행 중 D+ 최상단, 미상은 마지막) · 동률이면 점유율 낮은 순(주의 대상 위로)
-  var actives=perfs.filter(function(p){return p.status==='active';})
-    .sort(function(a,b){ var ad=(a.dday===null?9e9:a.dday), bd=(b.dday===null?9e9:b.dday); if(ad!==bd)return ad-bd; return a.occ-b.occ; });
-  // 인라인 드릴 상태 — 대상 공연이 갱신 후 사라졌으면(판매 종료 등) 목록으로 복귀
+  // 판매중 공연 + 진행중 전시(종류 무관 "진행중인 건 다" — 운영자 260707). 교육은 시트 생기면 여기 합류(확장점).
+  var perfActives=perfs.filter(function(p){return p.status==='active';});
+  perfActives.forEach(function(p){p._kind='perf';});
+  var exActives=_srailExhibs();
+  // 정렬 축 통일: 시작일 임박순(진행 중=음수 최상단, 미상은 마지막) · 동률이면 점유율/달성률 낮은 순(주의 대상 위로)
+  var actives=perfActives.concat(exActives)
+    .sort(function(a,b){ var ad=(a._kind==='ex'?a._dday:a.dday), bd=(b._kind==='ex'?b._dday:b.dday); ad=(ad===null||ad===undefined)?9e9:ad; bd=(bd===null||bd===undefined)?9e9:bd; if(ad!==bd)return ad-bd; return a.occ-b.occ; });
+  // 인라인 드릴 상태 — 대상이 갱신 후 사라졌으면(판매·전시 종료 등) 목록으로 복귀
   if(_srailView.mode==='drill'){
-    var dp=actives.find(function(p){return p.name===_srailView.name;});
-    if(dp){ _srailRenderDrill(els,dp,actives.length); return; }
+    var dp=actives.find(function(x){ return _srailView.kind==='ex'?(x._kind==='ex'&&x.id===_srailView.name):(x._kind==='perf'&&x.name===_srailView.name); });
+    if(dp){ if(dp._kind==='ex')_srailRenderDrillEx(els,dp,actives.length); else _srailRenderDrill(els,dp,actives.length); return; }
     _srailView={mode:'list',name:null};
   }
   if(els.cnt){ els.cnt.textContent=actives.length; els.cnt.style.display=actives.length?'':'none'; }
   if(els.asof)els.asof.textContent=_srailAsof();
   if(els.sum){
-    if(actives.length){
-      var sum=0,has=false; actives.forEach(function(p){ if(p.diff!==null&&!isNaN(p.diff)){sum+=p.diff;has=true;} });
-      var avg=actives.reduce(function(s,p){return s+p.occ;},0)/actives.length;
-      var dHtml;
-      if(!has)dHtml='<span>어제 증감 수집 전</span>';
-      else if(sum>0)dHtml='<span>어제 <b style="color:var(--green)">▲ +'+sum.toLocaleString()+'석</b></span>';
-      else if(sum<0)dHtml='<span>어제 <b style="color:var(--danger)">▼ '+sum.toLocaleString()+'석</b></span>';
-      else dHtml='<span>어제 <b>±0석</b></span>';
-      els.sum.innerHTML=dHtml+'<span>·</span><span>단순평균 점유율 <b style="color:var(--accent)">'+avg.toFixed(1)+'%</b></span>';
-      els.sum.style.display='';
-    } else els.sum.style.display='none';
+    var parts=[];
+    if(perfActives.length){
+      var sum=0,has=false; perfActives.forEach(function(p){ if(p.diff!==null&&!isNaN(p.diff)){sum+=p.diff;has=true;} });
+      if(has)parts.push('<span>공연 어제 <b style="color:'+(sum>0?'var(--green)':(sum<0?'var(--danger)':'var(--text)'))+'">'+(sum>0?'▲ +':(sum<0?'▼ ':'±'))+sum.toLocaleString()+'석</b></span>');
+      else parts.push('<span>공연 어제 증감 수집 전</span>');
+    }
+    if(exActives.length){
+      var exSum=0,exHas=false;
+      exActives.forEach(function(e){ var last=(e.daily&&e.daily.length)?e.daily[e.daily.length-1]:null; var v=last?_salesNum(last['일일총인원']):null; if(v!==null){exSum+=v;exHas=true;} });
+      if(exHas)parts.push('<span>전시 어제 <b style="color:'+(exSum>0?'var(--green)':'var(--text)')+'">'+(exSum>0?'▲ +':'±')+exSum.toLocaleString()+'명</b></span>');
+    }
+    if(parts.length){ els.sum.innerHTML=parts.join('<span>·</span>'); els.sum.style.display=''; }
+    else els.sum.style.display='none';
   }
   if(!actives.length){
-    els.body.innerHTML='<div class="u-empty" style="padding:30px 8px"><div class="ico">🎫</div><div class="msg">지금 판매중인 공연이 없어요</div></div>';
+    els.body.innerHTML='<div class="u-empty" style="padding:30px 8px"><div class="ico">🎫</div><div class="msg">지금 판매·진행중인 프로그램이 없어요</div></div>'+_srailExErrNote();
     return;
   }
-  els.body.innerHTML=actives.map(_srailCard).join('');
+  els.body.innerHTML=actives.map(function(x){return x._kind==='ex'?_srailCardEx(x):_srailCard(x);}).join('')+_srailExErrNote();
 }
-// ── 인라인 드릴 (개별 분석 — 분석 보드 드릴(_anaScreen2) 핵심 항목의 레일판) ──
-function _srailDrill(name){ _srailView={mode:'drill',name:name}; _srailRender(); }
+function _srailExErrNote(){
+  return _srailExErr?'<div class="srail-note" style="padding:4px 4px 8px">전시 데이터를 못 불러왔어요 — [새로고침]으로 재시도</div>':'';
+}
+// ── 인라인 드릴 (개별 분석 — 분석 보드 드릴 핵심 항목의 레일판. kind: perf=공연(_anaScreen2 계승) / ex=전시(_anaExhibDrillRender 계승)) ──
+function _srailDrill(kind,key){ _srailView={mode:'drill',kind:kind,name:key}; _srailRender(); }
 function _srailBack(){ _srailView={mode:'list',name:null}; _srailRender(); }
 function _srailRenderDrill(els,p,activeCount){
   if(els.cnt){ els.cnt.textContent=activeCount; els.cnt.style.display=activeCount?'':'none'; }
@@ -4038,6 +4098,40 @@ function _srailRenderDrill(els,p,activeCount){
   h+='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:2px"><span class="ana-next">▶ '+act+'</span><button class="ana-chip" onclick="_srailOpenBoard(\''+_anaEsc(p.name)+'\')" title="분석 보드에서 비슷한 공연 비교까지 크게 보기">크게 보기</button></div>';
   h+='</div>';
   els.body.innerHTML=h;
+}
+// 전시 인라인 드릴 — 분석 보드 전시 드릴(_anaExhibDrillRender) 계승: KPI + 일별 달성률 추이(_anaExhibTrend 재사용)
+function _srailRenderDrillEx(els,e,activeCount){
+  if(els.cnt){ els.cnt.textContent=activeCount; els.cnt.style.display=activeCount?'':'none'; }
+  if(els.asof)els.asof.textContent=_srailAsof();
+  if(els.sum)els.sum.style.display='none';
+  var dpp=e.deltaPP, dStr, dCol;
+  if(dpp===null||dpp===undefined){dStr='수집 전';dCol='var(--dim)';}
+  else if(dpp>0.04){dStr='▲ +'+dpp.toFixed(1)+'%p';dCol='var(--green)';}
+  else if(dpp<-0.04){dStr='▼ '+dpp.toFixed(1)+'%p';dCol='var(--danger)';}
+  else {dStr='보합';dCol='var(--dim)';}
+  var endTxt=(e._endD===null||e._endD===undefined)?'-':_salesDdayStr(e._endD);
+  var h='<div class="srail-drill">';
+  h+='<div class="srail-dhd"><button class="ana-back" style="margin-bottom:0;padding:4px 10px;font-size:11px" onclick="_srailBack()">← 목록</button><span class="srail-dname" title="'+escapeHtml(e.name)+'">'+escapeHtml(e.name)+'</span></div>';
+  h+='<div class="srail-meta" style="margin-bottom:8px">'+escapeHtml('전시 · '+e.profit+' · '+_srailMD(e.시작일)+'~'+_srailMD(e.종료일)+' · 진행중')+'</div>';
+  h+='<div class="ana-kpis">';
+  h+='<div class="ana-kpi"><div class="lab">달성률 (유료/목표관객)</div><div class="val">'+e.occ.toFixed(1)+'%</div></div>';
+  h+='<div class="ana-kpi"><div class="lab">어제대비</div><div class="val" style="color:'+dCol+'">'+dStr+'</div></div>';
+  h+='<div class="ana-kpi"><div class="lab">누적 유료 / 목표</div><div class="val" style="font-size:15px">'+_srailNumTxt(e._paid)+'</div><div class="sub2" style="color:var(--dim)">목표 '+_srailNumTxt(e._goal)+'명 · 총 '+_srailNumTxt(e._total)+'명</div></div>';
+  h+='<div class="ana-kpi"><div class="lab">종료까지</div><div class="val">'+endTxt+'</div></div>';
+  h+='</div>';
+  h+='<div class="srail-chart">'+_anaExhibTrend(e.daily)+'</div>';
+  h+='<div class="ana-line"><span class="ic">'+(e.occ>=100?'🟢':'🟠')+'</span><span><b>상황</b> — 목표관객 '+_srailNumTxt(e._goal)+'명 대비 유료 '+_srailNumTxt(e._paid)+'명 ('+(e.occ>=100?'초과달성 ':'')+(e.occ-100>=0?'+':'')+(e.occ-100).toFixed(1)+'%p) · 달성률은 좌석 점유가 아니라 목표 대비 비율</span></div>';
+  h+='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px"><button class="ana-chip" onclick="_srailOpenBoardEx(\''+_anaEsc(e.id)+'\')" title="분석 보드 전시 탭에서 크게 보기">크게 보기</button></div>';
+  h+='</div>';
+  els.body.innerHTML=h;
+}
+// [크게 보기](전시) → 분석 보드 전시 드릴. 캐시 없으면 openAnalyticsBoard 로드 완료 콜백이 그림.
+function _srailOpenBoardEx(id){
+  openAnalyticsBoard();
+  if(_anaState){
+    _anaState.cat='전시'; _anaState.exDrillId=id; _anaState.screen=1;   // 전시 드릴 = 스크린1 내부 분기(exDrillId)
+    if(_salesState.daily&&_salesState.master&&_salesState.ops&&_anaState._exDaily&&_anaState._exMaster)_anaRender();
+  }
 }
 // 인라인 드릴 미니 차트 — 분석 보드 드릴 차트(_anaDrawDrillChart) 계승·레일 폭 압축판.
 // 누적 점유율 라인(accent) + 목표 점선 + 마지막 값 라벨. 점 hover = 날짜·수치(title).
