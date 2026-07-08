@@ -17503,7 +17503,7 @@ async function _nbDispatch(payload){
   return j.id||id;
 }
 async function _nbPollDraft(id,maxMs){
-  var t0=Date.now();maxMs=maxMs||600000;   // 최대 ~10분(러너 시작+설치+웹 리서치 멀티턴+생성, 직렬 큐 1건 대기까지 흡수 — BW-2로 상향)
+  var t0=Date.now();maxMs=maxMs||720000;   // 최대 ~12분 = 워크플로 job timeout과 정렬(러너 시작+설치+웹 리서치 멀티턴+생성 — BW-2·감사 MED 반영. 큐에 밀린 경우는 타임아웃 안내로 재시도 유도)
   while(Date.now()-t0<maxMs){
     await new Promise(function(res){setTimeout(res,4000);});
     try{
@@ -17511,7 +17511,7 @@ async function _nbPollDraft(id,maxMs){
       if(r.status===404)continue;   // 아직 안 올라옴
       if(!r.ok)continue;
       var d=await r.json();
-      if(d&&d.ready&&d.draft)return d.draft;   // Worker가 base64 디코드·파싱해 {text,ok,error} 반환
+      if(d&&d.ready&&d.draft)return d.draft;   // Worker가 base64 디코드·파싱해 draft JSON 통짜 반환({text,ok,error,tags,research,…})
     }catch(e){/* 아직 — 계속 폴링 */}
   }
   throw new Error('TIMEOUT');
