@@ -1,0 +1,86 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>일일입력 .xls 업로드 지원 + 공연 수동 선택 — 결과 보고</title>
+<style>
+:root{--accent:#4A4DE7;--peach-text:#D88455;--green:#1A6B3C;--danger:#E24B4A;--text:#1A1A2E;--dim:#888;--bg:#FDF6F3;--surface:#fff;--border:rgba(0,0,0,.09);--border2:rgba(0,0,0,.12)}
+*{box-sizing:border-box}
+body{margin:0;font-family:'Pretendard',system-ui,sans-serif;background:linear-gradient(135deg,#FDF6F3,#F0EBF5 50%,#EBF0F8);color:var(--text);line-height:1.65;padding:28px 16px}
+.wrap{max-width:880px;margin:0 auto}
+h1{font-size:22px;margin:0 0 4px}
+.sub{color:var(--dim);font-size:13px;margin-bottom:22px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px 22px;margin-bottom:16px;box-shadow:0 8px 32px rgba(74,77,231,.06)}
+h2{font-size:16px;margin:0 0 12px;display:flex;align-items:center;gap:8px}
+.tag{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;background:#E8E8FD;color:var(--accent)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--border);vertical-align:top}
+th{color:var(--dim);font-weight:600;font-size:12px}
+.ok{color:var(--green);font-weight:700}
+.bad{color:var(--danger);font-weight:700}
+code{background:#F0EBF5;padding:1px 6px;border-radius:5px;font-size:12px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:640px){.grid2{grid-template-columns:1fr}}
+.box{border:1px solid var(--border2);border-radius:10px;padding:12px 14px}
+.box.before{background:#FCF0EE}
+.box.after{background:#EEF6F0}
+.box h3{margin:0 0 6px;font-size:13px}
+ul{margin:6px 0;padding-left:20px}li{margin:3px 0}
+.pill{display:inline-block;font-size:11px;padding:1px 7px;border-radius:6px;background:#EEF6F0;color:var(--green);font-weight:700}
+</style></head><body><div class="wrap">
+<h1>📄 일일입력: 티켓링크 <code>.xls</code> 업로드 지원 + 공연 수동 선택</h1>
+<div class="sub">2026-07-08 · PR #153 · index.html · 실질 변경(데이터·저장·비동기 얽힘 → 분신술 5인 검증)</div>
+
+<div class="card">
+<h2><span class="tag">원인</span> 왜 등록이 안 됐나 — 실측 3중 문제</h2>
+<table>
+<tr><th style="width:34px">#</th><th>문제</th><th>실측 근거</th></tr>
+<tr><td>①</td><td>셀러(티켓링크) 다운로드가 <b>구형 <code>.xls</code></b>(OLE2/BIFF 이진)인데 업로드 코드가 <code>.xlsx</code>(JSZip=zip)만 처리 → <b>파싱 진입조차 안 됨</b></td><td>매직바이트 <code>D0CF11E0</code>, <code>file</code>=CDFV2 Microsoft Excel</td></tr>
+<tr><td>②</td><td>열려도 <b>서식 컬럼이 딴판</b> — 코드는 <code>A</code>='상품명:'/날짜·<code>F~I</code> 가정, 실제는 <code>D</code>=상품명·<code>B</code>=일자·현금 <code>G/H</code>·카드 <code>I/J</code></td><td><code>schedule</code> 시트 실측(조재혁 리사이틀 7/8 37석)</td></tr>
+<tr><td>③</td><td>공연 <b>자동매칭 실패 시 저장 봉쇄</b> — 사용자가 직접 고를 방법 없음</td><td>스크린샷 "이름 비슷한 게 여럿 → 저장 제외"</td></tr>
+</table>
+</div>
+
+<div class="card">
+<h2><span class="tag">수정</span> 전 / 후</h2>
+<div class="grid2">
+<div class="box before"><h3>변경 전</h3><ul>
+<li><code>.xlsx</code>만 허용 → <code>.xls</code>는 "xlsx만 올릴 수 있어요"</li>
+<li>JSZip으로 <code>sheet1.xml</code> 직접 파싱(단일 서식 가정)</li>
+<li>자동매칭 실패 = 저장 제외(막다른 길)</li>
+</ul></div>
+<div class="box after"><h3>변경 후</h3><ul>
+<li><code>.xls</code>·<code>.xlsx</code> 모두 — SheetJS 지연 로드(<code>_ensureXLSX</code>)</li>
+<li>티켓링크 「거래 일자별 집계」 파서 + 레거시 서식 <b>자동감지</b>, 상품명별 그룹</li>
+<li>카드마다 <b>공연 선택 드롭다운</b> — 자동인식되면 그대로, 못 잡으면 직접 선택 시 저장. 미선택이면 "선택해야 저장·분석돼요" 안내</li>
+</ul></div>
+</div>
+<p style="font-size:12.5px;color:var(--dim);margin:12px 0 0">SheetJS는 이 앱이 이미 쓰는 <code>cdn.jsdelivr.net</code>(preconnect·폰트·MSAL 폴백·JSZip)에서 지연 로드 — 신규 의존 아님. 새 raw hex 0(토큰 계승, 게이트 1641/1641).</p>
+</div>
+
+<div class="card">
+<h2><span class="tag">검증</span> 분신술 5인 전원 APPROVE(HIGH 0) → 지적 반영</h2>
+<table>
+<tr><th>앵글</th><th>평결</th><th>반영</th></tr>
+<tr><td>회귀</td><td class="ok">APPROVE</td><td>저장 스키마 HEAD 바이트 동일·수동폼/레거시/pending 계약 무손상</td></tr>
+<tr><td>데이터·저장 정합</td><td class="ok">APPROVE</td><td><b>seat/money 권위값(합계) 우선</b>+현금카드 폴백 · '전체 기간' 안내</td></tr>
+<tr><td>파서 견고성</td><td class="ok">APPROVE</td><td>grade 오파싱 없음 확정 · <b>날짜 serial 복원</b>(엑셀 재저장 대비)</td></tr>
+<tr><td>UI·기틀·XSS</td><td class="ok">APPROVE</td><td>escapeHtml 전량·새 raw hex 0 · <b>배치 내 dedup</b>·aria-label</td></tr>
+<tr><td>비동기·로더·부트</td><td class="ok">APPROVE</td><td>TDZ 참사 재발 0 · <b>arrayBuffer 동기throw 체인화</b>(조용사 방지)</td></tr>
+</table>
+<p style="margin:14px 0 4px"><span class="pill">실측 통과</span></p>
+<ul style="font-size:13px">
+<li>실 셀러 xls 2개 파싱 <b>node 18/18</b> + 반영 후 재검증 <b>12/12</b>(권위값·serial 46211→20260708·다상품·폴백·레거시)</li>
+<li>합성(다상품·레거시·에러) <b>11/11</b></li>
+<li>실브라우저 DOM <b>Playwright E2E 27/27</b>(자동인식·모호→수동선택·dedup·배치중복·aria), JS 에러 0</li>
+<li>디자인 게이트 <b>1641/1641</b> · <code>node --check</code> 3블록</li>
+</ul>
+</div>
+
+<div class="card">
+<h2><span class="tag">한계</span> 개선 우선사항 등재(작업이력)</h2>
+<ul style="font-size:13px">
+<li><b>SheetJS 0.18.5</b> — CDN SRI 없음·CVE-2023-30533 이력. 업로더=인증 관리자 본인 파일이라 위협모델 낮음. 여유 시 상향 검토</li>
+<li><b>증분 vs 누적 가정</b> — 「거래 일자별 집계」 각 행=그날 순판매로 보고 누적. 실측 1일치라 다날짜 실물로 확인 필요</li>
+<li><b>오입력 정정 UI 부재</b> — 수동 공연 오선택 시 되돌리기 난망(미리보기 확인으로 부분 완화). 행 삭제/정정 UI 검토</li>
+</ul>
+</div>
+
+</div></body></html>

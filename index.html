@@ -4901,7 +4901,7 @@ function openDailyInput(){
     api('GET','/api/programs').then(function(d){return (d&&d.programs)||[];}).catch(function(){return [];})
   ]).then(function(res){_dailyState.master=res[0];_dailyState.programs=res[1];_dailyRenderForm();}).catch(function(e){var b=document.getElementById('daily-body');if(b)b.innerHTML='<div style="color:var(--danger);text-align:center;padding:30px">공연 목록 로드 실패: '+escapeHtml(e.message||String(e))+'</div>';});
 }
-function closeDailyInput(){ var el=document.getElementById('daily-input'); if(el)el.innerHTML=''; }
+function closeDailyInput(){ var el=document.getElementById('daily-input'); if(el)el.innerHTML=''; window._dsxState=null; window._dsxPending=null; }
 function _dailyRowHtml(r){
   var opts=_dailyMasters();
   var s='<div class="daily-row" style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">';
@@ -4973,7 +4973,10 @@ function _dsxParse(files){
     if(err){showToast('엑셀 라이브러리 로드 실패 — 네트워크 확인 후 다시 시도','error');return;}
     Promise.all([
       Promise.all(files.map(function(f){
-        return f.arrayBuffer().then(function(buf){
+        return Promise.resolve().then(function(){   // arrayBuffer 미지원 구형 브라우저의 동기 throw도 체인 안에서 잡히게(분신술 비동기 MED)
+          if(typeof f.arrayBuffer!=='function')throw new Error('이 브라우저는 파일 읽기를 지원하지 않아요 — 크롬·엣지 최신 버전에서 시도해 주세요');
+          return f.arrayBuffer();
+        }).then(function(buf){
           var wb=XLSX.read(new Uint8Array(buf),{type:'array'});
           return _dsxExtract(wb, f.name);   // 배열 반환 — 한 파일에 상품(공연)이 여럿일 수 있음
         }).catch(function(e){ return [{file:f.name, error:(e.message||String(e))}]; });
@@ -4986,10 +4989,12 @@ function _dsxParse(files){
   });
 }
 // 일별 순판매 → 날짜순 누적(일일입력이 '누적' 기록 구조). 두 서식 공통.
+// seat/money = 권위값(tot=합계매수·totM=합계금액) 우선 — 티켓링크가 결제분류를 늘려도 안 틀림.
+// tot 없거나 0(합계 컬럼 미독·레이아웃 밀림)이면 현금+카드 합으로 폴백(분신술 데이터 MED-1·파서 MED-2).
 function _dsxAccum(days){
   days.sort(function(a,b){return a.date<b.date?-1:(a.date>b.date?1:0);});
-  var Cs=0,Cm=0,Ks=0,Km=0,prev=0;
-  days.forEach(function(x){ Cs+=x.cs;Cm+=x.cm;Ks+=x.ks;Km+=x.km; x.cSeat=Cs;x.cMoney=Cm;x.kSeat=Ks;x.kMoney=Km; x.seat=Cs+Ks; x.money=Cm+Km; x.dSeat=x.seat-prev; prev=x.seat; });
+  var Cs=0,Cm=0,Ks=0,Km=0,T=0,M=0,prev=0;
+  days.forEach(function(x){ Cs+=x.cs;Cm+=x.cm;Ks+=x.ks;Km+=x.km; T+=(x.tot?x.tot:(x.cs+x.ks)); M+=(x.totM?x.totM:(x.cm+x.km)); x.cSeat=Cs;x.cMoney=Cm;x.kSeat=Ks;x.kMoney=Km; x.seat=T; x.money=M; x.dSeat=x.seat-prev; prev=x.seat; });
   return days;
 }
 // SheetJS 워크북 → [{file,pname,days}] (한 파일에 상품 여럿 가능) 또는 [{file,error}]. 두 서식 자동감지.
@@ -5010,11 +5015,14 @@ function _dsxExtract(wb, fname){
       var byName={}, order=[];
       for(var r=hdrRow+1;r<grid.length;r++){
         var row=grid[r];
-        var dm=/^(\d{4})[.\-\/](\d{1,2})[.\-\/](\d{1,2})$/.exec(String(cell(row,dateCol)).trim()); if(!dm)continue; // 데이터행만(소계·합계 자동제외)
+        var draw=cell(row,dateCol), dstr=String(draw).trim();
+        // 사용자가 엑셀로 열어 재저장하면 날짜셀이 serial(숫자)로 바뀔 수 있음 → SSF로 복원(분신술 파서 MED-1)
+        if(typeof draw==='number'&&draw>0&&window.XLSX&&XLSX.SSF){ try{ var dc=XLSX.SSF.parse_date_code(draw); if(dc&&dc.y)dstr=dc.y+'.'+('0'+dc.m).slice(-2)+'.'+('0'+dc.d).slice(-2); }catch(_e){} }
+        var dm=/^(\d{4})[.\-\/](\d{1,2})[.\-\/](\d{1,2})$/.exec(dstr); if(!dm)continue; // 데이터행만(소계·합계 자동제외)
         var pn=String(cell(row,nameCol)).trim(); if(!pn)continue;
         var ymd=dm[1]+('0'+dm[2]).slice(-2)+('0'+dm[3]).slice(-2);
         if(!byName[pn]){byName[pn]=[];order.push(pn);}
-        byName[pn].push({date:ymd, cs:toNum(cell(row,nameCol+3)), cm:toNum(cell(row,nameCol+4)), ks:toNum(cell(row,nameCol+5)), km:toNum(cell(row,nameCol+6))});
+        byName[pn].push({date:ymd, tot:toNum(cell(row,nameCol+1)), totM:toNum(cell(row,nameCol+2)), cs:toNum(cell(row,nameCol+3)), cm:toNum(cell(row,nameCol+4)), ks:toNum(cell(row,nameCol+5)), km:toNum(cell(row,nameCol+6))});
       }
       if(order.length){ order.forEach(function(pn){ out.push({file:fname, pname:pn, days:_dsxAccum(byName[pn])}); }); return; }
     }
@@ -5067,9 +5075,9 @@ function _dsxRender(){
   var st=window._dsxState; if(!st)return;
   var body=document.getElementById('daily-body'); if(!body)return;
   var byName=st.byName, existing=st.existing, cands=st.cands, nameMap=st.nameMap;
-  var pending=[], anyChosen=false;
+  var pending=[], anyChosen=false, seenPend={};  // seenPend = 이번 업로드 배치 내 (공연|날짜) 상호 dedup(분신술 공통 지적)
   var h='<div style="font-size:15px;font-weight:700;margin-bottom:3px">📄 판매현황 반영 미리보기</div>';
-  h+='<div style="font-size:12px;color:var(--dim);margin-bottom:14px">순판매를 날짜순 <b>누적</b>한 값이에요. 공연이 자동 인식되면 그대로, 못 잡으면 <b>공연을 선택</b>하면 저장·분석돼요. 이미 있는 날짜는 건너뛰어요.</div>';
+  h+='<div style="font-size:12px;color:var(--dim);margin-bottom:14px">순판매를 날짜순 <b>누적</b>한 값이에요. 공연이 자동 인식되면 그대로, 못 잡으면 <b>공연을 선택</b>하면 저장·분석돼요. 이미 있는 날짜는 건너뛰어요. 누적이 정확하려면 <b>전체 기간</b> 다운로드본을 올려주세요.</div>';
   if(st.dedupWarn)h+='<div style="padding:9px 12px;border-radius:8px;background:var(--accent-light);margin-bottom:12px;font-size:12px;color:var(--danger)">⚠️ 기존 일일입력을 못 읽어 중복 확인을 못 했어요 — 이미 입력한 날짜면 중복될 수 있으니 확인 후 저장하세요</div>';
   st.results.forEach(function(R, idx){
     if(R.error){ h+='<div style="padding:9px 12px;border-radius:8px;background:var(--accent-light);margin-bottom:10px;font-size:12px;color:var(--danger)">⚠️ '+escapeHtml(R.file||'')+' — '+escapeHtml(R.error)+'</div>'; return; }
@@ -5082,7 +5090,7 @@ function _dsxRender(){
     else if(R.ambiguous)h+='<div style="font-size:11.5px;color:var(--peach-text);margin:2px 0 6px">비슷한 공연이 여럿이라 자동으로 못 정했어요 — 아래에서 공연을 선택하면 저장·분석돼요</div>';
     else h+='<div style="font-size:11.5px;color:var(--peach-text);margin:2px 0 6px">이 파일에서 공연을 자동으로 못 찾았어요 — 아래에서 공연을 선택하면 저장·분석돼요</div>';
     // 공연 선택 드롭다운(항상 노출) — 새 raw hex 없이 토큰만
-    h+='<select onchange="_dsxChoose('+idx+',this.value)" style="width:100%;margin-bottom:8px;padding:7px 9px;border:1.5px solid var(--border2);border-radius:8px;font-size:12.5px;font-family:inherit;background:var(--surface-solid);color:var(--text)"><option value="">— 공연 선택 —</option>';
+    h+='<select aria-label="공연 선택" onchange="_dsxChoose('+idx+',this.value)" style="width:100%;margin-bottom:8px;padding:7px 9px;border:1.5px solid var(--border2);border-radius:8px;font-size:12.5px;font-family:inherit;background:var(--surface-solid);color:var(--text)"><option value="">— 공연 선택 —</option>';
     cands.forEach(function(k){ var o=nameMap[k]; h+='<option value="'+escapeHtml(o.name)+'"'+(o.name===chosen?' selected':'')+'>'+escapeHtml(o.name)+'</option>'; });
     h+='</select>';
     var newCnt=0, dupCnt=0;
@@ -5097,7 +5105,7 @@ function _dsxRender(){
     if(m)h+='<div style="font-size:11px;color:var(--dim);margin-top:6px">신규 '+newCnt+'건 저장'+(dupCnt?(' · 기존 '+dupCnt+'건 건너뜀'):'')+'</div>';
     else h+='<div style="font-size:11px;color:var(--peach-text);margin-top:6px">공연을 선택하면 '+R.days.length+'일치를 저장할 수 있어요</div>';
     h+='</div>';
-    if(m){ R.days.forEach(function(x){ if(existing[_dsxUname(m.name)+'|'+x.date])return; var occ=m.open>0?Math.min(x.seat/m.open*100,100):0; pending.push({기준일자:x.date,공연명:m.name,유료좌석:x.seat,유료금액:x.money,무료좌석:0,합계좌석:x.seat,합계금액:x.money,점유율:occ.toFixed(1),'전일대비(석)':((x.dSeat>0?'+':'')+x.dSeat),공연ID:(m.id||'')}); }); }
+    if(m){ R.days.forEach(function(x){ var pk=_dsxUname(m.name)+'|'+x.date; if(existing[pk]||seenPend[pk])return; seenPend[pk]=1; var occ=m.open>0?Math.min(x.seat/m.open*100,100):0; pending.push({기준일자:x.date,공연명:m.name,유료좌석:x.seat,유료금액:x.money,무료좌석:0,합계좌석:x.seat,합계금액:x.money,점유율:occ.toFixed(1),'전일대비(석)':((x.dSeat>0?'+':'')+x.dSeat),공연ID:(m.id||'')}); }); }
   });
   h+='<div id="d-msg" style="font-size:12px;color:var(--danger);margin-top:6px;min-height:16px"></div>';
   var btnLabel=pending.length?(pending.length+'건 저장'):(anyChosen?'저장할 신규 없음':'공연을 선택하세요');
