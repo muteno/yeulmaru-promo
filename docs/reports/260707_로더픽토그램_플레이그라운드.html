@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>로더 픽토그램 차용 플레이그라운드 — beui.dev 이식 (260707)</title>
+<style>
+/* ═══ 0. 루트 디자인 토큰 사본 — index.html :root 2블록 (값 SSOT 계승 · 여기서 창작 금지) ═══ */
+:root{
+  --accent:#4A4DE7; --accent-light:#E8E8FD; --accent-glow:rgba(74,77,231,0.15);
+  --peach:#F0C4B8; --peach-light:#FBF0EC; --peach-bg:#FDF6F3; --peach-text:#D88455;
+  --bg:linear-gradient(135deg,#FDF6F3 0%,#F0EBF5 50%,#EBF0F8 100%);
+  --surface:var(--glass-surface); --surface-solid:#fff;
+  --glass:rgba(255,255,255,0.55); --glass-border:var(--glass);
+  --glass-shadow:0 8px 32px rgba(74,77,231,0.08),0 2px 8px rgba(0,0,0,0.04);
+  --border:rgba(0,0,0,0.09); --border2:rgba(0,0,0,0.12);
+  --text:#1A1A2E; --dim:#888; --muted:#bbb;
+  --past-bg:rgba(0,0,0,0.02); --past-text:var(--muted); --nm-bg:var(--past-bg);
+  --today-bg:rgba(230,240,255,0.8); --off-bg:var(--border2);
+  --green:#1A6B3C; --danger:var(--danger-btn); --danger-btn:#E24B4A;
+  --kakao:var(--c6); --insta:#C02872; --youtube:#B71C1C; --blog:var(--green); --etc:var(--c5);
+  --radius:16px; --radius-lg:20px; --radius-xl:24px;
+  --neutral:#EEEDF3; --neutral-d:#E1DFEC; --neutral-text:#6B6B7B;
+  --r-btn:10px; --r-pop:16px; --r-modal:20px;
+  --elev:0 20px 56px rgba(74,77,231,.16),0 6px 18px rgba(26,26,46,.07);
+  --backdrop:rgba(26,26,46,.42);
+  --glass-surface:rgba(255,255,255,.78); --glass-bd:var(--glass);
+  --z-sticky:10; --z-nav:90; --z-dropdown:1000; --z-modal:2000; --z-confirm:2100; --z-toast:3000;
+  --c1:#4A4DE7; --c2:#D88455; --c3:#1A6B3C; --c4:#C02872; --c5:#2D8AB3; --c6:#F5B400;
+  --cell-pad-y:10px; --cell-pad-x:12px; --cell-fs:13px;
+}
+
+/* ═══ 1. 페이지 골격 ═══ */
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);min-height:100vh;
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;padding:22px 18px 60px}
+h1{font-size:19px;font-weight:800;letter-spacing:-.3px}
+.sub{font-size:12.5px;color:var(--dim);margin:6px 0 18px;line-height:1.6}
+.sub b{color:var(--text)}
+.wrap{display:flex;flex-wrap:wrap;gap:18px;align-items:flex-start;max-width:1540px;margin:0 auto}
+.stagewrap{flex:1 1 620px;min-width:340px}
+.console{flex:0 1 400px;min-width:320px;background:var(--surface-solid);border:1px solid var(--border);
+  border-radius:var(--radius-lg);padding:16px;box-shadow:var(--glass-shadow);position:sticky;top:14px}
+.csec{padding:12px 0;border-bottom:1px dashed var(--border)}
+.csec:first-child{padding-top:2px}
+.csec:last-child{border-bottom:none;padding-bottom:2px}
+.ct{font-size:11px;font-weight:800;color:var(--dim);letter-spacing:1px;margin-bottom:9px}
+.ct em{font-style:normal;font-weight:600;color:var(--muted);letter-spacing:0;margin-left:6px}
+
+/* ═══ 2. 프레임 — 데스크톱 브라우저 창(캘린더 전례 폭 계승) ═══ */
+.frame{width:min(960px,96vw);margin:0 auto;border-radius:12px;overflow:hidden;
+  border:1px solid var(--border2);box-shadow:var(--elev);background:var(--surface-solid)}
+.chrome{display:flex;align-items:center;gap:8px;padding:9px 12px;background:var(--neutral);border-bottom:1px solid var(--border)}
+.cdot{width:10px;height:10px;border-radius:50%;background:var(--neutral-d);border:1px solid var(--border)}
+.curl{flex:1;background:var(--surface-solid);border:1px solid var(--border);border-radius:7px;
+  font-size:11px;color:var(--dim);padding:4px 10px;max-width:420px}
+.stage{position:relative;height:470px;background:var(--bg);overflow:hidden}
+.stagecap{text-align:center;font-size:11.5px;color:var(--dim);margin-top:10px;line-height:1.7}
+
+/* ── 앱 재현: nav + 캘린더 글래스(실측 계승) ── */
+.app-nav{height:52px;background:var(--accent);display:flex;align-items:center;gap:14px;padding:0 18px}
+.app-logo{font-size:13px;font-weight:800;color:rgba(255,255,255,.95);letter-spacing:2px}
+.app-menu{display:flex;gap:4px;margin-left:8px}
+.app-mi{font-size:11.5px;font-weight:700;color:rgba(255,255,255,.85);padding:6px 10px;border-radius:8px}
+.app-mi.on{background:rgba(255,255,255,.16);color:rgba(255,255,255,.95)}
+.app-body{padding:16px 20px 0}
+.mini-cal{background:rgba(255,255,255,.43);backdrop-filter:blur(11px);-webkit-backdrop-filter:blur(11px);
+  border:1px solid rgba(255,255,255,.7);border-radius:var(--radius-xl);overflow:hidden;box-shadow:var(--glass-shadow)}
+.mini-head{display:grid;grid-template-columns:repeat(6,1fr);background:rgba(255,255,255,.9);border-bottom:1px solid rgba(0,0,0,.07)}
+.mini-dh{padding:9px 6px;text-align:center;font-size:11.5px;font-weight:700;color:#666}
+.mini-dh.sat{color:#3B7DD8}.mini-dh.sun{color:#D64545}
+.mini-grid{display:grid;grid-template-columns:repeat(6,1fr)}
+.mini-c{height:86px;border-right:1px solid rgba(0,0,0,.07);border-bottom:1px solid rgba(0,0,0,.07);padding:6px 8px;font-size:10px;color:var(--dim);font-weight:600}
+.mini-c:nth-child(6n){border-right:none}
+.mini-c .ev{height:8px;border-radius:5px;margin-top:5px;background:var(--accent-light)}
+.mini-c .ev.p{background:var(--peach-light)}
+
+/* ── 컨텍스트 ①: 저장 오버레이(overlay-load 실측 재현) ── */
+.ov{position:absolute;inset:0;background:rgba(0,0,0,0.3);backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;
+  font-size:18px;font-weight:600;color:#fff;letter-spacing:0.5px;text-shadow:0 2px 8px rgba(0,0,0,0.4)}
+.ov .ld-host{filter:drop-shadow(0 2px 8px rgba(0,0,0,0.35))}
+.ov-txt{min-height:24px}
+
+/* ── 컨텍스트 ②: 버튼 busy(.btn 정본 실측 재현) ── */
+.btn{font-family:inherit;font-weight:700;border:1px solid transparent;border-radius:var(--r-btn);cursor:pointer;line-height:1;
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap;
+  transition:transform .15s,box-shadow .15s,background .15s}
+.btn--md{padding:10px 20px;font-size:13px}
+.btn--primary{background:var(--accent);color:#fff;box-shadow:0 2px 8px rgba(74,77,231,.16)}
+.btn--primary:disabled{opacity:.75;cursor:default}
+.btn--neutral{background:var(--neutral);color:var(--neutral-text)}
+.ctx-modal{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:340px;
+  background:var(--glass-surface);backdrop-filter:blur(11px);-webkit-backdrop-filter:blur(11px);
+  border:1px solid var(--glass-bd);border-radius:var(--r-modal);box-shadow:var(--elev);padding:20px}
+.ctx-modal h3{font-size:14px;font-weight:800;margin-bottom:6px}
+.ctx-modal p{font-size:11.5px;color:var(--dim);line-height:1.6;margin-bottom:16px}
+.ctx-modal .row{display:flex;gap:8px;justify-content:flex-end}
+
+/* ── 컨텍스트 ③: 인라인 로딩(팝오버 재현 — 메모 '불러오는 중…' 실측) ── */
+.ctx-pop{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:280px;
+  background:var(--glass-surface);backdrop-filter:blur(11px);-webkit-backdrop-filter:blur(11px);
+  border:1px solid var(--glass-bd);border-radius:var(--r-pop);box-shadow:var(--elev);padding:14px}
+.ctx-pop .ph{font-size:12px;font-weight:800;color:var(--text);margin-bottom:4px}
+.pop-load{color:var(--muted);font-size:12px;padding:26px 0;text-align:center;
+  display:flex;flex-direction:column;align-items:center;gap:12px}
+.pop-load.h{flex-direction:row;justify-content:center;gap:8px;padding:26px 0}
+
+/* ── 컨텍스트 ④: 캘린더 첫 로딩(cal-skel 실측 재현) ── */
+.cal-skel{position:relative;overflow:hidden;display:grid;grid-template-columns:repeat(6,1fr);grid-auto-rows:118px}
+.cal-skel .sk-c{border-right:1px solid var(--border);border-bottom:1px solid var(--border);padding:var(--cell-pad-y) var(--cell-pad-x)}
+.cal-skel .sk-c:nth-child(6n){border-right:none}
+.cal-skel .sk-c:nth-child(n+7){border-bottom:none}
+.cal-skel .sk-b{height:10px;border-radius:8px;background:var(--neutral);margin-bottom:8px}
+.cal-skel .sk-sweep{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.cal-skel .sk-sweep::after{content:'';position:absolute;top:0;bottom:0;left:0;width:34%;
+  background:linear-gradient(100deg,transparent 0%,rgba(255,255,255,.5) 50%,transparent 100%);
+  transform:translateX(-120%);will-change:transform;animation:skSweep 1.5s ease-in-out infinite}
+@keyframes skSweep{to{transform:translateX(400%)}}
+.cal-center{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
+
+/* ═══ 3. 로더 17종 — beui.dev 원본 파라미터 바닐라 이식(색 = currentColor 상속) ═══ */
+.ld-host{display:inline-flex;align-items:center;justify-content:center;line-height:0}
+@keyframes ldRot{to{transform:rotate(360deg)}}
+@keyframes ldDots{0%,100%{transform:translateY(0);opacity:.5}50%{transform:translateY(var(--dy));opacity:1}}
+@keyframes ldBars{0%,100%{transform:scaleY(.3)}50%{transform:scaleY(1)}}
+@keyframes ldMx{0%,100%{opacity:.2;transform:scale(.7)}50%{opacity:1;transform:scale(1)}}
+@keyframes ldDit{0%,100%{opacity:.1}50%{opacity:1}}
+@keyframes ldMbA{0%,100%{cx:30px}50%{cx:70px}}
+@keyframes ldMbB{0%,100%{cx:70px}50%{cx:30px}}
+@keyframes ldNwL{0%{transform:translateX(0)}28%{transform:translateX(var(--nx))}50%,100%{transform:translateX(0)}}
+@keyframes ldNwR{0%,50%{transform:translateX(0)}78%{transform:translateX(var(--nxr))}100%{transform:translateX(0)}}
+@keyframes ldHxA{0%,100%{transform:translateX(var(--amp)) scale(1);opacity:1}50%{transform:translateX(var(--ampN)) scale(.5);opacity:.45}}
+@keyframes ldHxB{0%,100%{transform:translateX(var(--ampN)) scale(.5);opacity:.45}50%{transform:translateX(var(--amp)) scale(1);opacity:1}}
+@keyframes ldMorphT{0%,10%{transform:rotate(0deg) scale(1)}20%,30%{transform:rotate(72deg) scale(.88)}
+  40%,50%{transform:rotate(144deg) scale(1)}60%,70%{transform:rotate(216deg) scale(.88)}
+  80%,90%{transform:rotate(288deg) scale(1)}100%{transform:rotate(360deg) scale(1)}}
+.ld-mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-variant-numeric:tabular-nums;line-height:1}
+
+/* ═══ 4. 갤러리 ═══ */
+.gal{margin-top:14px;background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius-lg);
+  padding:14px 16px;box-shadow:var(--glass-shadow)}
+.gal h2{font-size:12px;font-weight:800;color:var(--dim);letter-spacing:1px;margin-bottom:4px}
+.gal .gd{font-size:11px;color:var(--muted);margin-bottom:12px}
+.gal-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px}
+.gt{border:1.5px solid var(--border);border-radius:12px;padding:10px 6px 8px;text-align:center;cursor:pointer;
+  background:var(--surface-solid);transition:border-color .15s,background .15s,transform .15s;user-select:none}
+.gt:hover{transform:translateY(-1px);border-color:var(--border2)}
+.gt.on{border-color:var(--accent);background:var(--accent-light)}
+.gt .gtl{display:flex;align-items:center;justify-content:center;height:34px;color:var(--text)}
+.gt .gtn{font-size:10px;font-weight:700;color:var(--dim);margin-top:7px;letter-spacing:.2px}
+.gt.on .gtn{color:var(--accent)}
+
+/* ═══ 5. 콘솔 컨트롤 ═══ */
+.seg{display:flex;gap:5px;flex-wrap:wrap}
+.seg button{font-family:inherit;font-size:11.5px;font-weight:700;padding:7px 11px;border-radius:9px;cursor:pointer;
+  border:1.5px solid var(--border);background:var(--surface-solid);color:var(--dim);transition:all .15s}
+.seg button.on{border-color:var(--accent);background:var(--accent-light);color:var(--accent)}
+.pill{display:flex;gap:6px;flex-wrap:wrap}
+.pill button{font-family:inherit;font-size:11.5px;font-weight:700;padding:8px 12px;border-radius:999px;cursor:pointer;
+  border:1.5px solid var(--border);background:var(--surface-solid);color:var(--text);transition:all .15s}
+.pill button.on{border-color:var(--accent);background:var(--accent);color:#fff;box-shadow:0 2px 8px rgba(74,77,231,.16)}
+.pill button .st{color:var(--c6)}
+.pill button.on .st{color:#fff}
+.chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.chip{width:26px;height:26px;border-radius:50%;cursor:pointer;border:2px solid var(--border2);position:relative}
+.chip.on{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-light)}
+.chip[data-w]{background:#fff}
+.chipnm{font-size:10.5px;color:var(--dim);margin-left:2px}
+.sl{margin-bottom:11px}
+.sl:last-child{margin-bottom:0}
+.sl .lb{display:flex;justify-content:space-between;font-size:11.5px;margin-bottom:5px}
+.sl .lb b{font-weight:700}
+.sl .lb .tg{color:var(--muted);font-weight:600;font-size:10.5px}
+.sl .lb .vl{font-variant-numeric:tabular-nums;color:var(--accent);font-weight:800}
+input[type=range]{width:100%;accent-color:var(--accent);height:22px;cursor:pointer}
+#out{background:var(--neutral);border-radius:10px;padding:12px;font-size:10.8px;line-height:1.75;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:pre-wrap;word-break:break-all;color:var(--text)}
+#out .wu{color:var(--danger);font-weight:700}
+#copy{margin-top:9px;width:100%}
+.note{font-size:10.8px;color:var(--dim);line-height:1.8}
+.note b{color:var(--text)}
+.cmp-hold{width:100%;margin-top:9px}
+@media (max-width:900px){.console{position:static}}
+</style>
+</head>
+<body>
+<h1>로더 픽토그램 차용 플레이그라운드 <span style="font-weight:600;color:var(--dim);font-size:13px">— beui.dev/components/motion/loader 이식 시안</span></h1>
+<div class="sub">
+현행 앱의 로딩 표시는 <b>픽토그램 0개</b>(저장 오버레이 = 타자기 텍스트만 · 버튼 busy = 문구 교체만 · 팝오버/지도 = "불러오는 중…" 텍스트만 · 캘린더 = 글래스 스켈레톤).
+beui 로더 17종을 <b>루트 토큰 색으로만</b>(팔레트 폐쇄형) 바닐라 이식해 실제 적용처 4곳에서 비교한다.
+갤러리에서 픽토그램을 골라 <b>현재 보기 중인 적용처에</b> 지정 → 슬라이더로 크기·속도 조정 → [선택값 복사]로 답장.
+</div>
+
+<div class="wrap">
+  <div class="stagewrap">
+    <div class="frame">
+      <div class="chrome"><span class="cdot"></span><span class="cdot"></span><span class="cdot"></span>
+        <span class="curl">yeulmaru.github.io/yeulmaru-promo/</span></div>
+      <div class="stage" id="stage"></div>
+    </div>
+    <div class="stagecap" id="stagecap"></div>
+
+    <div class="gal">
+      <h2>픽토그램 갤러리 — 17종 + 없음(현행)</h2>
+      <div class="gd">타일 클릭 = 지금 보고 있는 적용처에 그 픽토그램 지정 · 타일은 22px·1.0s 고정 미리보기</div>
+      <div class="gal-grid" id="gal"></div>
+    </div>
+  </div>
+
+  <aside class="console">
+    <div class="csec">
+      <div class="ct">적용처 보기 <em>4곳 전환</em></div>
+      <div class="seg" id="views"></div>
+    </div>
+    <div class="csec">
+      <div class="ct">프리셋</div>
+      <div class="pill" id="presets"></div>
+      <button class="btn btn--md btn--neutral cmp-hold" id="cmp">⏸ 누르고 있는 동안 = 현행(비교)</button>
+    </div>
+    <div class="csec">
+      <div class="ct">색 — 팔레트 폐쇄형 <em>현재 적용처의 로더 색</em></div>
+      <div class="chips" id="chips"></div>
+    </div>
+    <div class="csec">
+      <div class="ct">미세조정</div>
+      <div id="sliders"></div>
+    </div>
+    <div class="csec">
+      <div class="ct">선택값</div>
+      <pre id="out"></pre>
+      <button class="btn btn--md btn--primary" id="copy">선택값 복사</button>
+    </div>
+    <div class="csec note" id="foot">
+      <b>재현 한계 각주</b><br>
+      · 원본은 React(motion/react) — 여기선 <b>CSS keyframes + SMIL(모프) + JS 인터벌</b>로 등가 이식(실배선도 이 방식, 라이브러리 불요). 타이밍·딜레이·진폭 = 원본 수치 그대로.<br>
+      · 색은 원본(currentColor) 구조 유지 — 지정은 <b>기존 토큰·흰색만</b>(칩 밖 색 없음). 흰색 = 현행 오버레이 글자·버튼 글자 계승.<br>
+      · 이징 cubic-bezier(0.77,0,0.175,1) = beui 원본 — 우리 기틀에 없는 <b>신규 모션 커브(갱신 후보 ⚠)</b>. 토글로 기존 주력 (0.4,0,0.2,1) 계승판과 비교 가능.<br>
+      · Scramble 글리프는 랜덤(원본 동일 — 실행마다 다름) · Percent는 실제 진행률과 무관한 데모 루프(원본 동일).<br>
+      · reduced-motion 폴백(원본 = 투명도 펄스)은 여기선 미재현 — 실배선 시 포함 권장.<br>
+      · 갤러리 = 17종 상시 구동이라 실앱(로딩 중 1개)보다 CPU 사용 큼 · 오버레이 타자기 속도 65ms/자 = 실측.<br>
+      · 실앱 폰트 동일(시스템 스택) · 캘린더 스켈레톤 행높이만 132→118px 축소(프레임 470px 맞춤).
+    </div>
+  </aside>
+</div>
+
+<script>
+/* ═══ beui 원본 파라미터(소스 실측 이식) ═══
+   spinner: stroke=max(2,s*.09) 트랙 op.2 + 1/4 아크, rotate 360 linear, dur=speed
+   dots: dot=s*.24 gap=s*.14, y[0,-s*.3,0] op[.5,1,.5], delay=i*speed*.16
+   bars: bar=s*.16 gap=s*.1, scaleY[.3,1,.3] origin bottom, delay=i*speed*.12
+   dot-matrix: 3×3 gap=s*.14, op[.2,1,.2]+scale[.7,1,.7], delay=((x+y)/4)*speed
+   dither: 4×4 Bayer, gap=max(1,s*.05), op[.1,1,.1], delay=(order/16)*speed
+   morph: 원→사각→삼각→육각→다이아(24점 path 트윈)+rot/scale 홀드-모프 교대, dur=speed*5
+   comet: head=s*.2 r=s/2-head/2, 트레일6(scale1-i*.13 op1-i*.16 rot-15i), rotate linear
+   scramble: "LOADING" fontSize=s*.42, tick=(speed/7)*1000*.55
+   metaballs: blur5+colormatrix(a20-8), r15 cx[30↔70], dur=speed*1.6
+   newton: d=s*.2 out=d*1.1, 좌[0,-out,0,0]@[0,.28,.5,1] 우[0,0,out,0]@[0,.5,.78,1], dur=speed*1.5
+   helix: 7행×2점 dot=s*.14 amp=s*.32, x[±amp] scale[1,.5,1] op[1,.45,1], delay=(r/7)*speed
+   percent: 숫자 s*.42 + 바 h=max(3,s*.1) 트랙 15%, 40ms 틱
+   ascii 5종: 글리프 인터벌 = speed/frames*1000 */
+var EASE_BEUI='cubic-bezier(0.77,0,0.175,1)';   /* beui EASE_IN_OUT 원본 */
+var EASE_INH='cubic-bezier(0.4,0,0.2,1)';       /* 우리 앱 기존 주력 커브(계승) */
+var ASCII_SETS={
+  'ascii':['⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏'],
+  'ascii-line':['|','/','-','\\'],
+  'ascii-braille':['⣾','⣽','⣻','⢿','⡿','⣟','⣯','⣷'],
+  'ascii-blocks':['▁','▂','▃','▄','▅','▆','▇','█','▇','▆','▅','▄','▃','▂'],
+  'ascii-bounce':['⠁','⠂','⠄','⡀','⢀','⠠','⠐','⠈']
+};
+var BAYER4=[0,8,2,10,12,4,14,6,3,11,1,9,15,7,13,5];
+
+/* 모프 path 생성 — 원본 알고리즘 그대로(24점 동일 구조 = 진짜 트윈) */
+var MORPH_POINTS=24;
+function ngonRadius(ang,n,phase){phase=phase||0;var seg=2*Math.PI/n;var a=ang-phase;
+  var local=(((a%seg)+seg)%seg)-seg/2;return Math.cos(Math.PI/n)/Math.cos(local);}
+function morphPath(radiusAt){var parts=[];
+  for(var i=0;i<MORPH_POINTS;i++){var ang=(i/MORPH_POINTS)*2*Math.PI-Math.PI/2;
+    var r=Math.min(1.05,radiusAt(ang));
+    var x=(50+Math.cos(ang)*46*r).toFixed(2),y=(50+Math.sin(ang)*46*r).toFixed(2);
+    parts.push((i===0?'M':'L')+x+' '+y);}
+  return parts.join(' ')+' Z';}
+var MORPH_PATHS=[
+  morphPath(function(){return 1;}),
+  morphPath(function(a){return ngonRadius(a,4,Math.PI/4);}),
+  morphPath(function(a){return ngonRadius(a,3);}),
+  morphPath(function(a){return ngonRadius(a,6);}),
+  morphPath(function(a){return ngonRadius(a,4);})
+];
+var MORPH_SEQ=[];MORPH_PATHS.forEach(function(p){MORPH_SEQ.push(p,p);});MORPH_SEQ.push(MORPH_PATHS[0]);
+
+var VARIANTS=['spinner','dots','bars','dot-matrix','dither','morph','comet','scramble','metaballs','newton','helix','percent','ascii','ascii-line','ascii-braille','ascii-blocks','ascii-bounce'];
+var VNAME={spinner:'Spinner',dots:'Dots',bars:'Bars','dot-matrix':'Dot Matrix',dither:'Dither',morph:'Morph',comet:'Comet',scramble:'Scramble',metaballs:'Metaballs',newton:'Newton',helix:'Helix',percent:'Percent',ascii:'ASCII',
+  'ascii-line':'ASCII Line','ascii-braille':'ASCII Braille','ascii-blocks':'ASCII Blocks','ascii-bounce':'ASCII Bounce'};
+
+var _timers=[];
+function _addTimer(id){_timers.push(id);}
+function clearLoaders(){_timers.forEach(clearInterval);_timers=[];}
+
+var SVGNS='http://www.w3.org/2000/svg';
+function svgEl(t,at){var e=document.createElementNS(SVGNS,t);for(var k in at)e.setAttribute(k,at[k]);return e;}
+
+/* 로더 팩토리 — host(색은 부모 color 상속) 반환 */
+function mkLoader(v,size,speed,ease){
+  var h=document.createElement('span');h.className='ld-host';
+  var s=size,sp=speed,i;
+  if(v==='spinner'){
+    var st=Math.max(2,s*.09),r=(s-st)/2;
+    var sv=svgEl('svg',{width:s,height:s,viewBox:'0 0 '+s+' '+s});
+    sv.style.cssText='animation:ldRot '+sp+'s linear infinite';
+    sv.appendChild(svgEl('circle',{cx:s/2,cy:s/2,r:r,fill:'none',stroke:'currentColor','stroke-opacity':'0.2','stroke-width':st}));
+    sv.appendChild(svgEl('path',{d:'M '+(s/2)+' '+(s/2-r)+' A '+r+' '+r+' 0 0 1 '+(s/2+r)+' '+(s/2),fill:'none',stroke:'currentColor','stroke-width':st,'stroke-linecap':'round'}));
+    h.appendChild(sv);
+  }else if(v==='dots'){
+    var dot=s*.24;h.style.gap=(s*.14)+'px';
+    for(i=0;i<3;i++){var d=document.createElement('span');
+      d.style.cssText='width:'+dot+'px;height:'+dot+'px;border-radius:50%;background:currentColor;--dy:'+(-s*.3)+'px;'
+        +'animation:ldDots '+sp+'s '+ease+' '+(i*sp*.16)+'s infinite';h.appendChild(d);}
+  }else if(v==='bars'){
+    var bw=s*.16;h.style.cssText+='gap:'+(s*.1)+'px;height:'+s+'px';
+    for(i=0;i<4;i++){var b=document.createElement('span');
+      b.style.cssText='width:'+bw+'px;height:'+s+'px;border-radius:999px;background:currentColor;transform-origin:center bottom;'
+        +'animation:ldBars '+sp+'s '+ease+' '+(i*sp*.12)+'s infinite';h.appendChild(b);}
+  }else if(v==='dot-matrix'){
+    var g=s*.14,dm=(s-g*2)/3;h.style.cssText+='display:grid;grid-template-columns:repeat(3,'+dm+'px);gap:'+g+'px';
+    for(i=0;i<9;i++){var x=i%3,y=Math.floor(i/3),dl=((x+y)/4)*sp;
+      var c=document.createElement('span');
+      c.style.cssText='width:'+dm+'px;height:'+dm+'px;border-radius:50%;background:currentColor;'
+        +'animation:ldMx '+sp+'s '+ease+' '+dl+'s infinite';h.appendChild(c);}
+  }else if(v==='dither'){
+    var gp=Math.max(1,s*.05),cl=(s-gp*3)/4;h.style.cssText+='display:grid;grid-template-columns:repeat(4,'+cl+'px);gap:'+gp+'px';
+    BAYER4.forEach(function(ord){var c=document.createElement('span');
+      c.style.cssText='width:'+cl+'px;height:'+cl+'px;background:currentColor;'
+        +'animation:ldDit '+sp+'s '+ease+' '+((ord/16)*sp)+'s infinite';h.appendChild(c);});
+  }else if(v==='morph'){
+    var sv2=svgEl('svg',{width:s,height:s,viewBox:'0 0 100 100'});
+    var p=svgEl('path',{fill:'currentColor',d:MORPH_PATHS[0]});
+    p.style.cssText='transform-box:fill-box;transform-origin:center;animation:ldMorphT '+(sp*5)+'s '+ease+' infinite';
+    var kt=[],ks=[];for(i=0;i<=10;i++)kt.push((i/10).toFixed(1));
+    var spl=(ease===EASE_BEUI?'0.77 0 0.175 1':'0.4 0 0.2 1');
+    for(i=0;i<10;i++)ks.push(spl);
+    var an=svgEl('animate',{attributeName:'d',values:MORPH_SEQ.join(';'),keyTimes:kt.join(';'),
+      dur:(sp*5)+'s',repeatCount:'indefinite',calcMode:'spline',keySplines:ks.join(';')});
+    p.appendChild(an);sv2.appendChild(p);h.appendChild(sv2);
+  }else if(v==='comet'){
+    var head=s*.2,r2=s/2-head/2;
+    var rot=document.createElement('span');
+    rot.style.cssText='position:relative;display:block;width:'+s+'px;height:'+s+'px;animation:ldRot '+sp+'s linear infinite';
+    for(i=0;i<6;i++){var sc=1-i*.13,sz=head*sc;
+      var t=document.createElement('span');
+      t.style.cssText='position:absolute;top:50%;left:50%;width:'+sz+'px;height:'+sz+'px;border-radius:50%;background:currentColor;'
+        +'margin-left:'+(-sz/2)+'px;margin-top:'+(-sz/2)+'px;opacity:'+(1-i*.16)+';'
+        +'transform:rotate('+(-i*15)+'deg) translateY('+(-r2)+'px)';
+      rot.appendChild(t);}
+    h.appendChild(rot);
+  }else if(v==='scramble'){
+    var TG='LOADING',GL='ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<>/*#@';
+    var sp1=document.createElement('span');sp1.className='ld-mono';
+    sp1.style.cssText='font-weight:500;letter-spacing:.2em;font-size:'+(s*.42)+'px';sp1.textContent=TG;h.appendChild(sp1);
+    var tick=0,total=TG.length+4;
+    _addTimer(setInterval(function(){
+      var rev=tick%total,out='';
+      for(var j=0;j<TG.length;j++)out+=j<rev?TG[j]:GL[Math.floor(Math.random()*GL.length)];
+      sp1.textContent=out;tick++;
+    },(sp/TG.length)*1000*.55));
+  }else if(v==='metaballs'){
+    var id='mb'+Math.floor(Math.random()*1e9);
+    var sv3=svgEl('svg',{width:s,height:s,viewBox:'0 0 100 100'});
+    var df=svgEl('defs',{}),fl=svgEl('filter',{id:id});
+    fl.appendChild(svgEl('feGaussianBlur',{'in':'SourceGraphic',stdDeviation:'5',result:'b'}));
+    fl.appendChild(svgEl('feColorMatrix',{'in':'b',values:'1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 20 -8'}));
+    df.appendChild(fl);sv3.appendChild(df);
+    var gr=svgEl('g',{filter:'url(#'+id+')',fill:'currentColor'});
+    var c1=svgEl('circle',{cy:'50',r:'15',cx:'30'}),c2=svgEl('circle',{cy:'50',r:'15',cx:'70'});
+    c1.style.cssText='animation:ldMbA '+(sp*1.6)+'s '+ease+' infinite';
+    c2.style.cssText='animation:ldMbB '+(sp*1.6)+'s '+ease+' infinite';
+    gr.appendChild(c1);gr.appendChild(c2);sv3.appendChild(gr);h.appendChild(sv3);
+  }else if(v==='newton'){
+    var d2=s*.2,out2=d2*1.1;h.style.height=d2+'px';
+    for(i=0;i<5;i++){var bl=document.createElement('span');
+      var base='width:'+d2+'px;height:'+d2+'px;border-radius:50%;background:currentColor;';
+      if(i===0)base+='--nx:'+(-out2)+'px;animation:ldNwL '+(sp*1.5)+'s '+ease+' infinite';
+      if(i===4)base+='--nxr:'+out2+'px;animation:ldNwR '+(sp*1.5)+'s '+ease+' infinite';
+      bl.style.cssText=base;h.appendChild(bl);}
+  }else if(v==='helix'){
+    var rows=7,dt=s*.14,amp=s*.32;
+    var rl=document.createElement('span');rl.style.cssText='position:relative;display:block;width:'+s+'px;height:'+s+'px';
+    for(i=0;i<rows;i++){var top=(i/(rows-1))*(s-dt),dl2=(i/rows)*sp;
+      ['A','B'].forEach(function(k){var dd=document.createElement('span');
+        dd.style.cssText='position:absolute;width:'+dt+'px;height:'+dt+'px;border-radius:50%;background:currentColor;'
+          +'left:'+(s/2-dt/2)+'px;top:'+top+'px;--amp:'+amp+'px;--ampN:'+(-amp)+'px;'
+          +'animation:ldHx'+k+' '+sp+'s '+ease+' '+dl2+'s infinite';
+        rl.appendChild(dd);});}
+    h.appendChild(rl);
+  }else if(v==='percent'){
+    var wrap=document.createElement('span');
+    wrap.style.cssText='display:flex;flex-direction:column;align-items:center;gap:'+(s*.14)+'px;width:'+(s*1.4)+'px';
+    var num=document.createElement('span');num.className='ld-mono';
+    num.style.cssText='font-weight:500;font-size:'+(s*.42)+'px';num.textContent='0%';
+    var tr=document.createElement('span');
+    tr.style.cssText='width:100%;overflow:hidden;border-radius:999px;height:'+Math.max(3,s*.1)+'px;position:relative;background:currentColor;opacity:1';
+    var trBg=document.createElement('span');trBg.style.cssText='position:absolute;inset:0;background:currentColor;opacity:.15;border-radius:999px';
+    var fill=document.createElement('span');fill.style.cssText='position:absolute;left:0;top:0;bottom:0;width:0%;background:currentColor;border-radius:999px';
+    tr.style.background='transparent';tr.appendChild(trBg);tr.appendChild(fill);
+    wrap.appendChild(num);wrap.appendChild(tr);h.appendChild(wrap);
+    var t2=0,dur=sp*1000;
+    _addTimer(setInterval(function(){t2+=40;var nx=Math.min(100,Math.round(t2/dur*100));
+      num.textContent=nx+'%';fill.style.width=nx+'%';if(nx>=100)t2=0;},40));
+  }else if(ASCII_SETS[v]){
+    var fr=ASCII_SETS[v],f0=0;
+    var sp2=document.createElement('span');sp2.className='ld-mono';
+    sp2.style.cssText='font-size:'+s+'px';sp2.textContent=fr[0];h.appendChild(sp2);
+    _addTimer(setInterval(function(){f0=(f0+1)%fr.length;sp2.textContent=fr[f0];},(sp/fr.length)*1000));
+  }
+  return h;
+}
+
+/* ═══ 상태 — 기본값: 현행 실측(픽토그램 없음) · 크기 기본은 beui 데모 배율 준용 ═══ */
+var COLORS={
+  white:{nm:'#fff(흰)',css:'#fff',note:'현행 오버레이·버튼 글자 흰색 계승'},
+  accent:{nm:'--accent',css:'var(--accent)',note:'코어 인디고 계승'},
+  accentLight:{nm:'--accent-light',css:'var(--accent-light)',note:'인디고 틴트 계승'},
+  peach:{nm:'--peach',css:'var(--peach)',note:'피치 계승(어두운 딤 위 가시)'},
+  peachText:{nm:'--peach-text',css:'var(--peach-text)',note:'서브코어 살몬 계승'},
+  peachLight:{nm:'--peach-light',css:'var(--peach-light)',note:'피치 틴트 계승'},
+  dim:{nm:'--dim',css:'var(--dim)',note:'현행 인라인 로딩 글자색 계승'},
+  muted:{nm:'--muted',css:'var(--muted)',note:'현행 메모 로딩 글자색(#bbb) 계승'}
+};
+var CTX={
+  ov:{nm:'① 저장 오버레이',cur:'픽토그램 없음 — 딤+타자기 텍스트만(showOverlayLoad)',
+      chips:['white','accentLight','peachLight','peach'],szMin:24,szMax:72},
+  btn:{nm:'② 버튼 busy',cur:'픽토그램 없음 — 문구 교체(생성 중…)+disabled만',
+      chips:['white'],szMin:10,szMax:18},
+  inl:{nm:'③ 인라인 로딩(팝오버·지도·레일)',cur:'픽토그램 없음 — "불러오는 중…" 텍스트만',
+      chips:['dim','muted','accent','peachText'],szMin:12,szMax:26},
+  cal:{nm:'④ 캘린더 첫 로딩',cur:'글래스 스켈레톤+광택 스윕(운영자 확정 260705) — 픽토그램 없음',
+      chips:['accent','dim','peachText'],szMin:24,szMax:56}
+};
+var DEFAULTS={
+  view:'ov',
+  ov:{v:'none',size:44,color:'white'},
+  btn:{v:'none',size:14,color:'white'},
+  inl:{v:'none',size:16,color:'dim'},
+  cal:{v:'none',size:36,color:'accent'},
+  speed:1.0,ease:'beui'
+};
+var PRESETS=[
+  {id:'p0',nm:'현행(없음)',st:{ov:{v:'none'},btn:{v:'none'},inl:{v:'none'},cal:{v:'none'}}},
+  {id:'p1',nm:'A 클래식 스피너',st:{ov:{v:'spinner',size:40},btn:{v:'spinner'},inl:{v:'spinner'},cal:{v:'none'}}},
+  {id:'p2',nm:'B 소프트 도트',star:1,st:{ov:{v:'dots',size:44},btn:{v:'dots'},inl:{v:'dots'},cal:{v:'none'}}},
+  {id:'p3',nm:'C 글래스 블롭',st:{ov:{v:'metaballs',size:56},btn:{v:'spinner'},inl:{v:'dot-matrix'},cal:{v:'metaballs'}}}
+];
+function deep(o){return JSON.parse(JSON.stringify(o));}
+var state=deep(DEFAULTS);
+var activePreset='p0';
+
+/* ═══ 스테이지 렌더 — 적용처 4곳 실물 재현 ═══ */
+var stage=document.getElementById('stage'),stagecap=document.getElementById('stagecap');
+var _twTimer=null,_twChars=null,_twI=0,_twPause=0;
+function _typeLoop(el,text){ /* 실측 이식: 65ms/자 + 다 치면 30틱 유지 후 재시작 */
+  if(_twTimer)clearInterval(_twTimer);
+  _twChars=Array.from(text);_twI=0;_twPause=0;
+  _twTimer=setInterval(function(){
+    if(!document.body.contains(el)){clearInterval(_twTimer);_twTimer=null;return;}
+    if(_twPause>0){_twPause--;return;}
+    if(_twI<=_twChars.length){el.textContent=_twChars.slice(0,_twI).join('');_twI++;}
+    else{_twPause=Math.round(30*16/65);_twI=0;}
+  },65);
+}
+function easeCss(){return state.ease==='beui'?EASE_BEUI:EASE_INH;}
+function miniCalHtml(withEvents){
+  var h='<div class="mini-cal"><div class="mini-head">';
+  ['화','수','목','금','토','일'].forEach(function(d,i){
+    h+='<div class="mini-dh'+(i===4?' sat':i===5?' sun':'')+'">'+d+'</div>';});
+  h+='</div><div class="mini-grid">';
+  for(var i=0;i<12;i++){h+='<div class="mini-c">'+(i+7)
+    +(withEvents&&i%3===0?'<div class="ev"></div>':'')
+    +(withEvents&&i%4===1?'<div class="ev p"></div>':'')+'</div>';}
+  return h+'</div></div>';
+}
+function appShell(bodyHtml){
+  return '<div class="app-nav"><span class="app-logo">YEULMARU</span><span class="app-menu">'
+    +'<span class="app-mi on">홍보 계획</span><span class="app-mi">일정 관리</span><span class="app-mi">홍보 지도</span></span></div>'
+    +'<div class="app-body">'+bodyHtml+'</div>';
+}
+function renderStage(compare){
+  clearLoaders();if(_twTimer){clearInterval(_twTimer);_twTimer=null;}
+  var v=state.view,cfg=state[v],ease=easeCss();
+  var noneMode=compare||cfg.v==='none';
+  var html='',cap='';
+  if(v==='ov'){
+    html=appShell(miniCalHtml(true))
+      +'<div class="ov" id="ovbox">'
+      +(noneMode?'':'<span class="ld-host" id="ov-ld"></span>')
+      +'<span class="ov-txt" id="ov-txt"></span></div>';
+    cap='실측 재현: 딤 rgba(0,0,0,.3)+blur(2px) · 흰 18px 타자기(65ms/자) — 저장·변경 API 대기 중 전체 화면';
+  }else if(v==='btn'){
+    html=appShell(miniCalHtml(true))
+      +'<div class="ctx-modal"><h3>티켓 등록 신청</h3><p>운영계획 PPT에서 12개 항목을 추출해 판매대행 의뢰서를 만든다. 생성 버튼을 누른 busy 상태 재현.</p>'
+      +'<div class="row"><button class="btn btn--md btn--neutral">닫기</button>'
+      +'<button class="btn btn--md btn--primary" disabled id="busybtn">'
+      +(noneMode?'':'<span class="ld-host" id="btn-ld"></span>')
+      +'<span>생성 중…</span></button></div></div>';
+    cap='실측 재현: .btn--md.btn--primary + disabled + 문구 "생성 중…" — 로더는 .btn 자체 gap 6px로 인라인 합류';
+  }else if(v==='inl'){
+    html=appShell(miniCalHtml(true))
+      +'<div class="ctx-pop"><div class="ph">📝 메모</div>'
+      +'<div class="pop-load'+(noneMode?'':' h')+'" id="inlbox">'
+      +(noneMode?'':'<span class="ld-host" id="inl-ld"></span>')
+      +'<span>불러오는 중…</span></div></div>';
+    cap='실측 재현: 글래스 팝오버(--glass-surface·--r-pop·--elev) + "불러오는 중…"(--muted 12px) — 지도·판매 레일 로딩도 동일 패턴';
+  }else if(v==='cal'){
+    var sk='<div class="cal-skel">',w=['62%','38%','74%','46%','58%','30%'];
+    for(var i=0;i<12;i++){sk+='<div class="sk-c"><div class="sk-b" style="width:22%"></div><div class="sk-b" style="width:'+w[i%6]+'"></div>'
+      +(i%3===0?'<div class="sk-b" style="width:'+w[(i+2)%6]+'"></div>':'')+'</div>';}
+    sk+='<div class="sk-sweep"></div>'
+      +(noneMode?'':'<div class="cal-center"><span class="ld-host" id="cal-ld"></span></div>')+'</div>';
+    html=appShell('<div class="mini-cal"><div class="mini-head">'
+      +['화','수','목','금','토','일'].map(function(d,i){return '<div class="mini-dh'+(i===4?' sat':i===5?' sun':'')+'">'+d+'</div>';}).join('')
+      +'</div>'+sk+'</div>');
+    cap='실측 재현: 글래스 스켈레톤+광택 스윕 1.5s(운영자 확정 260705) — 픽토그램은 스켈레톤 "위 중앙"에 병치하는 안(스켈레톤 대체 아님)';
+  }
+  stage.innerHTML=html;
+  stagecap.innerHTML=(compare?'<b style="color:var(--accent)">[현행 비교 중]</b> ':'')+cap;
+  /* 로더 주입 */
+  if(!noneMode){
+    var host=document.getElementById({ov:'ov-ld',btn:'btn-ld',inl:'inl-ld',cal:'cal-ld'}[v]);
+    if(host){var ld=mkLoader(cfg.v,cfg.size,state.speed,ease);
+      ld.style.color=COLORS[cfg.color]?COLORS[cfg.color].css:'#fff';
+      host.replaceWith(ld);}
+  }
+  if(v==='ov'){var tt=document.getElementById('ov-txt');if(tt)_typeLoop(tt,'변경 중입니다... 💕');}
+}
+
+/* ═══ 갤러리 ═══ */
+var gal=document.getElementById('gal');
+function buildGallery(){
+  gal.innerHTML='';
+  var tiles=['none'].concat(VARIANTS);
+  tiles.forEach(function(v){
+    var t=document.createElement('div');t.className='gt';t.dataset.v=v;
+    var lab=document.createElement('div');lab.className='gtl';
+    if(v==='none'){lab.innerHTML='<span style="font-size:11px;color:var(--muted);font-weight:700">없음</span>';}
+    else{lab.appendChild(mkLoader(v,22,1,EASE_BEUI));}
+    var nm=document.createElement('div');nm.className='gtn';nm.textContent=v==='none'?'현행 그대로':VNAME[v];
+    t.appendChild(lab);t.appendChild(nm);
+    t.onclick=function(){state[state.view].v=v;markCustom();apply();};
+    gal.appendChild(t);
+  });
+}
+function syncGallery(){
+  var cur=state[state.view].v;
+  gal.querySelectorAll('.gt').forEach(function(t){t.classList.toggle('on',t.dataset.v===cur);});
+}
+
+/* ═══ 콘솔: 보기 · 프리셋 · 칩 · 슬라이더 ═══ */
+var viewsEl=document.getElementById('views');
+Object.keys(CTX).forEach(function(k){
+  var b=document.createElement('button');b.textContent=CTX[k].nm;b.dataset.v=k;
+  b.onclick=function(){state.view=k;apply();};viewsEl.appendChild(b);
+});
+var presetsEl=document.getElementById('presets');
+PRESETS.forEach(function(p){
+  var b=document.createElement('button');b.dataset.p=p.id;
+  b.innerHTML=p.nm+(p.star?' <span class="st">★</span>':'');
+  b.onclick=function(){
+    activePreset=p.id;
+    Object.keys(p.st).forEach(function(k){
+      state[k]=Object.assign({},deep(DEFAULTS[k]),{color:state[k].color},deep(p.st[k]));
+    });
+    apply();
+  };
+  presetsEl.appendChild(b);
+});
+function markCustom(){activePreset=null;}
+var chipsEl=document.getElementById('chips');
+function buildChips(){
+  chipsEl.innerHTML='';
+  var v=state.view,list=CTX[v].chips;
+  list.forEach(function(ck){
+    var c=COLORS[ck];if(!c)return;
+    var el=document.createElement('span');el.className='chip';el.title=c.nm+' — '+c.note;
+    if(ck==='white')el.dataset.w='1';else el.style.background=c.css;
+    el.classList.toggle('on',state[v].color===ck);
+    el.onclick=function(){state[v].color=ck;markCustom();apply();};
+    chipsEl.appendChild(el);
+  });
+  var nm=document.createElement('span');nm.className='chipnm';
+  nm.textContent=COLORS[state[v].color]?COLORS[state[v].color].nm+' — '+COLORS[state[v].color].note:'';
+  chipsEl.appendChild(nm);
+}
+var slidersEl=document.getElementById('sliders');
+function buildSliders(){
+  var v=state.view,c=CTX[v];
+  slidersEl.innerHTML='';
+  var defs=[
+    {k:'size',nm:'크기(현재 적용처)',min:c.szMin,max:c.szMax,step:1,unit:'px',get:function(){return state[v].size;},set:function(x){state[v].size=x;},tg:'신규 축(현행=픽토그램 없음)'},
+    {k:'speed',nm:'속도(공통 · 1사이클)',min:0.5,max:2.4,step:0.05,unit:'s',get:function(){return state.speed;},set:function(x){state.speed=x;},tg:'beui 기본 1.0s'}
+  ];
+  defs.forEach(function(d){
+    var w=document.createElement('div');w.className='sl';
+    w.innerHTML='<div class="lb"><b>'+d.nm+'</b><span class="tg">'+d.tg+'</span><span class="vl" id="vl-'+d.k+'"></span></div>';
+    var r=document.createElement('input');r.type='range';r.min=d.min;r.max=d.max;r.step=d.step;r.value=d.get();
+    r.oninput=function(){d.set(parseFloat(r.value));markCustom();apply();};
+    w.appendChild(r);slidersEl.appendChild(w);
+    w.querySelector('.vl').textContent=d.get()+d.unit;
+  });
+  /* 이징 토글 */
+  var ew=document.createElement('div');ew.className='sl';
+  ew.innerHTML='<div class="lb"><b>이징(공통)</b><span class="tg">모프·도트류 커브</span></div>';
+  var seg=document.createElement('div');seg.className='seg';
+  [['beui','beui 원본 (0.77,0,0.175,1) ⚠'],['inherit','기존 주력 계승 (0.4,0,0.2,1)']].forEach(function(o){
+    var b=document.createElement('button');b.textContent=o[1];
+    b.classList.toggle('on',state.ease===o[0]);
+    b.onclick=function(){state.ease=o[0];markCustom();apply();};
+    seg.appendChild(b);
+  });
+  ew.appendChild(seg);slidersEl.appendChild(ew);
+}
+
+/* ═══ 출력 — 현행 병기 + 계승/갱신 자동 표기 ═══ */
+var out=document.getElementById('out');
+function ctxLine(k){
+  var c=state[k],meta=CTX[k];
+  if(c.v==='none')return meta.nm+' : 현행 유지(픽토그램 없음)\n            [현행: '+meta.cur+']';
+  var col=COLORS[c.color];
+  var colNote=c.color==='white'?'#fff — 계승(현행 흰 글자)':col.nm+' — 계승(기존 토큰)';
+  return meta.nm+' : '+c.v+' · '+c.size+'px · '+colNote+'\n            [현행: '+meta.cur+']';
+}
+function buildOut(){
+  var easeTxt=state.ease==='beui'
+    ?EASE_BEUI+'  <span class="wu">⚠ 갱신 후보(신규 모션 커브 — §🚨 승인 필요)</span>'
+    :EASE_INH+'  계승(기존 주력 커브)';
+  var pn=activePreset?PRESETS.filter(function(p){return p.id===activePreset;})[0].nm:'커스텀';
+  out.innerHTML='[로더 픽토그램 차용 — 선택값]  프리셋: '+pn
+    +'\n출처: beui.dev/components/motion/loader (바닐라 이식)\n\n'
+    +Object.keys(CTX).map(ctxLine).join('\n')
+    +'\n\n공통 속도 : '+state.speed.toFixed(2)+'s/사이클   [토큰 축 없음 — 일반값]'
+    +'\n공통 이징 : '+easeTxt
+    +'\n\n배선 = index.html에 로더 팩토리 1개 신설 후'
+    +'\n  showOverlayLoad · busy 버튼 · _memoRender/지도/레일 · loadData 스켈레톤 4곳 주입';
+}
+document.getElementById('copy').onclick=function(){
+  var txt=out.textContent;
+  function ok(){var b=document.getElementById('copy');b.textContent='복사됨 ✓';setTimeout(function(){b.textContent='선택값 복사';},1400);}
+  if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(txt).then(ok,function(){fallback();});}
+  else fallback();
+  function fallback(){var r=document.createRange();r.selectNodeContents(out);
+    var s=getSelection();s.removeAllRanges();s.addRange(r);
+    try{document.execCommand('copy');ok();}catch(e){}s.removeAllRanges();}
+};
+
+/* ═══ 현행 비교 홀드 ═══ */
+var cmp=document.getElementById('cmp');
+function cmpOn(e){e.preventDefault();renderStage(true);}
+function cmpOff(){renderStage(false);}
+cmp.addEventListener('mousedown',cmpOn);cmp.addEventListener('touchstart',cmpOn,{passive:false});
+['mouseup','mouseleave','touchend','touchcancel'].forEach(function(ev){cmp.addEventListener(ev,cmpOff);});
+
+/* ═══ 단일 반영점 ═══ */
+function apply(){
+  viewsEl.querySelectorAll('button').forEach(function(b){b.classList.toggle('on',b.dataset.v===state.view);});
+  presetsEl.querySelectorAll('button').forEach(function(b){b.classList.toggle('on',b.dataset.p===activePreset);});
+  buildChips();buildSliders();syncGallery();renderStage(false);buildOut();
+}
+buildGallery();
+apply();
+</script>
+</body>
+</html>
