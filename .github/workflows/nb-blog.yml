@@ -3,6 +3,9 @@ name: 앱 블로그/분석 (claude -p · repository_dispatch)
 # 앱(index.html)이 repository_dispatch[nb-blog]로 입력을 던지면 claude -p(구독 OAuth)로
 # 초안(mode=blog) 또는 OCR 분석(mode=structure)을 만들어 drafts/<id>.json 으로 커밋.
 # 앱은 그 파일을 폴링해 결과를 받는다. (Worker는 OCR=Google Vision만 담당)
+# [블로그 개선] 새 초안(mode=blog·수정요청 아님)은 WebSearch·WebFetch를 허용해 공연·출연진·작품을
+#   먼저 조사(BW-2)하고, 사람 말투 문체 계약(BW-1)으로 쓰며, 본문 뒤 ===TAGS===(네이버 태그 30개, BW-5)
+#   ===RESEARCH===(검증용 리서치 노트) 섹션을 함께 출력 → 파서가 {text,tags,research}로 분리해 저장.
 on:
   repository_dispatch:
     types: [nb-blog]
@@ -17,6 +20,7 @@ concurrency:
 jobs:
   run:
     runs-on: ubuntu-latest
+    timeout-minutes: 12   # 리서치 멀티턴이 매달려도 다음 요청 큐(concurrency)를 오래 막지 않게 — 프론트 폴 한도(12분)와 정렬(감사 MED 반영)
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -37,6 +41,10 @@ jobs:
             const p = (_cp && typeof _cp.d === 'object' && _cp.d) ? _cp.d : _cp;
             const id = String(p.id || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 80) || ('x' + Date.now());
             const mode = (p.mode === 'structure') ? 'structure' : 'blog';
+            const prevDraft = String(p.prevDraft || '').slice(0, 12000).trim();
+            const revise = String(p.revise || '').slice(0, 1000).trim();
+            // 리서치(BW-2)는 '새 초안'에서만 — 코멘트 수정은 빠른 반영이 우선(태그는 매번 재산출)
+            const doResearch = (mode === 'blog') && !(prevDraft && revise);
 
             // ---- 프롬프트 구성 ----
             let prompt = '';
@@ -55,34 +63,67 @@ jobs:
               const factLines = [];
               ['overview', 'when', 'where', 'who', 'price', 'detail'].forEach((k) => { const v = String(F[k] || '').trim(); if (v) factLines.push('- ' + FLABEL[k] + ': ' + v); });
               const refs = Array.isArray(p.refs) ? p.refs.map((r) => String((r && r.text) || '').trim()).filter(Boolean).slice(-5) : [];
-              const prevDraft = String(p.prevDraft || '').slice(0, 12000).trim();
-              const revise = String(p.revise || '').slice(0, 1000).trim();
 
-              prompt = "당신은 GS칼텍스 예울마루(전남 여수의 복합문화예술공간) 홍보 담당자입니다. ";
-              prompt += "네이버 블로그에 올릴 한국어 포스팅 초안을 작성하세요. 가장 중요한 건 '의도·목적'을 분명히 달성하는 것 — 글 전체가 그 의도를 향하게 하고 모호해지지 않게. ";
-              prompt += "사실 정보(일시·장소·출연·가격 등)는 아래 '공연 정보'·'OCR 원문'·'추가 참고' 범위 안에서만 쓰고, 없는 사실을 지어내지 마세요. ";
-              prompt += "유명하지 않은 공연일 수 있으니 주어진 정보만으로도 충실하고 매력적으로. ";
-              prompt += "결과는 곧바로 붙여넣을 수 있게 '제목 한 줄 + 본문'만, 설명·머리말·코드블록 없이 본문 텍스트만 출력하세요.\n\n";
+              prompt = "당신은 GS칼텍스 예울마루(전남 여수의 복합문화예술공간)에서 일하는 홍보 담당 직원입니다. ";
+              prompt += "회사 공식 네이버 블로그에 올릴 한국어 포스팅 초안을, AI가 아니라 사람 직원이 쓴 글로 읽히게 작성하세요. ";
+              prompt += "가장 중요한 건 글의 의도·목적을 분명히 달성하는 것 — 글 전체가 그 의도를 향하게 하고 모호해지지 않게.\n\n";
+              if (doResearch) {
+                prompt += "# 0단계 — 웹 리서치 (본문을 쓰기 전에 먼저) [BW-2]\n";
+                prompt += "웹 검색으로 이 공연을 조사하세요(검색 3~6회 내외 — 과하게 오래 끌지 않기):\n";
+                prompt += "- 출연진(연주자·배우·연출·지휘)의 이력·수상·최근 활동·화제성\n";
+                prompt += "- 작곡가·작가·원작, 프로그램의 곡·작품에 얽힌 배경 이야기\n";
+                prompt += "- 이 프로덕션·투어의 리뷰·평점·매진 이력 같은 화제성, 관람 포인트\n";
+                prompt += "규칙: ① 검색으로 확인된 사실만 사용하고 불확실하면 버린다 ② 일시·장소·가격·출연 같은 기본 정보는 아래 OCR 원문·공연 정보가 정본 — 검색 결과와 다르면 OCR 쪽을 따른다 ③ 조사 내용 중 매력적인 2~4가지만 골라 본문에 이야기로 녹인다(백과사전식 나열 금지) ④ 검색이 안 되거나 소득이 없으면 주어진 정보만으로 쓴다(추측으로 메우지 않기).\n\n";
+              }
+              prompt += "# 문체 계약 — AI 냄새 제거 (이 글의 합격선) [BW-1]\n";
+              prompt += "보도자료·기사 톤이나 AI 특유의 매끈한 상투구가 남아 있으면 실패작입니다.\n";
+              prompt += "[금지 패턴]\n";
+              prompt += "- 기사·보도자료 문어체: 「이 뜻깊은 해를 기념해」 「~가 무대에 오릅니다」 「~를 선사합니다」 「~의 향연」 「황홀한 선율」 「잊지 못할 감동」 「특별한 시간을 만나보세요」 「많은 관심 부탁드립니다」류\n";
+              prompt += "- 과장 수식어 연발(감동적인·환상적인·특별한·아름다운), 모든 문단이 비슷한 길이·구조로 반복되는 것\n";
+              prompt += "- 문단마다 기계적으로 이모지 하나씩, 「~인데요」 「~죠」 같은 어미의 단조로운 반복\n";
+              prompt += "[대신 이렇게]\n";
+              prompt += "- 옆자리 동료나 친한 이웃에게 소개하듯 존댓말로. 예: 「이 뜻깊은 해를 기념해, 피아니스트 조재혁이 예울마루 대극장 무대에 오릅니다.」(나쁨) → 「라흐마니노프가 태어난 지 올해로 150년이에요. 조재혁 피아니스트가 그 기념 프로그램을 들고 여수까지 옵니다.」(좋음)\n";
+              prompt += "- 문장 길이에 리듬 — 짧게 끊는 문장과 길게 풀어내는 문장을 섞기\n";
+              prompt += "- 형용사 대신 구체적인 사실 하나(곡에 얽힌 일화, 연주자의 이력, 좌석·주차 팁)가 신뢰를 만든다\n";
+              prompt += "- 공연장에서 일하는 담당자 시점의 목소리를 한두 스푼(예: 「저도 이 곡은 리허설부터 챙겨 볼 생각이에요」) — 단, 실제가 아닌 경험담·가짜 후기 창작은 금지\n";
+              prompt += "- 다 쓴 뒤 위 금지 패턴이 남았는지 스스로 검토하고, 고친 최종본만 출력\n\n";
               const _topic = String(p.topic || '').slice(0, 2000).trim();
               if (_topic) prompt += "# 글의 주제(공연·행사명)\n" + _topic + "\n\n";
               else prompt += "# 글의 주제(공연·행사명)\n아래 'OCR 원문'에서 공연·행사명(부제 포함)을 그대로 파악해 제목과 본문에 사용하세요.\n\n";
               if (p.intent) prompt += "# 이 글을 쓰는 의도·목적 ★가장 중요\n" + String(p.intent).slice(0, 1500).trim() + "\n\n";
               if (p.target) prompt += "# 주요 타겟 독자\n" + String(p.target).slice(0, 500).trim() + "\n\n";
               if (factLines.length) prompt += "# 공연·행사 정보 (검증된 사실)\n" + factLines.join('\n') + "\n\n";
-              if (p.ocrText) prompt += "# 홍보물 OCR 원문 (사실 출처 — 이 안에서만)\n" + String(p.ocrText).slice(0, 8000).trim() + "\n\n";
+              if (p.ocrText) prompt += "# 홍보물 OCR 원문 (일시·장소·가격·출연의 정본 — 기본 정보는 이 안에서만)\n" + String(p.ocrText).slice(0, 8000).trim() + "\n\n";
               if (p.extra) prompt += "# 추가 참고 자료\n" + String(p.extra).slice(0, 4000).trim() + "\n\n";
               if (p.template) prompt += "# 글의 구성 틀 (이 순서·구성을 따를 것)\n" + String(p.template).slice(0, 1500).trim() + "\n\n";
-              prompt += "# 작성 지침\n- 분량: " + (lenMap[p.length] || lenMap['보통']) + "\n- 말투/톤: " + String(p.voice || '정중하고 따뜻한') + " 느낌\n- 이모지: " + (p.emoji === false ? '사용하지 않음' : '문단 사이에 어울리게 적당히 사용') + "\n- 해시태그는 넣지 않음\n- 주어진 사실 범위 안에서만, 없는 구체 사실은 지어내지 말 것\n";
-              if (refs.length) prompt += "\n# 톤 참조 — 이전에 작성한 글들 (말투·문장 길이·문단 구성·이모지 습관을 비슷하게)\n" + refs.map((t, i) => '[예시 ' + (i + 1) + ']\n' + String(t).slice(0, 4000)).join('\n\n') + "\n";
+              prompt += "# 네이버 태그 30개 [BW-5]\n";
+              prompt += "발행 시 붙일 태그를 정확히 30개 뽑으세요. 실제로 검색될 법한 검색어 형태(각 태그는 띄어쓰기 없이)로, 중복·유사 중복 없이 아래 4축을 배분(기본 배분 합=30 — 한 축이 마땅치 않으면 지역 유입·타겟 축에서 채워 반드시 총 30개를 맞출 것):\n";
+              prompt += "- 공연 고유: 공연명·출연진 이름·장르·곡/작품/원작명 (10개)\n";
+              prompt += "- 공간·기관: 예울마루, GS칼텍스예울마루, 여수예울마루, 여수공연장 등 (5개)\n";
+              prompt += "- 지역 유입: 여수·순천·광양 사람들이 일상적으로 검색하는 키워드 — 여수여행, 여수가볼만한곳, 여수주말나들이, 순천데이트, 광양아이랑 등 글과 직접 관련이 약해도 지역 검색에서 걸릴 태그 (9개)\n";
+              prompt += "- 타겟·상황·시기: 타겟 독자와 시즌에 맞는 것 — 주말데이트, 아이와문화생활, 여름방학나들이 등 (6개)\n\n";
+              prompt += "# 작성 지침\n- 분량: " + (lenMap[p.length] || lenMap['보통']) + "\n- 말투/톤: " + String(p.voice || '정중하고 따뜻한') + " 느낌 (단, 위 문체 계약이 항상 우선)\n- 이모지: " + (p.emoji === false ? '사용하지 않음' : '어울리는 곳에만 자연스럽게 — 문단마다 기계적으로 넣지 않기') + "\n- 본문에 해시태그를 넣지 않음(태그는 아래 TAGS 섹션에만)\n- 주어진 사실·검색으로 확인한 사실 범위 안에서만, 없는 구체 사실은 지어내지 말 것\n";
+              if (refs.length) prompt += "\n# 톤 참조 — 이전에 작성한 글들 (말투·문장 길이·문단 구성·이모지 습관을 비슷하게. 단, 참조 글에 위 문체 계약의 금지 패턴이 있으면 그 부분은 따라 하지 말 것 — 문체 계약이 항상 우선)\n" + refs.map((t, i) => '[예시 ' + (i + 1) + ']\n' + String(t).slice(0, 4000)).join('\n\n') + "\n";
+              prompt += "\n# 출력 형식 (정확히 지킬 것)\n";
+              prompt += "1) 첫 줄 = 글 제목, 이어서 본문 (설명·머리말·코드블록 없이 글만)\n";
+              prompt += "2) 본문이 끝나면 새 줄에 정확히 ===TAGS=== 라고만 쓴 줄 하나\n";
+              prompt += "3) 그 다음 줄에 태그 30개를 「#태그 #태그 …」 형태의 한 줄로\n";
+              if (doResearch) prompt += "4) 그 다음 새 줄에 정확히 ===RESEARCH=== 한 줄, 이어서 검색으로 확인한 사실을 「- 확인한 사실 (출처 사이트명)」 형식으로 5~10줄 — 글쓴이가 팩트체크할 때 씁니다\n";
               if (prevDraft && revise) {
-                prompt = "방금 작성한 아래 블로그 초안을, 사용자의 수정 요청대로 고쳐 전체 글을 다시 완성하세요. 요청과 무관한 부분은 기존 톤·사실 유지. '제목 한 줄 + 본문'만 출력.\n\n# 기존 초안\n" + prevDraft + "\n\n# 수정 요청\n" + revise + "\n\n---\n아래는 원래 입력 정보(참고):\n\n" + prompt;
+                prompt = "방금 작성한 아래 블로그 초안을, 사용자의 수정 요청대로 고쳐 전체 글을 다시 완성하세요. 요청과 무관한 부분은 기존 톤·사실 유지. " +
+                  "아래 원래 입력의 '문체 계약'과 출력 형식은 그대로 지키되, ===TAGS=== 30개는 수정된 본문 기준으로 다시 뽑고 ===RESEARCH===는 생략하세요.\n\n# 기존 초안\n" + prevDraft + "\n\n# 수정 요청\n" + revise + "\n\n---\n아래는 원래 입력 정보(참고):\n\n" + prompt;
               }
             }
 
             // ---- claude -p 실행 ----
+            // 리서치 모드(BW-2)에서만 WebSearch·WebFetch 허용 + 멀티턴. 그 외(수정요청·structure)는 기존과 동일한 1턴.
+            // cwd를 러너 임시폴더로 — 레포 CLAUDE.md(앱 개발 지침)가 글쓰기 컨텍스트에 섞이지 않게 격리.
+            const args = ['-p', '--model', 'claude-opus-4-8', '--effort', 'max'];
+            if (doResearch) args.push('--max-turns', '20', '--allowedTools', 'WebSearch,WebFetch');
+            else args.push('--max-turns', '1');
             let raw = '', err = '';
             try {
-              raw = execFileSync('claude', ['-p', '--model', 'claude-opus-4-8', '--effort', 'max', '--max-turns', '1'], { input: prompt, encoding: 'utf8', maxBuffer: 20 * 1024 * 1024 }).trim();
+              raw = execFileSync('claude', args, { input: prompt, encoding: 'utf8', maxBuffer: 20 * 1024 * 1024, cwd: process.env.RUNNER_TEMP || '/tmp' }).trim();
             } catch (e) {
               err = String((e && (e.stderr || '')) + ' ' + (e && (e.message || e))).trim().slice(0, 1500);
             }
@@ -99,7 +140,19 @@ jobs:
               ['title', 'overview', 'when', 'where', 'who', 'price', 'detail'].forEach((k) => { info[k] = String(obj[k] || '').trim(); });
               out = { id, mode, ok: true, info, ts: new Date().toISOString() };
             } else {
-              out = { id, mode, ok: true, text: raw, ts: new Date().toISOString() };
+              // 본문 / ===TAGS===(BW-5) / ===RESEARCH===(BW-2) 섹션 분리 — 형식 이탈 시 전체=본문으로 안전 폴백
+              const parts = raw.split(/^===(TAGS|RESEARCH)===\s*$/m);
+              let text = String(parts[0] || '').trim(), tags = [], research = '';
+              for (let i = 1; i < parts.length - 1; i += 2) {
+                const name = parts[i], content = String(parts[i + 1] || '').trim();
+                if (name === 'TAGS') {
+                  tags = (content.match(/#[^\s#]+/g) || []).map((t) => t.replace(/^#/, ''));
+                  if (!tags.length) tags = content.split(/[,\n]+/).map((s) => s.trim().replace(/^#/, '')).filter(Boolean);
+                  tags = tags.slice(0, 30);
+                } else if (name === 'RESEARCH') { research = content.slice(0, 4000); }
+              }
+              if (!text) text = raw;
+              out = { id, mode, ok: true, text, tags, research, ts: new Date().toISOString() };
             }
 
             // ---- 결과 커밋 (앱이 폴링) ----

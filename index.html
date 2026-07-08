@@ -16506,10 +16506,11 @@ function _bnavMore(){
 
 // ============================================================
 // 콘텐츠 제작 — 네이버 블로그 글쓰기 도우미
-//  주제 + 목적 + 타겟 + 핵심 메시지 3가지 + (톤 참조) → 네이버 블로그용 초안 생성.
-//  생성 흐름: _nbGenerate()가 Worker POST /api/content/blog (Claude API)를 호출해
-//     AI 초안을 만든다(목적·타겟·핵심 메시지·톤 참조·말투 반영). Worker 키 없거나
-//     오류면 로컬 임시 조립(_nbAssembleDraft)으로 자동 폴백한다.
+//  타겟 + 강조 포인트 + 상세페이지 OCR → 네이버 블로그용 초안 생성.
+//  생성 흐름: _nbGenerate() → Worker /api/blog/dispatch → GitHub Actions(nb-blog.yml, claude -p)
+//     → drafts/<id>.json 커밋 → _nbPollDraft()가 폴링해 수신.
+//  [블로그 개선 BW-1~5] 응답 = {text, tags(네이버 태그 30, BW-5), research(리서치 노트, BW-2)}.
+//     생성·코멘트 반영마다 versions[]에 스냅샷(1차·2차… 칩 전환 = BW-3, 인메모리 — 닫으면 소멸 유지).
 // ============================================================
 // (글 유형 템플릿 제거 — '왜·누구에게·무엇을' 목적·타겟·핵심 메시지 기반으로 재설계)
 var _NB_TONELIB_KEY='nb_tone_lib_v1';
@@ -16532,7 +16533,7 @@ var _NB_TEMPLATES=[
   ['review','후기·현장형','1) 방문 계기 / 기대\n2) 현장 분위기 묘사\n3) 공연 하이라이트\n4) 솔직한 감상\n5) 추천 + 다음 공연 안내'],
   ['info','정보 요약형','1) 핵심 정보 먼저 (일시·장소·가격·예매)\n2) 공연 개요\n3) 관람 포인트\n4) 예매 링크 / 문의']
 ];
-function _nbDefaultState(){return {length:'보통', voice:'정중하고 따뜻한', emoji:true, tgt:{}, hooks:['',''], facts:{}, extra:'', tplMode:'auto', tplSel:'', tplText:'', output:'', comments:[], ocrText:'', ocrFiles:[], ocrThumb:'', ocrBusy:false, analyzeBusy:false, genBusy:false, _toneDraft:'', escHandler:null};}
+function _nbDefaultState(){return {length:'보통', voice:'정중하고 따뜻한', emoji:true, tgt:{}, hooks:['',''], facts:{}, extra:'', tplMode:'auto', tplSel:'', tplText:'', output:'', versions:[], verCur:-1, comments:[], ocrText:'', ocrFiles:[], ocrThumb:'', ocrBusy:false, analyzeBusy:false, genBusy:false, _toneDraft:'', escHandler:null};}
 var _nbState=_nbDefaultState();
 
 // 상단 '콘텐츠 제작' 드롭다운 (네이버 블로그 + 향후 채널 확장)
@@ -17455,8 +17456,34 @@ function _nbRender(){
   var tplMode=s.tplMode||'auto';
   // (정리) 톤참조 목록·기본틀 프리셋·_ff 헬퍼는 현재 폼에서 미노출 — 매 렌더 죽은 계산이라 제거.
   var outHtml=s.genBusy
-    ? '<div class="nb-out-empty"><div class="nb-writing">✍️</div><div style="margin-top:14px;font-weight:700;color:#666">1차 초안을 작성 중입니다<span class="nb-dots"><i>.</i><i>.</i><i>.</i></span></div><div style="font-size:11.5px;color:#bbb;margin-top:7px">잠시만요, 정성껏 쓰는 중이에요</div></div>'
-    : (s.output? '<textarea id="nb-output" class="nb-out" oninput="_nbState.output=this.value;_nbSaveState()">'+escapeHtml(s.output)+'</textarea>' : '<div class="nb-out-empty"><div class="nb-flow"><span>›</span><span>›</span><span>›</span></div><div style="font-size:28px;margin-bottom:10px">📝</div>타겟을 고르고 공연 상세페이지를 올린 뒤<br><b>[초안 생성]</b>을 누르면<br>여기에 블로그 초안이 나타나요</div>');
+    ? '<div class="nb-out-empty"><div class="nb-writing">✍️</div><div style="margin-top:14px;font-weight:700;color:#666">초안을 쓰는 중입니다<span class="nb-dots"><i>.</i><i>.</i><i>.</i></span></div><div style="font-size:11.5px;color:#bbb;margin-top:7px">'+(s.genKind==='revise'?'코멘트를 반영해 다시 쓰는 중이에요':'공연·출연진·작품을 웹에서 조사해 살을 붙이는 중 — 보통 2~5분 걸려요')+'</div></div>'
+    : (s.output? '<textarea id="nb-output" class="nb-out" oninput="_nbOutEdit(this.value)">'+escapeHtml(s.output)+'</textarea>' : '<div class="nb-out-empty"><div class="nb-flow"><span>›</span><span>›</span><span>›</span></div><div style="font-size:28px;margin-bottom:10px">📝</div>타겟을 고르고 공연 상세페이지를 올린 뒤<br><b>[초안 생성]</b>을 누르면<br>블로그 초안과 추천 태그 30개가 나타나요</div>');
+  // [BW-3] 버전 칩 — 초안이 2개부터 노출. 현재 버전 = on, 클릭 = 전환(편집분 보존)
+  var _cv=(s.versions&&s.verCur>=0)?s.versions[s.verCur]:null;
+  var verHtml='';
+  if(s.versions&&s.versions.length>1&&!s.genBusy){
+    verHtml='<div class="nb-chiprow" style="margin:0 0 8px;align-items:center">'
+      +s.versions.map(function(v,i){return '<span class="nb-chip'+(i===s.verCur?' on':'')+'" title="'+escapeHtml(v.label||'')+'" onclick="_nbVerGo('+i+')">'+(i+1)+'차</span>';}).join('')
+      +'<span style="font-size:10.5px;color:var(--muted)">이전 초안도 눌러서 다시 볼 수 있어요</span></div>';
+  }
+  // [BW-5] 추천 태그 — 현재 버전의 태그 30개 + 원클릭 복사
+  var tagHtml='';
+  if(_cv&&_cv.tags&&_cv.tags.length&&s.output&&!s.genBusy){
+    tagHtml='<div class="nb-field" style="margin-top:14px">'
+      +'<label class="nb-label">🏷️ 추천 태그 '+_cv.tags.length+'개 <span style="color:var(--muted);font-weight:500">— 네이버 발행 시 태그란에 붙여넣기 (여수·순천·광양 검색 유입 포함)</span></label>'
+      +'<div class="nb-chiprow" style="margin-bottom:8px">'+_cv.tags.map(function(t){return '<span class="nb-chip" style="cursor:default">#'+escapeHtml(t)+'</span>';}).join('')+'</div>'
+      +'<button type="button" class="nb-btn ghost" onclick="_nbTagsCopy()" style="padding:7px 14px;font-size:12px">태그 전체 복사</button>'
+    +'</div>';
+  }
+  // [BW-2] 리서치 노트 — AI가 검색으로 확인한 사실(팩트체크·살 붙이기 참고). 접기/펼치기 = 기존 _nbSet 토글 패턴 계승
+  var resHtml='';
+  if(_cv&&String(_cv.research||'').trim()&&s.output&&!s.genBusy){
+    resHtml='<div class="nb-field" style="margin-top:10px">'
+      +'<button type="button" class="nb-btn ghost" onclick="_nbSet(\'resOpen\',!_nbState.resOpen)" style="padding:7px 14px;font-size:12px">리서치 노트 '+(s.resOpen?'접기 ▲':'보기 ▼')+'</button>'
+      +'<span style="font-size:11px;color:var(--muted);margin-left:8px">🔍 AI가 웹에서 조사해 확인한 자료 — 발행 전 검증용</span>'
+      +(s.resOpen?'<div class="nb-note" style="white-space:pre-wrap;overflow-wrap:anywhere;margin-top:8px">'+escapeHtml(_cv.research)+'</div>':'')
+    +'</div>';
+  }
   body.innerHTML=''
    +'<div class="nb-wrap">'
    +'<div class="nb-col">'
@@ -17489,6 +17516,7 @@ function _nbRender(){
        +'<span>📄 결과 초안</span>'
        +(s.output&&!s.genBusy?'<button type="button" class="nb-btn ghost" onclick="_nbCopy()" style="padding:5px 13px;font-size:12px">📋 복사</button>':'')
      +'</div>'
+     +verHtml
      +outHtml
      +'<div class="nb-row" style="margin-top:12px">'
        +'<button type="button" class="nb-btn primary" '+(s.genBusy?'disabled':'')+' onclick="_nbGenerate()">'+(s.genBusy?'✍️ 작성 중':'⚡ 초안 생성')+'</button>'
@@ -17503,6 +17531,8 @@ function _nbRender(){
          +((s.comments&&s.comments.length)?'<div style="margin-top:8px">'+s.comments.map(function(c,i){return '<div style="font-size:11.5px;color:#888;padding:5px 0;border-top:1px dashed #eee"><b style="color:var(--accent)">#'+(i+1)+'</b> '+escapeHtml(c.text)+'</div>';}).join('')+'</div>':'')
        +'</div>'
        : '')
+     +tagHtml
+     +resHtml
    +'</div>'
    +'</div>';
   body.scrollTop=_scTop;   // 스크롤 위치 복원
@@ -17526,7 +17556,7 @@ async function _nbDispatch(payload){
   return j.id||id;
 }
 async function _nbPollDraft(id,maxMs){
-  var t0=Date.now();maxMs=maxMs||330000;   // 최대 ~5.5분(러너 시작+설치+생성)
+  var t0=Date.now();maxMs=maxMs||720000;   // 최대 ~12분 = 워크플로 job timeout과 정렬(러너 시작+설치+웹 리서치 멀티턴+생성 — BW-2·감사 MED 반영. 큐에 밀린 경우는 타임아웃 안내로 재시도 유도)
   while(Date.now()-t0<maxMs){
     await new Promise(function(res){setTimeout(res,4000);});
     try{
@@ -17534,7 +17564,7 @@ async function _nbPollDraft(id,maxMs){
       if(r.status===404)continue;   // 아직 안 올라옴
       if(!r.ok)continue;
       var d=await r.json();
-      if(d&&d.ready&&d.draft)return d.draft;   // Worker가 base64 디코드·파싱해 {text,ok,error} 반환
+      if(d&&d.ready&&d.draft)return d.draft;   // Worker가 base64 디코드·파싱해 draft JSON 통짜 반환({text,ok,error,tags,research,…})
     }catch(e){/* 아직 — 계속 폴링 */}
   }
   throw new Error('TIMEOUT');
@@ -17542,7 +17572,7 @@ async function _nbPollDraft(id,maxMs){
 function _nbGenErr(msg){
   if(msg.indexOf('NO_PAT')>-1)showToast('초안 생성이 서버에 아직 설정되지 않았어요 — 관리자에게 문의해 주세요','error');
   else if(msg.indexOf('PAT_DENIED')>-1)showToast('서버 GitHub 토큰 권한이 부족해요(Contents: write) — 관리자 문의','error');
-  else if(msg.indexOf('TIMEOUT')>-1)showToast('시간이 초과됐어요 — 잠시 후 다시 시도해 주세요','error');
+  else if(msg.indexOf('TIMEOUT')>-1)showToast('시간이 초과됐어요 — 다른 초안이 먼저 생성 중이면 순서가 밀릴 수 있어요. 잠시 후 다시 시도해 주세요','error');
   else showToast('생성 실패: '+msg,'error');
 }
 async function _nbGenerate(){
@@ -17550,16 +17580,17 @@ async function _nbGenerate(){
   if(!String(o.ocrText||'').trim()){showToast('공연 상세페이지를 올려 OCR 원문을 채워 주세요','error');return;}
   var hk=(_nbState.hooks||[]).map(function(x){return String(x||'').trim();}).filter(Boolean);
   if(hk.length<2){showToast('강조할 점을 2줄 이상 적어 주세요','error');return;}
-  var _st=_nbState;   // 🔒 세대 가드 — 폴링 최장 5.5분, resolve 시 리셋됐으면 결과 폐기(다음 사용자 역류 방지)
-  _nbState.genBusy=true;_nbRender();   // '1차 초안을 작성 중입니다' 애니메이션
+  var _st=_nbState;   // 🔒 세대 가드 — 폴링 최장 8분, resolve 시 리셋됐으면 결과 폐기(다음 사용자 역류 방지)
+  _nbState.genBusy=true;_nbState.genKind='new';_nbRender();   // '초안을 쓰는 중입니다' 애니메이션(리서치 포함 안내)
   try{
     var id=await _nbDispatch(o);
     if(_st!==_nbState)return;
     var res=await _nbPollDraft(id);
     if(_st!==_nbState)return;
     if(!res||res.ok===false||!String(res.text||'').trim())throw new Error((res&&res.error)||'빈 응답');
-    _nbState.genBusy=false;_nbSetOutput(res.text);
-    showToast('1차 초안을 작성했어요 ✨','success');
+    _nbState.genBusy=false;
+    _nbSetOutput(res.text,{tags:res.tags,research:res.research,label:'초안 생성'});
+    showToast('초안을 작성했어요 — 태그 '+((res.tags&&res.tags.length)||0)+'개 포함 ✨','success');
   }catch(e){
     if(_st!==_nbState)return;   // 🔒 세대 가드
     _nbState.genBusy=false;_nbRender();
@@ -17575,7 +17606,7 @@ async function _nbCmtInlineSend(){
   if(!prev){showToast('먼저 초안을 생성해 주세요','error');return;}
   var o=_nbBuildPayload();o.prevDraft=prev;o.revise=txt;
   var _st=_nbState;   // 🔒 세대 가드
-  _nbState.genBusy=true;_nbRender();
+  _nbState.genBusy=true;_nbState.genKind='revise';_nbRender();
   try{
     var id=await _nbDispatch(o);
     if(_st!==_nbState)return;
@@ -17583,13 +17614,42 @@ async function _nbCmtInlineSend(){
     if(_st!==_nbState)return;
     if(!res||res.ok===false||!String(res.text||'').trim())throw new Error((res&&res.error)||'빈 응답');
     _nbState.comments=(_nbState.comments||[]).concat([{text:txt,ts:Date.now()}]);
-    _nbState.genBusy=false;_nbSetOutput(res.text);
+    _nbState.genBusy=false;
+    _nbSetOutput(res.text,{tags:res.tags,research:res.research,label:'코멘트: '+txt.slice(0,16)});
     showToast('코멘트를 반영했어요 ✨','success');
   }catch(e){if(_st!==_nbState)return;_nbState.genBusy=false;_nbRender();_nbGenErr(String((e&&e.message)||e));}
 }
-function _nbSetOutput(text){
+// [BW-3] 결과 반영 = 버전 스냅샷 추가 — meta={tags,research,label}. tags·research가 안 오면 현재 버전 것을 승계.
+function _nbSetOutput(text,meta){
+  var vs=_nbState.versions||(_nbState.versions=[]);
+  var prev=(_nbState.verCur>=0&&vs[_nbState.verCur])?vs[_nbState.verCur]:(vs.length?vs[vs.length-1]:null);
+  var tags=(meta&&Array.isArray(meta.tags)&&meta.tags.length)?meta.tags:((prev&&prev.tags)||[]);
+  var research=(meta&&String(meta.research||'').trim())?String(meta.research).trim():((prev&&prev.research)||'');
+  vs.push({text:text,tags:tags,research:research,label:(meta&&meta.label)||('초안 '+(vs.length+1)),ts:Date.now()});
+  _nbState.verCur=vs.length-1;
   _nbState.output=text;_nbSaveState();_nbRender();
   setTimeout(function(){var t=document.getElementById('nb-output');if(t)t.scrollTop=0;},30);
+}
+// [BW-3] 버전 전환 — 떠나는 버전에 현재 편집분을 저장하고 선택 버전을 불러온다(초안을 잃지 않음).
+function _nbVerGo(i){
+  var vs=_nbState.versions||[];
+  if(i<0||i>=vs.length||i===_nbState.verCur)return;
+  if(_nbState.verCur>=0&&vs[_nbState.verCur])vs[_nbState.verCur].text=_nbState.output;
+  _nbState.verCur=i;_nbState.output=vs[i].text;_nbSaveState();_nbRender();
+}
+// 결과 textarea 직접 편집 — output과 현재 버전 스냅샷을 함께 갱신(버전 전환해도 편집분 유지)
+function _nbOutEdit(v){
+  _nbState.output=v;
+  var vs=_nbState.versions||[];
+  if(_nbState.verCur>=0&&vs[_nbState.verCur])vs[_nbState.verCur].text=v;
+  _nbSaveState();
+}
+// [BW-5] 현재 버전의 추천 태그를 「#태그 #태그 …」 한 줄로 복사 — 네이버 태그란에 붙여넣기용
+function _nbTagsCopy(){
+  var vs=_nbState.versions||[],cv=(_nbState.verCur>=0)?vs[_nbState.verCur]:null;
+  var tags=(cv&&cv.tags)||[];
+  if(!tags.length){showToast('복사할 태그가 없어요','error');return;}
+  _nbCopyText(tags.map(function(t){return '#'+t;}).join(' '),'태그 '+tags.length+'개를 복사했어요 🏷️');
 }
 
 // 로컬 임시 초안 — 입력(의도·타겟관점·홍보물 사실)을 정리해 구조화 (AI 연결 전 폴백)
@@ -17620,13 +17680,17 @@ function _nbAssembleDraft(o){
 function _nbCopy(){
   var t=_nbState.output||'';
   if(!t){showToast('먼저 초안을 생성해 주세요','error');return;}
-  if(navigator.clipboard&&navigator.clipboard.writeText){
-    navigator.clipboard.writeText(t).then(function(){showToast('초안을 복사했어요 📋','success');}).catch(function(){_nbCopyFallback(t);});
-  }else _nbCopyFallback(t);
+  _nbCopyText(t,'초안을 복사했어요 📋');
 }
-function _nbCopyFallback(t){
+// 클립보드 복사 공용 — 초안(_nbCopy)·태그(_nbTagsCopy) 공유
+function _nbCopyText(t,okMsg){
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(t).then(function(){showToast(okMsg,'success');}).catch(function(){_nbCopyFallback(t,okMsg);});
+  }else _nbCopyFallback(t,okMsg);
+}
+function _nbCopyFallback(t,okMsg){
   var ta=document.createElement('textarea');ta.value=t;ta.style.position='fixed';ta.style.left='-9999px';document.body.appendChild(ta);ta.focus();ta.select();
-  try{document.execCommand('copy');showToast('초안을 복사했어요 📋','success');}catch(e){showToast('복사 실패 — 직접 선택해 복사해 주세요','error');}
+  try{document.execCommand('copy');showToast(okMsg||'복사했어요 📋','success');}catch(e){showToast('복사 실패 — 직접 선택해 복사해 주세요','error');}
   document.body.removeChild(ta);
 }
 
