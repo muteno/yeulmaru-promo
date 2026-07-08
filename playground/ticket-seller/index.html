@@ -1,0 +1,1158 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>티켓 셀러 — 예울마루</title>
+<style>
+  /* 색·수치는 전부 예울마루 루트 디자인 토큰 계승(index.html :root 2블록 값 사본) — 새 색 창작 없음.
+     rgba(…)는 같은 토큰의 alpha 변주(디자인기틀 §3.5②)만 사용. */
+  :root{
+    --accent:#4A4DE7; --accent-light:#E8E8FD; --accent-glow:rgba(74,77,231,0.15);
+    --peach:#F0C4B8; --peach-light:#FBF0EC; --peach-bg:#FDF6F3; --peach-text:#D88455;
+    --bg:linear-gradient(135deg,#FDF6F3 0%,#F0EBF5 50%,#EBF0F8 100%);
+    --surface-solid:#fff;
+    --glass:rgba(255,255,255,0.55); --glass-surface:rgba(255,255,255,.78);
+    --glass-shadow:0 8px 32px rgba(74,77,231,0.08),0 2px 8px rgba(0,0,0,0.04);
+    --border:rgba(0,0,0,0.09); --border2:rgba(0,0,0,0.12);
+    --text:#1A1A2E; --dim:#888; --muted:#bbb;
+    --past-bg:rgba(0,0,0,0.02);
+    --green:#1A6B3C; --danger:#E24B4A;
+    --neutral:#EEEDF3; --neutral-d:#E1DFEC; --neutral-text:#6B6B7B;
+    --c5:#2D8AB3; --c6:#F5B400;
+    --radius:16px; --radius-lg:20px; --radius-xl:24px;
+    --r-btn:10px; --r-pop:16px; --r-modal:20px;
+    --elev:0 20px 56px rgba(74,77,231,.16), 0 6px 18px rgba(26,26,46,.07);
+    --backdrop:rgba(26,26,46,.42);
+    --z-dropdown:1000; --z-modal:2000; --z-toast:3000;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;
+    color:var(--text);
+    background:var(--bg);
+    min-height:100vh;
+    padding:clamp(20px,4vw,48px) clamp(14px,3vw,40px) 60px;
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+  button{font-family:inherit;cursor:pointer}
+
+  /* ── 정본 버튼(.btn — index.html 정본 컴포넌트 계승) ── */
+  .btn{font-family:inherit;font-weight:700;border:1px solid transparent;
+    border-radius:var(--r-btn);cursor:pointer;line-height:1;
+    display:inline-flex;align-items:center;justify-content:center;gap:6px;
+    white-space:nowrap;transition:transform .15s,box-shadow .15s,background .15s}
+  .btn:hover{transform:translateY(-1px)}
+  .btn:active{transform:translateY(0) scale(.98)}
+  .btn--sm{padding:7px 14px;font-size:12px;border-radius:8px}
+  .btn--md{padding:10px 20px;font-size:13px}
+  .btn--primary{background:var(--accent);color:#fff;box-shadow:0 2px 8px rgba(74,77,231,.16)}
+  .btn--primary:hover{background:#3d40d4}
+  .btn--neutral{background:var(--neutral);color:var(--neutral-text)}
+  .btn--neutral:hover{background:var(--neutral-d)}
+  .btn--ghost{background:transparent;color:var(--accent);border-color:rgba(74,77,231,.25)}
+  .btn--ghost:hover{background:rgba(74,77,231,.06)}
+
+  /* ── 페이지 헤더 ── */
+  .hd{max-width:1180px;margin:0 auto 22px}
+  .hd .back{font-size:12.5px;font-weight:600;color:var(--dim);text-decoration:none}
+  .hd .back:hover{color:var(--accent)}
+  .kicker{font-size:13px;font-weight:700;letter-spacing:.08em;color:var(--accent);text-transform:uppercase;margin-top:10px}
+  h1.pg{font-size:clamp(26px,4.5vw,38px);font-weight:800;margin:4px 0 8px;letter-spacing:-.01em}
+  .lead{color:var(--dim);font-size:14.5px;max-width:72ch}
+  .hd-row{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:16px}
+  .lg{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--neutral-text);
+    background:var(--glass-surface);border:1px solid var(--glass);border-radius:20px;padding:5px 12px 5px 6px;box-shadow:var(--glass-shadow)}
+  .lg .bdg{width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;
+    color:#fff;font-size:10px;font-weight:800}
+  .lg .bdg.fee{background:var(--accent)}
+  .lg .bdg.s{background:var(--green)}
+  .lg .bdg.w{background:var(--peach-text)}
+  .lg .bdg.r{background:var(--danger)}
+  .hd-row .sp{flex:1}
+
+  /* ── 순서도 캔버스 ── */
+  .ts-scroll{max-width:1180px;margin:0 auto;overflow-x:auto;border-radius:var(--radius-lg);-webkit-overflow-scrolling:touch}
+  .ts-canvas{position:relative;width:1180px;height:760px;background:var(--surface-solid);
+    background-image:radial-gradient(rgba(26,26,46,.05) 1px,transparent 1px);background-size:16px 16px;
+    border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--glass-shadow)}
+  .ts-edges{position:absolute;inset:0;pointer-events:none}
+  .ts-edges path,.ts-edges line{fill:none;stroke:var(--dim);stroke-width:1.5}
+
+  .ts-lane{position:absolute;height:30px;background:var(--neutral);color:var(--neutral-text);
+    font-weight:800;font-size:12.5px;display:flex;align-items:center;justify-content:center;border-radius:8px;letter-spacing:.01em}
+
+  .ts-node{position:absolute;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;font-size:10.5px;font-weight:700;line-height:1.3;padding:4px 3px;border:1.5px solid transparent;word-break:keep-all}
+  .ts-node .code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:8.5px;font-weight:800;opacity:.72;display:block;margin-bottom:2px}
+  .ts-node .fcap{display:block;font-size:8.5px;font-weight:700;opacity:.78;margin-top:3px;font-variant-numeric:tabular-nums}
+  .n-actor{background:var(--peach-light);border-color:rgba(216,132,85,.35);color:var(--text)}
+  .n-plain{background:var(--surface-solid);border-color:var(--border2);color:var(--text)}
+  .n-dark{background:var(--text);color:#fff}
+  .n-accent{background:var(--accent);color:#fff;box-shadow:0 2px 8px rgba(74,77,231,.25)}
+  .n-green{background:var(--green);color:#fff}
+  .n-c5{background:var(--c5);color:#fff;box-shadow:0 2px 8px rgba(45,138,179,.3)}
+  .n-c5o{background:var(--surface-solid);border-color:var(--c5);color:var(--c5)}
+  .n-dashed{background:var(--surface-solid);border:1.5px dashed var(--border2);color:var(--text)}
+  .n-dashed .xtag{position:absolute;top:-9px;right:8px;font-size:8.5px;font-weight:700;color:var(--dim);background:var(--surface-solid);padding:0 5px;border-radius:6px;border:1px solid var(--border)}
+
+  .ts-group{position:absolute;border:1.6px dashed var(--green);border-radius:12px}
+  .ts-group .glab{position:absolute;bottom:10px;left:0;right:0;text-align:center;font-size:11.5px;font-weight:800;color:var(--text)}
+  .ts-bound{position:absolute;border:1.5px dashed var(--border2);border-radius:14px}
+
+  .ts-step{position:absolute;font-size:10px;font-weight:800;color:var(--accent);background:var(--accent-light);
+    border:1px solid rgba(74,77,231,.25);padding:3px 9px;border-radius:20px;white-space:nowrap;z-index:2}
+
+  /* 동그라미 토글 배지 */
+  .ts-badge{position:absolute;top:-12px;right:-11px;width:26px;height:26px;border-radius:50%;border:2px solid var(--surface-solid);
+    font-size:11.5px;font-weight:800;color:#fff;display:flex;align-items:center;justify-content:center;
+    box-shadow:0 2px 8px rgba(26,26,46,.18);z-index:3;padding:0;transition:transform .15s}
+  .ts-badge:hover{transform:scale(1.12)}
+  .ts-badge.bl{left:-11px;right:auto}
+  .ts-badge.bb{top:auto;bottom:-12px;left:-11px;right:auto}
+  .ts-badge.b-fee{background:var(--accent)}
+  .ts-badge.b-q.s{background:var(--green)}
+  .ts-badge.b-q.w{background:var(--peach-text)}
+  .ts-badge.b-q.r{background:var(--danger)}
+  .ts-badge[aria-expanded="true"]{outline:3px solid var(--accent-glow);transform:scale(1.12)}
+  .ts-badge .ct{position:absolute;top:-5px;right:-5px;background:var(--text);color:#fff;font-size:8px;font-weight:800;
+    width:13px;height:13px;border-radius:50%;line-height:13px;text-align:center}
+
+  .fnote{max-width:1180px;margin:14px auto 0;font-size:11.5px;color:var(--dim);line-height:1.7}
+  footer.pgf{max-width:1180px;margin:40px auto 0;font-size:12px;color:var(--dim)}
+  .mob-hint{display:none;max-width:1180px;margin:8px auto 0;font-size:11.5px;color:var(--dim)}
+  @media(max-width:1240px){.mob-hint{display:block}}
+
+  /* ── 팝오버 (동그라미 토글 → 요약) ── */
+  .ts-pop{position:absolute;width:min(330px,92vw);background:var(--surface-solid);border:1px solid var(--border);
+    border-radius:var(--r-pop);box-shadow:var(--elev);padding:14px 15px;z-index:var(--z-dropdown);display:none;text-align:left}
+  .ts-pop.on{display:block}
+  .tp-tag{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:10px;font-weight:700;letter-spacing:.08em;
+    color:var(--dim);text-transform:uppercase;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+  .tp-title{font-size:14px;font-weight:800;letter-spacing:-.01em;margin:5px 0 8px;line-height:1.35}
+  .tp-q{font-size:12px;color:var(--neutral-text);background:var(--past-bg);border:1px solid var(--border);
+    border-left:3px solid var(--muted);border-radius:9px;padding:8px 11px;margin-bottom:9px;line-height:1.5}
+  .tp-v{display:flex;gap:7px;align-items:flex-start;font-size:12.5px;font-weight:700;line-height:1.45;margin-bottom:11px}
+  .tp-v .vdot{width:9px;height:9px;border-radius:50%;flex:none;margin-top:4px}
+  .tp-v.s{color:var(--green)} .tp-v.s .vdot{background:var(--green)}
+  .tp-v.w{color:var(--peach-text)} .tp-v.w .vdot{background:var(--peach-text)}
+  .tp-v.r{color:var(--danger)} .tp-v.r .vdot{background:var(--danger)}
+  .sig{font-size:10px;font-weight:800;padding:2px 8px;border-radius:20px;letter-spacing:0}
+  .sig.s{color:var(--green);background:rgba(26,107,60,.10)}
+  .sig.w{color:var(--peach-text);background:rgba(216,132,85,.14)}
+  .sig.r{color:var(--danger);background:rgba(226,75,74,.10)}
+  .tp-fee{width:100%;border-collapse:collapse;font-size:12px;margin:4px 0 9px}
+  .tp-fee td{padding:5px 2px;border-bottom:1px solid var(--border);vertical-align:top}
+  .tp-fee td:first-child{color:var(--neutral-text);white-space:nowrap;padding-right:10px}
+  .tp-fee td:last-child{font-weight:700;font-variant-numeric:tabular-nums}
+  .tp-fee tr:last-child td{border-bottom:none}
+  .tp-note{font-size:10.5px;color:var(--dim);line-height:1.55;margin-bottom:10px}
+  .tp-list{list-style:none;margin:8px 0 4px}
+  .tp-list li{display:flex;align-items:center;gap:8px;padding:7px 0;border-top:1px solid var(--border)}
+  .tp-list li:first-child{border-top:none}
+  .tp-list .t{flex:1;font-size:12.5px;font-weight:700;line-height:1.35}
+  .tp-acts{display:flex;gap:8px;justify-content:flex-end}
+  @media(max-width:720px){
+    .ts-pop{position:fixed;left:0;right:0;bottom:0;top:auto !important;width:auto;max-height:70vh;overflow-y:auto;
+      border-radius:var(--r-pop) var(--r-pop) 0 0;box-shadow:var(--elev);padding-bottom:max(14px,env(safe-area-inset-bottom))}
+  }
+
+  /* ── 종합 보고서 모달 — 불투명 흰 풀시트(뒤 순서도가 전혀 안 비침, "흰색 배경" 지시 그대로) ── */
+  .ts-modal-bg{position:fixed;inset:0;background:var(--surface-solid);display:none;z-index:var(--z-modal)}
+  .ts-modal-bg.on{display:flex}
+  .ts-modal{width:100%;height:100%;background:var(--surface-solid);display:flex;flex-direction:column;overflow:hidden}
+  .ts-modal-hd{display:flex;align-items:center;gap:10px;padding:12px clamp(14px,3vw,26px);border-bottom:1px solid var(--border);flex:none;background:var(--glass-surface);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+  .ts-modal-hd b{font-size:14.5px;letter-spacing:-.01em}
+  .ts-modal-hd .sp{flex:1}
+  .ts-mx{width:34px;height:34px;border-radius:50%;border:1.5px solid var(--glass);background:var(--glass-surface);
+    box-shadow:var(--glass-shadow);
+    color:var(--text);font-size:15px;line-height:1;display:inline-flex;align-items:center;justify-content:center;flex:none}
+  .ts-mx:hover{border-color:var(--accent);color:var(--accent)}
+  .ts-modal-body{flex:1;overflow-y:auto;position:relative;scroll-behavior:smooth;overscroll-behavior:contain;background:var(--surface-solid)}
+  body.ts-modal-open{overflow:hidden}
+
+  /* ── 토스트 ── */
+  .ts-toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%);background:var(--text);color:#fff;
+    font-size:13px;font-weight:700;padding:10px 20px;border-radius:12px;box-shadow:var(--elev);
+    z-index:var(--z-toast);opacity:0;pointer-events:none;transition:opacity .2s}
+  .ts-toast.on{opacity:1}
+
+  /* ══ 종합 보고서(첨부 원문) 라이트 재스킨 — 마크업·앵커 무손실, 색만 토큰 별칭 브리지 ══
+     원본 변수명(--tx·--live·--safe…)을 예울마루 토큰으로 별칭 연결(색 창작 0):  */
+  .rp{
+    --ink:var(--surface-solid); --ink-2:rgba(26,26,46,.03); --panel:var(--surface-solid); --panel-2:rgba(26,26,46,.02);
+    --line:var(--border2); --line-soft:var(--border);
+    --tx:var(--text); --tx-mut:var(--neutral-text); --tx-dim:var(--dim);
+    --live:var(--accent); --live-deep:var(--accent);
+    --safe:var(--green); --warn:var(--peach-text); --risk:var(--danger);
+    --safe-bg:rgba(26,107,60,.10); --warn-bg:rgba(216,132,85,.13); --risk-bg:rgba(226,75,74,.10);
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    --r-card:14px; --r-panel:13px; --r-tbl:12px; --r-note:11px; --r-chip:7px; --r-pill:20px;
+    --ease:cubic-bezier(.22,.61,.36,1); --dur:.16s; --dur-slow:2.4s;
+    background:var(--surface-solid);color:var(--tx);line-height:1.62;text-rendering:optimizeLegibility;
+  }
+  .rp .wrap{max-width:1060px;margin:0 auto;padding:0 20px}
+  .rp a{color:var(--live);text-decoration:none}
+  .rp h1,.rp h2,.rp h3,.rp h4{margin:0}
+
+  .rp .mast{border-bottom:1px solid var(--line-soft);background:linear-gradient(180deg,rgba(74,77,231,.05),rgba(255,255,255,0))}
+  .rp .mast-in{padding:28px 0 24px}
+  .rp .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.32em;text-transform:uppercase;color:var(--live);margin:0 0 12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .rp .kicker .dot{width:7px;height:7px;border-radius:50%;background:var(--live);box-shadow:0 0 0 0 rgba(74,77,231,.5);animation:rp-pulse var(--dur-slow) infinite}
+  @keyframes rp-pulse{0%{box-shadow:0 0 0 0 rgba(74,77,231,.4)}70%{box-shadow:0 0 0 9px rgba(74,77,231,0)}100%{box-shadow:0 0 0 0 rgba(74,77,231,0)}}
+  .rp h1.title{font-size:clamp(22px,4vw,32px);font-weight:850;letter-spacing:-.03em;line-height:1.14;text-wrap:balance;margin:0 0 12px}
+  .rp h1.title .em{color:var(--live)}
+  .rp .subtitle{color:var(--tx-mut);font-size:14.5px;max-width:700px;margin:0 0 18px;text-wrap:pretty}
+  .rp .src{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:16px}
+  .rp .src .s{font-family:var(--mono);font-size:10.5px;color:var(--tx-mut);background:var(--ink-2);border:1px solid var(--line-soft);border-radius:var(--r-chip);padding:5px 9px}
+  .rp .src .s b{color:var(--live);font-weight:700}
+  .rp .byline{font-family:var(--mono);font-size:11.5px;color:var(--tx-dim);border-top:1px dashed var(--line);padding-top:14px;display:flex;gap:16px;flex-wrap:wrap}
+  .rp .byline b{color:var(--tx-mut);font-weight:500}
+
+  .rp .nav{position:sticky;top:0;z-index:40;background:var(--glass-surface);-webkit-backdrop-filter:blur(9px);backdrop-filter:blur(9px);border-bottom:1px solid var(--line-soft)}
+  .rp .nav-in{display:flex;gap:6px;align-items:center;padding:9px 0;overflow-x:auto;-webkit-overflow-scrolling:touch;font-family:var(--mono);font-size:11px}
+  .rp .nav-in::-webkit-scrollbar{height:0}
+  .rp .nav-in a{color:var(--tx-dim);white-space:nowrap;padding:4px 10px;border-radius:var(--r-pill);border:1px solid transparent;transition:color var(--dur),border-color var(--dur)}
+  .rp .nav-in a:hover{color:var(--live)}
+  .rp .nav-in a.on{color:var(--live);border-color:rgba(74,77,231,.3);background:rgba(74,77,231,.06)}
+  .rp .nav-in .div{width:1px;height:14px;background:var(--line);flex:none;margin:0 2px}
+
+  .rp section{padding:38px 0;border-bottom:1px solid var(--line-soft);scroll-margin-top:56px}
+  .rp .eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.24em;text-transform:uppercase;color:var(--tx-dim);margin:0 0 10px;display:flex;align-items:center;gap:12px}
+  .rp .eyebrow .no{color:var(--live);font-weight:700}
+  .rp h2.h{font-size:clamp(18px,3vw,23px);font-weight:820;letter-spacing:-.025em;text-wrap:balance;margin:0 0 8px}
+  .rp .lede{color:var(--tx-mut);font-size:14px;max-width:720px;margin:0 0 20px;text-wrap:pretty}
+  .rp h4.sub{font-size:15px;font-weight:800;letter-spacing:-.02em;margin:26px 0 11px;padding-left:12px;border-left:3px solid var(--live)}
+
+  .rp .rail{display:flex;gap:0;overflow-x:auto;padding:4px 0 16px;-webkit-overflow-scrolling:touch}
+  .rp .rail::-webkit-scrollbar{height:8px}.rp .rail::-webkit-scrollbar-thumb{background:var(--line);border-radius:20px}
+  .rp .stage{min-width:210px;flex:1 1 0;position:relative;padding-right:14px}
+  .rp .stage:not(:last-child)::after{content:"";position:absolute;top:26px;right:2px;width:12px;height:12px;border-top:2px solid var(--line);border-right:2px solid var(--line);transform:rotate(45deg);opacity:.55}
+  .rp .stage-card{background:var(--panel);border:1px solid var(--line-soft);border-radius:var(--r-card);padding:15px 14px 14px;height:100%;position:relative;overflow:hidden;background-image:linear-gradient(180deg,var(--panel-2),var(--panel));box-shadow:var(--glass-shadow)}
+  .rp .stage-card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--live);opacity:.55}
+  .rp .stage-no{font-family:var(--mono);font-size:10.5px;font-weight:700;letter-spacing:.14em;color:var(--live);text-transform:uppercase}
+  .rp .stage-nm{font-size:16px;font-weight:800;letter-spacing:-.02em;margin:3px 0 9px}
+  .rp .stage-meta{font-family:var(--mono);font-size:10.5px;color:var(--tx-dim);line-height:1.7;margin-bottom:11px}
+  .rp .stage-meta b{color:var(--tx-mut);font-weight:500}
+  .rp .pins{display:flex;flex-direction:column;gap:7px}
+  .rp .pin{display:flex;align-items:flex-start;gap:8px;width:100%;text-align:left;background:var(--ink-2);border:1px solid var(--line-soft);border-radius:var(--r-note);padding:9px 10px;cursor:pointer;color:var(--tx);font-size:12.5px;line-height:1.4;transition:border-color var(--dur),transform var(--dur)}
+  .rp .pin:hover{border-color:var(--live);transform:translateY(-2px)}
+  .rp .pin .pdot{width:8px;height:8px;border-radius:50%;margin-top:4px;flex:none}
+  .rp .pin.s .pdot{background:var(--safe)} .rp .pin.w .pdot{background:var(--warn)} .rp .pin.r .pdot{background:var(--risk)}
+  .rp .pin .ptx{flex:1}
+  .rp .pin .ptag{display:block;font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;color:var(--tx-dim);margin-bottom:1px}
+  .rp .pin .parrow{color:var(--tx-dim);font-size:14px;line-height:1;margin-top:2px;transition:color var(--dur),transform var(--dur)}
+  .rp .pin:hover .parrow{color:var(--live);transform:translateX(2px)}
+
+  .rp .tbl-scroll{overflow-x:auto;border:1px solid var(--line-soft);border-radius:var(--r-tbl);background:var(--panel);-webkit-overflow-scrolling:touch}
+  .rp .tbl-scroll::-webkit-scrollbar{height:8px}.rp .tbl-scroll::-webkit-scrollbar-thumb{background:var(--line);border-radius:20px}
+  .rp table{border-collapse:collapse;width:100%;min-width:640px;font-size:13px}
+  .rp thead th{background:var(--neutral);color:var(--neutral-text);font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;font-weight:700;text-align:left;padding:11px 13px;border-bottom:1px solid var(--line);white-space:nowrap}
+  .rp tbody td{padding:11px 13px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+  .rp tbody tr:last-child td{border-bottom:none}
+  .rp tbody tr:hover td{background:rgba(26,26,46,.02)}
+  .rp td .ch{font-weight:650;color:var(--tx)}
+  .rp td .mut{color:var(--tx-dim);font-size:11.5px}
+  .rp .tag-safe,.rp .tag-warn,.rp .tag-risk,.rp .tag-none{font-family:var(--mono);font-size:10px;font-weight:700;padding:2px 8px;border-radius:var(--r-pill);white-space:nowrap;display:inline-block}
+  .rp .tag-safe{color:var(--safe);background:var(--safe-bg)}
+  .rp .tag-warn{color:var(--warn);background:var(--warn-bg)}
+  .rp .tag-risk{color:var(--risk);background:var(--risk-bg)}
+  .rp .tag-none{color:var(--tx-dim);background:var(--ink-2)}
+  .rp .mtitle{font-size:12px;font-family:var(--mono);color:var(--tx-dim);margin:22px 0 9px;letter-spacing:.04em}
+
+  .rp .settle{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;margin-top:4px}
+  .rp .sc{background:var(--panel);border:1px solid var(--line-soft);border-radius:var(--r-note);padding:12px 13px;position:relative;overflow:hidden;box-shadow:var(--glass-shadow)}
+  .rp .sc::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--live);opacity:.4}
+  .rp .sc .chn{font-size:12.5px;font-weight:700;margin-bottom:8px}
+  .rp .sc .row{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px;color:var(--tx-mut);padding:2px 0;font-variant-numeric:tabular-nums}
+  .rp .sc .row.tot{border-top:1px dashed var(--line);margin-top:5px;padding-top:6px;color:var(--tx);font-weight:700}
+  .rp .sc .row .v{color:var(--tx)}.rp .sc .row.tot .v{color:var(--live)}
+
+  .rp .tracks{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .rp .trk{background:var(--panel);border:1px solid var(--line-soft);border-radius:var(--r-card);padding:16px 16px 14px;position:relative;overflow:hidden;box-shadow:var(--glass-shadow)}
+  .rp .trk::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px}
+  .rp .trk.a::before{background:var(--live)} .rp .trk.b::before{background:var(--safe)}
+  .rp .trk h3{font-size:15px;font-weight:800;letter-spacing:-.02em;margin-bottom:4px}
+  .rp .trk .tt{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--tx-dim);margin-bottom:9px}
+  .rp .trk ol{margin:0;padding-left:17px;font-size:12.5px;color:var(--tx-mut);line-height:1.7}
+  .rp .trk ol li{margin-bottom:3px}
+
+  .rp .rules{display:grid;gap:9px}
+  .rp .rule{display:grid;grid-template-columns:170px 1fr;gap:12px;background:var(--panel);border:1px solid var(--line-soft);border-radius:var(--r-note);padding:11px 14px}
+  .rp .rule .k{font-weight:700;font-size:12.5px;color:var(--tx)}
+  .rp .rule .v{font-size:12.5px;color:var(--tx-mut);text-wrap:pretty}
+  .rp .rule .v b{color:var(--tx);font-weight:650}
+  .rp .rule .cl{font-family:var(--mono);font-size:10px;color:var(--tx-dim);display:block;margin-top:3px}
+
+  .rp .qsec{background:var(--panel);border:1px solid var(--line-soft);border-radius:var(--r-card);padding:0;overflow:hidden;margin-bottom:16px;scroll-margin-top:60px;position:relative;box-shadow:var(--glass-shadow)}
+  .rp .qsec::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;z-index:1}
+  .rp .qsec.s::before{background:var(--safe)} .rp .qsec.w::before{background:var(--warn)} .rp .qsec.r::before{background:var(--risk)}
+  .rp .qhead{padding:16px 18px 14px;border-bottom:1px solid var(--line-soft);background-image:linear-gradient(180deg,var(--panel-2),var(--panel))}
+  .rp .qtag{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--tx-dim)}
+  .rp .qtitle{font-size:17px;font-weight:820;letter-spacing:-.02em;margin:3px 0 10px;text-wrap:balance}
+  .rp .verdict{display:inline-flex;align-items:center;gap:8px;padding:7px 12px;border-radius:var(--r-note);font-size:13px;font-weight:700;text-wrap:pretty}
+  .rp .verdict.s{background:var(--safe-bg);color:var(--safe)} .rp .verdict.w{background:var(--warn-bg);color:var(--warn)} .rp .verdict.r{background:var(--risk-bg);color:var(--risk)}
+  .rp .verdict .vdot{width:9px;height:9px;border-radius:50%;background:currentColor;flex:none}
+  .rp .qbody{padding:16px 18px 18px}
+  .rp .qq{background:var(--ink-2);border:1px solid var(--line-soft);border-left:3px solid var(--tx-dim);border-radius:var(--r-note);padding:11px 14px;font-size:13px;color:var(--tx-mut);margin-bottom:16px;text-wrap:pretty}
+  .rp .qq .ql{display:block;font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--tx-dim);margin-bottom:5px}
+  .rp .qsub{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--live);margin:18px 0 9px;padding-left:11px;border-left:2px solid var(--live)}
+  .rp .qbody p{font-size:13.5px;color:var(--tx);margin:0 0 11px;text-wrap:pretty}
+  .rp .qbody p.mut{color:var(--tx-mut);font-size:12.5px}
+  .rp .qbody ul{margin:0 0 12px;padding-left:2px;list-style:none}
+  .rp .qbody ul li{position:relative;padding-left:18px;font-size:13px;color:var(--tx-mut);margin-bottom:7px;line-height:1.55;text-wrap:pretty}
+  .rp .qbody ul li::before{content:"";position:absolute;left:2px;top:8px;width:6px;height:6px;border-radius:2px;background:var(--live);opacity:.7}
+  .rp .qbody ul li b,.rp .qbody p b{color:var(--tx);font-weight:650}
+  .rp .mono{font-family:var(--mono);font-size:11.5px;color:var(--tx-dim);font-variant-numeric:tabular-nums}
+  .rp .screens{display:flex;flex-wrap:wrap;gap:7px;margin-top:2px}
+  .rp .screens .sch{font-family:var(--mono);font-size:11px;color:var(--tx-mut);background:var(--ink-2);border:1px solid var(--line-soft);border-radius:var(--r-chip);padding:5px 9px}
+  .rp .screens .sch .p{color:var(--live)}
+  .rp .reply{background:rgba(74,77,231,.045);border:1px solid var(--line-soft);border-left:3px solid var(--live);border-radius:var(--r-note);padding:13px 15px;margin-top:6px}
+  .rp .reply .rl{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--live);margin-bottom:8px;display:flex;align-items:center;gap:7px}
+  .rp .reply .rl::before{content:"✎";font-size:11px}
+  .rp .reply p{font-size:13px;color:var(--tx);margin:0 0 9px;line-height:1.66}
+  .rp .reply p:last-child{margin-bottom:0}
+  .rp .reply .rq{color:var(--tx-mut);font-size:12px;border-top:1px dashed var(--line);padding-top:9px;margin-top:4px}
+  .rp-copy{margin-left:auto;font-family:inherit;font-size:10.5px;font-weight:700;letter-spacing:0;color:var(--accent);
+    background:transparent;border:1px solid rgba(74,77,231,.3);border-radius:7px;padding:3px 10px;text-transform:none}
+  .rp-copy:hover{background:rgba(74,77,231,.07)}
+
+  .rp details.memo{background:var(--panel);border:1px solid var(--line-soft);border-radius:var(--r-note);overflow:hidden}
+  .rp details.memo>summary{list-style:none;cursor:pointer;padding:13px 16px;font-size:13.5px;font-weight:700;display:flex;align-items:center;gap:10px;color:var(--tx-mut)}
+  .rp details.memo>summary::-webkit-details-marker{display:none}
+  .rp details.memo>summary .mk{font-family:var(--mono);font-size:10px;color:var(--tx-dim);transition:transform var(--dur)}
+  .rp details.memo[open]>summary .mk{transform:rotate(90deg)}
+  .rp details.memo>summary .cnt{margin-left:auto;font-family:var(--mono);font-size:10.5px;color:var(--tx-dim);font-weight:400}
+  .rp .memo-body{padding:2px 16px 15px;border-top:1px solid var(--line-soft)}
+  .rp .memo-item{font-size:12.5px;color:var(--tx-mut);line-height:1.62;padding:9px 0;border-bottom:1px solid var(--line-soft)}
+  .rp .memo-item:last-child{border-bottom:none}
+  .rp .memo-item b{color:var(--tx);font-weight:650}
+
+  .rp .foot{padding:28px 0 44px;color:var(--tx-dim);font-family:var(--mono);font-size:11px;line-height:1.8}
+  .rp .foot b{color:var(--tx-mut);font-weight:500}
+  @media(max-width:720px){.rp .stage{min-width:80vw}.rp .tracks{grid-template-columns:1fr}.rp .rule{grid-template-columns:1fr}.rp section{padding:32px 0}}
+
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+  @media print{
+    body.ts-modal-open>*:not(#tsModalBg){display:none !important}
+    #tsModalBg{position:static;background:#fff;padding:0;display:block}
+    .ts-modal{width:100%;height:auto;box-shadow:none;border-radius:0;display:block;overflow:visible}
+    .ts-modal-hd{display:none}
+    .ts-modal-body{overflow:visible;height:auto}
+    .rp .nav{display:none}
+    .rp .pin,.rp .qsec{break-inside:avoid}
+  }
+</style>
+</head>
+<body>
+
+<header class="hd">
+  <a class="back" href="../">← 플레이그라운드</a>
+  <div class="kicker">Playground · Ticket Seller</div>
+  <h1 class="pg">티켓 셀러</h1>
+  <p class="lead">예울마루 × 티켓링크 위탁판매의 신청 → 상품 등록 → 판매 → 정산 흐름. 순서도의 동그라미 토글(₩ 수수료 · Q 운영 문의)을 누르면 요약이 열리고, [상세]를 누르면 종합 보고서(2026-07-08)로 이어집니다.</p>
+  <div class="hd-row">
+    <span class="lg"><i class="bdg fee">₩</i> 수수료</span>
+    <span class="lg"><i class="bdg s">Q</i> 질문 · 가능</span>
+    <span class="lg"><i class="bdg w">Q</i> 질문 · 조건부</span>
+    <span class="lg"><i class="bdg r">Q</i> 질문 · 불가(대안)</span>
+    <span class="sp"></span>
+    <button class="btn btn--primary btn--md" id="openReport" type="button">📄 종합 보고서 열기</button>
+  </div>
+</header>
+
+<div class="ts-scroll">
+  <div class="ts-canvas" id="tsCanvas">
+    <svg class="ts-edges" width="1180" height="760" viewBox="0 0 1180 760" aria-hidden="true">
+      <defs>
+        <marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+          <path d="M0 0L10 5L0 10z" fill="var(--dim)" stroke="none"/>
+        </marker>
+      </defs>
+      <!-- 담당자→등록 (세로 4) -->
+      <path d="M42 534 V596" marker-end="url(#ar)"/>
+      <path d="M112 534 V596" marker-end="url(#ar)"/>
+      <path d="M182 534 V596" marker-end="url(#ar)"/>
+      <path d="M252 534 V596" marker-end="url(#ar)"/>
+      <!-- 상단 버스: 담당 4종 → Ticket Seller -->
+      <path d="M42 470 V300"/><path d="M112 470 V300"/><path d="M182 470 V300"/><path d="M252 470 V300"/>
+      <path d="M42 300 H462" marker-end="url(#ar)"/>
+      <!-- 공연 기획 → 예울마루 담당자 -->
+      <path d="M284 502 H318" marker-end="url(#ar)"/>
+      <!-- 예울마루 담당자 → 티켓링크 담당자 -->
+      <path d="M414 502 H462" marker-end="url(#ar)"/>
+      <!-- 티켓링크 담당자 → [B] Ticket Seller -->
+      <path d="M512 470 V324" marker-end="url(#ar)"/>
+      <!-- [A] → 예울마루 담당자 -->
+      <path d="M368 600 V538" marker-end="url(#ar)"/>
+      <!-- 등록 4종 → [A] (곡선 수렴) -->
+      <path d="M42 664 C42 736, 236 744, 336 678" marker-end="url(#ar)"/>
+      <path d="M112 664 C112 728, 248 736, 350 680" marker-end="url(#ar)"/>
+      <path d="M182 664 C182 720, 260 728, 364 680" marker-end="url(#ar)"/>
+      <path d="M252 664 C252 712, 282 718, 378 678" marker-end="url(#ar)"/>
+      <!-- [B] → 고객 -->
+      <path d="M512 236 V110 Q512 94 528 94 H696" marker-end="url(#ar)"/>
+      <!-- 고객 → 판매 채널 그룹 2 -->
+      <path d="M742 124 C742 158, 709 148, 709 172" marker-end="url(#ar)"/>
+      <path d="M742 124 C742 158, 900 148, 900 172" marker-end="url(#ar)"/>
+      <!-- 판매 경계 → [4] 정산 -->
+      <path d="M958 278 H984" marker-end="url(#ar)"/>
+    </svg>
+
+    <!-- 레인 헤더 -->
+    <div class="ts-lane" style="left:8px;top:8px;width:304px">[1] 신청서 작성·취합</div>
+    <div class="ts-lane" style="left:328px;top:8px;width:204px">[2] 프로그램 상품 등록·관리</div>
+    <div class="ts-lane" style="left:548px;top:8px;width:404px">[3] 상품 판매</div>
+    <div class="ts-lane" style="left:968px;top:8px;width:204px">[4] 정산</div>
+
+    <!-- 시스템 경계 · 판매 채널 그룹 -->
+    <div class="ts-bound" style="left:312px;top:148px;width:646px;height:314px"></div>
+    <div class="ts-group" style="left:584px;top:176px;width:250px;height:262px"><span class="glab">예울마루 제휴(C, D)</span></div>
+    <div class="ts-group" style="left:846px;top:176px;width:108px;height:262px"><span class="glab">티켓 사 제휴(E)</span></div>
+
+    <!-- 단계 라벨 -->
+    <div class="ts-step" style="left:256px;top:437px">[1-1] 정보 취합</div>
+    <div class="ts-step" style="left:130px;top:694px">[1-1] 정보 취합</div>
+    <div class="ts-step" style="left:394px;top:437px">[2-1] 등록 신청</div>
+    <div class="ts-step" style="left:524px;top:382px">[2-2] 등록 완료</div>
+    <div class="ts-step" style="left:800px;top:80px">[3] 상품 예매</div>
+
+    <!-- [1] 신청·취합 -->
+    <div class="ts-node n-actor" style="left:10px;top:470px;width:64px;height:64px">대관<br>담당자</div>
+    <div class="ts-node n-actor" style="left:80px;top:470px;width:64px;height:64px">큐레이터</div>
+    <div class="ts-node n-actor" style="left:150px;top:470px;width:64px;height:64px">예술교육<br>기획</div>
+    <div class="ts-node n-actor" style="left:220px;top:470px;width:64px;height:64px">공연 기획</div>
+    <div class="ts-node n-plain" style="left:10px;top:600px;width:64px;height:64px">대관 상품<br>등록</div>
+    <div class="ts-node n-plain" style="left:80px;top:600px;width:64px;height:64px">전시 등록</div>
+    <div class="ts-node n-plain" style="left:150px;top:600px;width:64px;height:64px">교육 등록</div>
+    <div class="ts-node n-plain" style="left:220px;top:600px;width:64px;height:64px">공연 등록</div>
+
+    <!-- [1/2] 담당자·신청서 -->
+    <div class="ts-node n-accent" style="left:322px;top:470px;width:92px;height:64px">예울마루<br>담당자</div>
+    <div class="ts-node n-dark" style="left:322px;top:600px;width:92px;height:72px">
+      <button class="ts-badge b-q s bl" type="button" data-q="qA4" aria-label="A-4 사업별 ID 질문 보기" aria-expanded="false">Q</button>
+      <span class="code">[A]</span>등록 신청서
+    </div>
+    <div class="ts-node n-green" style="left:466px;top:470px;width:92px;height:64px">
+      <button class="ts-badge b-q w" type="button" data-q="qB1b" aria-label="B-1-b 매수제한·방문일 질문 보기" aria-expanded="false">Q</button>
+      티켓링크<br>담당자
+    </div>
+
+    <!-- [2/3] Ticket Seller · 고객 -->
+    <div class="ts-node n-c5" style="left:466px;top:236px;width:92px;height:84px">
+      <span class="code">[B]</span>Ticket Seller
+    </div>
+    <div class="ts-node n-actor" style="left:700px;top:64px;width:84px;height:60px">
+      <button class="ts-badge b-q s" type="button" data-q="qB1a,qA1b" aria-label="망취소·증빙서류 질문 보기" aria-expanded="false">Q<span class="ct">2</span></button>
+      고객
+    </div>
+
+    <!-- [3] 판매 채널 -->
+    <div class="ts-node n-dark" style="left:592px;top:256px;width:54px;height:84px">
+      <button class="ts-badge b-fee" type="button" data-fee="c1" aria-label="C-1 초대권 수수료 보기" aria-expanded="false">₩</button>
+      <button class="ts-badge b-q s bb" type="button" data-q="qA2" aria-label="A-2 모바일 초대권 질문 보기" aria-expanded="false">Q</button>
+      <span class="code">[C-1]</span>초대권·지정<span class="fcap">발권 150원/장</span>
+    </div>
+    <div class="ts-node n-c5o" style="left:652px;top:256px;width:54px;height:84px">
+      <button class="ts-badge b-fee" type="button" data-fee="c2" aria-label="C-2 전화 예매 수수료 보기" aria-expanded="false">₩</button>
+      <button class="ts-badge b-q w bb" type="button" data-q="qA1a" aria-label="A-1-a 단체 예매 질문 보기" aria-expanded="false">Q</button>
+      <span class="code">[C-2]</span>전화 예매<span class="fcap">3%</span>
+    </div>
+    <div class="ts-node n-dark" style="left:712px;top:256px;width:54px;height:84px">
+      <button class="ts-badge b-fee" type="button" data-fee="d1" aria-label="D-1 예울마루 홈페이지 수수료 보기" aria-expanded="false">₩</button>
+      <button class="ts-badge b-q s bb" type="button" data-q="qB3" aria-label="B-3 수수료 질문 보기" aria-expanded="false">Q</button>
+      <span class="code">[D-1]</span>예울마루<br>홈페이지<span class="fcap">0·3%</span>
+    </div>
+    <div class="ts-node n-dark" style="left:772px;top:256px;width:54px;height:84px">
+      <button class="ts-badge b-fee" type="button" data-fee="d2" aria-label="D-2 제휴채널B 수수료 보기" aria-expanded="false">₩</button>
+      <span class="code">[D-2]</span>제휴채널B<br>(B2B 등)<span class="fcap">3% 협의</span>
+    </div>
+    <div class="ts-node n-dark" style="left:852px;top:256px;width:48px;height:84px">
+      <button class="ts-badge b-fee" type="button" data-fee="e1" aria-label="E-1 제휴채널 수수료 보기" aria-expanded="false">₩</button>
+      <span class="code">[E-1]</span>제휴채널<br>(네이버 등)<span class="fcap">6%</span>
+    </div>
+    <div class="ts-node n-dark" style="left:904px;top:256px;width:48px;height:84px">
+      <button class="ts-badge b-fee" type="button" data-fee="e2" aria-label="E-2 티켓링크 홈페이지 수수료 보기" aria-expanded="false">₩</button>
+      <span class="code">[E-2]</span>티켓링크<br>홈페이지<span class="fcap">3%+예매료</span>
+    </div>
+
+    <!-- [4] 정산 (보고서 보강분 — 원본 순서도엔 빈 레인) -->
+    <div class="ts-node n-dashed" style="left:988px;top:236px;width:180px;height:84px">
+      <span class="xtag">보고서 보강</span>
+      <button class="ts-badge b-fee" type="button" data-fee="settle" aria-label="정산 규칙 보기" aria-expanded="false">₩</button>
+      <button class="ts-badge b-q w bl" type="button" data-q="qB2,qA3" aria-label="정산·보고서 질문 보기" aria-expanded="false">Q<span class="ct">2</span></button>
+      정산·입금<span class="fcap">행사 종료 후 영업일 7일 내 1건<br>티켓링크 → 예울마루 지정계좌</span>
+    </div>
+
+    <!-- 팝오버 -->
+    <div class="ts-pop" id="tsPop" role="dialog" aria-label="요약 팝오버"></div>
+  </div>
+</div>
+<p class="mob-hint">← 순서도는 옆으로 넘겨 볼 수 있어요.</p>
+<p class="fnote">※ 순서도는 운영 순서도(첨부 이미지)의 구조를 예울마루 디자인 토큰으로 재현한 것(곡선·좌표는 근사). [4] 정산 노드와 ₩·Q 배지는 종합 보고서 기반 보강분. 현장 매표소 채널(3%·예매료 면제·발권 무료)은 원본 순서도에 없어 보고서의 수수료 매트릭스에서 확인. 수수료 %는 전부 VAT 별도.</p>
+<footer class="pgf">예울마루 · 내부 학습용 · 근거: 종합 보고서(2026-07-08) — 위탁판매 연간계약서·서비스 운영 제휴계약서·판매대행 의뢰서·셀러 실캡처·공식 매뉴얼 2종</footer>
+
+<!-- ══ 종합 보고서 모달 ══ -->
+<div class="ts-modal-bg" id="tsModalBg">
+  <div class="ts-modal" role="dialog" aria-modal="true" aria-label="예울마루 티켓링크 운영 문의 종합 보고서">
+    <div class="ts-modal-hd">
+      <b>예울마루 × 티켓링크 — 운영 문의 종합 보고서</b>
+      <span class="sp"></span>
+      <button class="btn btn--ghost btn--sm" id="tsPrint" type="button">인쇄</button>
+      <button class="ts-mx" id="tsClose" type="button" aria-label="닫기">×</button>
+    </div>
+    <div class="ts-modal-body" id="tsBody">
+      <div class="rp">
+<header class="mast">
+  <div class="wrap mast-in">
+    <p class="kicker"><span class="dot"></span>GS칼텍스 예울마루 · NHN 티켓링크</p>
+    <h1 class="title">티켓 판매·정산 <span class="em">프로세스 &amp; 운영 문의</span> 종합 보고서</h1>
+    <p class="subtitle">2026-07-08 접수된 운영 문의 2건(단체·초대권·보고서·사업ID / 전시 결제·정산·수수료)을 셀러 시스템 실캡처·계약서·의뢰서·공식 매뉴얼 근거로 분석. 5단계 프로세스 로드맵 + 채널×수수료 매트릭스 + 질문별 답변·회신문을 한 파일에 담았습니다.</p>
+    <div class="src">
+      <span class="s"><b>①</b> 위탁판매거래 연간계약서 2026.06.12</span>
+      <span class="s"><b>②</b> 서비스 운영 제휴계약서 2026.02.24</span>
+      <span class="s"><b>③</b> 판매대행 의뢰서(달샤베트)</span>
+      <span class="s"><b>④</b> 셀러 시스템 실캡처(GNB 17메뉴)</span>
+      <span class="s"><b>⑤</b> 공식 매뉴얼 2종(31p·112p)</span>
+    </div>
+    <div class="byline"><span><b>작성</b> 2026-07-08</span><span><b>인덱스</b> A-1~A-4 / B-1~B-3</span><span><b>비고</b> 고객 PII 없음 · 자립형 단일 파일</span></div>
+  </div>
+</header>
+
+<nav class="nav"><div class="wrap nav-in" id="nav">
+  <a href="#road">로드맵</a><a href="#fee">수수료</a><a href="#settle">정산</a><a href="#rental">대관</a>
+  <span class="div"></span>
+  <a href="#qA1a">A-1a</a><a href="#qA1b">A-1b</a><a href="#qA2">A-2</a><a href="#qA3">A-3</a><a href="#qA4">A-4</a>
+  <a href="#qB1a">B-1a</a><a href="#qB1b">B-1b</a><a href="#qB2">B-2</a><a href="#qB3">B-3</a>
+  <span class="div"></span>
+  <a href="#memo">확인메모</a>
+</div></nav>
+
+<!-- 01 로드맵 -->
+<section id="road">
+  <div class="wrap">
+    <p class="eyebrow"><span class="no">01</span> 한눈에 보는 로드맵</p>
+    <h2 class="h">고객 한 명의 티켓이 흐르는 길, 그리고 질문이 생긴 지점</h2>
+    <p class="lede">신청→등록→판매→발권→정산 5단계. 질문은 실제 발생한 단계에 칩으로 꽂았고, <b style="color:var(--tx-mut)">누르면 아래 상세·회신문으로 이동</b>합니다. 신호색 = <span style="color:var(--safe)">가능</span> · <span style="color:var(--warn)">조건부</span> · <span style="color:var(--risk)">불가(대안)</span>.</p>
+    <div class="rail">
+      <div class="stage"><div class="stage-card">
+        <div class="stage-no">[1]</div><div class="stage-nm">신청·취합</div>
+        <div class="stage-meta"><b>액터</b> 사업담당 4종 → 예울마루<br>내부 양식</div>
+        <div class="pins">
+          <a class="pin s" href="#qA4"><span class="pdot"></span><span class="ptx"><span class="ptag">A-4 · 사업별 ID</span>공연·교육·전시·대관 별도 ID(관리코드)</span><span class="parrow">›</span></a>
+        </div>
+      </div></div>
+      <div class="stage"><div class="stage-card">
+        <div class="stage-no">[2]</div><div class="stage-nm">상품 등록</div>
+        <div class="stage-meta"><b>액터</b> 예울마루 → 티켓링크<br>오픈 7일 전 · 본사 등록</div>
+        <div class="pins">
+          <a class="pin w" href="#qB1b"><span class="pdot"></span><span class="ptx"><span class="ptag">B-1-b · 매수/방문일</span>매수제한 · 방문일자 지정</span><span class="parrow">›</span></a>
+        </div>
+      </div></div>
+      <div class="stage"><div class="stage-card">
+        <div class="stage-no">[3]</div><div class="stage-nm">판매</div>
+        <div class="stage-meta"><b>액터</b> 고객 / 단체 / 기업<br>채널 6종</div>
+        <div class="pins">
+          <a class="pin w" href="#qA1a"><span class="pdot"></span><span class="ptx"><span class="ptag">A-1-a · 단체 예매</span>단체 예약 프로그램</span><span class="parrow">›</span></a>
+          <a class="pin s" href="#qB1a"><span class="pdot"></span><span class="ptx"><span class="ptag">B-1-a · 망취소</span>망상 결제 대응</span><span class="parrow">›</span></a>
+          <a class="pin s" href="#qB3"><span class="pdot"></span><span class="ptx"><span class="ptag">B-3 · 수수료</span>홈페이지 전용 오픈 시 수수료</span><span class="parrow">›</span></a>
+        </div>
+      </div></div>
+      <div class="stage"><div class="stage-card">
+        <div class="stage-no">[4]</div><div class="stage-nm">발권·입장</div>
+        <div class="stage-meta"><b>액터</b> 매표소 / 고객<br>실물·모바일·입장 스캔</div>
+        <div class="pins">
+          <a class="pin s" href="#qA2"><span class="pdot"></span><span class="ptx"><span class="ptag">A-2 · 모바일 초대권</span>대관 초대권 모바일 발행</span><span class="parrow">›</span></a>
+          <a class="pin s" href="#qA1b"><span class="pdot"></span><span class="ptx"><span class="ptag">A-1-b · 증빙서류</span>결제 후 증빙 종류</span><span class="parrow">›</span></a>
+        </div>
+      </div></div>
+      <div class="stage"><div class="stage-card">
+        <div class="stage-no">[5]</div><div class="stage-nm">정산·보고</div>
+        <div class="stage-meta"><b>액터</b> 티켓링크 → 예울마루<br>보고서·내역조회·증빙</div>
+        <div class="pins">
+          <a class="pin s" href="#qB2"><span class="pdot"></span><span class="ptx"><span class="ptag">B-2 · 정산</span>판매 종료 후 1건 정산</span><span class="parrow">›</span></a>
+          <a class="pin w" href="#qA3"><span class="pdot"></span><span class="ptx"><span class="ptag">A-3 · 보고서/API</span>자체 양식 출력 · API</span><span class="parrow">›</span></a>
+        </div>
+      </div></div>
+    </div>
+  </div>
+</section>
+
+<!-- 02 수수료 -->
+<section id="fee">
+  <div class="wrap">
+    <p class="eyebrow"><span class="no">02</span> 채널 × 수수료 매트릭스</p>
+    <h2 class="h">수수료는 성격이 다른 3종 — 이걸 나누면 대부분의 혼선이 사라집니다</h2>
+    <p class="lede"><b style="color:var(--tx)">판매수수료</b>(예울→링크, 액면가의 %, 고객 실지급액 기준) · <b style="color:var(--tx)">예매수수료 2,000원/매</b>(고객 부담, 채널 따라 면제) · <b style="color:var(--tx)">발권수수료 150원/장</b>(초대권·교환권·0원권만, VAT 포함). 모든 %는 VAT 별도. 복합결제는 <b style="color:var(--tx)">주결제 수단 기준</b>.</p>
+    <div class="tbl-scroll">
+      <table>
+        <thead><tr><th>판매 채널</th><th>계약상 용어(②제3조)</th><th>판매수수료</th><th>예매료 2천원</th><th>발권 150원</th></tr></thead>
+        <tbody>
+          <tr><td><span class="ch">예울마루 홈페이지</span><br><span class="mut">D-1 · API연동</span></td><td class="mut">제휴채널(2항)</td><td>무통장 <b>0%</b> / 카드 <b>3%</b></td><td><span class="tag-safe">면제</span></td><td><span class="tag-none">없음</span></td></tr>
+          <tr><td><span class="ch">티켓링크</span><br><span class="mut">E-2 · 웹/모바일/콜센터</span></td><td class="mut">온라인(1항)</td><td>현금 3% / 카드 3%</td><td><span class="tag-warn">부과</span></td><td><span class="tag-none">없음</span></td></tr>
+          <tr><td><span class="ch">네이버</span><br><span class="mut">E-1 · 기타판매처(독점)</span></td><td class="mut">기타판매처(3항)</td><td><b>6%</b> (결제수단 무관)</td><td><span class="tag-warn">부과</span></td><td><span class="tag-none">없음</span></td></tr>
+          <tr><td><span class="ch">B2B 전용 URL</span><br><span class="mut">D-2 · 기업 할인코드</span></td><td class="mut">온라인 해석</td><td>3% <span class="mut">(협의 확정)</span></td><td><span class="tag-warn">협의</span></td><td><span class="tag-none">없음</span></td></tr>
+          <tr><td><span class="ch">현장 매표소</span><br><span class="mut">현장판매시스템</span></td><td class="mut">현장(4항)</td><td>현금 3% / 카드 3%</td><td><span class="tag-safe">면제</span></td><td><span class="tag-safe">무료</span></td></tr>
+          <tr><td><span class="ch">전화 예매</span><br><span class="mut">C-2 · 셀러 대리예매</span></td><td class="mut">기획사(5항)</td><td>현금 3% / 카드 3%</td><td><span class="tag-none">상품설정</span></td><td><span class="tag-none">없음</span></td></tr>
+          <tr><td><span class="ch">초대권·교환권·0원권</span><br><span class="mut">C-1</span></td><td class="mut">발권료(6항)</td><td class="mut">판매 없음</td><td><span class="tag-none">없음</span></td><td><span class="tag-warn">150원/장</span></td></tr>
+          <tr><td><span class="ch">등록 전용 상품</span><br><span class="mut">대관 발권 지원</span></td><td class="mut">명문 없음</td><td class="mut">판매 없음</td><td><span class="tag-none">없음</span></td><td><span class="tag-safe">면제</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="mtitle">▍정가 66,000원 티켓 1매 — 채널별 예울마루 입금액 <span style="color:var(--tx-dim)">(입금 = 실지급액 × (1 − 요율×1.1))</span></p>
+    <div class="settle">
+      <div class="sc"><div class="chn">홈페이지 · 무통장</div><div class="row"><span>고객 지불</span><span class="v">66,000</span></div><div class="row"><span>공제 0%</span><span class="v">0</span></div><div class="row tot"><span>입금</span><span class="v">66,000</span></div></div>
+      <div class="sc"><div class="chn">홈페이지 · 카드</div><div class="row"><span>고객 지불</span><span class="v">66,000</span></div><div class="row"><span>공제 3%+VAT</span><span class="v">−2,178</span></div><div class="row tot"><span>입금</span><span class="v">63,822</span></div></div>
+      <div class="sc"><div class="chn">티켓링크 · 카드</div><div class="row"><span>고객 지불</span><span class="v">68,000</span></div><div class="row"><span>예매료 2,000 별도</span><span class="v">—</span></div><div class="row tot"><span>입금</span><span class="v">63,822</span></div></div>
+      <div class="sc"><div class="chn">네이버</div><div class="row"><span>고객 지불</span><span class="v">66,000</span></div><div class="row"><span>공제 6%+VAT</span><span class="v">−4,356</span></div><div class="row tot"><span>입금</span><span class="v">61,644</span></div></div>
+      <div class="sc"><div class="chn">현장 · 카드</div><div class="row"><span>고객 지불</span><span class="v">66,000</span></div><div class="row"><span>공제 3%+VAT</span><span class="v">−2,178</span></div><div class="row tot"><span>입금</span><span class="v">63,822</span></div></div>
+      <div class="sc"><div class="chn">현장 · 현금</div><div class="row"><span>고객 지불</span><span class="v">66,000</span></div><div class="row"><span>예울 직수취</span><span class="v">정산 제외</span></div><div class="row tot"><span>수취</span><span class="v">66,000</span></div></div>
+      <div class="sc"><div class="chn">홈피 40%할인·카드</div><div class="row"><span>고객 지불</span><span class="v">39,600</span></div><div class="row"><span>공제 3%+VAT</span><span class="v">−1,307</span></div><div class="row tot"><span>입금</span><span class="v">38,293</span></div></div>
+      <div class="sc"><div class="chn">초대권(0원권)</div><div class="row"><span>판매</span><span class="v">0</span></div><div class="row"><span>발권료 별도</span><span class="v">−150/장</span></div><div class="row tot"><span>입금</span><span class="v">0</span></div></div>
+    </div>
+
+    <h4 class="sub">사업 유형별 채널 개방 정책</h4>
+    <div class="tbl-scroll">
+      <table>
+        <thead><tr><th>사업</th><th>개방 채널</th><th>근거</th></tr></thead>
+        <tbody>
+          <tr><td><span class="ch">공연(기획)</span></td><td>전 채널 — 티켓링크 <b>독점/배타적</b> 판매 의무</td><td class="mut">① 제4조 7항</td></tr>
+          <tr><td><span class="ch">전시</span></td><td><b>D-1 예울마루 홈페이지만</b></td><td class="mut">운영 방침</td></tr>
+          <tr><td><span class="ch">교육</span></td><td><b>D-1 예울마루 홈페이지만</b></td><td class="mut">운영 방침</td></tr>
+          <tr><td><span class="ch">대관</span></td><td>정식 위탁판매(할당석 50%+네이버 독점) 또는 등록 전용</td><td class="mut">① 제4조 2~5항 (위탁 의무 2027.01.01~)</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- 03 정산 -->
+<section id="settle">
+  <div class="wrap">
+    <p class="eyebrow"><span class="no">03</span> 정산 흐름 — 돈이 흐르는 길</p>
+    <h2 class="h">행사 종료 후 7영업일 내 1건 정산</h2>
+    <p class="lede">티켓링크가 총 판매대금에서 판매수수료(+VAT)·유보·공제금을 차감해 예울마루 지정계좌(우리은행)로 입금. 셀러 시스템에는 "정산" 전용 메뉴가 없어(보고서가 정산 역할 겸함) 정산서는 티켓링크 담당자로부터 수령.</p>
+    <div class="rules">
+      <div class="rule"><div class="k">정산 시점</div><div class="v"><b>행사 최종 완료 후 영업일 기준 7일 이내</b> 일괄 1건 입금<span class="cl">② 제7조 3항</span></div></div>
+      <div class="rule"><div class="k">판매대금 기준</div><div class="v">총 매매액 = <b>고객이 실제 지급한 금액</b>(할인 적용 후)<span class="cl">② 제7조 1항 단서</span></div></div>
+      <div class="rule"><div class="k">현장 현금 직수취</div><div class="v">예울마루가 현장에서 직접 수취한 현금 판매분은 입금 정산에서 <b>제외</b>하되 수수료율은 정산에 포함(차감)<span class="cl">② 제7조 3항 / ③ 정산 유형 "현장 현금 수령"</span></div></div>
+      <div class="rule"><div class="k">취소수수료 배분</div><div class="v">티켓링크가 수취한 취소수수료의 <b>15%를 예울마루에 지급</b><span class="cl">② 제7조 5항</span></div></div>
+      <div class="rule"><div class="k">판매 마감</div><div class="v">공연 <b>전일 17:00</b> (공연 종료일이 일요일이면 <b>토요일 11:00</b>) — 협의 조정 가능<span class="cl">② 제6조</span></div></div>
+      <div class="rule"><div class="k">취소·환불 허용</div><div class="v">판매마감시간까지 (제휴·지정 예매처 포함). 예울 귀책 취소분은 판매수수료 산정 시 판매대금 총액에 포함<span class="cl">② 제9조</span></div></div>
+      <div class="rule"><div class="k">정산 보류</div><div class="v">공연 취소·부실 공연 등 예울 귀책 민원 해결 시까지 지급 보류<span class="cl">② 제8조</span></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- 04 대관 -->
+<section id="rental">
+  <div class="wrap">
+    <p class="eyebrow"><span class="no">04</span> 대관 공연 — 두 갈래 트랙</p>
+    <h2 class="h">대관은 대관자의 선택지 2개로 표준화</h2>
+    <p class="lede">우리 기획 공연은 아니지만 대관 공연도 발권까지 지원합니다. 판매 방식에 따라 트랙이 갈립니다.</p>
+    <div class="tracks">
+      <div class="trk a"><div class="tt">Track A</div><h3>정식 위탁판매</h3>
+        <ol>
+          <li>대관 계약 시 회당 좌석 <b>50%+ 티켓링크 할당석</b> 배정 (2027.01.01부터 강제)</li>
+          <li>대관자 ↔ 티켓링크 위탁판매계약 — 수수료·정산은 그 계약을 따름</li>
+          <li>네이버 채널은 티켓링크 <b>독점</b> 판매</li>
+          <li>판매·발권·정산은 기획공연과 동일 구조</li>
+        </ol>
+      </div>
+      <div class="trk b"><div class="tt">Track B</div><h3>등록 전용 (발권 지원)</h3>
+        <ol>
+          <li>대관자가 <b>자체 판매</b> — 결제는 시스템 밖</li>
+          <li>공연 정보·좌석도·명단 → 예울마루 담당자 (공연 7일 전)</li>
+          <li>티켓링크가 <b>등록 전용</b>으로 상품 등록</li>
+          <li>현장 매표소에서 발권만 지원 — <b>발권수수료 미발생</b></li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 05 질문별 상세 & 회신문 -->
+<section id="qa">
+  <div class="wrap">
+    <p class="eyebrow"><span class="no">05</span> 질문별 상세 · 원인 · 해결책 · 회신문</p>
+    <h2 class="h">문의 A(단체·초대권·보고서·사업ID) + 문의 B(결제·정산·수수료)</h2>
+    <p class="lede">각 질문 = 결론 → 질문 원문 → 시스템 현황·원인 → 해결책 → 관련 화면 → 회신문(복붙용) 순. 화면 경로는 실서비스 <span class="mono">seller.ticketlink.co.kr</span> 기준.</p>
+
+    <!-- A-1-a -->
+    <div class="qsec w" id="qA1a">
+      <div class="qhead"><div class="qtag">A-1-a · 단체 예매</div><div class="qtitle">단체 관람객 대상 예약 프로그램(단체 예매 관리) 구축</div>
+        <div class="verdict w"><span class="vdot"></span>전용 모듈은 없음 — 기존 기능 3종 조합으로 운영 가능</div></div>
+      <div class="qbody">
+        <div class="qq"><span class="ql">질문 원문</span>학교·관공서 등 단체 관람객을 위한 별도 예약 프로그램(단체 예매 관리 기능) 구축이 가능한지?</div>
+        <div class="qsub">시스템 현황·원인</div>
+        <p>셀러 시스템·공식 매뉴얼(31p·112p) 어디에도 <b>단체 전용 모듈은 없습니다</b>. 티켓링크의 단체 처리 모델이 전용 화면이 아니라 <b>기존 기능의 조합</b>이기 때문입니다. 실제로 예매 화면에는 예매수수료 부과와 함께 <b>'단체' 옵션·금액 입력란</b>이 이미 있습니다(셀러가이드 p.26). 달샤베트 의뢰서에도 "10/1·10/2 11시 = 단체 전용 회차", "[4] 단체할인: 전화 예매만 가능(10인+ 47%, 50인+ 50%)"로 이 모델이 반영돼 있습니다.</p>
+        <div class="qsub">해결책 (운영 체계)</div>
+        <ul>
+          <li><b>① 단체 전용 회차</b> — 특정 회차를 개인 판매에서 숨기고 단체 배정.</li>
+          <li><b>② 전화(대리) 예매</b> — 셀러 예매 화면에서 무통장(가상계좌) 대리 예매, 단체할인 적용, ARS 수기결제 지원. 입금 확인은 내역조회 '예매대기(미입금) 포함' 조건.</li>
+          <li><b>③ 일괄 발권</b> — 방문 당일 전체예매발권으로 단체분 한 번에 출력.</li>
+          <li><b>B2B 코드</b> — 기관별 전용 URL 발급 시 학교·관공서 셀프 결제 채널로 활용(여수시청 코드 기운영).</li>
+        </ul>
+        <div class="qsub">관련 화면</div>
+        <div class="screens"><span class="sch">예매 <span class="p">/reserve/make/insert.nhn</span></span><span class="sch">좌석관리 <span class="p">/plan.nhn</span></span><span class="sch">전체예매발권 <span class="p">/siteReserveIssue/list.nhn</span></span></div>
+        <div class="reply" style="margin-top:16px"><div class="rl">회신문 (복붙용)</div>
+          <p>티켓링크 시스템에 단체 전용 예약 프로그램(별도 모듈)은 제공되지 않습니다. 다만 아래 3가지 조합으로 단체 예매를 운영할 수 있으며, 당관은 이를 표준 프로세스로 정립하겠습니다. ① 단체 전용 회차 운영 ② 담당자가 셀러 시스템 예매 화면에서 단체 건을 무통장으로 등록(단체할인 10인 47%·50인 50% 적용) ③ 방문 당일 전체예매발권으로 일괄 출력. 학교·관공서가 직접 결제를 원할 경우 기관별 B2B 전용 URL(할인코드) 발급으로 셀프 예매 채널을 열 수 있습니다.</p>
+          <p class="rq"><b>티켓링크 확인 요청</b> — 신규 기관 B2B 코드 발급 절차·소요 기간, 단체 회차의 채널 숨김 설정 방법.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- A-1-b -->
+    <div class="qsec s" id="qA1b">
+      <div class="qhead"><div class="qtag">A-1-b · 증빙서류</div><div class="qtitle">단체 예약·결제 후 제공 가능한 증빙서류</div>
+        <div class="verdict s"><span class="vdot"></span>현금영수증·카드전표·구매영수증·입금증 발급 / 세금계산서는 면세라 불가(대안)</div></div>
+      <div class="qbody">
+        <div class="qq"><span class="ql">질문 원문</span>단체 예약·결제 완료 후 제공 가능한 증빙서류 종류는? (영수증·거래명세서·세금계산서·카드매출전표·현금영수증 등)</div>
+        <div class="qsub">결제수단별 발급 가능 증빙</div>
+        <ul>
+          <li><b>무통장/현금</b> — 현금영수증(소득공제용 또는 <b>사업자번호 지출증빙용</b>), 구매영수증, 입금증(예매 화면 증빙서류 팝업, 이메일 발송 가능)</li>
+          <li><b>신용카드</b> — 카드매출전표(승인전표), 구매영수증, 카드영수증 이메일 발송</li>
+          <li><b>간편결제(페이)</b> — 시스템 증빙 미지원 → 각 페이사 전자영수증</li>
+          <li><b>공통</b> — 거래명세서는 예울마루 자체 발행</li>
+        </ul>
+        <div class="qsub">세금계산서 · 원인</div>
+        <p>공연 입장권은 <b>부가세 면세 용역</b>이라 세금계산서 발행 대상이 아닙니다. 관공서·학교의 지출증빙 요구는 ① 지출증빙용 현금영수증(사업자번호) 또는 ② 카드매출전표로 충족됩니다. 증빙 권한이 3주체(티켓링크 시스템 / PG(페이코) / 예울마루 재무)로 분산돼 있어 문의마다 개별 대응이 필요했던 것이 근본 원인 — 아래 매트릭스를 공식 안내문으로 배포하면 해소됩니다.</p>
+        <p class="mut">시스템 증빙은 <b>현장 판매 건 기준</b>(셀러가이드 p.87). 온라인 예매 건은 고객이 티켓링크 마이페이지에서 직접 출력.</p>
+        <div class="qsub">관련 화면</div>
+        <div class="screens"><span class="sch">증빙 <span class="p">/receiptList/list.nhn</span></span><span class="sch">현금영수증 <span class="p">/receiptList/cashAppr.nhn</span></span><span class="sch">카드취소전표 <span class="p">/print/cancel-credit.nhn</span></span></div>
+        <div class="reply" style="margin-top:16px"><div class="rl">회신문 (복붙용)</div>
+          <p>결제 완료 후 제공 가능한 증빙서류는 결제수단에 따라 다음과 같습니다. <b>무통장/현금</b> — 현금영수증(소득공제용 또는 사업자번호 지출증빙용)·구매영수증·입금증. <b>신용카드</b> — 카드매출전표·구매영수증·카드영수증 이메일. <b>간편결제</b> — 각 페이사 전자영수증. <b>공통</b> — 거래명세서(예울마루 발행). 세금계산서는 공연 입장권이 부가세 면세 용역이라 발행 대상이 아니며, 관공서·학교 지출증빙은 지출증빙용 현금영수증 또는 카드매출전표로 충족됩니다. ※ 시스템 증빙 발급은 현장 판매 건 기준이며, 온라인 예매 건은 구매자가 티켓링크 마이페이지에서 직접 출력합니다.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- A-2 -->
+    <div class="qsec s" id="qA2">
+      <div class="qhead"><div class="qtag">A-2 · 모바일 초대권</div><div class="qtitle">대관 공연 초대권(교환권)의 모바일 발행</div>
+        <div class="verdict s"><span class="vdot"></span>가능 — 모바일 티켓 발송 인프라 실재. 비용 150원/장 + 디지털티켓 건별 견적</div></div>
+      <div class="qbody">
+        <div class="qq"><span class="ql">질문 원문</span>대관 공연 초대권(교환권)을 모바일 티켓 형태로 발행 가능한지? 발행 방식 및 사용 절차(비용)는?</div>
+        <div class="qsub">발행 방식</div>
+        <ul>
+          <li>상품 등록 시 <b>초대권(0원) 권종 + 모바일 티켓 사용</b> 명기 (이미지 600×368 규격 제출). 0원 권종 추가는 티켓링크 운영팀 요청.</li>
+          <li>수령자 명단을 <b>엑셀로 업로드</b> → 시스템의 모바일 티켓 발송 기능이 <b>알림톡(카카오)·이메일</b>로 즉시/예약 발송(셀러가이드 p.84~85).</li>
+          <li>관람 당일 모바일 바코드를 <b>입장처리 스캔</b>으로 바로 입장(실물 교환 불요).</li>
+        </ul>
+        <div class="qsub">비용 · 원인</div>
+        <p>초대권·교환권·0원권 발권은 계약상 <b>장당 150원(VAT 포함)</b>(② 제3조 6항). 온라인 판매 티켓 발권은 무료(② 제4조 1항). 모바일(디지털) 티켓 제작·발급은 티켓링크 재위탁사 <b>㈜부스터랩</b> 수행이라 수량·형태별 <b>건별 견적</b>이 필요 — 확정 수량으로 사전 요청 시 견적 안내. <span class="mono">단, 등록 전용 상품은 발권료 미발생.</span></p>
+        <p class="mut">실물 교환권 병행도 가능(당일권/기간권). <b>교환권은 발권 취소 불가</b>에 유의(셀러가이드 p.18). 발행·사용 현황은 유무료 판매집계·교환권 발행내역으로 리포팅.</p>
+        <div class="qsub">관련 화면</div>
+        <div class="screens"><span class="sch">교환권 <span class="p">/exchangeTicket/list.nhn</span></span><span class="sch">지정발권(0원권) <span class="p">/issueSeat/agency.nhn</span></span><span class="sch">입장처리 <span class="p">/entrance/barcode.nhn</span></span><span class="sch">모바일 티켓 발송 <span class="p">보고서S</span></span></div>
+        <div class="reply" style="margin-top:16px"><div class="rl">회신문 (복붙용)</div>
+          <p>대관 공연 초대권(교환권)은 모바일 티켓 형태로 발행 가능합니다. 발행 방식: 상품 등록 시 초대권(0원) 권종과 모바일 티켓 사용을 명기 → 수령자 명단을 엑셀로 업로드 → 시스템이 알림톡/이메일로 즉시·예약 발송 → 관람 당일 모바일 바코드를 현장 스캔으로 입장. 비용: 초대권·교환권·0원권 발권 시 계약상 장당 150원(VAT 포함)이 발생하며, 모바일(디지털) 티켓 제작·발급은 제휴사를 통해 진행되어 수량·형태에 따라 건별 견적이 필요합니다. 실물 교환권 병행도 가능하며 발행·사용 현황은 보고서로 제공합니다.</p>
+          <p class="rq"><b>티켓링크 확인 요청</b> — 모바일 초대권 발급비(디지털 티켓 단가), 명단 업로드 포맷, 알림톡 발송 비용 부담 주체.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- A-3 -->
+    <div class="qsec w" id="qA3">
+      <div class="qhead"><div class="qtag">A-3 · 보고서 / API</div><div class="qtitle">보고서 자체 양식 직접 출력 · API 제공</div>
+        <div class="verdict w"><span class="vdot"></span>자체 양식 직접 출력 불가 — 정형 보고서+엑셀 / API는 협의 경로</div></div>
+      <div class="qbody">
+        <div class="qq"><span class="ql">질문 원문</span>첨부한 보고서 형태로 시스템에서 직접 출력(다운로드) 가능한지? 어렵다면 데이터를 API로 받아 자체 보고서를 구성할 수 있는지? 가능 시 제공 범위·연동 방식은?</div>
+        <div class="qsub">시스템 현황·원인</div>
+        <p>시스템이 주는 것은 <b>정형 보고서(현 계정 10종, 권한 따라 최대 16종) + 엑셀 다운로드</b>까지. 임의 양식(첨부 서식)으로의 직접 출력 기능은 없습니다 — 보고서 화면이 서버집계→HTML 테이블→그리드 렌더의 <b>고정 파이프라인</b>이라 템플릿 커스터마이즈 계층이 없기 때문. 단 보고서 메뉴는 정산 역할을 겸해(정산서 저장·상품별 수수료 집계) 필요한 탭 권한 개방을 함께 요청할 수 있습니다.</p>
+        <div class="qsub">API — 기술 기반은 이미 있음</div>
+        <ul>
+          <li>예울마루 홈페이지 예매가 이미 <b>티켓링크 API 연동</b>으로 운영 중(② 제3조 2항).</li>
+          <li>판매 데이터가 <b>KOPIS(공연예술통합전산망)에 일 단위 자동 제공</b>되는 파이프라인 존재.</li>
+          <li>→ 셀러용 통계 API 개방을 <b>공식 질의</b> (범위: 예매/취소 원시내역·일별 집계·정산 확정 / 연동: REST·파트너 인증키·조회 주기).</li>
+        </ul>
+        <div class="qsub">단기 실행 (무개발)</div>
+        <p>보고서 엑셀 2~3종(유무료 판매집계 + 상품 등급/권종별 집계 + 내역조회 raw)을 파워쿼리로 자동 취합하는 <b>반자동 템플릿</b>으로 우선 대응. 축(화면=창구/상품 vs 보고양식=사업)의 변환 계층만 만들면 됨.</p>
+        <div class="qsub">관련 화면</div>
+        <div class="screens"><span class="sch">보고서(10종 탭) <span class="p">/report/issue.nhn</span></span><span class="sch">내역조회 <span class="p">/detail/member.nhn</span></span><span class="sch">엑셀 다운로드 <span class="p">/detail/member/download.nhn</span></span></div>
+        <div class="reply" style="margin-top:16px"><div class="rl">회신문 (복붙용)</div>
+          <p>① 첨부 양식 그대로의 직접 출력은 시스템에서 지원되지 않습니다. 제공되는 것은 정형 보고서(현 계정 10종, 권한 따라 최대 16종)와 각 화면의 엑셀 다운로드입니다. ② 당관은 단기적으로 보고서 엑셀 2~3종을 자동 취합하는 반자동 템플릿을 구축하고, 티켓링크에 데이터 API 제공을 공식 질의하겠습니다. 예울마루 홈페이지 예매가 이미 티켓링크 API 연동으로 운영되고 판매 데이터가 KOPIS에 일 단위 제공되는 만큼 기술 기반은 존재합니다. ③ API 확정 시 제공 범위(판매/취소 원시내역·일별 집계·정산 확정)·인증·연동 방식·주기를 정리해 공유드리겠습니다.</p>
+          <p class="rq"><b>티켓링크 질의</b> — 셀러 대상 판매 데이터 API 제공 가능 여부와 (a) 제공 범위 (b) 연동 방식(REST·파트너 키·주기) (c) 비용. 불가 시 보고서 엑셀 정기 자동 전달(메일/SFTP) 대안 여부.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- A-4 -->
+    <div class="qsec s" id="qA4">
+      <div class="qhead"><div class="qtag">A-4 · 사업별 ID</div><div class="qtitle">공연·교육·전시·대관 별도 ID(관리코드) 운영</div>
+        <div class="verdict s"><span class="vdot"></span>가능 — 관리코드 규칙(즉시) + 파트너 계정 분리(선택). 매출·통계·정산 분리 관리</div></div>
+      <div class="qbody">
+        <div class="qq"><span class="ql">질문 원문</span>사업 유형별(공연/교육/전시/대관)로 별도 ID(관리코드)를 부여해 운영할 수 있는지? 사업별 매출·통계·정산 데이터가 분리 관리되는지?</div>
+        <div class="qsub">시스템 현황·원인</div>
+        <p>시스템은 이미 <b>멀티 파트너 전환</b> 구조(판매처 셀렉트 + changePartner)와 창구(1~10, 90번대) 구분을 지원하고, 로그인 시 "채널검색→창구 선택" 절차가 그 증거. 상품에는 <b>관리 카테고리·상품코드·장르(공연/전시/스포츠)</b> 필드가 이미 붙어 보고서 곳곳에 컬럼으로 나옵니다(셀러가이드 p.51·p.53·p.65). 다만 현재는 단일 계정(reservePartnerNo=27247)으로만 운영 중이라 규칙이 없을 뿐 — 상품 등록·관리코드 부여는 티켓링크 내부(nbs 상품등록)에서 의뢰서 기반 수행.</p>
+        <div class="qsub">해결책 2단계</div>
+        <ul>
+          <li><b>① 관리코드 규칙 (즉시)</b> — <span class="mono">YWM-PF(공연)/EX(전시)/ED(교육)/RN(대관)-연도-일련</span>. 의뢰서 작성 때 강제. 보고서 상품별 통합 집계 + 유무료 판매집계의 상품코드 컬럼으로 사업별 매출·통계 분리 집계.</li>
+          <li>정산은 <b>행사(상품) 단위</b>로 완결되므로 코드만 정해두면 정산 데이터도 자연 분리. 전시·교육은 D-1 전용이라 채널 축에서도 이미 분리.</li>
+          <li><b>② 파트너 계정 분리 (선택)</b> — 완전 분리(정산계좌·보고서·창구)가 필요한 사업만 티켓링크에 별도 파트너 ID 발급 요청(추가 계정은 담당자 요청으로 가능, 매뉴얼 p.4).</li>
+        </ul>
+        <div class="qsub">관련 화면</div>
+        <div class="screens"><span class="sch">파트너 전환 <span class="p">/oauth/changePartner.nhn</span></span><span class="sch">상품별 통합집계 <span class="p">/report/multi-product-report</span></span><span class="sch">내역조회 <span class="p">/detail/member.nhn</span></span></div>
+        <div class="reply" style="margin-top:16px"><div class="rl">회신문 (복붙용)</div>
+          <p>사업 유형별 구분 운영이 가능하며 2가지 방식을 병행 적용하겠습니다. ① 관리코드 체계(즉시): 상품 등록 시 관리코드를 「YWM-PF(공연)/EX(전시)/ED(교육)/RN(대관)-연도-일련」 규칙으로 부여합니다. 시스템 보고서(상품별 통합 집계, 유무료 판매집계의 상품코드 컬럼)에서 사업별 매출·통계가 분리 집계되고, 정산이 행사(상품) 단위이므로 정산 데이터도 코드 기준 분리됩니다. ② 파트너 계정 분리(선택): 정산 계좌·보고서·창구 단위 완전 분리가 필요한 사업은 티켓링크에 별도 파트너 ID 발급을 요청할 수 있습니다. 우선 ①로 운영하고 필요 사업만 ②를 적용하는 것을 권장합니다.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- B-1-a -->
+    <div class="qsec s" id="qB1a">
+      <div class="qhead"><div class="qtag">B-1-a · 망취소</div><div class="qtitle">망상 결제(망취소) 케이스 및 대응</div>
+        <div class="verdict s"><span class="vdot"></span>결제-예매 불일치 대응 장치 실재 — 예정된 시연에서 검증</div></div>
+      <div class="qbody">
+        <div class="qq"><span class="ql">질문 원문</span>망상 결제(망취소) 케이스가 있는지, 있다면 대응 방법은? (테스트 추후 시연 예정)</div>
+        <div class="qsub">시스템 장치</div>
+        <ul>
+          <li>발권 실패 시 <b>예매취소/미발권 자동 롤백</b> (<span class="mono">/print/rollback.nhn</span>).</li>
+          <li>좌석 선점은 <b>10분(가이드상 8~10분) 경과 시 자동 해제</b>.</li>
+          <li>발권 전 상태 복구는 운영팀 요청 절차 운영.</li>
+          <li>PG(페이코) 레벨 미완료 승인은 <b>티켓링크-PG 자동 대사</b>로 처리(셀러 화면 밖).</li>
+        </ul>
+        <div class="qsub">예정 시연 체크리스트</div>
+        <ul>
+          <li>카드 승인 직후 통신 두절 시 <b>승인 자동취소 여부·소요시간</b></li>
+          <li>무통장 기한 미입금 시 <b>자동 취소·좌석 복귀</b></li>
+          <li>발권 중 프린터 장애 시 <b>롤백·재발권 절차</b></li>
+          <li>이중 결제 시 <b>환불 경로·처리 기한</b></li>
+        </ul>
+        <div class="qsub">관련 화면</div>
+        <div class="screens"><span class="sch">발권취소/환불 <span class="p">/cancelIssue/list.nhn</span></span><span class="sch">롤백 API <span class="p">/print/rollback.nhn</span></span></div>
+      </div>
+    </div>
+
+    <!-- B-1-b -->
+    <div class="qsec w" id="qB1b">
+      <div class="qhead"><div class="qtag">B-1-b · 매수제한 / 방문일</div><div class="qtitle">인터넷 예매 매수제한 · 관객 방문일자 지정</div>
+        <div class="verdict w"><span class="vdot"></span>매수제한 → 가능 · 방문일자 지정 → 불가(대안 있음)</div></div>
+      <div class="qbody">
+        <div class="qq"><span class="ql">질문 원문</span>① 인터넷 예매 구매 매수 제한이 현장과 별개로 가능한지? ② 관객의 방문일자 지정이 가능한지(지정 시 지정일 이후 티켓 취소 불가한지)?</div>
+        <div class="qsub">① 매수제한 — 가능</div>
+        <p>상품 등록 시 <b>1인 N매</b> 제한을 설정하며 온라인 채널에만 적용됩니다(현장 발권은 이 제한과 무관). 보안문자(클린예매) 옵션도 함께 설정 가능. 셀러 화면엔 직접 설정 기능이 없고 <b>의뢰서→상품 등록 단계에서 티켓링크가 설정</b>합니다.</p>
+        <div class="qsub">② 방문일자 지정 — 불가 · 원인</div>
+        <p>전시 상품은 <b>유효기간 내 1회 방문하는 기간권 모델</b>로 등록되어 방문일자 필드 자체가 없습니다(비지정발권도 기간권 상품은 일자 축에서 비노출, 셀러가이드 p.11). 실계정 전시 상품(productId 64250)도 실제 기간 관람 모델로 확인. 따라서 '지정일 이후 취소 불가'도 걸 대상이 없어 불가. 취소는 계약 기준(관람 유효기간 종료 전일 17시)을 따릅니다.</p>
+        <div class="qsub">대안 2가지</div>
+        <ul>
+          <li><b>회차형 등록</b> — 전시를 일자별 회차 상품(회차당 정원=일일 수용량)으로 등록하면 일자 지정·해당일 전일 17시 취소 구조가 됩니다(티켓링크 협의).</li>
+          <li><b>하이브리드</b> — 티켓은 기간권으로 팔되 <b>예울마루 홈페이지에서 방문 예약(날짜 슬롯)만 자체 접수</b>. 티켓 취소 정책과 분리돼 리스크 없음.</li>
+        </ul>
+        <div class="qsub">관련 화면</div>
+        <div class="screens"><span class="sch">지정발권 <span class="p">/issueSeat/agency.nhn</span></span><span class="sch">비지정발권 <span class="p">/issueZone.nhn</span></span></div>
+        <div class="reply" style="margin-top:16px"><div class="rl">회신문 (복붙용)</div>
+          <p><b>매수제한</b> — 가능합니다. 상품 등록 시 "1인 N매" 제한을 설정하며(현장 발권과는 별개로 온라인 채널에만 적용), 보안문자(클린예매) 옵션도 함께 설정할 수 있습니다. 희망 매수를 알려주시면 의뢰서에 반영합니다.</p>
+          <p><b>방문일자 지정</b> — 전시 상품은 유효기간 내 1회 방문하는 기간권 모델로 등록되어 방문일자 지정이 불가하며(따라서 지정일 이후 취소 불가 설정도 대상이 없어 불가), 취소는 계약 기준을 따릅니다. 대안으로 ① 일자별 회차 상품 등록(해당일 전일 17시 취소 가능 구조), 또는 ② 티켓은 기간권 판매 + 홈페이지에서 방문 예약만 별도 접수하는 하이브리드를 제안드립니다.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- B-2 -->
+    <div class="qsec s" id="qB2">
+      <div class="qhead"><div class="qtag">B-2 · 정산</div><div class="qtitle">판매 종료일 이후 1건 정산 · 정산 완료일 기준</div>
+        <div class="verdict s"><span class="vdot"></span>가능 — 행사 종료 후 영업일 7일 이내 1건 정산</div></div>
+      <div class="qbody">
+        <div class="qq"><span class="ql">질문 원문</span>판매 종료일 이후 1건으로 정산 가능한지? 티켓링크의 별도 정산 완료일 기준이 있는지?</div>
+        <div class="qsub">계약 기준</div>
+        <ul>
+          <li><b>행사 최종 완료 후 영업일 7일 이내</b>, 판매대금에서 수수료 등 공제 후 지정계좌 일괄 입금 — 판매 종료 후 1건 정산이 기본.</li>
+          <li><b>현장 현금 직수취분</b>은 입금 정산에서 제외(수수료만 정산 반영).</li>
+          <li>취소수수료 발생 시 그 <b>15%를 예울마루에 지급</b>.</li>
+        </ul>
+        <div class="qsub">장기 전시 팁</div>
+        <p>수개월 전시는 '행사 완료'가 늦어 현금흐름이 묶일 수 있어 <b>월 단위 중간 정산</b>을 부속 합의로 협의 가능(② 제6조 3항 협의 조정 + 제23조 2항 부속문서 절차). 판매 마감은 공연 전일 17시(종료일이 일요일이면 토요일 11시).</p>
+        <div class="qsub">관련 화면</div>
+        <div class="screens"><span class="sch">제휴포털 매출현황 <span class="p">/report/shoppingSaleDateSettlement.nhn</span></span><span class="sch">등급/권종별 집계(입금현황) <span class="p">보고서</span></span></div>
+        <div class="reply" style="margin-top:16px"><div class="rl">회신문 (복붙용)</div>
+          <p>가능합니다. 계약상 정산은 행사(판매) 최종 완료 후 영업일 기준 7일 이내에 판매대금에서 수수료 등을 공제하고 지정계좌로 일괄 입금하는 구조로, 판매 종료일 이후 1건 정산이 기본입니다(별도 정산 완료일 기준 = 종료 후 7영업일). 참고: ① 현장에서 현금으로 직접 수취한 판매분은 입금 정산에서 제외되고 수수료만 반영됩니다. ② 취소수수료가 발생한 경우 그 15%가 당관에 지급됩니다. 장기 전시의 경우 현금흐름을 위해 월 단위 중간 정산을 협의할 수 있습니다.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- B-3 -->
+    <div class="qsec s" id="qB3">
+      <div class="qhead"><div class="qtag">B-3 · 수수료</div><div class="qtitle">홈페이지 전용 오픈 시 수수료 구조</div>
+        <div class="verdict s"><span class="vdot"></span>판매수수료(무통장0·카드3·네이버6%) + 예매수수료 2,000원(홈피·현장 면제)</div></div>
+      <div class="qbody">
+        <div class="qq"><span class="ql">질문 원문</span>홈페이지 예매 전용으로 열면 수수료가 어떻게 되는지? (카드 수수료 3%? 예매 수수료 2천원?)</div>
+        <div class="qsub">수수료는 2종 — 나눠서</div>
+        <ul>
+          <li><b>① 판매(결제)수수료 · 예울 부담</b> — 홈페이지 전용이어도 결제수단별로 발생: <b>무통장 0% / 카드 3% / 네이버페이 6%</b> (VAT 별도). 전시·교육은 홈페이지 전용이라 이 요율만.</li>
+          <li><b>② 예매수수료 2,000원/매 · 고객 부담</b> — <b>홈페이지 예매·현장 발권은 면제</b>(③ 의뢰서 명문). 티켓링크·네이버 등 외부 채널에서만 부과.</li>
+        </ul>
+        <div class="qsub">외부 링크 → 홈페이지 강제 이동</div>
+        <p>타 링크로 티켓링크 예매 페이지가 열릴 때 이를 홈페이지로 강제 이동시키는 것은 <b>현재 불가</b>(판매 채널 정책·네이버 독점, ② 제12조 1항)이나, 노출 채널 제한 등 조율 여지는 있어 협의 중.</p>
+        <p class="mut">채널별 정산은 위 <b>02 수수료 매트릭스</b>와 66,000원 예시 참고. 복합결제는 주결제 수단 기준.</p>
+        <div class="reply" style="margin-top:16px"><div class="rl">회신문 (복붙용)</div>
+          <p>수수료는 성격이 다른 2종이므로 구분해 안내드립니다. ① 판매(결제)수수료(예울마루 부담): 홈페이지 전용으로 열어도 결제수단별 수수료가 발생합니다 — 무통장 0% / 카드 3% / 네이버페이 6%(부가세 별도, 티켓 실판매가 기준). 전시·교육은 홈페이지 전용이므로 이 요율만 적용됩니다. ② 예매수수료 2,000원/매(고객 부담): 예울마루 홈페이지 예매와 현장 발권은 면제이며, 티켓링크·네이버 등 외부 채널 예매 시에만 부과됩니다. ③ 외부 링크로 티켓링크 예매 페이지가 열리는 경우 이를 홈페이지로 강제 이동시키는 것은 현재 불가하나 조율 여지가 있어 협의 중입니다.</p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- 06 확인 메모 -->
+<section id="memo">
+  <div class="wrap">
+    <p class="eyebrow"><span class="no">06</span> 오픈 전 확인 메모</p>
+    <p class="lede" style="margin-bottom:16px">계약 검토는 완료된 사안이라 리스크가 아니라 <b style="color:var(--tx-mut)">"상품 오픈 전 티켓링크와 한 번 맞춰두면 되는 체크"</b> 수준으로만 접어둡니다.</p>
+    <details class="memo">
+      <summary><span class="mk">▶</span> 확인 메모 <span class="cnt">4건 · 펼쳐보기</span></summary>
+      <div class="memo-body">
+        <div class="memo-item"><b>네이버페이 요율 경계</b> — 홈페이지에서 네이버페이로 결제한 건이 카드 3%인지 네이버 6%인지(결제수단 기준 vs 유입채널 기준) 한 줄 확인. <span class="mono">운영 인식: 무통장 0 / 카드 3 / 네이버페이 6%</span></div>
+        <div class="memo-item"><b>B2B 전용 URL 요율</b> — 판매수수료(3% 적용 여부)와 예매수수료 2,000원 부과 여부를 오픈 전 확정.</div>
+        <div class="memo-item"><b>등록 전용 상품 발권료 면제</b> — 운영상 면제를 부속 합의로 한 줄 남겨두면 이후 대관 건마다 재문의가 사라짐.</div>
+        <div class="memo-item"><b>의뢰서 서식 수수료 칸</b> — 서식 기본값(온라인 5/7% 등)이 계약(온라인 3 / 홈피 0·3 / 네이버 6%)과 달라, <b>"기 계약 내용에 따름"</b>으로 통일 권장.</div>
+      </div>
+    </details>
+  </div>
+</section>
+
+<div class="wrap foot">
+  <div><b>근거</b> ① 위탁판매거래 연간계약서(2026.06.12) 제3·4·6·7·9조 · ② 서비스 운영 제휴계약서(2026.02.24) · ③ 판매대행 의뢰서(달샤베트) · ④ 셀러 시스템 실캡처(GNB 17메뉴, API 166) · ⑤ 공식 매뉴얼 2종(관리자 31p·셀러가이드 112p)</div>
+  <div style="margin-top:6px"><b>비고</b> 자립형 단일 파일(외부 의존 0, 고객 PII 없음) · 인덱스 A-1~A-4 / B-1~B-3 · 작성 2026-07-08</div>
+</div>
+      </div><!-- /.rp -->
+    </div><!-- /.ts-modal-body -->
+  </div><!-- /.ts-modal -->
+</div><!-- /#tsModalBg -->
+
+<div class="ts-toast" id="tsToast" role="status"></div>
+
+<script>
+(function(){
+  'use strict';
+  /* ── 단일 데이터 출처 — 순서도 팝오버가 참조(전체 근거는 모달 보고서 원문) ── */
+  var FEES = {
+    c1:{code:'C-1', name:'초대권·교환권·0원권', rows:[
+      ['판매수수료','없음 (판매 아님)'],
+      ['예매수수료 2,000원','없음'],
+      ['발권수수료','150원/장 (VAT 포함)']],
+      ex:'초대권(0원권) 입금 0원 · 발권료만 별도 −150원/장',
+      note:'등록 전용 상품은 발권료 미발생. 모바일(디지털) 티켓은 건별 견적.'},
+    c2:{code:'C-2', name:'전화 예매 (셀러 대리예매)', rows:[
+      ['판매수수료','현금 3% · 카드 3%'],
+      ['예매수수료 2,000원','상품 설정에 따름'],
+      ['발권수수료','없음']],
+      ex:'66,000원 카드 결제 시 입금 63,822원',
+      note:'단체할인(10인+ 47% · 50인+ 50%)은 전화 예매만 가능(달샤베트 의뢰서).'},
+    d1:{code:'D-1', name:'예울마루 홈페이지', rows:[
+      ['판매수수료','무통장 0% · 카드 3%'],
+      ['예매수수료 2,000원','면제'],
+      ['발권수수료','없음']],
+      ex:'66,000원 → 무통장 66,000원 · 카드 63,822원 입금',
+      note:'전시·교육은 홈페이지 전용 개방이라 이 요율만 적용.'},
+    d2:{code:'D-2', name:'B2B 전용 URL (기업 할인코드)', rows:[
+      ['판매수수료','3% (협의 확정)'],
+      ['예매수수료 2,000원','협의'],
+      ['발권수수료','없음']],
+      ex:'요율·예매료 부과 여부는 오픈 전 확정 필요(확인 메모)',
+      note:'기관별 전용 URL로 학교·관공서 셀프 결제 채널 활용(여수시청 기운영).'},
+    e1:{code:'E-1', name:'제휴채널 — 네이버 등', rows:[
+      ['판매수수료','6% (결제수단 무관)'],
+      ['예매수수료 2,000원','부과 (고객 부담)'],
+      ['발권수수료','없음']],
+      ex:'66,000원 → 입금 61,644원',
+      note:'네이버 채널은 티켓링크 독점 판매. 홈페이지 네이버페이 결제 요율 경계는 확인 메모 참조.'},
+    e2:{code:'E-2', name:'티켓링크 홈페이지 (웹·모바일·콜센터)', rows:[
+      ['판매수수료','현금 3% · 카드 3%'],
+      ['예매수수료 2,000원','부과 (고객 부담)'],
+      ['발권수수료','없음']],
+      ex:'고객 68,000원 지불(예매료 포함) → 입금 63,822원',
+      note:''},
+    settle:{code:'[4]', name:'정산 규칙 (계약 기준)', rows:[
+      ['정산 시점','행사 종료 후 영업일 7일 내 1건 입금'],
+      ['판매대금 기준','고객 실지급액 (할인 적용 후)'],
+      ['현장 현금 직수취','입금 정산 제외 · 수수료만 반영'],
+      ['취소수수료','티켓링크 수취분의 15%를 예울마루에 지급'],
+      ['판매 마감','공연 전일 17:00 (종료일 일요일 = 토 11:00)']],
+      ex:'장기 전시는 월 단위 중간 정산 협의 가능',
+      note:'수수료 %는 전부 VAT 별도 · 복합결제는 주결제 수단 기준.'}
+  };
+  var QS = {
+    qA1a:{tag:'A-1-a · 단체 예매', sig:'w', sigTx:'조건부', title:'단체 관람객 예약 프로그램 구축',
+      q:'학교·관공서 등 단체 관람객을 위한 별도 예약 프로그램(단체 예매 관리 기능) 구축이 가능한지?',
+      v:'전용 모듈은 없음 — 단체 전용 회차 + 전화(대리) 예매 + 일괄 발권 3종 조합으로 운영 가능'},
+    qA1b:{tag:'A-1-b · 증빙서류', sig:'s', sigTx:'가능', title:'단체 예약·결제 후 증빙서류',
+      q:'결제 완료 후 제공 가능한 증빙서류 종류는? (영수증·거래명세서·세금계산서·카드전표·현금영수증 등)',
+      v:'현금영수증·카드전표·구매영수증·입금증 발급 / 세금계산서는 면세 용역이라 불가(대안 있음)'},
+    qA2:{tag:'A-2 · 모바일 초대권', sig:'s', sigTx:'가능', title:'대관 초대권(교환권) 모바일 발행',
+      q:'대관 공연 초대권(교환권)을 모바일 티켓 형태로 발행 가능한지? 발행 방식·비용은?',
+      v:'가능 — 알림톡·이메일 발송 인프라 실재. 발권 150원/장 + 디지털 티켓 건별 견적'},
+    qA3:{tag:'A-3 · 보고서 / API', sig:'w', sigTx:'조건부', title:'보고서 자체 양식 출력 · API 제공',
+      q:'첨부 양식 그대로 시스템에서 직접 출력 가능한지? 어렵다면 데이터를 API로 받아 자체 구성할 수 있는지?',
+      v:'자체 양식 직접 출력 불가 — 정형 보고서+엑셀로 대응 / API는 공식 질의(협의) 경로'},
+    qA4:{tag:'A-4 · 사업별 ID', sig:'s', sigTx:'가능', title:'공연·교육·전시·대관 별도 ID(관리코드)',
+      q:'사업 유형별 별도 ID(관리코드) 운영과 사업별 매출·통계·정산 분리 관리가 가능한지?',
+      v:'가능 — 관리코드 규칙(즉시) + 파트너 계정 분리(선택) 2단계'},
+    qB1a:{tag:'B-1-a · 망취소', sig:'s', sigTx:'가능', title:'망상 결제(망취소) 케이스·대응',
+      q:'망상 결제(망취소) 케이스가 있는지, 있다면 대응 방법은?',
+      v:'결제-예매 불일치 대응 장치 실재 — 자동 롤백·좌석 선점 해제·PG 자동 대사'},
+    qB1b:{tag:'B-1-b · 매수제한 / 방문일', sig:'w', sigTx:'조건부', title:'인터넷 매수제한 · 방문일자 지정',
+      q:'인터넷 예매 매수 제한이 현장과 별개로 가능한지? 관객 방문일자 지정이 가능한지?',
+      v:'매수제한 가능(1인 N매·온라인만) / 방문일자 지정 불가 — 회차형·하이브리드 대안 2가지'},
+    qB2:{tag:'B-2 · 정산', sig:'s', sigTx:'가능', title:'판매 종료 후 1건 정산',
+      q:'판매 종료일 이후 1건으로 정산 가능한지? 별도 정산 완료일 기준이 있는지?',
+      v:'가능 — 행사 종료 후 영업일 7일 이내 1건 정산이 계약 기본'},
+    qB3:{tag:'B-3 · 수수료', sig:'s', sigTx:'가능', title:'홈페이지 전용 오픈 시 수수료',
+      q:'홈페이지 예매 전용으로 열면 수수료가 어떻게 되는지? (카드 3%? 예매 수수료 2천 원?)',
+      v:'판매수수료(무통장 0·카드 3·네이버 6%) + 예매수수료 2,000원(홈피·현장 면제) 2종 구분'}
+  };
+
+  var canvas = document.getElementById('tsCanvas');
+  var pop = document.getElementById('tsPop');
+  var modalBg = document.getElementById('tsModalBg');
+  var modalBody = document.getElementById('tsBody');
+  var toastEl = document.getElementById('tsToast');
+  var openBadge = null;
+  var toastTimer = null;
+
+  function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function toast(msg){
+    toastEl.textContent = msg; toastEl.classList.add('on');
+    clearTimeout(toastTimer); toastTimer = setTimeout(function(){ toastEl.classList.remove('on'); }, 1700);
+  }
+
+  /* ── 팝오버 ── */
+  function closePop(){
+    pop.classList.remove('on');
+    if (openBadge){ openBadge.setAttribute('aria-expanded','false'); openBadge = null; }
+  }
+  function buildQ(ids){
+    if (ids.length === 1){
+      var d = QS[ids[0]];
+      return '<div class="tp-tag">' + esc(d.tag) + ' <span class="sig ' + d.sig + '">' + d.sigTx + '</span></div>' +
+        '<div class="tp-title">' + esc(d.title) + '</div>' +
+        '<div class="tp-q">' + esc(d.q) + '</div>' +
+        '<div class="tp-v ' + d.sig + '"><span class="vdot"></span><span>' + esc(d.v) + '</span></div>' +
+        '<div class="tp-acts"><button class="btn btn--primary btn--sm" data-go="' + ids[0] + '" type="button">상세·회신문 보기</button></div>';
+    }
+    var h = '<div class="tp-tag">운영 문의 ' + ids.length + '건</div><ul class="tp-list">';
+    ids.forEach(function(id){
+      var d = QS[id];
+      h += '<li><span class="sig ' + d.sig + '">' + d.sigTx + '</span><span class="t">' + esc(d.title) +
+        '</span><button class="btn btn--neutral btn--sm" data-go="' + id + '" type="button">상세</button></li>';
+    });
+    return h + '</ul>';
+  }
+  function buildFee(key){
+    var d = FEES[key];
+    var h = '<div class="tp-tag">' + esc(d.code) + ' · 수수료</div><div class="tp-title">' + esc(d.name) + '</div><table class="tp-fee">';
+    d.rows.forEach(function(r){ h += '<tr><td>' + esc(r[0]) + '</td><td>' + esc(r[1]) + '</td></tr>'; });
+    h += '</table><div class="tp-note">' + esc(d.ex) + (d.note ? '<br>' + esc(d.note) : '') + '</div>' +
+      '<div class="tp-acts"><button class="btn btn--primary btn--sm" data-go="' + (key === 'settle' ? 'settle' : 'fee') + '" type="button">' +
+      (key === 'settle' ? '정산 규칙 전체 보기' : '수수료 매트릭스 전체 보기') + '</button></div>';
+    return h;
+  }
+  function openPop(badge){
+    var qIds = badge.getAttribute('data-q');
+    var feeKey = badge.getAttribute('data-fee');
+    pop.innerHTML = qIds ? buildQ(qIds.split(',')) : buildFee(feeKey);
+    if (openBadge && openBadge !== badge) openBadge.setAttribute('aria-expanded','false');
+    openBadge = badge; badge.setAttribute('aria-expanded','true');
+    pop.classList.add('on');
+    if (window.matchMedia('(max-width:720px)').matches){ pop.style.left = ''; pop.style.top = ''; return; }
+    var cr = canvas.getBoundingClientRect(), br = badge.getBoundingClientRect();
+    var x = br.left - cr.left + br.width + 8;
+    var y = br.top - cr.top - 4;
+    var pw = pop.offsetWidth, ph = pop.offsetHeight;
+    if (x + pw > 1174) x = br.left - cr.left - pw - 8;
+    if (x < 6) x = 6;
+    if (y + ph > 754) y = 754 - ph;
+    if (y < 6) y = 6;
+    pop.style.left = x + 'px'; pop.style.top = y + 'px';
+  }
+  document.querySelectorAll('.ts-badge').forEach(function(b){
+    b.addEventListener('click', function(e){
+      e.stopPropagation();
+      if (openBadge === b){ closePop(); return; }
+      openPop(b);
+    });
+  });
+  pop.addEventListener('click', function(e){
+    var go = e.target.getAttribute && e.target.getAttribute('data-go');
+    if (go){ closePop(); openModal(go); return; }
+    e.stopPropagation();
+  });
+  document.addEventListener('click', function(e){
+    if (pop.classList.contains('on') && !pop.contains(e.target)) closePop();
+  });
+
+  /* ── 모달 (불투명 흰 풀시트) — 딥링크·초기화는 즉시 점프, 모달 안 내비만 smooth ── */
+  function jumpInstant(fn){
+    modalBody.style.scrollBehavior = 'auto';
+    fn();
+    modalBody.style.scrollBehavior = '';
+  }
+  function openModal(anchor){
+    modalBg.classList.add('on');
+    document.body.classList.add('ts-modal-open');
+    if (anchor){
+      requestAnimationFrame(function(){
+        var el = document.getElementById(anchor);
+        if (el) jumpInstant(function(){ el.scrollIntoView({block:'start'}); });
+      });
+    } else {
+      jumpInstant(function(){ modalBody.scrollTop = 0; });
+    }
+  }
+  function closeModal(){
+    modalBg.classList.remove('on');
+    document.body.classList.remove('ts-modal-open');
+  }
+  document.getElementById('openReport').addEventListener('click', function(){ openModal(null); });
+  document.getElementById('tsClose').addEventListener('click', closeModal);
+  document.getElementById('tsPrint').addEventListener('click', function(){ window.print(); });
+  document.addEventListener('keydown', function(e){
+    if (e.key !== 'Escape') return;
+    if (pop.classList.contains('on')) closePop();
+    else if (modalBg.classList.contains('on')) closeModal();
+  });
+
+  /* ── 회신문 복사 버튼 주입 (보고서 원문 무수정 — 런타임 주입) ── */
+  function copyText(t){
+    function ok(){ toast('회신문이 복사됐습니다'); }
+    function fb(){
+      var ta = document.createElement('textarea');
+      ta.value = t; ta.style.cssText = 'position:fixed;opacity:0';
+      document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); ok(); } catch(err){ toast('복사 실패 — 직접 선택해 주세요'); }
+      document.body.removeChild(ta);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(ok, fb);
+    else fb();
+  }
+  document.querySelectorAll('.rp .reply').forEach(function(r){
+    var rl = r.querySelector('.rl'); if (!rl) return;
+    var b = document.createElement('button');
+    b.type = 'button'; b.className = 'rp-copy'; b.textContent = '복사';
+    b.addEventListener('click', function(){
+      var t = Array.prototype.filter.call(r.querySelectorAll('p'), function(p){ return !p.classList.contains('rq'); })
+        .map(function(p){ return p.textContent.trim(); }).join('\n\n');
+      copyText(t);
+    });
+    rl.appendChild(b);
+  });
+
+  /* ── 보고서 내비 하이라이트 (원문 스크립트를 모달 스크롤 컨테이너 기준으로 이식) ── */
+  var links = Array.prototype.slice.call(document.querySelectorAll('#nav a'));
+  var map = {};
+  links.forEach(function(a){
+    var el = document.querySelector(a.getAttribute('href'));
+    if (el) map[a.getAttribute('href')] = el;
+  });
+  var ids = Object.keys(map);
+  function onScroll(){
+    var y = modalBody.scrollTop + 90, cur = null;
+    ids.forEach(function(id){ if (map[id].offsetTop <= y) cur = id; });
+    links.forEach(function(a){ a.classList.toggle('on', a.getAttribute('href') === cur); });
+  }
+  modalBody.addEventListener('scroll', onScroll, {passive:true});
+  onScroll();
+})();
+</script>
+</body>
+</html>
