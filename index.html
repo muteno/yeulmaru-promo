@@ -919,14 +919,16 @@ table.promo-board-table th:last-child .col-resize-handle{display:none}
 .toast.error::before{content:"✕ ";color:var(--danger);font-weight:700;margin-right:4px}
 .overlay-load{position:fixed;inset:0;background:rgba(0,0,0,0.3);backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);z-index:999999;display:none;flex-direction:column;gap:18px;align-items:center;justify-content:center;font-size:18px;font-weight:600;color:#fff;letter-spacing:0.5px;text-shadow:0 2px 8px rgba(0,0,0,0.4);animation:fadeIn .2s ease}
 .overlay-load.show{display:flex}
+.overlay-load #ol-text{display:block;min-height:24px}   /* 타자기 리셋(빈 문자열) 순간 높이 0 → 로더 세로 출렁임 방지(시안 .ov-txt min-height 계승) */
 /* 오버레이 dots 픽토그램 — 운영자 확정(beui 로더 이식 시안 260707 [선택값]): 32px·0.8s·기존 주력 커브 계승.
    점 크기/간격/진폭/딜레이 = beui 원본 배율(32px 기준 .24/.14/.3/사이클×.16) · 색 = currentColor(.overlay-load 흰 상속, raw hex 0) · 그림자 = 현행 text-shadow 동값 변주 */
 .ol-dots{display:flex;align-items:center;gap:4.48px;filter:drop-shadow(0 2px 8px rgba(0,0,0,0.4))}
 .ol-dots i{width:7.68px;height:7.68px;border-radius:50%;background:currentColor;animation:olDots .8s cubic-bezier(0.4,0,0.2,1) infinite}
 .ol-dots i:nth-child(2){animation-delay:.128s}
 .ol-dots i:nth-child(3){animation-delay:.256s}
-@keyframes olDots{0%,100%{transform:translateY(0);opacity:.5}50%{transform:translateY(-9.6px);opacity:1}}
-@media (prefers-reduced-motion:reduce){.ol-dots i{animation:none;opacity:.85}}
+@keyframes olDots{0%,100%{transform:translateY(0);opacity:.5}50%{transform:translateY(var(--ld-dy,-9.6px));opacity:1}}
+@keyframes olRot{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.ol-dots i,.ld-p i,.ld-p svg{animation:none;opacity:.85}}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
 .modal{background:var(--surface-solid);border:1px solid var(--glass-border);border-radius:var(--radius-xl);padding:28px;width:400px;max-width:92vw;max-height:90vh;overflow-y:auto;box-shadow:0 24px 80px rgba(74,77,231,0.12),0 8px 24px rgba(0,0,0,0.08);animation:fadeUp .25s ease}
 .modal h3{font-size:16px;font-weight:700}
@@ -4946,7 +4948,7 @@ async function _dailySubmit(){
     var totSeat=paidS+free, open=masters[r.공연]||926, occ=open>0?Math.min(totSeat/open*100,100):0;
     return {기준일자:ymd,공연명:r.공연,유료좌석:paidS,유료금액:paidA,무료좌석:free,합계좌석:totSeat,합계금액:paidA,점유율:occ.toFixed(1),'전일대비(석)':'','공연ID':(_mid[r.공연]||'')};
   });
-  var btn=document.getElementById('d-save'); if(btn){btn.disabled=true;btn.textContent='저장 중…';}
+  var btn=document.getElementById('d-save'); _btnBusy(btn,true,'저장 중…');
   try{
     await api('POST','/api/ops',{sheet:'일일입력',mode:'append',rows:rows});
     showToast(rows.length+'건 저장됐어요 ('+date+')');
@@ -4954,7 +4956,7 @@ async function _dailySubmit(){
     _salesState.master=null;_salesState.daily=null;_salesState.rounds=null;
     try{_srailInit();}catch(_e){}  // 판매 레일 최신화(일일입력 반영 재fetch)
     if(document.getElementById('sales-board')&&document.getElementById('sales-board').innerHTML){openSalesBoard();}
-  }catch(e){ if(msg)msg.textContent='저장 실패: '+(e.message||e); if(btn){btn.disabled=false;btn.textContent='저장';} }
+  }catch(e){ if(msg)msg.textContent='저장 실패: '+(e.message||e); _btnBusy(btn,false,'저장'); }
 }
 function _salesToggleEnded(){ _salesState.showEnded=!_salesState.showEnded; _salesRender(); }
 function _salesDdayColor(d){ if(d===null)return '#555'; if(d<0)return '#999'; if(d<=7)return '#E08600'; if(d<=14)return '#C9A800'; return '#555'; }
@@ -16791,8 +16793,8 @@ function _tktBuild(){
   var f=st.f;
   var miss=['제목','기간','시간','장소','장르','오픈일시'].filter(function(k){return !String(f[k]||'').trim();});
   if(miss.length){showToast('필수 항목 입력: '+miss.join(' · '),'error');return;}
-  st.busy=true;var gbtn=document.getElementById('tkt-gen');if(gbtn){gbtn.textContent='생성 중…';gbtn.disabled=true;}
-  var done=function(ok,msg){st.busy=false;if(gbtn){gbtn.textContent='의뢰서 엑셀 생성 ⬇';gbtn.disabled=false;}showToast(msg,ok?'success':'error');};
+  st.busy=true;var gbtn=document.getElementById('tkt-gen');_btnBusy(gbtn,true,'생성 중…');
+  var done=function(ok,msg){st.busy=false;_btnBusy(gbtn,false,'의뢰서 엑셀 생성 ⬇');showToast(msg,ok?'success':'error');};
   _tktEnsureJSZip(function(err){
     if(err){done(false,'압축 라이브러리 로드 실패 — 네트워크 확인 후 다시 시도');return;}
     fetch(_TKT_TEMPLATE_URL+'?cb='+Date.now()).then(function(r){
@@ -17191,7 +17193,7 @@ async function _nbCmtSend(){
   if(!txt){showToast('코멘트를 입력해 주세요','error');inp.focus();return;}
   var prev=String(_nbState.output||'').trim();
   if(!prev){showToast('초안이 없어요','error');return;}
-  var btn=document.getElementById('nb-cmt-send');if(btn){btn.disabled=true;btn.textContent='반영 중…';}
+  var btn=document.getElementById('nb-cmt-send');_btnBusy(btn,true,'반영 중…');
   var _st=_nbState;   // 🔒 세대 가드
   inp.disabled=true;
   try{
@@ -17206,7 +17208,7 @@ async function _nbCmtSend(){
     showToast('코멘트를 반영했어요 ✨','success');
   }catch(e){
     showToast('반영 실패: '+String((e&&e.message)||e),'error');
-    var b2=document.getElementById('nb-cmt-send');if(b2){b2.disabled=false;b2.textContent='반영하기 ↻';}
+    var b2=document.getElementById('nb-cmt-send');_btnBusy(b2,false,'반영하기 ↻');
     var i2=document.getElementById('nb-cmt-input');if(i2)i2.disabled=false;
   }
 }
@@ -17512,7 +17514,7 @@ async function _qaSubmit(){
     category:(cat&&cat.value)||'기타',
     content:content.slice(0,1000)
   };
-  const btn=document.getElementById('qa-submit');if(btn){btn.disabled=true;btn.textContent='접수 중...';}
+  const btn=document.getElementById('qa-submit');_btnBusy(btn,true,'접수 중...');
   let okFlag=false;
   try{
     await api('POST','/api/qa',payload);okFlag=true;
@@ -17523,7 +17525,7 @@ async function _qaSubmit(){
       okFlag=true;
     }catch(e2){console.warn('[qaSubmit]',e2&&e2.message);}
   }
-  if(!okFlag){if(btn){btn.disabled=false;btn.textContent='접수하기';}showToast('접수에 실패했어요. 잠시 후 다시 시도해 주세요','error');return;}
+  if(!okFlag){_btnBusy(btn,false,'접수하기');showToast('접수에 실패했어요. 잠시 후 다시 시도해 주세요','error');return;}
   // 관리자 메시지함 알림 — 담당자 시트 관리자여부=true 전원(본인 제외)
   // 🛠️ 안 오던 원인 3중 방어: ① MANAGERS 미로드(특히 일반 사용자) 시 0명 전송 → 로드 보장
   //    ② _msgApiCall 킬스위치(직전 badge poll 401/404로 60초 봉인)로 알림 POST가 통째로 스킵되던 것 → 리셋
@@ -18000,6 +18002,41 @@ function showToast(msg,type,html){
   _toastTimer=setTimeout(function(){t.classList.remove('show');},3000);
 }
 
+/* ── 로더 픽토그램 보관소 — beui.dev/components/motion/loader 이식(운영자 260708 "필요한 것만 보관") ──
+   카탈로그 17종 전체 = docs/reports/260707_로더픽토그램_플레이그라운드.html — 추가 선별은 그 시안에서 [선택값 복사].
+   보관 2종: dots(저장 오버레이·버튼 busy 확정분) · spinner(범용 예비). 수치 = beui 원본 배율(.24/.14/.3/딜레이 사이클×.16, 스트로크 .09)
+   색 = currentColor 상속(팔레트 폐쇄 — 부모 글자색 그대로) · 커브 = 기존 주력 계승 cubic-bezier(0.4,0,0.2,1) · 감속 모션 = .ld-p 미디어쿼리가 정지 */
+function _ldMake(kind,size,speed){
+  size=size||14;speed=speed||0.8;
+  var h=document.createElement('span');h.className='ld-p';h.setAttribute('aria-hidden','true');
+  h.style.cssText='display:inline-flex;align-items:center;justify-content:center;line-height:0;vertical-align:middle';
+  if(kind==='spinner'){
+    var st=Math.max(2,size*.09),r=(size-st)/2,ns='http://www.w3.org/2000/svg';
+    var sv=document.createElementNS(ns,'svg');
+    sv.setAttribute('width',size);sv.setAttribute('height',size);sv.setAttribute('viewBox','0 0 '+size+' '+size);
+    sv.style.cssText='animation:olRot '+speed+'s linear infinite';
+    var c=document.createElementNS(ns,'circle');
+    c.setAttribute('cx',size/2);c.setAttribute('cy',size/2);c.setAttribute('r',r);c.setAttribute('fill','none');
+    c.setAttribute('stroke','currentColor');c.setAttribute('stroke-opacity','0.2');c.setAttribute('stroke-width',st);
+    var pa=document.createElementNS(ns,'path');
+    pa.setAttribute('d','M '+(size/2)+' '+(size/2-r)+' A '+r+' '+r+' 0 0 1 '+(size/2+r)+' '+(size/2));
+    pa.setAttribute('fill','none');pa.setAttribute('stroke','currentColor');
+    pa.setAttribute('stroke-width',st);pa.setAttribute('stroke-linecap','round');
+    sv.appendChild(c);sv.appendChild(pa);h.appendChild(sv);
+  }else{
+    h.style.gap=(size*.14)+'px';
+    for(var i=0;i<3;i++){var d=document.createElement('i');
+      d.style.cssText='display:block;width:'+(size*.24)+'px;height:'+(size*.24)+'px;border-radius:50%;background:currentColor;--ld-dy:'+(-size*.3)+'px;animation:olDots '+speed+'s cubic-bezier(0.4,0,0.2,1) '+(i*speed*.16)+'s infinite';
+      h.appendChild(d);}
+  }
+  return h;
+}
+/* 버튼 busy 공용 — dots 14px를 라벨 앞에 합류(.btn 자체 gap 6px 정렬). on=disabled+로더+라벨 · off=라벨 원복 */
+function _btnBusy(btn,on,label){
+  if(!btn)return;btn.disabled=on;
+  if(on){btn.textContent='';btn.appendChild(_ldMake('dots',14,.8));btn.appendChild(document.createTextNode(label));}
+  else btn.textContent=label;
+}
 function showOverlayLoad(msg){
   msg=msg||'\uBCC0\uACBD \uC911';
   document.getElementById('overlay-load').classList.add('show');
