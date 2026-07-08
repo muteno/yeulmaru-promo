@@ -4940,7 +4940,7 @@ function _dsxParse(files){
           return Promise.all([sh.async('string'), ssf?ssf.async('string'):Promise.resolve('')]).then(function(a){ return _dsxExtract(a[0],a[1],f.name); });
         }).catch(function(e){ return {file:f.name, error:(e.message||String(e))}; });
       })),
-      api('GET','/api/ops?sheet='+encodeURIComponent('일일입력')).catch(function(){return {headers:[],rows:[]};}) // dedup 대조용 기존 행
+      api('GET','/api/ops?sheet='+encodeURIComponent('일일입력')).catch(function(){return {headers:[],rows:[],_getFailed:1};}) // dedup 대조용 기존 행(실패 시 경고)
     ]).then(function(r){ _dsxPreview(r[0], r[1]); }).catch(function(e){ showToast('읽기 실패: '+(e.message||e),'error'); });
   });
 }
@@ -4984,9 +4984,13 @@ function _dsxPreview(results, existingData){
   masters.forEach(function(x){ var k=_dsxUname(x.name); if(k&&k.length>=2&&!nameMap[k]){nameMap[k]=x;cands.push(k);} });
   // 기존 일일입력 (공연,날짜) 셋 — 중복 append 방지(dedup)
   var eh=(existingData&&existingData.headers)||[], er=(existingData&&existingData.rows)||[], existing={};
-  var findCol=function(cc){ for(var i=0;i<eh.length;i++){ var hh=String(eh[i]||'').replace(/\s/g,''); for(var j=0;j<cc.length;j++)if(hh.indexOf(cc[j])>=0)return i; } return -1; };
+  // /api/ops rows = 헤더명 키 객체 배열(row['공연명']) — findCol은 인덱스가 아니라 헤더 '문자열'을 반환해야 한다(정본 mjs findCol 계승)
+  var findCol=function(cc){ for(var i=0;i<eh.length;i++){ var hh=String(eh[i]||'').replace(/\s/g,''); for(var j=0;j<cc.length;j++)if(hh.indexOf(cc[j])>=0)return eh[i]; } return null; };
   var cN=findCol(['공연명','공연','사업명']), cD=findCol(['기준일자','일자','날짜']);
-  if(cN>=0&&cD>=0)er.forEach(function(row){ var nm=String(row[cN]||'').trim(), ymd=String(row[cD]||'').replace(/[^0-9]/g,''); if(nm&&ymd)existing[_dsxUname(nm)+'|'+ymd]=1; });
+  var dedupReady=(cN!=null&&cD!=null);
+  if(dedupReady)er.forEach(function(row){ var nm=String(row[cN]||'').trim(), ymd=String(row[cD]||'').replace(/[^0-9]/g,''); if(nm&&ymd)existing[_dsxUname(nm)+'|'+ymd]=1; });
+  // dedup 대조 불가(기존 GET 실패 또는 헤더 미인식)면 중복 저장 경고 — 기존 데이터가 있을 때만
+  var dedupWarn=((existingData&&existingData._getFailed)||(!dedupReady&&er.length>0));
   // 정확일치 우선 → LCS(길이가드 4, 동점=모호로 저장 제외). mjs resolve 계승
   var resolve=function(pname){
     var q=_dsxUname(pname); if(q.length<2)return {none:1};
@@ -5000,6 +5004,7 @@ function _dsxPreview(results, existingData){
   var pending=[];
   var h='<div style="font-size:15px;font-weight:700;margin-bottom:3px">📄 판매현황 반영 미리보기</div>';
   h+='<div style="font-size:12px;color:var(--dim);margin-bottom:14px">순판매를 날짜순 <b>누적</b>한 값이에요. 이미 있는 날짜는 건너뛰어요. 확인 후 저장하면 반영돼요.</div>';
+  if(dedupWarn)h+='<div style="padding:9px 12px;border-radius:8px;background:var(--accent-light);margin-bottom:12px;font-size:12px;color:var(--danger)">⚠️ 기존 일일입력을 못 읽어 중복 확인을 못 했어요 — 이미 입력한 날짜면 중복될 수 있으니 확인 후 저장하세요</div>';
   results.forEach(function(R){
     if(R.error){ h+='<div style="padding:9px 12px;border-radius:8px;background:var(--accent-light);margin-bottom:10px;font-size:12px;color:var(--danger)">⚠️ '+escapeHtml(R.file)+' — '+escapeHtml(R.error)+'</div>'; return; }
     var rr=resolve(R.pname), m=rr.m, last=R.days[R.days.length-1];
