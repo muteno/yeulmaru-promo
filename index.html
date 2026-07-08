@@ -3198,7 +3198,10 @@ async function initApp(){
   // ⚠️ setTimeout 필수: F5 세션복원은 부트 IIFE가 "파싱 중" initApp을 동기 호출 — 그 시점엔 뒤쪽 var(_salesState 등)가
   //    할당 전(undefined)이라 동기 호출 시 레일이 조용히 죽는다(분신술 4호 HIGH — 260705 TDZ 참사와 동일 클래스).
   setTimeout(function(){ try{_srailInit();}catch(_e){console.warn('[initApp srail]',_e);} },0);
-  var _pPrograms=loadPrograms().then(function(){ updatePerfOpen(); _perfReady=true; }).catch(function(e){console.warn('[initApp loadPrograms]',e);});
+  var _pPrograms=loadPrograms().then(function(){ updatePerfOpen(); _perfReady=true;
+    // 판매 레일이 PERFS보다 먼저 그려졌으면 재렌더 — 프로그램 시트 폴백 카드(마스터 미등록 판매중 공연) 누락 방지
+    if(typeof _salesState!=='undefined'&&_salesState&&_salesState.daily&&_salesState.master&&!_srailBusy){try{_srailRender();}catch(_e){}}
+  }).catch(function(e){console.warn('[initApp loadPrograms]',e);});
   Promise.all([
     _pPrograms,
     loadAllMasters().catch(function(e){console.warn('[initApp loadAllMasters]',e);}),
@@ -3845,6 +3848,31 @@ function _salesBuild(){
     var genre2=opsF?opsF.genre:'';
     perfs.push({name:nm,seats:0,money:0,diff:null,occ:0,totalOpen:totalOpen2,dday:dday2,dateStr:dateStr2,수익성:mm.수익성||_profitType(nm,genre2),목표:mm.목표||50,startDate:start2,status:'active',genre:genre2,gubun:(opsF?opsF.gubun:''),enriched:false,spark:[],deltaPP:null,source:'master',noData:true});
   });
+  // [판매중 노출 2차] 공연마스터·일일입력에 아예 없는 신규 오픈 공연(하반기 라인업 등)은 프로그램 시트(PERFS)
+  // 판매기간(판매시작일≤오늘≤판매종료일, 종료 폴백=공연 종료일)으로 잡아 "집계 전(0석)" 카드로 노출(운영자 260708 — 마스터 미등록 공연이 판매 현황에 안 뜸).
+  // 공연('c')만 — 전시는 레일 _srailExhibs 별도 경로(이중 노출 방지), 교육·대관은 일일판매 범위 밖.
+  // 마스터에 등록된 공연은 마스터 판정이 정본(위 루프) — 마스터 전체 이름·ID를 dedup에 넣어 프로그램 폴백 차단.
+  perfs.forEach(function(p){ seenNames[_uName(p.name)]=1; if(p._mid)seenIds[p._mid]=1; });
+  Object.keys(master).forEach(function(nm){ seenNames[_uName(nm)]=1; if(master[nm].ID)seenIds[master[nm].ID]=1; });
+  var todayISO=today.getFullYear()+'-'+('0'+(today.getMonth()+1)).slice(-2)+'-'+('0'+today.getDate()).slice(-2);
+  ((typeof PERFS!=='undefined'&&PERFS)||[]).forEach(function(pg){
+    if(pg.t!=='c')return;
+    var nm3=String(pg.f||pg.n||'').trim(); if(!nm3)return;
+    if(seenNames[_uName(nm3)]||(pg.id&&seenIds[pg.id]))return;
+    var until=pg.se||pg.e;
+    if(!pg.ss||!until||!(pg.ss<=todayISO&&todayISO<=until))return;   // ISO 문자열 사전순 = 날짜순
+    if(pg.e&&pg.e<todayISO)return;   // 종료 강제 보정(기존 원칙과 동일): 공연이 끝났으면 판매기간이 남아도 제외
+    var start3=_salesDate(pg.s);
+    var opsP=(pg.id?_opsLookupById(pg.id):null)||_opsLookup(nm3,start3?start3.getFullYear():today.getFullYear());
+    var base3=(opsP&&opsP.base)?opsP.base:_SALES_FALLBACK_SEAT;
+    var totalOpen3=opsP?base3*(opsP.count||1):base3;
+    var dday3=start3?Math.round((start3-today)/86400000):null;
+    var dateStr3='';
+    if(start3){var ws3=['일','월','화','수','목','금','토'];dateStr3=(start3.getMonth()+1)+'.'+start3.getDate()+'('+ws3[start3.getDay()]+')';}
+    var genre3=opsP?opsP.genre:'';
+    seenNames[_uName(nm3)]=1;   // 프로그램 시트 안 동명 중복 방어
+    perfs.push({name:nm3,seats:0,money:0,diff:null,occ:0,totalOpen:totalOpen3,dday:dday3,dateStr:dateStr3,수익성:_profitType(nm3,genre3),목표:50,startDate:start3,status:'active',genre:genre3,gubun:(opsP?opsP.gubun:''),enriched:false,spark:[],deltaPP:null,source:'program',noData:true,_mid:(pg.id||'')});
+  });
   return perfs;
 }
 function openSalesBoard(){
@@ -3853,7 +3881,7 @@ function openSalesBoard(){
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeSalesBoard)">'
     +'<div class="modal" style="width:96vw;max-width:1280px;height:92vh;max-height:92vh;padding:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:#fff">'
     +'<button class="modal-x" onclick="closeSalesBoard()" title="닫기" style="position:absolute;top:14px;right:14px;z-index:10">✕</button>'
-    +'<div style="padding:18px 24px;border-bottom:1px solid #eee;font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px">📈 <span>판매 현황</span><span style="font-size:11px;color:#aaa;font-weight:500">· 실시간 판매</span>'+'<button onclick="closeSalesBoard();openAnalyticsBoard()" style="margin-left:auto;margin-right:'+(userRole==='admin'?'8px':'34px')+';padding:6px 13px;border-radius:8px;border:1.5px solid #C02872;background:rgba(192,40,114,0.07);color:#C02872;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit" title="판매·사업현황 분석 (베타)">🧪 분석(beta)</button>'+(userRole==='admin'?'<button onclick="openDailyInput()" style="margin-right:34px;padding:6px 13px;border-radius:8px;border:1.5px solid var(--accent);background:rgba(74,77,231,0.07);color:var(--accent);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">➕ 일일입력</button>':'')+'</div>'
+    +'<div style="padding:18px 24px;border-bottom:1px solid #eee;font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px">📈 <span>판매 현황</span><span style="font-size:11px;color:#aaa;font-weight:500">· 실시간 판매</span>'+'<button onclick="_salesCopyExcel()" style="margin-left:auto;margin-right:8px;padding:6px 13px;border-radius:8px;border:1.5px solid var(--green);background:rgba(26,107,60,0.07);color:var(--green);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit" title="판매 현황 표를 복사 — 엑셀에 그대로 붙여넣기(Ctrl+V)">📋 엑셀 복사</button>'+'<button onclick="closeSalesBoard();openAnalyticsBoard()" style="margin-right:'+(userRole==='admin'?'8px':'34px')+';padding:6px 13px;border-radius:8px;border:1.5px solid #C02872;background:rgba(192,40,114,0.07);color:#C02872;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit" title="판매·사업현황 분석 (베타)">🧪 분석(beta)</button>'+(userRole==='admin'?'<button onclick="openDailyInput()" style="margin-right:34px;padding:6px 13px;border-radius:8px;border:1.5px solid var(--accent);background:rgba(74,77,231,0.07);color:var(--accent);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">➕ 일일입력</button>':'')+'</div>'
     +'<div id="sales-body" style="flex:1;overflow:auto;padding:20px 24px;min-width:0"></div>'
     +'</div></div>';
   _salesState.escHandler=function(e){if(e.key==='Escape')closeSalesBoard();};
@@ -4320,7 +4348,7 @@ function _anaScreen1(sc){
     else if(dpp>0.04){dStr='▲ +'+dpp.toFixed(1)+'%p';dCol='#0F8B4C';}
     else if(dpp<-0.04){dStr='▼ '+dpp.toFixed(1)+'%p';dCol='var(--danger)';}
     else {dStr='— 0.0%p';dCol='#999';}
-    var bd=(p.source==='master')?['m','마스터']:(p.source==='fallback'?['f','폴백']:['n','없음']);
+    var bd=(p.source==='master')?['m','마스터']:(p.source==='fallback'?['f','폴백']:(p.source==='program'?['f','프로그램']:['n','없음']));
     h+='<tr class="clk" onclick="_anaDrill(\''+_anaEsc(p.name)+'\')">';
     h+='<td><div class="ana-row-name">'+escapeHtml(p.name)+'<sub>'+ax+' · '+escapeHtml(p.genre||'기타')+'</sub></div></td>';
     h+='<td>'+_anaSpark(p.spark)+'</td>';
@@ -4330,7 +4358,7 @@ function _anaScreen1(sc){
     h+='</tr>';
   });
   h+='</tbody></table>';
-  h+='<div style="color:#bbb;font-size:11px;margin-top:12px">행 클릭 → 개별 프로그램 분석 · 데이터: 운영_일일입력(공연명 조인) · 마스터=공연마스터/폴백=운영대장 추정</div>';
+  h+='<div style="color:#bbb;font-size:11px;margin-top:12px">행 클릭 → 개별 프로그램 분석 · 데이터: 운영_일일입력(공연명 조인) · 마스터=공연마스터/폴백=운영대장 추정/프로그램=프로그램 시트 판매기간(집계 전)</div>';
   sc.innerHTML=h;
 }
 function _anaEsc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
@@ -4892,6 +4920,23 @@ function _salesToggleEnded(){ _salesState.showEnded=!_salesState.showEnded; _sal
 function _salesDdayColor(d){ if(d===null)return '#555'; if(d<0)return '#999'; if(d<=7)return '#E08600'; if(d<=14)return '#C9A800'; return '#555'; }
 function _salesDdayStr(d){ if(d===null)return ''; if(d===0)return 'D-Day'; return d>0?('D-'+d):('D+'+(-d)); }
 function _salesMoneyMan(v){ if(!v)return '0'; return Math.round(v/10000).toLocaleString(); }
+// 판매 현황 → 엑셀 붙여넣기용 TSV 클립보드 복사 (운영자 260708) — [1] 표와 동일 컬럼 + 상태, 숫자는 콤마 없이(엑셀 숫자 인식)
+function _salesCopyExcel(){
+  var perfs=_salesBuild();
+  var act=perfs.filter(function(p){return p.status==='active';}).sort(function(a,b){return (a.startDate&&b.startDate)?(a.startDate-b.startDate):0;});
+  var end=perfs.filter(function(p){return p.status==='ended';}).sort(function(a,b){return (a.startDate&&b.startDate)?(b.startDate-a.startDate):0;});
+  var all=act.concat(end);
+  if(!all.length){showToast('복사할 판매 데이터가 없어요','error');return;}
+  function cell(v){return String(v===null||v===undefined?'':v).replace(/[\t\r\n]+/g,' ');}
+  var rows=[['상태','공연일','공연명','D-day','판매좌석','전일대비','오픈석','점유율(%)','판매금액(원)']];
+  all.forEach(function(p){
+    rows.push([p.status==='active'?'판매중':'종료',p.dateStr||'',p.name,p.status==='active'?(_salesDdayStr(p.dday)||''):'종료',p.seats,(p.diff===null?'':p.diff),p.totalOpen,(p.noData?'집계 전':p.occ.toFixed(1)),p.money]);
+  });
+  var tsv=rows.map(function(r){return r.map(cell).join('\t');}).join('\n');
+  var ok=function(){showToast('판매 현황 '+all.length+'개 공연 복사 완료 — 엑셀에 붙여넣기(Ctrl+V) 하세요');};
+  var fb=function(){try{var ta=document.createElement('textarea');ta.value=tsv;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);ok();}catch(e){showToast('복사 실패: '+e.message,'error');}};
+  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(tsv).then(ok,fb); else fb();
+}
 function _salesKpiCard(label,val,sub){ return '<div style="flex:1;min-width:110px;padding:14px 16px;background:#fafafa;border-radius:12px;border:1px solid #eee"><div style="font-size:11px;color:#888;font-weight:600;margin-bottom:6px">'+label+'</div><div style="font-size:'+(sub?'22':'24')+'px;font-weight:800;color:var(--accent);font-variant-numeric:tabular-nums">'+val+'</div></div>'; }
 function _salesTable(list,isActive){
   if(!list.length)return '<div style="color:#888;padding:20px;text-align:center">'+(isActive?'판매중인 공연이 없습니다':'없음')+'</div>';
