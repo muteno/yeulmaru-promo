@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>캘린더 상세패널 오버레이 · 판매현황 레일 높이 — 플레이그라운드 (260708)</title>
+<style>
+/* ═══════════ index.html :root 토큰 사본 (계승 재현용 — 값 SSOT는 index.html) ═══════════ */
+:root{
+  --accent:#4A4DE7; --accent-light:#E8E8FD; --accent-glow:rgba(74,77,231,0.15);
+  --peach:#F0C4B8; --peach-light:#FBF0EC; --peach-bg:#FDF6F3; --peach-text:#D88455;
+  --bg:linear-gradient(135deg,#FDF6F3 0%,#F0EBF5 50%,#EBF0F8 100%);
+  --surface-solid:#fff;
+  --glass:rgba(255,255,255,0.55);
+  --glass-shadow:0 8px 32px rgba(74,77,231,0.08),0 2px 8px rgba(0,0,0,0.04);
+  --border:rgba(0,0,0,0.09); --border2:rgba(0,0,0,0.12);
+  --text:#1A1A2E; --dim:#888; --muted:#bbb;
+  --today-bg:rgba(230,240,255,0.8);
+  --green:#1A6B3C; --danger-btn:#E24B4A;
+  --radius:16px; --radius-lg:20px; --radius-xl:24px;
+  --neutral:#EEEDF3; --neutral-d:#E1DFEC; --neutral-text:#6B6B7B;
+  --r-btn:10px; --r-modal:20px;
+  --glass-surface:rgba(255,255,255,.78); --glass-bd:rgba(255,255,255,.6);
+  --backdrop:rgba(26,26,46,.42);
+  --c1:#4A4DE7; --c2:#D88455; --c3:#1A6B3C; --c4:#C02872; --c5:#2D8AB3; --c6:#F5B400;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Malgun Gothic','Apple SD Gothic Neo',sans-serif;
+  background:var(--bg); color:var(--text); min-height:100vh;
+  padding:22px 20px 60px; -webkit-font-smoothing:antialiased;
+}
+.pg-title{max-width:1640px;margin:0 auto 6px;font-size:19px;font-weight:800;letter-spacing:-.2px}
+.pg-sub{max-width:1640px;margin:0 auto 18px;font-size:12.5px;color:var(--neutral-text);line-height:1.6;font-weight:600}
+.pg-sub b{color:var(--accent)}
+.wrap{max-width:1640px;margin:0 auto;display:flex;gap:22px;align-items:flex-start;flex-wrap:wrap}
+
+/* ── 좌: 무대(브라우저 창 목업) ── */
+.stage{flex:1 1 720px;min-width:340px}
+.browser{
+  border-radius:14px;overflow:hidden;background:#fff;
+  box-shadow:0 24px 60px rgba(26,26,46,.16),0 6px 18px rgba(26,26,46,.08);
+  border:1px solid var(--border2);
+}
+.bwbar{display:flex;align-items:center;gap:8px;padding:9px 14px;background:#EFEDF4;border-bottom:1px solid var(--border)}
+.bwbar i{width:11px;height:11px;border-radius:50%;display:block}
+.bwbar i:nth-child(1){background:#ff5f57}.bwbar i:nth-child(2){background:#febc2e}.bwbar i:nth-child(3){background:#28c840}
+.bwurl{flex:1;margin-left:10px;background:#fff;border-radius:8px;padding:5px 12px;font-size:11px;color:var(--dim);border:1px solid var(--border)}
+
+/* 앱 무대 = index.html body-wrap 재현 */
+.capp{
+  position:relative;height:600px;display:flex;overflow:hidden;
+  background:var(--bg);
+  /* ══ 튜닝 변수 (--t-*) · 기본값 = 현행 실측 ══ */
+  --t-pbg:.55;         /* 패널 흰색 불투명도 (현행 --glass .55) */
+  --t-pblur:24;        /* 패널 backdrop blur px (현행 24) */
+  --t-shrgb:74,77,231; /* 패널 그림자 색 (현행 인디고 = --accent) */
+  --t-sha:.06;         /* 패널 그림자 강도 alpha (현행 .06) */
+  --t-anim:.25;        /* 열고닫기 속도 s (현행 .25) */
+  --t-railfill:0;      /* 레일 높이 채움 0~1 (0=내용만 현행 · 1=캘린더 하단까지) */
+}
+
+/* ── 캘린더(좌 3/4) ── */
+.cal{flex:1;min-width:0;padding:16px 20px;display:flex;flex-direction:column;overflow:hidden}
+.calhd{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.calhd .mo{font-size:26px;font-weight:800;letter-spacing:-.5px}
+.calhd .mo small{font-size:15px;color:var(--dim);font-weight:700;margin-left:5px}
+.calhd .nv{width:30px;height:30px;border-radius:50%;border:1px solid var(--border);background:var(--glass);display:flex;align-items:center;justify-content:center;color:var(--dim);font-size:15px;cursor:pointer}
+.calgh{display:grid;grid-template-columns:repeat(7,1fr);border-bottom:1px solid var(--border);padding-bottom:7px;margin-bottom:2px}
+.calgh span{text-align:center;font-size:11.5px;font-weight:700;color:var(--dim)}
+.calgh span.sun{color:var(--danger-btn)}
+.calgrid{flex:1;display:grid;grid-template-columns:repeat(7,1fr);grid-auto-rows:1fr;gap:0}
+.dcell{border-right:1px solid var(--border);border-bottom:1px solid var(--border);padding:5px 6px;font-size:10px;overflow:hidden;cursor:pointer;transition:background .15s;position:relative}
+.dcell:nth-child(7n){border-right:none}
+.dcell:hover{background:rgba(74,77,231,.045)}
+.dcell .dn{font-size:11px;font-weight:700;color:var(--text)}
+.dcell.past{background:rgba(0,0,0,0.02)}
+.dcell.past .dn{color:var(--muted)}
+.dcell.today .dn{background:var(--accent);color:#fff;border-radius:6px;padding:0 5px}
+.dcell.sun .dn{color:var(--danger-btn)}
+.ev{margin-top:3px;font-size:9px;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
+.ev.i{color:var(--c4)}.ev.k{color:var(--c6)}.ev.m{color:var(--accent)}.ev.b{color:var(--green)}
+.cellcnt{position:absolute;top:5px;right:6px;font-size:8.5px;color:var(--muted);font-weight:700}
+
+/* ── 판매현황 레일(우 1/4) = index.html #sales-rail > .srail 계승 ── */
+.railcol{width:236px;flex-shrink:0;padding:16px 16px 16px 0;display:flex;flex-direction:column}
+.rail{
+  position:relative;display:flex;flex-direction:column;
+  background:rgba(255,255,255,.43);backdrop-filter:blur(11px);-webkit-backdrop-filter:blur(11px);
+  border:1px solid rgba(255,255,255,.7);border-radius:var(--radius-xl);box-shadow:var(--glass-shadow);
+  overflow:hidden;
+  /* 높이: railfill 0 → 내용만 · 1 → 컬럼(캘린더) 하단까지 */
+  min-height:calc(70px + var(--t-railfill) * (100% - 70px));
+  transition:min-height .3s ease;
+}
+.railcol{}
+.rail-hd{display:flex;align-items:center;gap:6px;padding:12px 14px 8px;flex-shrink:0}
+.rail-tt{font-size:13.5px;font-weight:800;color:var(--text)}
+.rail-cnt{font-size:9.5px;font-weight:800;color:var(--accent);background:rgba(74,77,231,.08);border:1px solid rgba(74,77,231,.18);border-radius:999px;padding:1px 7px}
+.rail-asof{font-size:9.5px;color:var(--dim);font-weight:600;margin-left:auto}
+.rail-chip{font-size:9.5px;font-weight:700;color:var(--accent);background:rgba(74,77,231,.06);border:1px solid rgba(74,77,231,.16);border-radius:7px;padding:2px 7px;cursor:pointer}
+.rail-body{flex:1;overflow:hidden;padding:2px 11px 6px;min-height:0}
+.rcard{background:var(--glass-surface);border:1px solid var(--glass-bd);border-radius:var(--radius);box-shadow:var(--glass-shadow);padding:10px 12px 11px;margin-bottom:9px}
+.rc-r1{display:flex;align-items:baseline;gap:7px}
+.rc-nm{flex:1;min-width:0;font-size:12px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rc-dd{font-size:9.5px;font-weight:800;color:var(--dim)}
+.rc-meta{font-size:9.5px;color:var(--dim);font-weight:500;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rc-r2{display:flex;align-items:baseline;gap:7px;margin-top:6px}
+.rc-occ{font-size:19px;font-weight:800;color:var(--accent);line-height:1}
+.rc-delta{font-size:10px;font-weight:700}
+.rc-delta.up{color:var(--green)}
+.rc-spark{margin-top:6px;height:26px}
+.rc-spark svg{display:block;width:100%;height:26px}
+.rc-hint{margin-top:6px;font-size:9px;color:var(--muted)}
+.rc-bar{position:relative;height:5px;border-radius:999px;background:var(--neutral);margin-top:8px}
+.rc-bar>i{position:absolute;left:0;top:0;bottom:0;border-radius:999px;background:var(--accent)}
+.rc-bar>b{position:absolute;top:-2.5px;width:2px;height:10px;border-radius:1px;background:var(--peach-text)}
+.rc-r3{display:flex;justify-content:space-between;margin-top:6px;font-size:9.5px;color:var(--dim)}
+.rc-r3 .bad{color:var(--danger-btn)}
+.rail-ft{padding:6px 14px 10px;display:flex;gap:8px;align-items:center;flex-shrink:0}
+.rail-note{font-size:9px;color:var(--muted);line-height:1.4;flex:1}
+
+/* ── 상세 패널 = index.html #panel/.panel 계승 (튜닝 대상) ── */
+.cpanel{
+  position:absolute;top:0;bottom:0;width:320px;display:none;flex-direction:column;z-index:10;
+  background:rgba(255,255,255,var(--t-pbg));
+  backdrop-filter:blur(calc(var(--t-pblur) * 1px));-webkit-backdrop-filter:blur(calc(var(--t-pblur) * 1px));
+  border-left:1px solid var(--glass-bd);
+  box-shadow:-8px 0 32px rgba(var(--t-shrgb),var(--t-sha));
+}
+/* 모드: 현행(push) = 우측 전체(레일 자리)를 덮음 · 제안(overlay) = 캘린더 위에만, 레일 왼쪽 경계에서 */
+.capp.mode-push .cpanel{right:0}
+.capp.mode-overlay .cpanel{right:236px}
+.capp.mode-push .railcol{opacity:.25;transition:opacity .2s}   /* 현행: 패널이 레일 자리를 덮어 레일이 가려짐 */
+.capp.mode-overlay .railcol{opacity:1;transition:opacity .2s}   /* 제안: 레일 그대로 유지 */
+.cpanel.opening{animation:pgSlideIn calc(var(--t-anim) * 1s) cubic-bezier(.22,1,.36,1)}
+.cpanel.closing{animation:pgSlideOut calc(var(--t-anim) * 1s) cubic-bezier(.4,0,1,1)}
+@keyframes pgSlideIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
+@keyframes pgSlideOut{from{transform:translateX(0);opacity:1}to{transform:translateX(100%);opacity:0}}
+.pn-hd{display:flex;align-items:flex-start;justify-content:space-between;padding:16px 18px 12px;border-bottom:1px solid var(--border)}
+.pn-date{font-size:18px;font-weight:800}
+.pn-dow{font-size:12px;font-weight:600;margin-left:7px;color:var(--dim)}
+.pn-x{width:28px;height:28px;border-radius:50%;border:1px solid rgba(0,0,0,0.06);background:var(--glass);font-size:12px;color:var(--dim);cursor:pointer;flex-shrink:0}
+.pn-body{flex:1;padding:14px 18px;overflow:hidden}
+.pn-svc{font-size:12px;color:var(--text);line-height:2;padding-bottom:12px;margin-bottom:12px;border-bottom:1px solid var(--border)}
+.pn-svc b{color:var(--accent);font-weight:700}
+.pn-seclb{font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.5px;font-weight:700;margin-bottom:9px}
+.pn-item{display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:11px;background:var(--surface-solid);border:1px solid var(--border);margin-bottom:8px}
+.pn-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.pn-tx{flex:1;min-width:0}
+.pn-tx .t1{font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pn-tx .t2{font-size:10px;color:var(--dim);margin-top:1px}
+.pn-tm{font-size:11px;font-weight:700;color:var(--dim)}
+
+.stagecap{margin-top:12px;font-size:12px;color:var(--neutral-text);line-height:1.6;font-weight:600;text-align:center}
+.stagecap kbd{background:#fff;border:1px solid var(--border2);border-radius:6px;padding:1px 7px;font-size:11px;font-family:inherit;box-shadow:0 1px 0 var(--border2)}
+
+/* ── 우: 콘솔 ── */
+.console{flex:0 0 380px;max-width:100%;display:flex;flex-direction:column;gap:14px}
+@media(max-width:1180px){.console{flex:1 1 340px}}
+.csec{background:var(--glass-surface);backdrop-filter:blur(11px);-webkit-backdrop-filter:blur(11px);border:1px solid var(--glass-bd);border-radius:var(--radius-lg);box-shadow:var(--glass-shadow);padding:15px 16px}
+.csec h3{font-size:12px;font-weight:800;color:var(--text);margin-bottom:11px;display:flex;align-items:center;gap:7px}
+.csec h3 span{font-size:10px;font-weight:600;color:var(--dim)}
+.tgrow{display:flex;gap:8px;margin-bottom:9px}
+.tgrow:last-child{margin-bottom:0}
+.tgrow .lb{font-size:11px;font-weight:700;color:var(--neutral-text);align-self:center;width:64px;flex-shrink:0}
+.seg{flex:1;display:flex;background:var(--neutral);border-radius:9px;padding:3px;gap:3px}
+.seg button{flex:1;border:0;background:none;font-family:inherit;font-size:11px;font-weight:700;color:var(--neutral-text);padding:6px 4px;border-radius:7px;cursor:pointer;transition:all .15s}
+.seg button.on{background:#fff;color:var(--accent);box-shadow:0 1px 4px rgba(26,26,46,.1)}
+.pgbtn{width:100%;border:1px solid var(--glass-bd);background:var(--surface-solid);color:var(--text);font-family:inherit;font-size:12px;font-weight:700;padding:10px;border-radius:var(--r-btn);cursor:pointer;transition:all .15s}
+.pgbtn:hover{border-color:var(--accent);color:var(--accent)}
+.pgbtn.accent{background:var(--accent);color:#fff;border-color:var(--accent)}
+.pgbtn.accent:hover{opacity:.92;color:#fff}
+.presets{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.preset{border:1.5px solid var(--border);background:var(--surface-solid);border-radius:12px;padding:9px 10px;cursor:pointer;text-align:left;font-family:inherit;transition:all .15s}
+.preset:hover{border-color:var(--accent-light)}
+.preset.on{border-color:var(--accent);background:var(--accent-light)}
+.preset .pnm{font-size:11.5px;font-weight:800;color:var(--text);display:flex;align-items:center;gap:5px}
+.preset .pds{font-size:9.5px;color:var(--dim);margin-top:2px;line-height:1.35}
+.preset .star{color:var(--peach-text)}
+.slider{margin-bottom:13px}
+.slider:last-child{margin-bottom:0}
+.slider .sl-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
+.slider .sl-nm{font-size:11px;font-weight:700;color:var(--text)}
+.slider .sl-nm em{font-style:normal;color:var(--dim);font-weight:600;font-size:9.5px;margin-left:4px}
+.slider .sl-val{font-size:11px;font-weight:800;color:var(--accent);font-variant-numeric:tabular-nums}
+.slider .sl-val.warn{color:var(--peach-text)}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:5px;border-radius:999px;background:linear-gradient(90deg,var(--accent) 0 var(--p,50%),var(--neutral) var(--p,50%) 100%);outline:none}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#fff;border:2px solid var(--accent);cursor:pointer;box-shadow:0 1px 4px rgba(26,26,46,.2)}
+input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:#fff;border:2px solid var(--accent);cursor:pointer}
+.grplb{font-size:9.5px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin:2px 0 9px}
+.grplb:not(:first-child){margin-top:16px;padding-top:13px;border-top:1px dashed var(--border)}
+#out{background:#1A1A2E;color:#E8E8FD;border-radius:12px;padding:13px 14px;font-size:11px;line-height:1.65;white-space:pre-wrap;font-family:'SF Mono',ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums;max-height:280px;overflow:auto}
+#out .inh{color:#6FCF97}#out .upd{color:#F2C14E}#out .cur{color:#9aa}
+.copyrow{display:flex;gap:8px;margin-top:10px}
+.copyrow .pgbtn{flex:1}
+.note{font-size:10.5px;color:var(--neutral-text);line-height:1.7}
+.note b{color:var(--text)}
+.toast{position:fixed;left:50%;bottom:30px;transform:translateX(-50%) translateY(20px);background:var(--text);color:#fff;padding:11px 20px;border-radius:12px;font-size:12.5px;font-weight:700;opacity:0;pointer-events:none;transition:all .25s;z-index:100}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+@media(prefers-reduced-motion:reduce){.cpanel.opening,.cpanel.closing{animation-duration:.01s}}
+</style>
+</head>
+<body>
+<div class="pg-title">캘린더 상세패널 오버레이 · 판매현황 레일 높이 — 플레이그라운드</div>
+<div class="pg-sub">날짜 셀을 <b>클릭</b>하면 상세 패널이 우→좌로 열려. 빈 곳을 클릭하면 닫혀(촤르륵 확인). · 오른쪽 콘솔에서 <b>현행 ↔ 제안</b>을 바꿔가며 비교하고, 슬라이더로 미세조정한 뒤 <b>[선택값 복사]</b>를 눌러 답장해줘.</div>
+
+<div class="wrap">
+  <!-- ── 좌: 무대 ── -->
+  <div class="stage">
+    <div class="browser">
+      <div class="bwbar"><i></i><i></i><i></i><div class="bwurl">yeulmaru.github.io/yeulmaru-promo/</div></div>
+      <div class="capp mode-push" id="capp">
+        <!-- 캘린더 -->
+        <div class="cal">
+          <div class="calhd">
+            <div class="nv">‹</div>
+            <div class="mo">7<small>2026</small></div>
+            <div class="nv">›</div>
+          </div>
+          <div class="calgh"><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span><span class="sun">일</span><span>월</span></div>
+          <div class="calgrid" id="grid"></div>
+        </div>
+        <!-- 판매현황 레일 -->
+        <div class="railcol">
+          <div class="rail" id="rail">
+            <div class="rail-hd"><span class="rail-tt">판매 현황</span><span class="rail-cnt">2</span><span class="rail-asof">기준 7.8</span><span class="rail-chip">분석</span></div>
+            <div class="rail-body">
+              <div class="rcard">
+                <div class="rc-r1"><span class="rc-nm">브런치 콘서트 Ⅲ</span><span class="rc-dd">D-56</span></div>
+                <div class="rc-meta">기타 · 사업성 · 9.3(목)</div>
+                <div class="rc-r2"><span class="rc-occ">18.0%</span><span class="rc-delta up">▲ +0.8%p</span></div>
+                <div class="rc-spark"><svg viewBox="0 0 132 26" preserveAspectRatio="none"><path d="M3 20 L25 19.4 L47 18.8 L69 16 L91 12 L113 9.5 L129 8" fill="none" stroke="#4A4DE7" stroke-width="1.6"/><path d="M3 20 L25 19.4 L47 18.8 L69 16 L91 12 L113 9.5 L129 8 L129 24 L3 24 Z" fill="rgba(74,77,231,.08)"/></svg></div>
+                <div class="rc-bar"><i style="width:18%"></i><b style="left:50%"></b></div>
+                <div class="rc-r3"><span>167 / 926석</span><span class="bad">목표 50% -32.0%p</span></div>
+              </div>
+              <div class="rcard">
+                <div class="rc-r1"><span class="rc-nm">조재혁 피아노 리사이틀</span><span class="rc-dd">D-65</span></div>
+                <div class="rc-meta">기타 · 예술성 · 9.12(토)</div>
+                <div class="rc-r2"><span class="rc-occ">4.0%</span><span class="rc-delta up">▲ +4.0%p</span></div>
+                <div class="rc-hint">추이 수집 전 (일일입력 2회부터)</div>
+                <div class="rc-bar"><i style="width:4%"></i><b style="left:50%"></b></div>
+                <div class="rc-r3"><span>37 / 926석</span><span class="bad">목표 50% -46.0%p</span></div>
+              </div>
+            </div>
+            <div class="rail-ft"><span class="rail-note">일일입력 최신분 기준 · 카드를 누르면 이 자리에서 개별 분석</span><span class="rail-chip">새로고침</span></div>
+          </div>
+        </div>
+        <!-- 상세 패널 (날짜 클릭 시) -->
+        <div class="cpanel" id="cpanel">
+          <div class="pn-hd">
+            <div><span class="pn-date">7월 9일</span><span class="pn-dow">목요일</span></div>
+            <button class="pn-x" id="pnx">✕</button>
+          </div>
+          <div class="pn-body">
+            <div class="pn-svc">• 장도 입도 가능 시간 : <b>09:00~18:00</b><br>• 카페 운영 시간 : <b>10:00~17:30</b></div>
+            <div class="pn-seclb">홍보 콘텐츠 · 3</div>
+            <div class="pn-item"><span class="pn-dot" style="background:var(--c4)"></span><div class="pn-tx"><div class="t1">인스타 · 브런치 콘서트 Ⅲ</div><div class="t2">피드 · T/O</div></div><span class="pn-tm">05:03</span></div>
+            <div class="pn-item"><span class="pn-dot" style="background:var(--accent)"></span><div class="pn-tx"><div class="t1">문자 · 브런치 콘서트 Ⅲ</div><div class="t2">단체문자 · T/O</div></div><span class="pn-tm">05:03</span></div>
+            <div class="pn-item"><span class="pn-dot" style="background:var(--c6)"></span><div class="pn-tx"><div class="t1">B2B · 브런치 콘서트 Ⅲ</div><div class="t2">제휴처 발송</div></div><span class="pn-tm">05:03</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="stagecap">무대 안에서 <kbd>날짜 클릭</kbd> = 패널 열기 · <kbd>빈 곳 클릭</kbd> 또는 <kbd>✕</kbd> = 닫기 — 열고닫기 촤르륵을 직접 확인해줘</div>
+  </div>
+
+  <!-- ── 우: 콘솔 ── -->
+  <aside class="console">
+    <div class="csec">
+      <h3>① 보기 <span>— 현행과 제안을 바꿔 비교</span></h3>
+      <div class="tgrow">
+        <span class="lb">패널 방식</span>
+        <div class="seg" id="seg-mode">
+          <button data-v="push">현행(밀기·레일가림)</button>
+          <button data-v="overlay">제안(캘린더 위 오버레이)</button>
+        </div>
+      </div>
+      <div class="tgrow">
+        <span class="lb">그림자 색</span>
+        <div class="seg" id="seg-hue">
+          <button data-v="indigo">인디고(현행)</button>
+          <button data-v="neutral">무채색</button>
+        </div>
+      </div>
+      <button class="pgbtn accent" id="btn-toggle" style="margin-top:4px">패널 열기 / 닫기 (촤르륵)</button>
+    </div>
+
+    <div class="csec">
+      <h3>② 프리셋 <span>— 현행 포함 · ★ 추천</span></h3>
+      <div class="presets" id="presets"></div>
+    </div>
+
+    <div class="csec">
+      <h3>③ 미세조정</h3>
+      <div id="sliders"></div>
+    </div>
+
+    <div class="csec">
+      <h3>④ 선택값 <span>— 계승 / 갱신 자동 표기</span></h3>
+      <pre id="out"></pre>
+      <div class="copyrow"><button class="pgbtn accent" id="copy">선택값 복사</button></div>
+    </div>
+
+    <div class="csec">
+      <h3>⑤ 재현 한계 각주</h3>
+      <div class="note">
+        • 캘린더 그리드·일정·판매 카드는 <b>시각 근사</b>(실물은 로그인·실데이터·반응형). 결정 대상은 <b>패널 오버레이 방식 · 무채색/불투명도 · 레일 높이 · 촤르륵 속도</b>야.<br>
+        • 실물 패널은 화면폭 <b>1200px 초과</b>일 때만 레일이 함께 보여(이하·모바일은 기존대로 전폭). 이 무대는 그 데스크톱 상태를 고정 재현.<br>
+        • <b>레일 높이</b> = 실물 <code>.srail</code>의 <code>max-height→min-height</code> 채움 비율 근사. 캘린더가 화면보다 길면 실물은 sticky로 따라붙어(무대는 한 화면 기준).<br>
+        • blur 강도·그림자는 브라우저별 미세차 있음. 색은 전부 index.html 토큰(<code>--glass</code>·<code>--glass-surface</code>·<code>--accent</code>·<code>--text</code>) alpha 변주로만 재현 — 새 색 없음.
+      </div>
+    </div>
+  </aside>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ══════════ 데이터 ══════════
+// 캘린더 셀 (7월 2026 · 화 시작 · 근사) — [일, 지남여부, 일요일여부, 오늘여부, [이벤트..], 카운트]
+var CELLS=[
+  [7,1,0,0,[],'0/1'],[8,1,0,0,[['러커스','m']],'3/5'],[9,0,0,1,[['05:03 인스타 브런치Ⅲ','i'],['05:03 문자 브런치Ⅲ','m'],['05:03 B2B 브런치Ⅲ','k']],'0/3'],
+  [10,0,0,0,[['15:00 문자 달셔베트','m'],['15:50 카카오','k'],['16:00 인스타','i']],'0/4'],[11,0,1,0,[['17:00 블로그 9월홍보','b']],''],[12,0,0,0,[],''],[13,0,0,0,[],''],
+  [14,0,0,0,[],''],[15,0,0,0,[['14:00 인스타 T/O','i'],['15:00 문자 T/O','m'],['15:50 카카오','k']],'0/4'],[16,0,0,0,[['14:00 작가 인터뷰','m']],''],[17,0,0,0,[['제헌절','x']],''],[18,0,1,0,[['17:00 블로그 리사이틀','b']],''],[19,0,0,0,[],''],[20,0,0,0,[],''],
+  [21,0,0,0,[['10:00 카카오 기획전','k'],['10:00 인스타 숨쉬는섬','i']],'0/3'],[22,0,0,0,[['14:00 인스타 T/O','i'],['15:00 문자','m'],['15:50 카카오','k']],'0/3'],[23,0,0,0,[],''],[24,0,0,0,[],''],[25,0,1,0,[],''],[26,0,0,0,[],''],[27,0,0,0,[],''],
+  [28,0,0,0,[],''],[29,0,0,0,[['15:00 카카오 여수섬','k']],'0/1'],[30,0,0,0,[],''],[31,0,0,0,[],''],[1,1,0,0,[],''],[2,1,1,0,[],''],[3,1,0,0,[],''],
+];
+var grid=document.getElementById('grid');
+CELLS.forEach(function(c){
+  var d=document.createElement('div');
+  d.className='dcell'+(c[1]?' past':'')+(c[2]?' sun':'')+(c[3]?' today':'');
+  var evs=(c[4]||[]).map(function(e){return '<div class="ev '+e[1]+'">'+e[0]+'</div>';}).join('');
+  d.innerHTML=(c[5]?'<span class="cellcnt">'+c[5]+'</span>':'')+'<div class="dn">'+c[0]+'</div>'+evs;
+  grid.appendChild(d);
+});
+
+// ══════════ 상태·프리셋·슬라이더 ══════════
+var capp=document.getElementById('capp'), cpanel=document.getElementById('cpanel');
+var DEFAULTS={mode:'push', hue:'indigo', pbg:.55, pblur:24, sha:.06, anim:.25, railfill:0};
+var HUES={indigo:'74,77,231', neutral:'26,26,46'};
+
+var PRESETS=[
+  {id:'p0', nm:'현행', ds:'밀기 · 레일 가림 · 인디고 그림자', st:Object.assign({},DEFAULTS)},
+  {id:'p1', nm:'은은한 오버레이', ds:'레일 유지 · 무채색 · 살짝 비침', st:{mode:'overlay',hue:'neutral',pbg:.72,pblur:22,sha:.10,anim:.22,railfill:1}},
+  {id:'p2', nm:'선명 오버레이', star:1, ds:'레일 유지 · 무채색 · 잘보임 · 빠름', st:{mode:'overlay',hue:'neutral',pbg:.86,pblur:18,sha:.14,anim:.20,railfill:1}},
+  {id:'p3', nm:'불투명 카드', ds:'거의 솔리드 · 뒤 안비침 · 무채색', st:{mode:'overlay',hue:'neutral',pbg:.95,pblur:8,sha:.16,anim:.24,railfill:1}},
+];
+var SLIDERS=[
+  {k:'pbg', nm:'패널 불투명도', d:'rgba(255,255,255,_)', min:.4, max:1, step:.01, grp:'패널 — 잘보이게', warn:0},
+  {k:'pblur', nm:'패널 blur', d:'backdrop-filter px', min:0, max:30, step:1, grp:'패널 — 잘보이게', warn:0},
+  {k:'sha', nm:'그림자 강도', d:'box-shadow alpha', min:0, max:.24, step:.01, grp:'패널 — 잘보이게', warn:0},
+  {k:'anim', nm:'열고닫기 속도', d:'animation s (촤르륵)', min:.12, max:.5, step:.01, grp:'모션', warn:0},
+  {k:'railfill', nm:'레일 높이 채움', d:'0 내용만 → 1 캘린더 하단까지', min:0, max:1, step:.01, grp:'판매현황 레일', warn:0},
+];
+var state=Object.assign({},DEFAULTS), curPreset='p0', panelOn=false;
+
+// 프리셋 UI
+var pbox=document.getElementById('presets');
+PRESETS.forEach(function(p){
+  var b=document.createElement('button'); b.className='preset'; b.dataset.id=p.id;
+  b.innerHTML='<div class="pnm">'+p.nm+(p.star?' <span class="star">★</span>':'')+'</div><div class="pds">'+p.ds+'</div>';
+  b.onclick=function(){ state=Object.assign({},p.st); curPreset=p.id; apply(); };
+  pbox.appendChild(b);
+});
+// 슬라이더 UI
+var sbox=document.getElementById('sliders'), lastGrp='';
+SLIDERS.forEach(function(s){
+  if(s.grp!==lastGrp){ var g=document.createElement('div'); g.className='grplb'; g.textContent=s.grp; sbox.appendChild(g); lastGrp=s.grp; }
+  var w=document.createElement('div'); w.className='slider';
+  w.innerHTML='<div class="sl-top"><span class="sl-nm">'+s.nm+'<em>'+s.d+'</em></span><span class="sl-val'+(s.warn?' warn':'')+'" id="v-'+s.k+'"></span></div>'+
+    '<input type="range" id="r-'+s.k+'" min="'+s.min+'" max="'+s.max+'" step="'+s.step+'">';
+  sbox.appendChild(w);
+  var r=w.querySelector('input');
+  r.oninput=function(){ state[s.k]=parseFloat(r.value); curPreset=null; apply(); };
+});
+// 세그 토글
+function bindSeg(id,key){
+  var seg=document.getElementById(id);
+  seg.querySelectorAll('button').forEach(function(b){
+    b.onclick=function(){ state[key]=b.dataset.v; curPreset=null; apply(); };
+  });
+}
+bindSeg('seg-mode','mode'); bindSeg('seg-hue','hue');
+
+// ══════════ 반영 ══════════
+function fmt(k,v){ if(k==='pbg'||k==='sha'||k==='railfill')return v.toFixed(2); if(k==='anim')return v.toFixed(2)+'s'; if(k==='pblur')return v.toFixed(0)+'px'; return v; }
+function apply(){
+  // CSS 변수
+  capp.style.setProperty('--t-pbg', state.pbg);
+  capp.style.setProperty('--t-pblur', state.pblur);
+  capp.style.setProperty('--t-sha', state.sha);
+  capp.style.setProperty('--t-anim', state.anim);
+  capp.style.setProperty('--t-railfill', state.railfill);
+  capp.style.setProperty('--t-shrgb', HUES[state.hue]);
+  capp.classList.toggle('mode-overlay', state.mode==='overlay');
+  capp.classList.toggle('mode-push', state.mode==='push');
+  // 슬라이더 UI
+  SLIDERS.forEach(function(s){
+    var r=document.getElementById('r-'+s.k), v=document.getElementById('v-'+s.k);
+    r.value=state[s.k]; v.textContent=fmt(s.k,state[s.k]);
+    var pct=(state[s.k]-s.min)/(s.max-s.min)*100; r.style.setProperty('--p',pct+'%');
+  });
+  // 세그 UI
+  ['seg-mode','seg-hue'].forEach(function(id){
+    var key=id==='seg-mode'?'mode':'hue';
+    document.getElementById(id).querySelectorAll('button').forEach(function(b){ b.classList.toggle('on', b.dataset.v===state[key]); });
+  });
+  // 프리셋 UI
+  document.querySelectorAll('.preset').forEach(function(b){ b.classList.toggle('on', b.dataset.id===curPreset); });
+  buildOut();
+}
+
+// ══════════ 선택값 출력 (계승/갱신 자동 표기) ══════════
+var near=function(a,b,eps){ return Math.abs(a-b)<(eps||.005); };
+function tag(txt,cls){ return '<span class="'+cls+'">'+txt+'</span>'; }
+function buildOut(){
+  var out=document.getElementById('out');
+  // 패널 배경: rgba(255,255,255,pbg) — 토큰 동값이면 계승 표기
+  var bgNote;
+  if(near(state.pbg,.55)) bgNote=tag('= --glass 동값 (계승)','inh');
+  else if(near(state.pbg,.78)) bgNote=tag('= --glass-surface 동값 (계승)','inh');
+  else bgNote=tag('→ --glass alpha 변주 (계승 범위 · 값 배선)','upd');
+  // 그림자 색
+  var shName = state.hue==='indigo' ? 'rgba(74,77,231,·) = --accent (현행)' : 'rgba(26,26,46,·) = --text/--backdrop 계열 (무채색)';
+  var shNote = state.hue==='indigo' ? tag('(현행 유지)','cur') : tag('(무채색 · 계승 색 alpha)','inh');
+  // 방식
+  var modeTx = state.mode==='overlay' ? '캘린더 위 오버레이 (레일 유지 · main-area 안 밀림)' : '밀기/레일자리 덮기 (현행)';
+  // 레일 높이
+  var railTx = near(state.railfill,0) ? '내용만 (현행)' : near(state.railfill,1) ? '캘린더 하단까지 꽉 채움' : Math.round(state.railfill*100)+'% 채움';
+  var railNote = near(state.railfill,0) ? tag('(현행)','cur') : tag('→ .srail max-height→min-height 갱신','upd');
+
+  out.innerHTML =
+'[캘린더 상세패널 · 판매현황 레일 — 선택값]\n\n'+
+'■ 패널 방식 : '+modeTx+'\n'+
+'   '+tag(state.mode==='overlay'?'→ _panelRailReflow 재작성 · marginRight 제거':'현행 로직','+ '+(state.mode==='overlay'?'upd':'cur'))+'\n\n'+
+'■ 패널 배경 : rgba(255,255,255,'+state.pbg.toFixed(2)+')  '+bgNote+'\n'+
+'   현행 .55 (--glass)\n'+
+'■ 패널 blur : '+state.pblur.toFixed(0)+'px   '+tag('현행 24px','cur')+'\n'+
+'■ 그림자   : -8px 0 32px '+shName.split(' = ')[0]+', a='+state.sha.toFixed(2)+'\n'+
+'   '+shName+' '+shNote+'\n'+
+'   현행 = 인디고 a.06\n\n'+
+'■ 열고닫기 : '+state.anim.toFixed(2)+'s   '+(near(state.anim,.25)?tag('현행 .25s','cur'):tag('→ slideIn/slideOut 갱신','upd'))+'\n'+
+'   (닫기 slideOut = 신설)\n\n'+
+'■ 레일 높이 : '+railTx+' ('+state.railfill.toFixed(2)+')  '+railNote+'\n'+
+'   현행 = 내용만큼 (max-height calc(100vh-136px))\n\n'+
+'· 외부 클릭 자동 닫기 = 이미 구현 (유지)\n'+
+'· 색 = 전부 기존 토큰 계승 (새 색 0)';
+}
+
+// ══════════ 패널 열고닫기 (촤르륵) ══════════
+function openP(){
+  cpanel.style.display='flex';
+  cpanel.classList.remove('closing');
+  void cpanel.offsetWidth;              // reflow → 애니 재시작
+  cpanel.classList.add('opening');
+  panelOn=true;
+}
+function closeP(){
+  if(!panelOn)return;
+  panelOn=false;
+  cpanel.classList.remove('opening');
+  void cpanel.offsetWidth;
+  cpanel.classList.add('closing');
+  var done=function(){ if(!panelOn){ cpanel.style.display='none'; cpanel.classList.remove('closing'); } cpanel.removeEventListener('animationend',done); };
+  cpanel.addEventListener('animationend',done);
+  setTimeout(function(){ if(!panelOn){ cpanel.style.display='none'; cpanel.classList.remove('closing'); } }, state.anim*1000+150);
+}
+function toggleP(){ panelOn?closeP():openP(); }
+
+// 날짜 클릭 = 열기 · 빈 곳(캘린더 배경) 클릭 = 닫기 (실물 body-wrap onclick 계승)
+grid.querySelectorAll('.dcell').forEach(function(c){ c.addEventListener('click',function(e){ e.stopPropagation(); openP(); }); });
+capp.addEventListener('click',function(e){
+  if(e.target.closest('.cpanel')||e.target.closest('.dcell')||e.target.closest('.railcol'))return;
+  closeP();
+});
+document.getElementById('pnx').addEventListener('click',function(e){ e.stopPropagation(); closeP(); });
+document.getElementById('btn-toggle').addEventListener('click',toggleP);
+
+// ══════════ 복사 ══════════
+document.getElementById('copy').addEventListener('click',function(){
+  var txt=document.getElementById('out').textContent;
+  var ok=function(){ var t=document.getElementById('toast'); t.textContent='선택값 복사됨 — 채팅에 붙여넣어 답장해줘'; t.classList.add('on'); setTimeout(function(){t.classList.remove('on');},2200); };
+  if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(txt).then(ok,function(){fallback(txt,ok);}); }
+  else fallback(txt,ok);
+});
+function fallback(txt,ok){ try{ var ta=document.createElement('textarea'); ta.value=txt; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); ok(); }catch(e){} }
+
+// 초기
+apply();
+</script>
+</body>
+</html>
