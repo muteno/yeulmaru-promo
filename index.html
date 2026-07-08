@@ -91,9 +91,21 @@ button{font-family:inherit;cursor:pointer}
 .pin-slot:has(.pin.lit)::before{opacity:0;transform:translate(-50%,-50%) scale(.4)}
 .pin-slot:has(.pin.err)::before{border-color:var(--danger)}
 .pin{width:100%;height:100%;text-align:center;font-size:19px;font-weight:700;border:none;background:transparent;color:transparent;caret-color:transparent;outline:none;opacity:.8;padding:0;font-family:inherit}
-.pin.lit{color:var(--accent);animation:pinDigitIn .18s ease}
-@keyframes pinDigitIn{from{opacity:0;transform:scale(.6)}to{opacity:1;transform:none}}
+/* [260708] 입력 순간 숫자 통통(운영자 선택 강도 1.53) — 색 var(--accent) 계승, 모션만 신규 */
+.pin.lit{color:var(--accent);animation:pinDigitIn .3s cubic-bezier(.3,1.5,.5,1)}
+@keyframes pinDigitIn{0%{opacity:0;transform:scale(.5)}55%{transform:scale(1.53)}100%{opacity:1;transform:none}}
+/* [260708] PIN 일치 = 도트별 시계방향 링 draw(초록) + 살짝 튐 — 색 var(--green) 계승, 순차 delay */
+.dot-ring{position:absolute;left:50%;top:50%;width:26px;height:26px;transform:translate(-50%,-50%);pointer-events:none;overflow:visible;opacity:0}
+.dot-ring circle{fill:none;stroke:var(--green);stroke-width:2.2;stroke-linecap:round;stroke-dasharray:100;stroke-dashoffset:100;transform:rotate(-90deg);transform-origin:50% 50%}
+.pin-wrap.success .dot-ring{opacity:1}
+.pin-wrap.success .dot-ring circle{animation:pinRingDraw .9s cubic-bezier(.5,0,.3,1) forwards;animation-delay:calc(var(--i,0)*.1s)}
+@keyframes pinRingDraw{to{stroke-dashoffset:0}}
+.pin-wrap.success .pin-slot::before{animation:pinWin .5s ease calc(var(--i,0)*.1s)}
+@keyframes pinWin{0%,100%{transform:translate(-50%,-50%) scale(1)}45%{transform:translate(-50%,-50%) scale(1.2)}}
+@media (prefers-reduced-motion:reduce){.pin.lit{animation:none}.pin-wrap.success .dot-ring circle{animation:none;stroke-dashoffset:0}.pin-wrap.success .pin-slot::before{animation:none}}
 #login-msg{font-size:13px;height:18px;color:var(--danger);margin-top:4px}
+/* [260708] 메시지 영역 하나로 통합 — 평상시 안내(무채색 var(--muted)), 입력 시작하면 비움, 틀리면 같은 자리 danger 대체 */
+#login-msg.lm-hint{color:var(--muted);font-weight:600}
 #login-load{font-size:13px;height:18px;color:var(--accent);margin-top:4px}
 /* 진입 전환 = 카드 리프트 디졸브 — PIN 카드가 떠오르며 사라지고 셰이더가 body 그라데이션(var(--bg))으로 디졸브,
    앱 셸(nav→hdr→cal)이 순차 등장(_appEnterStagger). 색 = 흰색 alpha 변주(§3.5②)+기존 토큰만.
@@ -1630,10 +1642,10 @@ table.promo-board-table thead th:last-child{border-top-right-radius:11px}
     <div id="pin-step" style="display:none">
       <div id="pin-account" style="font-size:12px;color:var(--accent);opacity:.8;text-align:center;margin-bottom:14px"></div>
       <div class="pin-wrap">
-        <div class="pin-slot"><input class="pin" type="password" maxlength="1" inputmode="numeric" autocomplete="off"></div>
-        <div class="pin-slot"><input class="pin" type="password" maxlength="1" inputmode="numeric" autocomplete="off"></div>
-        <div class="pin-slot"><input class="pin" type="password" maxlength="1" inputmode="numeric" autocomplete="off"></div>
-        <div class="pin-slot"><input class="pin" type="password" maxlength="1" inputmode="numeric" autocomplete="off"></div>
+        <div class="pin-slot" style="--i:0"><input class="pin" type="password" maxlength="1" inputmode="numeric" autocomplete="off"><svg class="dot-ring" viewBox="0 0 26 26" aria-hidden="true"><circle cx="13" cy="13" r="11" pathLength="100"></circle></svg></div>
+        <div class="pin-slot" style="--i:1"><input class="pin" type="password" maxlength="1" inputmode="numeric" autocomplete="off"><svg class="dot-ring" viewBox="0 0 26 26" aria-hidden="true"><circle cx="13" cy="13" r="11" pathLength="100"></circle></svg></div>
+        <div class="pin-slot" style="--i:2"><input class="pin" type="password" maxlength="1" inputmode="numeric" autocomplete="off"><svg class="dot-ring" viewBox="0 0 26 26" aria-hidden="true"><circle cx="13" cy="13" r="11" pathLength="100"></circle></svg></div>
+        <div class="pin-slot" style="--i:3"><input class="pin" type="password" maxlength="1" inputmode="numeric" autocomplete="off"><svg class="dot-ring" viewBox="0 0 26 26" aria-hidden="true"><circle cx="13" cy="13" r="11" pathLength="100"></circle></svg></div>
       </div>
       <div id="login-msg"></div>
       <div id="login-load"></div>
@@ -2217,12 +2229,16 @@ let selected=null,editing=null,panelOpen=false,activeFilters=[],activePrograms=[
 // PIN
 const pins=document.querySelectorAll('.pin');
 // PIN 클리어 = 값·모션타이머(_at)·상태클래스 일괄 청산(유령 dot 방지). err=true면 에러 표시.
-function _pinClear(err){ pins.forEach(function(p){ p.value=''; p.type='password'; clearTimeout(p._at); p.classList.remove('lit','filled','err'); if(err) p.classList.add('err'); }); }
+function _pinClear(err){ var _pw=document.querySelector('.pin-wrap'); if(_pw)_pw.classList.remove('success'); pins.forEach(function(p){ p.value=''; p.type='password'; clearTimeout(p._at); p.classList.remove('lit','filled','err'); if(err) p.classList.add('err'); }); }
+// [260708] 메시지 영역(#login-msg) 안내/에러 통합 — 값이 하나라도 있으면 비워 안내·에러를 숨기고, 전부 비면 안내문구(무채색)로 복귀.
+//  에러는 tryLogin이 textContent를 설정한 뒤 _pinClear가 값을 프로그램적으로 비우므로(input 이벤트 없음) 그대로 유지된다.
+function _pinHintUpdate(){ var lm=document.getElementById('login-msg'); if(!lm)return; var any=Array.prototype.some.call(pins,function(p){return p.value;}); if(any){ lm.textContent=''; lm.classList.remove('lm-hint'); } else { lm.textContent='PIN 번호를 입력해주세요'; lm.classList.add('lm-hint'); } }
 pins.forEach((el,i)=>{
   // 방금 입력한 칸만 숫자 노출(lit), 2초 뒤 채운 동그라미로(filled). 원=.pin-slot::before, 숫자=input → 물리 분리로 겹침 없음.
   var _fill=function(){el.type='password';el.classList.remove('lit');el.classList.add('filled');};
   el.addEventListener('input',()=>{
     el.classList.remove('err');
+    _pinHintUpdate();   // [260708] 입력하면 안내문구 사라짐 / 다 지우면 복귀 · 에러도 재입력 시 해제
     if(el.value){ el.type='text'; el.classList.add('lit'); el.classList.remove('filled'); clearTimeout(el._at); el._at=setTimeout(_fill,2000); }  // 입력 순간: 코발트 숫자 노출
     else { el.type='password'; el.classList.remove('lit','filled'); clearTimeout(el._at); }                                                       // 지우면: 빈 동그라미
     if(el.value.length===1&&i<3)pins[i+1].focus();
@@ -2233,7 +2249,7 @@ pins.forEach((el,i)=>{
   // [260707] 빈 칸 건너뛴 입력 방지 — 클릭/탭으로 어느 칸에 포커스가 와도 앞쪽 첫 빈 칸으로 이동.
   //  ⚠️ 뒤→앞(k<i)만 — 무조건 첫 빈 칸으로 보내면 위 Backspace 역이동(빈 칸에서 앞 칸 포커스)과 핑퐁 충돌.
   el.addEventListener('focus',()=>{const k=Array.from(pins).findIndex(p=>!p.value);if(k>-1&&k<i)pins[k].focus();});
-  el.addEventListener('paste',e=>{e.preventDefault();const t=(e.clipboardData.getData('text')||'').replace(/\D/g,'').slice(0,4);t.split('').forEach((c,j)=>{if(pins[j]){pins[j].value=c;pins[j].type='password';pins[j].classList.remove('lit');pins[j].classList.add('filled');clearTimeout(pins[j]._at);}});if(t.length===4)tryLogin();});
+  el.addEventListener('paste',e=>{e.preventDefault();const t=(e.clipboardData.getData('text')||'').replace(/\D/g,'').slice(0,4);t.split('').forEach((c,j)=>{if(pins[j]){pins[j].value=c;pins[j].type='password';pins[j].classList.remove('lit');pins[j].classList.add('filled');clearTimeout(pins[j]._at);}});_pinHintUpdate();if(t.length===4)tryLogin();});
 });
 // === 비밀번호 입력/설정 모달 (Promise 기반) ===
 function _togglePwdVisibility(inputId, btn){
@@ -2424,7 +2440,7 @@ async function tryLogin(){
     if(!_loginEmail){ document.getElementById('login-msg').textContent='먼저 Microsoft 인증이 필요합니다'; _loggingIn=false; return; }
     const pin=Array.from(pins).map(p=>p.value).join('');
     if(pin.length!==4){_loggingIn=false;return;}
-    document.getElementById('login-msg').textContent='';
+    var _lm=document.getElementById('login-msg');_lm.textContent='';_lm.classList.remove('lm-hint');  // [260708] 확인 시작 = 안내/에러 클리어(이후 실패면 이 자리에 danger 에러)
     document.getElementById('login-load').innerHTML=_ldHtml(12)+'확인 중';
 
     // MS 계정 이메일 (silent, 팝업 없음)
@@ -2576,8 +2592,17 @@ function _enterAsManager(matched, pin, userName){
   password='0510';userRole=sessRole;
   try{sessionStorage.setItem('myApplicant',userName);sessionStorage.setItem('myUserDept',userDept);}catch(e){}
   try{sessionStorage.setItem('myEmail',String(_authGetCol(matched,_EMAIL_KEYS)||'').trim().toLowerCase());}catch(e){}
-  _enterApp();
-  setTimeout(function(){if(typeof showToast==='function')showToast('<span style="color:var(--accent);font-weight:700">'+escapeHtml(userName)+'</span>님'+(isSubAdmin?' (관리자)':'')+' 접속을 환영합니다','success',true);},300);
+  // [260708] PIN 일치 = 도트별 시계방향 링(초록) 감싸기를 잠깐 보여준 뒤 앱 진입 — reduced-motion이면 즉시
+  var _go=function(){ _enterApp(); setTimeout(function(){if(typeof showToast==='function')showToast('<span style="color:var(--accent);font-weight:700">'+escapeHtml(userName)+'</span>님'+(isSubAdmin?' (관리자)':'')+' 접속을 환영합니다','success',true);},300); };
+  try{
+    var _pw=document.querySelector('.pin-wrap');
+    var _rm=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if(_pw&&!_rm){
+      pins.forEach(function(p){clearTimeout(p._at);p.type='password';p.classList.remove('lit','err');p.classList.add('filled');});  // 마지막 칸까지 채운 원으로 통일 후 링 draw
+      _pw.classList.add('success');
+      setTimeout(_go,780);
+    } else { _go(); }
+  }catch(e){ _go(); }
 }
 
 // MS 로그인 버튼 (토큰 無 → popup) — 첫 방문/다른 기기
@@ -2779,7 +2804,8 @@ function _enterPinInputStep(){
   if(pa)pa.innerHTML='<b style="color:var(--accent)">'+escapeHtml(_loginEmail)+'</b> 로 로그인';
   _pinClear(false);
   if(pins[0])pins[0].focus();
-  var lm=document.getElementById('login-msg'); if(lm)lm.textContent='';
+  // [260708] 진입 시 안내문구(무채색) 노출 — 입력 시작하면 사라지고, 틀리면 이 자리를 에러가 대체
+  var lm=document.getElementById('login-msg'); if(lm){lm.textContent='PIN 번호를 입력해주세요';lm.classList.add('lm-hint');}
   var ll=document.getElementById('login-load'); if(ll)ll.textContent='';
   console.log('[pinInput] DONE account=',a?a.style.display:'null','pin=',ps?ps.style.display:'null');
   // ── 진단: getComputedStyle + 조상 체인 ──
@@ -8023,8 +8049,8 @@ function markMsgRead(id){
     document.body.appendChild(warn);
     return warn;
   }
-  // PIN은 입력 순간 type=text로 토글되므로 password뿐 아니라 .pin 클래스도 대상(type토글 정합)
-  function _isPwField(t){ return t && t.tagName === 'INPUT' && (t.type === 'password' || t.classList.contains('pin')); }
+  // [260708] PIN은 숫자 입력이라 CapsLock 경고가 무의미 → 대상서 제외(비밀번호 설정 모달의 password 필드엔 유지). 운영자 지시.
+  function _isPwField(t){ return t && t.tagName === 'INPUT' && t.type === 'password' && !t.classList.contains('pin'); }
   function showWarn(inputEl){
     const w = ensureWarn();
     const anchor = inputEl.closest('.pin-wrap') || inputEl;   // PIN은 그룹 전체 기준 → 정중앙
