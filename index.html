@@ -2425,7 +2425,7 @@ async function tryLogin(){
     const pin=Array.from(pins).map(p=>p.value).join('');
     if(pin.length!==4){_loggingIn=false;return;}
     document.getElementById('login-msg').textContent='';
-    document.getElementById('login-load').textContent='확인 중...';
+    document.getElementById('login-load').innerHTML=_ldHtml(12)+'확인 중';
 
     // MS 계정 이메일 (silent, 팝업 없음)
     const email = _loginEmail || await _msalGetEmailSilent();
@@ -2541,7 +2541,7 @@ async function _authWithEmail(email, pin){
     document.getElementById('login-load').textContent='';
     const newPin = await _promptNewPin(userName);
     if(!newPin){ _pinClear(false);pins[0].focus(); return; }
-    document.getElementById('login-load').textContent='확인 중...';
+    document.getElementById('login-load').innerHTML=_ldHtml(12)+'확인 중';
     try{
       const r=await fetch(`${API}/api/auth/set-pin`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:email,pin:newPin})});
       const d=await r.json();
@@ -2685,7 +2685,7 @@ async function initLoginScreen(){
   if(!step)return;
   const ps=document.getElementById('pin-step'); if(ps)ps.style.display='none';
   step.style.display='';
-  step.innerHTML='<div style="color:#999;font-size:13px;padding:10px 0">계정 확인 중...</div>';
+  step.innerHTML='<div style="color:#999;font-size:13px;padding:10px 0">'+_ldHtml(12)+'계정 확인 중</div>';
   let email=null;
   try{ email=await _msalGetEmailSilent(); }catch(e){}
   if(email){
@@ -2703,7 +2703,7 @@ async function initLoginScreen(){
       let _live=false;
       try{ _live=await _msalHasLiveSession(); }catch(e){}
       if(_live){
-        step.innerHTML='<div style="font-size:15px;color:var(--accent);font-weight:700;margin-bottom:3px;word-break:break-all">'+escapeHtml(email)+'</div><div style="font-size:11px;color:#aaa;margin:10px 0 4px">PIN 입력 화면으로 이동 중...</div>';
+        step.innerHTML='<div style="font-size:15px;color:var(--accent);font-weight:700;margin-bottom:3px;word-break:break-all">'+escapeHtml(email)+'</div><div style="font-size:11px;color:#aaa;margin:10px 0 4px">'+_ldHtml(12)+'PIN 입력 화면으로 이동 중</div>';
         if(typeof goToPinStep==='function'){ setTimeout(function(){goToPinStep(true);},0); }
         return;
       }
@@ -2723,7 +2723,7 @@ async function goToPinStep(skipEnsure){
   console.log('[goToPin] start skipEnsure=',skipEnsure,'_loginEmail=',_loginEmail,'MANAGERS=',MANAGERS?MANAGERS.length:'null');
   try{
   const step=document.getElementById('account-step');
-  if(step)step.innerHTML='<div style="color:#999;font-size:13px;padding:24px 0">Microsoft 인증 확인 중...</div>';
+  if(step)step.innerHTML='<div style="color:#999;font-size:13px;padding:24px 0">'+_ldHtml(12)+'Microsoft 인증 확인 중</div>';
   if(!skipEnsure){
     console.log('[goToPin] _msalEnsureToken...');
     const v=await _msalEnsureToken(_loginEmail);
@@ -2830,7 +2830,7 @@ async function msLogin(){
   _loggingIn = true;
   try {
     const step=document.getElementById('account-step');
-    if(step)step.innerHTML='<div style="color:#999;font-size:13px;padding:10px 0">Microsoft 로그인 중...</div>';
+    if(step)step.innerHTML='<div style="color:#999;font-size:13px;padding:10px 0">'+_ldHtml(12)+'Microsoft 로그인 중</div>';
     const email = await _msalLoginEmail();
     if(!email){ _fullLogout(); if(typeof initLoginScreen==='function')initLoginScreen(); _loggingIn=false; return; }
     try{localStorage.setItem('_resumePin',email);}catch(e){} location.reload();
@@ -3255,7 +3255,7 @@ function _wxResultsHtml(results){
     return '<div onclick="_wxPick('+r.lat+','+r.lon+',\''+nm+'\')" style="padding:7px 9px;border-radius:8px;cursor:pointer" onmouseover="this.style.background=\'#f3f4fb\'" onmouseout="this.style.background=\'\'"><b style="font-size:12.5px;color:#333">'+escapeHtml(r.name||'')+'</b> <span style="font-size:11px;color:#999">'+escapeHtml(r.sub||'')+'</span></div>';
   }).join('');
 }
-function _wxRenderResults(results,msg){ var el=document.getElementById('wx-results'); if(el)el.innerHTML= msg?('<div style="color:#bbb;font-size:12px;padding:8px;text-align:center">'+escapeHtml(msg)+'</div>'):_wxResultsHtml(results); }
+function _wxRenderResults(results,msg,busy){ var el=document.getElementById('wx-results'); if(el)el.innerHTML= msg?('<div style="color:#bbb;font-size:12px;padding:8px;text-align:center">'+(busy?_ldHtml(12):'')+escapeHtml(msg)+'</div>'):_wxResultsHtml(results); }
 function _wxRenderPop(){
   var p=document.getElementById('wx-pop'); if(!p)return; var cur=_wxLoc();
   var h='<div style="font-size:12px;font-weight:700;color:#333;margin-bottom:8px">🌦️ 날씨 지역 <span style="font-size:11px;color:var(--accent);font-weight:600">· '+escapeHtml(cur.name)+'</span></div>';
@@ -3271,7 +3271,7 @@ function _wxSearchDebounced(q){ if(_wxTimer)clearTimeout(_wxTimer); _wxTimer=set
 var _WX_KEEP={city:1,town:1,municipality:1,county:1};  // 시 단위(시·군·광역시 등) — 동/리/구/도로 제외
 async function _wxSearch(q){
   q=(q||'').trim(); if(_wxTimer){clearTimeout(_wxTimer);_wxTimer=null;} if(!q){ _wxRenderResults([]); return; }
-  _wxRenderResults(null,'검색 중…');
+  _wxRenderResults(null,'검색 중',1);
   try{
     var r=await fetch('https://nominatim.openstreetmap.org/search?q='+encodeURIComponent(q)+'&format=jsonv2&accept-language=ko&limit=15&featureType=city&addressdetails=1');
     var j=await r.json(); var seen={};
@@ -3286,7 +3286,7 @@ function _wxPick(lat,lon,name){ _wxSetLoc({lat:lat,lon:lon,name:name||'선택 �
 function _wxReset(){ _wxSetLoc({lat:34.7604,lon:127.6622,name:'여수'}); var p=document.getElementById('wx-pop'); if(p)p.classList.remove('show'); }
 function _wxGeo(){
   if(!navigator.geolocation){ _wxRenderResults([],'이 브라우저는 위치를 지원하지 않아요'); return; }
-  _wxRenderResults(null,'현재 위치 확인 중…');
+  _wxRenderResults(null,'현재 위치 확인 중',1);
   navigator.geolocation.getCurrentPosition(function(pos){
     var la=pos.coords.latitude, lo=pos.coords.longitude;
     fetch('https://api.bigdatacloud.net/data/reverse-geocode-client?latitude='+la+'&longitude='+lo+'&localityLanguage=ko')
@@ -3383,7 +3383,7 @@ async function _memoLoad(){
   _memoState.loaded=true;
 }
 function _memoPersist(){
-  var s=document.getElementById('memo-status'); if(s)s.textContent='저장 중…';
+  var s=document.getElementById('memo-status'); if(s)s.innerHTML=_ldHtml(10)+'저장 중';
   if(_memoState.timer)clearTimeout(_memoState.timer);
   _memoState.timer=setTimeout(function(){ _memoState.timer=null;
     api('POST','/api/memo',{user:_memoUser(),text:JSON.stringify({tasks:_memoState.tasks,alarmOff:_memoState.alarmOff})})
@@ -3423,7 +3423,7 @@ function _memoRenderBody(){ var el=document.getElementById('memo-list'); if(el)e
 function _memoToggleAlarm(){ _memoState.alarmOff=!_memoState.alarmOff; _memoRender(false); _memoPersist(); }
 function _memoRender(loading){
   var pop=document.getElementById('memo-pop'); if(!pop)return;
-  if(loading){ pop.innerHTML='<div style="color:#bbb;font-size:12px;padding:26px;text-align:center">불러오는 중…</div>'; return; }
+  if(loading){ pop.innerHTML='<div style="color:#bbb;font-size:12px;padding:26px;text-align:center">'+_ldHtml(14)+'불러오는 중</div>'; return; }
   var imp=_memoState.addImp||2;
   pop.innerHTML=''
     +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;gap:8px"><span style="font-size:14px;font-weight:800;color:#2a2a3a">📝 내 할 일 <span style="font-size:12.5px;color:var(--accent);font-weight:800;background:rgba(74,77,231,0.09);padding:1px 8px;border-radius:7px;margin-left:2px">'+_memoDateLabel()+'</span></span>'
@@ -3910,7 +3910,7 @@ function openSalesBoard(){
   document.addEventListener('keydown',_salesState.escHandler);
   var body=document.getElementById('sales-body');
   if(_salesState.master&&_salesState.ops){_salesRender();return;}
-  body.innerHTML='<div style="text-align:center;padding:60px;color:#888;font-size:14px">판매 데이터 불러오는 중…</div>';
+  body.innerHTML='<div style="text-align:center;padding:60px;color:#888;font-size:14px">'+_ldHtml(16)+'판매 데이터 불러오는 중</div>';
   Promise.all([
     _salesState.daily?Promise.resolve(_salesState.daily):api('GET','/api/ops?sheet='+encodeURIComponent('일일입력')),
     _salesState.master?Promise.resolve(_salesState.master):api('GET','/api/ops?sheet='+encodeURIComponent('공연마스터')),
@@ -3960,7 +3960,7 @@ function _srailInit(force){
   if(_srailBusy&&!force)return;   // force = 스톨 뚫고 재발사 허용(세대 토큰이 구응답 폐기)
   _srailBusy=true;
   var gen=++_srailGen;
-  els.body.innerHTML='<div class="srail-note" style="padding:20px 6px">판매 데이터 불러오는 중…</div>';
+  els.body.innerHTML='<div class="srail-note" style="padding:20px 6px">'+_ldHtml(14)+'판매 데이터 불러오는 중</div>';
   Promise.all([
     _salesState.daily?Promise.resolve(_salesState.daily):api('GET','/api/ops?sheet='+encodeURIComponent('일일입력')),
     _salesState.master?Promise.resolve(_salesState.master):api('GET','/api/ops?sheet='+encodeURIComponent('공연마스터')),
@@ -4289,7 +4289,7 @@ function openAnalyticsBoard(){
   var needSales=!(_salesState.daily&&_salesState.master&&_salesState.ops);
   if(!needSales&&!_bizState.raw)_bizState.raw=_salesState.ops;   // 같은 '세부운영관리대장(정리)' 시트 재사용
   if(!needSales){ _anaRender(); return; }
-  body.innerHTML='<div style="text-align:center;padding:60px;color:#888;font-size:14px">분석 데이터 불러오는 중…</div>';
+  body.innerHTML='<div style="text-align:center;padding:60px;color:#888;font-size:14px">'+_ldHtml(16)+'분석 데이터 불러오는 중</div>';
   Promise.all([
     _salesState.daily?Promise.resolve(_salesState.daily):api('GET','/api/ops?sheet='+encodeURIComponent('일일입력')),
     _salesState.master?Promise.resolve(_salesState.master):api('GET','/api/ops?sheet='+encodeURIComponent('공연마스터')),
@@ -4390,7 +4390,7 @@ function _anaSetCat(c){
   _anaRender();
 }
 function _anaExhibLoad(cb){
-  var sc=document.getElementById('ana-screen'); if(sc)sc.innerHTML='<div style="text-align:center;padding:60px;color:#888;font-size:14px">전시 데이터 불러오는 중…</div>';
+  var sc=document.getElementById('ana-screen'); if(sc)sc.innerHTML='<div style="text-align:center;padding:60px;color:#888;font-size:14px">'+_ldHtml(16)+'전시 데이터 불러오는 중</div>';
   Promise.all([
     api('GET','/api/ops?sheet='+encodeURIComponent('전시일일')),
     api('GET','/api/ops?sheet='+encodeURIComponent('전시마스터'))
@@ -4893,7 +4893,7 @@ function openDailyInput(){
   if(userRole!=='admin'){showToast('관리자만 입력할 수 있어요','error');return;}
   let el=document.getElementById('daily-input');
   if(!el){el=document.createElement('div');el.id='daily-input';document.body.appendChild(el);}
-  el.innerHTML='<div class="modal-bg show" style="z-index:99990" onclick="if(event.target===this)closeDailyInput()"><div class="modal" style="width:96vw;max-width:760px;max-height:90vh;overflow:auto;padding:0;position:relative;background:#fff"><button class="modal-x" onclick="closeDailyInput()" title="닫기" style="position:absolute;top:14px;right:14px;z-index:10">✕</button><div style="padding:18px 22px;border-bottom:1px solid #eee;font-size:15px;font-weight:700">➕ 일일 판매 입력</div><div id="daily-body" style="padding:18px 22px"><div style="text-align:center;color:#888;padding:30px">공연 목록 불러오는 중…</div></div></div></div>';
+  el.innerHTML='<div class="modal-bg show" style="z-index:99990" onclick="if(event.target===this)closeDailyInput()"><div class="modal" style="width:96vw;max-width:760px;max-height:90vh;overflow:auto;padding:0;position:relative;background:#fff"><button class="modal-x" onclick="closeDailyInput()" title="닫기" style="position:absolute;top:14px;right:14px;z-index:10">✕</button><div style="padding:18px 22px;border-bottom:1px solid #eee;font-size:15px;font-weight:700">➕ 일일 판매 입력</div><div id="daily-body" style="padding:18px 22px"><div style="text-align:center;color:#888;padding:30px">'+_ldHtml(16)+'공연 목록 불러오는 중</div></div></div></div>';
   if(_dailyState.master&&_dailyState.programs){_dailyRenderForm();return;}
   Promise.all([
     api('GET','/api/ops?sheet='+encodeURIComponent('공연마스터')),
@@ -4949,7 +4949,7 @@ async function _dailySubmit(){
     var totSeat=paidS+free, open=masters[r.공연]||926, occ=open>0?Math.min(totSeat/open*100,100):0;
     return {기준일자:ymd,공연명:r.공연,유료좌석:paidS,유료금액:paidA,무료좌석:free,합계좌석:totSeat,합계금액:paidA,점유율:occ.toFixed(1),'전일대비(석)':'','공연ID':(_mid[r.공연]||'')};
   });
-  var btn=document.getElementById('d-save'); _btnBusy(btn,true,'저장 중…');
+  var btn=document.getElementById('d-save'); _btnBusy(btn,true,'저장 중');
   try{
     await api('POST','/api/ops',{sheet:'일일입력',mode:'append',rows:rows});
     showToast(rows.length+'건 저장됐어요 ('+date+')');
@@ -4968,7 +4968,7 @@ function _dsxCell(cells,ref){ return cells[ref]!=null?cells[ref]:''; }
 function _dsxParse(files){
   if(files.some(function(f){return f.size>20*1024*1024;})){showToast('파일이 너무 커요(20MB 제한)','error');return;}
   if(files.some(function(f){return !/\.xlsx$/i.test(f.name);})){showToast('xlsx 파일만 올릴 수 있어요','error');return;}
-  showToast('판매현황 읽는 중…','info');
+  showToast('판매현황 읽는 중','info');
   _tktEnsureJSZip(function(err){
     if(err){showToast('압축 라이브러리 로드 실패 — 네트워크 확인 후 다시 시도','error');return;}
     Promise.all([
@@ -5072,7 +5072,7 @@ function _dsxPreview(results, existingData){
 async function _dsxSubmit(){
   var rows=window._dsxPending||[]; var msg=document.getElementById('d-msg');
   if(!rows.length){if(msg)msg.textContent='저장할 항목이 없어요';return;}
-  var btn=document.getElementById('d-xsave'); if(btn){btn.disabled=true;btn.textContent='저장 중…';}
+  var btn=document.getElementById('d-xsave'); _btnBusy(btn,true,'저장 중');
   try{
     await api('POST','/api/ops',{sheet:'일일입력',mode:'append',rows:rows});
     showToast(rows.length+'건 반영됐어요');
@@ -5080,7 +5080,7 @@ async function _dsxSubmit(){
     _salesState.master=null;_salesState.daily=null;_salesState.rounds=null;
     try{_srailInit();}catch(_e){}
     if(document.getElementById('sales-board')&&document.getElementById('sales-board').innerHTML){openSalesBoard();}
-  }catch(e){ if(msg)msg.textContent='저장 실패: '+(e.message||e); if(btn){btn.disabled=false;btn.textContent=rows.length+'건 저장';} }
+  }catch(e){ if(msg)msg.textContent='저장 실패: '+(e.message||e); _btnBusy(btn,false,rows.length+'건 저장'); }
 }
 function _salesToggleEnded(){ _salesState.showEnded=!_salesState.showEnded; _salesRender(); }
 function _salesDdayColor(d){ if(d===null)return '#555'; if(d<0)return '#999'; if(d<=7)return '#E08600'; if(d<=14)return '#C9A800'; return '#555'; }
@@ -5530,7 +5530,7 @@ function openBusinessBoard(){
   document.addEventListener('keydown',_bizState.escHandler);
   const body=document.getElementById('biz-body');
   if(_bizState.raw){_bizRender();return;}
-  body.innerHTML='<div style="text-align:center;padding:60px;color:#888;font-size:14px">운영 데이터 불러오는 중…</div>';
+  body.innerHTML='<div style="text-align:center;padding:60px;color:#888;font-size:14px">'+_ldHtml(16)+'운영 데이터 불러오는 중</div>';
   api('GET','/api/ops?sheet='+encodeURIComponent('세부운영관리대장(정리)')).then(function(d){_bizState.raw=d;_bizRender();}).catch(function(e){
     body.innerHTML='<div style="text-align:center;padding:60px;color:var(--danger)">데이터 로드 실패: '+escapeHtml(e.message||String(e))+'</div>';
   });
@@ -5882,7 +5882,7 @@ async function _sigSave(){
   if(!_hasNew && !_hasDel && _curOrder===_savedOrder && dur===_sigState.savedDuration){
     showToast('변경 사항이 없어요','info'); return;
   }
-  showOverlayLoad('사이니지 저장 중...');
+  showOverlayLoad('사이니지 저장 중');
   try{
     const branch=_sigState.branch||'main';
     const lr=await _sigGh('GET','signage?ref='+encodeURIComponent(branch));
@@ -6399,7 +6399,7 @@ function _pmapRenderDashboard(c){
   _pmapState={kind:'all',city:'all',map:null,markers:[],badges:[],badgeKey:'',iw:null,clock:null,manifest:null};
   c.style.padding='0';
   c.innerHTML='<div class="pm-wrap">'
-    +'<div class="pm-mapdiv" id="pm-mapdiv"><div class="pm-map-loading">지도를 불러오는 중…</div></div>'
+    +'<div class="pm-mapdiv" id="pm-mapdiv"><div class="pm-map-loading">'+_ldHtml(16)+'지도를 불러오는 중</div></div>'
     +'<div class="pm-corners"><i></i><i></i><i></i><i></i></div>'
     +'<div class="pm-ov pm-ov-top">'
       +'<div class="pm-ov-row">'
@@ -6465,7 +6465,7 @@ function _pmapRenderCards(){
   const card=function(l,n,unit,s){return '<div class="pm-card"><div class="pm-card-l">'+l+'</div><div class="pm-card-n">'+n+'<small>'+unit+'</small></div><div class="pm-card-s">'+s+'</div></div>';};
   el.innerHTML=card('홍보 거점',spots.length,'곳','운영 '+act+' · 예정 '+pend)
     +card('운영 매체',units,'대','협력기관 DID '+didC.done+'대 포함')
-    +card('송출 콘텐츠',mf?((mf.images||[]).length):'—','건',mf?('사이니지 · '+((mf.slideDuration||8000)/1000)+'초 간격'):'사이니지 연동 중…')
+    +card('송출 콘텐츠',mf?((mf.images||[]).length):'—','건',mf?('사이니지 · '+((mf.slideDuration||8000)/1000)+'초 간격'):'사이니지 연동 중')
     +card('이번 달 홍보',mCnt,'건','오늘 '+todayCnt+'건');
 }
 function _pmapFeedHtml(){
@@ -6630,7 +6630,7 @@ function _pmapCalloutHtml(s){
       extra+='<div class="pm-co-sec">지금 송출 중 — '+mf.images.length+'건 · '+((mf.slideDuration||8000)/1000)+'초 간격'+(sigMl&&sigMl.ratio?' · 📐 '+escapeHtml(sigMl.ratio):'')+' <span style="font-weight:600;color:var(--dim)">(클릭=조회)</span></div>'
         +'<div class="pm-co-thumbs">'+mf.images.map(function(n,ci){return '<img src="signage/'+encodeURI(n)+'" alt="" loading="lazy" style="'+thumbSt+'" onclick="_pmapViewItem(\''+s.id+'\','+sigMi+','+ci+')">';}).join('')+'</div>';
     }else{
-      extra+='<div class="pm-co-note">송출 콘텐츠 불러오는 중…</div>';
+      extra+='<div class="pm-co-note">'+_ldHtml(12)+'송출 콘텐츠 불러오는 중</div>';
     }
   }
   if(s.note)extra+='<div class="pm-co-note">📋 '+escapeHtml(s.note)+'</div>';
@@ -6725,7 +6725,7 @@ function _pmapRenderFallback(note){
   if(!fb){ fb=document.createElement('div'); fb.className='pm-fmap'; div.insertBefore(fb, div.firstChild); }
   fb.setAttribute('style', bg);
   fb.innerHTML=inner;
-  // 폴백 지도가 떴다 = 지도가 이미 보인다 → 초기 "지도를 불러오는 중…" 로딩 노드 제거.
+  // 폴백 지도가 떴다 = 지도가 이미 보인다 → 초기 "지도를 불러오는 중" 로딩 노드 제거.
   // (흰화면 방어 수정이 div.innerHTML 통째교체 → .pm-fmap 노드만 갱신으로 바뀌며 로딩 노드가 남아 폴백 위에 겹쳐 보이던 회귀, 분신술 D-M1)
   var _ld=div.querySelector('.pm-map-loading'); if(_ld&&_ld.parentNode)_ld.parentNode.removeChild(_ld);
 }
@@ -6766,7 +6766,7 @@ function _pmapContents(s,mediaName){
   if(s.signage&&/사이니지/.test(mediaName)){
     const mf=_pmapState&&_pmapState.manifest;
     if(mf&&mf.images&&mf.images.length)return mf.images.map(function(n){return {type:'img',name:n,src:'signage/'+encodeURI(n)};});
-    return [{type:'todo',name:'송출 콘텐츠 불러오는 중…'}];
+    return [{type:'todo',name:'송출 콘텐츠 불러오는 중'}];
   }
   // 지점별 이미지 직접 등록 확장점 — 운영자가 "이 지점엔 이 이미지" 목록 주면 spot.images:['경로',…]로 등록
   if(s.images&&s.images.length)return s.images.map(function(n){return {type:'img',name:String(n).split('/').pop(),src:n};});
@@ -6890,7 +6890,7 @@ function _pmapSpotRows(s,pad){
     _pmapContents(s,ml.name).forEach(function(it,ci){
       const iid='i|'+s.id+'|'+ml.mi+'|'+ci;
       h+='<div class="pm-rrow'+(sel===iid?' on':'')+'" style="padding-left:'+(pad+32)+'px;font-size:11.5px'+(it.type!=='img'?';color:var(--dim)':'')+'" onclick="_pmapRow(\''+iid+'\')">'
-        +'<span class="pm-rarrow"></span>'+(it.type==='img'?'<img class="pm-rthumb" src="'+it.src+'" loading="lazy" alt="">':'⏳ ')+'<span class="pm-rlabel">'+escapeHtml(it.name)+'</span></div>';
+        +'<span class="pm-rarrow"></span>'+(it.type==='img'?'<img class="pm-rthumb" src="'+it.src+'" loading="lazy" alt="">':_ldHtml(12))+'<span class="pm-rlabel">'+escapeHtml(it.name)+'</span></div>';
     });
   });
   return h;
@@ -7504,7 +7504,7 @@ async function adminCompleteWithResult(rowIndex){
   if(!result)return;  // 취소
 
   // PATCH — 진행상태='완료' + 결과 필드 3개 (기존 다른 필드 유지)
-  showOverlayLoad('완료 처리 중...');
+  showOverlayLoad('완료 처리 중');
   try{
     const row = buildRecordRow(rec, {
       '진행 상태':'완료',
@@ -8835,7 +8835,7 @@ function openPromoBoard(){
   _promoFilter.viewMode='mine';  // 비관리자: 열 때마다 '내 신청만' 기본 (admin은 이 값 무시)
   _promoFilter.colFilters={};
   _promoFilter.sortBy='';_promoFilter.sortDir='asc';
-  const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closePromoBoard)"><div class="modal pb-modal" style="width:96vw;max-width:1100px;height:88vh;max-height:88vh;overflow:hidden;padding:0;position:relative;display:flex;flex-direction:column"><button class="modal-x" onclick="closePromoBoard()" title="닫기" aria-label="닫기" style="position:absolute;top:16px;right:18px;float:none;margin:0;z-index:10">✕</button><div id="promo-board-body" style="flex:1;overflow:auto;padding:26px 30px 26px 30px;text-align:center;color:#888">로딩 중...</div><div id="edit-mode-bar" style="display:none;align-items:center;gap:12px;padding:12px 24px;border-top:1px solid rgba(0,0,0,0.08);background:var(--surface-solid)"><span style="font-size:13px;font-weight:700;color:var(--accent)"><span id="edit-mode-count">0건 선택</span></span><span style="font-size:11px;color:var(--dim)">변경할 신청을 체크하세요 · 완료/취소·남의 신청은 선택 불가</span><div id="edit-mode-actions" style="display:none;gap:8px;margin-left:auto"><button onclick="_bulkMoveSchedule()" style="padding:8px 16px;border-radius:9px;border:0;background:var(--accent);color:var(--surface-solid);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">📅 일괄 일정 이동</button><button onclick="_bulkCancelSchedule()" style="padding:8px 16px;border-radius:9px;border:1.5px solid var(--peach-text);background:var(--surface-solid);color:var(--peach-text);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">✕ 일괄 취소</button></div></div></div></div>';
+  const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closePromoBoard)"><div class="modal pb-modal" style="width:96vw;max-width:1100px;height:88vh;max-height:88vh;overflow:hidden;padding:0;position:relative;display:flex;flex-direction:column"><button class="modal-x" onclick="closePromoBoard()" title="닫기" aria-label="닫기" style="position:absolute;top:16px;right:18px;float:none;margin:0;z-index:10">✕</button><div id="promo-board-body" style="flex:1;overflow:auto;padding:26px 30px 26px 30px;text-align:center;color:#888">'+_ldHtml(16)+'로딩 중</div><div id="edit-mode-bar" style="display:none;align-items:center;gap:12px;padding:12px 24px;border-top:1px solid rgba(0,0,0,0.08);background:var(--surface-solid)"><span style="font-size:13px;font-weight:700;color:var(--accent)"><span id="edit-mode-count">0건 선택</span></span><span style="font-size:11px;color:var(--dim)">변경할 신청을 체크하세요 · 완료/취소·남의 신청은 선택 불가</span><div id="edit-mode-actions" style="display:none;gap:8px;margin-left:auto"><button onclick="_bulkMoveSchedule()" style="padding:8px 16px;border-radius:9px;border:0;background:var(--accent);color:var(--surface-solid);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">📅 일괄 일정 이동</button><button onclick="_bulkCancelSchedule()" style="padding:8px 16px;border-radius:9px;border:1.5px solid var(--peach-text);background:var(--surface-solid);color:var(--peach-text);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">✕ 일괄 취소</button></div></div></div></div>';
   let el=document.getElementById('promo-board');
   if(!el){el=document.createElement('div');el.id='promo-board';document.body.appendChild(el);}
   el.innerHTML=html;
@@ -8976,7 +8976,7 @@ async function _bulkMoveApply(){
   }
   const ids=Array.from(_editChecks);
   _closeBulkMove();
-  showOverlayLoad('일괄 이동 중... (0/'+ids.length+')');
+  showOverlayLoad('일괄 이동 중 (0/'+ids.length+')');
   let success=0,failed=0,skipped=0; const skipReasons=[];
   let _myAppl='';try{_myAppl=sessionStorage.getItem('myApplicant')||'';}catch(e){}
   for(let i=0;i<ids.length;i++){
@@ -9002,7 +9002,7 @@ async function _bulkMoveApply(){
       if(userRole==='admin'&&_recip&&_recip!==_myAppl){
         try{ pushMessage({recipient:_recip,type:'일반',trigger:'일정 이동',before:_recDate(rec),after:newDate,reason:'관리자가 일정을 '+newDate+' '+newTime+'로 옮겼어요',refNo:rec['No']||rec['NO']||'',refSummary:(newDate+' '+(rec['플랫폼 1']||'')+' '+(rec['콘텐츠 제목']||'')).trim()}); }catch(_e){}
       }
-      showOverlayLoad('일괄 이동 중... ('+(i+1)+'/'+ids.length+')');
+      showOverlayLoad('일괄 이동 중 ('+(i+1)+'/'+ids.length+')');
     }catch(e){console.error('[bulkMove]',e);failed++;}
   }
   hideOverlayLoad();
@@ -9022,7 +9022,7 @@ async function _bulkCancelSchedule(){
   const ids=Array.from(_editChecks);
   const reason=await _renderCancelReasonModal(ids.length);
   if(!reason)return;
-  showOverlayLoad('일괄 취소 중... (0/'+ids.length+')');
+  showOverlayLoad('일괄 취소 중 (0/'+ids.length+')');
   let success=0,failed=0,skipped=0;
   let _myAppl='';try{_myAppl=sessionStorage.getItem('myApplicant')||'';}catch(e){}
   for(let i=0;i<ids.length;i++){
@@ -9037,7 +9037,7 @@ async function _bulkCancelSchedule(){
       if(_recip&&_recip!==_myAppl){
         try{ pushMessage({recipient:_recip,type:'중요',trigger:'취소',before:(rec['진행 상태']||'예정'),after:'취소',reason:reason,refNo:rec['No']||rec['NO']||'',refSummary:(getRecDateKey(rec)+' '+(rec['플랫폼 1']||'')+' '+(rec['콘텐츠 제목']||'')).trim()}); }catch(_e){}
       }
-      showOverlayLoad('일괄 취소 중... ('+(i+1)+'/'+ids.length+')');
+      showOverlayLoad('일괄 취소 중 ('+(i+1)+'/'+ids.length+')');
     }catch(e){console.error('[bulkCancel]',e);failed++;}
   }
   hideOverlayLoad();
@@ -9150,7 +9150,7 @@ async function bulkApprovePending(){
   const ids = Array.from(_pendingChecks);
   const ok = await showConfirm('선택한 '+ids.length+'건을 접수하시겠어요?<br><br><span style="color:#888;font-size:12px">신청 중 → 예정으로 변경됩니다.</span>',{title:'일괄 접수',html:true});
   if(!ok) return;
-  showOverlayLoad('일괄 접수 중... (0/'+ids.length+')');
+  showOverlayLoad('일괄 접수 중 (0/'+ids.length+')');
   let success = 0, failed = 0, skipped = 0, _failReason = '';
   for(let i = 0; i < ids.length; i++){
     const rowIndex = ids[i];
@@ -9169,7 +9169,7 @@ async function bulkApprovePending(){
       try{
         pushMessage({recipient:rec['신청자']||'',type:'일반',trigger:'신청중→예정',before:'신청 중',after:'예정',reason:'',refNo:rec['No']||rec['NO']||'',refSummary:(getRecDateKey(rec)+' '+(rec['플랫폼 1']||'')+' '+(rec['콘텐츠 제목']||'')).trim()});
       }catch(_e){ console.error('[pushMessage bulkApprove]', _e); }
-      showOverlayLoad('일괄 접수 중... ('+(i+1)+'/'+ids.length+')');
+      showOverlayLoad('일괄 접수 중 ('+(i+1)+'/'+ids.length+')');
     }catch(e){ console.error(e); failed++; }
   }
   hideOverlayLoad();
@@ -9226,7 +9226,7 @@ async function holdPromoFromBoard(rowIndex){
   if(_reSon){
     const cR=await _renderCancelReasonModal(1,{title:'재신청 건 취소',subtitle:'이미 재신청된 건이에요. 보류 대신 취소 처리됩니다.',labelText:'취소 사유',placeholder:'예: 일정 확정 불가',buttonLabel:'취소 처리',buttonColor:'#EF4444'});
     if(!cR)return;
-    showOverlayLoad('취소 처리 중...');
+    showOverlayLoad('취소 처리 중');
     try{
       const row=buildRecordRow(rec,{'진행 상태':'취소','취소사유':cR});
       await api('PATCH','/api/records/'+rowIndex,{values:row});
@@ -9238,7 +9238,7 @@ async function holdPromoFromBoard(rowIndex){
   }
   const reason=await _renderCancelReasonModal(1,{title:'신청 보류',subtitle:'보류 사유를 입력해 주세요. 신청자가 확인 후 재신청할 수 있어요.',labelText:'보류 사유',placeholder:'예: 일정 충돌 - 다른 날짜로 재신청 부탁',buttonLabel:'보류 처리',buttonColor:'#F59E0B'});
   if(!reason)return;
-  showOverlayLoad('보류 처리 중...');
+  showOverlayLoad('보류 처리 중');
   try{
     const row=buildRecordRow(rec,{'진행 상태':'보류','보류사유':reason});
     await api('PATCH','/api/records/'+rowIndex,{values:row});
@@ -9260,7 +9260,7 @@ async function reapplyPromoRequest(rowIndex){
   if(!_ca.ok){showToast(_ca.reason,'error');return;}
   const rR=await _renderCancelReasonModal(1,{title:'재신청',subtitle:'재신청 사유를 입력해 주세요.',labelText:'재신청 사유',placeholder:'예: 일정 조정 완료, 재검토 요청',buttonLabel:'재신청',buttonColor:'#3B82F6'});
   if(!rR)return;
-  showOverlayLoad('재신청 처리 중...');
+  showOverlayLoad('재신청 처리 중');
   try{
     const row=buildRecordRow(rec,{'진행 상태':'신청 중','재신청사유':rR});
     await api('PATCH','/api/records/'+rowIndex,{values:row});
@@ -9296,7 +9296,7 @@ async function cancelWithReason(rowIndex){
     reason=await _renderCancelReasonModal(1);
     if(!reason) return;
   }
-  showOverlayLoad('취소 처리 중...');
+  showOverlayLoad('취소 처리 중');
   try{
     const row = buildRecordRow(rec, {'진행 상태':'취소','취소사유':reason});
     await api('PATCH','/api/records/'+rowIndex,{values: row});
@@ -9322,7 +9322,7 @@ async function bulkCancelPending(){
   const ids=Array.from(_pendingChecks);
   const reason=await _renderCancelReasonModal(ids.length);
   if(!reason)return;
-  showOverlayLoad('일괄 취소 중... (0/'+ids.length+')');
+  showOverlayLoad('일괄 취소 중 (0/'+ids.length+')');
   let success=0,failed=0,skipped=0;
   let _myApplBulk='';try{_myApplBulk=sessionStorage.getItem('myApplicant')||'';}catch(e){}
   for(let i=0;i<ids.length;i++){
@@ -9343,7 +9343,7 @@ async function bulkCancelPending(){
           pushMessage({recipient:_recip,type:'중요',trigger:'취소',before:_st||'예정',after:'취소',reason:reason,refNo:rec['No']||rec['NO']||'',refSummary:(getRecDateKey(rec)+' '+(rec['플랫폼 1']||'')+' '+(rec['콘텐츠 제목']||'')).trim()});
         }catch(_e){ console.error('[pushMessage bulkCancel]', _e); }
       }
-      showOverlayLoad('일괄 취소 중... ('+(i+1)+'/'+ids.length+')');
+      showOverlayLoad('일괄 취소 중 ('+(i+1)+'/'+ids.length+')');
     }catch(e){console.error(e);failed++;}
   }
   hideOverlayLoad();
@@ -10446,7 +10446,7 @@ async function submitPromoEdit(){
       patch['취소사유']=_cxReason;
     }
   }
-  showOverlayLoad('변경 사항 저장 중...');
+  showOverlayLoad('변경 사항 저장 중');
   try{
     if(patch['프로그램']!==undefined)patch['공연ID']=_recPerfId(patch['프로그램']);  // [정규화] 프로그램 변경 → ID 동기화
     const row = buildRecordRow(orig, patch);
@@ -11158,7 +11158,7 @@ async function _pwSaveDraft(){
     const _no=_draftRec?(_draftRec['No']||_draftRec['NO']||records.length+1):records.length+1;
     // 29컬럼 row = 공용 빌더. 진행상태='임시', AC='Y'(records↔_DRAFTS 분리 키)
     const row=_buildRecRow(_pwData, '임시', _no, true);
-    showOverlayLoad('임시저장 중...');
+    showOverlayLoad('임시저장 중');
     if(_pwData._draftRow){
       await api('PATCH','/api/records/'+_pwData._draftRow,{values:row});
     }else{
@@ -11541,7 +11541,7 @@ async function openFolderTreeModal(idx){
     '<span style="color:#666">현재 선택: </span><span id="ftm-current-path" style="color:#333">없음</span>'+
     '</div>'+
     '<div id="ftm-tree" style="overflow-y:auto;padding:12px 18px;flex:1;font-size:13px">'+
-    '<div style="text-align:center;color:#aaa;padding:30px">⌛ Microsoft 로그인 중...</div>'+
+    '<div style="text-align:center;color:#aaa;padding:30px">'+_ldHtml(14)+'Microsoft 로그인 중</div>'+
     '</div>'+
     '<div style="padding:12px 22px;border-top:1px solid rgba(0,0,0,0.06);display:flex;gap:8px;justify-content:flex-end;flex-shrink:0">'+
     '<button onclick="closeFolderTreeModal()" style="padding:8px 18px;border:1px solid rgba(0,0,0,0.10);background:transparent;color:#666;border-radius:8px;cursor:pointer;font-family:inherit;font-size:12px">취소</button>'+
@@ -12791,7 +12791,7 @@ function invalidateApplyCache(){
 }
 
 async function openApplySettings(){
-  const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeAdminPanel)"><div class="modal" style="width:96vw;max-width:720px;max-height:88vh;overflow:auto;padding:24px;position:relative"><button onclick="backToAdminMenu()" title="뒤로" aria-label="뒤로" style="position:absolute;top:14px;right:54px;float:none;margin:0;width:32px;height:32px;border-radius:50%;border:1px solid var(--glass-bd);background:var(--glass-surface);backdrop-filter:blur(8px);color:var(--accent);cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:10;box-shadow:var(--glass-shadow);transition:background .15s" onmouseover="this.style.background=\'var(--accent-light)\'" onmouseout="this.style.background=\'var(--glass-surface)\'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button><button class="modal-x" onclick="closeAdminPanel()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:14px;float:none;margin:0;z-index:10">✕</button><div id="apply-settings-body" style="text-align:center;padding:40px;color:#888">로딩 중...</div></div></div>';
+  const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeAdminPanel)"><div class="modal" style="width:96vw;max-width:720px;max-height:88vh;overflow:auto;padding:24px;position:relative"><button onclick="backToAdminMenu()" title="뒤로" aria-label="뒤로" style="position:absolute;top:14px;right:54px;float:none;margin:0;width:32px;height:32px;border-radius:50%;border:1px solid var(--glass-bd);background:var(--glass-surface);backdrop-filter:blur(8px);color:var(--accent);cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:10;box-shadow:var(--glass-shadow);transition:background .15s" onmouseover="this.style.background=\'var(--accent-light)\'" onmouseout="this.style.background=\'var(--glass-surface)\'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button><button class="modal-x" onclick="closeAdminPanel()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:14px;float:none;margin:0;z-index:10">✕</button><div id="apply-settings-body" style="text-align:center;padding:40px;color:#888">'+_ldHtml(16)+'로딩 중</div></div></div>';
   let el=document.getElementById('admin-panel');
   if(!el){el=document.createElement('div');el.id='admin-panel';document.body.appendChild(el);}
   el.innerHTML=html;
@@ -12922,7 +12922,7 @@ async function setApplyAuto(key,on){
 
 async function setApplyOpen(on){
   const val=on?'true':'false';
-  showOverlayLoad(on?'접수 ON 처리 중...':'접수 OFF 처리 중...');
+  showOverlayLoad(on?'접수 ON 처리 중':'접수 OFF 처리 중');
   try{
     const ri=APPLY_SETTINGS_ROWS.접수ON;
     if(ri){
@@ -12948,7 +12948,7 @@ async function saveApplyMonth(idx){
   const ym=(document.getElementById('as-ym-'+idx)||{}).value||'';
   if(!ym)return;
   const stEl=document.getElementById('as-ym-status');
-  if(stEl){stEl.textContent='저장 중...';stEl.style.color='#888';}
+  if(stEl){stEl.textContent='저장 중';stEl.style.color='#888';}
   try{
     const rows=getApplyMonthRows();
     const ri=rows[idx];
@@ -13771,7 +13771,7 @@ let _logsFilter={action:'all',sheet:'all',role:'all',q:''};
 let _logsQTimer=null;
 
 async function openLogsAdmin(){
-  const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeAdminPanel)"><div class="modal" style="width:96vw;max-width:1100px;max-height:88vh;overflow:auto;padding:24px;position:relative"><button onclick="backToAdminMenu()" title="뒤로" aria-label="뒤로" style="position:absolute;top:14px;right:54px;float:none;margin:0;width:32px;height:32px;border-radius:50%;border:1px solid var(--glass-bd);background:var(--glass-surface);backdrop-filter:blur(8px);color:var(--accent);cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:10;box-shadow:var(--glass-shadow);transition:background .15s" onmouseover="this.style.background=\'var(--accent-light)\'" onmouseout="this.style.background=\'var(--glass-surface)\'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button><button class="modal-x" onclick="closeAdminPanel()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:14px;float:none;margin:0;z-index:10">✕</button><div id="logs-admin-body" style="text-align:center;padding:40px;color:#888">로딩 중...</div></div></div>';
+  const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeAdminPanel)"><div class="modal" style="width:96vw;max-width:1100px;max-height:88vh;overflow:auto;padding:24px;position:relative"><button onclick="backToAdminMenu()" title="뒤로" aria-label="뒤로" style="position:absolute;top:14px;right:54px;float:none;margin:0;width:32px;height:32px;border-radius:50%;border:1px solid var(--glass-bd);background:var(--glass-surface);backdrop-filter:blur(8px);color:var(--accent);cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:10;box-shadow:var(--glass-shadow);transition:background .15s" onmouseover="this.style.background=\'var(--accent-light)\'" onmouseout="this.style.background=\'var(--glass-surface)\'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button><button class="modal-x" onclick="closeAdminPanel()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:14px;float:none;margin:0;z-index:10">✕</button><div id="logs-admin-body" style="text-align:center;padding:40px;color:#888">'+_ldHtml(16)+'로딩 중</div></div></div>';
   let el=document.getElementById('admin-panel');
   if(!el){el=document.createElement('div');el.id='admin-panel';document.body.appendChild(el);}
   el.innerHTML=html;
@@ -13937,7 +13937,7 @@ function exportLogsCsv(){
 async function openSheetAdmin(slug){
   const cfg=SHEET_CONFIG[slug];
   if(!cfg){showToast('알 수 없는 시트예요: '+slug,'error');return;}
-  const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeAdminPanel)"><div class="modal" style="width:96vw;max-width:1100px;max-height:88vh;overflow:auto;padding:24px;position:relative"><button onclick="backToAdminMenu()" title="뒤로" aria-label="뒤로" style="position:absolute;top:14px;right:54px;float:none;margin:0;width:32px;height:32px;border-radius:50%;border:1px solid var(--glass-bd);background:var(--glass-surface);backdrop-filter:blur(8px);color:var(--accent);cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:10;box-shadow:var(--glass-shadow);transition:background .15s" onmouseover="this.style.background=\'var(--accent-light)\'" onmouseout="this.style.background=\'var(--glass-surface)\'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button><button class="modal-x" onclick="closeAdminPanel()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:14px;float:none;margin:0;z-index:10">✕</button><div id="sheet-admin-body" style="text-align:center;padding:40px;color:#888">로딩 중...</div></div></div>';
+  const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeAdminPanel)"><div class="modal" style="width:96vw;max-width:1100px;max-height:88vh;overflow:auto;padding:24px;position:relative"><button onclick="backToAdminMenu()" title="뒤로" aria-label="뒤로" style="position:absolute;top:14px;right:54px;float:none;margin:0;width:32px;height:32px;border-radius:50%;border:1px solid var(--glass-bd);background:var(--glass-surface);backdrop-filter:blur(8px);color:var(--accent);cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:10;box-shadow:var(--glass-shadow);transition:background .15s" onmouseover="this.style.background=\'var(--accent-light)\'" onmouseout="this.style.background=\'var(--glass-surface)\'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button><button class="modal-x" onclick="closeAdminPanel()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:14px;float:none;margin:0;z-index:10">✕</button><div id="sheet-admin-body" style="text-align:center;padding:40px;color:#888">'+_ldHtml(16)+'로딩 중</div></div></div>';
   let el=document.getElementById('admin-panel');
   if(!el){el=document.createElement('div');el.id='admin-panel';document.body.appendChild(el);}
   el.innerHTML=html;
@@ -14031,7 +14031,7 @@ async function resetUserPin(rowIndex, userName, email){
   if(!email){showToast('이메일이 없는 계정이에요','error');return;}
   const ok = await showConfirm('<b>'+escapeHtml(userName||'사용자')+'</b> 님의 PIN을 초기화할까요?', {title:'\uD83D\uDD11 PIN 초기화', html:true, okText:'초기화', danger:true});
   if(!ok) return;
-  showOverlayLoad('초기화 중...');
+  showOverlayLoad('초기화 중');
   try{
     await api('POST', '/api/auth/reset-pin', {targetEmail: email});
     showToast(userName+' 님 PIN 초기화 완료. 다음 접속 때 새로 설정합니다');
@@ -14301,7 +14301,7 @@ async function deleteSheetRow(slug,rowIndex){
 
 // === 프로그램 관리 ===
 async function openProgramAdmin(){
-  const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeAdminPanel)"><div class="modal" style="width:96vw;max-width:1100px;max-height:88vh;overflow:auto;padding:24px;position:relative"><button onclick="backToAdminMenu()" title="뒤로" aria-label="뒤로" style="position:absolute;top:14px;right:54px;float:none;margin:0;width:32px;height:32px;border-radius:50%;border:1px solid var(--glass-bd);background:var(--glass-surface);backdrop-filter:blur(8px);color:var(--accent);cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:10;box-shadow:var(--glass-shadow);transition:background .15s" onmouseover="this.style.background=\'var(--accent-light)\'" onmouseout="this.style.background=\'var(--glass-surface)\'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button><button class="modal-x" onclick="closeAdminPanel()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:14px;float:none;margin:0;z-index:10">✕</button><div id="prog-admin-body" style="text-align:center;padding:40px;color:#888">로딩 중...</div></div></div>';
+  const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeAdminPanel)"><div class="modal" style="width:96vw;max-width:1100px;max-height:88vh;overflow:auto;padding:24px;position:relative"><button onclick="backToAdminMenu()" title="뒤로" aria-label="뒤로" style="position:absolute;top:14px;right:54px;float:none;margin:0;width:32px;height:32px;border-radius:50%;border:1px solid var(--glass-bd);background:var(--glass-surface);backdrop-filter:blur(8px);color:var(--accent);cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:10;box-shadow:var(--glass-shadow);transition:background .15s" onmouseover="this.style.background=\'var(--accent-light)\'" onmouseout="this.style.background=\'var(--glass-surface)\'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button><button class="modal-x" onclick="closeAdminPanel()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:14px;float:none;margin:0;z-index:10">✕</button><div id="prog-admin-body" style="text-align:center;padding:40px;color:#888">'+_ldHtml(16)+'로딩 중</div></div></div>';
   let el=document.getElementById('admin-panel');
   if(!el){el=document.createElement('div');el.id='admin-panel';document.body.appendChild(el);}
   el.innerHTML=html;
@@ -16643,7 +16643,7 @@ function _tktRender(){
   h+='<div style="margin-top:18px;padding:12px 14px;background:var(--accent-light);border-radius:var(--r-btn);font-size:11.5px;color:var(--text);line-height:1.6">ℹ️ 기획사 정보·정산·수수료·관리자 페이지 등 회사 고정 항목과 체크박스 상태는 양식에 이미 채워져 있어요. 생성 후 엑셀에서 최종 확인만 하면 돼요. <b>작성일은 오늘 날짜로 자동 기입.</b></div>'
     +'<div style="display:flex;justify-content:flex-end;gap:10px;margin-top:14px">'
     +'<button class="btn btn--md btn--neutral" onclick="closeTicketReg()">닫기</button>'
-    +'<button id="tkt-gen" class="btn btn--md btn--primary" onclick="_tktBuild()">'+(st.busy?'생성 중…':'의뢰서 엑셀 생성 ⬇')+'</button>'
+    +'<button id="tkt-gen" class="btn btn--md btn--primary" onclick="_tktBuild()">'+(st.busy?'생성 중':'의뢰서 엑셀 생성 ⬇')+'</button>'
     +'</div>';
   b.innerHTML=h;
 }
@@ -16672,7 +16672,7 @@ function _tktOnFile(input){
 function _tktParseFile(file){
   if(!/\.pptx$/i.test(file.name)){showToast('pptx 파일만 읽을 수 있어요 (ppt는 pptx로 저장 후 업로드)','error');return;}
   if(file.size>50*1024*1024){showToast('파일이 너무 커요(50MB 제한) — 이미지를 줄여 다시 저장해 주세요','error');return;}
-  var stEl=document.getElementById('tkt-src-status');if(stEl)stEl.textContent='읽는 중…';
+  var stEl=document.getElementById('tkt-src-status');if(stEl)stEl.textContent='읽는 중';
   var _st=_tktState; // 세대 가드 — 모달 닫힘/재열림 후 늦게 도착한 결과 폐기
   _tktEnsureJSZip(function(err){
     if(err)return; // 로더가 상태문구 표시 완료
@@ -16917,7 +16917,7 @@ function _tktBuild(){
   var f=st.f;
   var miss=['제목','기간','시간','장소','장르','오픈일시'].filter(function(k){return !String(f[k]||'').trim();});
   if(miss.length){showToast('필수 항목 입력: '+miss.join(' · '),'error');return;}
-  st.busy=true;var gbtn=document.getElementById('tkt-gen');_btnBusy(gbtn,true,'생성 중…');
+  st.busy=true;var gbtn=document.getElementById('tkt-gen');_btnBusy(gbtn,true,'생성 중');
   var done=function(ok,msg){st.busy=false;_btnBusy(gbtn,false,'의뢰서 엑셀 생성 ⬇');showToast(msg,ok?'success':'error');};
   _tktEnsureJSZip(function(err){
     if(err){done(false,'압축 라이브러리 로드 실패 — 네트워크 확인 후 다시 시도');return;}
@@ -17317,7 +17317,7 @@ async function _nbCmtSend(){
   if(!txt){showToast('코멘트를 입력해 주세요','error');inp.focus();return;}
   var prev=String(_nbState.output||'').trim();
   if(!prev){showToast('초안이 없어요','error');return;}
-  var btn=document.getElementById('nb-cmt-send');_btnBusy(btn,true,'반영 중…');
+  var btn=document.getElementById('nb-cmt-send');_btnBusy(btn,true,'반영 중');
   var _st=_nbState;   // 🔒 세대 가드
   inp.disabled=true;
   try{
@@ -17417,7 +17417,7 @@ function _nbRender(){
      +'<div style="font-size:12px;color:#555;font-weight:500;line-height:1.6;margin:0 0 8px">상세페이지를 올리면 텍스트가 <b style="color:var(--accent)">OCR 원문</b>에 나와요. 그대로 글의 바탕이 됩니다.</div>'
      +'<div class="nb-field">'
        +'<input type="file" id="nb-ocr-file" accept="image/*" style="display:none" onchange="_nbOnFile(this)">'
-       +'<button type="button" class="nb-upload-btn" '+((s.ocrBusy||(s.ocrFiles&&s.ocrFiles.length>=3))?'disabled':'')+' onclick="_nbPickImage()">'+(s.ocrBusy?'⏳ 읽는 중…':'＋ 상세 페이지 업로드'+((s.ocrFiles&&s.ocrFiles.length)?' ('+s.ocrFiles.length+'/3)':''))+'</button>'
+       +'<button type="button" class="nb-upload-btn" '+((s.ocrBusy||(s.ocrFiles&&s.ocrFiles.length>=3))?'disabled':'')+' onclick="_nbPickImage()">'+(s.ocrBusy?_ldHtml(12)+'읽는 중':'＋ 상세 페이지 업로드'+((s.ocrFiles&&s.ocrFiles.length)?' ('+s.ocrFiles.length+'/3)':''))+'</button>'
        +((s.ocrFiles&&s.ocrFiles.length)?'<div style="margin-top:8px">'+s.ocrFiles.map(function(f,i){return '<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:#f7f7fb;border:1px solid #ececf3;border-radius:8px;margin-bottom:5px"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12.5px;color:#555">📄 '+escapeHtml(f.name||'이미지')+'</span><button type="button" title="삭제" onclick="_nbOcrFileDel('+i+')" style="border:0;background:none;color:#bbb;cursor:pointer;font-size:15px;line-height:1;padding:0 3px;flex-shrink:0">✕</button></div>';}).join('')+'</div>':'')
      +'</div>'
      +'<div class="nb-field" style="margin-bottom:6px"><label class="nb-label">OCR 원문 <span style="color:#bbb;font-weight:500">· 직접 수정 가능 ('+(String(s.ocrText||'').length)+'자)</span></label>'
@@ -17437,7 +17437,7 @@ function _nbRender(){
      +'</div>'
      +outHtml
      +'<div class="nb-row" style="margin-top:12px">'
-       +'<button type="button" class="nb-btn primary" '+(s.genBusy?'disabled':'')+' onclick="_nbGenerate()">'+(s.genBusy?'✍️ 작성 중…':'⚡ 초안 생성')+'</button>'
+       +'<button type="button" class="nb-btn primary" '+(s.genBusy?'disabled':'')+' onclick="_nbGenerate()">'+(s.genBusy?'✍️ 작성 중':'⚡ 초안 생성')+'</button>'
      +'</div>'
      +(s.output&&!s.genBusy
        ? '<div class="nb-field" style="margin-top:14px">'
@@ -17638,7 +17638,7 @@ async function _qaSubmit(){
     category:(cat&&cat.value)||'기타',
     content:content.slice(0,1000)
   };
-  const btn=document.getElementById('qa-submit');_btnBusy(btn,true,'접수 중...');
+  const btn=document.getElementById('qa-submit');_btnBusy(btn,true,'접수 중');
   let okFlag=false;
   try{
     await api('POST','/api/qa',payload);okFlag=true;
@@ -17682,7 +17682,7 @@ async function _qaSubmit(){
 // === 불편사항 관리 (admin) — 접수 목록 확인 + 상태/처리메모 업데이트 ===
 var _qaData=[], _qaFilterState={status:'all',cat:'all'};
 async function openQaBoard(){
-  const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeAdminPanel)"><div class="modal" style="width:96vw;max-width:1000px;max-height:88vh;overflow:auto;padding:24px;position:relative"><button onclick="backToAdminMenu()" title="뒤로" aria-label="뒤로" style="position:absolute;top:14px;right:54px;float:none;margin:0;width:32px;height:32px;border-radius:50%;border:1px solid var(--glass-bd);background:var(--glass-surface);backdrop-filter:blur(8px);color:var(--accent);cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:10;box-shadow:var(--glass-shadow)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button><button class="modal-x" onclick="closeAdminPanel()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:14px;float:none;margin:0;z-index:10">✕</button><div id="qa-board-body" style="text-align:center;padding:40px;color:#888">로딩 중...</div></div></div>';
+  const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeAdminPanel)"><div class="modal" style="width:96vw;max-width:1000px;max-height:88vh;overflow:auto;padding:24px;position:relative"><button onclick="backToAdminMenu()" title="뒤로" aria-label="뒤로" style="position:absolute;top:14px;right:54px;float:none;margin:0;width:32px;height:32px;border-radius:50%;border:1px solid var(--glass-bd);background:var(--glass-surface);backdrop-filter:blur(8px);color:var(--accent);cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:10;box-shadow:var(--glass-shadow)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button><button class="modal-x" onclick="closeAdminPanel()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:14px;float:none;margin:0;z-index:10">✕</button><div id="qa-board-body" style="text-align:center;padding:40px;color:#888">'+_ldHtml(16)+'로딩 중</div></div></div>';
   let el=document.getElementById('admin-panel');
   if(!el){el=document.createElement('div');el.id='admin-panel';document.body.appendChild(el);}
   el.innerHTML=html;
@@ -18130,6 +18130,12 @@ function showToast(msg,type,html){
    카탈로그 17종 전체 = docs/reports/260707_로더픽토그램_플레이그라운드.html — 추가 선별은 그 시안에서 [선택값 복사].
    보관 2종: dots(저장 오버레이·버튼 busy 확정분) · spinner(범용 예비). 수치 = beui 원본 배율(.24/.14/.3/딜레이 사이클×.16, 스트로크 .09)
    색 = currentColor 상속(팔레트 폐쇄 — 부모 글자색 그대로) · 커브 = 기존 주력 계승 cubic-bezier(0.4,0,0.2,1) · 감속 모션 = .ld-p 미디어쿼리가 정지 */
+/* 인라인 로딩 dots — innerHTML 조립부용 문자열 버전(수치 = _ldMake 동일 · currentColor 상속 · 우측 8px 간격 내장) */
+function _ldHtml(size,speed){
+  size=size||16;speed=speed||0.8;var h='';
+  for(var i=0;i<3;i++)h+='<i style="display:block;width:'+(size*.24)+'px;height:'+(size*.24)+'px;border-radius:50%;background:currentColor;--ld-dy:'+(-size*.3)+'px;animation:olDots '+speed+'s cubic-bezier(0.4,0,0.2,1) '+(i*speed*.16)+'s infinite"></i>';
+  return '<span class="ld-p" aria-hidden="true" style="display:inline-flex;align-items:center;line-height:0;vertical-align:-2px;gap:'+(size*.14)+'px;margin-right:8px">'+h+'</span>';
+}
 function _ldMake(kind,size,speed){
   size=size||14;speed=speed||0.8;
   var h=document.createElement('span');h.className='ld-p';h.setAttribute('aria-hidden','true');
@@ -18148,10 +18154,8 @@ function _ldMake(kind,size,speed){
     pa.setAttribute('stroke-width',st);pa.setAttribute('stroke-linecap','round');
     sv.appendChild(c);sv.appendChild(pa);h.appendChild(sv);
   }else{
-    h.style.gap=(size*.14)+'px';
-    for(var i=0;i<3;i++){var d=document.createElement('i');
-      d.style.cssText='display:block;width:'+(size*.24)+'px;height:'+(size*.24)+'px;border-radius:50%;background:currentColor;--ld-dy:'+(-size*.3)+'px;animation:olDots '+speed+'s cubic-bezier(0.4,0,0.2,1) '+(i*speed*.16)+'s infinite';
-      h.appendChild(d);}
+    var t=document.createElement('span');t.innerHTML=_ldHtml(size,speed);
+    var el=t.firstChild;el.style.marginRight='0';return el;   /* 버튼은 .btn gap 6px가 간격 담당 */
   }
   return h;
 }
