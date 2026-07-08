@@ -135,7 +135,7 @@
 - b) 기틀 문서(라우터·지침·게이트)를 고칠 땐 현재본을 `_versions/`의 {yymmdd_HHmm}_{라벨}/ 폴더에 **백업**(구조 변경 시 필수 — 오타 등 국소 수정은 git 이력 갈음 가능, §기틀 보호 판정 기준). 앱 코드는 git 이력으로 갈음 가능.
 - c) 수정. (**기틀 변경이면 수정 전에 운영자 확인** = §기틀 보호.)
 - d) 게이트 통과 확인 — `python3 tools/check_design.py`(`index.html`·signage 편집 시) + `python3 tools/check_refs.py`(라우터·지침 편집 시) → `git add·commit·push`(작업 브랜치).
-- e) **PR 생성 → §검증 통과 후 즉시 main 머지**(draft 방치 금지 = 라이브 확정). **main force-push 금지** · 이미 머지된 PR 브랜치에 새 커밋 금지(최신 main에서 새 브랜치).
+- e) **PR 생성 → §검증 통과 후 즉시 main 자동 머지**(draft 방치 금지 = 라이브 확정). **검증만 통과하면 머지 재확인 안 물음 = 자동 머지가 디폴트**(이 레포 = 실시간 운영 대상 아님 → 운영자 승인 대기로 draft 방치 금지) · 운영자에겐 **사후 요지 통지**로 갈음(사전 승인 대기 불요) · 단 §기틀·데이터·크로스유저·보안 얽힘은 통지에 핵심 요지 명시. **main force-push 금지**(작업 브랜치 force-push·reset은 이 자동 흐름서 허용) · 이미 머지된 PR 브랜치에 새 커밋 금지(최신 main에서 새 브랜치).
 - f) `git fetch` 후 **`git show origin/main:<파일>`로 원격 실내용 직접 읽어 검증·보고**(화면·로컬만 보고 `됐다` 금지). 라이브 화면 확인이 필요한 변경은 Pages 빌드 후 캐시버스트로.
 - g) 머지 충돌: 일반 파일은 `git merge origin/main -X ours` 흡수 가능 · 진짜 충돌 = STOP+보고 · `force` 안 씀. 단 **append-only 원장(`docs/작업이력.md`)은 `-X ours` 금지** = 수동 정리로 양쪽 보존.
 
