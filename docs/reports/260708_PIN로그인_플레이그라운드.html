@@ -3,183 +3,162 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>PIN 로그인 입력 개선 — 플레이그라운드</title>
+<title>PIN 로그인 입력 개선 — 플레이그라운드 (현행 도트 기준)</title>
 <style>
-/* ── index.html :root 2블록 토큰 사본(값 SSOT 계승 — 이 플레이그라운드 안에서만) ── */
+/* ── index.html :root 토큰 사본(값 SSOT 계승) ── */
 :root{
   --accent:#4A4DE7; --accent-light:#E8E8FD; --accent-glow:rgba(74,77,231,0.15);
-  --peach-text:#D88455; --muted:#bbb; --dim:#888; --text:#1A1A2E; --border:rgba(0,0,0,0.09);
+  --muted:#bbb; --dim:#888; --text:#1A1A2E; --border:rgba(0,0,0,0.09);
   --danger:#E24B4A; --green:#1A6B3C;
   --bg:linear-gradient(135deg,#FDF6F3 0%,#F0EBF5 50%,#EBF0F8 100%);
-  --glass:rgba(255,255,255,0.55); --glass-surface:rgba(255,255,255,.78);
-  --glass-border:var(--glass);
+  --glass:rgba(255,255,255,0.55); --glass-border:var(--glass);
   --elev:0 20px 56px rgba(74,77,231,.16), 0 6px 18px rgba(26,26,46,.07);
-  --radius-xl:24px; --r-btn:10px; --r-pop:16px;
-  /* 튜닝 변수 — 기본값 = ★추천 프리셋 실측 */
-  --pre-op:0.85;      /* 입력 전 흰색 불투명도 */
-  --slot-r:16px;      /* 칸 모서리 둥글기 */
-  --pop:1.18;         /* 통통 튀는 정점 배율 */
-  --stroke-t:0.22s;   /* 입력 획 sweep 속도 */
-  --ring-t:0.45s;     /* 성공 시계방향 감싸기 속도(칸당) */
-  --bord:2px;         /* 강조 테두리 두께 */
-  --ring-col:var(--accent);  /* 성공 링 색 */
+  --radius-xl:24px; --r-btn:10px;
+  /* 튜닝 변수 — 기본값 = 개선판 실측 */
+  --pop:1.35;        /* 통통 정점 배율(도트) */
+  --ring-t:0.5s;     /* 시계방향 감싸기 속도(칸당) */
+  --ring-col:var(--accent);
+  --hint-col:var(--dim);   /* 안내문구 무채색 */
 }
 *{box-sizing:border-box}
 body{margin:0;font-family:'Pretendard','Apple SD Gothic Neo','Malgun Gothic',sans-serif;color:var(--text);background:#eef0f6;line-height:1.6;padding:24px 16px 80px}
 .wrap{max-width:min(1100px,96vw);margin:0 auto}
 h1{font-size:21px;margin:0 0 4px}
-.sub{font-size:12.5px;color:var(--dim);margin-bottom:20px}
-h2{font-size:14px;color:var(--accent);margin:26px 0 10px;letter-spacing:.2px}
+.sub{font-size:12.5px;color:var(--dim);margin-bottom:18px}
+h2{font-size:14px;color:var(--accent);margin:24px 0 10px}
 .card{background:#fff;border:1px solid var(--border);border-radius:16px;padding:18px 20px;margin-bottom:14px;box-shadow:0 6px 22px rgba(74,77,231,.06)}
+code{background:rgba(74,77,231,.08);border-radius:5px;padding:1px 5px;font-size:11.5px}
 
-/* ── 실물 재현 프레임 = 브라우저 창(로그인은 전체화면 중앙 카드) ── */
 .frames{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 @media(max-width:820px){.frames{grid-template-columns:1fr}}
 .frame{border:1px solid var(--border);border-radius:14px;overflow:hidden;box-shadow:0 8px 30px rgba(26,26,46,.10)}
 .frame-bar{height:30px;background:#e9e9ef;display:flex;align-items:center;gap:6px;padding:0 12px;border-bottom:1px solid var(--border)}
-.frame-bar i{width:11px;height:11px;border-radius:50%;background:#cfcfd8;display:inline-block}
+.frame-bar i{width:11px;height:11px;border-radius:50%;background:#cfcfd8}
 .frame-bar span{margin-left:10px;font-size:10.5px;color:#9a9aa8}
 .frame-tag{font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px;margin-left:auto}
 .frame-tag.cur{background:#efeef4;color:var(--dim)}
 .frame-tag.neo{background:var(--accent-light);color:var(--accent)}
-/* 로그인 배경 = WebGL 셰이더 근사(CSS mesh) */
-.stage{height:420px;display:flex;align-items:center;justify-content:center;position:relative;
+.stage{height:400px;display:flex;align-items:center;justify-content:center;position:relative;
   background:
     radial-gradient(58% 55% at 20% 22%, rgba(224,205,238,.92), transparent 62%),
     radial-gradient(52% 55% at 82% 26%, rgba(198,183,232,.88), transparent 60%),
     radial-gradient(66% 60% at 66% 82%, rgba(236,203,220,.85), transparent 62%),
     var(--bg);}
-/* 로그인 카드(=index.html .login-card 계승) */
 .lcard{background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.2);backdrop-filter:blur(16px) saturate(1.2);
-  border:1px solid var(--glass-border);border-radius:var(--radius-xl);padding:32px 34px;text-align:center;box-shadow:var(--elev);min-width:300px}
-.lwelcome{font-size:21px;font-weight:800;color:var(--text);opacity:.82;letter-spacing:.5px;margin-bottom:16px;white-space:nowrap}
+  border:1px solid var(--glass-border);border-radius:var(--radius-xl);padding:30px 34px;text-align:center;box-shadow:var(--elev);min-width:300px}
+.lwelcome{font-size:20px;font-weight:800;color:var(--text);opacity:.82;letter-spacing:.5px;margin-bottom:14px;white-space:nowrap}
 .lwelcome .thin{font-weight:400}.lwelcome .ac{color:var(--accent)}
-.lacct{font-size:12px;color:var(--accent);opacity:.85;margin-bottom:16px}
-.lacct b{font-weight:700}
+.lacct{font-size:12px;color:var(--accent);opacity:.85;margin-bottom:18px}
 .lback{margin-top:16px;background:none;border:0;color:var(--muted);font-size:12px;cursor:pointer;text-decoration:underline}
 
-/* ── 현행(도트) 재현 = index.html .pin-slot 계승 ── */
-.cur-wrap{display:flex;gap:12px;justify-content:center}
-.cur-slot{position:relative;width:42px;height:48px;display:grid;place-items:center}
-.cur-slot::before{content:'';position:absolute;left:50%;top:50%;width:14px;height:14px;border:1.5px solid var(--muted);border-radius:50%;background:transparent;opacity:.8;transform:translate(-50%,-50%);transition:background .18s,border-color .18s,opacity .18s,transform .18s}
-.cur-slot.lit::before{opacity:0;transform:translate(-50%,-50%) scale(.4)}
-.cur-slot.filled::before{background:var(--accent);border-color:var(--accent)}
-.cur-digit{font-size:19px;font-weight:700;color:var(--accent);opacity:0}
-.cur-slot.lit .cur-digit{opacity:1;animation:curIn .18s ease}
-@keyframes curIn{from{opacity:0;transform:scale(.6)}to{opacity:1;transform:none}}
+/* ── 도트(현행 .pin-slot 계승) ── */
+.pin-wrap{display:flex;gap:12px;justify-content:center;position:relative}
+.pin-slot{position:relative;width:42px;height:48px;display:grid;place-items:center}
+.pin-slot::before{content:'';position:absolute;left:50%;top:50%;width:14px;height:14px;box-sizing:border-box;
+  border:1.5px solid var(--muted);border-radius:50%;background:transparent;opacity:.8;
+  transform:translate(-50%,-50%);transition:background .18s,border-color .18s,opacity .18s,transform .18s}
+.pin-slot.filled::before{background:var(--accent);border-color:var(--accent);opacity:1}
+/* ④ 통통 — 도트 채울 때 바운스 */
+.pin-slot.filled.pop::before{animation:dotPop .36s cubic-bezier(.3,1.5,.5,1)}
+@keyframes dotPop{0%{transform:translate(-50%,-50%) scale(.3)}50%{transform:translate(-50%,-50%) scale(var(--pop))}100%{transform:translate(-50%,-50%) scale(1)}}
+.pin-slot.err::before{border-color:var(--danger);background:transparent}
+.pin-wrap.shake{animation:pinShake .38s ease}
+@keyframes pinShake{0%,100%{transform:translateX(0)}22%,66%{transform:translateX(-6px)}44%,88%{transform:translateX(6px)}}
 
-/* ── ★ 새 디자인(박스형) ── */
-.np-wrap{display:flex;gap:12px;justify-content:center}
-.np-slot{position:relative;width:52px;height:60px;border-radius:var(--slot-r);
-  background:rgba(255,255,255,var(--pre-op));
-  border:var(--bord) solid rgba(74,77,231,.16);
-  box-shadow:0 2px 10px rgba(26,26,46,.06);
-  display:grid;place-items:center;transition:border-color .18s ease,background .2s ease,box-shadow .2s ease}
-.np-slot.focus{border-color:var(--accent);box-shadow:0 0 0 4px var(--accent-glow)}
-.np-slot.filled{border-color:var(--accent);background:var(--accent-light)}
-.np-digit{font-size:24px;font-weight:800;color:var(--accent);opacity:0}
-.np-slot.filled .np-digit{opacity:1;animation:npPop var(--pop-t,.34s) cubic-bezier(.3,1.5,.5,1)}
-@keyframes npPop{0%{transform:scale(.5);opacity:0}45%{transform:scale(var(--pop));opacity:1}70%{transform:scale(.93)}100%{transform:scale(1);opacity:1}}
-/* 입력 획 sweep(밑줄이 슥) */
-.np-stroke{position:absolute;left:50%;bottom:9px;transform:translateX(-50%);width:0;height:3px;border-radius:2px;background:var(--accent);opacity:0}
-.np-slot.filled .np-stroke{animation:npStroke var(--stroke-t) ease forwards}
-@keyframes npStroke{0%{width:0;opacity:1}100%{width:58%;opacity:1}}
-/* 에러 */
-.np-slot.err{border-color:var(--danger);background:rgba(226,75,74,.06)}
-.np-wrap.shake{animation:npShake .38s ease}
-@keyframes npShake{0%,100%{transform:translateX(0)}22%,66%{transform:translateX(-6px)}44%,88%{transform:translateX(6px)}}
-/* 성공 = 시계방향 링 draw */
-.np-ring{position:absolute;inset:-1px;pointer-events:none;overflow:visible}
-.np-ring rect{fill:none;stroke:var(--ring-col);stroke-width:2.5;stroke-linecap:round;
-  stroke-dasharray:100;stroke-dashoffset:100;opacity:0}
-.np-wrap.success .np-slot .np-ring rect{opacity:1;animation:npDraw var(--ring-t) cubic-bezier(.5,0,.3,1) forwards;animation-delay:calc(var(--i) * .1s)}
-@keyframes npDraw{from{stroke-dashoffset:100}to{stroke-dashoffset:0}}
-.np-wrap.success .np-slot{animation:npWin .5s ease calc(var(--i) * .1s)}
-@keyframes npWin{0%,100%{transform:translateY(0)}40%{transform:translateY(-5px)}}
+/* ③ 성공 = 시계방향 감싸기 */
+/* (A) 개별 링 — 각 도트 둘레 */
+.dot-ring{position:absolute;left:50%;top:50%;width:26px;height:26px;transform:translate(-50%,-50%);pointer-events:none;overflow:visible}
+.dot-ring circle{fill:none;stroke:var(--ring-col);stroke-width:2.2;stroke-linecap:round;
+  stroke-dasharray:100;stroke-dashoffset:100;opacity:0;transform:rotate(-90deg);transform-origin:50% 50%}
+.pin-wrap.success.mode-each .pin-slot .dot-ring circle{opacity:1;animation:ringDraw var(--ring-t) cubic-bezier(.5,0,.3,1) forwards;animation-delay:calc(var(--i)*.1s)}
+@keyframes ringDraw{to{stroke-dashoffset:0}}
+.pin-wrap.success.mode-each .pin-slot.filled::before{animation:dotWin .5s ease calc(var(--i)*.1s)}
+@keyframes dotWin{0%,100%{transform:translate(-50%,-50%) scale(1)}45%{transform:translate(-50%,-50%) scale(1.25)}}
+/* (B) 큰 원 — 4도트 전체 둘레 */
+.big-ring{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:calc(100% + 34px);height:74px;pointer-events:none;overflow:visible;opacity:0}
+.big-ring rect{fill:none;stroke:var(--ring-col);stroke-width:2.4;stroke-linecap:round;stroke-dasharray:100;stroke-dashoffset:100}
+.pin-wrap.success.mode-big .big-ring{opacity:1}
+.pin-wrap.success.mode-big .big-ring rect{animation:ringDraw calc(var(--ring-t)*2) cubic-bezier(.5,0,.3,1) forwards}
 
-/* 안내 문구 */
-.np-hint{font-size:13.5px;font-weight:600;color:var(--accent);margin-top:16px;letter-spacing:.2px;transition:opacity .2s}
-.np-hint.dim{color:var(--dim);font-weight:500}
-.np-hint.gone{opacity:0}
-.cur-hint{font-size:12px;color:var(--muted);margin-top:12px}
-.msg{font-size:12.5px;height:16px;color:var(--danger);margin-top:6px}
+/* ── ⑤ 메시지 영역 = 한 자리 3-state(안내→사라짐→에러) ── */
+.pin-msg{font-size:13px;font-weight:600;height:18px;margin-top:14px;letter-spacing:.2px;color:var(--hint-col);transition:opacity .2s,color .15s}
+.pin-msg.gone{opacity:0}
+.pin-msg.err{color:var(--danger);font-weight:700}
+/* 순정 현행 참고용(안내 없음, 에러만) */
+.old-msg{font-size:13px;height:18px;margin-top:14px;color:var(--danger)}
 
 /* ── 컨트롤 ── */
 .demo-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
-.btn{border:0;border-radius:var(--r-btn);padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:transform .12s,box-shadow .12s,background .12s}
+.btn{border:0;border-radius:var(--r-btn);padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:transform .12s}
 .btn:active{transform:translateY(1px)}
 .btn.primary{background:var(--accent);color:#fff;box-shadow:0 5px 14px rgba(74,77,231,.28)}
 .btn.ghost{background:#eeedf5;color:#555}
-.presets{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px}
-.preset{border:1.5px solid var(--border);background:#fff;border-radius:12px;padding:9px 14px;font-size:12.5px;font-weight:700;color:#555;cursor:pointer;font-family:inherit;transition:all .14s}
-.preset:hover{border-color:var(--accent);color:var(--accent)}
-.preset.on{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 4px 12px rgba(74,77,231,.22)}
-.preset .star{color:#FFD35A}
-.preset.on .star{color:#fff}
-.sliders{display:grid;grid-template-columns:1fr 1fr;gap:14px 26px;margin-top:6px}
+.sliders{display:grid;grid-template-columns:1fr 1fr;gap:14px 26px}
 @media(max-width:660px){.sliders{grid-template-columns:1fr}}
 .sl label{display:flex;justify-content:space-between;font-size:12px;font-weight:600;color:#555;margin-bottom:5px}
 .sl label .val{font-variant-numeric:tabular-nums;color:var(--accent);font-weight:800}
 .sl input[type=range]{width:100%;accent-color:var(--accent)}
-.grp{font-size:11px;font-weight:800;color:var(--dim);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 6px;grid-column:1/-1}
+.grp{font-size:11px;font-weight:800;color:var(--dim);text-transform:uppercase;letter-spacing:.5px;margin:8px 0 2px;grid-column:1/-1}
+.segwrap{display:flex;gap:20px;flex-wrap:wrap;margin-top:4px}
+.segline{display:flex;align-items:center;gap:10px}
+.segline>span{font-size:12px;font-weight:700;color:#555}
 .seg{display:inline-flex;border:1.5px solid var(--border);border-radius:10px;overflow:hidden}
 .seg button{border:0;background:#fff;padding:7px 13px;font-size:12px;font-weight:700;color:#666;cursor:pointer;font-family:inherit}
 .seg button.on{background:var(--accent);color:#fff}
 
-/* 선택값 출력 */
+/* 메시지 3-state 시연 패널 */
+.states{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:6px}
+@media(max-width:660px){.states{grid-template-columns:1fr}}
+.state{border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center;background:#fafaff}
+.state .lbl{font-size:11px;font-weight:800;color:var(--dim);margin-bottom:8px}
+.state .demo{height:20px;font-size:13px;font-weight:600}
+.state .arrow{font-size:18px;color:var(--muted)}
+.state .demo.hint{color:var(--dim)}.state .demo.gone{color:#ccc;font-style:italic}.state .demo.err{color:var(--danger);font-weight:700}
+
 .out{background:#1e1e2e;color:#e8e8f0;border-radius:12px;padding:14px 16px;font-family:'SF Mono',Menlo,Consolas,monospace;font-size:12px;line-height:1.9;overflow-x:auto;white-space:pre;margin-top:8px}
-.out .tag{display:inline-block;font-size:9.5px;font-weight:700;border-radius:5px;padding:1px 6px;margin-left:8px;vertical-align:middle}
-.tag.keep{background:rgba(122,220,160,.2);color:#7adca0}
-.tag.new{background:rgba(255,200,110,.2);color:#ffc86e}
 .tbl{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:4px}
 .tbl th{background:var(--accent-light);color:var(--accent);text-align:left;padding:8px 10px;font-size:11px}
 .tbl td{padding:8px 10px;border-top:1px solid var(--border);vertical-align:top}
+.tag{display:inline-block;font-size:9.5px;font-weight:700;border-radius:5px;padding:1px 6px}
+.tag.keep{background:rgba(26,107,60,.14);color:var(--green)}.tag.new{background:rgba(216,132,85,.16);color:#b06a2e}
 .foot{font-size:11.5px;color:var(--dim);line-height:1.75;background:#f7f7fb;border-radius:10px;padding:12px 14px;margin-top:10px}
 .chk{color:var(--green);font-weight:700}
-ul{margin:6px 0;padding-left:18px}li{margin:3px 0;font-size:13px}
 </style>
 </head>
 <body>
 <div class="wrap">
-<h1>🔐 PIN 로그인 입력 개선 — 플레이그라운드</h1>
-<div class="sub">운영자 요구 6가지를 실제 움직임으로 재현 · 프리셋/슬라이더로 튜닝 후 <b>[선택값 복사]</b> → index.html 배선. 색은 전부 <code>index.html :root</code> 토큰 계승(raw 색 창작 0), 크기·모션만 신규.</div>
+<h1>🔐 PIN 로그인 입력 개선 — 현행(도트) 기준</h1>
+<div class="sub">박스형 폐기 · <b>현행 도트 유지</b> + 통통·시계방향 감싸기 + <b>메시지 영역 하나로 통합</b>(안내→사라짐→에러가 같은 자리). 색은 <code>:root</code> 토큰 계승(raw 색 0).</div>
 
 <div class="demo-row">
-  <button class="btn primary" onclick="play()">▶ 1·2·3·4 입력 재생 (통통·획·성공 감싸기)</button>
-  <button class="btn ghost" onclick="playErr()">↻ 불일치(에러) 재생</button>
+  <button class="btn primary" onclick="play()">▶ 정상 입력 재생 (통통·성공 감싸기·안내 사라짐)</button>
+  <button class="btn ghost" onclick="playErr()">↻ 불일치 재생 (안내 자리를 에러가 대체)</button>
   <button class="btn ghost" onclick="reset()">비우기</button>
-  <span style="font-size:11.5px;color:var(--dim)">아래 칸을 직접 클릭해 숫자를 쳐봐도 돼요</span>
 </div>
 
 <div class="frames">
-  <!-- 현행 -->
+  <!-- 순정 현행 -->
   <div class="frame">
-    <div class="frame-bar"><i></i><i></i><i></i><span>현행 (도트)</span><span class="frame-tag cur">지금</span></div>
+    <div class="frame-bar"><i></i><i></i><i></i><span>순정 현행</span><span class="frame-tag cur">지금</span></div>
     <div class="stage">
       <div class="lcard">
         <div class="lwelcome"><b>GS</b> <span class="thin">Caltex</span> <b class="ac">YEULMARU</b></div>
-        <div class="lacct"><b>ems1130@gscf.or.kr</b> 로 로그인</div>
-        <div class="cur-wrap" id="curWrap">
-          <div class="cur-slot"><span class="cur-digit">1</span></div>
-          <div class="cur-slot"><span class="cur-digit">2</span></div>
-          <div class="cur-slot"><span class="cur-digit">3</span></div>
-          <div class="cur-slot"><span class="cur-digit">4</span></div>
-        </div>
-        <div class="cur-hint">입력하라는 느낌·안내가 약함 · CapsLock 잔재 노출</div>
+        <div class="lacct">ems1130@gscf.or.kr 로 로그인</div>
+        <div class="pin-wrap" id="oldWrap"></div>
+        <div class="old-msg" id="oldMsg"></div>
         <button class="lback">← 계정 다시 선택</button>
       </div>
     </div>
   </div>
-  <!-- 새 디자인 -->
+  <!-- 개선판 -->
   <div class="frame">
-    <div class="frame-bar"><i></i><i></i><i></i><span>새 디자인 (박스)</span><span class="frame-tag neo">★ 제안</span></div>
+    <div class="frame-bar"><i></i><i></i><i></i><span>개선판 (도트 + 통합 메시지)</span><span class="frame-tag neo">★ 제안</span></div>
     <div class="stage">
       <div class="lcard">
         <div class="lwelcome"><b>GS</b> <span class="thin">Caltex</span> <b class="ac">YEULMARU</b></div>
-        <div class="lacct"><b>ems1130@gscf.or.kr</b> 로 로그인</div>
-        <div class="np-wrap" id="npWrap"></div>
-        <div class="np-hint" id="npHint">PIN 번호를 입력해주세요</div>
-        <div class="msg" id="npMsg"></div>
+        <div class="lacct">ems1130@gscf.or.kr 로 로그인</div>
+        <div class="pin-wrap mode-each" id="npWrap"></div>
+        <div class="pin-msg" id="npMsg">PIN 번호를 입력해주세요</div>
         <button class="lback">← 계정 다시 선택</button>
       </div>
     </div>
@@ -187,18 +166,28 @@ ul{margin:6px 0;padding-left:18px}li{margin:3px 0;font-size:13px}
 </div>
 
 <div class="card">
-  <h2>프리셋 — 현행 포함 · ★ 추천 1개</h2>
-  <div class="presets" id="presets"></div>
-  <div style="font-size:11.5px;color:var(--dim);margin-top:8px">★ 화이트 박스 = 운영자 요구 6가지를 그대로 담은 기본 추천. 나머지는 톤 변형.</div>
+  <h2>⑤ 메시지 영역 — 한 자리가 3단계로 바뀜 (새 영역 안 만듦)</h2>
+  <div class="states">
+    <div class="state"><div class="lbl">평상시 (무채색)</div><div class="demo hint">PIN 번호를 입력해주세요</div></div>
+    <div class="state"><div class="lbl">입력 시작 → 사라짐</div><div class="demo gone">( 비어 있음 )</div></div>
+    <div class="state"><div class="lbl">틀리면 → 같은 자리 대체</div><div class="demo err">PIN이 일치하지 않습니다</div></div>
+  </div>
+  <div style="font-size:11.5px;color:var(--dim);margin-top:10px">현재는 안내문구가 없고 에러만 <code>#login-msg</code>에 떴는데, <b>그 한 영역을 안내·에러 겸용</b>으로 통합 → 안내(회색)가 입력 시 사라지고 틀리면 같은 자리에 빨강 에러.</div>
 </div>
 
 <div class="card">
   <h2>미세조정</h2>
   <div class="sliders" id="sliders"></div>
-  <div class="grp">성공 감싸기 색</div>
-  <div class="seg" id="ringColSeg">
-    <button data-v="var(--accent)" class="on">강조색(코발트)</button>
-    <button data-v="var(--green)">초록(합격)</button>
+  <div class="segwrap" style="margin-top:14px">
+    <div class="segline"><span>감싸기 방식</span>
+      <div class="seg" id="modeSeg"><button data-v="each" class="on">도트별 링</button><button data-v="big">큰 원 하나</button></div>
+    </div>
+    <div class="segline"><span>안내문구 색(무채색)</span>
+      <div class="seg" id="hintSeg"><button data-v="var(--dim)" class="on">진한 회색 #888</button><button data-v="var(--muted)">연회색 #bbb</button></div>
+    </div>
+    <div class="segline"><span>감싸기 색</span>
+      <div class="seg" id="ringSeg"><button data-v="var(--accent)" class="on">코발트</button><button data-v="var(--green)">초록</button></div>
+    </div>
   </div>
 </div>
 
@@ -206,21 +195,21 @@ ul{margin:6px 0;padding-left:18px}li{margin:3px 0;font-size:13px}
   <h2>선택값 <button class="btn primary" style="float:right;padding:6px 14px;font-size:12px" onclick="copyVals()">📋 선택값 복사</button></h2>
   <div class="out" id="out"></div>
   <table class="tbl">
-    <tr><th>항목</th><th>선택값</th><th>현행</th><th>계승/신규</th></tr>
-    <tbody id="cmpTbl"></tbody>
+    <tr><th>항목</th><th>선택값</th><th>현행</th><th>계승/신규</th></tr><tbody id="cmpTbl"></tbody>
   </table>
 </div>
 
 <div class="card">
-  <h2>요구 6가지 → 이 시안에서 어떻게 풀리나</h2>
+  <h2>요구 → 반영</h2>
   <table class="tbl">
-    <tr><th>#</th><th>운영자 요구</th><th>시안 반영</th></tr>
-    <tr><td>1</td><td>입력 전 흰색 불투명도 85% (입력 느낌↑)</td><td>칸 배경 <code>rgba(255,255,255,.85)</code> — 도트가 아니라 눌러 넣는 "칸"으로. 슬라이더로 조절</td></tr>
-    <tr><td>2</td><td>입력하면 강조색 + 액티브 획</td><td>채우면 <code>var(--accent)</code> 테두리+<code>var(--accent-light)</code> 배경, 밑줄 획이 슥 그려짐</td></tr>
-    <tr><td>3</td><td>다 맞으면 테두리가 시계방향으로 동그랗게 감싸기</td><td>각 칸 라운드 링이 시계방향 draw(순차) + 살짝 튀어오름</td></tr>
-    <tr><td>4</td><td>입력 시 통통 튀는 번호</td><td>숫자가 <code>scale .5→1.18→1</code> 바운스로 등장</td></tr>
-    <tr><td>5</td><td>칸 아래 "PIN 번호를 입력해주세요" 잘 보이게</td><td>강조색 굵은 안내문구 상시 노출(입력 완료되면 사라짐)</td></tr>
-    <tr><td>6</td><td>CapsLock 잔재 삭제</td><td>PIN은 숫자라 무의미 → 배선 시 <code>.pin</code>을 CapsLock 대상에서 제외(비밀번호 설정 모달엔 유지)</td></tr>
+    <tr><th>운영자 요구</th><th>이 시안</th></tr>
+    <tr><td>현행 도트 유지 (박스 아님)</td><td>회색 빈 원 → 코발트 채운 원, 현행 <code>.pin-slot</code> 그대로</td></tr>
+    <tr><td>"PIN 번호를 입력해주세요" 그대로 · 무채색</td><td>안내문구 <code>var(--dim)</code> 회색 (슬라이더로 #888/#bbb)</td></tr>
+    <tr><td>입력 시점에 그 메시지 사라짐</td><td>첫 자리 입력하면 <code>opacity 0</code></td></tr>
+    <tr><td>틀리면 그 영역을 대체 (새 영역 X)</td><td>같은 <code>#login-msg</code>에 빨강 에러 텍스트로 교체</td></tr>
+    <tr><td>통통 튀는 번호</td><td>도트 채울 때 <code>scale .3→1.35→1</code> 바운스</td></tr>
+    <tr><td>다 맞으면 시계방향 감싸기</td><td>도트별 링 또는 큰 원, 시계방향 draw</td></tr>
+    <tr><td>CapsLock 잔재 삭제</td><td>배선 시 <code>.pin</code>을 경고 대상서 제외</td></tr>
   </table>
 </div>
 
@@ -228,205 +217,142 @@ ul{margin:6px 0;padding-left:18px}li{margin:3px 0;font-size:13px}
 </div>
 
 <script>
-var S={ preOp:0.85, slotR:16, pop:1.18, strokeT:0.22, ringT:0.45, bord:2, ringCol:'var(--accent)' };
-var CUR={ preOp:'—(도트)', slotR:'—(원 14px)', pop:'—(없음)', strokeT:'—(없음)', ringT:'—(없음)', bord:'1.5px 원테두리' };
+var S={ pop:1.35, ringT:0.5, mode:'each', ringCol:'var(--accent)', hintCol:'var(--dim)' };
 var root=document.documentElement.style;
 
-// 4칸 렌더(SVG 링 포함)
-function buildSlots(){
-  var w=document.getElementById('npWrap'); w.innerHTML='';
+function buildDots(wrapId,withRing){
+  var w=document.getElementById(wrapId); w.innerHTML='';
   for(var i=0;i<4;i++){
-    var d=document.createElement('div'); d.className='np-slot'; d.style.setProperty('--i',i);
-    d.innerHTML='<span class="np-digit"></span><span class="np-stroke"></span>'+
-      '<svg class="np-ring" viewBox="0 0 52 60" preserveAspectRatio="none"><rect x="2" y="2" width="48" height="56" rx="'+S.slotR+'" pathLength="100"/></svg>';
-    w.appendChild(d);
+    var d=document.createElement('div'); d.className='pin-slot'; d.style.setProperty('--i',i);
+    var ring=withRing?'<svg class="dot-ring" viewBox="0 0 26 26"><circle cx="13" cy="13" r="11" pathLength="100"/></svg>':'';
+    d.innerHTML=ring; w.appendChild(d);
+  }
+  if(withRing){
+    var big=document.createElement('div'); big.className='big-ring';
+    big.innerHTML='<svg viewBox="0 0 240 74" preserveAspectRatio="none"><rect x="2" y="2" width="236" height="70" rx="37" pathLength="100"/></svg>';
+    w.appendChild(big);
   }
 }
 function applyVars(){
-  root.setProperty('--pre-op',S.preOp);
-  root.setProperty('--slot-r',S.slotR+'px');
   root.setProperty('--pop',S.pop);
-  root.setProperty('--stroke-t',S.strokeT+'s');
   root.setProperty('--ring-t',S.ringT+'s');
-  root.setProperty('--bord',S.bord+'px');
   root.setProperty('--ring-col',S.ringCol);
-  // 링 rx 동기
-  document.querySelectorAll('#npWrap .np-ring rect').forEach(function(r){r.setAttribute('rx',S.slotR);});
+  root.setProperty('--hint-col',S.hintCol);
+  var w=document.getElementById('npWrap');
+  w.classList.toggle('mode-each',S.mode==='each');
+  w.classList.toggle('mode-big',S.mode==='big');
   renderOut();
 }
 
-// ── 데모 재생 ──
-var slots=function(){return document.querySelectorAll('#npWrap .np-slot');};
-var curSlots=function(){return document.querySelectorAll('#curWrap .cur-slot');};
-var _t=[];
-function clearT(){_t.forEach(clearTimeout);_t=[];}
+var npSlots=function(){return document.querySelectorAll('#npWrap .pin-slot');};
+var oldSlots=function(){return document.querySelectorAll('#oldWrap .pin-slot');};
+var _t=[]; function clearT(){_t.forEach(clearTimeout);_t=[];}
 function reset(){
   clearT();
   var w=document.getElementById('npWrap'); w.classList.remove('success','shake');
-  slots().forEach(function(s){s.classList.remove('filled','focus','err');s.querySelector('.np-digit').textContent='';});
-  curSlots().forEach(function(s){s.classList.remove('lit','filled');});
-  var h=document.getElementById('npHint'); h.textContent='PIN 번호를 입력해주세요'; h.className='np-hint';
-  document.getElementById('npMsg').textContent='';
+  npSlots().forEach(function(s){s.classList.remove('filled','pop','err');});
+  oldSlots().forEach(function(s){s.classList.remove('filled','err');});
+  var m=document.getElementById('npMsg'); m.className='pin-msg'; m.textContent='PIN 번호를 입력해주세요';
+  document.getElementById('oldMsg').textContent='';
 }
 function play(){
-  reset(); var code=['1','2','3','4'];
-  code.forEach(function(n,i){
+  reset();
+  for(var i=0;i<4;i++){(function(i){
     _t.push(setTimeout(function(){
-      // 새 디자인
-      var s=slots()[i]; s.classList.add('filled'); s.querySelector('.np-digit').textContent=n;
-      if(i<3){slots()[i+1].classList.add('focus');}
-      slots()[i].classList.remove('focus');
-      // 현행
-      var c=curSlots()[i]; c.classList.add('lit'); c.querySelector('.cur-digit').textContent=n;
-      if(i>0){curSlots()[i-1].classList.remove('lit');curSlots()[i-1].classList.add('filled');}
-      var h=document.getElementById('npHint');
-      h.className='np-hint dim'; h.textContent=(i<3?'PIN 번호를 입력해주세요':'확인 중…');
+      var s=npSlots()[i]; s.classList.add('filled','pop');
+      oldSlots()[i].classList.add('filled');
+      if(i===0){var m=document.getElementById('npMsg');m.classList.add('gone');}  // 입력 시작 → 안내 사라짐
     },500+i*430));
-  });
-  // 성공 감싸기
-  _t.push(setTimeout(function(){
-    curSlots()[3].classList.remove('lit');curSlots()[3].classList.add('filled');
-    document.getElementById('npWrap').classList.add('success');
-    var h=document.getElementById('npHint'); h.className='np-hint gone';
-  },500+4*430+200));
+  })(i);}
+  _t.push(setTimeout(function(){ document.getElementById('npWrap').classList.add('success'); },500+4*430+150));
 }
 function playErr(){
-  reset(); var code=['9','9','9','9'];
-  code.forEach(function(n,i){
+  reset();
+  for(var i=0;i<4;i++){(function(i){
     _t.push(setTimeout(function(){
-      var s=slots()[i]; s.classList.add('filled'); s.querySelector('.np-digit').textContent=n;
+      npSlots()[i].classList.add('filled','pop'); oldSlots()[i].classList.add('filled');
+      if(i===0)document.getElementById('npMsg').classList.add('gone');
     },300+i*260));
-  });
+  })(i);}
   _t.push(setTimeout(function(){
     var w=document.getElementById('npWrap'); w.classList.add('shake');
-    slots().forEach(function(s){s.classList.remove('filled');s.classList.add('err');s.querySelector('.np-digit').textContent='';});
-    document.getElementById('npMsg').textContent='PIN이 일치하지 않습니다';
-    var h=document.getElementById('npHint');h.className='np-hint';h.textContent='PIN 번호를 입력해주세요';
-    _t.push(setTimeout(function(){w.classList.remove('shake');slots().forEach(function(s){s.classList.remove('err');});},1400));
+    npSlots().forEach(function(s){s.classList.remove('filled','pop');s.classList.add('err');});
+    oldSlots().forEach(function(s){s.classList.remove('filled');s.classList.add('err');});
+    // 같은 메시지 영역을 에러가 대체(새 영역 X)
+    var m=document.getElementById('npMsg'); m.className='pin-msg err'; m.textContent='PIN이 일치하지 않습니다';
+    document.getElementById('oldMsg').textContent='PIN이 일치하지 않습니다';  // 순정 = 별도 에러줄
+    _t.push(setTimeout(function(){
+      w.classList.remove('shake'); npSlots().forEach(function(s){s.classList.remove('err');});
+      m.className='pin-msg'; m.textContent='PIN 번호를 입력해주세요';   // 안내로 복귀
+      oldSlots().forEach(function(s){s.classList.remove('err');}); document.getElementById('oldMsg').textContent='';
+    },1600));
   },300+4*260+150));
 }
 
-// ── 프리셋 ──
-var PRE={
-  '현행 (도트)':      {preOp:1,slotR:24,pop:1.0,strokeT:0.01,ringT:0.01,bord:1.5,_cur:true},
-  '★ 화이트 박스':    {preOp:0.85,slotR:16,pop:1.18,strokeT:0.22,ringT:0.45,bord:2,star:true},
-  '소프트(둥근·은은)': {preOp:0.78,slotR:22,pop:1.10,strokeT:0.3,ringT:0.6,bord:2},
-  '또렷(굵은 테두리)': {preOp:0.9,slotR:12,pop:1.24,strokeT:0.16,ringT:0.35,bord:3}
-};
-function preset(name){
-  var p=PRE[name]; if(!p)return;
-  ['preOp','slotR','pop','strokeT','ringT','bord'].forEach(function(k){if(p[k]!=null)S[k]=p[k];});
-  document.querySelectorAll('#presets .preset').forEach(function(b){b.classList.toggle('on',b.dataset.n===name);});
-  syncSliders(); buildSlots(); applyVars();
-  if(p._cur){document.getElementById('npMsg').textContent='';}
-  setTimeout(play,120);
-}
-function buildPresets(){
-  var box=document.getElementById('presets');
-  Object.keys(PRE).forEach(function(n){
-    var b=document.createElement('button'); b.className='preset'+(PRE[n].star?' on':''); b.dataset.n=n;
-    b.innerHTML=(PRE[n].star?'<span class="star">★</span> ':'')+n.replace('★ ','');
-    b.onclick=function(){preset(n);}; box.appendChild(b);
-  });
-}
-
-// ── 슬라이더 ──
 var SL=[
-  {grp:'모양',k:'preOp',label:'입력 전 흰색 불투명도',min:0.6,max:1,step:0.01,fmt:function(v){return Math.round(v*100)+'%';}},
-  {k:'slotR',label:'칸 모서리 둥글기',min:8,max:26,step:1,fmt:function(v){return v+'px';}},
-  {k:'bord',label:'강조 테두리 두께',min:1,max:3,step:0.5,fmt:function(v){return v+'px';}},
-  {grp:'모션',k:'pop',label:'통통 튀는 강도',min:1,max:1.35,step:0.01,fmt:function(v){return '×'+v.toFixed(2);}},
-  {k:'strokeT',label:'입력 획 속도',min:0.1,max:0.5,step:0.01,fmt:function(v){return v.toFixed(2)+'s';}},
-  {k:'ringT',label:'시계방향 감싸기 속도(칸당)',min:0.2,max:0.8,step:0.01,fmt:function(v){return v.toFixed(2)+'s';}}
+  {grp:'모션',k:'pop',label:'통통 튀는 강도(도트)',min:1,max:1.6,step:0.01,fmt:function(v){return '×'+v.toFixed(2);}},
+  {k:'ringT',label:'시계방향 감싸기 속도',min:0.25,max:0.9,step:0.01,fmt:function(v){return v.toFixed(2)+'s';}}
 ];
 function buildSliders(){
   var box=document.getElementById('sliders'); box.innerHTML='';
   SL.forEach(function(o){
     if(o.grp){var g=document.createElement('div');g.className='grp';g.textContent=o.grp;box.appendChild(g);}
     var d=document.createElement('div'); d.className='sl';
-    d.innerHTML='<label>'+o.label+'<span class="val" id="v-'+o.k+'">'+o.fmt(S[o.k])+'</span></label>'+
-      '<input type="range" min="'+o.min+'" max="'+o.max+'" step="'+o.step+'" value="'+S[o.k]+'" id="r-'+o.k+'">';
+    d.innerHTML='<label>'+o.label+'<span class="val" id="v-'+o.k+'">'+o.fmt(S[o.k])+'</span></label><input type="range" min="'+o.min+'" max="'+o.max+'" step="'+o.step+'" value="'+S[o.k]+'" id="r-'+o.k+'">';
     box.appendChild(d);
-    d.querySelector('input').addEventListener('input',function(e){
-      S[o.k]=parseFloat(e.target.value);
-      document.getElementById('v-'+o.k).textContent=o.fmt(S[o.k]);
-      document.querySelectorAll('#presets .preset').forEach(function(b){b.classList.remove('on');});
-      if(o.k==='slotR')buildSlots();
-      applyVars();
-    });
+    d.querySelector('input').addEventListener('input',function(e){S[o.k]=parseFloat(e.target.value);document.getElementById('v-'+o.k).textContent=o.fmt(S[o.k]);applyVars();});
   });
 }
-function syncSliders(){
-  SL.forEach(function(o){var r=document.getElementById('r-'+o.k),v=document.getElementById('v-'+o.k);if(r){r.value=S[o.k];v.textContent=o.fmt(S[o.k]);}});
+function seg(id,key,after){
+  document.getElementById(id).addEventListener('click',function(e){
+    var b=e.target.closest('button'); if(!b)return;
+    this.querySelectorAll('button').forEach(function(x){x.classList.remove('on');}); b.classList.add('on');
+    S[key]=b.dataset.v; applyVars(); if(after)after();
+  });
 }
 
-// 성공 링 색 세그
-document.getElementById('ringColSeg').addEventListener('click',function(e){
-  var b=e.target.closest('button'); if(!b)return;
-  this.querySelectorAll('button').forEach(function(x){x.classList.remove('on');}); b.classList.add('on');
-  S.ringCol=b.dataset.v; applyVars();
-});
-
-// ── 선택값 출력 ──
 function renderOut(){
+  var ringCss=S.mode==='each'
+    ? '.pin-slot .dot-ring circle{stroke:'+S.ringCol+';animation:ringDraw '+S.ringT.toFixed(2)+'s forwards}  /* 도트별 시계방향 */'
+    : '.pin-wrap .big-ring rect{stroke:'+S.ringCol+';animation:ringDraw '+(S.ringT*2).toFixed(2)+'s forwards}  /* 큰 원 하나 */';
   var css=
-'/* PIN 칸 — 색은 :root 토큰 계승, 크기·모션만 신규 */\n'+
-'.pin-slot{width:52px;height:60px;border-radius:'+S.slotR+'px;\n'+
-'  background:rgba(255,255,255,'+S.preOp+');            /* ①입력 전 흰 '+Math.round(S.preOp*100)+'% */\n'+
-'  border:'+S.bord+'px solid rgba(74,77,231,.16);}      /* --accent 16% alpha 변주 */\n'+
-'.pin-slot.filled{border-color:var(--accent);background:var(--accent-light)}  /* ②강조 */\n'+
-'.pin-digit{animation:pinPop '+(S.pop>1?0.34:0.01)+'s cubic-bezier(.3,1.5,.5,1)}      /* ④통통 ×'+S.pop.toFixed(2)+' */\n'+
-'@keyframes pinPop{0%{transform:scale(.5)}45%{transform:scale('+S.pop.toFixed(2)+')}100%{transform:scale(1)}}\n'+
-'.pin-stroke{animation:pinStroke '+S.strokeT.toFixed(2)+'s ease forwards}          /* ②획 sweep */\n'+
-'.pin-wrap.success .pin-slot rect{animation:pinDraw '+S.ringT.toFixed(2)+'s forwards}  /* ③시계방향 */\n'+
-'.pin-hint{color:var(--accent);font-weight:600}         /* ⑤안내문구 */';
-  var out=document.getElementById('out');
-  out.innerHTML=css
-    .replace(/rgba\(255,255,255,[\d.]+\)/g,function(m){return '<span style="color:#a5d6ff">'+m+'</span>';})
+'/* 현행 .pin-slot 유지 + 아래만 추가 — 색은 :root 토큰 계승 */\n'+
+'.pin-slot.filled.pop::before{animation:dotPop .36s cubic-bezier(.3,1.5,.5,1)}  /* ④통통 */\n'+
+'@keyframes dotPop{0%{scale:.3}50%{scale:'+S.pop.toFixed(2)+'}100%{scale:1}}\n'+
+ringCss+'\n'+
+'/* ⑤ 메시지 한 영역 3-state (#login-msg 겸용) */\n'+
+'.pin-msg{color:'+S.hintCol+';font-weight:600}         /* 평상시 안내(무채색) */\n'+
+'.pin-msg.gone{opacity:0}                              /* 입력 시작 → 사라짐 */\n'+
+'.pin-msg.err{color:var(--danger);font-weight:700}     /* 틀리면 같은 자리 대체 */';
+  document.getElementById('out').innerHTML=css
     .replace(/var\(--[a-z-]+\)/g,function(m){return '<span style="color:#c3f0c8">'+m+'</span>';});
-  // 비교표
   var rows=[
-    ['입력 전 배경', Math.round(S.preOp*100)+'% 흰색', CUR.preOp, 'new'],
-    ['칸 모서리', S.slotR+'px', CUR.slotR, 'new'],
-    ['테두리 두께', S.bord+'px', CUR.bord, 'new'],
-    ['통통 강도', '×'+S.pop.toFixed(2), CUR.pop, 'new'],
-    ['획 속도', S.strokeT.toFixed(2)+'s', CUR.strokeT, 'new'],
-    ['감싸기 속도', S.ringT.toFixed(2)+'s/칸', CUR.ringT, 'new'],
-    ['채운 배경', 'var(--accent-light)', 'var(--accent) 원', 'keep'],
-    ['테두리·숫자·획·링', 'var(--accent)', 'var(--accent)', 'keep'],
-    ['성공 링 색', S.ringCol, '—', 'keep'],
-    ['안내문구 색', 'var(--accent)/var(--dim)', '—', 'keep'],
-    ['에러', 'var(--danger)', 'var(--danger)', 'keep']
+    ['도트 스타일','현행 유지','회색원→코발트원','keep'],
+    ['통통 강도','×'+S.pop.toFixed(2),'없음','new'],
+    ['감싸기','시계방향 '+(S.mode==='each'?'도트별 링':'큰 원')+' '+S.ringT.toFixed(2)+'s','없음','new'],
+    ['안내문구','"PIN 번호를 입력해주세요" '+S.hintCol,'없음','new'],
+    ['입력 시 안내','사라짐(opacity 0)','—','new'],
+    ['에러','같은 영역 대체 var(--danger)','별도 #login-msg','keep'],
+    ['감싸기 색',S.ringCol,'—','keep'],
+    ['도트·숫자 색','var(--accent)','var(--accent)','keep']
   ];
-  document.getElementById('cmpTbl').innerHTML=rows.map(function(r){
-    return '<tr><td>'+r[0]+'</td><td><b>'+r[1]+'</b></td><td style="color:#999">'+r[2]+'</td><td><span class="tag '+r[3]+'">'+(r[3]==='keep'?'계승':'신규 px/모션')+'</span></td></tr>';
-  }).join('');
+  document.getElementById('cmpTbl').innerHTML=rows.map(function(r){return '<tr><td>'+r[0]+'</td><td><b>'+r[1]+'</b></td><td style="color:#999">'+r[2]+'</td><td><span class="tag '+r[3]+'">'+(r[3]==='keep'?'계승':'신규')+'</span></td></tr>';}).join('');
 }
 function copyVals(){
-  var txt='PIN 로그인 입력 개선 — 선택값\n'+
-    '입력전_불투명도='+S.preOp+' ('+Math.round(S.preOp*100)+'%)\n'+
-    '칸_radius='+S.slotR+'px\n'+
-    '테두리_두께='+S.bord+'px\n'+
-    '통통_강도='+S.pop.toFixed(2)+'\n'+
-    '획_속도='+S.strokeT.toFixed(2)+'s\n'+
-    '감싸기_속도='+S.ringT.toFixed(2)+'s/칸\n'+
-    '성공링_색='+S.ringCol+'\n'+
-    '— 색 전부 :root 토큰 계승(신규 raw hex 0) · 크기/모션만 신규 배선';
-  navigator.clipboard.writeText(txt).then(function(){
-    var b=event.target; var o=b.textContent; b.textContent='✓ 복사됨'; setTimeout(function(){b.textContent=o;},1400);
-  }).catch(function(){alert(txt);});
+  var txt='PIN 로그인 입력 개선(현행 도트 기준) — 선택값\n'+
+    '도트=현행 유지\n통통_강도='+S.pop.toFixed(2)+'\n'+
+    '감싸기_방식='+(S.mode==='each'?'도트별 링':'큰 원 하나')+'\n감싸기_속도='+S.ringT.toFixed(2)+'s\n감싸기_색='+S.ringCol+'\n'+
+    '안내문구_색(무채색)='+S.hintCol+'\n안내문구=입력 시 사라짐 · 에러=같은 #login-msg 영역 대체(새 영역 X)\n'+
+    'CapsLock=PIN에서 제거\n— 색 전부 :root 토큰 계승(신규 raw hex 0)';
+  navigator.clipboard.writeText(txt).then(function(){var b=event.target;var o=b.textContent;b.textContent='✓ 복사됨';setTimeout(function(){b.textContent=o;},1400);}).catch(function(){alert(txt);});
 }
 
 document.getElementById('foot').innerHTML=
-  '<b>⑤ 재현 한계 각주</b><br>'+
-  '· 배경 = 실물은 WebGL 셰이더(유동 mesh)인데 여기선 <span class="chk">CSS 그라데이션으로 근사</span> — 실제 화면은 은은하게 움직임.<br>'+
-  '· 카드 blur·그림자는 <code>--glass-border</code>·<code>--elev</code> 토큰 그대로. 폰트는 시스템 폴백(실물 Pretendard).<br>'+
-  '· 실물 입력은 4개 <code>&lt;input&gt;</code>(자동 포커스 이동·붙여넣기·Backspace 역이동) — 여기선 재생 데모로 모션만 시연. 배선 시 기존 입력 로직(#138 빈칸 건너뜀 방지 등)은 그대로 유지.<br>'+
-  '· "시계방향 감싸기"는 각 칸 라운드 링을 SVG로 시계방향 draw(순차) — 큰 원 하나로 감싸는 변형을 원하면 말해줘, 그 버전도 만들게.<br>'+
-  '· ⑥ CapsLock 제거는 CSS 아닌 JS 변경(<code>.pin</code>을 경고 대상서 제외) — 이 플레이그라운드엔 시연 대상 아님, 배선 시 함께.';
+  '<b>재현 한계</b> · 배경 = 실물 WebGL 셰이더를 <span class="chk">CSS로 근사</span> · 폰트 시스템 폴백 · 실물 입력은 4 <code>&lt;input&gt;</code>(자동 포커스·붙여넣기·Backspace 역이동, #138 로직 유지) — 여기선 재생 데모로 모션만 · CapsLock 제거는 JS 변경이라 시연 대상 아님(배선 시 함께).';
 
-// init
-buildPresets(); buildSliders(); buildSlots(); applyVars();
+buildDots('oldWrap',false); buildDots('npWrap',true); buildSliders();
+seg('modeSeg','mode',function(){}); seg('hintSeg','hintCol',function(){document.getElementById('npMsg').style.color='';}); seg('ringSeg','ringCol');
+applyVars();
 setTimeout(play,400);
 </script>
 </body>
