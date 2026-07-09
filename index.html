@@ -2850,10 +2850,12 @@ function _enterPinInputStep(){
 async function switchMsAccount(){
   if(_loggingIn)return; _loggingIn=true;
   try{
-    const email=await _msalLoginEmail();
-    if(email){ try{localStorage.setItem('_resumePin',email);}catch(e){} location.reload(); }
-  }catch(e){ console.error('[switchMs]',e); if(typeof initLoginScreen==='function')initLoginScreen(); }
-  finally{ _loggingIn=false; }
+    const inst=await _msalGet();
+    if(!inst){ _loggingIn=false; return; }
+    // [260708] 계정 전환 = 팝업 대신 리다이렉트(reload 제거) — 페이지가 MS로 이동 후 복귀
+    await inst.loginRedirect({scopes:_MSAL_SCOPES, prompt:'select_account'});
+    // loginRedirect 성공 시 페이지를 떠나므로 이후 코드 미실행
+  }catch(e){ console.error('[switchMs]',e); if(typeof initLoginScreen==='function')initLoginScreen(); _loggingIn=false; }
 }
 async function msLogin(){
   if(_loggingIn) return;
@@ -2861,13 +2863,16 @@ async function msLogin(){
   try {
     const step=document.getElementById('account-step');
     if(step)step.innerHTML='<div style="color:#999;font-size:13px;padding:10px 0">'+_ldHtml(12)+'Microsoft 로그인 중</div>';
-    const email = await _msalLoginEmail();
-    if(!email){ _fullLogout(); if(typeof initLoginScreen==='function')initLoginScreen(); _loggingIn=false; return; }
-    try{localStorage.setItem('_resumePin',email);}catch(e){} location.reload();
+    const inst = await _msalGet();
+    if(!inst){ _fullLogout(); if(typeof initLoginScreen==='function')initLoginScreen(); _loggingIn=false; return; }
+    // [260708] 첫 로그인 = 팝업 대신 리다이렉트 — 흰 화면 reload 번쩍임·추가 팝업 제거. 복귀는 handleRedirectPromise가 처리.
+    await inst.loginRedirect({scopes: _MSAL_SCOPES, prompt: 'select_account'});
+    // loginRedirect 성공 시 페이지를 떠나므로 이후 코드는 실행되지 않음(에러 시에만 catch)
   } catch(e){
     console.error('[msLogin]',e);
     if(typeof initLoginScreen==='function')initLoginScreen();
-  } finally { _loggingIn = false; }
+    _loggingIn = false;
+  }
 }
 
 // 슈퍼admin 2차 비밀번호 입력 모달
@@ -3570,9 +3575,10 @@ async function _doSwitchUser(){
   const app=document.getElementById('app'); if(app)app.style.display='none';
   const login=document.getElementById('login'); if(login)login.style.display='';
   try{
-    const email=await _msalLoginEmail();
-    if(email){ try{localStorage.setItem('_resumePin',email);}catch(e){} location.reload(); }
-    else { initLoginScreen(); }
+    const inst=await _msalGet();
+    if(!inst){ initLoginScreen(); return; }
+    // [260708] 사용자 전환도 리다이렉트 — 팝업·reload 번쩍임 제거(복귀는 handleRedirectPromise가 처리)
+    await inst.loginRedirect({scopes:_MSAL_SCOPES, prompt:'select_account'});
   }catch(e){ console.warn('[switchUser]',e); initLoginScreen(); }
 }
 async function _doLogout(){
@@ -11331,7 +11337,8 @@ async function _msalGet(){
   if(!_msalInitialized){
     try { await _msalInstance.initialize(); _msalInitialized = true; }
     catch(e){ console.error('[msal init failed]', e); return null; }
-    try { await _msalInstance.handleRedirectPromise(); }
+    // [260708] 리다이렉트 로그인 복귀 처리 — 결과 account를 active로 설정해 initLoginScreen 자동 진입(_msalGetEmailSilent→_msalHasLiveSession→goToPinStep)에 연결. 팝업·reload 없이 자연스럽게 PIN 화면으로.
+    try { const _rr = await _msalInstance.handleRedirectPromise(); if(_rr && _rr.account){ _msalInstance.setActiveAccount(_rr.account); try{localStorage.setItem('lastLoginEmail', ((_rr.account.username)||'').trim().toLowerCase());}catch(e){} } }
     catch(e){ console.warn('[msal handleRedirect]', e); }
   }
   return _msalInstance;
