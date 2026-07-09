@@ -1665,7 +1665,11 @@ var index_default = {
           const sheet = url.searchParams.get("sheet");
           if (sheet) {
             try {
-              const { headers, rows } = await getOpsCached(token, opsSheetName(sheet));
+              const opsName = opsSheetName(sheet);
+              // [분신술 260710 H2] fresh=1 = isolate 로컬 5분 캐시 우회(실시간 조회) — 실적 수정 모달의 편집 기준·저장 직전 재조회용.
+              //  다른 isolate가 방금 쓴 변경을 stale 캐시로 놓쳐 전체 재작성이 그 변경을 지우는 동시성 유실 창 축소.
+              if (url.searchParams.get("fresh") === "1") delete opsCache[opsName];
+              const { headers, rows } = await getOpsCached(token, opsName);
               return json({ sheet, headers, rows, count: rows.length }, env);
             } catch (e) {
               return json({ sheet, headers: [], rows: [], count: 0, note: "시트 없음 (미동기화)" }, env);
