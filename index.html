@@ -1691,12 +1691,14 @@ table.promo-board-table thead th:last-child{border-top-right-radius:11px}
 .srail-ttlzone{display:flex;align-items:center;justify-content:center;flex-shrink:0;min-width:0;margin-bottom:1px}
 .srail-ttlstrip{display:inline-flex;align-items:center;gap:7px;background:var(--glass);border:1px solid var(--glass-border);border-radius:999px;padding:5px 16px;box-shadow:var(--glass-shadow);transform:translateY(2px)}
 .srail-ttltext{font-size:14px;font-weight:800;color:var(--text);white-space:nowrap}
+/* 흰 헤더 행 — 캘린더 요일바(.cal-head-wrap) 미러(운영자 260710 "요일 nav행을 판매현황에도 + 그 행에 요약줄"). 높이 = 요일바 실높이(_srailAlignTop 동적, 폴백 47px) */
+.srail-head{flex-shrink:0;min-height:47px;display:flex;align-items:center;padding:0 16px;background:rgba(255,255,255,.9);backdrop-filter:blur(11px);-webkit-backdrop-filter:blur(11px);border-bottom:1px solid rgba(0,0,0,.07);overflow:hidden}
 .srail{flex:1;min-height:0;display:flex;flex-direction:column;margin-top:-1px;background:rgba(255,255,255,.20);backdrop-filter:blur(24px) saturate(160%);-webkit-backdrop-filter:blur(24px) saturate(160%);border:1px solid rgba(255,255,255,.30);border-radius:var(--radius-xl);box-shadow:var(--glass-shadow);overflow:hidden;animation:srailIn .4s ease}
 .srail-hd{display:flex;align-items:center;gap:7px;padding:14px 16px 9px;flex-shrink:0}
 .srail-tt{font-size:14.5px;font-weight:800;color:var(--text)}
 .srail-cnt{font-size:10.5px;font-weight:800;color:var(--accent);background:rgba(74,77,231,.08);border:1px solid rgba(74,77,231,.18);border-radius:999px;padding:1px 8px;font-variant-numeric:tabular-nums}
 .srail-asof{font-size:10.5px;color:var(--dim);font-weight:600;margin-left:auto;white-space:nowrap}
-.srail-sum{display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:0 16px 10px;font-size:11px;color:var(--neutral-text);font-weight:600;flex-shrink:0}
+.srail-sum{display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:11px;color:var(--neutral-text);font-weight:600;flex-shrink:0}
 .srail-body{flex:1;overflow-y:auto;padding:20px 14px 0;min-height:0}
 .srail-card{background:rgba(255,255,255,.85);border:1px solid var(--glass-bd);border-radius:var(--radius);box-shadow:var(--glass-shadow);padding:11px 13px 12px;margin-bottom:10px;cursor:pointer;transition:border-color .15s,transform .15s}
 .srail-card:hover{border-color:var(--accent);transform:translateY(-2px)}
@@ -1777,7 +1779,7 @@ table.promo-board-table thead th:last-child{border-top-right-radius:11px}
   <div class="login-tilt"><div class="login-card">
     <div class="login-welcome"><b>GS</b> <span class="lw-thin">Caltex</span> <b class="lw-ac">YEULMARU</b></div>
     
-    <div id="account-step" style="margin-top:8px"></div>
+    <div id="account-step" style="margin-top:8px" aria-live="polite"></div>
     <div id="pin-step" style="display:none">
       <div id="pin-account" style="font-size:12px;color:var(--accent);opacity:1;text-align:center;margin-bottom:14px"></div>
       <div class="pin-wrap">
@@ -1852,11 +1854,13 @@ table.promo-board-table thead th:last-child{border-top-right-radius:11px}
         <div class="cal" id="cal"></div>
     </div>
     <!-- 판매 레일 — 판매현황·분석 보드와 _salesState 캐시 공유. data-panel = 레일 클릭이 사이드패널 closePanel을 타지 않게.
-         운영자 260710 확정: 제목 = 박스 밖 유리 스트립(월헤더 라인 중앙) · 요약(srail-sum)/기준일(srail-asof)/[분석]/[새로고침] 푸터 = 숨김(마크업 제거).
-         분석 보드 진입 = nav 사업현황▸판매 현황 · 요약/기준일 JS는 els 가드로 dormant(재노출 시 마크업만 복원). -->
+         운영자 260710 확정: 제목 = 박스 밖 유리 스트립(월헤더 라인 중앙) · 기준일(srail-asof)/[분석]/[새로고침] 푸터 = 숨김(마크업 제거·JS는 els 가드 dormant).
+         요약(srail-sum) = 같은 날 후속 지시로 흰 헤더 행(.srail-head, 캘린더 요일바 미러) 안에 복원 — 밴드는 정적 마크업이라 로딩·빈 상태에도 동일 유지.
+         분석 보드 진입 = nav 사업현황▸판매 현황. -->
     <aside id="sales-rail" data-panel aria-label="판매 현황 (판매중 공연)">
       <div class="srail-ttlzone" id="srail-ttlzone"><div class="srail-ttlstrip"><span class="srail-ttltext">판매 현황</span><span class="srail-cnt" id="srail-cnt" style="display:none">0</span></div></div>
       <div class="srail">
+        <div class="srail-head" id="srail-head"><div class="srail-sum" id="srail-sum" style="display:none"></div></div>
         <div class="srail-body" id="srail-body"></div>
       </div>
     </aside>
@@ -1929,7 +1933,7 @@ const _MSAL_CONFIG = {
   auth: {
     clientId: '9f3a0105-aa86-4a8b-bad0-bd651688d854',
     authority: 'https://login.microsoftonline.com/95768064-89cb-48c0-b5e5-e7bd309abcbd',
-    redirectUri: window.location.origin + window.location.pathname
+    redirectUri: window.location.origin + window.location.pathname.replace(/index\.html$/,'')   // [분신술 260710 감사3] …/index.html 직접 접속 변형을 등록 베이스 URI로 정규화(AADSTS50011 방지 · 평소 접속엔 동일값)
   },
   cache: {
     cacheLocation: 'localStorage',
@@ -2632,6 +2636,7 @@ function _enterApp(){
     _lg.style.display='none'; _appEl.style.display='';
   }
   try{ if(typeof _loginEmail!=='undefined' && _loginEmail) localStorage.setItem('lastLoginEmail', _loginEmail); }catch(e){}
+  try{ localStorage.removeItem('_msAutoRedirAt'); }catch(e){}   // [분신술 260710] 자동 리다이렉트 TTL 백스톱 클리어(성공 진입 = 루프 아님 확정)
   _locked=false; initApp(); if(typeof _bindIdleEvents==='function'){ _bindIdleEvents(); resetIdleTimer(); }
 }
 
@@ -2895,6 +2900,29 @@ async function initLoginScreen(){
       +'<button type="button" onclick="switchMsAccount()" style="width:100%;margin-top:10px;padding:8px;background:none;border:0;color:var(--muted);font-size:12px;cursor:pointer;text-decoration:underline">다른 Microsoft 계정으로 전환</button>';
   }else{
     _loginEmail='';
+    // [260710] 운영자: 관문 카드에서 클릭 없이 곧장 MS 로그인 화면으로(자동 진입).
+    //  - popup은 사용자 제스처 없이는 브라우저가 차단 → 자동 경로만 loginRedirect(전체 페이지 이동). 수동 버튼(msLogin=popup)은 폴백으로 유지.
+    //  - 가드①: 탭 세션당 1회(sessionStorage _msAutoRedir) — MS에서 취소/실패 후 복귀 시 무한 왕복 방지 + 로그아웃·계정전환 직후 자동 재발사로 계정을 못 바꾸는 함정 방지.
+    //  - 가드②: window.msal 미로드(CDN 실패)면 플래그 안 태우고 수동 카드로 폴백.
+    //  - prompt:'select_account' = 기존 수동 popup과 동일(공용 PC 의도치 않은 계정 자동선택 방지 — 260704 2FA 보안수정 정신 유지, 무프롬프트 SSO 아님).
+    //  - 복귀 = 기존 _msalGet의 handleRedirectPromise가 계정 캐시 → 위 email 분기(라이브 세션 확인 후 자동 PIN 진입)가 그대로 이어받음. 실패 복귀는 이 분기 재진입 → 가드①로 수동 카드.
+    var _autoDone=false; try{_autoDone=sessionStorage.getItem('_msAutoRedir')==='1';}catch(e){}
+    // [분신술 260710 감사2] 인앱 웹뷰(카카오/네이버 등)가 크로스오리진 왕복에서 sessionStorage를 유실하면 가드만 리셋돼 무한 왕복 —
+    //  localStorage 타임스탬프 백스톱(10분 TTL, 성공 진입 시 _enterApp에서 클리어) 병용. MSAL 캐시도 localStorage라 이 저장소는 왕복 생존 전제가 성립.
+    if(!_autoDone){ try{ var _at=parseInt(localStorage.getItem('_msAutoRedirAt')||'0',10); if(_at&&(Date.now()-_at)<600000)_autoDone=true; }catch(e){} }
+    if(!_autoDone && window.msal){
+      // [분신술 260710 감사5] read-back 검증 — 두 저장소 모두 안 붙는(차단·파티션) 환경이면 자동을 아예 안 태움 = 취소-복귀 무한 왕복 원천 차단(수동 카드 유지)
+      var _flagOk=false;
+      try{ sessionStorage.setItem('_msAutoRedir','1'); _flagOk=sessionStorage.getItem('_msAutoRedir')==='1'; }catch(e){}
+      try{ localStorage.setItem('_msAutoRedirAt',String(Date.now())); _flagOk=_flagOk||parseInt(localStorage.getItem('_msAutoRedirAt')||'0',10)>0; }catch(e){}
+      if(_flagOk){
+        step.innerHTML='<div style="color:var(--dim);font-size:13px;padding:10px 0">'+_ldHtml(12)+'Microsoft 로그인으로 이동 중</div>';
+        try{
+          const _inst=await _msalGet();
+          if(_inst){ await _inst.loginRedirect({scopes:_MSAL_SCOPES, prompt:'select_account'}); return; }
+        }catch(e){ console.warn('[msAutoRedir] 수동 카드로 폴백:', e&&(e.errorCode||e.message)||e); }
+      }
+    }
     step.innerHTML='<div style="font-size:12px;color:var(--text);margin-bottom:18px;line-height:1.6">로그인하려면 먼저<br>Microsoft 계정 인증이 필요해요</div>'
       +'<button type="button" onclick="msLogin()" style="width:100%;padding:12px;background:var(--glass-surface);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border:1px solid var(--glass-bd);color:var(--text);box-shadow:var(--glass-shadow);border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px"><svg width="18" height="18" viewBox="0 0 23 23"><path fill="#f25022" d="M1 1h10v10H1z"/><path fill="#7fba00" d="M12 1h10v10H12z"/><path fill="#00a4ef" d="M1 12h10v10H1z"/><path fill="#ffb900" d="M12 12h10v10H12z"/></svg>Microsoft 계정으로 로그인</button>';
   }
@@ -3080,6 +3108,8 @@ function _resolveNewPinOk(){
 function _enterAppFromSession(){password=sessionStorage.getItem('pw');userRole=sessionStorage.getItem('role')||'user';document.getElementById('login').style.display='none';document.getElementById('app').style.display='';initApp();if(typeof _bindIdleEvents==='function'){_bindIdleEvents();resetIdleTimer();}}
 async function _msalHasLiveSession(){try{const inst=await _msalGet();if(!inst)return false;let acc=inst.getActiveAccount();if(!acc){const accs=inst.getAllAccounts();if(accs&&accs.length){acc=accs[0];inst.setActiveAccount(acc);}}if(!acc){for(let i=0;i<5;i++){await new Promise(function(r){setTimeout(r,200);});acc=inst.getActiveAccount();if(!acc){const accs=inst.getAllAccounts();if(accs&&accs.length){acc=accs[0];inst.setActiveAccount(acc);}}if(acc){console.log('[zombie-check] account found after polling attempt',i+1);break;}}}if(!acc){console.warn('[zombie-check] no account after polling');return false;}try{await Promise.race([inst.acquireTokenSilent({scopes:_MSAL_SCOPES,account:acc}),new Promise(function(_,rej){setTimeout(function(){rej(new Error('silent_timeout'));},4000);})]);return true;}catch(e){console.warn('[zombie-check] silent token failed:',e.errorCode||e.message);return false;}}catch(e){console.warn('[zombie-check]',e);return false;}}
 function _zombieToLogin(){try{['pw','role','myApplicant','myUserDept','subAdminPin'].forEach(function(k){sessionStorage.removeItem(k);});}catch(e){}password='';userRole='user';try{document.getElementById('app').style.display='none';var _l=document.getElementById('login');if(_l){_l.style.display='flex';_l.style.opacity='1';_l.style.visibility='visible';_l.classList.remove('login-leave');}var _zc=document.querySelector('.login-card');if(_zc)_zc.classList.remove('lc-lift');}catch(e){}if(typeof initLoginScreen==='function')initLoginScreen();}
+// [분신술 260710 감사2] 자동 loginRedirect 후 브라우저 뒤로가기 → bfcache 복원이면 '이동 중' 스피너로 동결(리로드가 없어 initLoginScreen 미재실행) — 로그인 화면 표시 중 복원 시에만 리로드로 재기동(앱 사용 중 복원은 무간섭)
+window.addEventListener('pageshow',function(e){ try{ if(e.persisted){ var _l=document.getElementById('login'); if(_l&&_l.style.display!=='none')location.reload(); } }catch(_e){} });
 var _idleLockDisabled=true; var IDLE_MS=10*60*1000; // hoisted above session-restore IIFE: on F5 _enterAppFromSession→resetIdleTimer runs here, before the original (later) declaration executed; undefined IDLE_MS made setTimeout(lockScreen,undefined)=0ms → instant false lock
 (function(){try{localStorage.removeItem('myApplicant');localStorage.removeItem('myUserDept');}catch(e){}const s=sessionStorage.getItem('pw');if(s){if(s==='0511'){console.log('[IIFE] super-admin pw=0511 → initApp (no MSAL identity needed)');}else{console.log('[IIFE] pw branch → restoring session pw=',s);}_enterAppFromSession();_msalHasLiveSession().then(function(ok){if(!ok){console.warn('[IIFE] MSAL session not confirmed, but keeping app (pw exists)');}else{console.log('[IIFE] MSAL session OK');}});}else{var _rp=null;try{_rp=localStorage.getItem('_resumePin');}catch(e){} if(_rp){try{localStorage.removeItem('_resumePin');}catch(e){} _loginEmail=_rp; console.log('[IIFE] _resumePin HIT email=',_rp); if(typeof startLoginShader==='function'){try{startLoginShader();}catch(e){}} if(typeof goToPinStep==='function'){setTimeout(function(){goToPinStep(true);},0);}else{console.warn('[IIFE] goToPinStep not defined, fallback initLoginScreen');if(typeof initLoginScreen==='function')initLoginScreen();}}else{console.log('[IIFE] no pw, no _resumePin → initLoginScreen');if(typeof initLoginScreen==='function')initLoginScreen();}}})();
 
@@ -4142,6 +4172,8 @@ function _srailAlignTop(){
     var tz=document.getElementById('srail-ttlzone'); if(tz)tz.style.height=h+'px';
     // 요일바(sticky) top을 hdr 실제 높이에 맞춤 — 칩 줄바꿈·화면 비율 변화로 hdr가 커져도 셀이 요일바 위로 관통 안 하게(운영자 260709). CSS top:112(=56+56 가정) 고정을 동적화.
     var chw=document.getElementById('cal-head-wrap'); if(chw)chw.style.top=(56+h)+'px';
+    // 흰 헤더 행 높이 = 요일바 실높이 — 두 헤어라인이 같은 y에 오게(운영자 260710)
+    var sh=document.getElementById('srail-head'); if(sh&&chw&&chw.offsetHeight>10)sh.style.height=chw.offsetHeight+'px';   // >10 = 요일바 미구축(보더만 ~2px) 측정 배제, min-height 47 폴백 유지
     // 판매 레일 유리 박스(.srail) 높이 = 캘린더 박스(요일바+그리드) 높이로 캡 — 레일 top은 위에서 요일바 top에 정렬했으므로 max-height만 맞추면 하단도 .cal 하단과 일치.
     // flex 컬럼 stretch로 뷰포트 끝까지 늘어나던 것을 제한. 캘린더 주 수(5·6주)·화면 비율 변화 시 render()/resize에서 재계산.
     var cal=document.getElementById('cal'), srailBox=rail&&rail.querySelector('.srail');
@@ -4190,7 +4222,8 @@ function _srailInit(force){
   }).catch(function(e){
     if(gen!==_srailGen)return;
     _srailBusy=false; console.warn('[srail]',e);
-    var b=_srailEls().body; if(!b)return;
+    var els2=_srailEls(); var b=els2.body; if(!b)return;
+    if(els2.sum)els2.sum.style.display='none';   // [분신술 260710 감사4] 성공 렌더 후 재시도 실패 시 이전 요약 잔존 방지
     b.innerHTML='<div class="u-empty" style="padding:26px 8px"><div class="ico">📡</div><div class="msg">판매 데이터를 못 불러왔어요</div><button class="ana-chip" onclick="_srailInit(true)">다시 시도</button></div>';
   });
 }
@@ -11591,10 +11624,11 @@ async function _msalGet(){
     _msalInstance = new msal.PublicClientApplication(_MSAL_CONFIG);
   }
   if(!_msalInitialized){
-    try { await _msalInstance.initialize(); _msalInitialized = true; }
+    try { await _msalInstance.initialize(); }
     catch(e){ console.error('[msal init failed]', e); return null; }
     try { await _msalInstance.handleRedirectPromise(); }
     catch(e){ console.warn('[msal handleRedirect]', e); }
+    _msalInitialized = true;   // [분신술 260710 감사3] redirect 응답 소비 완료 후 마킹 — 동시 호출이 미처리 인스턴스를 받는 창 제거
   }
   return _msalInstance;
 }
