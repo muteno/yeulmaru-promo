@@ -1742,6 +1742,12 @@ table.promo-board-table thead th:last-child{border-top-right-radius:11px}
 .srail-dots{display:flex;gap:5px;align-items:center;flex-wrap:wrap;justify-content:center;max-width:62%}
 .srail-dot{width:6px;height:6px;border-radius:999px;background:var(--muted);border:none;padding:0;cursor:pointer;transition:background .2s,width .2s}
 .srail-dot.on{background:var(--accent);width:16px}
+/* AI 분석 섹션 — 드릴 컨설팅 줄 개편(운영자 260710: 강조색+AI 스파클 픽토그램 헤더 · [관점] 블릿 · 관점마다 끝이 살짝 열린 구분선 · 줄간격 유지). 색 전부 토큰. */
+.sr-ai-hd{display:flex;align-items:center;gap:5px;font-size:11.5px;font-weight:800;color:var(--accent);margin:10px 0 3px}
+.sr-ai-item{display:flex;align-items:flex-start;gap:7px;font-size:11.5px;line-height:1.55;margin:5px 0;color:var(--text)}
+.sr-ai-item .bu{width:5px;height:5px;border-radius:999px;flex-shrink:0;margin-top:6px;background:var(--accent)}
+.sr-ai-item b{font-weight:800}
+.sr-ai-div{height:1px;background:var(--border);width:calc(100% - 28px);margin:2px 0}
 /* 레일 인라인 드릴(개별 분석 — 분석 보드 드릴 계승, 캘린더 안 가리고 레일 안에서 동작) */
 .srail-drill{animation:srailIn .22s ease}
 @keyframes srailIn{from{opacity:0;transform:translateX(10px)}to{opacity:1;transform:none}}
@@ -4459,6 +4465,10 @@ function _srailExErrNote(){
   // 상시 [새로고침] 푸터는 운영자 260710 확정으로 제거 — 에러 시에만 인라인 재시도 제공
   return _srailExErr?'<div class="srail-note" style="padding:4px 4px 8px">전시 데이터를 못 불러왔어요 <button class="ana-chip" onclick="_srailInit(true)" style="margin-left:6px">다시 시도</button></div>':'';
 }
+// AI 분석 블록 헬퍼 — 스파클 픽토그램(토큰 fill)·헤더·[관점] 블릿 행(운영자 260710)
+var _AI_ICO='<svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true" style="flex-shrink:0"><path fill="var(--accent)" d="M12 2l1.9 5.6 5.6 1.9-5.6 1.9L12 17l-1.9-5.6L4.5 9.5l5.6-1.9z"/><path fill="var(--accent)" opacity=".5" d="M19 14.5l1 2.9 2.9 1-2.9 1-1 2.9-1-2.9-2.9-1 2.9-1z"/></svg>';
+function _srailAiHd(){ return '<div class="sr-ai-hd">'+_AI_ICO+'AI 분석</div>'; }
+function _srailAiRow(color,label,html){ return '<div class="sr-ai-item"><span class="bu" style="background:'+color+'"></span><span><b>[' +label+ ']</b> : '+html+'</span></div>'; }
 // ── 인라인 드릴 (개별 분석 — 분석 보드 드릴 핵심 항목의 레일판. kind: perf=공연(_anaScreen2 계승) / ex=전시(_anaExhibDrillRender 계승)) ──
 function _srailDrill(kind,key){ _srailView={mode:'drill',kind:kind,name:key}; _srailRender(); }
 function _srailBack(){ _srailView={mode:'list',name:null}; _srailRender(); }
@@ -4498,11 +4508,14 @@ function _srailRenderDrill(els,p,activeCount){
   h+='<div class="ana-kpi"><div class="lab">공연일</div><div class="val">'+ddTxt+'</div></div>';
   h+='</div>';
   h+='<div class="srail-chart">'+_srailDrillSvg(p)+'</div>';
+  h+=_srailAiHd();
   h+=(noData
-    ?'<div class="ana-line"><span class="ic">🎫</span><span><b>상황</b> — 판매 실적 집계 전 (티켓 오픈됨, 첫 일일입력 대기)</span></div>'
-    :'<div class="ana-line"><span class="ic">'+(gap>=0?'🟢':'🟠')+'</span><span><b>상황</b> — 목표 '+tgt+'% '+(gap>=0?'달성':'미달')+' ('+(gap>=0?'+':'')+gap.toFixed(1)+'%p) · '+medTxt+'</span></div>');
-  h+='<div class="ana-line"><span class="ic">📣</span><span><b>효과 채널</b> — '+_anaTopChannel(p.name)+'</span></div>';
-  h+='<div class="ana-line"><span class="ic">⚡</span><span><b>최대 레버</b> — '+_anaTopLever(_anaDailySeries(p))+'</span></div>';
+    ?_srailAiRow('var(--dim)','상황','판매 실적 집계 전 (티켓 오픈됨, 첫 일일입력 대기)')
+    :_srailAiRow(gap>=0?'var(--green)':'var(--peach-text)','상황','목표 '+tgt+'% '+(gap>=0?'달성':'미달')+' ('+(gap>=0?'+':'')+gap.toFixed(1)+'%p) · '+medTxt));
+  h+='<div class="sr-ai-div"></div>';
+  h+=_srailAiRow('var(--accent)','효과 채널',_anaTopChannel(p.name));
+  h+='<div class="sr-ai-div"></div>';
+  h+=_srailAiRow('var(--accent)','최대 레버',_anaTopLever(_anaDailySeries(p)));
   h+='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:2px"><span class="ana-next">▶ '+act+'</span><button class="ana-chip" onclick="_srailOpenBoard(\''+_anaEsc(p.name)+'\')" title="분석 보드에서 비슷한 공연 비교까지 크게 보기">크게 보기</button></div>';
   h+='</div>';
   els.body.innerHTML=h;
@@ -4528,7 +4541,8 @@ function _srailRenderDrillEx(els,e,activeCount){
   h+='<div class="ana-kpi"><div class="lab">종료까지</div><div class="val">'+endTxt+'</div></div>';
   h+='</div>';
   h+='<div class="srail-chart">'+_anaExhibTrend(e.daily)+'</div>';
-  h+='<div class="ana-line"><span class="ic">'+(e.occ>=100?'🟢':'🟠')+'</span><span><b>상황</b> — 목표관객 '+_srailNumTxt(e._goal)+'명 대비 유료 '+_srailNumTxt(e._paid)+'명 ('+(e.occ>=100?'초과달성 ':'')+(e.occ-100>=0?'+':'')+(e.occ-100).toFixed(1)+'%p) · 달성률은 좌석 점유가 아니라 목표 대비 비율</span></div>';
+  h+=_srailAiHd();
+  h+=_srailAiRow(e.occ>=100?'var(--green)':'var(--peach-text)','상황','목표관객 '+_srailNumTxt(e._goal)+'명 대비 유료 '+_srailNumTxt(e._paid)+'명 ('+(e.occ>=100?'초과달성 ':'')+(e.occ-100>=0?'+':'')+(e.occ-100).toFixed(1)+'%p) · 달성률은 좌석 점유가 아니라 목표 대비 비율');
   h+='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px"><button class="ana-chip" onclick="_srailOpenBoardEx(\''+_anaEsc(e.id)+'\')" title="분석 보드 전시 탭에서 크게 보기">크게 보기</button></div>';
   h+='</div>';
   els.body.innerHTML=h;
