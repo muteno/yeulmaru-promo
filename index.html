@@ -17242,7 +17242,7 @@ async function _bpFileOpenSrv(id){
       var st=_bpStore(),f=_bpFileFind(st,id);
       // 서버 ts == 로컬 srvTs = 서버에 새 저장 없음 → 로컬 캐시 승(미전송 편집 보호, _bpSrvRefresh와 동일 규칙).
       // 다르면 = 다른 기기·세션 저장 → 서버 승. 로컬 캐시 없으면(새 브라우저) 서버본 채택.
-      var srvAhead=!f||!f.doc||String(r.meta.ts||'')!==String(f.srvTs||'');
+      var srvAhead=!f||!f.doc||(!!String(r.meta.ts||'')&&String(r.meta.ts||'')!==String(f.srvTs||''));
       if(!f){f={id:id};st.files.unshift(f);}
       if(srvAhead){
         f.doc=doc;f.name=String(r.meta.name||'제목 없음').slice(0,80);f.scope=_bpScopeOk(r.meta.scope);f.srvTs=String(r.meta.ts||'');f.ts=Date.now();
@@ -17314,7 +17314,7 @@ function _bpDirty(){
   if(_bpS.edit)_bpToolsRender();
 }
 function _bpAutoSave(){
-  if(!_bpS||!_bpS.file)return;
+  if(!_bpS||!_bpS.file||_bpS.ro)return;
   _bpS.saveT=null;
   var st=_bpStore(),f=_bpFileFind(st,_bpS.file.id);
   if(!f){f={id:_bpS.file.id};st.files.unshift(f);}   // 목록에서 지워진 채 편집 중이면 복구
@@ -17375,7 +17375,7 @@ async function _bpSrvFlush(){
 }
 // 열려 있는 문서의 계정(서버) 최신본 확인 — 다른 기기·세션에서 저장했으면 서버 승(재진입 직후 1회)
 async function _bpSrvRefresh(id){
-  if(!_bpCanSrv())return;
+  if(!_bpCanSrv()||(_bpS&&_bpS.ro))return;
   try{
     var r=await _bpSrvGet(id);
     if(!_bpS||!_bpS.file||_bpS.file.id!==id||!r||!r.ok)return;
