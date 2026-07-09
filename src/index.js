@@ -285,7 +285,8 @@ __name(summarize, "summarize");
 // === 홍보기록 (PlanData) ===
 async function handleGetRecords(token) {
   const { driveId, itemId } = await findFile(token);
-  const data = await graphGet(token, `${sheetPath(driveId, itemId)}/usedRange`);
+  // [로딩 성능] $select — usedRange가 기본으로 values 외 text·formulas·numberFormat·valueTypes까지 동일 크기 배열로 5~7겹 실어보냄. 코드는 data.values만 쓰므로 값·크기만 선택해 페이로드 다이어트(홍보기록 누적분 전송량↓, 운영자 260709). ⚠️ Cloudflare 재배포 필요.
+  const data = await graphGet(token, `${sheetPath(driveId, itemId)}/usedRange?$select=values,rowCount,columnCount`);
   const records = [];
   if (data.values && data.values.length > 1) {
     const headers = data.values[0];
@@ -336,7 +337,8 @@ __name(handleDeleteRecord, "handleDeleteRecord");
 // === 프로그램 시트 - PERFS 로드용 ===
 async function handleGetPrograms(token) {
   const { driveId, itemId } = await findFile(token);
-  const data = await graphGet(token, `${sheetPathFor(driveId, itemId, SP.programSheetName)}/usedRange`);
+  // [로딩 성능] $select — usedRange 페이로드 다이어트(코드는 data.values만 사용, 260709)
+  const data = await graphGet(token, `${sheetPathFor(driveId, itemId, SP.programSheetName)}/usedRange?$select=values,rowCount,columnCount`);
   const programs = [];
   if (data.values && data.values.length > 1) {
     const headers = data.values[0];
@@ -355,7 +357,8 @@ __name(handleGetPrograms, "handleGetPrograms");
 // === 일반화된 시트 CRUD (마스터 관리용) ===
 async function handleGetSheet(token, sheetName) {
   const { driveId, itemId } = await findFile(token);
-  const data = await graphGet(token, `${sheetPathFor(driveId, itemId, sheetName)}/usedRange`);
+  // [로딩 성능] $select — usedRange 페이로드 다이어트(코드는 data.values만 사용 · 판매현황 6시트에 ×6 효과, 260709)
+  const data = await graphGet(token, `${sheetPathFor(driveId, itemId, sheetName)}/usedRange?$select=values,rowCount,columnCount`);
   const rows = [];
   const headers = (data.values && data.values[0]) ? data.values[0] : [];
   if (data.values && data.values.length > 1) {
