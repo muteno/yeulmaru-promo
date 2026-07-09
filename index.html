@@ -1579,7 +1579,7 @@ table.promo-board-table thead th:last-child{border-top-right-radius:11px}
 /* ===== 판매 레일 — 메인 캘린더 3/4 + 판매중 사업현황 1/4 (.srail-* 네임스페이스).
    데이터·표기 = 판매현황(_salesBuild)+분석 보드(.ana-*) 스크린1·드릴 KPI 계승(스파크라인·어제대비·목표 대비).
    글래스 값 = .cal(흰 .43/blur 11/보더 .7)·--glass-* 토큰 계승, 색 전부 기존 토큰·alpha 변주 — 신규 raw hex 0. */
-#sales-rail{width:25%;min-width:300px;max-width:430px;flex-shrink:0;padding:24px 28px 24px 0;display:flex;flex-direction:column}
+#sales-rail{width:40%;min-width:300px;max-width:720px;flex-shrink:0;padding:24px 28px 24px 0;display:flex;flex-direction:column}
 .srail{flex:1;min-height:0;display:flex;flex-direction:column;background:rgba(255,255,255,.43);backdrop-filter:blur(11px);-webkit-backdrop-filter:blur(11px);border:1px solid rgba(255,255,255,.7);border-radius:var(--radius-xl);box-shadow:var(--glass-shadow);overflow:hidden}
 .srail-hd{display:flex;align-items:center;gap:7px;padding:14px 16px 9px;flex-shrink:0}
 .srail-tt{font-size:14.5px;font-weight:800;color:var(--text)}
@@ -3510,16 +3510,22 @@ function _ddCloseAll(){
   // (260611) 헤더 팝업류 전부 상호 배타 — 하나 열면 나머지 닫힘 (창 중첩 방지)
   ['memo-pop','pres-pop','wx-pop','prog-modal'].forEach(function(id){const d=document.getElementById(id);if(d)d.classList.remove('show');});
 }
-function _ddOpen(anchor,builder,minW){
+function _ddOpen(anchor,builder,minW,owner){
   _ddCloseAll();
   if(!anchor)return;
   const r=anchor.getBoundingClientRect();
   const m=document.createElement('div');m.id='dd-pop';
-  m.style.cssText='position:fixed;inset:0;z-index:99999;background:transparent';
+  if(owner)m.dataset.owner=owner;   // 호버 전환 판정용 소유 메뉴 id (같은 메뉴 재호버=유지, 다른 메뉴=전환)
+  // 오버레이는 nav(56px) 아래만 덮는다 — nav 위까지 덮으면 다른 메뉴 호버 mouseenter가 막혀 메뉴 간 전환 불가(운영자 260709 "호버 원활 안 함"). 본문 클릭 닫기·nav 통과는 유지.
+  m.style.cssText='position:fixed;top:56px;left:0;right:0;bottom:0;z-index:99999;background:transparent';
   const menu=document.createElement('div');
   menu.style.cssText='position:fixed;top:'+(r.bottom+8)+'px;right:'+Math.max(12,window.innerWidth-r.right-4)+'px;min-width:'+(minW||176)+'px;max-width:94vw;background:rgba(255,255,255,0.97);backdrop-filter:blur(20px) saturate(150%);-webkit-backdrop-filter:blur(20px) saturate(150%);border:1px solid rgba(0,0,0,0.06);border-radius:14px;box-shadow:0 16px 48px rgba(74,77,231,0.18),0 4px 14px rgba(0,0,0,0.08);padding:6px;transform-origin:top right;animation:acctDrop .22s cubic-bezier(.26,1.2,.5,1)';
   builder(menu);
   m.appendChild(menu);document.body.appendChild(m);
+  if(owner){   // 호버 드롭다운 — 메뉴 위는 유지(닫기 예약 취소), 벗어나면 지연 닫기(버튼↔메뉴 갭 커버). 클릭 드롭다운(관리자)엔 미적용.
+    menu.addEventListener('mouseenter',function(){clearTimeout(window._ddHovT2);});
+    menu.addEventListener('mouseleave',function(){clearTimeout(window._ddHovT2);window._ddHovT2=setTimeout(_ddCloseAll,160);});
+  }
   // 바깥 클릭 = 닫기. 단 전면 오버레이(z99999)가 nav(z20)를 덮어 다음 클릭을 삼키는 문제(분신술 HIGH: 호버 자동오픈 후 "메뉴 안 눌림")
   // → 닫은 뒤 클릭 지점 밑이 nav 버튼류면 그 버튼으로 클릭을 통과시켜 한 번에 열리게 한다.
   m.addEventListener('click',function(e){
@@ -3632,24 +3638,31 @@ function buildNav(){
     b.onclick=()=>{
       clearTimeout(b._hovT);  // 클릭 직후 호버 타이머가 뒤늦게 재오픈하지 않게
       closeMobileNav();  // 메뉴 클릭 시 모바일 드롭다운 자동 닫힘
-      if(m.id==='content'){_ddOpen(b,_contentMenuBuild,210);return;}
+      if(m.id==='content'){_ddOpen(b,_contentMenuBuild,210,'content');return;}
       if(m.id==='annual'){openAnnualCalendar();return;}
       if(m.id==='admin'){openAdminPanel();return;}
-      if(m.id==='schedule'){_ddOpen(b,_scheduleMenuBuild,210);return;}
+      if(m.id==='schedule'){_ddOpen(b,_scheduleMenuBuild,210,'schedule');return;}
       if(m.id==='platform'){openPlatformBoard();return;}
       if(m.id==='business'){openBusinessBoard();return;}
       if(m.id==='sales'){openAnalyticsBoard();return;}
-      if(m.id==='playzone'){_ddOpen(b,_playzoneMenuBuild,210);return;}
+      if(m.id==='playzone'){_ddOpen(b,_playzoneMenuBuild,210,'playzone');return;}
       document.querySelectorAll('.nav-btn').forEach(x=>x.classList.remove('on'));b.classList.add('on');movePill(b,pill);
     };
     // 세부메뉴 보유 메뉴(콘텐츠 제작·일정 관리·PLAY ZONE) = 호버 즉시 드롭다운(운영자 260709 "바로" — 스침 오발 방지 가드 120ms만). 다른 팝업이 열려 있으면 안 뺏음.
     var _sub=(m.id==='content')?_contentMenuBuild:(m.id==='schedule')?_scheduleMenuBuild:(m.id==='playzone')?_playzoneMenuBuild:null;
-    b.onmouseenter=()=>{ movePill(b,pill);
-      if(_sub){ clearTimeout(b._hovT); b._hovT=setTimeout(function(){ if(!document.getElementById('dd-pop'))_ddOpen(b,_sub,210); },120); } };
+    b.onmouseenter=()=>{ movePill(b,pill); clearTimeout(window._ddHovT2);   // 메뉴로 넘어오면 닫기 예약 취소
+      if(_sub){ clearTimeout(b._hovT); b._hovT=setTimeout(function(){
+        var _dd=document.getElementById('dd-pop');
+        if(_dd&&_dd.dataset.owner===m.id)return;   // 이미 이 메뉴 열림 = 유지(깜빡 방지)
+        _ddOpen(b,_sub,210,m.id);                    // 없거나 다른 메뉴 = 열기/전환
+      },120); }
+      else { var _dd=document.getElementById('dd-pop'); if(_dd&&_dd.dataset.owner){ clearTimeout(window._ddHovT2); window._ddHovT2=setTimeout(_ddCloseAll,160); } }   // 세부메뉴 없는 버튼 호버 = 열린 호버 드롭다운 닫기 예약
+    };
     b.onmouseleave=()=>{ clearTimeout(b._hovT); };
     c.appendChild(b);
   });
-  c.onmouseleave=()=>{const a=c.querySelector('.nav-btn.on');if(a)movePill(a,pill);};
+  c.onmouseleave=()=>{const a=c.querySelector('.nav-btn.on');if(a)movePill(a,pill);
+    var _dd=document.getElementById('dd-pop'); if(_dd&&_dd.dataset.owner){ clearTimeout(window._ddHovT2); window._ddHovT2=setTimeout(_ddCloseAll,160); }};   // nav 벗어남 = 호버 드롭다운 닫기 예약(드롭다운으로 내려가면 menu mouseenter가 취소)
   document.fonts.ready.then(()=>{const a=c.querySelector('.nav-btn.on');if(a){pill.style.transition='none';movePill(a,pill);requestAnimationFrame(()=>pill.style.transition='');}});
   try{_bnavBuild();}catch(_e){}  // 모바일 하단 네비 (role별 재구성)
 }
