@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>판매현황 레일 카드 — 10일 추이 개편 플레이그라운드 v3 (260709)</title>
+<style>
+:root{
+  --accent:#4A4DE7; --accent-light:#E8E8FD; --peach-text:#D88455; --c2:#D88455;
+  --bg:linear-gradient(135deg,#FDF6F3 0%,#F0EBF5 50%,#EBF0F8 100%);
+  --surface-solid:#fff; --glass-surface:rgba(255,255,255,.78); --glass-bd:rgba(255,255,255,.6);
+  --glass-shadow:0 8px 32px rgba(74,77,231,0.08),0 2px 8px rgba(0,0,0,0.04);
+  --border:rgba(0,0,0,0.09); --text:#1A1A2E; --dim:#888; --muted:#bbb;
+  --green:#1A6B3C; --danger-btn:#E24B4A; --neutral:#EEEDF3; --neutral-text:#6B6B7B;
+  --radius:16px; --radius-lg:20px; --radius-xl:24px; --r-btn:10px; --peach:#F0C4B8;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Malgun Gothic','Apple SD Gothic Neo',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding:22px 20px 60px;-webkit-font-smoothing:antialiased}
+.pg-title{max-width:1280px;margin:0 auto 6px;font-size:19px;font-weight:800}
+.pg-sub{max-width:1280px;margin:0 auto 18px;font-size:12.5px;color:var(--neutral-text);line-height:1.6;font-weight:600}
+.pg-sub b{color:var(--accent)}
+.wrap{max-width:1280px;margin:0 auto;display:flex;gap:22px;align-items:flex-start;flex-wrap:wrap}
+.stage{flex:1 1 480px;min-width:320px}
+.railbg{background:rgba(255,255,255,.43);backdrop-filter:blur(11px);border:1px solid rgba(255,255,255,.7);border-radius:var(--radius-xl);box-shadow:var(--glass-shadow);padding:16px 14px}
+.railbg h4{font-size:13.5px;font-weight:800;margin-bottom:12px}
+.cardrow{display:flex;gap:16px;flex-wrap:wrap}
+.cardcol{flex:1 1 300px;min-width:280px}
+.cardcap{font-size:11px;font-weight:700;color:var(--dim);margin-bottom:7px;text-align:center}
+.cardcap.now{color:var(--accent)}
+
+/* ==== 레일 카드 ==== */
+.rc{background:var(--glass-surface);border:1px solid var(--glass-bd);border-radius:var(--radius);box-shadow:var(--glass-shadow);padding:12px 14px 13px;
+  --t-graph-h:118; --t-slope:1; --t-dash:4;
+}
+/* 헤더: [이름+메타] [% 칼럼 좌측정렬] [D-day] */
+.rc-hd{display:flex;align-items:flex-start;gap:10px}
+.rc-hd .tt{flex:1;min-width:0}
+.rc-nm{font-size:13.5px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rc-meta{font-size:10.5px;color:var(--dim);font-weight:500;margin-top:2px}
+.rc-occcol{display:flex;flex-direction:column;align-items:flex-start;flex-shrink:0;padding:0 10px;border-left:1px solid var(--border)}
+.rc-occ{font-size:19px;font-weight:800;color:var(--accent);font-variant-numeric:tabular-nums;line-height:1.05}
+.rc-delta{font-size:10.5px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:2px}
+.rc-delta.up{color:var(--green)}
+.rc-dd{font-size:10.5px;font-weight:800;color:var(--dim);flex-shrink:0}
+.rc-graph{margin-top:12px}
+.rc-graph svg{display:block;width:100%;overflow:visible}
+.rc-xlab{font-size:7.5px;fill:var(--dim);font-weight:700}
+.rc-todaylab{font-size:8.5px;fill:var(--accent);font-weight:800}
+.rc-forecast{font-size:10.5px;color:var(--peach-text);font-weight:700;margin-top:8px;background:rgba(216,132,85,.08);border:1px solid rgba(216,132,85,.22);border-radius:9px;padding:6px 10px;line-height:1.5}
+.rc-forecast b{color:var(--peach-text)}
+.rc-bar{position:relative;height:5px;border-radius:999px;background:var(--neutral);margin-top:11px}
+.rc-bar>i{position:absolute;left:0;top:0;bottom:0;border-radius:999px;background:var(--accent)}
+.rc-bar>b{position:absolute;top:-2.5px;width:2px;height:10px;border-radius:1px;background:var(--peach-text)}
+.rc-r3{display:flex;justify-content:space-between;margin-top:8px;font-size:10.5px;color:var(--dim);font-variant-numeric:tabular-nums}
+.rc-r3 .bad{color:var(--danger-btn)}
+/* 현행 카드(비교용) */
+.rc.cur .rc-occ{font-size:21px}
+.rc.cur .rc-graph svg{height:34px}
+
+.stagecap{margin-top:12px;font-size:12px;color:var(--neutral-text);line-height:1.6;font-weight:600;text-align:center}
+.console{flex:0 0 380px;max-width:100%;display:flex;flex-direction:column;gap:14px}
+@media(max-width:1080px){.console{flex:1 1 340px}}
+.csec{background:var(--glass-surface);backdrop-filter:blur(11px);border:1px solid var(--glass-bd);border-radius:var(--radius-lg);box-shadow:var(--glass-shadow);padding:15px 16px}
+.csec h3{font-size:12px;font-weight:800;margin-bottom:11px;display:flex;align-items:center;gap:7px}
+.csec h3 span{font-size:10px;font-weight:600;color:var(--dim)}
+.tgrow{display:flex;gap:8px;margin-bottom:9px}.tgrow:last-child{margin-bottom:0}
+.tgrow .lb{font-size:11px;font-weight:700;color:var(--neutral-text);align-self:center;width:66px;flex-shrink:0}
+.seg{flex:1;display:flex;background:var(--neutral);border-radius:9px;padding:3px;gap:3px}
+.seg button{flex:1;border:0;background:none;font-family:inherit;font-size:11px;font-weight:700;color:var(--neutral-text);padding:6px 4px;border-radius:7px;cursor:pointer}
+.seg button.on{background:#fff;color:var(--accent);box-shadow:0 1px 4px rgba(26,26,46,.1)}
+.slider{margin-bottom:13px}.slider:last-child{margin-bottom:0}
+.slider .sl-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
+.slider .sl-nm{font-size:11px;font-weight:700}.slider .sl-nm em{font-style:normal;color:var(--dim);font-weight:600;font-size:9.5px;margin-left:4px}
+.slider .sl-val{font-size:11px;font-weight:800;color:var(--accent);font-variant-numeric:tabular-nums}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:5px;border-radius:999px;background:linear-gradient(90deg,var(--accent) 0 var(--p,50%),var(--neutral) var(--p,50%) 100%);outline:none}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#fff;border:2px solid var(--accent);cursor:pointer}
+#out{background:#1A1A2E;color:#E8E8FD;border-radius:12px;padding:13px 14px;font-size:11px;line-height:1.65;white-space:pre-wrap;font-family:'SF Mono',ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums;max-height:260px;overflow:auto}
+#out .inh{color:#6FCF97}#out .upd{color:#F2C14E}
+.pgbtn{width:100%;border:0;background:var(--accent);color:#fff;font-family:inherit;font-size:12px;font-weight:700;padding:10px;border-radius:var(--r-btn);cursor:pointer;margin-top:10px}
+.note{font-size:10.5px;color:var(--neutral-text);line-height:1.7}.note b{color:var(--text)}
+.toast{position:fixed;left:50%;bottom:30px;transform:translateX(-50%) translateY(20px);background:var(--text);color:#fff;padding:11px 20px;border-radius:12px;font-size:12.5px;font-weight:700;opacity:0;pointer-events:none;transition:all .25s;z-index:100}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+<div class="pg-title">판매현황 레일 카드 — 10일 추이 개편 v3</div>
+<div class="pg-sub">각 점에 <b>날짜(7/1…)</b> · 오늘=<b>살몬 원+인디고 덮기</b> · 예측 3일=<b>살몬 원(불투명)</b> · 원 두껍게 동일크기 · 좌석 증감은 <b>최근 3일만 +N(%) 강조</b>·그 전 muted · <b>18.0%는 타이틀 우측 칼럼</b>. 슬라이더로 높이·기울기 조정하고 [선택값 복사]로 답장해줘.</div>
+
+<div class="wrap">
+  <div class="stage">
+    <div class="railbg">
+      <h4>판매 현황 <span style="font-size:10px;color:var(--dim);font-weight:600">· 기준 7.9</span></h4>
+      <div class="cardrow">
+        <div class="cardcol"><div class="cardcap">현행</div><div id="card-cur"></div></div>
+        <div class="cardcol"><div class="cardcap now">개편안 v3 ★</div><div id="card-new"></div></div>
+      </div>
+    </div>
+    <div class="stagecap">브런치 콘서트 Ⅲ 예시 — 7일 실측(오늘=7번째) + 3일 예측. 색은 index.html 토큰(인디고·살몬)만.</div>
+  </div>
+  <aside class="console">
+    <div class="csec">
+      <h3>① 옵션</h3>
+      <div class="tgrow"><span class="lb">Y축</span><div class="seg" id="seg-yaxis"><button data-v="occ">점유율 %</button><button data-v="seat">좌석 수</button></div></div>
+      <div class="tgrow"><span class="lb">좌석 라벨</span><div class="seg" id="seg-seat"><button data-v="on">전체</button><button data-v="off">오늘·예측만</button></div></div>
+    </div>
+    <div class="csec"><h3>② 프리셋</h3><div class="presets" id="presets" style="display:grid;grid-template-columns:1fr 1fr;gap:8px"></div></div>
+    <div class="csec"><h3>③ 미세조정</h3><div id="sliders"></div></div>
+    <div class="csec"><h3>④ 선택값</h3><pre id="out"></pre><button class="pgbtn" id="copy">선택값 복사</button></div>
+    <div class="csec"><h3>⑤ 각주</h3><div class="note">
+      • 데이터=목업(브런치 상승 추세). 실물은 일일입력 <code>합계좌석</code>에서 최근 N일 추출.<br>
+      • 예측 3일=최근 추세 선형 연장(살몬 점선·"추정" 표기). 카드 클릭은 <b>기존 개별분석 드릴 유지</b>.<br>
+      • 색=인디고 <code>--accent</code>(1강조·실측·오늘 덮기)·살몬 <code>--peach-text/--c2</code>(2강조·오늘 바탕·예측)·<code>--green</code> 증감·<code>--muted</code> 그 전. 새 색 0.
+    </div></div>
+  </aside>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+var OPEN=926, TGT=50;
+var ACT=[15.5,16.0,16.5,16.8,17.2,17.6,18.0];           // 7일 실측 점유율(오늘=18.0%)
+var DATES=['7/1','7/2','7/3','7/4','7/5','7/8','7/9','7/10','7/11','7/12'];
+function seatOf(o){ return Math.round(OPEN*o/100); }
+function predict(slope){ var a=ACT.slice(), g=(ACT[6]-ACT[4])/2; for(var i=1;i<=3;i++)a.push(Math.max(0,Math.min(100,ACT[6]+g*slope*i))); return a; }
+
+var DEFAULTS={ yAxis:'occ', seatLab:'on', graphH:177, slope:1.0, dash:4 };
+var PRESETS=[
+  {id:'p0', nm:'현행', ds:'7일 스파크·큰 %·예측 없음', st:{yAxis:'occ',seatLab:'off',graphH:34,slope:1,dash:4}, cur:true},
+  {id:'p1', nm:'개편안 ★', star:1, ds:'높이 177(1.5배)·날짜·오늘 이중원·예측 살몬·증감 전체대비', st:{yAxis:'occ',seatLab:'on',graphH:177,slope:1,dash:4}},
+  {id:'p2', nm:'좌석 축', ds:'Y=좌석수', st:{yAxis:'seat',seatLab:'on',graphH:177,slope:1,dash:4}},
+  {id:'p3', nm:'더 크게', ds:'높이 200·기울기 1.2', st:{yAxis:'occ',seatLab:'on',graphH:200,slope:1.2,dash:5}},
+];
+var SLIDERS=[
+  {k:'graphH', nm:'그래프 높이', d:'px', min:34, max:230, step:2},
+  {k:'slope', nm:'예측 기울기', d:'최근 추세 ×', min:0, max:2, step:.1},
+  {k:'dash', nm:'예측 점선 대시', d:'px', min:2, max:8, step:1},
+];
+var state=Object.assign({},DEFAULTS), curPreset=null;
+
+function graphSVG(){
+  var occ10=predict(state.slope), yS=(state.yAxis==='seat');
+  var vals=occ10.map(function(o){return yS?seatOf(o):o;});
+  var W=280, H=state.graphH, padX=9, padT=32, padB=28;
+  var mn=Math.min.apply(null,vals), mx=Math.max.apply(null,vals), span=mx-mn; if(span<(yS?4:0.6))span=(yS?4:0.6);
+  mn-=span*0.20; mx+=span*0.34;
+  var pts=vals.map(function(v,i){ var x=padX+(W-2*padX)*i/9; var y=padT+(H-padT-padB)*(1-(v-mn)/(mx-mn)); return [x,y,occ10[i]]; });
+  function dOf(a,b){ return pts.slice(a,b).map(function(q,i){return (i?'L':'M')+q[0].toFixed(1)+' '+q[1].toFixed(1);}).join(' '); }
+  var solid=dOf(0,7), dashed='M'+pts[6][0].toFixed(1)+' '+pts[6][1].toFixed(1)+' '+pts.slice(7).map(function(q){return 'L'+q[0].toFixed(1)+' '+q[1].toFixed(1);}).join(' ');
+  var area=solid+' L'+pts[6][0].toFixed(1)+' '+(H-padB)+' L'+pts[0][0].toFixed(1)+' '+(H-padB)+' Z';
+  var s='<svg viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" style="height:'+H+'px">';
+  s+='<path d="'+area+'" fill="rgba(74,77,231,.08)"/>';
+  s+='<path d="'+solid+'" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>';
+  s+='<path d="'+dashed+'" fill="none" stroke="var(--peach-text)" stroke-width="2" stroke-dasharray="'+state.dash+' '+state.dash+'" stroke-linecap="round" vector-effect="non-scaling-stroke"/>';
+  s+='<line x1="'+pts[6][0].toFixed(1)+'" y1="'+padT+'" x2="'+pts[6][0].toFixed(1)+'" y2="'+(H-padB)+'" stroke="var(--accent)" stroke-opacity=".18" stroke-width="1" stroke-dasharray="2 2"/>';
+  s+='<text x="'+pts[6][0].toFixed(1)+'" y="'+(padT-14)+'" text-anchor="middle" class="rc-todaylab">📌 Today</text>';
+  var R=3.6;  // 원 크기 동일(두껍게)
+  pts.forEach(function(q,i){
+    var future=i>6, today=(i===6), recent=(i>=4);   // 최근 3일(그제·어제·오늘) + 예측 = 강조 · 그 전 muted
+    var seat=seatOf(q[2]), prevSeat=(i>0)?seatOf(occ10[i-1]):null, dseat=(prevSeat!=null)?(seat-prevSeat):null;
+    var pct=(dseat!=null)?(dseat/OPEN*100):null;   // 전체 판매량(오픈석) 대비 증가율 — 어제 대비 아님
+    // 원 — 오늘=살몬 바탕+인디고 덮기 / 예측=살몬(불투명) / 실측=인디고. 다 동일 크기 R
+    if(today){ s+='<circle cx="'+q[0].toFixed(1)+'" cy="'+q[1].toFixed(1)+'" r="'+(R+2.2)+'" fill="var(--peach-text)"/><circle cx="'+q[0].toFixed(1)+'" cy="'+q[1].toFixed(1)+'" r="'+R+'" fill="var(--accent)"/>'; }
+    else s+='<circle cx="'+q[0].toFixed(1)+'" cy="'+q[1].toFixed(1)+'" r="'+R+'" fill="var('+(future?'--peach-text':'--accent')+')"/>';
+    // 좌석 + 증감(최근3만 green +N(%) · 그 전 muted, 증감 생략)
+    var showLab=(state.seatLab==='on')||today||future;
+    if(showLab){
+      var seatCol=today?'var(--accent)':(recent?'var(--text)':'var(--muted)');
+      var sy=(q[1]-R-6).toFixed(1);
+      s+='<text x="'+q[0].toFixed(1)+'" y="'+sy+'" text-anchor="middle" font-size="'+(today?'11.5':'9')+'" font-weight="'+(today?'800':'700')+'" fill="'+seatCol+'" font-family="inherit">'+seat+'</text>';
+      if(dseat!=null && recent){
+        var dtxt=(dseat>=0?'+':'')+dseat+(pct!=null?' ('+(pct>=0?'+':'')+pct.toFixed(1)+'%)':'');
+        s+='<text x="'+q[0].toFixed(1)+'" y="'+(parseFloat(sy)-9.5).toFixed(1)+'" text-anchor="middle" font-size="7" font-weight="800" fill="var(--green)" font-family="inherit">'+dtxt+'</text>';
+      }
+    }
+    s+='<text x="'+q[0].toFixed(1)+'" y="'+(H-7)+'" text-anchor="middle" class="rc-xlab" fill="'+(today?'var(--accent)':(future?'var(--peach-text)':'var(--dim)'))+'">'+DATES[i]+'</text>';
+  });
+  return s+'</svg>';
+}
+
+function cardHTML(mode){
+  var occ=18.0, delta='▲ +0.8%p';
+  if(mode==='cur'){
+    var W=132,H=34,pad=3,mn=Math.min.apply(null,ACT)-2,mx=Math.max.apply(null,ACT)+2;
+    var pts=ACT.map(function(v,i){var x=pad+(W-2*pad)*i/(ACT.length-1);var y=H-pad-(H-2*pad)*(v-mn)/(mx-mn);return [x,y];});
+    var d=pts.map(function(q,i){return (i?'L':'M')+q[0].toFixed(1)+' '+q[1].toFixed(1);}).join(' ');
+    var area=d+' L'+pts[6][0].toFixed(1)+' '+(H-pad)+' L'+pts[0][0].toFixed(1)+' '+(H-pad)+' Z';
+    return '<div class="rc cur"><div class="rc-hd"><div class="tt"><div class="rc-nm">브런치 콘서트 Ⅲ</div><div class="rc-meta">기타 · 사업성 · 9.3(목)</div></div><span class="rc-dd">D-56</span></div>'
+      +'<div class="rc-r2" style="margin-top:7px"><span class="rc-occ">18.0%</span> <span class="rc-delta up">▲ +0.8%p</span></div>'
+      +'<div class="rc-graph"><svg viewBox="0 0 132 34" preserveAspectRatio="none"><path d="'+area+'" fill="rgba(74,77,231,.10)"/><path d="'+d+'" fill="none" stroke="var(--accent)" stroke-width="1.8" vector-effect="non-scaling-stroke"/></svg></div>'
+      +'<div class="rc-bar"><i style="width:18%"></i><b style="left:50%"></b></div><div class="rc-r3"><span>167 / 926석</span><span class="bad">목표 50% -32.0%p</span></div></div>';
+  }
+  var p=predict(state.slope);
+  return '<div class="rc"><div class="rc-hd"><div class="tt"><div class="rc-nm">브런치 콘서트 Ⅲ</div><div class="rc-meta">기타 · 사업성 · 9.3(목)</div></div>'
+    +'<div class="rc-occcol"><span class="rc-occ">'+occ.toFixed(1)+'%</span><span class="rc-delta up">'+delta+'</span></div>'
+    +'<span class="rc-dd">D-56</span></div>'
+    +'<div class="rc-graph">'+graphSVG()+'</div>'
+    +'<div class="rc-forecast">📈 <b>예상</b> (이 추세면) '+DATES[7]+'~'+DATES[9]+' → <b>'+seatOf(p[9])+'석</b> · 누적 +'+(seatOf(p[9])-167)+'</div>'
+    +'<div class="rc-bar"><i style="width:18%"></i><b style="left:50%"></b></div><div class="rc-r3"><span>167 / 926석</span><span class="bad">목표 50% -32.0%p</span></div></div>';
+}
+function render(){ document.getElementById('card-cur').innerHTML=cardHTML('cur'); document.getElementById('card-new').innerHTML=cardHTML('new'); }
+
+var pbox=document.getElementById('presets');
+PRESETS.forEach(function(p){ var b=document.createElement('button'); b.className='preset'; b.dataset.id=p.id;
+  b.style.cssText='border:1.5px solid var(--border);background:#fff;border-radius:12px;padding:9px 10px;cursor:pointer;text-align:left;font-family:inherit';
+  b.innerHTML='<div style="font-size:11.5px;font-weight:800">'+p.nm+(p.star?' <span style="color:var(--peach-text)">★</span>':'')+'</div><div style="font-size:9.5px;color:var(--dim);margin-top:2px;line-height:1.35">'+p.ds+'</div>';
+  b.onclick=function(){ state=Object.assign({},DEFAULTS,p.st); curPreset=p.id; apply(); }; pbox.appendChild(b); });
+var sbox=document.getElementById('sliders');
+SLIDERS.forEach(function(s){ var w=document.createElement('div'); w.className='slider';
+  w.innerHTML='<div class="sl-top"><span class="sl-nm">'+s.nm+'<em>'+s.d+'</em></span><span class="sl-val" id="v-'+s.k+'"></span></div><input type="range" id="r-'+s.k+'" min="'+s.min+'" max="'+s.max+'" step="'+s.step+'">';
+  sbox.appendChild(w); w.querySelector('input').oninput=function(){ state[s.k]=parseFloat(this.value); curPreset=null; apply(); }; });
+function bindSeg(id,key){ document.getElementById(id).querySelectorAll('button').forEach(function(b){ b.onclick=function(){ state[key]=b.dataset.v; curPreset=null; apply(); }; }); }
+bindSeg('seg-yaxis','yAxis'); bindSeg('seg-seat','seatLab');
+
+function fmt(k,v){ if(k==='slope')return v.toFixed(1)+'×'; return Math.round(v)+'px'; }
+function apply(){
+  SLIDERS.forEach(function(s){ var r=document.getElementById('r-'+s.k),v=document.getElementById('v-'+s.k); r.value=state[s.k]; v.textContent=fmt(s.k,state[s.k]); r.style.setProperty('--p',((state[s.k]-s.min)/(s.max-s.min)*100)+'%'); });
+  [['seg-yaxis','yAxis'],['seg-seat','seatLab']].forEach(function(pr){ document.getElementById(pr[0]).querySelectorAll('button').forEach(function(b){ b.classList.toggle('on', b.dataset.v===state[pr[1]]); }); });
+  document.querySelectorAll('.preset').forEach(function(b){ b.classList.toggle('on', b.dataset.id===curPreset); b.style.borderColor=(b.dataset.id===curPreset)?'var(--accent)':'var(--border)'; b.style.background=(b.dataset.id===curPreset)?'var(--accent-light)':'#fff'; });
+  render(); buildOut();
+}
+function buildOut(){
+  var p=predict(state.slope);
+  document.getElementById('out').innerHTML=
+'[레일 카드 추이 개편 v3 — 선택값]\n\n'+
+'■ 그래프 높이 : '+Math.round(state.graphH)+'px  '+(Math.abs(state.graphH-34)<1?'<span>현행 34</span>':'<span class="upd">→ .srail-spark 높이 갱신</span>')+'\n'+
+'■ 추이 = 10일 · 각 점 날짜 라벨(7/1…7/12)\n'+
+'■ 원 : 오늘=살몬(--c2)+인디고 덮기 · 예측=살몬 불투명 · 실측=인디고 · 반지름 동일 두껍게\n'+
+'■ % : 타이틀 우측 칼럼 좌측정렬(19px)\n'+
+'■ 좌석 증감 : 최근 3일만 +N(증가율%) green · 그 전 muted\n'+
+'■ Y축 : '+(state.yAxis==='seat'?'좌석 수':'점유율 %')+' · 좌석 라벨 '+(state.seatLab==='on'?'전체':'오늘·예측만')+'\n'+
+'■ 예측 기울기 : '+state.slope.toFixed(1)+'× → '+DATES[7]+'~'+DATES[9]+' '+seatOf(p[7])+'/'+seatOf(p[8])+'/'+seatOf(p[9])+'석\n'+
+'■ 예측 점선 대시 : '+Math.round(state.dash)+'px\n\n'+
+'· 색=--accent·--peach-text(--c2)·--green·--muted (계승·새 색 0)';
+}
+document.getElementById('copy').addEventListener('click',function(){ var t=document.getElementById('out').textContent;
+  var ok=function(){ var el=document.getElementById('toast'); el.textContent='선택값 복사됨'; el.classList.add('on'); setTimeout(function(){el.classList.remove('on');},2000); };
+  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(t).then(ok,function(){fb(t,ok);}); else fb(t,ok); });
+function fb(t,ok){ try{var ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);ok();}catch(e){} }
+
+state=Object.assign({},DEFAULTS,PRESETS[1].st); curPreset='p1'; apply();
+</script>
+</body>
+</html>
