@@ -683,7 +683,8 @@ var DGM_SHEET = "도표";
 var DGM_CHUNKS = 10;
 var DGM_CHUNK_SIZE = 28000;
 var DGM_HEADERS = ["ID", "이름", "소유자", "부서", "공유범위", "저장시각", "청크수", "본문1", "본문2", "본문3", "본문4", "본문5", "본문6", "본문7", "본문8", "본문9", "본문10"];
-var DGM_SCOPES = { "비공개": 1, "팀": 1, "전체": 1 };
+function dgmScopeOk(s) { return s === "비공개" || s === "팀" || s === "전체"; }
+__name(dgmScopeOk, "dgmScopeOk");
 function dgmCanSee(r, user, dept) {
   if (String(user || "") && String(r["소유자"] || "") === String(user || "")) return true;
   const scope = String(r["공유범위"] || "비공개");
@@ -693,7 +694,7 @@ function dgmCanSee(r, user, dept) {
 }
 __name(dgmCanSee, "dgmCanSee");
 function dgmMeta(r) {
-  return { id: String(r["ID"] || ""), name: String(r["이름"] || ""), owner: String(r["소유자"] || ""), dept: String(r["부서"] || ""), scope: DGM_SCOPES[r["공유범위"]] ? String(r["공유범위"]) : "비공개", ts: String(r["저장시각"] || "") };
+  return { id: String(r["ID"] || ""), name: String(r["이름"] || ""), owner: String(r["소유자"] || ""), dept: String(r["부서"] || ""), scope: dgmScopeOk(r["공유범위"]) ? String(r["공유범위"]) : "비공개", ts: String(r["저장시각"] || "") };
 }
 __name(dgmMeta, "dgmMeta");
 async function handleDgmList(token, user, dept) {
@@ -723,7 +724,7 @@ async function handleDgmSave(token, body, isAdm) {
   if (!owner) return { ok: false, error: "no owner", status: 400 };
   const name = (String(body.name || "").trim() || "제목 없음").slice(0, 80);
   const dept = String(body.dept || "").slice(0, 40);
-  const scope = DGM_SCOPES[body.scope] ? body.scope : "비공개";
+  const scope = dgmScopeOk(body.scope) ? body.scope : "비공개";
   const jsonBody = JSON.stringify(body.doc || {});
   if (jsonBody.length > DGM_CHUNKS * DGM_CHUNK_SIZE) return { ok: false, error: "too large", status: 413 };
   const chunks = [];

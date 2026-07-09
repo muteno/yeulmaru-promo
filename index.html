@@ -17139,7 +17139,7 @@ function _bpRename(v){
 }
 function _bpShowHome(){
   if(!_bpS)return;
-  _bpS.home=true;_bpS.file=null;_bpS.edit=false;_bpS.sel=[];_bpS.drag=null;_bpS.hover=null;_bpS.editingText=null;
+  _bpS.home=true;_bpS.file=null;_bpS.ro=false;_bpS.edit=false;_bpS.sel=[];_bpS.drag=null;_bpS.hover=null;_bpS.editingText=null;
   _bpPopClose();_bpHeadSync();_bpHomeRender();_bpPropsSync();
   _bpHomeLoad();
 }
@@ -17158,6 +17158,7 @@ function _bpHomeLoad(){
   _bpSrvList().then(function(l){if(!_bpS)return;_bpS.srvList=l;if(_bpS.home)_bpHomeRender();})
     .catch(function(){if(!_bpS)return;_bpS.srvList=false;if(_bpS.home)_bpHomeRender();});
 }
+function _bpScopeOk(sc){return (sc==='팀'||sc==='전체')?sc:'비공개';}
 function _bpScopeTag(sc){
   var m={'비공개':['pv','비공개'],'팀':['tm','팀'],'전체':['al','전체'],'local':['lc','이 브라우저']};
   var pr=m[sc]||m['비공개'];
@@ -17239,20 +17240,31 @@ async function _bpFileOpenSrv(id){
     var doc=_bpSanitizeDoc(r.doc)||_bpEmptyDoc();
     if(r.meta.owner===me.user){
       var st=_bpStore(),f=_bpFileFind(st,id);
+      // 서버 ts == 로컬 srvTs = 서버에 새 저장 없음 → 로컬 캐시 승(미전송 편집 보호, _bpSrvRefresh와 동일 규칙).
+      // 다르면 = 다른 기기·세션 저장 → 서버 승. 로컬 캐시 없으면(새 브라우저) 서버본 채택.
+      var srvAhead=!f||!f.doc||String(r.meta.ts||'')!==String(f.srvTs||'');
       if(!f){f={id:id};st.files.unshift(f);}
-      f.name=r.meta.name;f.ts=Date.now();f.doc=doc;f.scope=r.meta.scope;f.srvTs=r.meta.ts;st.cur=id;
+      if(srvAhead){
+        f.doc=doc;f.name=String(r.meta.name||'제목 없음').slice(0,80);f.scope=_bpScopeOk(r.meta.scope);f.srvTs=String(r.meta.ts||'');f.ts=Date.now();
+      }
+      st.cur=id;
       _bpStoreSave(st);
       _bpFileOpen(id);
+      if(!srvAhead)_bpSrvQueue();   // 로컬 승 = 미전송분일 수 있음 → 서버 반영 재시도
       return;
     }
-    _bpS.file={id:id,name:String(r.meta.name||'도표').slice(0,80),scope:r.meta.scope,owner:r.meta.owner,dept:r.meta.dept};
+    _bpS.file={id:id,name:String(r.meta.name||'도표').slice(0,80),scope:_bpScopeOk(r.meta.scope),owner:String(r.meta.owner||''),dept:String(r.meta.dept||'')};
     _bpS.doc=doc;_bpS.home=false;_bpS.ro=true;_bpS.sel=[];_bpS.undo=[];_bpS.redo=[];_bpS.edit=false;_bpS.tool='select';_bpS.drag=null;_bpS.hover=null;
     _bpHeadSync();
     try{_bpRenderAll();}catch(e2){_bpS.doc=_bpEmptyDoc();_bpRenderAll();}
     _bpFit();_bpPropsSync();_bpSyncCursor();
     var s=document.getElementById('bp-save');
     if(s)s.textContent=(r.meta.owner||'')+' 님의 도표 · '+_bpTsAny(r.meta.ts)+' 저장';
-  }catch(e){showToast('도표를 불러오지 못했어요 — 잠시 후 다시 시도해주세요','error');}
+  }catch(e){
+    var st2=_bpStore(),lf=_bpFileFind(st2,id);
+    if(lf&&lf.doc){_bpFileOpen(id);showToast('서버 연결 실패 — 이 브라우저 저장본으로 열었어요','info');return;}
+    showToast('도표를 불러오지 못했어요 — 잠시 후 다시 시도해주세요','error');
+  }
 }
 function _bpCloneToMine(){
   if(!_bpS||!_bpS.file)return;
@@ -17292,7 +17304,7 @@ async function _bpSetScope(sc){
       if(f&&r.ts){f.srvTs=r.ts;_bpStoreSave(st);}
       showToast(sc==='비공개'?'비공개로 전환했어요 (이 계정만)':'「'+sc+'」 범위로 공유했어요','success');
     }
-  }catch(e){_bpS.srvFail=true;showToast('서버 반영 실패 — 연결되면 자동 저장됩니다','error');}
+  }catch(e){_bpS.srvFail=true;_bpSrvQueue();showToast('서버 반영 실패 — 연결되면 자동 저장됩니다','error');}
 }
 // ── 자동 저장(임시저장 = 저장) — 변경 400ms 디바운스로 현재 파일에 반영 ──
 function _bpDirty(){
@@ -17367,12 +17379,12 @@ async function _bpSrvRefresh(id){
   try{
     var r=await _bpSrvGet(id);
     if(!_bpS||!_bpS.file||_bpS.file.id!==id||!r||!r.ok)return;
-    if(_bpS.editingText||_bpS.drag)return;
+    if(_bpS.editingText||_bpS.drag||_bpS.undo.length||_bpS.redo.length)return;   // 확인 중 사용자가 이미 편집 시작 = 로컬 우선
     var st=_bpStore(),f=_bpFileFind(st,id);
     var localSrvTs=(f&&f.srvTs)||'';
     if(r.meta.ts&&r.meta.ts!==localSrvTs){
       var doc=_bpSanitizeDoc(r.doc);if(!doc)return;
-      _bpS.doc=doc;_bpS.file.name=r.meta.name||_bpS.file.name;_bpS.file.scope=r.meta.scope||'비공개';
+      _bpS.doc=doc;_bpS.file.name=String(r.meta.name||_bpS.file.name).slice(0,80);_bpS.file.scope=_bpScopeOk(r.meta.scope);
       _bpS.undo=[];_bpS.redo=[];_bpS.sel=[];
       if(f){f.doc=doc;f.name=_bpS.file.name;f.scope=_bpS.file.scope;f.srvTs=r.meta.ts;f.ts=Date.now();_bpStoreSave(st);}
       _bpHeadSync();_bpRenderAll();_bpPropsSync();
@@ -18272,6 +18284,7 @@ function openBookingProcess(){
   if(cur){_bpFileOpen(cur.id);_bpSrvRefresh(cur.id);}else _bpShowHome();
 }
 function closeBookingProcess(){
+  if(typeof _ddCloseAll==='function')_ddCloseAll();
   if(_bpS&&_bpS._raf){cancelAnimationFrame(_bpS._raf);_bpS._raf=null;}
   if(_bpS&&_bpS.editingText)_bpTextCommit();
   if(_bpS&&_bpS.saveT){clearTimeout(_bpS.saveT);_bpAutoSave();}
