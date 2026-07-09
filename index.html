@@ -16940,11 +16940,12 @@ function _bpSeed(){
 }
 // ── 새니타이저 관문 — 외부 유입 문서(스토어·JSON 가져오기·구 키 승계)는 전부 여기를 통과한 것만 신뢰.
 //    id·타입·색키·앵커 = 화이트리스트, 수치 = 유한값 클램프, 원소 = 순수 객체만 → 속성 탈출 XSS·렌더 크래시 차단.
+function _bpIdOk(s){return typeof s==='string'&&/^[A-Za-z0-9_-]{1,40}$/.test(s)&&s!=='__proto__'&&s!=='constructor'&&s!=='prototype';}
 function _bpSanitizeInq(q){
-  var out={},ID=/^[A-Za-z0-9_-]{1,40}$/;
+  var out={};
   if(!q||typeof q!=='object'||Array.isArray(q))return out;
   Object.keys(q).forEach(function(k){
-    if(!ID.test(k)||!Array.isArray(q[k]))return;
+    if(!_bpIdOk(k)||!Array.isArray(q[k]))return;
     var arr=[];
     q[k].forEach(function(it){
       if(it&&typeof it==='object'&&!Array.isArray(it)&&typeof it.t==='string'){
@@ -16957,27 +16958,26 @@ function _bpSanitizeInq(q){
 }
 function _bpSanitizeDoc(d){
   if(!d||typeof d!=='object'||Array.isArray(d)||d.v!==2||!Array.isArray(d.nodes)||!Array.isArray(d.edges))return null;
-  var ID=/^[A-Za-z0-9_-]{1,40}$/;
   var T={shape:1,frame:1,'div':1,text:1,step:1},K={rect:1,round:1,diamond:1,ellipse:1},EK={orth:1,line:1,curve:1},SD={t:1,r:1,b:1,l:1};
   function num(v,df,mn,mx){v=+v;return isFinite(v)?Math.max(mn,Math.min(mx,v)):df;}
-  var out={v:2,seq:num(d.seq,100,100,1e9),nodes:[],edges:[],inq:_bpSanitizeInq(d.inq)},nid={},eid={},i;
+  var out={v:2,seq:num(d.seq,100,100,1e9),nodes:[],edges:[],inq:_bpSanitizeInq(d.inq)},nid=Object.create(null),eid=Object.create(null),i;
   function fresh(p){var x;do{x=p+(++out.seq);}while(nid[x]||eid[x]);return x;}
   for(i=0;i<d.nodes.length&&i<800;i++){
     var n=d.nodes[i];if(!n||typeof n!=='object'||Array.isArray(n))continue;
     var t=T[n.t]?n.t:'shape';
-    var id2=(typeof n.id==='string'&&ID.test(n.id)&&!nid[n.id])?n.id:fresh('n');
+    var id2=(_bpIdOk(n.id)&&!nid[n.id])?n.id:fresh('n');
     var c={id:id2,t:t,x:num(n.x,0,-1e5,1e5),y:num(n.y,0,-1e5,1e5),w:num(n.w,120,0,5000),h:num(n.h,60,0,5000),tx:(typeof n.tx==='string')?n.tx.slice(0,2000):'',f:_BP_FILLS[n.f]?n.f:'w'};
     if(t==='div')c.w=0;
     if(t==='shape')c.k=K[n.k]?n.k:'round';
     if(n.ts!=null)c.ts=num(n.ts,11,6,80);
     if(t==='frame'){c.dash=n.dash?1:0;c.lab=(n.lab==='bc')?'bc':'tr';c.lc=(n.lc==='g')?'g':'t';c.bc=(n.bc==='g')?'g':'b2';}
-    if(typeof n.badge==='string'&&ID.test(n.badge))c.badge=n.badge;
+    if(_bpIdOk(n.badge))c.badge=n.badge;
     nid[id2]=1;out.nodes.push(c);
   }
   for(i=0;i<d.edges.length&&i<1600;i++){
     var e=d.edges[i];if(!e||typeof e!=='object'||Array.isArray(e))continue;
     if(!nid[e.from]||!nid[e.to]||e.from===e.to)continue;
-    var id3=(typeof e.id==='string'&&ID.test(e.id)&&!eid[e.id]&&!nid[e.id])?e.id:fresh('e');
+    var id3=(_bpIdOk(e.id)&&!eid[e.id]&&!nid[e.id])?e.id:fresh('e');
     var c2={id:id3,from:e.from,to:e.to,k:EK[e.k]?e.k:'orth',a2:e.a2!==false};
     if(e.a1)c2.a1=true;
     if(e.dash)c2.dash=1;
@@ -16992,7 +16992,10 @@ function _bpSanitizeDoc(d){
 function _bpStore(){
   try{
     var st=JSON.parse(localStorage.getItem(_BP_STORE_KEY)||'null');
-    if(st&&st.v===1&&Array.isArray(st.files))return st;
+    if(st&&typeof st==='object'&&!Array.isArray(st)&&st.v===1&&Array.isArray(st.files)){
+      return {v:1,cur:(typeof st.cur==='string')?st.cur:null,
+        files:st.files.filter(function(f){return f&&typeof f==='object'&&!Array.isArray(f);})};
+    }
   }catch(e){}
   return {v:1,cur:null,files:[]};
 }
