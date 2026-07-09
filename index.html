@@ -1654,6 +1654,12 @@ table.promo-board-table thead th:last-child{border-top-right-radius:11px}
 .srail-r3{display:flex;justify-content:space-between;gap:8px;margin-top:7px;font-size:10.5px;color:var(--dim);font-variant-numeric:tabular-nums}
 .srail-r3 .tgt.ok{color:var(--green)}
 .srail-r3 .tgt.bad{color:var(--danger)}
+.srail-hd{display:flex;align-items:flex-start;gap:9px}
+.srail-tt{flex:1;min-width:0}
+.srail-occcol{display:flex;flex-direction:column;align-items:flex-start;flex-shrink:0;padding:0 9px;border-left:1px solid var(--border)}
+.srail-occcol .srail-occ{font-size:18px}
+.srail-fc{font-size:10px;color:var(--peach-text);font-weight:700;margin-top:7px;background:rgba(216,132,85,.08);border:1px solid rgba(216,132,85,.22);border-radius:9px;padding:5px 9px;line-height:1.5}
+.srail-fc b{color:var(--peach-text)}
 .srail-ft{padding:8px 16px 12px;display:flex;gap:8px;align-items:center;flex-shrink:0}
 .srail-note{font-size:10px;color:var(--muted);line-height:1.4;flex:1}
 /* 레일 인라인 드릴(개별 분석 — 분석 보드 드릴 계승, 캘린더 안 가리고 레일 안에서 동작) */
@@ -3934,6 +3940,8 @@ function _salesBuild(){
     if(status==='active'&&lastShow&&lastShow<today)status='ended';
     // [분석보드] 추가 필드(기존 필드 불변): 최근 7일 점유율 스파크라인 / 어제대비 %p / 데이터 출처
     var spark=rows.slice(-7).map(function(r){return totalOpen>0?Math.min((_salesNum(r['합계좌석'])||0)/totalOpen*100,100):0;});
+    // 레일 10일 추이용 — 최근 7일 실측(좌석·기준일자·점유율). 예측 3일은 렌더 시 추세 연장.
+    var days=rows.slice(-7).map(function(r){var s=_salesNum(r['합계좌석']); return {bd:_salesNum(r['기준일자']),seat:(s==null?0:s),occ:(s!=null&&totalOpen>0)?Math.min(s/totalOpen*100,100):0};});
     var deltaPP=(diff!==null&&totalOpen>0)?diff/totalOpen*100:null;
     var source=m?'master':(ops?'fallback':'none');
     perfs.push({name:name,seats:seats,money:money,diff:diff,occ:occ,totalOpen:totalOpen,dday:dday,dateStr:dateStr,수익성:(m&&m.수익성)?m.수익성:_profitType(name,genre),목표:(m?m.목표:50),startDate:startDate,status:status,genre:genre,gubun:(ops?ops.gubun:''),enriched:(!m&&!!ops),spark:spark,deltaPP:deltaPP,source:source,_mid:((m&&m.ID)||rid||'')});
@@ -4144,6 +4152,44 @@ function _srailSpark(arr){
     +'<circle cx="'+last[0].toFixed(1)+'" cy="'+last[1].toFixed(1)+'" r="2.2" fill="var(--accent)"/>'
     +'</svg>';
 }
+// 레일 카드 10일 추이 — 최근 실측(days) + 3일 예측(추세 연장). 오늘=살몬 바탕+인디고 덮기 / 예측=살몬 / 각 점 날짜·좌석·증감(전체대비%, 최근3만 강조). 시안 260709_레일추이10일 계승, 색 전부 토큰.
+function _srailTrend(p){
+  var days=(p.days||[]).filter(function(d){return d&&d.seat!=null&&!isNaN(d.seat);});
+  if(days.length<2)return '<span style="font-size:10px;color:var(--muted)">추이 수집 전 (일일입력 2회부터)</span>';
+  var tot=p.totalOpen||926, seatOf=function(o){return Math.round(tot*o/100);};
+  var occ=days.map(function(d){return d.occ;});
+  var g=(occ.length>=3)?((occ[occ.length-1]-occ[occ.length-3])/2):(occ[occ.length-1]-occ[occ.length-2]);
+  var vals=occ.slice(); for(var k=1;k<=3;k++)vals.push(Math.max(0,Math.min(100,occ[occ.length-1]+g*k)));
+  var N=occ.length, todayIdx=N-1, T=vals.length;
+  function md(bd){var s=String(bd);return s.length===8?(parseInt(s.slice(4,6),10)+'/'+parseInt(s.slice(6,8),10)):'';}
+  var ld=_salesDate(String(days[days.length-1].bd));
+  var labels=days.map(function(d){return md(d.bd);});
+  for(var k2=1;k2<=3;k2++){ if(ld){var nd=new Date(ld.getTime()+k2*86400000);labels.push((nd.getMonth()+1)+'/'+nd.getDate());}else labels.push(''); }
+  var W=280,H=177,padX=9,padT=32,padB=28;
+  var mn=Math.min.apply(null,vals),mx=Math.max.apply(null,vals),span=mx-mn;if(span<0.6)span=0.6;mn-=span*.2;mx+=span*.34;
+  var pts=vals.map(function(v,i){var x=padX+(W-2*padX)*i/(T-1);var y=padT+(H-padT-padB)*(1-(v-mn)/(mx-mn));return [x,y,v];});
+  function seg(a,b){return pts.slice(a,b).map(function(q,i){return (i?'L':'M')+q[0].toFixed(1)+' '+q[1].toFixed(1);}).join(' ');}
+  var solid=seg(0,N),dashed='M'+pts[todayIdx][0].toFixed(1)+' '+pts[todayIdx][1].toFixed(1)+' '+pts.slice(N).map(function(q){return 'L'+q[0].toFixed(1)+' '+q[1].toFixed(1);}).join(' ');
+  var area=solid+' L'+pts[todayIdx][0].toFixed(1)+' '+(H-padB)+' L'+pts[0][0].toFixed(1)+' '+(H-padB)+' Z';
+  var s='<svg viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" style="height:'+H+'px;width:100%;overflow:visible" aria-hidden="true">';
+  s+='<path d="'+area+'" fill="rgba(74,77,231,.08)"/>';
+  s+='<path d="'+solid+'" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>';
+  if(T>N)s+='<path d="'+dashed+'" fill="none" stroke="var(--peach-text)" stroke-width="2" stroke-dasharray="4 4" stroke-linecap="round" vector-effect="non-scaling-stroke"/>';
+  s+='<line x1="'+pts[todayIdx][0].toFixed(1)+'" y1="'+padT+'" x2="'+pts[todayIdx][0].toFixed(1)+'" y2="'+(H-padB)+'" stroke="var(--accent)" stroke-opacity=".18" stroke-width="1" stroke-dasharray="2 2"/>';
+  s+='<text x="'+pts[todayIdx][0].toFixed(1)+'" y="'+(padT-14)+'" text-anchor="middle" font-size="8.5" font-weight="800" fill="var(--accent)">📌 Today</text>';
+  var R=3.6;
+  pts.forEach(function(q,i){
+    var future=i>todayIdx,today=(i===todayIdx),recent=(i>=todayIdx-2);
+    var seat=seatOf(q[2]),prevSeat=(i>0)?seatOf(vals[i-1]):null,dseat=(prevSeat!=null)?(seat-prevSeat):null,pct=(dseat!=null)?(dseat/tot*100):null;
+    if(today)s+='<circle cx="'+q[0].toFixed(1)+'" cy="'+q[1].toFixed(1)+'" r="'+(R+2.2)+'" fill="var(--peach-text)"/><circle cx="'+q[0].toFixed(1)+'" cy="'+q[1].toFixed(1)+'" r="'+R+'" fill="var(--accent)"/>';
+    else s+='<circle cx="'+q[0].toFixed(1)+'" cy="'+q[1].toFixed(1)+'" r="'+R+'" fill="var('+(future?'--peach-text':'--accent')+')"/>';
+    var col=today?'var(--accent)':(recent?'var(--text)':'var(--muted)'),sy=(q[1]-R-6).toFixed(1);
+    s+='<text x="'+q[0].toFixed(1)+'" y="'+sy+'" text-anchor="middle" font-size="'+(today?'11.5':'9')+'" font-weight="'+(today?'800':'700')+'" fill="'+col+'">'+seat+'</text>';
+    if(dseat!=null&&recent)s+='<text x="'+q[0].toFixed(1)+'" y="'+(parseFloat(sy)-9.5).toFixed(1)+'" text-anchor="middle" font-size="7" font-weight="800" fill="var(--green)">'+(dseat>=0?'+':'')+dseat+(pct!=null?' ('+(pct>=0?'+':'')+pct.toFixed(1)+'%)':'')+'</text>';
+    s+='<text x="'+q[0].toFixed(1)+'" y="'+(H-7)+'" text-anchor="middle" font-size="7.5" font-weight="700" fill="'+(today?'var(--accent)':(future?'var(--peach-text)':'var(--dim)'))+'">'+labels[i]+'</text>';
+  });
+  return s+'</svg>';
+}
 function _srailCard(p){
   var dpp=p.deltaPP, dCls, dStr;
   if(dpp===null){ dCls='fl'; dStr='어제대비 —'; }
@@ -4154,13 +4200,20 @@ function _srailCard(p){
   var meta=(p.genre||'기타')+' · '+_anaProfitAxis(p['수익성'])+(p.dateStr?' · '+p.dateStr:'');
   var dd=_salesDdayStr(p.dday);
   // title=순수 HTML 속성 → escapeHtml / onclick=JS 문자열 → _anaEsc (컨텍스트별 이스케이프 분리, 분신술 5호 MED)
+  var fc='';
+  var _fd=(p.days||[]).filter(function(d){return d&&d.seat!=null;});
+  if(_fd.length>=2 && !p.noData){
+    var _o=_fd.map(function(d){return d.occ;}); var _g=(_o.length>=3)?((_o[_o.length-1]-_o[_o.length-3])/2):(_o[_o.length-1]-_o[_o.length-2]);
+    var _p3=Math.max(0,Math.min(100,_o[_o.length-1]+_g*3)), _s3=Math.round((p.totalOpen||926)*_p3/100), _cum=_s3-p.seats;
+    fc='<div class="srail-fc">📈 예상 (이 추세면) 3일 뒤 <b>'+_s3.toLocaleString()+'석</b> · 누적 '+(_cum>=0?'+':'')+_cum+'</div>';
+  }
   return '<div class="srail-card" role="button" tabindex="0" onclick="_srailDrill(\'perf\',\''+_anaEsc(p.name)+'\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click();}" title="'+escapeHtml(p.name)+' — 개별 분석 (레일 안에서 열려요)">'
-    +'<div class="srail-r1"><span class="srail-name">'+escapeHtml(p.name)+'</span>'+(dd?'<span class="srail-dday" style="color:'+_salesDdayColor(p.dday)+'">'+dd+'</span>':'')+'</div>'
-    +'<div class="srail-meta">'+escapeHtml(meta)+'</div>'
-    +'<div class="srail-r2">'+(p.noData
-        ?'<span class="srail-occ" style="font-size:14px;color:var(--dim)">집계 전</span><span class="srail-delta fl">첫 일일입력 대기</span>'
-        :'<span class="srail-occ">'+p.occ.toFixed(1)+'%</span><span class="srail-delta '+dCls+'">'+dStr+'</span>')+'</div>'
-    +'<div class="srail-spark">'+_srailSpark(p.spark)+'</div>'
+    +'<div class="srail-hd"><div class="srail-tt"><div class="srail-name">'+escapeHtml(p.name)+'</div><div class="srail-meta">'+escapeHtml(meta)+'</div></div>'
+    +(p.noData?'':'<div class="srail-occcol"><span class="srail-occ">'+p.occ.toFixed(1)+'%</span><span class="srail-delta '+dCls+'">'+dStr+'</span></div>')
+    +(dd?'<span class="srail-dday" style="color:'+_salesDdayColor(p.dday)+'">'+dd+'</span>':'')+'</div>'
+    +(p.noData?'<div class="srail-r2"><span class="srail-occ" style="font-size:14px;color:var(--dim)">집계 전</span><span class="srail-delta fl">첫 일일입력 대기</span></div>':'')
+    +'<div class="srail-spark" style="margin-top:10px">'+_srailTrend(p)+'</div>'
+    +fc
     +'<div class="srail-bar"><i style="width:'+Math.min(p.occ,100).toFixed(1)+'%"></i><b style="left:'+Math.min(tgt,100)+'%"></b></div>'
     +'<div class="srail-r3"><span>'+p.seats.toLocaleString()+' / '+p.totalOpen.toLocaleString()+'석</span>'+(p.noData?'<span class="tgt">목표 '+tgt+'%</span>':'<span class="tgt '+(gap>=0?'ok':'bad')+'">목표 '+tgt+'% '+(gap>=0?'+':'')+gap.toFixed(1)+'%p</span>')+'</div>'
     +'</div>';
