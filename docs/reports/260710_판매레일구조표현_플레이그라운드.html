@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>판매 레일 구조·표현 플레이그라운드 — 260710</title>
+<style>
+/* ═══ 루트 디자인 토큰 사본 (index.html :root 2블록 — 값 SSOT 계승, §🚨) ═══ */
+:root{
+  --accent:#4A4DE7; --accent-light:#E8E8FD; --accent-glow:rgba(74,77,231,0.15);
+  --peach:#F0C4B8; --peach-light:#FBF0EC; --peach-bg:#FDF6F3; --peach-text:#D88455;
+  --bg:linear-gradient(135deg,#FDF6F3 0%,#F0EBF5 50%,#EBF0F8 100%);
+  --surface:var(--glass-surface); --surface-solid:#fff;
+  --glass:rgba(255,255,255,0.55); --glass-border:var(--glass);
+  --glass-shadow:0 8px 32px rgba(74,77,231,0.08),0 2px 8px rgba(0,0,0,0.04);
+  --border:rgba(0,0,0,0.09); --border2:rgba(0,0,0,0.12);
+  --text:#1A1A2E; --dim:#888; --muted:#bbb;
+  --past-bg:rgba(0,0,0,0.02); --past-text:var(--muted); --nm-bg:var(--past-bg);
+  --today-bg:rgba(230,240,255,0.8); --off-bg:var(--border2);
+  --green:#1A6B3C; --danger:var(--danger-btn); --danger-btn:#E24B4A;
+  --insta:#C02872; --youtube:#B71C1C; --blog:var(--green); --etc:var(--c5);
+  --radius:16px; --radius-lg:20px; --radius-xl:24px;
+  --neutral:#EEEDF3; --neutral-d:#E1DFEC; --neutral-text:#6B6B7B;
+  --r-btn:10px; --r-pop:16px; --r-modal:20px;
+  --elev:0 20px 56px rgba(74,77,231,.16),0 6px 18px rgba(26,26,46,.07);
+  --backdrop:rgba(26,26,46,.42);
+  --glass-surface:rgba(255,255,255,.78); --glass-menu:rgba(255,255,255,.45); --glass-bd:var(--glass);
+  --z-sticky:10; --z-nav:90; --z-dropdown:1000; --z-modal:2000; --z-confirm:2100; --z-toast:3000;
+  --c1:#4A4DE7; --c2:#D88455; --c3:#1A6B3C; --c4:#C02872; --c5:#2D8AB3; --c6:#F5B400; --kakao:#F5B400;
+  --cell-pad-y:10px; --cell-pad-x:12px; --cell-fs:13px;
+}
+*{margin:0;padding:0;box-sizing:border-box;font-family:'Pretendard',-apple-system,'Malgun Gothic',sans-serif}
+body{background:var(--bg);color:var(--text);min-height:100vh;padding-bottom:80px}
+.wrap{max-width:1460px;margin:0 auto;padding:26px clamp(12px,3vw,36px)}
+h1{font-size:21px;font-weight:800}
+h2{font-size:15px;font-weight:800;margin:34px 0 12px;display:flex;align-items:center;gap:8px}
+h2 .no{font-size:10.5px;font-weight:800;color:var(--accent);background:rgba(74,77,231,.08);border:1px solid rgba(74,77,231,.18);border-radius:999px;padding:2px 9px}
+.lead{font-size:12.5px;color:var(--neutral-text);line-height:1.75;margin-top:8px}
+.lead b{color:var(--text)}
+.mono{font-variant-numeric:tabular-nums}
+/* ── 상단 스티키: 프리셋 + 프레임 2개 병렬 ── */
+.pv-stick{position:sticky;top:0;z-index:50;background:rgba(253,246,243,.86);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);margin:18px -12px 8px;padding:10px 12px 12px;border-radius:0 0 var(--radius-lg) var(--radius-lg);border-bottom:1px solid var(--border)}
+.pbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+.pbtn{padding:7px 14px;border-radius:999px;border:1.5px solid var(--glass-bd);background:var(--glass-surface);font-size:12px;font-weight:700;color:var(--text);cursor:pointer;box-shadow:var(--glass-shadow);transition:all .15s}
+.pbtn:hover{border-color:var(--accent);color:var(--accent)}
+.pbtn.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.pbtn.star::before{content:'★ ';color:var(--c6)}
+.pbtn.star.on::before{color:#fff}
+.util{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap}
+.ubtn{padding:6px 11px;border-radius:8px;border:1.5px solid var(--glass-bd);background:var(--glass-surface);font-size:11px;font-weight:600;cursor:pointer;color:var(--text)}
+.ubtn:hover{border-color:var(--accent);color:var(--accent)}
+.ubtn.hold:active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.pv{display:flex;gap:14px;align-items:flex-start}
+.fcol{flex:1;min-width:0}
+.ftag{font-size:11px;font-weight:800;color:var(--neutral-text);margin:0 0 5px 4px}
+.ftag b{color:var(--accent)}
+.frame{position:relative;overflow:hidden;border-radius:14px;border:1px solid var(--border);box-shadow:var(--glass-shadow)}
+.fr-scale{width:1150px;transform-origin:top left;background:var(--bg)}
+@media(max-width:1080px){.pv{flex-direction:column}.fcol{width:100%}}
+/* ── 프레임 내부(실물 재현 — index.html 값 계승) ── */
+.f-nav{height:48px;background:var(--accent);display:flex;align-items:center;padding:0 22px;color:#fff;font-weight:800;letter-spacing:2px;font-size:14px}
+.f-nav .sp{flex:1}
+.f-nav .dot{width:26px;height:26px;border-radius:50%;background:rgba(255,255,255,.22);margin-left:8px}
+.f-body{display:flex;align-items:stretch}
+.f-main{flex:1;min-width:0;padding:24px 0 24px 28px}
+.f-hdr{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;padding:16px 0 12px}
+.f-mnav{display:flex;align-items:center;gap:16px}
+.f-arrow{width:38px;height:38px;border-radius:50%;border:1px solid rgba(0,0,0,0.06);background:var(--glass);font-size:18px;display:flex;align-items:center;justify-content:center;color:#666;box-shadow:0 2px 8px rgba(0,0,0,0.04)}
+.f-mtext{font-size:32px;font-weight:800;color:var(--accent)}
+.f-ytext{font-size:17px;color:var(--dim);margin-left:8px;font-weight:400}
+.f-chips{display:flex;gap:10px;flex-wrap:wrap}
+.f-chip{display:flex;align-items:center;gap:6px;padding:7px 14px;background:var(--glass);border-radius:var(--radius);font-size:12px;border:1px solid var(--glass-border);box-shadow:0 2px 8px rgba(0,0,0,0.03);color:var(--text)}
+.f-chip.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.f-daybar{display:grid;grid-template-columns:repeat(7,1fr);background:rgba(255,255,255,.9);border-radius:var(--radius-xl) var(--radius-xl) 0 0;border:1px solid var(--glass-border);border-bottom:1px solid rgba(0,0,0,.07)}
+.f-daybar div{padding:12px 0;text-align:center;font-weight:700;font-size:13px;color:var(--dim)}
+.f-daybar div.td{color:var(--accent);box-shadow:inset 0 -3px 0 var(--c2)}
+.f-daybar div.su{color:var(--danger)}
+.f-grid{background:rgba(255,255,255,.43);border-radius:0 0 var(--radius-xl) var(--radius-xl);border:1px solid rgba(255,255,255,.7);border-top:0;overflow:hidden}
+.f-row{display:grid;grid-template-columns:repeat(7,1fr)}
+.f-cell{height:96px;border-right:1px solid rgba(0,0,0,.045);border-bottom:1px solid rgba(0,0,0,.045);padding:6px 8px;font-size:11px;font-weight:700;color:var(--dim)}
+.f-cell:last-child{border-right:0}
+.f-row:last-child .f-cell{border-bottom:0}
+.f-cell.td{background:var(--today-bg)}
+.f-cell .ev{height:7px;border-radius:4px;margin-top:5px;opacity:.5}
+/* 레일 존 */
+.f-rail{flex-shrink:0;display:flex;flex-direction:column}
+.rz-ttl{display:flex;align-items:center;gap:7px;min-width:0}
+.rz-ttl .t{font-weight:800;color:var(--text);white-space:nowrap}
+.rz-cnt{font-size:10.5px;font-weight:800;color:var(--accent);background:rgba(74,77,231,.08);border:1px solid rgba(74,77,231,.18);border-radius:999px;padding:1px 8px}
+.rz-asof{font-size:10.5px;color:var(--dim);font-weight:600;white-space:nowrap}
+.rz-chip{padding:4px 11px;border-radius:7px;border:1.5px solid var(--glass-bd);background:var(--glass-surface);box-shadow:var(--glass-shadow);color:var(--text);font-size:11px;font-weight:600;cursor:pointer}
+.rz-sum{display:flex;flex-wrap:wrap;align-items:center;font-weight:600;color:var(--neutral-text)}
+.rz-sum b{font-weight:800}
+.rz-box{display:flex;flex-direction:column;min-height:0;overflow:hidden;border:1px solid;position:relative}
+.rz-body{flex:1;overflow-y:auto;min-height:0}
+.rz-ft{display:flex;gap:8px;align-items:center;justify-content:flex-end;flex-shrink:0;padding:8px 16px 12px}
+/* 카드 */
+.cd{cursor:pointer;transition:border-color .15s,transform .15s;border:1px solid}
+.cd-hd{display:flex;align-items:flex-start;gap:9px;min-width:0}
+.cd-tt{flex:1;min-width:0}
+.cd-name{color:var(--text)}
+.cd-name.c1{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cd-name.c2{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.cd-meta{font-weight:500;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cd-occcol{display:flex;flex-direction:column;align-items:flex-start;flex-shrink:0;padding:0 9px}
+.cd-occ{font-weight:800;line-height:1}
+.cd-delta{font-weight:700;white-space:nowrap}
+.cd-dday{font-weight:800;flex-shrink:0}
+.cd-bar{position:relative;background:var(--neutral);margin-top:8px}
+.cd-bar>i{position:absolute;left:0;top:0;bottom:0}
+.cd-bar>b{position:absolute;top:-2.5px;width:2px;height:10px;border-radius:1px}
+.cd-r3{display:flex;justify-content:space-between;gap:8px;margin-top:7px;font-size:10.5px;color:var(--dim)}
+.cd-fc{font-weight:700;margin-top:7px;line-height:1.5}
+.cd-fc b{font-weight:800}
+/* 캐러셀 */
+.car{display:flex;flex-direction:column;min-height:0}
+.car-vp{overflow:hidden;position:relative}
+.car-track{display:flex;will-change:transform;transition:transform .4s cubic-bezier(.55,0,.45,1)}
+.car-slide{min-width:0;padding:0 2px;flex-shrink:0}
+.car-nav{display:flex;align-items:center;justify-content:center;gap:10px;padding:7px 6px 2px;flex-shrink:0}
+.car-btn{border-radius:999px;border:1px solid var(--glass-bd);background:var(--glass-surface);color:var(--accent);font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;padding:0;flex-shrink:0}
+.car-dots{display:flex;gap:5px;align-items:center;justify-content:center}
+.car-dot{border-radius:999px;background:var(--muted);border:none;padding:0;cursor:pointer;transition:background .2s,width .2s}
+.car-dot.on{background:var(--accent)}
+.fade-in{animation:pgFade .34s ease}
+.slide-in{animation:pgSlide .34s ease}
+@keyframes pgFade{from{opacity:0}to{opacity:1}}
+@keyframes pgSlide{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.fade-in,.slide-in{animation:none}.car-track{transition:none}}
+.f-empty{text-align:center;padding:34px 18px;color:var(--neutral-text)}
+.f-empty .ico{font-size:28px;margin-bottom:8px;opacity:.7}
+.f-empty .msg{font-size:13px;font-weight:600}
+/* 가이드 */
+.gline{position:absolute;left:0;right:0;height:0;border-top:2px dashed var(--accent);opacity:.55;pointer-events:none;z-index:9}
+.gline span{position:absolute;left:8px;top:-16px;font-size:10px;font-weight:800;color:var(--accent);background:rgba(255,255,255,.85);padding:1px 6px;border-radius:6px}
+.gline.g2{border-color:var(--c4)}.gline.g2 span{color:var(--c4)}
+.gline.g3{border-color:var(--green)}.gline.g3 span{color:var(--green)}
+/* ── 컨트롤 ── */
+.toc{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 4px}
+.toc a{font-size:11px;font-weight:700;color:var(--accent);background:rgba(74,77,231,.07);border:1px solid rgba(74,77,231,.16);border-radius:999px;padding:4px 10px;text-decoration:none}
+.grp{background:var(--glass-surface);border:1px solid var(--glass-bd);border-radius:var(--radius);box-shadow:var(--glass-shadow);padding:14px 16px;margin-bottom:14px}
+.grp h3{font-size:13px;font-weight:800;margin-bottom:4px;display:flex;align-items:baseline;gap:8px}
+.grp h3 small{font-size:10.5px;color:var(--neutral-text);font-weight:600}
+.rows{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:4px 22px}
+.crow{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px dashed rgba(0,0,0,.05);min-width:0}
+.crow:last-child{border-bottom:0}
+.clabel{flex:0 0 118px;font-size:11.5px;font-weight:600;color:var(--text);line-height:1.25}
+.clabel small{display:block;font-size:9.5px;color:var(--muted);font-weight:600}
+.cw{flex:1;min-width:0;display:flex;align-items:center;gap:6px}
+input[type=range]{flex:1;min-width:60px;accent-color:var(--accent);height:20px}
+.cval{flex:0 0 auto;font-size:11px;font-weight:700;color:var(--accent);min-width:44px;text-align:right}
+.ccur{flex:0 0 auto;font-size:9.5px;color:var(--muted);font-weight:600;white-space:nowrap}
+.segw{display:flex;gap:0;border:1.5px solid var(--glass-bd);border-radius:8px;overflow:hidden;background:var(--glass-surface)}
+.segw button{padding:4px 9px;font-size:10.5px;font-weight:600;border:none;background:transparent;cursor:pointer;color:var(--neutral-text);white-space:nowrap}
+.segw button.on{background:var(--accent);color:#fff}
+.dirty .clabel{color:var(--accent)}
+/* 출력·진단 */
+.out{background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius);padding:16px;box-shadow:var(--glass-shadow)}
+.out pre{font-size:11px;line-height:1.7;white-space:pre-wrap;word-break:break-all;max-height:420px;overflow:auto;font-family:ui-monospace,Consolas,monospace}
+.copy{margin-bottom:10px;padding:9px 20px;border-radius:var(--r-btn);border:none;background:var(--accent);color:#fff;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(74,77,231,.3)}
+.copy:hover{filter:brightness(1.07)}
+.diag{margin-top:10px;font-size:11.5px;line-height:1.8}
+.diag .ok{color:var(--green);font-weight:800}
+.diag .bad{color:var(--danger);font-weight:800}
+.diag table{border-collapse:collapse;width:100%;margin-top:8px;font-size:10.5px}
+.diag td,.diag th{border:1px solid var(--border);padding:3px 7px;text-align:left}
+.diag th{background:var(--neutral);font-weight:700}
+.fn{font-size:11px;color:var(--neutral-text);line-height:1.8;background:var(--peach-light);border:1px solid var(--peach);border-radius:var(--radius);padding:14px 16px}
+.fn b{color:var(--peach-text)}
+.toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%);background:var(--text);color:#fff;font-size:12.5px;font-weight:600;padding:10px 20px;border-radius:999px;opacity:0;pointer-events:none;transition:opacity .25s;z-index:99}
+.toast.show{opacity:.94}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>판매 레일 구조·표현 플레이그라운드 <span style="font-size:12px;color:var(--dim);font-weight:600">260710 · §🎛</span></h1>
+  <p class="lead">
+    운영자 지시 — <b>① 「판매 현황」 제목을 유리 박스 밖으로 빼서 좌측 월 헤더(7 2026) 라인에 중앙정렬</b> ·
+    <b>② 캘린더 시작 라인과 같은 위치에 현재 공연 현황(요약)</b> · <b>③ 그 아래 글래스모피즘 콘텐츠</b>.
+    지시 반영형이 <b>★ 프리셋으로 로드돼 있음</b>(현행 실측값은 좌측 고정 프레임 + 모든 컨트롤의 회색 「현행」 병기 + [현행] 프리셋 원클릭).
+    구조 <b>Ⅰ부 50축</b> + 판매현황 표현 <b>Ⅱ부 80축 = 총 130축</b>, 전부 실구현 — 하단 <b>[130축 자가진단]</b>으로 각 축이 실제 화면을 바꾸는지 즉석 검증 가능.
+  </p>
+
+  <div class="pv-stick" id="pvStick">
+    <div class="pbar" id="pbar">
+      <span style="font-size:11px;font-weight:800;color:var(--neutral-text)">프리셋</span>
+      <button class="pbtn" data-p="0">현행</button>
+      <button class="pbtn star" data-p="1">지시 기본형 (추천)</button>
+      <button class="pbtn" data-p="2">유리 레이어드</button>
+      <button class="pbtn" data-p="3">콤팩트 브리핑</button>
+      <div class="util">
+        <button class="ubtn hold" id="holdBtn" title="누르는 동안 튜닝 프레임을 현행으로 바꿔 비교">꾹 눌러 현행 비교</button>
+        <button class="ubtn" id="sizeBtn">실제 크기</button>
+        <button class="ubtn" id="foldBtn">프레임 축소</button>
+      </div>
+    </div>
+    <div class="pv" id="pv">
+      <div class="fcol"><div class="ftag">현행 (고정 · 비교 기준)</div><div class="frame" id="frCurF"><div class="fr-scale" id="frCur"></div></div></div>
+      <div class="fcol"><div class="ftag"><b>튜닝</b> ← 아래 130축 실시간 반영</div><div class="frame" id="frTunF"><div class="fr-scale" id="frTun"></div></div></div>
+    </div>
+  </div>
+
+  <div class="toc" id="toc"></div>
+  <div id="ctrls"></div>
+
+  <h2><span class="no">④</span> 선택값 출력 <span style="font-size:11px;color:var(--dim);font-weight:600">— 값마다 현행 병기 · 계승/갱신 후보 자동 판정 · ⚠=기틀 축(승인 경로)</span></h2>
+  <div class="out">
+    <button class="copy" id="copyBtn">📋 선택값 복사</button>
+    <button class="copy" id="diagBtn" style="background:var(--green)">🔬 130축 자가진단 (모든 선택지 구현 확인)</button>
+    <div class="diag" id="diagOut"></div>
+    <pre id="outPre"></pre>
+  </div>
+
+  <h2><span class="no">⑤</span> 재현 한계 각주</h2>
+  <div class="fn">
+    · 프레임 = <b>가상 데스크톱 1150px</b>를 축소 렌더(레일 폭 % 등 비율은 유지, 절대 px는 스케일됨 — [실제 크기]로 1:1 확인 가능). 실제 앱 뷰포트(≥1200px)와 픽셀 배율 차이 있음.<br>
+    · 캘린더 = 간이 목업(5주·더미 일정 바) — 정렬 기준선(월 헤더·요일바 top·캘린더 하단) 용도. 실제 셀 내용·공휴일 색·sticky 동작은 생략.<br>
+    · 폰트 Pretendard 미임베드 → 시스템 폴백(자간·줄바꿈 미세 차이). WebGL·실데이터 없음 — 판매 수치는 스크린샷 기반 목업(브런치 콘서트 Ⅲ 18.0% 등).<br>
+    · 카드 클릭 시 개별 분석 드릴은 본 시안 범위 밖(현행 유지 전제) — 카드 hover/캐러셀 넘김·자동넘김·꾹눌러 비교는 실동작.<br>
+    · backdrop-filter 중첩은 브라우저별 근사. D-day 색 규칙은 현행 코드(≤7 주황 ·≤14 노랑 · 그 외 중립) 그대로 — 목업 D-56/D-36은 중립만 노출.<br>
+    · <b>배선 시</b>: 값 복사 → 회신하면 index.html에 배선. 구조 변경(제목 밖 이동 등)·⚠ 기틀 축(글래스 blur·saturate 등)은 §🚨 승인 경로 + 편입 3점 세트로 처리.
+  </div>
+</div>
+<div class="toast" id="toast">복사됐어</div>
+
+<script>
+'use strict';
+/* ═══════════ 목업 데이터 (스크린샷·실코드 _srailCard/_srailTrend 계승) ═══════════ */
+var PERFS=[
+ {name:'브런치 콘서트 Ⅲ <현 위로 흐르는 계절>',genre:'기타',profit:'사업성',dateStr:'9.3(목)',dday:56,total:926,tgt:50,
+  seats:[139,144,148,152,157,161,167]},
+ {name:'뮤지컬 <그날들> 10주년 기념공연',genre:'뮤지컬',profit:'사업성',dateStr:'8.14(금)',dday:36,total:912,tgt:60,
+  seats:[358,367,377,389,398,405,412]}
+];
+var EXHIB={name:'빛의 정원 — 미디어아트 특별전',profit:'예술성',range:'6.1~8.31',endD:53,paid:4120,goal:9000,total:5210,
+  spark:[38.2,39.9,41.4,42.8,44.1,45.8]};
+var DATES=['7/3','7/4','7/5','7/6','7/7','7/8','7/9','7/10','7/11','7/12'];
+
+/* ═══════════ 130축 컨트롤 정의 ═══════════
+ type: seg(옵션 인덱스 저장, vals=실값) | rng(숫자)
+ axis: struct=구조(승인 대상) · tok=토큰 선택(계승) · alpha=토큰 alpha 변주(§3.5 정상) ·
+       gate=⚠기틀 축(변경=갱신 후보·승인) · layout=비토큰 레이아웃값 · view=미리보기 전용(배선 없음) */
+var CTRL=[
+/* ─── Ⅰ부 A. 타이틀 존 (16) ─── */
+{id:'ttlPos',g:'A',label:'제목 위치',type:'seg',opts:['박스 안(현행)','밖 · 월헤더 라인'],cur:0,axis:'struct'},
+{id:'ttlAlign',g:'A',label:'제목 정렬(밖일 때)',type:'seg',opts:['좌','중앙','우'],cur:0,axis:'struct'},
+{id:'ttlAnchor',g:'A',label:'세로 맞춤 기준',type:'seg',opts:['월헤더 세로중앙','월숫자 베이스라인'],cur:0,axis:'layout'},
+{id:'ttlVOff',g:'A',label:'세로 미세 오프셋',type:'rng',min:-14,max:14,step:1,unit:'px',cur:0,axis:'layout'},
+{id:'ttlSize',g:'A',label:'제목 크기',type:'rng',min:12,max:22,step:.5,unit:'px',cur:14.5,axis:'layout'},
+{id:'ttlWeight',g:'A',label:'제목 굵기',type:'seg',opts:['700','800(현행)','900'],vals:[700,800,900],cur:1,axis:'layout'},
+{id:'ttlColor',g:'A',label:'제목 색',type:'seg',opts:['--text(현행)','--accent','--neutral-text'],vals:['var(--text)','var(--accent)','var(--neutral-text)'],cur:0,axis:'tok'},
+{id:'ttlTrack',g:'A',label:'제목 자간',type:'rng',min:-0.5,max:2,step:.1,unit:'px',cur:0,axis:'layout'},
+{id:'cntShow',g:'A',label:'판매중 건수 배지',type:'seg',opts:['표시(현행)','숨김'],cur:0,axis:'struct'},
+{id:'cntStyle',g:'A',label:'건수 스타일',type:'seg',opts:['필 배지(현행)','괄호 (N)'],cur:0,axis:'layout'},
+{id:'asofPos',g:'A',label:'기준일(기준 7.9) 위치',type:'seg',opts:['제목 줄(현행)','요약 줄','숨김'],cur:0,axis:'struct'},
+{id:'anaBtnPos',g:'A',label:'[분석] 버튼 위치',type:'seg',opts:['제목 줄(현행)','글래스 하단','숨김'],cur:0,axis:'struct'},
+{id:'refBtnPos',g:'A',label:'[새로고침] 위치',type:'seg',opts:['글래스 하단(현행)','제목 줄','숨김'],cur:0,axis:'struct'},
+{id:'ttlGapBelow',g:'A',label:'제목→다음 존 간격',type:'rng',min:0,max:28,step:1,unit:'px',cur:0,axis:'layout',note:'0=요일바 라인 유지'},
+{id:'ttlDeco',g:'A',label:'제목 장식',type:'seg',opts:['없음(현행)','액센트 언더바','좌 도트'],cur:0,axis:'layout'},
+{id:'ttlZoneBg',g:'A',label:'제목 존 배경',type:'seg',opts:['투명(현행)','유리 스트립'],cur:0,axis:'alpha'},
+/* ─── Ⅰ부 B. 현황 요약 존 (12) ─── */
+{id:'sumShow',g:'B',label:'요약 표시',type:'seg',opts:['표시(현행)','숨김'],cur:0,axis:'struct'},
+{id:'sumPos',g:'B',label:'요약 위치',type:'seg',opts:['글래스 안 상단(현행)','캘린더 라인(글래스 밖)'],cur:0,axis:'struct'},
+{id:'sumStyle',g:'B',label:'요약 스타일',type:'seg',opts:['맨몸 텍스트(현행)','유리 스트립','개별 칩'],cur:0,axis:'struct'},
+{id:'sumAlign',g:'B',label:'요약 정렬',type:'seg',opts:['좌(현행)','중앙','우'],cur:0,axis:'layout'},
+{id:'sumPerf',g:'B',label:'항목: 공연 어제 증감',type:'seg',opts:['표시(현행)','숨김'],cur:0,axis:'struct'},
+{id:'sumCnt',g:'B',label:'항목: 판매중 N건',type:'seg',opts:['숨김(현행)','표시'],cur:0,axis:'struct'},
+{id:'sumAsofItem',g:'B',label:'항목: 기준일',type:'seg',opts:['숨김(현행)','표시'],cur:0,axis:'struct'},
+{id:'sumSeats',g:'B',label:'항목: 전체 좌석 합',type:'seg',opts:['숨김(현행)','표시'],cur:0,axis:'struct'},
+{id:'sumSize',g:'B',label:'요약 글자 크기',type:'rng',min:10,max:13,step:.5,unit:'px',cur:11,axis:'layout'},
+{id:'sumGapBelow',g:'B',label:'요약→글래스 간격',type:'rng',min:0,max:20,step:1,unit:'px',cur:10,axis:'layout'},
+{id:'sumGlassA',g:'B',label:'요약 스트립 유리 α',type:'rng',min:.2,max:.95,step:.05,unit:'',cur:.55,axis:'alpha'},
+{id:'sumRadius',g:'B',label:'요약 스트립 라운드',type:'seg',opts:['10 --r-btn','16 --radius','필(999)'],vals:['var(--r-btn)','var(--radius)','999px'],cur:2,axis:'tok'},
+/* ─── Ⅰ부 C. 글래스 콘텐츠 박스 (12) ─── */
+{id:'boxTopOff',g:'C',label:'박스 top 오프셋',type:'rng',min:-8,max:24,step:1,unit:'px',cur:0,axis:'layout'},
+{id:'boxBottom',g:'C',label:'박스 하단',type:'seg',opts:['캘린더 하단 정렬(현행)','내용만큼'],cur:0,axis:'struct'},
+{id:'boxAlpha',g:'C',label:'박스 유리 α',type:'rng',min:.2,max:.95,step:.01,unit:'',cur:.43,axis:'alpha'},
+{id:'boxBlur',g:'C',label:'박스 blur',type:'rng',min:4,max:24,step:1,unit:'px',cur:11,axis:'gate'},
+{id:'boxSat',g:'C',label:'박스 saturate',type:'rng',min:100,max:180,step:5,unit:'%',cur:100,axis:'gate'},
+{id:'boxBorderA',g:'C',label:'박스 보더 α',type:'rng',min:.3,max:1,step:.05,unit:'',cur:.7,axis:'alpha'},
+{id:'boxRadius',g:'C',label:'박스 라운드',type:'seg',opts:['16 --radius','20 --radius-lg','24 --radius-xl(현행)'],vals:['var(--radius)','var(--radius-lg)','var(--radius-xl)'],cur:2,axis:'tok'},
+{id:'boxShadow',g:'C',label:'박스 그림자',type:'seg',opts:['--glass-shadow(현행)','--elev','없음'],vals:['var(--glass-shadow)','var(--elev)','none'],cur:0,axis:'tok'},
+{id:'boxPadX',g:'C',label:'박스 좌우 패딩',type:'rng',min:4,max:24,step:1,unit:'px',cur:12,axis:'layout'},
+{id:'boxPadT',g:'C',label:'박스 위 패딩',type:'rng',min:0,max:20,step:1,unit:'px',cur:2,axis:'layout'},
+{id:'boxPadB',g:'C',label:'박스 아래 패딩',type:'rng',min:0,max:20,step:1,unit:'px',cur:8,axis:'layout'},
+{id:'boxTint',g:'C',label:'박스 배경 틴트',type:'seg',opts:['순백(현행)','피치 틴트','인디고 틴트'],cur:0,axis:'alpha'},
+/* ─── Ⅰ부 D. 컬럼·존 구조 (10) ─── */
+{id:'railW',g:'D',label:'레일 폭',type:'rng',min:32,max:48,step:1,unit:'%',cur:40,axis:'layout'},
+{id:'railMinW',g:'D',label:'레일 최소폭',type:'rng',min:280,max:380,step:10,unit:'px',cur:300,axis:'layout'},
+{id:'gapCal',g:'D',label:'캘린더↔레일 간격',type:'rng',min:16,max:48,step:2,unit:'px',cur:32,axis:'layout'},
+{id:'railPadR',g:'D',label:'레일 우측 여백',type:'rng',min:12,max:40,step:2,unit:'px',cur:28,axis:'layout'},
+{id:'sepCards',g:'D',label:'카드 사이 구분',type:'seg',opts:['간격만(현행)','헤어라인'],cur:0,axis:'layout'},
+{id:'zoneMotion',g:'D',label:'등장 모션',type:'seg',opts:['없음(현행)','페이드인','슬라이드'],cur:0,axis:'layout'},
+{id:'motionDur',g:'D',label:'모션 시간',type:'rng',min:.15,max:.5,step:.05,unit:'s',cur:.22,axis:'layout'},
+{id:'guides',g:'D',label:'정렬 가이드 라인',type:'seg',opts:['끔','표시'],cur:0,axis:'view',note:'미리보기 전용'},
+{id:'previewEmpty',g:'D',label:'빈 상태 미리보기',type:'seg',opts:['카드 보기','빈 상태'],cur:0,axis:'view',note:'미리보기 전용'},
+{id:'exNote',g:'D',label:'전시 카드 포함',type:'seg',opts:['공연만','전시 병기(실제 동작)'],cur:1,axis:'view',note:'현행 = 진행중 전시 합류'},
+/* ─── Ⅱ부 E. 카드 컨테이너 (10) ─── */
+{id:'cardAlpha',g:'E',label:'카드 유리 α',type:'rng',min:.4,max:.95,step:.01,unit:'',cur:.78,axis:'alpha'},
+{id:'cardBlur',g:'E',label:'카드 자체 blur',type:'rng',min:0,max:16,step:1,unit:'px',cur:0,axis:'gate'},
+{id:'cardRadius',g:'E',label:'카드 라운드',type:'seg',opts:['10 --r-btn','16 --radius(현행)','20 --radius-lg'],vals:['var(--r-btn)','var(--radius)','var(--radius-lg)'],cur:1,axis:'tok'},
+{id:'cardPadY',g:'E',label:'카드 상하 패딩',type:'rng',min:6,max:18,step:1,unit:'px',cur:11,axis:'layout'},
+{id:'cardPadX',g:'E',label:'카드 좌우 패딩',type:'rng',min:8,max:20,step:1,unit:'px',cur:13,axis:'layout'},
+{id:'cardGap',g:'E',label:'카드 간격',type:'rng',min:4,max:18,step:1,unit:'px',cur:10,axis:'layout'},
+{id:'cardBorderA',g:'E',label:'카드 보더 α',type:'rng',min:.2,max:1,step:.05,unit:'',cur:.55,axis:'alpha'},
+{id:'hoverLift',g:'E',label:'호버 리프트',type:'rng',min:0,max:4,step:1,unit:'px',cur:1,axis:'layout'},
+{id:'hoverBorder',g:'E',label:'호버 보더',type:'seg',opts:['--accent(현행)','--border2','없음'],vals:['var(--accent)','var(--border2)','none'],cur:0,axis:'tok'},
+{id:'cardShadow',g:'E',label:'카드 그림자',type:'seg',opts:['--glass-shadow(현행)','없음','--elev'],vals:['var(--glass-shadow)','none','var(--elev)'],cur:0,axis:'tok'},
+/* ─── Ⅱ부 F. 카드 헤더 (10) ─── */
+{id:'nameSize',g:'F',label:'공연명 크기',type:'rng',min:11,max:16,step:.5,unit:'px',cur:13,axis:'layout'},
+{id:'nameWeight',g:'F',label:'공연명 굵기',type:'seg',opts:['700(현행)','800'],vals:[700,800],cur:0,axis:'layout'},
+{id:'nameClamp',g:'F',label:'공연명 줄수',type:'seg',opts:['1줄 말줄임(현행)','2줄'],cur:0,axis:'layout'},
+{id:'metaShow',g:'F',label:'메타(장르·날짜)',type:'seg',opts:['표시(현행)','숨김'],cur:0,axis:'struct'},
+{id:'metaSize',g:'F',label:'메타 크기',type:'rng',min:9,max:12,step:.5,unit:'px',cur:10.5,axis:'layout'},
+{id:'metaColor',g:'F',label:'메타 색',type:'seg',opts:['--dim(현행)','--neutral-text'],vals:['var(--dim)','var(--neutral-text)'],cur:0,axis:'tok'},
+{id:'ddayStyle',g:'F',label:'D-day 스타일',type:'seg',opts:['텍스트(현행)','필 배지','숨김'],cur:0,axis:'layout'},
+{id:'ddayEmph',g:'F',label:'D-day 강조색',type:'seg',opts:['현행 규칙(중립)','--accent','--peach-text'],vals:['#555','var(--accent)','var(--peach-text)'],cur:0,axis:'tok',note:'≤7일 주황·≤14 노랑 규칙은 유지 전제'},
+{id:'hdGap',g:'F',label:'헤더 내부 간격',type:'rng',min:4,max:14,step:1,unit:'px',cur:9,axis:'layout'},
+{id:'occColPos',g:'F',label:'점유율 열 위치',type:'seg',opts:['우측 열(현행)','헤더 아래 줄'],cur:0,axis:'struct'},
+/* ─── Ⅱ부 G. 점유율·델타 (10) ─── */
+{id:'occSize',g:'G',label:'점유율 크기',type:'rng',min:14,max:26,step:1,unit:'px',cur:18,axis:'layout'},
+{id:'occWeight',g:'G',label:'점유율 굵기',type:'seg',opts:['700','800(현행)'],vals:[700,800],cur:1,axis:'layout'},
+{id:'occColor',g:'G',label:'점유율 색',type:'seg',opts:['--accent(현행)','--text'],vals:['var(--accent)','var(--text)'],cur:0,axis:'tok'},
+{id:'occSeatSub',g:'G',label:'점유 아래 좌석 서브',type:'seg',opts:['없음(현행)','167석 병기'],cur:0,axis:'struct'},
+{id:'deltaShow',g:'G',label:'어제대비 표시',type:'seg',opts:['표시(현행)','숨김'],cur:0,axis:'struct'},
+{id:'deltaSize',g:'G',label:'어제대비 크기',type:'rng',min:9,max:13,step:.5,unit:'px',cur:11,axis:'layout'},
+{id:'deltaArrow',g:'G',label:'증감 기호',type:'seg',opts:['▲▼(현행)','+/-'],cur:0,axis:'layout'},
+{id:'deltaUpColor',g:'G',label:'상승 색',type:'seg',opts:['--green(현행)','--accent'],vals:['var(--green)','var(--accent)'],cur:0,axis:'tok'},
+{id:'occDivider',g:'G',label:'점유율 열 세로선',type:'seg',opts:['표시(현행)','없음'],cur:0,axis:'layout'},
+{id:'occCaption',g:'G',label:'「점유율」 캡션',type:'seg',opts:['없음(현행)','표시'],cur:0,axis:'layout'},
+/* ─── Ⅱ부 H. 추이 그래프 (16) ─── */
+{id:'trendShow',g:'H',label:'그래프 표시',type:'seg',opts:['표시(현행)','숨김'],cur:0,axis:'struct'},
+{id:'trendH',g:'H',label:'그래프 높이',type:'rng',min:120,max:220,step:1,unit:'px',cur:177,axis:'layout'},
+{id:'measDays',g:'H',label:'실측 일수',type:'seg',opts:['5일','7일(현행)'],vals:[5,7],cur:1,axis:'struct'},
+{id:'fcDays',g:'H',label:'예측 일수',type:'seg',opts:['없음','2일','3일(현행)'],vals:[0,2,3],cur:2,axis:'struct'},
+{id:'dotR',g:'H',label:'점 반지름',type:'rng',min:2,max:5.5,step:.1,unit:'px',cur:3.6,axis:'layout'},
+{id:'lineW',g:'H',label:'선 두께',type:'rng',min:1,max:3.5,step:.5,unit:'px',cur:2,axis:'layout'},
+{id:'lineColor',g:'H',label:'실측 선 색',type:'seg',opts:['--accent(현행)','--text'],vals:['var(--accent)','var(--text)'],cur:0,axis:'tok'},
+{id:'fcDash',g:'H',label:'예측 점선 간격',type:'rng',min:2,max:8,step:1,unit:'px',cur:4,axis:'layout'},
+{id:'fcDotA',g:'H',label:'예측 점 불투명',type:'rng',min:.25,max:1,step:.05,unit:'',cur:1,axis:'alpha'},
+{id:'fcColor',g:'H',label:'예측 색',type:'seg',opts:['--peach-text(현행)','--muted'],vals:['var(--peach-text)','var(--muted)'],cur:0,axis:'tok'},
+{id:'todayMk',g:'H',label:'오늘 마커',type:'seg',opts:['이중원+세로선(현행)','이중원만','단일 큰 원'],cur:0,axis:'layout'},
+{id:'todayPin',g:'H',label:'Today 핀 라벨',type:'seg',opts:['표시(현행)','없음'],cur:0,axis:'layout'},
+{id:'dateLabels',g:'H',label:'날짜 라벨',type:'seg',opts:['전부(현행)','격일','끝점만'],cur:0,axis:'layout'},
+{id:'dateLabelSize',g:'H',label:'날짜 라벨 크기',type:'rng',min:6.5,max:10,step:.5,unit:'px',cur:7.5,axis:'layout'},
+{id:'padT',g:'H',label:'그래프 위 여백',type:'rng',min:24,max:44,step:1,unit:'px',cur:32,axis:'layout'},
+{id:'smooth',g:'H',label:'선 형태',type:'seg',opts:['직선(현행)','곡선(스플라인)'],cur:0,axis:'layout'},
+/* ─── Ⅱ부 I. 좌석·증감 라벨 (8) ─── */
+{id:'seatLbl',g:'I',label:'점 위 좌석수',type:'seg',opts:['표시(현행)','숨김'],cur:0,axis:'struct'},
+{id:'seatLblSize',g:'I',label:'좌석수 크기',type:'rng',min:7,max:11,step:.5,unit:'px',cur:9,axis:'layout'},
+{id:'deltaLblMode',g:'I',label:'증감 라벨 범위',type:'seg',opts:['최근3일+예측(현행)','전부','없음'],cur:0,axis:'layout'},
+{id:'deltaLblFmt',g:'I',label:'증감 형식',type:'seg',opts:['+N (전체%)(현행)','+N석만'],cur:0,axis:'layout'},
+{id:'deltaLblColor',g:'I',label:'증감 색',type:'seg',opts:['--green(현행)','--accent'],vals:['var(--green)','var(--accent)'],cur:0,axis:'tok'},
+{id:'pastLblColor',g:'I',label:'과거 라벨 색',type:'seg',opts:['--muted(현행)','--dim'],vals:['var(--muted)','var(--dim)'],cur:0,axis:'tok'},
+{id:'areaFill',g:'I',label:'라인 아래 채움',type:'seg',opts:['있음(현행)','없음'],cur:0,axis:'layout'},
+{id:'fillAlpha',g:'I',label:'채움 α',type:'rng',min:.03,max:.2,step:.01,unit:'',cur:.08,axis:'alpha'},
+/* ─── Ⅱ부 J. 진행 바·목표 (10) ─── */
+{id:'barShow',g:'J',label:'진행 바',type:'seg',opts:['표시(현행)','숨김'],cur:0,axis:'struct'},
+{id:'barH',g:'J',label:'바 높이',type:'rng',min:3,max:9,step:1,unit:'px',cur:5,axis:'layout'},
+{id:'barRound',g:'J',label:'바 라운드',type:'seg',opts:['필(현행)','4px'],vals:['999px','4px'],cur:0,axis:'layout'},
+{id:'barFill',g:'J',label:'바 채움 색',type:'seg',opts:['--accent(현행)','--green'],vals:['var(--accent)','var(--green)'],cur:0,axis:'tok'},
+{id:'barTrack',g:'J',label:'바 트랙 색',type:'seg',opts:['--neutral(현행)','--past-bg'],vals:['var(--neutral)','var(--past-bg)'],cur:0,axis:'tok'},
+{id:'tgtMark',g:'J',label:'목표 마커',type:'seg',opts:['표시(현행)','숨김'],cur:0,axis:'struct'},
+{id:'tgtMarkColor',g:'J',label:'목표 마커 색',type:'seg',opts:['--peach-text(현행)','--danger'],vals:['var(--peach-text)','var(--danger)'],cur:0,axis:'tok'},
+{id:'seatsText',g:'J',label:'좌석 텍스트(167/926)',type:'seg',opts:['표시(현행)','숨김'],cur:0,axis:'struct'},
+{id:'tgtText',g:'J',label:'목표 텍스트',type:'seg',opts:['표시(현행)','숨김'],cur:0,axis:'struct'},
+{id:'tgtTextRule',g:'J',label:'목표 색 규칙',type:'seg',opts:['달성 초록·미달 레드(현행)','중립 dim'],cur:0,axis:'layout'},
+/* ─── Ⅱ부 K. 예상 요약 (8) ─── */
+{id:'fcShow',g:'K',label:'예상 요약 박스',type:'seg',opts:['표시(현행)','숨김'],cur:0,axis:'struct'},
+{id:'fcBgA',g:'K',label:'배경 틴트 α',type:'rng',min:.04,max:.2,step:.01,unit:'',cur:.08,axis:'alpha'},
+{id:'fcBorderA',g:'K',label:'보더 α',type:'rng',min:.1,max:.5,step:.02,unit:'',cur:.22,axis:'alpha'},
+{id:'fcSize',g:'K',label:'글자 크기',type:'rng',min:9,max:12,step:.5,unit:'px',cur:10,axis:'layout'},
+{id:'fcRadius',g:'K',label:'라운드',type:'seg',opts:['9px(현행)','10 --r-btn','필'],vals:['9px','var(--r-btn)','999px'],cur:0,axis:'tok',note:'현행 9px = 기존 리터럴'},
+{id:'fcMode',g:'K',label:'문구 형식',type:'seg',opts:['3일 뒤+누적(현행)','한 줄 압축'],cur:0,axis:'layout'},
+{id:'fcTone',g:'K',label:'톤',type:'seg',opts:['살몬(현행)','인디고','중립'],cur:0,axis:'tok'},
+{id:'fcIcon',g:'K',label:'📈 아이콘',type:'seg',opts:['표시(현행)','없음'],cur:0,axis:'layout'},
+/* ─── Ⅱ부 L. 캐러셀·다건 (8) ─── */
+{id:'multiMode',g:'L',label:'2건↑ 배치',type:'seg',opts:['캐러셀(현행)','세로 스택'],cur:0,axis:'struct'},
+{id:'cbtnSize',g:'L',label:'‹› 버튼 크기',type:'rng',min:22,max:32,step:1,unit:'px',cur:26,axis:'layout'},
+{id:'dotSize',g:'L',label:'점 크기',type:'rng',min:4,max:8,step:1,unit:'px',cur:6,axis:'layout'},
+{id:'dotActW',g:'L',label:'활성 점 길이',type:'rng',min:10,max:22,step:1,unit:'px',cur:16,axis:'layout'},
+{id:'autoSec',g:'L',label:'자동넘김(유휴)',type:'rng',min:4,max:12,step:1,unit:'s',cur:7,axis:'layout'},
+{id:'holdSec',g:'L',label:'조작 후 재개 유휴',type:'rng',min:6,max:15,step:1,unit:'s',cur:10,axis:'layout'},
+{id:'navPos',g:'L',label:'‹ 점 › 위치',type:'seg',opts:['글래스 하단(현행)','제목 줄 우측'],cur:0,axis:'struct'},
+{id:'peek',g:'L',label:'다음 카드 엿보기',type:'rng',min:0,max:24,step:2,unit:'px',cur:0,axis:'layout'}
+];
+var GROUPS={A:'Ⅰ-A. 타이틀 존 (16)',B:'Ⅰ-B. 현황 요약 존 (12)',C:'Ⅰ-C. 글래스 콘텐츠 박스 (12)',D:'Ⅰ-D. 컬럼·존 구조 (10)',
+E:'Ⅱ-E. 카드 컨테이너 (10)',F:'Ⅱ-F. 카드 헤더 (10)',G:'Ⅱ-G. 점유율·델타 (10)',H:'Ⅱ-H. 추이 그래프 (16)',
+I:'Ⅱ-I. 좌석·증감 라벨 (8)',J:'Ⅱ-J. 진행 바·목표 (10)',K:'Ⅱ-K. 예상 요약 (8)',L:'Ⅱ-L. 캐러셀·다건 (8)'};
+var CMAP={}; CTRL.forEach(function(c){CMAP[c.id]=c;});
+var CUR={}; CTRL.forEach(function(c){CUR[c.id]=c.cur;});
+
+/* 프리셋 (0=현행) */
+var P1={ttlPos:1,ttlAlign:1,ttlSize:18,sumPos:1,sumStyle:1,sumCnt:1,boxPadT:10,zoneMotion:1};
+var P2={ttlPos:1,ttlAlign:0,ttlSize:16,ttlDeco:1,sumPos:0,sumStyle:1,sumGapBelow:8,boxAlpha:.55,boxBlur:14,boxSat:150,
+        cardAlpha:.85,hoverLift:2,fcTone:1,cntShow:0,zoneMotion:1};
+var P3={ttlPos:1,ttlAlign:1,ttlSize:15,sumPos:1,sumStyle:2,sumCnt:1,sumAsofItem:1,asofPos:2,trendH:140,measDays:0,fcDays:1,
+        dateLabels:1,seatLblSize:8,fcShow:1,cardPadY:9,boxPadX:10,occSize:16,dotActW:12,peek:14,boxPadT:8,zoneMotion:1};
+var PRESETS=[{},P1,P2,P3], PNAMES=['현행','★ 지시 기본형','유리 레이어드','콤팩트 브리핑'];
+function presetState(i){ var s={}; CTRL.forEach(function(c){s[c.id]=c.cur;}); Object.keys(PRESETS[i]).forEach(function(k){s[k]=PRESETS[i][k];}); return s; }
+var STATE=presetState(1);   /* 로드 = ★ 지시 기본형 (운영자 지시 반영) — [현행] 프리셋으로 즉시 원복 가능 */
+var curPreset=1;
+
+function vv(s,id){ var c=CMAP[id]; return (c.type==='seg'&&c.vals)?c.vals[s[id]]:s[id]; }
+function esc(t){ return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+/* ═══════════ 추이 SVG (실코드 _srailTrend 파라미터화 이식) ═══════════ */
+function trendSvg(p,s){
+  var meas=vv(s,'measDays'), fcN=vv(s,'fcDays');
+  var seats=p.seats.slice(-meas), tot=p.total;
+  var occ=seats.map(function(x){return x/tot*100;});
+  var g=(occ.length>=3)?((occ[occ.length-1]-occ[occ.length-3])/2):(occ[occ.length-1]-occ[occ.length-2]);
+  var vals=occ.slice(); for(var k=1;k<=fcN;k++)vals.push(Math.max(0,Math.min(100,occ[occ.length-1]+g*k)));
+  var N=occ.length,todayIdx=N-1,T=vals.length;
+  var labels=DATES.slice(7-meas,7+fcN);
+  var W=280,H=s.trendH,padX=9,padT=s.padT,padB=28;
+  var mn=Math.min.apply(null,vals),mx=Math.max.apply(null,vals),span=mx-mn;if(span<0.6)span=0.6;mn-=span*.2;mx+=span*.34;
+  var pts=vals.map(function(v,i){var x=padX+(W-2*padX)*i/Math.max(T-1,1);var y=padT+(H-padT-padB)*(1-(v-mn)/(mx-mn));return[x,y,v];});
+  function lineTo(a,b){ var seg=pts.slice(a,b); if(s.smooth===1&&seg.length>2){ var d='M'+seg[0][0].toFixed(1)+' '+seg[0][1].toFixed(1);
+      for(var i=1;i<seg.length;i++){var p0=seg[i-1],p1=seg[i],cx=((p0[0]+p1[0])/2).toFixed(1);d+=' C'+cx+' '+p0[1].toFixed(1)+' '+cx+' '+p1[1].toFixed(1)+' '+p1[0].toFixed(1)+' '+p1[1].toFixed(1);}
+      return d; }
+    return seg.map(function(q,i){return (i?'L':'M')+q[0].toFixed(1)+' '+q[1].toFixed(1);}).join(' '); }
+  var lc=vv(s,'lineColor'), fc=vv(s,'fcColor');
+  var out='<svg viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" style="height:'+H+'px;width:100%;overflow:visible;display:block" aria-hidden="true">';
+  if(s.areaFill===0)out+='<path d="'+lineTo(0,N)+' L'+pts[todayIdx][0].toFixed(1)+' '+(H-padB)+' L'+pts[0][0].toFixed(1)+' '+(H-padB)+' Z" fill="rgba(74,77,231,'+s.fillAlpha+')"/>';
+  out+='<path d="'+lineTo(0,N)+'" fill="none" stroke="'+lc+'" stroke-width="'+s.lineW+'" stroke-linecap="round" stroke-linejoin="round"/>';
+  if(T>N){ var dsh='M'+pts[todayIdx][0].toFixed(1)+' '+pts[todayIdx][1].toFixed(1)+pts.slice(N).map(function(q){return ' L'+q[0].toFixed(1)+' '+q[1].toFixed(1);}).join('');
+    out+='<path d="'+dsh+'" fill="none" stroke="'+fc+'" stroke-width="'+s.lineW+'" stroke-dasharray="'+s.fcDash+' '+s.fcDash+'" stroke-linecap="round"/>'; }
+  if(s.todayMk===0)out+='<line x1="'+pts[todayIdx][0].toFixed(1)+'" y1="'+padT+'" x2="'+pts[todayIdx][0].toFixed(1)+'" y2="'+(H-padB)+'" stroke="var(--accent)" stroke-opacity=".18" stroke-width="1" stroke-dasharray="2 2"/>';
+  if(s.todayPin===0)out+='<text x="'+pts[todayIdx][0].toFixed(1)+'" y="'+(padT-14)+'" text-anchor="middle" font-size="8.5" font-weight="800" fill="var(--accent)">📌 Today</text>';
+  var R=s.dotR;
+  pts.forEach(function(q,i){
+    var future=i>todayIdx,today=(i===todayIdx),recent=(i>=todayIdx-2);
+    var seat=Math.round(tot*q[2]/100),prev=(i>0)?Math.round(tot*vals[i-1]/100):null,ds=(prev!=null)?seat-prev:null,pct=(ds!=null)?ds/tot*100:null;
+    if(today){ if(s.todayMk===2)out+='<circle cx="'+q[0].toFixed(1)+'" cy="'+q[1].toFixed(1)+'" r="'+(R+2.6)+'" fill="var(--accent)"/>';
+      else out+='<circle cx="'+q[0].toFixed(1)+'" cy="'+q[1].toFixed(1)+'" r="'+(R+2.2)+'" fill="'+fc+'"/><circle cx="'+q[0].toFixed(1)+'" cy="'+q[1].toFixed(1)+'" r="'+R+'" fill="var(--accent)"/>'; }
+    else out+='<circle cx="'+q[0].toFixed(1)+'" cy="'+q[1].toFixed(1)+'" r="'+R+'" fill="'+(future?fc:lc)+'"'+(future?' fill-opacity="'+s.fcDotA+'"':'')+'/>';
+    if(s.seatLbl===0){ var col=today?'var(--accent)':(recent?'var(--text)':vv(s,'pastLblColor')),sy=(q[1]-R-6);
+      out+='<text x="'+q[0].toFixed(1)+'" y="'+sy.toFixed(1)+'" text-anchor="middle" font-size="'+(today?(+s.seatLblSize+2.5):s.seatLblSize)+'" font-weight="'+(today?800:700)+'" fill="'+col+'">'+seat+'</text>';
+      var dOn=(s.deltaLblMode===0&&recent)||(s.deltaLblMode===1&&i>0);
+      if(ds!=null&&dOn)out+='<text x="'+q[0].toFixed(1)+'" y="'+(sy-9.5).toFixed(1)+'" text-anchor="middle" font-size="7" font-weight="800" fill="'+vv(s,'deltaLblColor')+'">'+(ds>=0?'+':'')+ds+(s.deltaLblFmt===0&&pct!=null?' ('+(pct>=0?'+':'')+pct.toFixed(1)+'%)':'')+'</text>'; }
+    var dl=(s.dateLabels===0)||(s.dateLabels===1&&(((T-1-i)%2===0)))||(s.dateLabels===2&&(i===0||i===T-1||today));
+    if(dl)out+='<text x="'+q[0].toFixed(1)+'" y="'+(H-7)+'" text-anchor="middle" font-size="'+s.dateLabelSize+'" font-weight="700" fill="'+(today?'var(--accent)':(future?fc:'var(--dim)'))+'">'+labels[i]+'</text>';
+  });
+  return out+'</svg>';
+}
+
+/* ═══════════ 카드 HTML ═══════════ */
+function occOf(p){ return p.seats[p.seats.length-1]/p.total*100; }
+function cardHtml(p,s){
+  var occ=occOf(p), prev=p.seats[p.seats.length-2]/p.total*100, dpp=occ-prev;
+  var up=dpp>0.04, arrows=s.deltaArrow===0, dStr=up?((arrows?'▲ +':'+')+dpp.toFixed(1)+'%p'):((arrows?'▼ ':'-')+Math.abs(dpp).toFixed(1)+'%p');
+  var gap=occ-p.tgt, meta=p.genre+' · '+p.profit+' · '+p.dateStr;
+  var nameCss='font-size:'+s.nameSize+'px;font-weight:'+vv(s,'nameWeight');
+  var occBlock=(s.deltaShow===0?'<span class="cd-delta" style="font-size:'+s.deltaSize+'px;color:'+(up?vv(s,'deltaUpColor'):'var(--danger)')+'">'+dStr+'</span>':'')
+    +(s.occSeatSub===1?'<span style="font-size:9.5px;color:var(--dim);font-weight:600">'+p.seats[p.seats.length-1].toLocaleString()+'석</span>':'')
+    +(s.occCaption===1?'<span style="font-size:9px;color:var(--muted);font-weight:700">점유율</span>':'');
+  var occCol='<div class="cd-occcol" style="'+(s.occDivider===0?'border-left:1px solid var(--border)':'padding-left:0')+'">'
+    +'<span class="cd-occ" style="font-size:'+s.occSize+'px;font-weight:'+vv(s,'occWeight')+';color:'+vv(s,'occColor')+'">'+occ.toFixed(1)+'%</span>'+occBlock+'</div>';
+  var dd=s.ddayStyle===2?'':(s.ddayStyle===1
+    ?'<span class="cd-dday" style="font-size:10px;padding:2px 8px;border-radius:999px;background:rgba(74,77,231,.08);border:1px solid rgba(74,77,231,.18);color:'+vv(s,'ddayEmph')+'">D-'+p.dday+'</span>'
+    :'<span class="cd-dday" style="font-size:10.5px;color:'+vv(s,'ddayEmph')+'">D-'+p.dday+'</span>');
+  var fcHtml='';
+  if(s.fcShow===0){
+    var o=p.seats.map(function(x){return x/p.total*100;}), g=(o[o.length-1]-o[o.length-3])/2;
+    var p3=Math.max(0,Math.min(100,o[o.length-1]+g*3)), s3=Math.round(p.total*p3/100), cum=s3-p.seats[p.seats.length-1];
+    var tone=s.fcTone===1?['var(--accent)','rgba(74,77,231,'+s.fcBgA+')','rgba(74,77,231,'+s.fcBorderA+')']
+            :s.fcTone===2?['var(--neutral-text)','rgba(0,0,0,'+(s.fcBgA*.5).toFixed(3)+')','rgba(0,0,0,'+(s.fcBorderA*.6).toFixed(3)+')']
+            :['var(--peach-text)','rgba(216,132,85,'+s.fcBgA+')','rgba(216,132,85,'+s.fcBorderA+')'];
+    var txt=s.fcMode===0?((s.fcIcon===0?'📈 ':'')+'예상 (이 추세면) 3일 뒤 <b>'+s3.toLocaleString()+'석</b> · 누적 '+(cum>=0?'+':'')+cum)
+                        :((s.fcIcon===0?'📈 ':'')+'3일 뒤 ≈<b>'+s3.toLocaleString()+'석</b>');
+    fcHtml='<div class="cd-fc" style="font-size:'+s.fcSize+'px;color:'+tone[0]+';background:'+tone[1]+';border:1px solid '+tone[2]+';border-radius:'+vv(s,'fcRadius')+';padding:5px 9px">'+txt+'</div>';
+  }
+  var trend=s.trendShow===0?'<div style="margin-top:10px">'+trendSvg(p,s)+'</div>':'';
+  var bar=s.barShow===0?'<div class="cd-bar" style="height:'+s.barH+'px;border-radius:'+vv(s,'barRound')+';background:'+vv(s,'barTrack')+'">'
+      +'<i style="width:'+Math.min(occ,100).toFixed(1)+'%;border-radius:'+vv(s,'barRound')+';background:'+vv(s,'barFill')+'"></i>'
+      +(s.tgtMark===0?'<b style="left:'+p.tgt+'%;background:'+vv(s,'tgtMarkColor')+'"></b>':'')+'</div>':'';
+  var r3='';
+  if(s.seatsText===0||s.tgtText===0){
+    r3='<div class="cd-r3">'+(s.seatsText===0?'<span>'+p.seats[p.seats.length-1].toLocaleString()+' / '+p.total.toLocaleString()+'석</span>':'<span></span>')
+      +(s.tgtText===0?'<span style="'+(s.tgtTextRule===0?('color:'+(gap>=0?'var(--green)':'var(--danger)')):'color:var(--dim)')+'">목표 '+p.tgt+'% '+(gap>=0?'+':'')+gap.toFixed(1)+'%p</span>':'<span></span>')+'</div>';
+  }
+  var hd='<div class="cd-hd" style="gap:'+s.hdGap+'px"><div class="cd-tt"><div class="cd-name '+(s.nameClamp===0?'c1':'c2')+'" style="'+nameCss+'">'+esc(p.name)+'</div>'
+    +(s.metaShow===0?'<div class="cd-meta" style="font-size:'+s.metaSize+'px;color:'+vv(s,'metaColor')+'">'+esc(meta)+'</div>':'')+'</div>'
+    +(s.occColPos===0?occCol:'')+dd+'</div>'
+    +(s.occColPos===1?'<div style="display:flex;align-items:baseline;gap:9px;margin-top:6px"><span class="cd-occ" style="font-size:'+s.occSize+'px;font-weight:'+vv(s,'occWeight')+';color:'+vv(s,'occColor')+'">'+occ.toFixed(1)+'%</span>'+occBlock.replace(/cd-occcol/g,'')+'</div>':'');
+  var sh=vv(s,'cardShadow');
+  if(s.sepCards===1)sh=(sh==='none'?'':sh+',')+'0 '+(Math.round(s.cardGap/2)+1)+'px 0 -'+Math.round(s.cardGap/2)+'px var(--border2)';
+  return '<div class="cd" data-hl="'+s.hoverLift+'" data-hb="'+esc(vv(s,'hoverBorder'))+'" style="background:rgba(255,255,255,'+s.cardAlpha+');'
+    +(s.cardBlur>0?'backdrop-filter:blur('+s.cardBlur+'px);-webkit-backdrop-filter:blur('+s.cardBlur+'px);':'')
+    +'border-color:rgba(255,255,255,'+s.cardBorderA+');border-radius:'+vv(s,'cardRadius')+';box-shadow:'+sh
+    +';padding:'+s.cardPadY+'px '+s.cardPadX+'px;margin-bottom:'+(s.multiMode===1||s.exNote===1?s.cardGap:0)+'px">'
+    +hd+trend+fcHtml+bar+r3+'</div>';
+}
+function exCardHtml(e,s){
+  var occ=e.paid/e.goal*100, last=e.spark[e.spark.length-1], prev=e.spark[e.spark.length-2], dpp=last-prev;
+  return '<div class="cd" data-hl="'+s.hoverLift+'" data-hb="'+esc(vv(s,'hoverBorder'))+'" style="background:rgba(255,255,255,'+s.cardAlpha+');border-color:rgba(255,255,255,'+s.cardBorderA+');border-radius:'+vv(s,'cardRadius')+';box-shadow:'+vv(s,'cardShadow')+';padding:'+s.cardPadY+'px '+s.cardPadX+'px;margin-bottom:'+s.cardGap+'px">'
+    +'<div style="display:flex;align-items:baseline;gap:8px;min-width:0"><span class="cd-name c1" style="flex:1;min-width:0;font-size:'+s.nameSize+'px;font-weight:'+vv(s,'nameWeight')+'">'+esc(e.name)+'</span><span class="cd-dday" style="font-size:10.5px;color:'+vv(s,'ddayEmph')+'">종료 D-'+e.endD+'</span></div>'
+    +(s.metaShow===0?'<div class="cd-meta" style="font-size:'+s.metaSize+'px;color:'+vv(s,'metaColor')+'">전시 · '+e.profit+' · '+e.range+'</div>':'')
+    +'<div style="display:flex;align-items:baseline;gap:8px;margin-top:7px"><span class="cd-occ" style="font-size:'+s.occSize+'px;font-weight:'+vv(s,'occWeight')+';color:'+vv(s,'occColor')+'">'+occ.toFixed(1)+'%</span>'
+    +(s.deltaShow===0?'<span class="cd-delta" style="font-size:'+s.deltaSize+'px;color:'+vv(s,'deltaUpColor')+'">'+(s.deltaArrow===0?'▲ +':'+')+dpp.toFixed(1)+'%p</span>':'')
+    +'<span style="font-size:10px;color:var(--muted);font-weight:600">달성률</span></div>'
+    +(s.barShow===0?'<div class="cd-bar" style="height:'+s.barH+'px;border-radius:'+vv(s,'barRound')+';background:'+vv(s,'barTrack')+'"><i style="width:'+Math.min(occ,100).toFixed(1)+'%;border-radius:'+vv(s,'barRound')+';background:'+vv(s,'barFill')+'"></i></div>':'')
+    +'<div class="cd-r3"><span>유료 '+e.paid.toLocaleString()+' / 목표 '+e.goal.toLocaleString()+'명</span><span>총 '+e.total.toLocaleString()+'명</span></div></div>';
+}
+
+/* ═══════════ 레일 존 HTML ═══════════ */
+function titleRowHtml(s,inBox){
+  var deco=s.ttlDeco===1?'border-bottom:2.5px solid var(--accent);padding-bottom:3px;':'';
+  var dot=s.ttlDeco===2?'<span style="width:7px;height:7px;border-radius:99px;background:var(--accent);flex-shrink:0"></span>':'';
+  var t='<span class="t" style="font-size:'+s.ttlSize+'px;font-weight:'+vv(s,'ttlWeight')+';color:'+vv(s,'ttlColor')+';letter-spacing:'+s.ttlTrack+'px;'+deco+'">판매 현황</span>';
+  var cnt=s.cntShow===0?(s.cntStyle===0?'<span class="rz-cnt">2</span>':'<span style="font-size:12px;font-weight:700;color:var(--accent)">(2)</span>'):'';
+  var asof=s.asofPos===0?'<span class="rz-asof">기준 7.9</span>':'';
+  var ana=s.anaBtnPos===0?'<button class="rz-chip">분석</button>':'';
+  var ref=s.refBtnPos===1?'<button class="rz-chip">새로고침</button>':'';
+  var nav=(s.navPos===1&&s.multiMode===0&&s.previewEmpty===0)?'<span class="car-hostttl" style="display:inline-flex"></span>':'';
+  var just=s.ttlPos===1?(['flex-start','center','flex-end'][s.ttlAlign]):'flex-start';
+  var bg=(s.ttlPos===1&&s.ttlZoneBg===1)?'background:var(--glass);border:1px solid var(--glass-border);border-radius:999px;padding:5px 16px;box-shadow:var(--glass-shadow);':'';
+  var align=s.ttlAnchor===1?'align-items:baseline;':'align-items:center;';
+  if(inBox)return '<div class="rz-ttl" style="padding:14px 16px 9px;flex-shrink:0">'+dot+t+cnt+'<span style="margin-left:auto;display:inline-flex;gap:7px;align-items:center">'+asof+nav+ana+ref+'</span></div>';
+  return '<div class="rz-ttlzone" style="display:flex;'+align+'justify-content:'+just+';transform:translateY('+s.ttlVOff+'px)">'
+    +'<div class="rz-ttl" style="'+bg+'">'+dot+t+cnt+asof+nav+ana+ref+'</div></div>';
+}
+function sumHtml(s,outside){
+  if(s.sumShow!==0)return '';
+  var items=[];
+  if(s.sumPerf===0)items.push('<span>공연 어제 <b style="color:var(--green)">▲ +13석</b></span>');
+  if(s.sumCnt===1)items.push('<span>판매중 <b>'+(s.exNote===1?3:2)+'건</b></span>');
+  if(s.sumAsofItem===1||s.asofPos===1)items.push('<span>기준 <b>7.9</b></span>');
+  if(s.sumSeats===1)items.push('<span>전체 <b>579/1,838석</b></span>');
+  if(!items.length)items.push('<span style="color:var(--muted)">표시 항목 없음</span>');
+  var just=['flex-start','center','flex-end'][s.sumAlign];
+  var inner;
+  if(s.sumStyle===2){ inner=items.map(function(it){return '<span style="background:rgba(255,255,255,'+s.sumGlassA+');border:1px solid var(--glass-border);border-radius:'+vv(s,'sumRadius')+';padding:4px 11px;box-shadow:var(--glass-shadow);display:inline-flex;gap:4px">'+it+'</span>';}).join('');
+    inner='<div class="rz-sum" style="gap:6px;font-size:'+s.sumSize+'px;justify-content:'+just+'">'+inner+'</div>'; }
+  else if(s.sumStyle===1){ inner='<div class="rz-sum" style="gap:10px;font-size:'+s.sumSize+'px;justify-content:'+just+';background:rgba(255,255,255,'+s.sumGlassA+');backdrop-filter:blur(8px);border:1px solid var(--glass-border);border-radius:'+vv(s,'sumRadius')+';padding:7px 14px;box-shadow:var(--glass-shadow)">'+items.join('<span style="opacity:.4">·</span>')+'</div>'; }
+  else { inner='<div class="rz-sum" style="gap:8px;font-size:'+s.sumSize+'px;justify-content:'+just+'">'+items.join('<span style="opacity:.4">·</span>')+'</div>'; }
+  return '<div class="rz-sumzone" style="'+(outside?'margin-bottom:'+s.sumGapBelow+'px':'padding:0 16px '+s.sumGapBelow+'px')+';flex-shrink:0">'+inner+'</div>';
+}
+function bodyHtml(s){
+  if(s.previewEmpty===1)return '<div class="f-empty"><div class="ico">🎫</div><div class="msg">지금 판매·진행중인 프로그램이 없어요</div></div>';
+  var cards=PERFS.map(function(p){return cardHtml(p,s);});
+  if(s.exNote===1)cards.push(exCardHtml(EXHIB,s));
+  if(s.multiMode===0&&cards.length>=2){
+    var slides=cards.map(function(c){return '<div class="car-slide">'+c+'</div>';}).join('');
+    var dots=cards.map(function(_,i){return '<button class="car-dot" data-i="'+i+'" style="width:'+s.dotSize+'px;height:'+s.dotSize+'px"></button>';}).join('');
+    var nav='<button class="car-btn cprev" style="width:'+s.cbtnSize+'px;height:'+s.cbtnSize+'px;font-size:'+Math.round(s.cbtnSize*.58)+'px">‹</button><div class="car-dots">'+dots+'</div><button class="car-btn cnext" style="width:'+s.cbtnSize+'px;height:'+s.cbtnSize+'px;font-size:'+Math.round(s.cbtnSize*.58)+'px">›</button>';
+    return '<div class="car" data-auto="'+s.autoSec+'" data-hold="'+s.holdSec+'" data-peek="'+s.peek+'" data-actw="'+s.dotActW+'">'
+      +'<div class="car-vp"><div class="car-track">'+slides+'</div></div>'
+      +(s.navPos===0?'<div class="car-nav">'+nav+'</div>':'<div class="car-nav car-navttl" style="display:none">'+nav+'</div>')+'</div>';
+  }
+  return cards.join('');
+}
+function railHtml(s){
+  var tintMap=['','linear-gradient(rgba(216,132,85,.05),rgba(216,132,85,.05)),','linear-gradient(rgba(74,77,231,.04),rgba(74,77,231,.04)),'];
+  var mot=s.zoneMotion===1?'fade-in':(s.zoneMotion===2?'slide-in':'');
+  var box='<div class="rz-box '+mot+'" style="animation-duration:'+s.motionDur+'s;background:'+tintMap[s.boxTint]+'rgba(255,255,255,'+s.boxAlpha+');'
+    +'backdrop-filter:blur('+s.boxBlur+'px)'+(s.boxSat>100?' saturate('+s.boxSat+'%)':'')+';-webkit-backdrop-filter:blur('+s.boxBlur+'px)'+(s.boxSat>100?' saturate('+s.boxSat+'%)':'')+';'
+    +'border-color:rgba(255,255,255,'+s.boxBorderA+');border-radius:'+vv(s,'boxRadius')+';box-shadow:'+vv(s,'boxShadow')+';margin-top:'+s.boxTopOff+'px">'
+    +(s.ttlPos===0?titleRowHtml(s,true):'')
+    +(s.sumPos===0?sumHtml(s,false):'')
+    +'<div class="rz-body" style="padding:'+s.boxPadT+'px '+s.boxPadX+'px '+s.boxPadB+'px">'+bodyHtml(s)+'</div>'
+    +((s.anaBtnPos===1||s.refBtnPos===0)?'<div class="rz-ft">'+(s.anaBtnPos===1?'<button class="rz-chip">분석</button>':'')+(s.refBtnPos===0?'<button class="rz-chip">새로고침</button>':'')+'</div>':'')
+    +'</div>';
+  return (s.ttlPos===1?titleRowHtml(s,false):'')
+    +(s.sumPos===1?sumHtml(s,true):'')
+    +box;
+}
+/* ═══════════ 프레임(가상 데스크톱 1150) ═══════════ */
+var DAYS=['화','수','목','금','토','일','월'];
+function frameHtml(s){
+  var chips=['전체','문자','카카오','인스타','블로그'].map(function(t,i){return '<span class="f-chip'+(i===0?' on':'')+'">'+t+'</span>';}).join('');
+  var rows='';
+  for(var r=0;r<5;r++){ rows+='<div class="f-row">';
+    for(var c=0;c<7;c++){ var day=r*7+c+ -1; var td=(r===1&&c===2);
+      rows+='<div class="f-cell'+(td?' td':'')+'">'+(day>0&&day<32?day:'')
+        +(((r*7+c)%4===1)?'<div class="ev" style="background:var(--c'+((r+c)%6+1)+')"></div>':'')
+        +(((r*7+c)%5===3)?'<div class="ev" style="background:var(--c'+((r+c+2)%6+1)+')"></div>':'')+'</div>'; }
+    rows+='</div>'; }
+  return '<div class="f-nav">YEULMARU<span class="sp"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>'
+    +'<div class="f-body"><div class="f-main" style="padding-right:'+s.gapCal+'px">'
+    +'<div class="f-hdr"><div class="f-mnav"><span class="f-arrow">‹</span><span><span class="f-mtext">7</span><span class="f-ytext">2026</span></span><span class="f-arrow">›</span></div><div class="f-chips">'+chips+'</div></div>'
+    +'<div class="f-daybar">'+DAYS.map(function(d,i){return '<div class="'+(i===2?'td':(i===5?'su':''))+'">'+d+'</div>';}).join('')+'</div>'
+    +'<div class="f-grid">'+rows+'</div></div>'
+    +'<div class="f-rail" style="width:'+s.railW+'%;min-width:'+s.railMinW+'px;padding:24px '+s.railPadR+'px 24px 0">'+railHtml(s)+'</div></div>';
+}
+/* 렌더 + 사후 정렬(실코드 _srailAlignTop 방법론 계승: 측정→맞춤) */
+var SWEEP=false;
+function renderFrame(rootId,s){
+  var root=document.getElementById(rootId);
+  if(root.__carT){clearInterval(root.__carT);root.__carT=null;}
+  if(root.__carR){clearTimeout(root.__carR);root.__carR=null;}
+  root.innerHTML=frameHtml(s);
+  var hdr=root.querySelector('.f-hdr'), rail=root.querySelector('.f-rail'), grid=root.querySelector('.f-grid'),
+      daybar=root.querySelector('.f-daybar'), box=root.querySelector('.rz-box'), tz=root.querySelector('.rz-ttlzone');
+  var hdrH=hdr.offsetHeight;
+  if(s.ttlPos===1){ tz.style.height=hdrH+'px'; if(s.ttlGapBelow>0)tz.style.marginBottom=s.ttlGapBelow+'px'; }
+  else rail.style.paddingTop=(24+hdrH)+'px';
+  var calBottom=grid.offsetTop+grid.offsetHeight;
+  /* 하단 정렬 = 실물 .srail(컬럼 flex:1 + #182 캡)과 동형: 박스가 캘린더 하단까지 채움 */
+  if(s.boxBottom===0){ var mh=calBottom-(box.offsetTop); if(mh>120)box.style.height=mh+'px'; }
+  /* 가이드 */
+  if(s.guides===1){
+    var mnav=root.querySelector('.f-mnav');
+    [[mnav.offsetTop+mnav.offsetHeight/2,'월헤더 중심',''],[daybar.offsetTop,'캘린더 시작(요일바)','g2'],[calBottom,'캘린더 하단','g3']]
+    .forEach(function(g){ var d=document.createElement('div');d.className='gline '+g[2];d.style.top=g[0]+'px';d.innerHTML='<span>'+g[1]+'</span>';root.appendChild(d); });
+  }
+  /* 카드 hover 리프트 */
+  root.querySelectorAll('.cd').forEach(function(cd){
+    cd.addEventListener('mouseenter',function(){cd.style.transform='translateY(-'+cd.dataset.hl+'px)';cd.style.borderColor=vv(s,'hoverBorder')==='none'?('rgba(255,255,255,'+s.cardBorderA+')'):vv(s,'hoverBorder');});
+    cd.addEventListener('mouseleave',function(){cd.style.transform='';cd.style.borderColor='rgba(255,255,255,'+s.cardBorderA+')';});
+  });
+  /* 캐러셀 */
+  var car=root.querySelector('.car');
+  if(car){
+    if(s.navPos===1){ var host=root.querySelector('.car-hostttl'), nv=car.querySelector('.car-navttl'); if(host&&nv){nv.style.display='flex';nv.style.padding='0';nv.style.gap='6px';host.appendChild(nv);} }
+    var vp=car.querySelector('.car-vp'),tr=car.querySelector('.car-track'),slides=car.querySelectorAll('.car-slide'),dots=car.querySelectorAll('.car-dot');
+    var n=slides.length, idx=0, peek=+car.dataset.peek;
+    slides.forEach(function(sl){sl.style.flex='0 0 calc(100% - '+peek+'px)';});
+    function apply(anim){ var w=vp.clientWidth-peek; tr.style.transition=anim?'':'none'; tr.style.transform='translateX('+(-idx*w)+'px)';
+      dots.forEach(function(d,i){d.classList.toggle('on',i===idx); d.style.width=(i===idx?car.dataset.actw:s.dotSize)+'px';}); if(!anim)void tr.offsetWidth; tr.style.transition=''; }
+    function to(i,anim){ idx=((i%n)+n)%n; apply(anim); }
+    car.querySelectorAll('.cprev').forEach(function(b){b.onclick=function(){to(idx-1,true);kick();};});
+    car.querySelectorAll('.cnext').forEach(function(b){b.onclick=function(){to(idx+1,true);kick();};});
+    dots.forEach(function(d){d.onclick=function(){to(+d.dataset.i,true);kick();};});
+    function startAuto(){ if(SWEEP||root.__carT)return; root.__carT=setInterval(function(){if(!document.hidden)to(idx+1,true);}, (+car.dataset.auto)*1000); }
+    function kick(){ if(root.__carT){clearInterval(root.__carT);root.__carT=null;} if(root.__carR)clearTimeout(root.__carR);
+      root.__carR=setTimeout(startAuto,(+car.dataset.hold)*1000); }
+    root.addEventListener('pointerdown',kick,{passive:true});
+    apply(false); if(!SWEEP)startAuto();
+    root.__carApply=apply;
+  }
+  fitFrames();
+}
+/* 스케일 */
+var DESIGN_W=1150, foldMul=1, realSize=false;
+function fitFrames(){
+  ['frCur','frTun'].forEach(function(id){
+    var sc=document.getElementById(id), fr=sc.parentElement, col=fr.parentElement;
+    if(realSize){ sc.style.transform='none'; fr.style.height='auto'; fr.style.overflowX='auto'; sc.style.width=DESIGN_W+'px'; return; }
+    fr.style.overflowX='hidden';
+    var w=col.clientWidth, s=Math.min(w/DESIGN_W,1)*foldMul;
+    sc.style.transform='scale('+s+')'; sc.style.width=DESIGN_W+'px';
+    fr.style.height=(sc.offsetHeight*s)+'px';
+  });
+}
+window.addEventListener('resize',function(){fitFrames();renderAll();});
+
+/* ═══════════ 컨트롤 UI ═══════════ */
+function fmtV(c,v){ if(c.type==='seg')return c.opts[v]; var n=(c.step&&c.step<1)?(+v).toFixed(String(c.step).split('.')[1].length):v; return n+(c.unit||''); }
+function buildCtrls(){
+  var host=document.getElementById('ctrls'), toc=document.getElementById('toc'), html='', part1=true;
+  Object.keys(GROUPS).forEach(function(gk){
+    if(part1&&'EFGHIJKL'.indexOf(gk)===0){ html+='<h2 id="part2"><span class="no">Ⅱ부</span> 판매현황 표현 — 80축</h2>'; part1=false; }
+    if(gk==='A')html+='<h2 id="part1"><span class="no">Ⅰ부</span> 구조·레이아웃 — 50축</h2>';
+    toc.insertAdjacentHTML('beforeend','<a href="#grp'+gk+'">'+GROUPS[gk]+'</a>');
+    html+='<div class="grp" id="grp'+gk+'"><h3>'+GROUPS[gk]+'</h3><div class="rows">';
+    CTRL.filter(function(c){return c.g===gk;}).forEach(function(c){
+      html+='<div class="crow" id="row_'+c.id+'"><div class="clabel">'+c.label+(c.note?'<small>'+c.note+'</small>':'')+'</div><div class="cw">';
+      if(c.type==='rng'){ html+='<input type="range" id="in_'+c.id+'" min="'+c.min+'" max="'+c.max+'" step="'+(c.step||1)+'" value="'+STATE[c.id]+'">'
+        +'<span class="cval mono" id="v_'+c.id+'"></span>'; }
+      else { html+='<div class="segw" id="in_'+c.id+'">'+c.opts.map(function(o,i){return '<button data-v="'+i+'">'+o+'</button>';}).join('')+'</div>'; }
+      html+='<span class="ccur mono">현행 '+fmtV(c,c.cur)+'</span></div></div>';
+    });
+    html+='</div></div>';
+  });
+  host.innerHTML=html;
+  CTRL.forEach(function(c){
+    if(c.type==='rng'){ var el=document.getElementById('in_'+c.id);
+      el.addEventListener('input',function(){ setVal(c.id,+el.value); }); }
+    else { document.getElementById('in_'+c.id).querySelectorAll('button').forEach(function(b){
+      b.addEventListener('click',function(){ setVal(c.id,+b.dataset.v); }); }); }
+  });
+  syncCtrlUI();
+}
+function syncCtrlUI(){
+  CTRL.forEach(function(c){
+    var row=document.getElementById('row_'+c.id); row.classList.toggle('dirty',STATE[c.id]!==c.cur);
+    if(c.type==='rng'){ document.getElementById('in_'+c.id).value=STATE[c.id]; document.getElementById('v_'+c.id).textContent=fmtV(c,STATE[c.id]); }
+    else document.getElementById('in_'+c.id).querySelectorAll('button').forEach(function(b,i){ b.classList.toggle('on',i===STATE[c.id]); });
+  });
+}
+function setVal(id,v,skipUI){ STATE[id]=v; curPreset=-1; document.querySelectorAll('.pbtn').forEach(function(b){b.classList.remove('on');});
+  if(!skipUI){ syncCtrlUI(); } renderTuned(); buildOut(); }
+function renderTuned(){ renderFrame('frTun',STATE); }
+function renderAll(){ renderFrame('frCur',CUR); renderTuned(); }
+
+/* ═══════════ ④ 출력 ═══════════ */
+function axisTag(c,changed){
+  if(c.axis==='view')return '(미리보기 전용 — 배선 없음)';
+  if(c.axis==='tok')return changed?'토큰 계승('+c.opts[STATE[c.id]].replace(/\(현행\)/,'')+')':'= 계승';
+  if(!changed)return '= 계승';
+  if(c.axis==='alpha')return '알파 변주(§3.5 정상)';
+  if(c.axis==='gate')return '⚠ 기틀 축 — 갱신 후보(§🚨 승인 경로)';
+  if(c.axis==='struct')return '구조 변경(운영자 확정으로 배선)';
+  return '레이아웃값(비토큰 축 — 배선 시 반영)';
+}
+function buildOut(){
+  var lines=['[판매 레일 구조·표현 선택값 — 260710 플레이그라운드]','프리셋: '+(curPreset>=0?PNAMES[curPreset]:'커스텀'),''];
+  Object.keys(GROUPS).forEach(function(gk){
+    lines.push('■ '+GROUPS[gk]);
+    CTRL.filter(function(c){return c.g===gk;}).forEach(function(c){
+      var ch=STATE[c.id]!==c.cur;
+      lines.push('- '+c.label+': '+fmtV(c,STATE[c.id])+'  [현행 '+fmtV(c,c.cur)+']  '+axisTag(c,ch));
+    });
+    lines.push('');
+  });
+  document.getElementById('outPre').textContent=lines.join('\n');
+}
+document.getElementById('copyBtn').addEventListener('click',function(){
+  var t=document.getElementById('outPre').textContent;
+  function done(){ var el=document.getElementById('toast'); el.classList.add('show'); setTimeout(function(){el.classList.remove('show');},1500); }
+  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(t).then(done,function(){fb();});
+  else fb();
+  function fb(){ var ta=document.createElement('textarea'); ta.value=t; document.body.appendChild(ta); ta.select(); try{document.execCommand('copy');}catch(e){} document.body.removeChild(ta); done(); }
+});
+
+/* ═══════════ 130축 자가진단(모든 선택지 구현 확인) ═══════════ */
+function altVal(c,v){ if(c.type==='seg')return (v+1)%c.opts.length; return v===c.max?c.min:c.max; }
+function serTun(){ return document.getElementById('frTun').innerHTML; }
+function runDiag(){
+  SWEEP=true;
+  var saved=JSON.parse(JSON.stringify(STATE));
+  /* 진단 기준 상태 = ★기본형 + 전 요소 노출(게이트 하위 축까지 보이게) */
+  var base=presetState(1); base.exNote=1; base.guides=0; base.previewEmpty=0; base.sumStyle=1; base.sumCnt=1; base.sumAsofItem=1; base.sumSeats=1;
+  var dead=[],okN=0;
+  CTRL.forEach(function(c){
+    var s1=JSON.parse(JSON.stringify(base));
+    renderFrame('frTun',s1); var before=serTun();
+    s1[c.id]=altVal(c,s1[c.id]);
+    renderFrame('frTun',s1); var after=serTun();
+    if(before===after)dead.push(c); else okN++;
+  });
+  STATE=saved; SWEEP=false; syncCtrlUI(); renderTuned(); buildOut();
+  var h='<span class="'+(dead.length?'bad':'ok')+'">'+okN+'/'+CTRL.length+'축 반응 확인'+(dead.length?' — 무반응 '+dead.length+'축!':' — 전 축 실구현 ✔')+'</span>';
+  if(dead.length)h+='<table><tr><th>무반응 축</th></tr>'+dead.map(function(c){return '<tr><td>'+c.g+' · '+c.label+' ('+c.id+')</td></tr>';}).join('')+'</table>';
+  else h+='<div style="color:var(--neutral-text);margin-top:4px">각 축을 기준 상태에서 반대값으로 바꿔 튜닝 프레임 DOM이 실제로 달라지는지 전수 검사한 결과야.</div>';
+  document.getElementById('diagOut').innerHTML=h;
+  return {total:CTRL.length,ok:okN,dead:dead.map(function(c){return c.id;})};
+}
+document.getElementById('diagBtn').addEventListener('click',runDiag);
+window.__pgDiag=runDiag; window.__pgSet=setVal; window.__pgState=function(){return STATE;};
+
+/* ═══════════ 프리셋·유틸 바인딩 ═══════════ */
+document.querySelectorAll('.pbtn').forEach(function(b){
+  b.addEventListener('click',function(){
+    curPreset=+b.dataset.p; STATE=presetState(curPreset);
+    document.querySelectorAll('.pbtn').forEach(function(x){x.classList.remove('on');}); b.classList.add('on');
+    syncCtrlUI(); renderTuned(); buildOut();
+  });
+});
+var holdBtn=document.getElementById('holdBtn');
+holdBtn.addEventListener('pointerdown',function(){ renderFrame('frTun',CUR); });
+function holdOff(){ renderTuned(); }
+holdBtn.addEventListener('pointerup',holdOff); holdBtn.addEventListener('pointerleave',holdOff);
+document.getElementById('sizeBtn').addEventListener('click',function(){ realSize=!realSize; this.textContent=realSize?'맞춤 크기':'실제 크기'; fitFrames(); });
+document.getElementById('foldBtn').addEventListener('click',function(){ foldMul=foldMul===1?0.62:1; this.textContent=foldMul===1?'프레임 축소':'프레임 확대'; fitFrames(); });
+
+/* ═══════════ 부트 ═══════════ */
+buildCtrls();
+renderAll();
+buildOut();
+document.querySelector('.pbtn[data-p="1"]').classList.add('on');
+requestAnimationFrame(fitFrames);
+</script>
+</body>
+</html>
