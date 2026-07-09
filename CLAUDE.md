@@ -204,3 +204,4 @@
 - `tools/check_design.py` · `tools/check_refs.py` — 기계 게이트 · `.claude/hooks/` — 세션 훅(design_digest·design_gate) · `.githooks/pre-commit` — 커밋 게이트.
 - `_versions/` — 기틀 백업 · `signage/` — 장도 사이니지 페이지 · `image/` — 에셋(PWA 아이콘·폴백 지도) · `reference/` — 원문 자료(규정 PDF 등) · `drafts/` · `tools/scratch/` — 작업장.
 - `manifest.webmanifest` — PWA 매니페스트 · `AGENTS.md` — 타 모델용 공통 계약 요약.
+- MCP 권한 자동 허용 정본 = `.claude/settings.json` permissions.allow(Claude Code Remote 서버 전체 + github PR 구독/해제) — 임의 삭제 금지. 강제는 settings.json이고 이 줄은 기록용.
