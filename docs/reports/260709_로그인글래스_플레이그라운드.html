@@ -1,0 +1,549 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>로그인 글래스모피즘 — 플레이그라운드 (42축)</title>
+<style>
+/* ── index.html :root 토큰 사본(값 SSOT 계승 · 창작 0) ── */
+:root{
+  --accent:#4A4DE7; --accent-light:#E8E8FD; --accent-glow:rgba(74,77,231,0.15);
+  --peach:#F0C4B8; --peach-light:#FBF0EC; --peach-bg:#FDF6F3; --peach-text:#D88455;
+  --muted:#bbb; --dim:#888; --text:#1A1A2E; --border:rgba(0,0,0,0.09);
+  --danger:#E24B4A; --green:#1A6B3C;
+  --bg:linear-gradient(135deg,#FDF6F3 0%,#F0EBF5 50%,#EBF0F8 100%);
+  --glass:rgba(255,255,255,0.55); --glass-border:var(--glass);
+  --glass-shadow:0 8px 32px rgba(74,77,231,0.08),0 2px 8px rgba(0,0,0,0.04);
+  --elev:0 20px 56px rgba(74,77,231,.16), 0 6px 18px rgba(26,26,46,.07);
+  --radius:16px; --radius-lg:20px; --radius-xl:24px; --r-btn:10px; --r-pop:16px;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:'Pretendard','Apple SD Gothic Neo','Malgun Gothic',-apple-system,sans-serif;color:var(--text);background:#eef0f6;line-height:1.6;padding:20px 16px 90px}
+.wrap{max-width:min(1240px,97vw);margin:0 auto}
+h1{font-size:21px;margin:0 0 4px}
+.sub{font-size:12.5px;color:var(--dim);margin-bottom:14px}
+h2{font-size:14px;color:var(--accent);margin:0 0 10px}
+code{background:rgba(74,77,231,.08);border-radius:5px;padding:1px 5px;font-size:11.5px}
+.card{background:#fff;border:1px solid var(--border);border-radius:16px;padding:16px 18px;margin-bottom:14px;box-shadow:0 6px 22px rgba(74,77,231,.06)}
+
+/* ── 프레임(데스크톱 브라우저 창 재현) ── */
+.frames{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(min-width:1001px){.frames{position:sticky;top:0;z-index:40;background:#eef0f6;padding:8px 0 10px}}
+@media(max-width:1000px){.frames{grid-template-columns:1fr}}
+.frame{border:1px solid var(--border);border-radius:14px;overflow:hidden;box-shadow:0 8px 30px rgba(26,26,46,.10);background:#fff}
+.frame-bar{height:30px;background:#e9e9ef;display:flex;align-items:center;gap:6px;padding:0 12px;border-bottom:1px solid var(--border)}
+.frame-bar i{width:11px;height:11px;border-radius:50%;background:#cfcfd8}
+.frame-bar span{margin-left:8px;font-size:10.5px;color:#9a9aa8}
+.frame-tag{font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px;margin-left:auto}
+.frame-tag.cur{background:#efeef4;color:var(--dim)}
+.frame-tag.neo{background:var(--accent-light);color:var(--accent)}
+/* 실물 #login 재현: 흰 배경 + 셰이더 canvas + 유리 카드 */
+.stage{height:430px;position:relative;overflow:hidden;background:#fff;display:flex;align-items:center;justify-content:center}
+.stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+/* WebGL2 미지원 폴백 = CSS 근사(각주 ⑤) */
+.stage.no-gl canvas{display:none}
+.stage.no-gl{background:
+  radial-gradient(58% 55% at 20% 22%, rgba(232,232,253,.95), transparent 62%),
+  radial-gradient(52% 55% at 82% 26%, rgba(240,196,184,.85), transparent 60%),
+  radial-gradient(66% 60% at 66% 82%, rgba(251,240,236,.9), transparent 62%), var(--bg)}
+.veil{position:absolute;inset:0;pointer-events:none;background:rgba(255,255,255,var(--t-bgLight,0))}
+.stage.leave canvas,.stage.leave .veil{opacity:0;transition:opacity .6s ease}
+.tiltwrap{position:relative;z-index:1;perspective:900px}
+
+/* ══ 현행 카드(고정 기준 — index.html 실측 그대로) ══ */
+.lcard{position:relative;text-align:center;min-width:300px}
+.f-cur .lcard{background:rgba(255,255,255,.05);-webkit-backdrop-filter:blur(16px) saturate(1.2);backdrop-filter:blur(16px) saturate(1.2);
+  border:1px solid var(--glass-border);border-radius:var(--radius-xl);padding:44px 40px;box-shadow:var(--elev)}
+.f-cur .lcard.enter{animation:bFadeUp .5s ease}
+@keyframes bFadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+.f-cur .lwelcome{font-size:25px;opacity:.8;letter-spacing:.5px}
+.f-cur .lacct{opacity:.8}
+.f-cur .pin-wrap{gap:12px;padding:14px 18px;background:var(--glass);border:1px solid var(--glass-border);border-radius:var(--r-pop);box-shadow:var(--glass-shadow)}
+.f-cur .pin-slot::before{width:14px;height:14px;border:1.5px solid var(--muted);background:rgba(255,255,255,.5)}
+.f-cur .pin-slot.err::before{border-color:var(--danger)}
+.f-cur .pin-slot.lit .pin-digit{animation:bDigitIn .3s cubic-bezier(.3,1.5,.5,1)}
+@keyframes bDigitIn{0%{opacity:0;transform:scale(.5)}55%{transform:scale(1.53)}100%{opacity:1;transform:none}}
+
+/* ══ 튜닝 카드(--t-* 변수 = 기본값이 곧 현행 실측) ══ */
+.f-tuned .stage{
+  --t-bgLight:0;
+  --t-tint:.05; --t-blur:16px; --t-sat:1.2; --t-rad:24px; --t-padY:44px; --t-padX:40px;
+  --t-bdW:1px; --t-bdA:.55; --t-topHi:0; --t-sheenA:0; --t-sheenAng:115deg; --t-innerA:0;
+  --t-sh1Y:20px; --t-sh1B:56px; --t-sh1A:.16; --t-sh2Y:6px; --t-sh2B:18px; --t-sh2A:.07;
+  --t-pTint:.55; --t-pBlur:0px; --t-pRad:16px; --t-pBdA:.55; --t-pShA:1; --t-pPadY:14px; --t-pPadX:18px;
+  --t-dotSz:14px; --t-dotBd:1.5px; --t-dotGap:12px; --t-dotBgA:.5; --t-pop:1.53;
+  --t-logoSz:25px; --t-logoOp:.8; --t-logoLs:.5px; --t-subOp:.8;
+  --t-inT:.5s; --t-inY:12px;
+}
+.f-tuned .lcard{
+  background:linear-gradient(180deg, rgba(255,255,255,calc(var(--t-tint) + var(--t-innerA))) 0%, rgba(255,255,255,var(--t-tint)) 55%);
+  -webkit-backdrop-filter:blur(var(--t-blur)) saturate(var(--t-sat));backdrop-filter:blur(var(--t-blur)) saturate(var(--t-sat));
+  border:var(--t-bdW) solid rgba(255,255,255,var(--t-bdA));
+  border-radius:var(--t-rad);padding:var(--t-padY) var(--t-padX);
+  box-shadow:0 var(--t-sh1Y) var(--t-sh1B) rgba(74,77,231,var(--t-sh1A)),
+             0 var(--t-sh2Y) var(--t-sh2B) rgba(26,26,46,var(--t-sh2A)),
+             inset 0 1px 0 rgba(255,255,255,var(--t-topHi));
+}
+.f-tuned .lcard::after{content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background:linear-gradient(var(--t-sheenAng), rgba(255,255,255,var(--t-sheenA)) 0%, rgba(255,255,255,0) 38%, rgba(255,255,255,0) 68%, rgba(255,255,255,calc(var(--t-sheenA)*.45)) 100%)}
+.f-tuned .lcard.enter{animation:tFadeUp var(--t-inT) ease}
+@keyframes tFadeUp{from{opacity:0;transform:translateY(var(--t-inY))}to{opacity:1;transform:translateY(0)}}
+.f-tuned .lwelcome{font-size:var(--t-logoSz);opacity:var(--t-logoOp);letter-spacing:var(--t-logoLs)}
+.f-tuned .lacct{opacity:var(--t-subOp)}
+.f-tuned .pin-wrap{gap:var(--t-dotGap);padding:var(--t-pPadY) var(--t-pPadX);
+  background:rgba(255,255,255,var(--t-pTint));
+  -webkit-backdrop-filter:blur(var(--t-pBlur));backdrop-filter:blur(var(--t-pBlur));
+  border:1px solid rgba(255,255,255,var(--t-pBdA));border-radius:var(--t-pRad);
+  box-shadow:0 8px 32px rgba(74,77,231,calc(.08*var(--t-pShA))),0 2px 8px rgba(0,0,0,calc(.04*var(--t-pShA)))}
+.f-tuned .pin-slot::before{width:var(--t-dotSz);height:var(--t-dotSz);border:var(--t-dotBd) solid var(--muted);background:rgba(255,255,255,var(--t-dotBgA))}
+.f-tuned .pin-slot.err::before{border-color:var(--danger)}
+.f-tuned .pin-slot.lit .pin-digit{animation:tDigitIn .3s cubic-bezier(.3,1.5,.5,1)}
+@keyframes tDigitIn{0%{opacity:0;transform:scale(.5)}55%{transform:scale(var(--t-pop))}100%{opacity:1;transform:none}}
+
+/* ── 공통(양 프레임 동일 — 실물 계승) ── */
+.lwelcome{font-weight:800;color:var(--text);margin-bottom:22px;line-height:1.3;white-space:nowrap;
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}
+.lwelcome .thin{font-weight:400}.lwelcome .ac{color:var(--accent)}
+.lacct{font-size:12px;color:var(--accent);margin-bottom:14px}
+.pin-wrap{display:flex;justify-content:center;position:relative}
+.pin-slot{position:relative;width:42px;height:48px;display:grid;place-items:center}
+.pin-slot::before{content:'';position:absolute;left:50%;top:50%;box-sizing:border-box;border-radius:50%;opacity:.8;
+  transform:translate(-50%,-50%);transition:background .18s ease,border-color .18s ease,opacity .18s ease,transform .18s ease}
+.pin-slot.filled::before{background:var(--accent) !important;border-color:var(--accent) !important}
+.pin-slot.lit::before{opacity:0;transform:translate(-50%,-50%) scale(.4)}
+.pin-digit{position:absolute;inset:0;display:grid;place-items:center;font-size:19px;font-weight:700;color:var(--accent);opacity:0}
+.pin-slot.lit .pin-digit{opacity:1}
+.dot-ring{position:absolute;left:50%;top:50%;width:26px;height:26px;transform:translate(-50%,-50%);pointer-events:none;overflow:visible;opacity:0}
+.dot-ring circle{fill:none;stroke:var(--green);stroke-width:2.2;stroke-linecap:round;stroke-dasharray:100;stroke-dashoffset:100;transform:rotate(-90deg);transform-origin:50% 50%}
+.pin-wrap.success .dot-ring{opacity:1}
+.pin-wrap.success .dot-ring circle{animation:ringDraw .9s cubic-bezier(.5,0,.3,1) forwards;animation-delay:calc(var(--i,0)*.1s)}
+@keyframes ringDraw{to{stroke-dashoffset:0}}
+.pin-wrap.success .pin-slot::before{animation:dotWin .5s ease calc(var(--i,0)*.1s)}
+@keyframes dotWin{0%,100%{transform:translate(-50%,-50%) scale(1)}45%{transform:translate(-50%,-50%) scale(1.2)}}
+.lmsg{font-size:13px;height:18px;margin-top:10px;color:var(--accent);font-weight:600}
+.lmsg.err{color:var(--danger);font-weight:400}
+.lback{margin-top:16px;background:none;border:0;color:var(--accent);font-weight:600;font-size:12px;cursor:pointer;text-decoration:underline;text-underline-offset:3px;font-family:inherit}
+.lcard.lc-lift{transition:transform .48s cubic-bezier(.4,.05,.2,1),opacity .48s ease;transform:translateY(-26px) scale(.97);opacity:0;pointer-events:none}
+
+.stagecap{font-size:11.5px;color:var(--dim);margin:8px 2px 14px}
+
+/* ── 콘솔 ── */
+.demo-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+.btn{border:0;border-radius:var(--r-btn);padding:9px 15px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:transform .12s}
+.btn:active{transform:translateY(1px)}
+.btn.primary{background:var(--accent);color:#fff;box-shadow:0 5px 14px rgba(74,77,231,.28)}
+.btn.ghost{background:#eeedf5;color:#555}
+.pills{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+.pill{border:1.5px solid var(--border);background:#fff;border-radius:999px;padding:7px 15px;font-size:12.5px;font-weight:700;color:#555;cursor:pointer;font-family:inherit}
+.pill.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.pill .star{color:#f5b400}
+.pill.on .star{color:#ffe9a8}
+.pdesc{font-size:11.5px;color:var(--dim);min-height:18px}
+.sliders{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px 24px}
+.sl label{display:flex;justify-content:space-between;font-size:12px;font-weight:600;color:#555;margin-bottom:3px;gap:8px}
+.sl label .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sl label .val{font-variant-numeric:tabular-nums;color:var(--accent);font-weight:800;white-space:nowrap}
+.sl input[type=range]{width:100%;accent-color:var(--accent);margin:0}
+.grp{font-size:11px;font-weight:800;color:var(--dim);letter-spacing:.5px;margin:10px 0 0;grid-column:1/-1;border-top:1px dashed var(--border);padding-top:8px}
+.grp:first-child{border-top:0;margin-top:0;padding-top:0}
+.warnb{color:#b06a2e;font-weight:800;cursor:help}
+.segline{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.segline>span{font-size:12px;font-weight:700;color:#555}
+.seg{display:inline-flex;border:1.5px solid var(--border);border-radius:10px;overflow:hidden}
+.seg button{border:0;background:#fff;padding:7px 13px;font-size:12px;font-weight:700;color:#666;cursor:pointer;font-family:inherit}
+.seg button.on{background:var(--accent);color:#fff}
+.out{background:#1e1e2e;color:#e8e8f0;border-radius:12px;padding:14px 16px;font-family:'SF Mono',Menlo,Consolas,monospace;font-size:11.5px;line-height:1.75;overflow-x:auto;white-space:pre;margin-top:8px}
+.out .kp{color:#c3f0c8}.out .wn{color:#ffd28a}.out .cm{color:#8a8aa0}
+.foot{font-size:11.5px;color:var(--dim);line-height:1.75;background:#f7f7fb;border-radius:10px;padding:12px 14px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>🧊 로그인 글래스모피즘 — 플레이그라운드</h1>
+<div class="sub">PIN 로그인 화면의 <b>유리(글래스) 질감 전체</b>를 만지는 판 — 조작 축 <b>42개</b>(슬라이더 41 + 색 세트 1) · 배경 = <b>실물 WebGL 셰이더 원본 이식</b> · 색 = <code>:root</code> 토큰 계승(raw 색 창작 0, 흰색 alpha 변주 §3.5②).</div>
+
+<div class="frames">
+  <div class="frame f-cur">
+    <div class="frame-bar"><i></i><i></i><i></i><span>현행 (고정 기준)</span><span class="frame-tag cur">지금</span></div>
+    <div class="stage" id="stC">
+      <canvas id="cvC"></canvas>
+      <div class="tiltwrap"><div class="lcard enter" id="cardC">
+        <div class="lwelcome"><b>GS</b> <span class="thin">Caltex</span> <b class="ac">YEULMARU</b></div>
+        <div class="lacct">ems1130@gscf.or.kr 로 로그인</div>
+        <div class="pin-wrap" id="pwC"></div>
+        <div class="lmsg" id="msgC">PIN 번호를 입력해주세요</div>
+        <button class="lback" type="button">← 계정 다시 선택</button>
+      </div></div>
+    </div>
+  </div>
+  <div class="frame f-tuned">
+    <div class="frame-bar"><i></i><i></i><i></i><span>튜닝 (조작 대상)</span><span class="frame-tag neo">★ 여기가 바뀜</span></div>
+    <div class="stage" id="stT">
+      <canvas id="cvT"></canvas>
+      <div class="veil"></div>
+      <div class="tiltwrap" id="tiltT"><div class="lcard enter" id="cardT">
+        <div class="lwelcome"><b>GS</b> <span class="thin">Caltex</span> <b class="ac">YEULMARU</b></div>
+        <div class="lacct">ems1130@gscf.or.kr 로 로그인</div>
+        <div class="pin-wrap" id="pwT"></div>
+        <div class="lmsg" id="msgT">PIN 번호를 입력해주세요</div>
+        <button class="lback" type="button">← 계정 다시 선택</button>
+      </div></div>
+    </div>
+  </div>
+</div>
+<div class="stagecap">왼쪽 = 현행 고정 · 오른쪽 = 슬라이더 즉시 반영. 재생 버튼은 <b>양쪽 동시에</b> 돌아서 같은 모션으로 유리만 비교됨. 프레임은 스크롤해도 위에 붙어 있음(PC).</div>
+
+<div class="card">
+  <div class="demo-row">
+    <button class="btn primary" onclick="playFlow(true)">▶ 성공 플로우 (입력→링→리프트 진입)</button>
+    <button class="btn ghost" onclick="playErr()">↻ 불일치</button>
+    <button class="btn ghost" onclick="replayEnter()">⟲ 등장 리플레이</button>
+    <button class="btn ghost" onclick="resetDemo()">비우기</button>
+  </div>
+  <h2 style="margin-top:4px">프리셋 (4)</h2>
+  <div class="pills" id="pills"></div>
+  <div class="pdesc" id="pdesc"></div>
+</div>
+
+<div class="card">
+  <h2>미세조정 — 42축 <span style="font-size:11px;color:var(--dim);font-weight:400">(<span class="warnb">⚠</span> = 기틀 토큰 축: 바꾸면 §🚨 승인 갱신 경로)</span></h2>
+  <div class="sliders" id="sliders"></div>
+  <div class="segline" style="margin-top:12px"><span>배경 셰이더 색 세트(토큰 조합만)</span>
+    <div class="seg" id="bgSeg">
+      <button data-v="현행" class="on">현행 라이트 5색</button>
+      <button data-v="코발트 딥">코발트 딥</button>
+      <button data-v="피치 웜">피치 웜</button>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>선택값 — 현행 병기 + 계승/갱신 자동 판정 <button class="btn primary" style="float:right;padding:6px 14px;font-size:12px" onclick="copyVals()">📋 선택값 복사</button></h2>
+  <div class="out" id="out"></div>
+</div>
+
+<div class="foot" id="foot">
+<b>⑤ 재현 한계</b> · <b>배경 = 실물 WebGL 셰이더 GLSL 원본 이식</b>(색도 동일 토큰 주입) — WebGL2 미지원 환경만 CSS 그라데이션 폴백(자동, 이때 셰이더 3축은 화면에 안 먹음) · 폰트 = 시스템 폴백(실물 Pretendard와 자간 미세 차이) · 실물 PIN은 투명 <code>&lt;input&gt;</code> 4개(포커스·붙여넣기·백스페이스) — 여기선 재생 데모로 시각 모션만 · MS 인증·"확인 중" 로더는 생략 · PIN 패널 blur(중첩 backdrop-filter)는 크로뮴 실측 기준(사파리 구버전 차이 가능) · 그림자 축은 오프셋·blur·농도만 노출(구조 2층 유지 = <code>--elev</code>·<code>--glass-shadow</code> 골격 계승) · 셰이더 입자 위치는 시간 기반이라 창 크기 따라 다르게 보임.
+</div>
+</div>
+
+<script>
+/* ══════════ 상태 ══════════ */
+var DEFAULTS={
+  spd:.35, dist:.8, swirl:.5, bgLight:0,
+  tint:.05, blur:16, sat:1.2, rad:24, padY:44, padX:40,
+  bdW:1, bdA:.55, topHi:0, sheenA:0, sheenAng:115, innerA:0,
+  sh1Y:20, sh1B:56, sh1A:.16, sh2Y:6, sh2B:18, sh2A:.07,
+  pTint:.55, pBlur:0, pRad:16, pBdA:.55, pShA:1, pPadY:14, pPadX:18,
+  dotSz:14, dotBd:1.5, dotGap:12, dotBgA:.5, pop:1.53,
+  logoSz:25, logoOp:.8, logoLs:.5, subOp:.8,
+  inT:.5, inY:12, tilt:0
+};
+var S=Object.assign({},DEFAULTS); var bgSet='현행'; var activePreset='p0';
+var UNIT={blur:'px',rad:'px',padY:'px',padX:'px',bdW:'px',sheenAng:'deg',sh1Y:'px',sh1B:'px',sh2Y:'px',sh2B:'px',
+  pBlur:'px',pRad:'px',pPadY:'px',pPadX:'px',dotSz:'px',dotBd:'px',dotGap:'px',logoSz:'px',logoLs:'px',inT:'s',inY:'px'};
+
+var PRESETS=[
+ {id:'p0',nm:'현행',desc:'지금 라이브와 동일 — 5% 초박 유리 + 55% PIN 패널. 모든 축의 비교 기준.',st:{}},
+ {id:'p1',nm:'크리스탈 클리어',desc:'투명 유리 강조 — 틴트 낮추고 blur·채도·테두리 광·상단 하이라이트·사선 광택으로 "진짜 유리판" 반짝임.',
+  st:{tint:.03,blur:26,sat:1.65,bdA:.8,topHi:.85,sheenA:.16,innerA:.1,sh1A:.13,sh1B:64,pTint:.38,pBlur:10,pBdA:.7,dotBgA:.35}},
+ {id:'p2',nm:'프로스트 밀크',star:true,desc:'★ 추천 — 우윳빛 서리 유리(iOS 톤). 틴트 22%+blur 32로 가독 최상, 광택은 은은하게. 배경 베일 8%로 눈부심 정돈.',
+  st:{tint:.22,blur:32,sat:1.35,bdA:.65,topHi:.55,sheenA:.07,innerA:.06,sh1Y:22,sh1B:60,sh1A:.12,pTint:.5,pBlur:8,dotBgA:.6,bgLight:.08}},
+ {id:'p3',nm:'딥 레이어',desc:'떠 있는 입체 유리 — 그림자 깊게(28/72/22%), PIN 패널 62%+blur 14 두 층 위계, 도트 16px, 마우스 틸트 2.5°.',
+  st:{tint:.1,blur:20,sat:1.5,bdA:.45,topHi:.35,sh1Y:28,sh1B:72,sh1A:.22,sh2Y:10,sh2B:24,sh2A:.1,pTint:.62,pBlur:14,dotSz:16,tilt:2.5}}
+];
+
+var SL=[
+ {grp:'배경 셰이더 (실물 GLSL)'},
+ {k:'spd',nm:'유동 속도',min:0,max:1,step:.01,dp:2},
+ {k:'dist',nm:'왜곡 강도',min:0,max:1.6,step:.01,dp:2},
+ {k:'swirl',nm:'소용돌이',min:0,max:1.5,step:.01,dp:2},
+ {k:'bgLight',nm:'배경 흰 베일 α',min:0,max:.6,step:.01,dp:2},
+ {grp:'카드 유리 표면'},
+ {k:'tint',nm:'표면 흰 틴트 α',min:0,max:.6,step:.01,dp:2,tok:'W'},
+ {k:'blur',nm:'blur',min:0,max:48,step:1,dp:0,u:'px'},
+ {k:'sat',nm:'saturate',min:.6,max:2.2,step:.05,dp:2,u:'×'},
+ {k:'rad',nm:'라디우스',min:12,max:36,step:1,dp:0,u:'px',warn:1,tok:'R'},
+ {k:'padY',nm:'패딩 세로',min:24,max:64,step:1,dp:0,u:'px'},
+ {k:'padX',nm:'패딩 가로',min:24,max:64,step:1,dp:0,u:'px'},
+ {grp:'카드 테두리·광'},
+ {k:'bdW',nm:'테두리 두께',min:0,max:2,step:.5,dp:1,u:'px'},
+ {k:'bdA',nm:'테두리 흰 α',min:0,max:1,step:.01,dp:2,warn:1,tok:'W'},
+ {k:'topHi',nm:'상단 하이라이트 α',min:0,max:1,step:.05,dp:2},
+ {k:'sheenA',nm:'사선 광택 세기',min:0,max:.5,step:.01,dp:2},
+ {k:'sheenAng',nm:'광택 각도',min:90,max:160,step:1,dp:0,u:'°'},
+ {k:'innerA',nm:'내부 그라데이션 Δα',min:0,max:.35,step:.01,dp:2},
+ {grp:'카드 그림자 (--elev 2층)'},
+ {k:'sh1Y',nm:'층1(인디고) Y',min:0,max:48,step:1,dp:0,u:'px',warn:1},
+ {k:'sh1B',nm:'층1 blur',min:0,max:120,step:1,dp:0,u:'px',warn:1},
+ {k:'sh1A',nm:'층1 농도 α',min:0,max:.4,step:.01,dp:2,warn:1},
+ {k:'sh2Y',nm:'층2(잉크) Y',min:0,max:24,step:1,dp:0,u:'px',warn:1},
+ {k:'sh2B',nm:'층2 blur',min:0,max:48,step:1,dp:0,u:'px',warn:1},
+ {k:'sh2A',nm:'층2 농도 α',min:0,max:.3,step:.01,dp:2,warn:1},
+ {grp:'PIN 유리 패널'},
+ {k:'pTint',nm:'패널 흰 α',min:0,max:1,step:.01,dp:2,warn:1,tok:'W'},
+ {k:'pBlur',nm:'패널 blur (현행 0)',min:0,max:24,step:1,dp:0,u:'px'},
+ {k:'pRad',nm:'패널 라디우스',min:8,max:28,step:1,dp:0,u:'px',warn:1,tok:'R'},
+ {k:'pBdA',nm:'패널 테두리 α',min:0,max:1,step:.01,dp:2,warn:1,tok:'W'},
+ {k:'pShA',nm:'패널 그림자 배율',min:0,max:2,step:.05,dp:2,warn:1,u:'×'},
+ {k:'pPadY',nm:'패널 패딩 세로',min:6,max:26,step:1,dp:0,u:'px'},
+ {k:'pPadX',nm:'패널 패딩 가로',min:8,max:34,step:1,dp:0,u:'px'},
+ {grp:'PIN 도트'},
+ {k:'dotSz',nm:'도트 크기',min:10,max:22,step:1,dp:0,u:'px'},
+ {k:'dotBd',nm:'도트 테두리',min:1,max:3,step:.5,dp:1,u:'px'},
+ {k:'dotGap',nm:'도트 간격',min:4,max:24,step:1,dp:0,u:'px'},
+ {k:'dotBgA',nm:'빈 도트 흰 α',min:0,max:1,step:.05,dp:2},
+ {k:'pop',nm:'숫자 통통 정점',min:1,max:1.9,step:.01,dp:2,u:'×'},
+ {grp:'타이포'},
+ {k:'logoSz',nm:'로고 크기',min:18,max:30,step:1,dp:0,u:'px'},
+ {k:'logoOp',nm:'로고 불투명도',min:.5,max:1,step:.01,dp:2},
+ {k:'logoLs',nm:'로고 자간',min:0,max:3,step:.1,dp:1,u:'px'},
+ {k:'subOp',nm:'계정 문구 불투명도',min:.4,max:1,step:.01,dp:2},
+ {grp:'모션'},
+ {k:'inT',nm:'등장 시간',min:.2,max:1.2,step:.05,dp:2,u:'s'},
+ {k:'inY',nm:'등장 이동거리',min:0,max:40,step:1,dp:0,u:'px'},
+ {k:'tilt',nm:'마우스 틸트 (현행 0)',min:0,max:6,step:.5,dp:1,u:'°'}
+];
+
+/* ══════════ WebGL 셰이더 (index.html 원본 이식) ══════════ */
+window.__glOK=false;
+var SETS={
+ '현행':['--accent-light','--peach-light','--peach','--accent','--peach-text'],
+ '코발트 딥':['--accent','--accent-light','--accent-light','--accent','--peach-light'],
+ '피치 웜':['--peach','--peach-light','--peach-text','--accent-light','--peach']
+};
+function hexToVec4(h){h=(h||'').trim();if(h[0]==='#')h=h.slice(1);if(h.length===3)h=h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+  return [parseInt(h.slice(0,2),16)/255,parseInt(h.slice(2,4),16)/255,parseInt(h.slice(4,6),16)/255,1];}
+var VERT='#version 300 es\nin vec2 p;out vec2 v_objectUV;uniform vec2 u_res;void main(){gl_Position=vec4(p,0.,1.);vec2 uv=p*0.5;uv.x*=u_res.x/max(1.,u_res.y);v_objectUV=uv;}';
+var FRAG='#version 300 es\n'
+ +'precision mediump float;\n'
+ +'uniform float u_time;uniform highp vec2 u_res;\n'
+ +'uniform vec4 u_colors[10];uniform float u_colorsCount;\n'
+ +'uniform float u_distortion;uniform float u_swirl;\n'
+ +'in vec2 v_objectUV;out vec4 fragColor;\n'
+ +'vec2 rotate(vec2 uv,float th){return mat2(cos(th),sin(th),-sin(th),cos(th))*uv;}\n'
+ +'vec2 getPosition(int i,float t){float a=float(i)*.37;float b=.6+fract(float(i)/3.)*.9;float c=.8+fract(float(i+1)/4.);return .5+.5*vec2(sin(t*b+a),cos(t*c+a*1.5));}\n'
+ +'void main(){\n'
+ +'  vec2 uv=v_objectUV+.5;float t=.5*(u_time+41.5);\n'
+ +'  float radius=smoothstep(0.,1.,length(uv-.5));float center=1.-radius;\n'
+ +'  for(float i=1.;i<=2.;i++){uv.x+=u_distortion*center/i*sin(t+i*.4*smoothstep(.0,1.,uv.y))*cos(.2*t+i*2.4*smoothstep(.0,1.,uv.y));uv.y+=u_distortion*center/i*cos(t+i*2.*smoothstep(.0,1.,uv.x));}\n'
+ +'  vec2 uvR=uv-.5;uvR=rotate(uvR,-3.*u_swirl*radius);uvR+=.5;\n'
+ +'  vec3 color=vec3(0.);float tw=0.;\n'
+ +'  for(int i=0;i<10;i++){if(i>=int(u_colorsCount))break;vec2 pos=getPosition(i,t);vec3 cf=u_colors[i].rgb*u_colors[i].a;float dist=pow(length(uvR-pos),3.5);float w=1./(dist+1e-3);color+=cf*w;tw+=w;}\n'
+ +'  fragColor=vec4(color/max(1e-4,tw),1.0);\n'
+ +'}';
+function makeGL(cv){
+  var gl=cv.getContext('webgl2',{antialias:false}); if(!gl)return null;
+  function mk(ty,src){var s=gl.createShader(ty);gl.shaderSource(s,src);gl.compileShader(s);
+    if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))console.warn('[pg-shader]',gl.getShaderInfoLog(s));return s;}
+  var pr=gl.createProgram();gl.attachShader(pr,mk(gl.VERTEX_SHADER,VERT));gl.attachShader(pr,mk(gl.FRAGMENT_SHADER,FRAG));gl.linkProgram(pr);
+  if(!gl.getProgramParameter(pr,gl.LINK_STATUS)){console.warn('[pg-shader]',gl.getProgramInfoLog(pr));return null;}
+  gl.useProgram(pr);
+  var b=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,b);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
+  var lp=gl.getAttribLocation(pr,'p');gl.enableVertexAttribArray(lp);gl.vertexAttribPointer(lp,2,gl.FLOAT,false,0,0);
+  var inst={gl:gl,cv:cv,pr:pr,
+    uRes:gl.getUniformLocation(pr,'u_res'),uTime:gl.getUniformLocation(pr,'u_time'),
+    uCnt:gl.getUniformLocation(pr,'u_colorsCount'),uDist:gl.getUniformLocation(pr,'u_distortion'),uSwirl:gl.getUniformLocation(pr,'u_swirl')};
+  inst.setColors=function(names){var cs=getComputedStyle(document.documentElement);
+    for(var i=0;i<names.length;i++)gl.uniform4fv(gl.getUniformLocation(pr,'u_colors['+i+']'),hexToVec4(cs.getPropertyValue(names[i])));
+    gl.uniform1f(inst.uCnt,names.length);};
+  inst.setParams=function(d,s){gl.uniform1f(inst.uDist,d);gl.uniform1f(inst.uSwirl,s);};
+  return inst;
+}
+var glC=null,glT=null,T0=performance.now();
+try{
+  glC=makeGL(document.getElementById('cvC'));
+  glT=makeGL(document.getElementById('cvT'));
+}catch(e){console.warn('[pg-shader] init fail',e);}
+if(glC){glC.setColors(SETS['현행']);glC.setParams(.8,.5);}else{document.getElementById('stC').classList.add('no-gl');}
+if(glT){glT.setColors(SETS[bgSet]);glT.setParams(S.dist,S.swirl);}else{document.getElementById('stT').classList.add('no-gl');}
+window.__glOK=!!(glC&&glT);
+if(!window.__glOK)document.getElementById('foot').innerHTML+=' · <b style="color:#b06a2e">이 환경 = WebGL2 불가 → CSS 폴백으로 표시 중</b>';
+function drawInst(inst,now,speed){
+  var gl=inst.gl,cv=inst.cv,d=Math.min(window.devicePixelRatio||1,1.5);
+  var w=(cv.clientWidth*d)|0,h=(cv.clientHeight*d)|0;
+  if(w>0&&h>0&&(cv.width!==w||cv.height!==h)){cv.width=w;cv.height=h;gl.viewport(0,0,w,h);gl.uniform2f(inst.uRes,w,h);}
+  gl.uniform1f(inst.uTime,(now-T0)/1000*speed);
+  gl.drawArrays(gl.TRIANGLES,0,3);
+}
+(function loop(now){
+  now=now||performance.now();
+  if(glC)drawInst(glC,now,.35);        /* 현행 = speed 0.35 고정 */
+  if(glT)drawInst(glT,now,S.spd);
+  requestAnimationFrame(loop);
+})();
+
+/* ══════════ 도트 빌드 + 데모 ══════════ */
+function buildDots(id){var w=document.getElementById(id);w.innerHTML='';
+  for(var i=0;i<4;i++){var d=document.createElement('div');d.className='pin-slot';d.style.setProperty('--i',i);
+    d.innerHTML='<span class="pin-digit"></span><svg class="dot-ring" viewBox="0 0 26 26" aria-hidden="true"><circle cx="13" cy="13" r="11" pathLength="100"/></svg>';
+    w.appendChild(d);}}
+buildDots('pwC');buildDots('pwT');
+function slots(id){return document.querySelectorAll('#'+id+' .pin-slot');}
+var _t=[];function clearT(){_t.forEach(clearTimeout);_t=[];}
+function eachFrame(fn){fn('pwC','msgC','cardC','stC');fn('pwT','msgT','cardT','stT');}
+function resetDemo(){clearT();
+  eachFrame(function(pw,msg,card,st){
+    document.getElementById(pw).classList.remove('success');
+    slots(pw).forEach(function(s){s.classList.remove('filled','lit','err');s.querySelector('.pin-digit').textContent='';});
+    var m=document.getElementById(msg);m.className='lmsg';m.textContent='PIN 번호를 입력해주세요';
+    var c=document.getElementById(card);c.classList.remove('lc-lift');
+    document.getElementById(st).classList.remove('leave');
+  });}
+function typeDigit(i,digit){
+  eachFrame(function(pw,msg){
+    var s=slots(pw)[i];s.querySelector('.pin-digit').textContent=digit;
+    s.classList.add('lit');
+    if(i===0){var m=document.getElementById(msg);m.textContent='';}
+  });
+  _t.push(setTimeout(function(){eachFrame(function(pw){var s=slots(pw)[i];s.classList.remove('lit');s.classList.add('filled');});},300));
+}
+function playFlow(withLift){resetDemo();
+  var ds=[(Math.random()*10)|0,(Math.random()*10)|0,(Math.random()*10)|0,(Math.random()*10)|0];
+  for(var i=0;i<4;i++)(function(i){_t.push(setTimeout(function(){typeDigit(i,ds[i]);},420+i*430));})(i);
+  _t.push(setTimeout(function(){eachFrame(function(pw){document.getElementById(pw).classList.add('success');});},420+4*430+180));
+  if(withLift){
+    _t.push(setTimeout(function(){eachFrame(function(pw,msg,card,st){
+      document.getElementById(card).classList.add('lc-lift');document.getElementById(st).classList.add('leave');});},420+4*430+1500));
+    _t.push(setTimeout(resetDemo,420+4*430+3300));
+  }
+}
+function playErr(){resetDemo();
+  for(var i=0;i<4;i++)(function(i){_t.push(setTimeout(function(){typeDigit(i,(Math.random()*10)|0);},260+i*260));})(i);
+  _t.push(setTimeout(function(){
+    eachFrame(function(pw,msg){
+      slots(pw).forEach(function(s){s.classList.remove('filled','lit');s.querySelector('.pin-digit').textContent='';s.classList.add('err');});
+      var m=document.getElementById(msg);m.className='lmsg err';m.textContent='PIN이 일치하지 않습니다';
+    });
+    _t.push(setTimeout(function(){eachFrame(function(pw,msg){
+      slots(pw).forEach(function(s){s.classList.remove('err');});
+      var m=document.getElementById(msg);m.className='lmsg';m.textContent='PIN 번호를 입력해주세요';});},1700));
+  },260+4*260+180));
+}
+function replayEnter(){resetDemo();
+  eachFrame(function(pw,msg,card){var c=document.getElementById(card);c.classList.remove('enter');void c.offsetWidth;c.classList.add('enter');});
+}
+
+/* 마우스 틸트(튜닝 프레임 전용 · tilt=0이면 정지) */
+(function(){var st=document.getElementById('stT'),tw=document.getElementById('tiltT');
+  st.addEventListener('pointermove',function(e){if(!S.tilt){tw.style.transform='';return;}
+    var r=st.getBoundingClientRect(),x=(e.clientX-r.left)/r.width-.5,y=(e.clientY-r.top)/r.height-.5;
+    tw.style.transform='rotateX('+(-y*2*S.tilt).toFixed(2)+'deg) rotateY('+(x*2*S.tilt).toFixed(2)+'deg)';});
+  st.addEventListener('pointerleave',function(){tw.style.transform='';});})();
+
+/* ══════════ 상태 → 화면 반영(단일 반영점) ══════════ */
+var stT=document.getElementById('stT');
+function apply(){
+  for(var k in S){if(k==='tilt')continue;stT.style.setProperty('--t-'+k,S[k]+(UNIT[k]||''));}
+  if(glT)glT.setParams(S.dist,S.swirl);
+  SL.forEach(function(o){if(!o.k)return;
+    var r=document.getElementById('r-'+o.k),v=document.getElementById('v-'+o.k);
+    if(r&&parseFloat(r.value)!==S[o.k])r.value=S[o.k];
+    if(v)v.textContent=fmt(o,S[o.k]);});
+  buildOut();
+}
+function fmt(o,v){var s=(o.dp!==undefined?v.toFixed(o.dp):String(v));return o.u==='×'?'×'+s:s+(o.u||'');}
+
+/* ══════════ 콘솔 빌드 ══════════ */
+function buildSliders(){var box=document.getElementById('sliders');box.innerHTML='';
+  SL.forEach(function(o){
+    if(o.grp&&!o.k){var g=document.createElement('div');g.className='grp';g.textContent=o.grp;box.appendChild(g);return;}
+    var d=document.createElement('div');d.className='sl';
+    d.innerHTML='<label><span class="nm">'+o.nm+(o.warn?' <span class="warnb" title="기틀 토큰 축 — 바꾸면 운영자 승인 갱신(§🚨)">⚠</span>':'')
+      +'</span><span class="val" id="v-'+o.k+'">'+fmt(o,S[o.k])+'</span></label>'
+      +'<input type="range" id="r-'+o.k+'" min="'+o.min+'" max="'+o.max+'" step="'+o.step+'" value="'+S[o.k]+'">';
+    box.appendChild(d);
+    d.querySelector('input').addEventListener('input',function(e){S[o.k]=parseFloat(e.target.value);markCustom();apply();});
+  });}
+function buildPills(){var box=document.getElementById('pills');box.innerHTML='';
+  PRESETS.forEach(function(p){
+    var b=document.createElement('button');b.className='pill'+(activePreset===p.id?' on':'');b.id='pill-'+p.id;
+    b.innerHTML=(p.star?'<span class="star">★</span> ':'')+p.nm;
+    b.addEventListener('click',function(){activePreset=p.id;S=Object.assign({},DEFAULTS,p.st);resetDemo();buildPills();apply();
+      document.getElementById('pdesc').textContent=p.desc;});
+    box.appendChild(b);});
+  var c=document.createElement('button');c.className='pill'+(activePreset==='custom'?' on':'');c.id='pill-custom';
+  c.textContent='커스텀';c.style.display=activePreset==='custom'?'':'none';box.appendChild(c);
+  var p=PRESETS.find(function(x){return x.id===activePreset;});
+  document.getElementById('pdesc').textContent=p?p.desc:'슬라이더 직접 조정 중 — 아래 선택값이 그대로 스펙.';
+}
+function markCustom(){if(activePreset!=='custom'){activePreset='custom';buildPills();}}
+document.getElementById('bgSeg').addEventListener('click',function(e){var b=e.target.closest('button');if(!b)return;
+  this.querySelectorAll('button').forEach(function(x){x.classList.remove('on');});b.classList.add('on');
+  bgSet=b.dataset.v;if(glT)glT.setColors(SETS[bgSet]);buildOut();});
+
+/* ══════════ 선택값 출력 — 현행 병기 + 계승/갱신 자동 판정 ══════════ */
+var near=function(a,b,eps){return Math.abs(a-b)<(eps||.004);};
+var WTOK=[[.55,'--glass'],[.78,'--glass-surface'],[.45,'--glass-menu']];
+var RTOK=[[24,'--radius-xl'],[20,'--radius-lg'],[16,'--radius·--r-pop'],[10,'--r-btn']];
+function tokMatch(o,v){var list=o.tok==='W'?WTOK:o.tok==='R'?RTOK:null;if(!list)return null;
+  for(var i=0;i<list.length;i++)if(near(v,list[i][0]))return list[i][1];return null;}
+function tag(o,v){
+  if(near(v,DEFAULTS[o.k]))return '현행 유지';
+  var t=tokMatch(o,v);if(t)return '계승='+t+' 동값';
+  return o.warn?'갱신 후보 ⚠기틀':'변경(리터럴'+(o.tok==='W'?'·흰α변주 §3.5②':'')+')';
+}
+function pad(s,n){s=String(s);while(s.length<n)s+=' ';return s;}
+function buildOut(){
+  var L=[],grp='';
+  L.push('[로그인 글래스모피즘 — 선택값] 프리셋: '+(activePreset==='custom'?'커스텀':(PRESETS.find(function(p){return p.id===activePreset;})||{}).nm));
+  L.push('셰이더 색 세트 : '+bgSet+' ('+SETS[bgSet].join(' ')+')'+(bgSet==='현행'?'  ← 현행 유지':'  ← 갱신 후보(토큰 조합 변경)'));
+  SL.forEach(function(o){
+    if(o.grp&&!o.k){grp=o.grp;L.push('');L.push('· '+grp);return;}
+    var v=S[o.k];
+    L.push('  '+pad(o.nm,14)+': '+pad(fmt(o,v),9)+' [현행 '+fmt(o,DEFAULTS[o.k])+']  '+tag(o,v));
+  });
+  L.push('');L.push('· 배선용 CSS (index.html — 색은 흰 alpha 변주 + 토큰만)');
+  L.push(cssOut());
+  var el=document.getElementById('out');
+  el.innerHTML=L.join('\n')
+    .replace(/(⚠기틀|갱신 후보)/g,'<span class="wn">$1</span>')
+    .replace(/(계승=[^\s]+|현행 유지)/g,'<span class="kp">$1</span>')
+    .replace(/(\/\*[^*]*\*\/)/g,'<span class="cm">$1</span>');
+}
+function cssOut(){
+  var elevSame=near(S.sh1Y,20)&&near(S.sh1B,56)&&near(S.sh1A,.16)&&near(S.sh2Y,6)&&near(S.sh2B,18)&&near(S.sh2A,.07);
+  var sh=elevSame?'var(--elev)':'0 '+S.sh1Y+'px '+S.sh1B+'px rgba(74,77,231,'+S.sh1A+'), 0 '+S.sh2Y+'px '+S.sh2B+'px rgba(26,26,46,'+S.sh2A+')';
+  if(S.topHi>0)sh+=', inset 0 1px 0 rgba(255,255,255,'+S.topHi+')';
+  var bg=S.innerA>0
+    ?'linear-gradient(180deg, rgba(255,255,255,'+(Math.round((S.tint+S.innerA)*100)/100)+') 0%, rgba(255,255,255,'+S.tint+') 55%)'
+    :'rgba(255,255,255,'+S.tint+')';
+  var bd=near(S.bdA,.55)?'var(--glass-border)':'rgba(255,255,255,'+S.bdA+')';
+  var rad=near(S.rad,24)?'var(--radius-xl)':near(S.rad,20)?'var(--radius-lg)':near(S.rad,16)?'var(--radius)':S.rad+'px /* 갱신 후보 ⚠ */';
+  var c=['.login-card{',
+   '  background:'+bg+';',
+   '  -webkit-backdrop-filter:blur('+S.blur+'px) saturate('+S.sat+');backdrop-filter:blur('+S.blur+'px) saturate('+S.sat+');',
+   '  border:'+S.bdW+'px solid '+bd+';border-radius:'+rad+';',
+   '  padding:'+S.padY+'px '+S.padX+'px;box-shadow:'+sh+';',
+   '}'];
+  if(S.sheenA>0)c.push('.login-card::after{ /* 사선 광택 오버레이(신규) */\n  content:\'\';position:absolute;inset:0;border-radius:inherit;pointer-events:none;\n  background:linear-gradient('+S.sheenAng+'deg, rgba(255,255,255,'+S.sheenA+') 0%, rgba(255,255,255,0) 38%, rgba(255,255,255,0) 68%, rgba(255,255,255,'+(Math.round(S.sheenA*45)/100)+') 100%);\n}');
+  var pBg=near(S.pTint,.55)?'var(--glass)':'rgba(255,255,255,'+S.pTint+')';
+  var pBd=near(S.pBdA,.55)?'var(--glass-border)':'rgba(255,255,255,'+S.pBdA+')';
+  var pRad=near(S.pRad,16)?'var(--r-pop)':S.pRad+'px /* 갱신 후보 ⚠ */';
+  var pSh=near(S.pShA,1)?'var(--glass-shadow)':'0 8px 32px rgba(74,77,231,'+(Math.round(S.pShA*8)/100)+'), 0 2px 8px rgba(0,0,0,'+(Math.round(S.pShA*4)/100)+') /* --glass-shadow×'+S.pShA.toFixed(2)+' */';
+  c.push('.pin-wrap{gap:'+S.dotGap+'px;padding:'+S.pPadY+'px '+S.pPadX+'px;background:'+pBg+';');
+  c.push('  '+(S.pBlur>0?'-webkit-backdrop-filter:blur('+S.pBlur+'px);backdrop-filter:blur('+S.pBlur+'px);':'/* 패널 blur 없음(현행) */'));
+  c.push('  border:1px solid '+pBd+';border-radius:'+pRad+';box-shadow:'+pSh+';}');
+  c.push('.pin-slot::before{width:'+S.dotSz+'px;height:'+S.dotSz+'px;border:'+S.dotBd+'px solid var(--muted);background:rgba(255,255,255,'+S.dotBgA+');}');
+  c.push('.login-welcome{font-size:'+S.logoSz+'px;opacity:'+S.logoOp+';letter-spacing:'+S.logoLs+'px;} /* 계정문구 opacity '+S.subOp+' */');
+  c.push('@keyframes fadeUp{from{opacity:0;transform:translateY('+S.inY+'px)}...} /* '+S.inT+'s · 통통 정점 '+S.pop+' */');
+  if(S.tilt>0)c.push('/* 마우스 틸트 '+S.tilt+'° = JS 신규(pointermove) */');
+  if(!near(S.bgLight,0))c.push('/* 배경 흰 베일: #login 셰이더 위 rgba(255,255,255,'+S.bgLight+') 레이어(신규) */');
+  if(!(near(S.spd,.35)&&near(S.dist,.8)&&near(S.swirl,.5)))c.push('/* 셰이더 uniform: speed '+S.spd+' [현행 .35] · distortion '+S.dist+' [.8] · swirl '+S.swirl+' [.5] */');
+  return c.join('\n');
+}
+function copyVals(){
+  var txt=document.getElementById('out').innerText;
+  function done(b){var o=b.textContent;b.textContent='✓ 복사됨';setTimeout(function(){b.textContent=o;},1400);}
+  var b=event.target;
+  if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(txt).then(function(){done(b);}).catch(function(){fallbackCopy(txt);done(b);});}
+  else{fallbackCopy(txt);done(b);}
+}
+function fallbackCopy(t){var ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();try{document.execCommand('copy');}catch(e){}document.body.removeChild(ta);}
+
+/* ══════════ 초기화 ══════════ */
+buildSliders();buildPills();apply();
+setTimeout(function(){playFlow(false);},700);
+</script>
+</body>
+</html>
