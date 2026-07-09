@@ -1662,10 +1662,22 @@ table.promo-board-table thead th:last-child{border-top-right-radius:11px}
 .srail-fc b{color:var(--peach-text)}
 .srail-ft{padding:8px 16px 12px;display:flex;gap:8px;align-items:center;flex-shrink:0}
 .srail-note{font-size:10px;color:var(--muted);line-height:1.4;flex:1}
+/* 레일 캐러셀 — 판매중 공연 1장씩(버튼·점·드래그 넘김 + 유휴 자동넘김). 색·모션 전부 토큰 계승, 신규 raw hex 0. */
+.srail-carousel{display:flex;flex-direction:column;height:100%;min-height:0}
+.srail-vp{flex:1;min-height:0;overflow:hidden;position:relative;touch-action:pan-y}
+.srail-track{display:flex;height:100%;will-change:transform;transition:transform .4s cubic-bezier(.55,0,.45,1)}
+.srail-track.srail-drag{transition:none}
+.srail-slide{flex:0 0 100%;min-width:0;overflow-y:auto;padding:0 2px}
+.srail-cnav{display:flex;align-items:center;justify-content:center;gap:10px;padding:7px 6px 2px;flex-shrink:0}
+.srail-cbtn{width:26px;height:26px;border-radius:999px;border:1px solid var(--glass-bd);background:var(--glass-surface);color:var(--accent);font-size:15px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;padding:0;flex-shrink:0;transition:border-color .15s,background .15s}
+.srail-cbtn:hover{border-color:var(--accent);background:var(--accent-light)}
+.srail-dots{display:flex;gap:5px;align-items:center;flex-wrap:wrap;justify-content:center;max-width:62%}
+.srail-dot{width:6px;height:6px;border-radius:999px;background:var(--muted);border:none;padding:0;cursor:pointer;transition:background .2s,width .2s}
+.srail-dot.on{background:var(--accent);width:16px}
 /* 레일 인라인 드릴(개별 분석 — 분석 보드 드릴 계승, 캘린더 안 가리고 레일 안에서 동작) */
 .srail-drill{animation:srailIn .22s ease}
 @keyframes srailIn{from{opacity:0;transform:translateX(10px)}to{opacity:1;transform:none}}
-@media (prefers-reduced-motion:reduce){.srail-drill{animation:none}}
+@media (prefers-reduced-motion:reduce){.srail-drill{animation:none}.srail-track{transition:none}}
 .srail-dhd{display:flex;align-items:center;gap:8px;margin-bottom:8px;min-width:0}
 .srail-dname{flex:1;min-width:0;font-size:13.5px;font-weight:800;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .srail-chart{border:1px solid var(--border);border-radius:var(--r-btn);background:var(--surface-solid);padding:6px 4px 2px;margin:8px 0}
@@ -4098,6 +4110,7 @@ function _srailArmResize(){
   if(window._srailResizeArmed)return; window._srailResizeArmed=1;
   window.addEventListener('resize',function(){
     _srailAlignTop();
+    if(window.innerWidth<=1200)_srailCarStop();   // 레일 CSS 숨김되면 캐러셀 전역 리스너·타이머 철거(감사2 LOW — 숨은 레일 유휴 리스너 잔존 방지)
     if(window.innerWidth>1200&&_salesState&&!_salesState.daily&&!_srailBusy)_srailInit();
     if(typeof panelOpen!=='undefined'&&panelOpen)_panelRailReflow();   // 1200px 경계 리사이즈 시 열린 패널 폭 stale 방지(분신술 1호 LOW)
   });
@@ -4238,8 +4251,42 @@ function _srailCardEx(e){
     +'<div class="srail-r3"><span>유료 '+_srailNumTxt(e._paid)+' / 목표 '+_srailNumTxt(e._goal)+'명</span><span>총 '+_srailNumTxt(e._total)+'명</span></div>'
     +'</div>';
 }
+// ── 레일 캐러셀 (판매중 공연 1장씩 · 버튼/점/드래그 넘김 + 유휴 자동넘김) ──
+// 자동넘김 = 아무 동작 없을 때만: SRAIL_CAR_IDLE 유휴 뒤 다음 공연. 캐러셀·타 기능 등 아무 상호작용이나 하면 정지 → SRAIL_CAR_HOLD 유휴 뒤 재개.
+var _srailCar={idx:0,count:0,autoT:null,resumeT:null,bound:null,swiped:false};
+var SRAIL_CAR_IDLE=7000, SRAIL_CAR_HOLD=10000;
+function _srailCarActive(){ var vp=document.querySelector('.srail-vp'); return !!(vp&&vp.offsetParent&&_srailView.mode==='list'&&_srailCar.count>=2); }
+function _srailCarApply(anim){ var tr=document.querySelector('.srail-track'); if(!tr)return; if(anim)tr.classList.remove('srail-drag'); else tr.classList.add('srail-drag'); tr.style.transform='translateX('+(-_srailCar.idx*100)+'%)'; document.querySelectorAll('.srail-dot').forEach(function(d,i){ d.classList.toggle('on',i===_srailCar.idx); }); document.querySelectorAll('.srail-slide').forEach(function(s,i){ if(i===_srailCar.idx)s.removeAttribute('inert'); else s.setAttribute('inert',''); }); }   // 오프스크린 슬라이드=inert(키보드 포커스·상호작용 차단, 감사4 L2)
+function _srailCarTo(i,anim){ if(_srailCar.count<1)return; _srailCar.idx=((i%_srailCar.count)+_srailCar.count)%_srailCar.count; _srailCarApply(anim!==false); }
+function _srailCarStartAuto(){ if(_srailCar.autoT||_srailCar.count<2)return; _srailCar.autoT=setInterval(function(){ if(document.hidden||!_srailCarActive())return; _srailCarTo(_srailCar.idx+1,true); },SRAIL_CAR_IDLE); }
+function _srailCarStopAuto(){ if(_srailCar.autoT){clearInterval(_srailCar.autoT);_srailCar.autoT=null;} }
+function _srailCarKick(){ _srailCarStopAuto(); if(_srailCar.resumeT)clearTimeout(_srailCar.resumeT); _srailCar.resumeT=setTimeout(function(){ _srailCar.resumeT=null; if(_srailCarActive())_srailCarStartAuto(); },SRAIL_CAR_HOLD); }
+function _srailCarStop(){ _srailCarStopAuto(); if(_srailCar.resumeT){clearTimeout(_srailCar.resumeT);_srailCar.resumeT=null;} if(_srailCar.bound){ ['pointerdown','keydown','wheel','touchstart'].forEach(function(ev){ document.removeEventListener(ev,_srailCar.bound,true); }); _srailCar.bound=null; } }
+function _srailCarMount(count){
+  _srailCarStop();
+  _srailCar.count=count; if(_srailCar.idx>=count)_srailCar.idx=count-1; if(_srailCar.idx<0)_srailCar.idx=0;
+  _srailCarApply(false);
+  if(count<2)return;
+  _srailCar.bound=function(){ _srailCarKick(); };   // 전역 유휴 감지 — 아무 상호작용이나 하면 자동넘김 정지(타 기능 조작 포함)
+  ['pointerdown','keydown','wheel','touchstart'].forEach(function(ev){ document.addEventListener(ev,_srailCar.bound,{capture:true,passive:true}); });
+  _srailCarBindDrag();
+  _srailCarStartAuto();
+}
+function _srailCarBindDrag(){
+  var vp=document.querySelector('.srail-vp'), tr=document.querySelector('.srail-track'); if(!vp||!tr)return;
+  var sx=0,sy=0,dx=0,down=false,lock='';   // lock: ''=미정 · h=가로(넘김) · v=세로(스크롤 위임)
+  vp.addEventListener('pointerdown',function(e){ if(e.button&&e.button!==0)return; down=true;lock='';dx=0;sx=e.clientX;sy=e.clientY;_srailCar.swiped=false; });
+  vp.addEventListener('pointermove',function(e){ if(!down)return; var mx=e.clientX-sx,my=e.clientY-sy;
+    if(!lock){ if(Math.abs(mx)>8&&Math.abs(mx)>Math.abs(my)*1.2){ lock='h'; try{vp.setPointerCapture(e.pointerId);}catch(_e){} } else if(Math.abs(my)>8){ lock='v'; } }
+    if(lock==='h'){ e.preventDefault(); dx=mx; tr.classList.add('srail-drag'); tr.style.transform='translateX(calc('+(-_srailCar.idx*100)+'% + '+dx.toFixed(0)+'px))'; }
+  });
+  function end(){ if(!down)return; down=false; if(lock==='h'){ var w=vp.clientWidth||1; if(Math.abs(dx)>8)_srailCar.swiped=true; if(dx<=-w*0.18)_srailCarTo(_srailCar.idx+1,true); else if(dx>=w*0.18)_srailCarTo(_srailCar.idx-1,true); else _srailCarApply(true); } lock=''; }
+  vp.addEventListener('pointerup',end); vp.addEventListener('pointercancel',end); vp.addEventListener('pointerleave',end);
+  vp.addEventListener('click',function(e){ if(_srailCar.swiped){ e.stopPropagation(); e.preventDefault(); _srailCar.swiped=false; } },true);   // 스와이프 직후 카드 클릭(드릴) 오작동 방지
+}
 function _srailRender(){
   var els=_srailEls(); if(!els.body)return;
+  _srailCarStop();   // 재렌더/드릴/비활성 전 캐러셀 타이머·리스너 정리(idx는 보존)
   _srailAlignTop();
   try{ _srailRenderInner(els); }catch(e){   // 렌더 전체 방어 — 예외 시 공백 대신 재시도 UI(분신술 5호 LOW)
     console.warn('[srail render]',e);
@@ -4282,7 +4329,16 @@ function _srailRenderInner(els){
     els.body.innerHTML='<div class="u-empty" style="padding:30px 8px"><div class="ico">🎫</div><div class="msg">지금 판매·진행중인 프로그램이 없어요</div></div>'+_srailExErrNote();
     return;
   }
-  els.body.innerHTML=actives.map(function(x){return x._kind==='ex'?_srailCardEx(x):_srailCard(x);}).join('')+_srailExErrNote();
+  // 판매중이 2건↑이면 캐러셀(1장씩 · 버튼/점/드래그 + 유휴 자동넘김) · 1건이면 그대로 카드.
+  if(actives.length>=2){
+    var slides=actives.map(function(x){ return '<div class="srail-slide">'+(x._kind==='ex'?_srailCardEx(x):_srailCard(x))+'</div>'; }).join('');
+    var dots=actives.map(function(x,i){ return '<button class="srail-dot'+(i===_srailCar.idx?' on':'')+'" onclick="_srailCarTo('+i+',true)" aria-label="'+(i+1)+'번째 공연"></button>'; }).join('');
+    els.body.innerHTML='<div class="srail-carousel"><div class="srail-vp"><div class="srail-track">'+slides+'</div></div>'
+      +'<div class="srail-cnav"><button class="srail-cbtn" onclick="_srailCarTo(_srailCar.idx-1,true)" aria-label="이전 공연">‹</button><div class="srail-dots">'+dots+'</div><button class="srail-cbtn" onclick="_srailCarTo(_srailCar.idx+1,true)" aria-label="다음 공연">›</button></div></div>'+_srailExErrNote();
+    _srailCarMount(actives.length);
+  } else {
+    els.body.innerHTML=actives.map(function(x){return x._kind==='ex'?_srailCardEx(x):_srailCard(x);}).join('')+_srailExErrNote();
+  }
 }
 function _srailExErrNote(){
   return _srailExErr?'<div class="srail-note" style="padding:4px 4px 8px">전시 데이터를 못 불러왔어요 — [새로고침]으로 재시도</div>':'';
