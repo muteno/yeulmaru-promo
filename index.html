@@ -4336,6 +4336,20 @@ function _srailInit(force){
 // 리사이즈 대응(1회 장전): 좁은 화면에서 스킵했던 레일 로드 재시도 + 열린 날짜 패널 폭 재계산(분신술 1호 LOW)
 function _srailArmResize(){
   if(window._srailResizeArmed)return; window._srailResizeArmed=1;
+  // [정렬 견고화 260710] 좌 hdr(월·연·필터 밴드) 높이 = 우 레일 ttlzone 높이 SSOT(_srailAlignTop이 동기). 로딩 중엔
+  //   _srailInit이 1회만 정렬 → 그 뒤 웹폰트(Noto/Pretendard) 지연 로드가 32px 월텍스트 라인박스를 바꿔 hdr가 리플로우되면
+  //   데이터 로드(_srailRender) 전까지 재정렬 훅이 없어 판매 헤더가 요일바와 어긋난 채 방치됐다(운영자 신고 — 헤드리스 통제실험 GAP 25px 재현).
+  //   → hdr·요일바 크기 변화를 ResizeObserver로 관측해 즉시 재정렬(자기교정) + 폰트 로드 완료 시점 명시 훅.
+  //   _srailAlignTop은 요일바 sticky top(위치)·우측열(ttlzone/레일) 크기만 조정 — 관측 대상(.hdr·요일바)의 box 크기는 안 바꿔(RO는 크기만 감지) 되먹임(무한루프) 없음.
+  try{
+    if(window.ResizeObserver){
+      var _roHdr=document.querySelector('#main-area .hdr'), _roChw=document.getElementById('cal-head-wrap');
+      var _srailRO=new ResizeObserver(function(){ try{_srailAlignTop();}catch(_e){console.warn('[srail align ro]',_e);} });
+      if(_roHdr)_srailRO.observe(_roHdr); if(_roChw)_srailRO.observe(_roChw);
+      window._srailHdrRO=_srailRO;
+    }
+    if(document.fonts&&document.fonts.ready&&document.fonts.ready.then){ document.fonts.ready.then(function(){ try{_srailAlignTop();}catch(_e){console.warn('[srail align fonts]',_e);} }); }
+  }catch(_e){}
   window.addEventListener('resize',function(){
     _srailAlignTop();
     if(window.innerWidth<=1200)_srailCarStop();   // 레일 CSS 숨김되면 캐러셀 전역 리스너·타이머 철거(감사2 LOW — 숨은 레일 유휴 리스너 잔존 방지)
