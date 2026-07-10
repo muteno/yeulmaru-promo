@@ -19240,7 +19240,7 @@ function _tktRender(){
     +_tktLabel('공연내용','공연 내용 (오픈 공지문)',0)+'<textarea rows="5" oninput="_tktIn(\'공연내용\',this.value)" placeholder="PPT 공연소개에서 자동으로 채워져요">'+escapeHtml(f['공연내용'])+'</textarea>';
   // 5.5) 담당자 연락처 — 공개 저장소에 안 담아둔 개인 항목(비우면 다운로드 후 엑셀에서 수기)
   var cInp=function(key,label,ph){return '<div>'+_tktLabel(key,label,0)+'<input type="text" value="'+escapeHtml(f[key])+'" placeholder="'+escapeHtml(ph||'')+'" oninput="_tktIn(\''+key+'\',this.value)"></div>';};
-  h+='<div style="'+sec+'">기획사 담당자 연락처 <span style="font-weight:600;color:var(--dim)">— 개인정보라 양식에 안 담아둔 항목 · 비우면 다운로드 후 엑셀 38~40·54행에 직접</span></div><div style="'+grid2+'">'
+  h+='<div style="'+sec+'">기획사 담당자 연락처 <span style="font-weight:600;color:var(--dim)">— 개인정보라 양식에 안 담아둔 항목 · 비우면 다운로드 후 엑셀 39·40·54행에 직접</span></div><div style="'+grid2+'">'
     +cInp('담당자명','공연 담당자명','비우면 양식 기본값 유지')
     +cInp('담당자휴대폰','공연 담당자 휴대폰','예: 010-0000-0000')
     +cInp('담당자이메일','공연 담당자 E-mail','')
@@ -19272,6 +19272,13 @@ function _tktVenueIn(v){
   if(v==='__custom__'){st._venueCustom=true;st.f['장소']='';}
   else{st._venueCustom=false;st.f['장소']=v;}
   _tktRender();
+}
+function _tktVenueSnap(){ // PPT 자동 장소 → 정식 장소명 스냅(+구분 동기) · 목록 밖 = 직접입력 모드 확정(구분 전환에도 값 유지)
+  if(!_tktState||!_tktState.f['장소'])return;
+  var st=_tktState,pl=st.f['장소'].replace('GS칼텍스 ',''),snap=null;
+  _TKT_CATS.some(function(c){return (_TKT_VENUES[c]||[]).some(function(v){if(v.replace('GS칼텍스 ','')===pl){snap=[c,v];return true;}return false;});});
+  if(snap){st.f['구분']=snap[0];st.f['장소']=snap[1];st._venueCustom=false;}
+  else st._venueCustom=true;
 }
 // 단위 필드 blur — 값이 숫자로 끝나면 끝에 단위 자동 부착(이미 단위 있거나 비숫자·공란이면 그대로). 엑셀 셀 패치 땐 양식 고정 라벨과 겹치지 않게 단위를 다시 스트립한다.
 function _tktUnit(k,unit,el){
@@ -19310,6 +19317,7 @@ function _tktParseFile(file){
       var slides=xmls.map(_tktSlideParse);
       var got=_tktExtract(slides);
       Object.keys(got.f).forEach(function(k){if(got.f[k]!==''){_tktState.f[k]=got.f[k];_tktState.auto[k]=true;}});
+      if(_tktState.auto['장소'])_tktVenueSnap(); // 「예울마루 대극장」류 표기를 정식 장소명·구분에 스냅
       if(got.seats.length){_tktState.seats=_tktDefaultState().seats;got.seats.slice(0,6).forEach(function(s,i){_tktState.seats[i]=s;});_tktState.auto['좌석']=true;}
       _tktState.src=file.name;
       _tktRender();
