@@ -773,6 +773,21 @@ button{font-family:inherit;cursor:pointer}
   0%{opacity:0;transform:translateY(-10px) scale(0.985)}
   100%{opacity:1;transform:translateY(0) scale(1)}
 }
+/* 펼친 주 되접기 핸들 — 좌측 상시 ⌃(접힌 줄 클릭=펼침과 대칭). 색·모션 전부 토큰 계승(새 색 0) */
+.wk-collapse{position:absolute;left:0;top:0;bottom:0;width:15px;display:flex;align-items:center;justify-content:center;
+  background:var(--past-bg);border-right:1px solid var(--border);color:var(--dim);cursor:pointer;z-index:7;
+  transition:background .2s,color .2s,width .2s;user-select:none}
+.wk-collapse:hover{background:rgba(74,77,231,0.12);color:var(--accent);width:18px}
+.wk-collapse svg{width:11px;height:11px;display:block;opacity:.65;transition:opacity .2s}
+.wk-collapse:hover svg{opacity:1}
+/* 핸들 폭만큼 첫 칸 안쪽 여백 — 날짜·일정이 핸들에 안 가리게 */
+.week > .c:first-child{padding-left:18px}
+/* 접힘 애니메이션 — 펼침(wk-slide-down)과 짝, 접힌 줄이 부드럽게 자리잡음 */
+.week-collapsed.just-collapsed{animation:wk-collapse-in 0.34s cubic-bezier(0.4,0,0.2,1)}
+@keyframes wk-collapse-in{
+  0%{opacity:0;transform:translateY(-6px)}
+  100%{opacity:1;transform:translateY(0)}
+}
 /* 일정 확인 페이지 행 stagger 애니메이션 (촤르륵) */
 .promo-row{animation:promo-row-in 0.32s cubic-bezier(0.34,1.56,0.64,1) backwards}
 @keyframes promo-row-in{
@@ -2426,6 +2441,7 @@ let password='',userRole='user',records=[],currentYear=new Date().getFullYear(),
 // === 주차 접힘 상태 — 저저번 주차 이상 자동 접힘 ===
 let _weekState={};  // {wi: 'expanded'|'collapsed'} — 사용자 명시 상태
 let _justExpandedWeek=null;  // 펼친 직후 1회 — 애니메이션용
+let _justCollapsedWeek=null;  // 접은 직후 1회 — 애니메이션용(펼침과 대칭)
 let _calAnimateOnNextRender=true;  // 캘린더 stagger — 첫 로드/월 변경 시에만 true
 function expandWeek(wi){
   _weekState[wi]='expanded';
@@ -2434,6 +2450,7 @@ function expandWeek(wi){
 }
 function collapseWeek(wi){
   _weekState[wi]='collapsed';
+  _justCollapsedWeek=wi;
   renderCal();
 }
 function toggleWeek(wi){expandWeek(wi);}  // 후방 호환
@@ -16007,7 +16024,8 @@ function renderCal(){
       const start=week[0],end=week[week.length-1];
       let evCount=0;
       week.forEach(function(d){if(d.getMonth()+1===currentMonth)evCount+=getRecsForDate(d).length;});
-      h+='<div class="week-collapsed'+_calAnim+'" style="'+_calDelay+'" onclick="expandWeek('+wi+')" title="클릭해서 펼치기">';
+      var _wcAnim=(_justCollapsedWeek===wi)?' just-collapsed':'';   // 방금 접은 주 = 부드럽게 자리잡기
+      h+='<div class="week-collapsed'+_calAnim+_wcAnim+'" style="'+_calDelay+'" onclick="expandWeek('+wi+')" title="클릭해서 펼치기">';
       h+='<span class="wc-range">'+(start.getMonth()+1)+'/'+start.getDate()+' ~ '+(end.getMonth()+1)+'/'+end.getDate()+'</span>';
       if(evCount>0){h+='<span class="wc-count">'+evCount+'개</span>';}
       else{h+='<span class="wc-count empty">—</span>';}
@@ -16016,6 +16034,8 @@ function renderCal(){
     }
     const justOpened=_justExpandedWeek===wi;
     h+=`<div class="week${isTW?' tw':''}${justOpened?' just-opened':''}${_calAnim}" style="${wi<weeks.length-1?'':'border-bottom:none;'}${_calDelay}">`;
+    // 되접기 핸들 — 좌측 상시 ⌃(접힌 줄 눌러 펴기와 대칭). 셀 클릭(clickDate) 안 타게 stopPropagation.
+    h+=`<div class="wk-collapse" title="이 주 접기" onclick="event.stopPropagation();collapseWeek(${wi})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M7 14l5-5 5 5"/></svg></div>`;
     week.forEach((d,di)=>{
       const key=dk(d),nm=d.getMonth()+1!==currentMonth,td=isToday(d),past=isThisMonth&&isPast(d)&&!td,isSat=di===4,isSun=di===5,isSel=selected===key||(di===5&&selected===dk(new Date(d.getFullYear(),d.getMonth(),d.getDate()+1))),recs=nm?[]:getRecsForDate(d);   // 일·월 = 구분되되 한몸: 월요일 선택도 통합 셀 전체에 선택 링(운영자 260706)
       // 비-홍보일(자동_일요일 ON 시 일·월) — readonly 느낌으로 옅은 회색
@@ -16111,6 +16131,7 @@ function renderCal(){
   startTodayMarquee();
   startSpecialSlide();
   if(_justExpandedWeek!==null){setTimeout(function(){_justExpandedWeek=null;},500);}
+  if(_justCollapsedWeek!==null){setTimeout(function(){_justCollapsedWeek=null;},500);}
   if(_calAnimateOnNextRender){
     _calAnimateOnNextRender=false;
     // animation 강제 재시작 (innerHTML 교체 후 같은 클래스 재적용 시 트리거 안 되는 케이스 대응)
