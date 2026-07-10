@@ -3334,7 +3334,8 @@ function programToPerf(p){
     m:p['담당자']||'',
     l:p['장소']||'',
     u:p['URL']||p['공연 URL']||p['상세 링크']||p['링크']||'',
-    id:String(p['프로그램ID']||p['공연ID']||'').trim()   // [정규화] 프로그램 시트 공유키(헤더='프로그램ID', 구'공연ID' 폴백) — records 저장 시 동반
+    id:String(p['프로그램ID']||p['공연ID']||'').trim(),   // [정규화] 프로그램 시트 공유키(헤더='프로그램ID', 구'공연ID' 폴백) — records 저장 시 동반
+    g:String(p['구분']||'').trim()   // [260710 운영자] N열 구분(장르 — 클래식·뮤지컬(대형)·연극…) = 판매현황 장르 폴백 소스. O~Q(공동기획·지원사업·GS아트센터협업)는 앱 미사용·엑셀 관리
   };
 }
 // SharePoint에서 프로그램 시트 fetch → PERFS 채우기
@@ -4180,6 +4181,15 @@ function _salesFmtDates(dates){
 }
 // [260710 운영자] 「예측 제외」 행 판정 — 일일입력 '예측제외' 컬럼(실적 수정 모달이 'Y' 기록). 그 날 증분을 예측 평균에서 뺀다(단체 150명·2차 오픈 등 이벤트 변수).
 function _fcExcl(r){ var v=String((r&&r['예측제외'])||'').trim().toUpperCase(); return v!==''&&v!=='N'&&v!=='FALSE'&&v!=='0'; }
+// 프로그램 시트 N열 「구분」 조회 — 판매현황 장르 폴백(운영대장 장르1 빈 공연의 '기타' 소멸, 운영자 260710).
+// 매칭 = 프로그램ID 우선 → 풀네임/줄임말 _uName(마스터-프로그램 조인 pgf 전례 계승).
+function _pgGenre(rid,name){
+  var list=(typeof PERFS!=='undefined'&&PERFS)||[];
+  var un=_uName(name||'');
+  var hit=null;
+  list.some(function(pg){ if((rid&&pg.id&&pg.id===rid)||(pg.f&&_uName(pg.f)===un)||(pg.n&&_uName(pg.n)===un)){hit=pg;return true;} return false; });
+  return (hit&&hit.g)||'';
+}
 function _salesBuild(){
   var master={},masterById={};
   ((_salesState.master&&_salesState.master.rows)||[]).map(_salesNorm).forEach(function(m){
@@ -4215,7 +4225,8 @@ function _salesBuild(){
     var base=m?m.기본석:(ops&&ops.base?ops.base:_SALES_FALLBACK_SEAT);
     // [수정] 장르 = 마스터 공연도 운영대장에서 조인 — 공연마스터엔 장르 컬럼이 없어, 옛 코드(마스터면 ops=null → genre='')는 마스터 등록 공연을 판매현황에서 무조건 '기타'로 표시했음(opsForDates와 동일 조회 계승).
     var _gOps=ops||(rid?_opsLookupById(rid):null)||_opsLookup(name,salesYear);
-    var genre=_gOps?_gOps.genre:'';
+    // [260710 운영자] 운영대장 장르1이 비면 프로그램 시트 N열 「구분」 폴백('기타' 소멸) — 기존 장르1 값은 그대로 우선(회귀 0)
+    var genre=(_gOps&&_gOps.genre)?_gOps.genre:_pgGenre(rid,name);
     var totalOpen=(m&&m.총오픈석)?m.총오픈석:(ops?base*(ops.count||1):base*((m&&m.총회차)||1));
     var occ=totalOpen>0?Math.min(seats/totalOpen*100,100):0;
     var startDate=m?m.시작:(ops&&ops.first?ops.first:null);
