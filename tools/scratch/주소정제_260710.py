@@ -184,13 +184,16 @@ def dongify(df):
         if not a3 or _is_dongish(a3):
             new_a3.append(a3); new_a4.append(a4); src.append('')
             continue
-        # zip 우선(분신술 데이터 감사 F2) — zip 순도 99.9%+ 실측: 도로가 동 경계를 넘는 경우
-        # (상암로·여문2로·여천체육공원길 등) 행 자신의 우편번호가 도로명 최빈동보다 구체적 증거다
+        # 증거 우선순위(분신술 데이터 감사 F2·재심사 권고) = 행 자신의 괄호 참고항목(자기신고)
+        # > 자기 우편번호(순도 99.9%+ 실측) > 도로명 최빈동. 도로가 동 경계를 넘는 경우
+        # (상암로·여문2로·여천체육공원길 등) 구체 증거가 사전 최빈값을 이긴다.
+        m = RE_PAREN_DONG.search(r['주소(원본)'])
+        pdong = m.group(1) if m else None
         zd = zip_map.get(z)
-        dong = zd or road_map.get((sgg, _a3_head(a3)))
+        dong = pdong or zd or road_map.get((sgg, _a3_head(a3)))
         if dong:
             new_a3.append(dong); new_a4.append((a3 + ' ' + a4).strip())
-            src.append('동복원(우편번호)' if zd else '동복원(도로명)')
+            src.append('동복원(참고항목)' if pdong else ('동복원(우편번호)' if zd else '동복원(도로명)'))
         else:
             new_a3.append(a3); new_a4.append(a4); src.append('동미상(도로명유지)')
     return new_a3, new_a4, src
