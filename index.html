@@ -19106,19 +19106,23 @@ function openTicketSeller(){window.open('playground/ticket-seller/','_blank','no
 // 흐름: 일정 관리 ▸ 티켓 등록 신청 → 모달에서 PPT 업로드(자동 채움) + 부족분 직접 입력 → 템플릿 xlsx(zip)를
 //       셀 단위로 패치해 다운로드. 시트 서식·체크박스(폼 컨트롤)·수식을 보존하려고 라이브러리 재생성 대신
 //       zip 레벨 텍스트 패치를 쓴다(시트2 제목·기간·시간·장소·협찬·기타정보는 시트1 참조 수식 → 캐시만 갱신).
-// 데이터는 어디에도 저장 안 함(시트·서버 무관) — 순수 클라이언트 변환. 템플릿 = reference/ticketlink_template.xlsx
-var _TKT_TEMPLATE_URL='reference/ticketlink_template.xlsx';
+// 데이터는 어디에도 저장 안 함(시트·서버 무관) — 순수 클라이언트 변환. 템플릿 = reference/ticketlink_template.xlsm
+//       260710 신템플릿(운영자 개선판 계승): 분류 접이식 그룹 · AH8 구분→G8 장소 드롭다운 연동 · 사이즈표 더블클릭 첨부 매크로(VBA).
+//       시트 파일 매핑 = 의뢰서 sheet2.xml · 공지문 sheet3.xml (sheet1.xml = veryHidden 'Claude Log' · 구판 시트4·5 없음) · 산출 = .xlsm
+var _TKT_TEMPLATE_URL='reference/ticketlink_template.xlsm';
 var _TKT_GENRES=['뮤지컬','콘서트','연극','클래식/무용','가족&아동','전시/축제','레저/체험','e스포츠/게임'];
 var _TKT_GENRE_SEL={'뮤지컬':2,'콘서트':3,'연극':4,'클래식/무용':5,'가족&아동':6,'전시/축제':7,'레저/체험':8,'e스포츠/게임':9}; // 시트1 장르 드롭다운($AK$2:$AK$10) 1-base 인덱스
 var _TKT_SUB_SEL={'해당없음':1,'대학로':2,'가족&아동':3}; // 부가장르($AL$2:$AL$4)
 // 시트2 장르 체크박스: VML 라벨 ↔ ctrlProp 파일 (템플릿 고정 자산 실측 매핑 — shapeId 2049.. → ctrlProp54..)
 var _TKT_S2_CTRL={'뮤지컬':'ctrlProp54','연극':'ctrlProp55','클래식/무용':'ctrlProp56','콘서트':'ctrlProp57','레저/체험':'ctrlProp58','전시/축제':'ctrlProp59','e스포츠/게임':'ctrlProp62','가족&아동':'ctrlProp63'};
-var _TKT_SEAT_ROWS=[23,24,25,26,27,28]; // 시트1 좌석등급 행 (템플릿 6행 고정 — 넘치면 4번 시트에 수기)
+var _TKT_SEAT_ROWS=[23,24,25,26,27,28]; // 시트1 좌석등급 행 (템플릿 6행 고정 — 넘치면 생성 후 엑셀에서 수기)
+var _TKT_CATS=['공연','전시','예술교육']; // 구분 — 의뢰서 AH8 기입(G8 장소 드롭다운 귀속 값)
+var _TKT_VENUES={'공연':['GS칼텍스 예울마루 대극장','GS칼텍스 예울마루 소극장'],'전시':['GS칼텍스 예울마루 7층 전시실','GS칼텍스 예울마루 장도 전시실'],'예술교육':['GS칼텍스 예울마루 소극장']}; // 구분별 장소 (운영자 확정 260710)
 var _tktState=null;
 
 function _tktDefaultState(){
-  return {src:'',busy:false,auto:{},
-    f:{'제목':'','부제목':'','기간':'','시간':'','장소':'','관람연령':'','러닝타임':'','인터미션':'','장르':'','부가장르':'해당없음','검색키워드':'','할인정보':'','출연':'','후원':'','공연내용':'','오픈일시':'','공지노출':'','마감일시':'','선오픈':'해당 없음','가격요약':'',
+  return {src:'',busy:false,auto:{},_venueCustom:false,
+    f:{'제목':'','부제목':'','기간':'','시간':'','장소':'','구분':'공연','관람연령':'','러닝타임':'','인터미션':'','장르':'','부가장르':'해당없음','검색키워드':'','할인정보':'','출연':'','후원':'','공연내용':'','오픈일시':'','공지노출':'','마감일시':'','선오픈':'해당 없음','가격요약':'',
        '담당자명':'','담당자휴대폰':'','담당자이메일':'','세금담당자명':'','세금휴대폰':'','세금이메일':'','티켓링크ID':'','티켓링크이름':'','티켓링크연락처':''},
     seats:[{},{},{},{},{},{}].map(function(){return {'등급':'','권종':'','정가':'','석수':'','비고':''};})};
 }
@@ -19192,7 +19196,17 @@ function _tktRender(){
     +'<div>'+_tktLabel('부가장르','부가장르',0)+'<select onchange="_tktIn(\'부가장르\',this.value)">'+Object.keys(_TKT_SUB_SEL).map(function(g){return '<option'+(f['부가장르']===g?' selected':'')+'>'+g+'</option>';}).join('')+'</select></div>'
     +'<div>'+inp('기간',1,'예: 2026년 11월 26일(목) ~ 2026년 11월 28일(토)')+'</div>'
     +'<div>'+inp('시간',1,'예: 목 11:00, 14:30 / 토 14:00 (총 6회)')+'</div>'
-    +'<div>'+inp('장소',1,'예: GS칼텍스 예울마루 대극장')+'</div>'
+    +(function(){ // 장소 = 구분(공연/전시/예술교육) 연동 select — 목록 밖은 '직접 입력…'
+      var cat=f['구분']||'공연',vlist=_TKT_VENUES[cat]||[];
+      var isCustom=st._venueCustom||(!!f['장소']&&vlist.indexOf(f['장소'])<0);
+      return '<div>'+_tktLabel('장소','장소 (구분 연동)',1)
+        +'<div style="display:flex;gap:6px">'
+        +'<select style="width:92px;flex:none" onchange="_tktCatIn(this.value)" aria-label="구분">'+_TKT_CATS.map(function(c){return '<option'+(cat===c?' selected':'')+'>'+c+'</option>';}).join('')+'</select>'
+        +'<select style="flex:1;min-width:0" onchange="_tktVenueIn(this.value)" aria-label="장소"><option value="">선택</option>'+vlist.map(function(v){return '<option value="'+escapeHtml(v)+'"'+(!isCustom&&f['장소']===v?' selected':'')+'>'+escapeHtml(v.replace('GS칼텍스 예울마루 ',''))+'</option>';}).join('')+'<option value="__custom__"'+(isCustom?' selected':'')+'>직접 입력…</option></select>'
+        +'</div>'
+        +(isCustom?'<input type="text" value="'+escapeHtml(f['장소'])+'" placeholder="예: 여수 진남문예회관" oninput="_tktIn(\'장소\',this.value)" style="margin-top:6px">':'')
+        +'</div>';
+    })()
     +'<div style="'+grid4.replace('1fr 1fr 1fr 1fr','1fr 1fr 1fr')+'">'
       +'<div>'+inp('관람연령',0,'예: 초등학생')+'</div>'
       +'<div>'+inp('러닝타임',0,'예: 약 75','text','분')+'</div>'
@@ -19206,7 +19220,7 @@ function _tktRender(){
     +'<div>'+_tktLabel('선오픈','티켓링크 선오픈',0)+'<input type="text" value="'+escapeHtml(f['선오픈'])+'" oninput="_tktIn(\'선오픈\',this.value)"></div>'
     +'</div>';
   // 3) 좌석 등급·가격
-  h+='<div style="'+sec+'">좌석 등급 · 가격 <span style="font-weight:600;color:var(--dim)">— 최대 6행(양식 고정), 넘치면 엑셀 4번 시트에 수기</span></div>';
+  h+='<div style="'+sec+'">좌석 등급 · 가격 <span style="font-weight:600;color:var(--dim)">— 최대 6행(양식 고정), 넘치면 생성 후 엑셀에서 행 추가</span></div>';
   h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px;min-width:560px">'
     +'<tr>'+['등급','권종','정가(원)','판매좌석 수','비고'].map(function(c){return '<th style="text-align:left;font-size:11px;color:var(--dim);font-weight:700;padding:6px 4px;border-bottom:1px solid var(--border2)">'+c+'</th>';}).join('')+'</tr>'
     +st.seats.map(function(s,i){
@@ -19246,6 +19260,19 @@ function _tktRender(){
   b.innerHTML=h;
 }
 function _tktIn(k,v){if(_tktState)_tktState.f[k]=v;}
+function _tktCatIn(v){ // 구분 변경 — 목록 장소는 새 구분에 없으면 비움(직접 입력값은 유지)
+  if(!_tktState)return;
+  var st=_tktState;st.f['구분']=v;
+  if(!st._venueCustom&&(_TKT_VENUES[v]||[]).indexOf(st.f['장소'])<0)st.f['장소']='';
+  _tktRender();
+}
+function _tktVenueIn(v){
+  if(!_tktState)return;
+  var st=_tktState;
+  if(v==='__custom__'){st._venueCustom=true;st.f['장소']='';}
+  else{st._venueCustom=false;st.f['장소']=v;}
+  _tktRender();
+}
 // 단위 필드 blur — 값이 숫자로 끝나면 끝에 단위 자동 부착(이미 단위 있거나 비숫자·공란이면 그대로). 엑셀 셀 패치 땐 양식 고정 라벨과 겹치지 않게 단위를 다시 스트립한다.
 function _tktUnit(k,unit,el){
   if(!_tktState)return;
@@ -19523,21 +19550,23 @@ function _tktBuild(){
       if(!r.ok)throw new Error('template http '+r.status);
       return r.arrayBuffer();
     }).then(function(buf){return JSZip.loadAsync(buf);}).then(function(zip){
-      var need=['xl/worksheets/sheet1.xml','xl/worksheets/sheet2.xml','xl/worksheets/sheet5.xml','xl/workbook.xml','xl/drawings/vmlDrawing1.vml','xl/drawings/vmlDrawing2.vml','xl/ctrlProps/ctrlProp9.xml','xl/ctrlProps/ctrlProp10.xml','xl/ctrlProps/ctrlProp64.xml','xl/ctrlProps/ctrlProp65.xml'];
+      var need=['xl/worksheets/sheet2.xml','xl/worksheets/sheet3.xml','xl/workbook.xml','xl/drawings/vmlDrawing1.vml','xl/drawings/vmlDrawing2.vml','xl/ctrlProps/ctrlProp9.xml','xl/ctrlProps/ctrlProp10.xml','xl/ctrlProps/ctrlProp64.xml','xl/ctrlProps/ctrlProp65.xml'];
       Object.keys(_TKT_S2_CTRL).forEach(function(k){need.push('xl/ctrlProps/'+_TKT_S2_CTRL[k]+'.xml');});
       return Promise.all(need.map(function(n){var zf=zip.file(n);if(!zf)throw new Error('템플릿 손상: '+n+' 없음');return zf.async('string');})).then(function(texts){
         var fs={};need.forEach(function(n,i){fs[n]=texts[i];});
         // KST 오늘 (러너/브라우저 TZ 무관)
         var now=new Date(Date.now()+9*3600e3);
         var today=now.getUTCFullYear()+'.'+String(now.getUTCMonth()+1).padStart(2,'0')+'.'+String(now.getUTCDate()).padStart(2,'0');
-        // ─ 시트1
-        var s1=fs['xl/worksheets/sheet1.xml'];
+        // ─ 시트1 의뢰서 (신템플릿 파일 = sheet2.xml)
+        var s1=fs['xl/worksheets/sheet2.xml'];
         s1=_tktCellRepl(s1,'W3','작성일 : '+today);
         s1=_tktCellRepl(s1,'G4',f['제목'].trim());
         s1=_tktCellRepl(s1,'G5',f['부제목'].trim());
         s1=_tktCellRepl(s1,'G6',f['기간'].trim());
         s1=_tktCellRepl(s1,'G7',f['시간'].trim());
         s1=_tktCellRepl(s1,'G8',f['장소'].trim());
+        s1=_tktCellRepl(s1,'AH8',f['구분']||'공연'); // 구분(AH8) = G8 장소 드롭다운 귀속 값 동기
+        s1=_tktCellRepl(s1,'G9',f['장르']); // 장르 텍스트(G9) — 드롭다운 Sel·공지문 D4 수식과 동기
         var age=f['관람연령'].trim().replace(/\s*이상\s*$/,''); // 옆 칸 '세·이상' 고정 라벨과 중복 방지
         s1=_tktCellRepl(s1,'AA6',age);
         var rtime=f['러닝타임'].trim().replace(/\s*분\s*$/,''); // 옆 칸(AD7) '분' 고정 라벨과 중복 방지
@@ -19568,26 +19597,27 @@ function _tktBuild(){
           var c=num(s['석수']);s1=_tktCellRepl(s1,'Y'+r,c||(s['석수']||'').trim(),!!c);
           s1=_tktCellRepl(s1,'AA'+r,(s['비고']||'').trim());
         });
-        fs['xl/worksheets/sheet1.xml']=s1;
+        fs['xl/worksheets/sheet2.xml']=s1;
         // ─ 장르 드롭다운(시트1) — VML Sel + ctrlProp sel 동기
         var gsel=_TKT_GENRE_SEL[f['장르']]||1,ssel=_TKT_SUB_SEL[f['부가장르']]||1;
         fs['xl/drawings/vmlDrawing1.vml']=_tktDropSel(_tktDropSel(fs['xl/drawings/vmlDrawing1.vml'],'$AK$2:$AK$10',gsel),'$AL$2:$AL$4',ssel);
         fs['xl/ctrlProps/ctrlProp9.xml']=_tktCtrlSel(fs['xl/ctrlProps/ctrlProp9.xml'],gsel);
         fs['xl/ctrlProps/ctrlProp10.xml']=_tktCtrlSel(fs['xl/ctrlProps/ctrlProp10.xml'],ssel);
-        // ─ 시트2 (직접 셀 + 시트1 참조 수식의 캐시 갱신)
-        var s2=fs['xl/worksheets/sheet2.xml'];
+        // ─ 시트2 공지문 (신템플릿 파일 = sheet3.xml · 라벨 D열/값 L열 구조 — 기간·시간·장소·가격은 L열 직접 기입,
+        //   제목·기타정보·협찬은 시트1 참조 수식 → 캐시 갱신 · 장르 D4·가격 D12/D13은 수식이라 fullCalcOnLoad로 자동)
+        var s2=fs['xl/worksheets/sheet3.xml'];
         s2=_tktCellRepl(s2,'I6',f['선오픈'].trim()||'해당 없음');
         s2=_tktCellRepl(s2,'W6',_tktFmtDot(f['오픈일시']));
         s2=_tktCellRepl(s2,'O7',f['공지노출']?('  '+_tktFmtDot(f['공지노출'],true)):'');
-        s2=_tktCellRepl(s2,'D11',' ◎ 티켓 가격 : '+f['가격요약'].trim());
-        s2=_tktCellRepl(s2,'D18',f['공연내용']);
+        s2=_tktCellRepl(s2,'L8',f['기간'].trim());
+        s2=_tktCellRepl(s2,'L9',f['시간'].trim());
+        s2=_tktCellRepl(s2,'L10',f['장소'].trim());
+        s2=_tktCellRepl(s2,'L11',f['가격요약'].trim());
+        s2=_tktCellRepl(s2,'D22',f['공연내용']);
         s2=_tktFCache(s2,'D3',f['제목'].trim()+(f['부제목'].trim()?(' : '+f['부제목'].trim()):''));
-        s2=_tktFCache(s2,'D8','   ◎ 공연 기간 : '+f['기간'].trim());
-        s2=_tktFCache(s2,'D9','   ◎ 공연 시간 : '+f['시간'].trim());
-        s2=_tktFCache(s2,'D10','   ◎ 공연 장소 : '+f['장소'].trim());
-        s2=_tktFCache(s2,'D12','   ◎ 기타 정보 : \n    - 관람연령 : '+(age?age+' 이상':'')+'\n    - 관람시간 : '+(rtime?rtime+'분':'')+'\n    - 할인정보 : '+f['할인정보']);
-        s2=_tktFCache(s2,'D16','   ◎ 협찬 : '+f['후원'].trim());
-        fs['xl/worksheets/sheet2.xml']=s2;
+        s2=_tktFCache(s2,'D15','   ◎ 기타 정보 : \n    - 관람연령 : '+(age?age+' 이상':'')+'\n    - 관람시간 : '+(rtime?rtime+'분':'')+'\n    - 할인정보 : '+f['할인정보']);
+        s2=_tktFCache(s2,'D20','   ◎ 협찬 : '+f['후원'].trim());
+        fs['xl/worksheets/sheet3.xml']=s2;
         // ─ 시트2 장르 체크박스 (전부 해제 후 선택만 체크)
         var v2=fs['xl/drawings/vmlDrawing2.vml'];
         Object.keys(_TKT_S2_CTRL).forEach(function(label){
@@ -19603,24 +19633,19 @@ function _tktBuild(){
         fs['xl/ctrlProps/ctrlProp64.xml']=_tktCtrlCheck(fs['xl/ctrlProps/ctrlProp64.xml'],!vis);
         fs['xl/ctrlProps/ctrlProp65.xml']=_tktCtrlCheck(fs['xl/ctrlProps/ctrlProp65.xml'],vis);
         fs['xl/drawings/vmlDrawing2.vml']=v2;
-        // ─ 시트5 (현장 지원 요청서 머리)
-        var s5=fs['xl/worksheets/sheet5.xml'];
-        s5=_tktCellRepl(s5,'D3',f['제목'].trim());
-        s5=_tktCellRepl(s5,'D4',f['기간'].trim());
-        s5=_tktCellRepl(s5,'D5',f['장르']);
-        fs['xl/worksheets/sheet5.xml']=s5;
+        // (구판 시트5 현장지원요청서 기입은 신템플릿에서 제거 — 운영자가 시트 자체를 삭제한 개선판 계승)
         // ─ 열 때 전체 재계산 (시트2 수식 최신화 보증)
         if(fs['xl/workbook.xml'].indexOf('fullCalcOnLoad')<0)fs['xl/workbook.xml']=fs['xl/workbook.xml'].replace('<calcPr ','<calcPr fullCalcOnLoad="1" ');
         Object.keys(fs).forEach(function(n){zip.file(n,fs[n],{createFolders:false});});
-        return zip.generateAsync({type:'blob',compression:'DEFLATE',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+        return zip.generateAsync({type:'blob',compression:'DEFLATE',mimeType:'application/vnd.ms-excel.sheet.macroEnabled.12'});
       }).then(function(blob){
         if(st!==_tktState)return; // 생성 중 모달 닫힘 — 조용히 폐기(공용 PC에 흔적 안 남김)
         var safe=f['제목'].trim().replace(/[\\/:*?"<>|]/g,'').replace(/[\u0000-\u001F\u007F\u202A-\u202E\u2066-\u2069]/g,'').replace(/^[.\s]+|[.\s]+$/g,'').slice(0,40);
         var a=document.createElement('a'),url=URL.createObjectURL(blob);
-        a.href=url;a.download='공연입장권 판매대행 의뢰서_GS칼텍스 예울마루_'+yymmddName()+'_'+safe+'.xlsx';
+        a.href=url;a.download='공연입장권 판매대행 의뢰서_GS칼텍스 예울마루_'+yymmddName()+'_'+safe+'.xlsm';
         document.body.appendChild(a);a.click();a.remove();
         setTimeout(function(){URL.revokeObjectURL(url);},1000);
-        done(true,'의뢰서 엑셀 생성 완료 — 다운로드했어요. 열어서 최종 확인!');
+        done(true,'의뢰서 엑셀(.xlsm) 생성 완료 — 열 때 [콘텐츠 사용]을 눌러야 첨부 매크로가 살아요. 최종 확인!');
       });
     }).catch(function(e){
       console.error('[tkt build]',e);
