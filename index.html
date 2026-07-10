@@ -621,12 +621,13 @@ button{font-family:inherit;cursor:pointer}
 .cal-skel .sk-c:nth-child(6n){border-right:none}
 .cal-skel .sk-c:nth-child(n+13){border-bottom:none}
 .cal-skel .sk-b{height:10px;border-radius:8px;background:var(--neutral);margin-bottom:8px}
-.cal-skel .sk-sweep{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+/* .sk-sweep = 캘린더 스켈레톤 + 판매 레일 로딩 공용(운영자 260710 "좌측 스캔 모션 우측에도" — .cal-skel 스코프 해제, 규칙 내용 불변) */
+.sk-sweep{position:absolute;inset:0;pointer-events:none;overflow:hidden}
 /* 스윕은 transform 애니(컴포지터 전용) — left 애니는 매 프레임 layout+paint로 backdrop-filter 재계산 유발(분신술 5호 MED) */
-.cal-skel .sk-sweep::after{content:'';position:absolute;top:0;bottom:0;left:0;width:34%;background:linear-gradient(100deg,transparent 0%,rgba(255,255,255,.5) 50%,transparent 100%);transform:translateX(-120%);will-change:transform;animation:skSweep 1.5s ease-in-out infinite}
+.sk-sweep::after{content:'';position:absolute;top:0;bottom:0;left:0;width:34%;background:linear-gradient(100deg,transparent 0%,rgba(255,255,255,.5) 50%,transparent 100%);transform:translateX(-120%);will-change:transform;animation:skSweep 1.5s ease-in-out infinite}
 @keyframes skSweep{to{transform:translateX(400%)}}
 @media (max-width:768px){.cal-skel{grid-auto-rows:64px}.cal-skel .sk-b{height:7px;margin-bottom:6px}}
-@media (prefers-reduced-motion:reduce){.cal-skel .sk-sweep::after{animation:none}}
+@media (prefers-reduced-motion:reduce){.sk-sweep::after{animation:none}}
 /* 캘린더 로딩 중앙 표시 — 판매 레일과 동일 강조색 dots+문구(운영자 260708). accent+opacity.75(계승) */
 .cal-skel .cal-load-msg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--accent);opacity:.75;font-size:14px;font-weight:600;z-index:2;pointer-events:none}
 /* 요일 바 배경 .43→.9: 스크롤 시 밑을 지나는 셀 비침 차단(운영자 260707 버그 신고 — 일정관리 thead 불투명화 전례 계승, 흰 alpha 변주 §3.5②) */
@@ -4322,8 +4323,8 @@ function _srailInit(force){
   if(_srailBusy&&!force)return;   // force = 스톨 뚫고 재발사 허용(세대 토큰이 구응답 폐기)
   _srailBusy=true;
   var gen=++_srailGen;
-  // [260710 운영자] 로딩 표기 = 좌측 캘린더 스켈레톤 문구(.cal-load-msg)와 동일 스펙(정중앙·accent 75%·14px/600·_ldHtml(16)·「불러오는 중」) — 좌우 로딩 톤 통일
-  els.body.innerHTML='<div style="height:100%;display:flex;align-items:center;justify-content:center;color:var(--accent);opacity:.75;font-size:14px;font-weight:600">'+_ldHtml(16)+'불러오는 중</div>';
+  // [260710 운영자] 로딩 표기 = 좌측 캘린더 스켈레톤과 동일 — 문구(.cal-load-msg 스펙: 정중앙·accent 75%·14px/600·_ldHtml(16)·「불러오는 중」) + 광택 스윕(.sk-sweep 공용, "스캔 모션까지")
+  els.body.innerHTML='<div style="position:relative;height:100%"><div class="sk-sweep" aria-hidden="true"></div><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--accent);opacity:.75;font-size:14px;font-weight:600">'+_ldHtml(16)+'불러오는 중</div></div>';
   Promise.all([
     _salesState.daily?Promise.resolve(_salesState.daily):api('GET','/api/ops?sheet='+encodeURIComponent('일일입력')),
     _salesState.master?Promise.resolve(_salesState.master):api('GET','/api/ops?sheet='+encodeURIComponent('공연마스터')),
