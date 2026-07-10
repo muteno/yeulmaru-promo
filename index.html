@@ -946,6 +946,23 @@ table.promo-board-table th:last-child .col-resize-handle{display:none}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 .toast.success::before{content:"✓ ";color:#0F8B4C;font-weight:700;margin-right:4px}
 .toast.error::before{content:"✕ ";color:var(--danger);font-weight:700;margin-right:4px}
+/* 새 메시지 알림 토스트 (요청4 · 260710 선택값 배선) — 체크(✓) 눌러야 닫힘·자동 타이머 없음.
+   기존 .toast(저장·에러용 3초 자동)와 별개 컴포넌트. 색 전부 토큰/흰색 alpha 변주(팔레트 폐쇄). */
+.msg-toast{position:fixed;bottom:43px;left:50%;transform:translateX(-50%) translateY(26px);max-width:488px;width:max-content;padding:20px 28px;background:rgba(255,255,255,0.46);backdrop-filter:blur(15px) saturate(1.3);-webkit-backdrop-filter:blur(15px) saturate(1.3);border:1px solid var(--glass-border);border-radius:14px;box-shadow:var(--glass-shadow);color:var(--text);z-index:1000001;opacity:0;pointer-events:none;transition:opacity .42s ease,transform .42s ease;display:flex;gap:14px;align-items:flex-start}
+.msg-toast.show{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto}
+.msg-toast.imp{border-color:rgba(226,75,74,.4)}
+.mt-main{min-width:0;flex:1}
+.mt-head{margin-bottom:5px;display:flex;align-items:center;gap:6px}
+.mt-badge{display:inline-block;font-size:9px;font-weight:700;padding:2px 8px;border-radius:8px;letter-spacing:.3px}
+.mt-badge.n{background:var(--dim);color:var(--surface-solid);font-weight:600}
+.mt-badge.i{background:var(--danger);color:var(--surface-solid)}
+.mt-time{font-size:10px;color:var(--muted);font-variant-numeric:tabular-nums}
+.mt-title{font-size:12.5px;font-weight:700;color:var(--text);line-height:1.4;margin-bottom:3px}
+.mt-sub{font-size:12px;color:var(--neutral-text);line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.mt-open{margin-top:8px;display:inline-block;font-size:11px;font-weight:700;color:var(--accent);cursor:pointer}
+.mt-check{flex-shrink:0;width:34px;height:34px;border-radius:50%;border:1.5px solid var(--border2);background:var(--surface-solid);color:var(--neutral-text);font-size:16px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;font-family:inherit;padding:0;line-height:1}
+.mt-check:hover{background:var(--accent);border-color:var(--accent);color:var(--surface-solid);transform:scale(1.05)}
+@media(max-width:640px){.msg-toast{bottom:calc(80px + env(safe-area-inset-bottom,0px));max-width:none;left:14px;right:14px;width:auto;transform:translateY(26px)}.msg-toast.show{transform:translateY(0)}}
 .overlay-load{position:fixed;inset:0;background:rgba(0,0,0,0.3);backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);z-index:999999;display:none;flex-direction:column;gap:18px;align-items:center;justify-content:center;font-size:18px;font-weight:600;color:#fff;letter-spacing:0.5px;text-shadow:0 2px 8px rgba(0,0,0,0.4);animation:fadeIn .2s ease}
 .overlay-load.show{display:flex}
 .overlay-load #ol-text{display:block;min-height:24px}   /* 타자기 리셋(빈 문자열) 순간 높이 0 → 로더 세로 출렁임 방지(시안 .ov-txt min-height 계승) */
@@ -1953,6 +1970,7 @@ table.promo-board-table thead th:last-child{border-top-right-radius:11px}
 </div>
 
 <div class="toast" id="toast"></div>
+<div class="msg-toast" id="msg-toast" role="status" aria-live="polite"></div>
 <div class="overlay-load" id="overlay-load"><span class="ol-dots" aria-hidden="true"><i></i><i></i><i></i></span><span id="ol-text"></span></div>
 
 <div class="modal-bg" id="prog-modal">
@@ -2692,6 +2710,7 @@ function _appEnterStagger(appEl){
   }catch(e){ try{appEl.style.display='';document.querySelectorAll('.ae-pre').forEach(function(el){el.classList.remove('ae-pre');});}catch(_e){} }
 }
 function _enterApp(){
+  window._appEnteredAt=Date.now();  // 알림 토스트 10초 지연 기준(진입 직후 억제)
   console.log('[_enterApp] CALLED from:',new Error().stack.split('\n').slice(1,3).join(' | '),'| pw=',sessionStorage.getItem('pw'),'| role=',sessionStorage.getItem('role'),'| myAppl=',sessionStorage.getItem('myApplicant'),'| password=',password,'| _loginEmail=',_loginEmail);
   window._pinActive=false;
   try{ if(typeof window._hideCapsWarn==='function') window._hideCapsWarn(); }catch(e){}  // CapsLock 경고 떠다님 차단
@@ -3204,7 +3223,7 @@ function _resolveNewPinOk(){
   _resolveNewPin(v);
 }
 
-function _enterAppFromSession(){password=sessionStorage.getItem('pw');userRole=sessionStorage.getItem('role')||'user';document.getElementById('login').style.display='none';document.getElementById('app').style.display='';initApp();if(typeof _bindIdleEvents==='function'){_bindIdleEvents();resetIdleTimer();}}
+function _enterAppFromSession(){window._appEnteredAt=Date.now();password=sessionStorage.getItem('pw');userRole=sessionStorage.getItem('role')||'user';document.getElementById('login').style.display='none';document.getElementById('app').style.display='';initApp();if(typeof _bindIdleEvents==='function'){_bindIdleEvents();resetIdleTimer();}}
 async function _msalHasLiveSession(){try{const inst=await _msalGet();if(!inst)return false;let acc=inst.getActiveAccount();if(!acc){const accs=inst.getAllAccounts();if(accs&&accs.length){acc=accs[0];inst.setActiveAccount(acc);}}if(!acc){for(let i=0;i<5;i++){await new Promise(function(r){setTimeout(r,200);});acc=inst.getActiveAccount();if(!acc){const accs=inst.getAllAccounts();if(accs&&accs.length){acc=accs[0];inst.setActiveAccount(acc);}}if(acc){console.log('[zombie-check] account found after polling attempt',i+1);break;}}}if(!acc){console.warn('[zombie-check] no account after polling');return false;}try{await Promise.race([inst.acquireTokenSilent({scopes:_MSAL_SCOPES,account:acc}),new Promise(function(_,rej){setTimeout(function(){rej(new Error('silent_timeout'));},4000);})]);return true;}catch(e){console.warn('[zombie-check] silent token failed:',e.errorCode||e.message);return false;}}catch(e){console.warn('[zombie-check]',e);return false;}}
 function _zombieToLogin(){try{['pw','role','myApplicant','myUserDept','subAdminPin'].forEach(function(k){sessionStorage.removeItem(k);});}catch(e){}password='';userRole='user';try{document.getElementById('app').style.display='none';var _l=document.getElementById('login');if(_l){_l.style.display='flex';_l.style.opacity='1';_l.style.visibility='visible';_l.classList.remove('login-leave');}var _zc=document.querySelector('.login-card');if(_zc)_zc.classList.remove('lc-lift');}catch(e){}if(typeof initLoginScreen==='function')initLoginScreen();}
 // [분신술 260710 감사2] 자동 loginRedirect 후 브라우저 뒤로가기 → bfcache 복원이면 '이동 중' 스피너로 동결(리로드가 없어 initLoginScreen 미재실행) — 로그인 화면 표시 중 복원 시에만 리로드로 재기동(앱 사용 중 복원은 무간섭)
@@ -8502,6 +8521,7 @@ async function _msgFetchAll(){
         refNo: m['참조번호'] || m.refNo || '',
         refSummary: m['참조요약'] || m.refSummary || '',
         kst: m.KST || m.kst || '',
+        title: m['제목'] || m.title || '',
         read: (m['읽음'] === 'TRUE' || m['읽음'] === true || m.read === true)
       };
     });
@@ -8531,6 +8551,7 @@ function pushMessage(opts){
     reason: opts.reason || '',
     refNo: opts.refNo || '',
     refSummary: opts.refSummary || '',
+    title: opts.title || '',
     kst: new Date().toISOString().slice(0,16).replace('T',' '),
     read: false
   };
@@ -8581,7 +8602,60 @@ function _refreshMsgBoxBadgeSync(){
     badge.style.background = '#999';
     btn.classList.remove('msgbox-urgent');
   }
+  _maybeShowMsgToast(myMsgs, myAppl);
 }
+
+/* ===== 새 메시지 알림 토스트 (요청4 · 260710) — 새 안읽음 수신 시 하단 미리보기.
+   체크(✓) 눌러야 닫힘(자동 타이머 없음 = 운영자 지시). 기존 .toast는 무접촉.
+   최초 로드 시 이미 쌓인 안읽음은 seen 처리해 폭주 방지 — 이후 새로 온 것만 1건 표시. ===== */
+var _mtSeen=null, _mtCur=null;
+function _mtLoad(){ try{ return JSON.parse(localStorage.getItem('yw_msgToastSeen')||'[]'); }catch(e){ return []; } }
+function _mtSave(){ try{ var a=Array.from(_mtSeen); if(a.length>200) a=a.slice(a.length-200); localStorage.setItem('yw_msgToastSeen', JSON.stringify(a)); }catch(e){} }
+function _maybeShowMsgToast(myUnread, myAppl){
+  // 🔒 로그인 전 절대 차단 (3중 가드): 인증(password)·신원(myAppl)·로그인 화면(#login) 숨김
+  if(typeof password==='undefined' || !password) return;
+  if(!myAppl || !Array.isArray(myUnread)) return;
+  var _lg=document.getElementById('login');
+  if(_lg && _lg.style.display!=='none') return;
+  // ⏱ 앱 진입 후 10초 지연 (진입 직후 어수선함·폭주 방지 — 운영자 지시). 진입 시각 미기록이면 대기.
+  if(!window._appEnteredAt || (Date.now() - window._appEnteredAt) < 10000) return;
+  if(_mtSeen===null) _mtSeen=new Set(_mtLoad());
+  var fresh=myUnread.filter(function(m){ return m && m.id && !_mtSeen.has(m.id); });
+  if(!fresh.length) return;
+  fresh.forEach(function(m){ _mtSeen.add(m.id); }); _mtSave();
+  fresh.sort(function(a,b){ return String(b.kst||'').localeCompare(String(a.kst||'')); });
+  showMsgToast(fresh[0], fresh.length);
+}
+function showMsgToast(m, extra){
+  var el=document.getElementById('msg-toast'); if(!el || !m) return;
+  _mtCur=m;
+  var isImp=(m.type==='중요');
+  var _hasT=!!(m.title||'').toString().trim();
+  var title=(m.title||'').toString().trim() || (m.reason||'').toString().trim() || (m.trigger||'새 알림').toString();
+  var sub=_hasT ? (m.reason||'').toString().trim() : (m.refSummary||'').toString().trim();
+  if(!sub && !_hasT && m.before && m.after) sub=m.before+' → '+m.after;
+  var tm=(m.kst||'').toString().slice(11,16); if(!tm) tm='방금';
+  var more=(extra&&extra>1)?(' · 외 '+(extra-1)+'건'):'';
+  var h='<div class="mt-main">';
+  h+='<div class="mt-head"><span class="mt-badge '+(isImp?'i':'n')+'">'+(isImp?'중요':'일반')+'</span><span class="mt-time">'+escapeHtml(tm+more)+'</span></div>';
+  h+='<div class="mt-title">'+escapeHtml(title)+'</div>';
+  if(sub) h+='<div class="mt-sub">'+escapeHtml(sub)+'</div>';
+  h+='<span class="mt-open" role="button" tabindex="0" onclick="_msgToastOpen()" onkeydown="if(event.key===\'Enter\'){event.preventDefault();_msgToastOpen();}">열기 &rarr;</span>';
+  h+='</div>';
+  h+='<button class="mt-check" title="확인" aria-label="확인" onclick="_msgToastCheck()">✓</button>';
+  el.className='msg-toast'+(isImp?' imp':'');
+  el.innerHTML=h;
+  requestAnimationFrame(function(){ requestAnimationFrame(function(){ el.classList.add('show'); }); });
+}
+function _hideMsgToast(){ var el=document.getElementById('msg-toast'); if(el) el.classList.remove('show'); _mtCur=null; }
+function _msgToastCheck(){
+  var m=_mtCur; _hideMsgToast(); if(!m) return;
+  _msgApiCall('PATCH', '/api/messages/'+encodeURIComponent(m.id), {read:true}).then(function(){});
+  var msgs=_msgGet(); var x=msgs.find(function(y){ return y.id===m.id; });
+  if(x && !x.read){ x.read=true; _msgSave(msgs); }
+  try{ refreshMsgBoxBadge(); }catch(e){}
+}
+function _msgToastOpen(){ var m=_mtCur; _hideMsgToast(); if(!m) return; try{ markMsgRead(m.id); }catch(e){} }
 async function openMsgBox(){
   // 진입 시 최신 메시지 fetch (API 우선). 메시지함을 여는 시점 = 로그인 완료 상태이므로,
   // 로그인 전 폴링이 걸어둔 봉인이 남아있으면 해제해 반드시 서버를 다시 조회한다(분신술 B-HIGH).
@@ -8625,13 +8699,19 @@ async function openMsgBox(){
       }
       html += '<span style="font-size:10px;color:#aaa;font-variant-numeric:tabular-nums">'+escapeHtml(m.kst)+'</span>';
       html += '</div>';
+      if(m.title){
+        html += '<div style="font-size:'+(isImp?'14px':'13px')+';font-weight:700;color:'+(isImp?'var(--danger)':'var(--text)')+';margin-bottom:5px;line-height:1.35">'+escapeHtml(m.title)+'</div>';
+      }
       if(m.reason){
-        const reasonFs = isImp ? '14px' : '12px';
-        const reasonFw = isImp ? '700' : '600';
+        const _hasT = !!m.title;
+        const reasonFs = _hasT ? '12px' : (isImp ? '14px' : '12px');
+        const reasonFw = _hasT ? '500' : (isImp ? '700' : '600');
         const reasonCol = isImp ? '#C0392B' : '#333';
         html += '<div style="font-size:'+reasonFs+';font-weight:'+reasonFw+';color:'+reasonCol+';margin-bottom:6px;line-height:1.4">'+escapeHtml(m.reason)+'</div>';
       }
-      html += '<div style="font-size:11px;color:#666;margin-bottom:4px">'+escapeHtml(m.before)+' → <strong style="color:#333">'+escapeHtml(m.after)+'</strong></div>';
+      if(m.before && m.after){
+        html += '<div style="font-size:11px;color:#666;margin-bottom:4px">'+escapeHtml(m.before)+' → <strong style="color:#333">'+escapeHtml(m.after)+'</strong></div>';
+      }
       if(m.refSummary){
         html += '<div style="font-size:11px;color:#999;letter-spacing:0.2px">'+escapeHtml(m.refSummary)+'</div>';
       }
@@ -13466,12 +13546,12 @@ function adminRoute(id){
 //  - 자동_낮에만 (boolean, 09:00~18:00 외 자동 차단 — 260611 9-6 통일, default true)
 //  - 자동_일요일 (boolean, 일요일 자동 차단, default true)
 //  - 자동_휴무 (boolean, 담당자 휴무일 자동 차단, default false)
-let APPLY_SETTINGS={접수ON:false,접수월:[],자동_낮에만:true,자동_일요일:true,자동_휴무:false};
+let APPLY_SETTINGS={접수ON:false,접수월:[],자동_낮에만:true,자동_일요일:true,자동_휴무:false,이메일알림:false};
 let APPLY_SETTINGS_ROWS={};
 let APPLY_EXCLUSIONS=[]; // [{rowIndex, date, start, end}]
 
 // 자동 키 default 값
-const APPLY_AUTO_DEFAULTS={'자동_낮에만':true,'자동_일요일':true,'자동_휴무':false};
+const APPLY_AUTO_DEFAULTS={'자동_낮에만':true,'자동_일요일':true,'자동_휴무':false,'이메일알림':false};
 
 // === 접수월 헬퍼 — 배열/단수 둘 다 정규화 (구버전 데이터 호환) ===
 function getApplyMonths(){
@@ -13503,7 +13583,7 @@ async function loadApplySettings(){
   try{
     const d=await api('GET','/api/sheet/applysettings');
     // default 값으로 초기화
-    APPLY_SETTINGS={접수ON:false,접수월:[],자동_낮에만:APPLY_AUTO_DEFAULTS['자동_낮에만'],자동_일요일:APPLY_AUTO_DEFAULTS['자동_일요일'],자동_휴무:APPLY_AUTO_DEFAULTS['자동_휴무']};
+    APPLY_SETTINGS={접수ON:false,접수월:[],자동_낮에만:APPLY_AUTO_DEFAULTS['자동_낮에만'],자동_일요일:APPLY_AUTO_DEFAULTS['자동_일요일'],자동_휴무:APPLY_AUTO_DEFAULTS['자동_휴무'],이메일알림:APPLY_AUTO_DEFAULTS['이메일알림']};
     APPLY_SETTINGS_ROWS={};
     APPLY_EXCLUSIONS=[];
     (d.rows||[]).forEach(function(r){
@@ -13628,6 +13708,13 @@ function renderApplySettings(loadOk){
     html+='<label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;user-select:none"><input type="checkbox" '+(APPLY_SETTINGS['자동_낮에만']?'checked':'')+' onchange="setApplyAuto(\'자동_낮에만\',this.checked)" style="margin:0;cursor:pointer;accent-color:var(--accent)">낮에만 (9~18시)</label>';
     html+='<label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;user-select:none"><input type="checkbox" '+(APPLY_SETTINGS['자동_일요일']?'checked':'')+' onchange="setApplyAuto(\'자동_일요일\',this.checked)" style="margin:0;cursor:pointer;accent-color:var(--accent)">화-토</label>';
     html+='<label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;user-select:none"><input type="checkbox" '+(APPLY_SETTINGS['자동_휴무']?'checked':'')+' onchange="setApplyAuto(\'자동_휴무\',this.checked)" style="margin:0;cursor:pointer;accent-color:var(--accent)">휴무</label>';
+    html+='</div>';
+    html+='</div>';
+    // 알림 설정 (이메일 = 향후 큐잉 발송용 · 기본 off · 앱 내 메시지함은 항상 동작)
+    html+='<div style="display:flex;align-items:center;gap:14px;margin-bottom:6px;flex-wrap:wrap">';
+    html+='<label style="font-size:11px;color:var(--neutral-text);font-weight:600;letter-spacing:0.5px;white-space:nowrap;min-width:64px;padding-left:8px">알림</label>';
+    html+='<div style="display:flex;align-items:center;gap:14px;font-size:12px;color:var(--neutral-text)">';
+    html+='<label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;user-select:none"><input type="checkbox" '+(APPLY_SETTINGS['이메일알림']?'checked':'')+' onchange="setApplyAuto(\'이메일알림\',this.checked)" style="margin:0;cursor:pointer;accent-color:var(--accent)">이메일 알림 <span style="color:var(--muted);font-size:10px">(준비 중 · 메시지함은 항상 동작)</span></label>';
     html+='</div>';
     html+='</div>';
     // 공통 시간 입력

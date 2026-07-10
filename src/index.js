@@ -478,9 +478,124 @@ async function autoCancelStalePending(env) {
 }
 __name(autoCancelStalePending, "autoCancelStalePending");
 
+// === 홍보 담당자 알림 (요청1~3) — 문안 SSOT + cron 스캔 (운영자 [선택값] 회신 배선 260710) ===
+// 채널 = 앱 내 '메시지' 시트(프론트가 폴링→토스트/메시지함). 외부 발송 없음. 중복 = 결정론적 id 멱등.
+var PROMO_NOTIFY = {
+  morning:    { type: "일반", trigger: "홍보-당일",   title: "📣 오늘 홍보 일정이 있어요",     body: "{수신자}님, 오늘 예정된 {시간} {플랫폼} 「{제목}」를 확인해주세요." },
+  lead1h:     { type: "일반", trigger: "홍보-1시간전", title: "⏰ 1시간 뒤 홍보 예정",         body: "{수신자}님, {시간}에 {플랫폼} 「{제목}」 홍보가 예정되어 있습니다." },
+  overdue:    { type: "중요", trigger: "홍보-미완료",  title: "🔔 홍보 완료됐나요?",            body: "{수신자}님, {시간}에 {플랫폼} 「{제목}」 완료하셨나요? 확인해주세요." },
+  unassigned: { type: "일반", trigger: "홍보-미지정",  title: "📣 담당자 미지정 홍보가 있어요", body: "오늘 {시간} {플랫폼} 「{제목}」 홍보에 지정된 담당자가 없으니 확인해주세요." }
+};
+// 발송 규칙(운영자 선택값). morningAt=아침 알림 시각, leadMin=사전 리드, overdueMin=미완료 지연, scanMin=cron 주기.
+var PROMO_NOTIFY_CFG = { morningAt: "09:30", leadMin: 60, overdueMin: 15, scanMin: 15, quietStartH: 22, quietEndH: 8, unassignedVal: "상관 없음", copyApplicant: false, overdueRepeat: true, overdueMaxRep: 4 };
+
+function _pnFill(tpl, v) {
+  return String(tpl || "").replace(/\{수신자\}/g, v["수신자"] || "").replace(/\{시간\}/g, v["시간"] || "").replace(/\{플랫폼\}/g, v["플랫폼"] || "").replace(/\{제목\}/g, v["제목"] || "");
+}
+__name(_pnFill, "_pnFill");
+function _pnFlagOn(v) {
+  if (v === true || v === 1) return true;
+  const s = String(v == null ? "" : v).trim().toLowerCase();
+  return ["true", "1", "y", "yes", "o", "on", "active", "✓", "✔", "활성", "예", "사용", "가능", "t"].indexOf(s) >= 0;
+}
+__name(_pnFlagOn, "_pnFlagOn");
+function _pnHash(s) { let h = 0; s = String(s); for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36); }
+__name(_pnHash, "_pnHash");
+
+// 홍보기록을 스캔해 요청1~3 알림을 '메시지' 시트에 적재. cron(매 scanMin분)에서 호출.
+async function promoNotifyScan(env) {
+  const token = await getToken(env);
+  const { rows } = await handleGetSheet(token, "홍보기록");
+  const managers = await getManagersCached(token);
+  const cfg = PROMO_NOTIFY_CFG;
+  const nowMs = Date.now();
+  const kst = new Date(nowMs + 9 * 3600 * 1000);
+  const pad = (n) => String(n).padStart(2, "0");
+  const kstHM = pad(kst.getUTCHours()) + ":" + pad(kst.getUTCMinutes());
+  const todayKey = kst.getUTCFullYear() + "-" + pad(kst.getUTCMonth() + 1) + "-" + pad(kst.getUTCDate());
+  const kstStamp = kstNowText().slice(0, 16);
+  // PR_MANAGERS = 홍보여부 ON · 휴직 아님 · 이름 있음
+  const prNames = managers.filter((m) => _pnFlagOn(m["홍보여부"]) && !_pnFlagOn(m["휴직여부"]) && String(m["담당자"] || "").trim()).map((m) => String(m["담당자"]).trim());
+  const PLAN = "예정";
+  // 감사4 MED-1: 메시지 시트 기존 id를 스캔당 1회만 읽어 Set — 이미 보낸 알림은 fire 전 skip(Graph 재읽기 폭증 방지)
+  const existing = new Set();
+  try { (await handleGetMessages(token)).forEach((m) => { const id = m.ID || m.id; if (id) existing.add(String(id)); }); } catch (e) {}
+  let sent = 0;
+  const fire = async (kind, seq, recipList, ctx) => {
+    const tpl = PROMO_NOTIFY[kind];
+    if (!tpl) return;
+    const uniq = Array.from(new Set(recipList.filter(Boolean)));
+    for (const rn of uniq) {
+      const id = "pn-" + kind + "-" + ctx.no + "-" + seq + "-" + rn; // 이름 무손실(해시 충돌 제거 · 감사2 L3)
+      if (existing.has(id)) continue; // 이미 발송 — Graph 왕복 없이 skip (감사4 MED-1)
+      try {
+        await handleAddMessage(token, {
+          id, recipient: rn, type: tpl.type, trigger: tpl.trigger, title: tpl.title, before: "", after: "",
+          reason: _pnFill(tpl.body, { "수신자": rn, "시간": ctx.hm, "플랫폼": ctx.platform, "제목": ctx.title }),
+          refNo: ctx.no, refSummary: ctx.refSummary, kst: kstStamp, read: false
+        });
+        existing.add(id); sent++;
+      } catch (e) { console.error("promoNotify " + kind + " " + ctx.no, e); }
+    }
+  };
+  for (const row of rows) {
+    // 알림 대상 = '예정'(승인)만 (감사1 MED-5: 신청 중·보류·취소·임시·완료 제외 → 오발송 차단)
+    if (String(row["진행 상태"] || "").trim() !== PLAN) continue;
+    // 날짜 = 연/월/일 정수 열 (입력시간(KST)의 Excel serial 자동변환을 우회 · 감사1 HIGH-1 · index.html _recDate 계승)
+    const y = parseInt(row["연도"], 10), mo = parseInt(row["월"], 10), d = parseInt(row["일"], 10);
+    if (!y || !mo || !d) continue;
+    // 시각 = 입력시간(KST): 문자열 "YYYY-MM-DD HH:MM(:SS)" 또는 Excel serial 숫자(소수부=하루 중 분) 양쪽 (_recTime 계승)
+    const ts = row["입력시간(KST)"];
+    let hm = "";
+    if (typeof ts === "number") {
+      const tmin = Math.round((ts % 1) * 1440); hm = pad(Math.floor(tmin / 60)) + ":" + pad(tmin % 60);
+    } else {
+      const tstr = String(ts == null ? "" : ts).trim();
+      if (tstr.indexOf(" ") > -1) hm = tstr.split(" ")[1].substr(0, 5);
+      else if (tstr !== "" && !isNaN(tstr)) { const tmin = Math.round((Number(tstr) % 1) * 1440); hm = pad(Math.floor(tmin / 60)) + ":" + pad(tmin % 60); }
+      else if (tstr.indexOf(":") > -1) hm = tstr.substr(0, 5);
+    }
+    if (hm.indexOf(":") < 0) continue;
+    const promoDateKey = y + "-" + pad(mo) + "-" + pad(d);
+    const promoMs = new Date(promoDateKey + "T" + hm + ":00+09:00").getTime();
+    if (isNaN(promoMs)) continue;
+    const ctx = {
+      no: row["No"] || row["NO"] || ("r" + row._rowIndex), // No 빈값/재사용 폴백 (감사2 L4)
+      hm,
+      platform: row["플랫폼 1"] || "",
+      title: row["콘텐츠 제목"] || "",
+      refSummary: (promoDateKey + " " + (row["플랫폼 1"] || "") + " " + (row["콘텐츠 제목"] || "")).trim()
+    };
+    const assignee = String(row["게시 담당자"] || "").trim();
+    const assigned = assignee && assignee !== cfg.unassignedVal;
+    const applicant = String(row["신청자"] || "").trim();
+    // 수신자: 지정 → 그 담당자(+옵션 신청자 사본) / 미지정 → PR_MANAGERS 전원
+    const baseRecips = assigned ? [assignee].concat(cfg.copyApplicant && applicant ? [applicant] : []) : prNames.slice();
+    if (!baseRecips.length) continue;
+    const toPromo = promoMs - nowMs;
+    // 요청1a 당일 아침 (오늘 · 아침시각 지남 · 홍보까지 leadMin 초과 = 1시간전과 안 겹침)
+    if (promoDateKey === todayKey && kstHM >= cfg.morningAt && toPromo > cfg.leadMin * 60000) {
+      await fire(assigned ? "morning" : "unassigned", "AM" + todayKey, baseRecips, ctx);
+    }
+    // 요청1b 1시간 전 (홍보 前 0~leadMin 넓게 — cron 지연/스킵에도 안 놓침 · 감사1 HIGH-2 · dedup "L"로 1회)
+    if (toPromo > 0 && toPromo <= cfg.leadMin * 60000) {
+      await fire(assigned ? "lead1h" : "unassigned", "L", baseRecips, ctx);
+    }
+    // 요청3 +15분 미완료 (반복: scanMin 간격 회차 · 무음 제거로 저녁 홍보도 정상 · 감사1 HIGH-3)
+    if (nowMs >= promoMs + cfg.overdueMin * 60000) {
+      let rep = 0;
+      if (cfg.overdueRepeat) { rep = Math.floor((nowMs - (promoMs + cfg.overdueMin * 60000)) / (cfg.scanMin * 60000)); if (rep > cfg.overdueMaxRep) rep = -1; }
+      if (rep >= 0) await fire("overdue", "O" + rep, baseRecips, ctx);
+    }
+  }
+  console.log("promoNotify: " + sent + " message(s)");
+  return sent;
+}
+__name(promoNotifyScan, "promoNotifyScan");
+
 // === 메시지(알림) 시트 — 자동 생성 + CRUD ===
 var MSG_SHEET = "메시지";
-var MSG_HEADERS = ["ID", "수신자", "종류", "트리거", "이전", "이후", "사유", "참조번호", "참조요약", "KST", "읽음"];
+var MSG_HEADERS = ["ID", "수신자", "종류", "트리거", "이전", "이후", "사유", "참조번호", "참조요약", "KST", "읽음", "제목"];
 
 async function graphPost(token, path, body) {
   const r = await fetch(`https://graph.microsoft.com/v1.0${path}`, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -489,15 +604,30 @@ async function graphPost(token, path, body) {
 }
 __name(graphPost, "graphPost");
 
-// 메시지 시트 없으면 생성 + 헤더 기록 (최초 1회)
+// 메시지 시트 없으면 생성 + 헤더 기록 (최초 1회). 기존 시트엔 신규 열 헤더 보강(마이그레이션).
+var _msgHdrSynced = false;
 async function ensureMessagesSheet(token) {
   const { driveId, itemId } = await findFile(token);
   const ws = await graphGet(token, `/drives/${driveId}/items/${itemId}/workbook/worksheets`);
   const exists = (ws.value || []).some((w) => w.name === MSG_SHEET);
+  const lastCol = colLetter(MSG_HEADERS.length);
   if (!exists) {
     await graphPost(token, `/drives/${driveId}/items/${itemId}/workbook/worksheets/add`, { name: MSG_SHEET });
-    const lastCol = colLetter(MSG_HEADERS.length);
     await graphPatch(token, `${sheetPathFor(driveId, itemId, MSG_SHEET)}/range(address='A1:${lastCol}1')`, { values: [MSG_HEADERS] });
+    _msgHdrSynced = true;
+  } else if (!_msgHdrSynced) {
+    // 헤더 마이그레이션(isolate당 1회): '제목' 등 신규 열이 없으면 헤더만 보강.
+    // A~K 기존값은 동일하면 건드리지 않고, 어긋난 칸(주로 끝 신규 열)만 write → 데이터 열 밀림 없음.
+    try {
+      const hdr = await graphGet(token, `${sheetPathFor(driveId, itemId, MSG_SHEET)}/range(address='A1:${lastCol}1')`);
+      const cur = (hdr.values && hdr.values[0]) || [];
+      for (let i = 0; i < MSG_HEADERS.length; i++) {
+        if (String(cur[i] || "") !== MSG_HEADERS[i]) {
+          await graphPatch(token, `${sheetPathFor(driveId, itemId, MSG_SHEET)}/range(address='${colLetter(i + 1)}1')`, { values: [[MSG_HEADERS[i]]] });
+        }
+      }
+    } catch (e) { console.error("msg header migrate", e); }
+    _msgHdrSynced = true;
   }
   return { driveId, itemId };
 }
@@ -516,7 +646,8 @@ async function handleAddMessage(token, msg) {
   const values = [
     msg.id || "", msg.recipient || "", msg.type || "일반", msg.trigger || "",
     msg.before || "", msg.after || "", msg.reason || "", msg.refNo || "",
-    msg.refSummary || "", msg.kst || kstNowText(), msg.read ? "TRUE" : "FALSE"
+    msg.refSummary || "", msg.kst || kstNowText(), msg.read ? "TRUE" : "FALSE",
+    msg.title || ""
   ];
   const lastCol = colLetter(values.length);
   // ⚠️ 비원자 append 경합 방어(분신술 H2): nextRow를 계산해 쓴 뒤 그 행 A열을 read-back 검증한다.
@@ -1259,10 +1390,18 @@ __name(ghDecodeB64, "ghDecodeB64");
 
 var index_default = {
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(autoCancelStalePending(env));
-    const ky = new Date(Date.now() + 9 * 3600 * 1e3).getUTCFullYear();
-    ctx.waitUntil(getHolidays(env, ky, true));
-    ctx.waitUntil(getHolidays(env, ky + 1, true));
+    const kst = new Date(Date.now() + 9 * 3600 * 1e3);
+    const h = kst.getUTCHours();
+    // 하루 1회(KST 10시대)만 보류 자동취소 + 공휴일 갱신 (기존 동작 유지 — cron이 */15로 바뀌어도 1회 보장)
+    if (h === 10 && kst.getUTCMinutes() < PROMO_NOTIFY_CFG.scanMin) {
+      ctx.waitUntil(autoCancelStalePending(env));
+      const ky = kst.getUTCFullYear();
+      ctx.waitUntil(getHolidays(env, ky, true));
+      ctx.waitUntil(getHolidays(env, ky + 1, true));
+    }
+    // 홍보 담당자 알림 스캔 — 매 틱 (무음 없음). 인앱 메시지는 밤에 소리내지 않으므로(푸시 없음) 야간 게이팅이
+    // 실효 없고, 스캔 자체를 끄면 lead/overdue 윈도우·회차 계산이 오염됨(감사1 HIGH-3/4). 무음은 향후 이메일/푸시 발송에만.
+    ctx.waitUntil(promoNotifyScan(env));
   },
   async fetch(request, env) {
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders(env) });
