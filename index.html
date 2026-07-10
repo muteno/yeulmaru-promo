@@ -1790,6 +1790,21 @@ table.promo-board-table thead th:last-child{border-top-right-radius:11px}
 ::-webkit-scrollbar-button:horizontal:decrement{border-top:6.5px solid transparent;border-bottom:6.5px solid transparent;border-right:8px solid var(--c2);border-left:0}
 ::-webkit-scrollbar-button:horizontal:increment{border-top:6.5px solid transparent;border-bottom:6.5px solid transparent;border-left:8px solid var(--c2);border-right:0}
 ::-webkit-scrollbar-button:vertical:start:increment,::-webkit-scrollbar-button:vertical:end:decrement,::-webkit-scrollbar-button:horizontal:start:increment,::-webkit-scrollbar-button:horizontal:end:decrement{display:none}
+/* [260710 운영자] 스크롤바 위치·이동 반응(전역) — 최상하단=2강조색(위 기본 유지) · 중간정지=무채 옅게 · 중간이동=무채 진하게.
+   무채 = 흑알파(캘린더 .c-inner 스크롤바 rgba(0,0,0,.15)와 동일 계승) · 신규 토큰/hex 0.
+   상태 data-sbpos(top|mid|bottom)·data-sbmove(1) = 전역 트래커 _sbTrack이 스크롤된 요소에 세팅 · data 속성이라 자식 상속 0(타 스크롤바 오염 없음) · webkit 전용. */
+[data-sbpos="mid"]::-webkit-scrollbar-thumb{background:rgba(0,0,0,.13)}
+[data-sbpos="mid"]::-webkit-scrollbar-track{border-color:rgba(0,0,0,.10)}
+[data-sbpos="mid"]::-webkit-scrollbar-button:vertical:decrement{border-bottom-color:rgba(0,0,0,.13)}
+[data-sbpos="mid"]::-webkit-scrollbar-button:vertical:increment{border-top-color:rgba(0,0,0,.13)}
+[data-sbpos="mid"]::-webkit-scrollbar-button:horizontal:decrement{border-right-color:rgba(0,0,0,.13)}
+[data-sbpos="mid"]::-webkit-scrollbar-button:horizontal:increment{border-left-color:rgba(0,0,0,.13)}
+[data-sbpos="mid"][data-sbmove="1"]::-webkit-scrollbar-thumb{background:rgba(0,0,0,.30)}
+[data-sbpos="mid"][data-sbmove="1"]::-webkit-scrollbar-track{border-color:rgba(0,0,0,.18)}
+[data-sbpos="mid"][data-sbmove="1"]::-webkit-scrollbar-button:vertical:decrement{border-bottom-color:rgba(0,0,0,.30)}
+[data-sbpos="mid"][data-sbmove="1"]::-webkit-scrollbar-button:vertical:increment{border-top-color:rgba(0,0,0,.30)}
+[data-sbpos="mid"][data-sbmove="1"]::-webkit-scrollbar-button:horizontal:decrement{border-right-color:rgba(0,0,0,.30)}
+[data-sbpos="mid"][data-sbmove="1"]::-webkit-scrollbar-button:horizontal:increment{border-left-color:rgba(0,0,0,.30)}
 </style>
   <!-- MSAL.js for Microsoft OAuth (OneDrive 폴더 트리) — 공식 docs 권장 이중 fallback -->
   <script src="https://alcdn.msauth.net/browser/2.35.0/js/msal-browser.min.js"></script>
@@ -4481,8 +4496,8 @@ function _srailCard(p){
     +'<div class="srail-hd"><div class="srail-tt"><div class="srail-name">'+escapeHtml(p.name)+'</div><div class="srail-meta">'+escapeHtml(meta)+'</div></div>'
     +(dd?'<span class="srail-dday" style="color:'+_srailDdayColor(p.dday)+'">'+dd+'</span>':'')+'</div>'
     +(p.noData?'':'<div class="srail-occrow"><span class="srail-occ">'+p.occ.toFixed(1)+'%</span><span class="srail-delta '+dCls+'">'+dStr+'</span><span class="srail-seatsub">'+p.seats.toLocaleString()+'석</span><span class="srail-occcap">점유율</span></div>')
-    +(p.noData?'<div class="srail-r2"><span class="srail-occ" style="font-size:14px;color:var(--dim)">집계 전</span><span class="srail-delta fl">첫 일일입력 대기</span></div>':'')
-    +'<div class="srail-spark" style="margin-top:10px">'+_srailTrend(p)+'</div>'
+    +(p.noData?'<div class="srail-r2"><span style="font-size:13px;color:var(--dim);font-weight:600">집계 전입니다.</span></div>':'')
+    +(p.noData?'':'<div class="srail-spark" style="margin-top:10px">'+_srailTrend(p)+'</div>')
     +fc
     +'<div class="srail-bar"><i style="width:'+Math.min(p.occ,100).toFixed(1)+'%"></i><b style="left:'+Math.min(tgt,100)+'%"></b></div>'
     +'<div class="srail-r3"><span>'+p.seats.toLocaleString()+' / '+p.totalOpen.toLocaleString()+'석</span>'+(p.noData?'<span class="tgt">목표 '+tgt+'%</span>':'<span class="tgt '+(gap>=0?'ok':'bad')+'">목표 '+tgt+'% '+(gap>=0?'+':'')+gap.toFixed(1)+'%p</span>')+'</div>'
@@ -20749,6 +20764,29 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(_confirmResolve)
 document.getElementById('modal').addEventListener('click',e=>{if(e.target.id==='modal')closeModal();});
 document.getElementById('prog-modal').addEventListener('click',e=>{if(e.target.id==='prog-modal')closeProgFilter();});
 document.getElementById('confirm-modal').addEventListener('click',e=>{if(e.target.id==='confirm-modal')confirmResolve(false);});
+
+/* [260710 운영자] 전역 스크롤바 위치·이동 트래커 — 스크롤된 요소에 data-sbpos(top|mid|bottom)·data-sbmove(1) 세팅.
+   창 스크롤=documentElement · webkit 전용 · 캘린더 셀(.c-inner)·채팅(.cb-body)·칩바(.chips)는 자체 스크롤바 스타일 보존 위해 제외 · passive(스크롤 성능 무해). */
+(function _sbTrack(){
+  var timers=new WeakMap(), raf=new WeakSet(), EPS=2;
+  function classify(el){
+    if(!el||el.nodeType!==1)return;
+    var top=el.scrollTop, ch=el.clientHeight, sh=el.scrollHeight;
+    if(sh-ch<=EPS){ el.removeAttribute('data-sbpos'); return; }   // 스크롤 불가 = 기본(2강조색)
+    el.setAttribute('data-sbpos', top<=EPS?'top':(top+ch>=sh-EPS?'bottom':'mid'));
+  }
+  function onScroll(e){
+    var el=e.target;
+    if(el===document||el===window||el===document.body)el=document.documentElement;
+    if(!el||el.nodeType!==1||(el.matches&&el.matches('.c-inner,.cb-body,.chips')))return;
+    el.setAttribute('data-sbmove','1');
+    var pt=timers.get(el); if(pt)clearTimeout(pt);
+    timers.set(el, setTimeout(function(){ el.removeAttribute('data-sbmove'); classify(el); }, 420));   // 멈춤 420ms 뒤 정지색 복귀
+    if(raf.has(el))return; raf.add(el);
+    requestAnimationFrame(function(){ raf.delete(el); classify(el); });
+  }
+  window.addEventListener('scroll', onScroll, {capture:true, passive:true});   // 캡처 = 창+모든 컨테이너
+})();
 </script>
 
 <!-- 연간 일정 마크업 보관소 — openAnnualCalendar()가 모달로 이동/복귀 -->
