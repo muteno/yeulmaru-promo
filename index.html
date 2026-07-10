@@ -4182,7 +4182,7 @@ function _salesBuild(){
     if(status==='active'&&lastShow&&lastShow<today)status='ended';
     // [분석보드] 추가 필드(기존 필드 불변): 최근 7일 점유율 스파크라인 / 어제대비 %p / 데이터 출처
     var spark=rows.slice(-7).map(function(r){return totalOpen>0?Math.min((_salesNum(r['합계좌석'])||0)/totalOpen*100,100):0;});
-    // 레일 10일 추이용 — 최근 7일 실측(좌석·기준일자·점유율). 예측 3일은 렌더 시 추세 연장.
+    // 레일 10일 추이용 — 최근 7일 실측(좌석·기준일자·점유율). 예측(추세 연장·종료 예상)은 렌더 시 — 실측 7건부터(_SRAIL_FC_MIN).
     var days=rows.slice(-7).map(function(r){var s=_salesNum(r['합계좌석']); return {bd:_salesNum(r['기준일자']),seat:(s==null?0:s),occ:(s!=null&&totalOpen>0)?Math.min(s/totalOpen*100,100):0};});
     var deltaPP=(diff!==null&&totalOpen>0)?diff/totalOpen*100:null;
     var source=m?'master':(ops?'fallback':'none');
@@ -4279,6 +4279,7 @@ function closeSalesBoard(){ if(_salesState.escHandler)document.removeEventListen
 var _srailBusy=false;
 var _srailGen=0;                          // fetch 세대 토큰 — 스톨/경합 시 구응답 폐기 + force 재발사 허용(분신술 4호 MED)
 var _srailView={mode:'list',name:null};   // 레일 화면 상태: list=판매중 목록 / drill=개별 분석(인라인)
+var _SRAIL_FC_MIN=7;                      // [260710 운영자] 예측(추이 연장·종료 예상·예상 문구) 최소 실측 건수 = 일일입력 7건부터(달력 7일 아님) — 미만은 표본이 적어 추세를 못 믿으니 예측 전부 생략
 function _srailEls(){ return { body:document.getElementById('srail-body'), cnt:document.getElementById('srail-cnt'), sum:document.getElementById('srail-sum'), asof:document.getElementById('srail-asof') }; }
 // 레일 상단 라인 = 캘린더 요일 바(cal-head-wrap) 상단 라인과 일치(운영자 260707 "우측 라인도 캘린더 라인하고 맞춰").
 // 운영자 260710 확정: 그 자리(월헤더 밴드)에 타이틀 존이 들어감 — 존 높이를 hdr 실높이로 맞추면 글래스 박스 top = 요일바 top(레일 paddingTop 고정 24 = main-area와 동일).
@@ -4321,7 +4322,8 @@ function _srailInit(force){
   if(_srailBusy&&!force)return;   // force = 스톨 뚫고 재발사 허용(세대 토큰이 구응답 폐기)
   _srailBusy=true;
   var gen=++_srailGen;
-  els.body.innerHTML='<div class="srail-note" style="padding:20px 6px;color:var(--accent);opacity:.75">'+_ldHtml(14)+'판매 데이터 불러오는 중</div>';
+  // [260710 운영자] 로딩 표기 = 좌측 캘린더 스켈레톤 문구(.cal-load-msg)와 동일 스펙(정중앙·accent 75%·14px/600·_ldHtml(16)·「불러오는 중」) — 좌우 로딩 톤 통일
+  els.body.innerHTML='<div style="height:100%;display:flex;align-items:center;justify-content:center;color:var(--accent);opacity:.75;font-size:14px;font-weight:600">'+_ldHtml(16)+'불러오는 중</div>';
   Promise.all([
     _salesState.daily?Promise.resolve(_salesState.daily):api('GET','/api/ops?sheet='+encodeURIComponent('일일입력')),
     _salesState.master?Promise.resolve(_salesState.master):api('GET','/api/ops?sheet='+encodeURIComponent('공연마스터')),
@@ -4427,19 +4429,21 @@ function _srailSpark(arr){
     +'<circle cx="'+last[0].toFixed(1)+'" cy="'+last[1].toFixed(1)+'" r="2.2" fill="var(--accent)"/>'
     +'</svg>';
 }
-// 레일 카드 10일 추이 — 최근 실측(days) + 3일 예측(추세 연장). 오늘=살몬 바탕+인디고 덮기 / 예측=살몬 / 각 점 날짜·좌석·증감(전체대비%, 최근3만 강조). 시안 260709_레일추이10일 계승, 색 전부 토큰.
+// 레일 카드 10일 추이 — 최근 실측(days) + 예측(추세 연장, 실측 7건부터 — _SRAIL_FC_MIN 미만은 실측만). 오늘=살몬 바탕+인디고 덮기 / 예측=살몬 / 각 점 날짜·좌석·증감(전체대비%, 최근3만 강조). 시안 260709_레일추이10일 계승, 색 전부 토큰.
 function _srailTrend(p){
   var days=(p.days||[]).filter(function(d){return d&&d.seat!=null&&!isNaN(d.seat);});
   if(days.length<2)return '<span style="font-size:10px;color:var(--muted)">추이 수집 전 (일일입력 2회부터)</span>';
   var tot=p.totalOpen||926, seatOf=function(o){return Math.round(tot*o/100);};
   var occ=days.map(function(d){return d.occ;});
-  var g=(occ.length>=3)?((occ[occ.length-1]-occ[occ.length-3])/2):(occ[occ.length-1]-occ[occ.length-2]);
-  var vals=occ.slice(); for(var k=1;k<=2;k++)vals.push(Math.max(0,Math.min(100,occ[occ.length-1]+g*k)));   // 예측 2일(운영자 260710 — 그래프만, 예상 요약 문구는 3일 유지)
+  // [260710 운영자] 예측 게이트 — 실측 _SRAIL_FC_MIN(7)건부터만 추이 연장·종료 예상(달력 7일 아님). 미만 = 실측만 그림(days는 상류 slice(-7) 캡이라 length 7 = 실측 7건 이상)
+  var fc7=days.length>=_SRAIL_FC_MIN;
+  var vals=occ.slice();
+  if(fc7){ var g=(occ.length>=3)?((occ[occ.length-1]-occ[occ.length-3])/2):(occ[occ.length-1]-occ[occ.length-2]); for(var k=1;k<=2;k++)vals.push(Math.max(0,Math.min(100,occ[occ.length-1]+g*k))); }   // 예측 2일(운영자 260710 — 그래프만, 예상 요약 문구는 3일 유지)
   var N=occ.length, todayIdx=N-1, T=vals.length;
   function md(bd){var s=String(bd);return s.length===8?(parseInt(s.slice(4,6),10)+'/'+parseInt(s.slice(6,8),10)):'';}
   var ld=_salesDate(String(days[days.length-1].bd));
   var labels=days.map(function(d){return md(d.bd);});
-  for(var k2=1;k2<=2;k2++){ if(ld){var nd=new Date(ld.getTime()+k2*86400000);labels.push((nd.getMonth()+1)+'/'+nd.getDate());}else labels.push(''); }
+  if(fc7)for(var k2=1;k2<=2;k2++){ if(ld){var nd=new Date(ld.getTime()+k2*86400000);labels.push((nd.getMonth()+1)+'/'+nd.getDate());}else labels.push(''); }
   // [260710 운영자 "차트 늘어짐"] viewBox 폭 = 실측 픽셀 폭(_srailChartW) — 종전 고정 280 + preserveAspectRatio none이
   // 넓은 레일에서 글자를 가로로 잡아 늘이던 왜곡 제거(스케일 ≈ 1:1, 확정 폰트 수치는 그대로 유지)
   var W=Math.max(240,_srailChartW||280),H=177,padX=9,padT=24,padB=28;
@@ -4447,7 +4451,7 @@ function _srailTrend(p){
   var endD=(p.endDate instanceof Date)?p.endDate:null;
   var kEnd=(endD&&ld)?Math.round((endD-ld)/86400000):null;
   var _tdy=new Date(); _tdy.setHours(0,0,0,0);
-  var showEnd=(kEnd!==null&&kEnd>=3&&!p.noData&&endD>=_tdy);   // endD>=오늘 = 스테일 종료일 방어(상류 status 필터의 이중 안전 — 분신술 감사3)
+  var showEnd=(fc7&&kEnd!==null&&kEnd>=3&&!p.noData&&endD>=_tdy);   // fc7 = 실측 7건 미만 종료 예상 생략(운영자 260710) · endD>=오늘 = 스테일 종료일 방어(상류 status 필터의 이중 안전 — 분신술 감사3)
   var occEnd=null;
   if(showEnd){
     // [분신술 260710 감사3 MED-2] 종료 예상 기울기 = 실제 달력일당(드릴과 단위 통일) — 입력에 날짜 공백이 있어도 g(샘플 스텝당·예측 2일 전용 확정 로직)와 달리 과/저추정 없음
@@ -4516,7 +4520,7 @@ function _srailCard(p){
   // title=순수 HTML 속성 → escapeHtml / onclick=JS 문자열 → _anaEsc (컨텍스트별 이스케이프 분리, 분신술 5호 MED)
   var fc='';
   var _fd=(p.days||[]).filter(function(d){return d&&d.seat!=null;});
-  if(_fd.length>=2 && !p.noData){
+  if(_fd.length>=_SRAIL_FC_MIN && !p.noData){   // [260710 운영자] 예상 문구도 실측 7건부터(차트 예측 게이트와 동일 기준)
     var _o=_fd.map(function(d){return d.occ;}); var _g=(_o.length>=3)?((_o[_o.length-1]-_o[_o.length-3])/2):(_o[_o.length-1]-_o[_o.length-2]);
     var _p3=Math.max(0,Math.min(100,_o[_o.length-1]+_g*3)), _s3=Math.round((p.totalOpen||926)*_p3/100), _cum=_s3-p.seats;
     fc='<div class="srail-fc">📈 예상 (이 추세면) 3일 뒤 <b>'+_s3.toLocaleString()+'석</b> · 누적 '+(_cum>=0?'+':'')+_cum+'</div>';
@@ -4747,7 +4751,7 @@ function _srailDrillSvg(p){
   var endD=(p.endDate instanceof Date)?p.endDate:null;
   var kEnd=(endD&&lp.bd)?Math.round((endD-lp.bd)/86400000):null;
   var _tdy2=new Date(); _tdy2.setHours(0,0,0,0);
-  var showEnd=(kEnd!==null&&kEnd>=3&&endD>=_tdy2);   // 스테일 종료일 방어(분신술 감사3)
+  var showEnd=(ser.pts.length>=_SRAIL_FC_MIN&&kEnd!==null&&kEnd>=3&&endD>=_tdy2);   // 실측 7건부터 종료 예상(운영자 260710, 달력일 아님) + 스테일 종료일 방어(분신술 감사3)
   var occEnd=null;
   if(showEnd){
     var p0=ser.pts[Math.max(0,ser.pts.length-3)];
