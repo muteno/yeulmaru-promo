@@ -1642,6 +1642,11 @@ table.promo-board-table th:last-child .col-resize-handle{display:none}
 .bpn.step{flex-direction:row;justify-content:flex-start;text-align:left;gap:7px;padding:3px 8px;border-radius:8px;background:rgba(255,255,255,.9);color:var(--accent)}
 .bpn.step .tx{width:auto;flex:1}
 .bpn .bq-c{position:absolute;top:-11px;right:-11px}
+.bpn .bp-imwrap{position:absolute;inset:0;overflow:hidden;border-radius:inherit;pointer-events:none}
+.bpn .bp-im{width:100%;height:100%;object-fit:cover;display:block}
+.bpn .bp-emb{width:100%;height:100%;border:0;display:block;background:var(--neutral);pointer-events:none}
+.bp-vp:not(.edit) .bpn .bp-emb{pointer-events:auto}
+.bpn.hasmedia .tx,.bpn.hasmedia .flab{text-shadow:0 1px 2px rgba(0,0,0,.55)}
 .bp-q{width:24px;height:24px;border-radius:50%;border:1.5px solid var(--accent);background:var(--surface-solid);color:var(--accent);font-size:13px;font-weight:800;line-height:1;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;flex:none;font-family:inherit;box-shadow:var(--glass-shadow);transition:transform .15s;pointer-events:auto}
 .bp-q:hover{transform:scale(1.12)}
 .bp-q.has{background:var(--accent);color:var(--surface-solid);border-color:var(--accent);font-size:11.5px}
@@ -17686,6 +17691,7 @@ function _contentMenuBuild(menu){
 //  색·형태 = 전부 :root 토큰 계승(팔레트 폐쇄형) — 신규 raw hex 0. 오버레이(핸들·앵커)는 스크린 좌표라 줌 무관 크기.
 // ============================================================
 var _BP_STORE_KEY='yw_bp_store_v1';
+var _BP_SRV_CAP=620000;   // 계정 서버(도표 시트) 소프트 상한 근사 — 초과 접근 시 사용자에게 경고(하드 거절은 Worker 413로). Worker DGM_CHUNKS×DGM_CHUNK_SIZE와 함께 조정.
 var _bpS=null;   // 에디터 상태 — 보드 열릴 때 생성, 닫으면 파기
 // 채움 팔레트(폐쇄형) — 전부 기존 :root 토큰·기존 alpha 변주만. 칩 밖 색 반입 금지(§🚨).
 var _BP_FILLS={
@@ -17764,6 +17770,22 @@ function _bpSeed(){
 // ── 새니타이저 관문 — 외부 유입 문서(스토어·JSON 가져오기·구 키 승계)는 전부 여기를 통과한 것만 신뢰.
 //    id·타입·색키·앵커 = 화이트리스트, 수치 = 유한값 클램프, 원소 = 순수 객체만 → 속성 탈출 XSS·렌더 크래시 차단.
 function _bpIdOk(s){return typeof s==='string'&&/^[A-Za-z0-9_-]{1,40}$/.test(s)&&s!=='__proto__'&&s!=='constructor'&&s!=='prototype';}
+// 미디어 소스 화이트리스트 — data:image(base64) 또는 https 이미지 링크만(javascript:·data:text 등 스킴 XSS 차단). 렌더는 escapeHtml + <img src>라 이중 방어.
+function _bpMediaSrcOk(s){
+  if(typeof s!=='string'||!s||s.length>5000000)return null;   // 5MB 하드 상한(렌더/크래시 가드) — 정상 압축본은 훨씬 작음
+  if(/^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(s))return s;
+  if(s.length<=2000&&/^https:\/\/[^\s"'<>\\]+$/i.test(s))return s;   // 괄호 허용(위키미디어 File_(1).jpg 등) — <img src> attr 컨텍스트라 escapeHtml로 안전, 따옴표·꺾쇠·역슬래시·공백만 차단
+  return null;
+}
+// 임베드 화이트리스트 — 유튜브/Vimeo 임베드 URL만(임의 iframe HTML·타 출처 금지). 저장·복원 양쪽에서 재검증.
+function _bpEmbedOk(s){
+  if(typeof s!=='string'||!s)return null;
+  var m=s.match(/^https:\/\/www\.youtube\.com\/embed\/([A-Za-z0-9_-]{6,20})$/);
+  if(m)return 'https://www.youtube.com/embed/'+m[1];
+  var v=s.match(/^https:\/\/player\.vimeo\.com\/video\/(\d{5,12})$/);
+  if(v)return 'https://player.vimeo.com/video/'+v[1];
+  return null;
+}
 function _bpSanitizeInq(q){
   var out={};
   if(!q||typeof q!=='object'||Array.isArray(q))return out;
@@ -17795,6 +17817,11 @@ function _bpSanitizeDoc(d){
     if(n.ts!=null)c.ts=num(n.ts,11,6,80);
     if(t==='frame'){c.dash=n.dash?1:0;c.lab=(n.lab==='bc')?'bc':'tr';c.lc=(n.lc==='g')?'g':'t';c.bc=(n.bc==='g')?'g':'b2';}
     if(_bpIdOk(n.badge))c.badge=n.badge;
+    if(t==='shape'||t==='frame'){   // 미디어(사진·영상) — 도형/구역만. 임베드 우선, 없으면 이미지.
+      var _em=_bpEmbedOk(n.emb);
+      if(_em)c.emb=_em;
+      else{var _im=_bpMediaSrcOk(n.im);if(_im){c.im=_im;c.imf=(n.imf==='contain')?'contain':'cover';}}
+    }
     nid[id2]=1;out.nodes.push(c);
   }
   for(i=0;i<d.edges.length&&i<1600;i++){
@@ -18212,9 +18239,9 @@ function _bpAutoSave(){
   var st=_bpStore(),f=_bpFileFind(st,_bpS.file.id);
   if(!f){f={id:_bpS.file.id};st.files.unshift(f);}   // 목록에서 지워진 채 편집 중이면 복구
   f.name=_bpS.file.name;f.ts=Date.now();f.doc=_bpS.doc;f.scope=_bpS.file.scope||'비공개';st.cur=f.id;
-  if(!_bpStoreSave(st))return;
+  var localOk=_bpStoreSave(st);   // 로컬 실패(용량 초과)여도 계정 서버 저장은 시도 — 메모리 doc은 온전(분신술 효율 MED). 서버 한도 내 이미지가 로컬 풀로 계정 반영까지 막히는 것 방지
   var s=document.getElementById('bp-save');
-  if(s)s.textContent=(_bpS.srvFail?'이 브라우저에 보관됨 — 계정 반영 대기':'임시 보관됨 '+new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}));
+  if(s)s.textContent=(!localOk?'브라우저 저장공간 부족 — 계정에만 반영 시도':(_bpS.srvFail?'이 브라우저에 보관됨 — 계정 반영 대기':'임시 보관됨 '+new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'})));
   _bpSrvQueue();
 }
 // ── 서버 공유 저장(Worker '도표' 시트) — 계정 귀속(비공개/팀/전체). 실패·미배포 시 로컬 캐시만으로 동작 ──
@@ -18259,7 +18286,7 @@ async function _bpSrvFlush(){
     if(!_bpS)return;
     _bpS.srvBusy=false;
     if(!r||!r.ok||!_bpS.file||_bpS.file.id!==fid)return;
-    _bpS.srvFail=false;
+    _bpS.srvFail=false;_bpS._warned413=false;
     var st=_bpStore(),f=_bpFileFind(st,fid);
     if(f&&r.ts){f.srvTs=r.ts;_bpStoreSave(st);}
     var s=document.getElementById('bp-save');
@@ -18267,8 +18294,10 @@ async function _bpSrvFlush(){
   }catch(e){
     if(!_bpS)return;
     _bpS.srvBusy=false;_bpS.srvFail=true;
+    var tooBig=/(^|\D)413(\D|$)/.test(String(e&&e.message||''));   // Worker 413(too large) = 사진/영상으로 도표가 서버 한도 초과 — 재시도 무의미, 명확 안내
     var s2=document.getElementById('bp-save');
-    if(s2)s2.textContent='이 브라우저에 보관됨 — 계정 반영 대기';
+    if(s2)s2.textContent=tooBig?'용량 초과 — 사진/영상이 커서 계정 저장 안 됨(이 브라우저에만 보관)':'이 브라우저에 보관됨 — 계정 반영 대기';
+    if(tooBig&&!_bpS._warned413){_bpS._warned413=true;showToast('사진이 커서 계정·공유 저장 한도를 넘었어요. 사진을 지우거나 이미지 링크·유튜브 링크로 바꿔보세요.','error');}
   }
 }
 // 열려 있는 문서의 계정(서버) 최신본 확인 — 다른 기기·세션에서 저장했으면 서버 승(재진입 직후 1회)
@@ -18454,6 +18483,20 @@ function _bpPathDist(pts,x,y){
 }
 // ── 렌더 ──
 function _bpRenderAll(){_bpRenderNodes();_bpRenderEdges();_bpRenderOvl();}
+// 노드 미디어 레이어(사진 <img> / 유튜브·Vimeo <iframe>) — 도형·구역 안에 채움. 클립 = 모양별(라운드=inherit·타원=원·마름모=폴리곤). 편집 중 iframe은 pointer-events:none(노드 드래그 보존), 읽기전용 공유뷰에서만 재생.
+function _bpMediaHtml(n){
+  if(!n)return '';
+  var inner='';
+  if(n.emb){
+    inner='<iframe class="bp-emb" src="'+escapeHtml(n.emb)+'" title="'+escapeHtml((n.tx||'영상').slice(0,60))+'" loading="lazy" allow="autoplay;encrypted-media;picture-in-picture;fullscreen" referrerpolicy="strict-origin-when-cross-origin" sandbox="allow-scripts allow-same-origin allow-presentation allow-popups"></iframe>';
+  }else if(n.im){
+    inner='<img class="bp-im" src="'+escapeHtml(n.im)+'" alt="'+escapeHtml((n.tx||'').slice(0,80))+'" draggable="false" referrerpolicy="no-referrer" style="object-fit:'+(n.imf==='contain'?'contain':'cover')+'">';
+  }else return '';
+  var clip='';
+  if(n.t==='shape'&&n.k==='ellipse')clip='border-radius:50%;';
+  else if(n.t==='shape'&&n.k==='diamond')clip='clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%);border-radius:0;';
+  return '<span class="bp-imwrap"'+(clip?' style="'+clip+'"':'')+'>'+inner+'</span>';
+}
 function _bpNodeEl(n){
   var sty='left:'+n.x+'px;top:'+n.y+'px;';
   if(n.t==='div'){
@@ -18463,7 +18506,8 @@ function _bpNodeEl(n){
   if(n.t==='frame'){
     var F0=_BP_FILLS[n.f]||_BP_FILLS.t;
     var bd=(n.bc==='g'?'var(--green)':'var(--border2)'),lc=(n.lc==='g'?'var(--green)':'var(--text)');
-    return '<div class="bpn frame" data-id="'+n.id+'" style="'+sty+'background:'+F0.bg+';border:1.5px '+(n.dash?'dashed':'solid')+' '+bd+';border-radius:14px">'
+    return '<div class="bpn frame'+(n.im||n.emb?' hasmedia':'')+'" data-id="'+n.id+'" style="'+sty+'background:'+F0.bg+';border:1.5px '+(n.dash?'dashed':'solid')+' '+bd+';border-radius:14px">'
+      +_bpMediaHtml(n)
       +'<span class="flab tx'+(n.lab==='bc'?' bl':'')+'" style="color:'+lc+'">'+escapeHtml(n.tx)+'</span></div>';
   }
   var q=_bpS.doc.inq||{},cnt=n.badge?(q[n.badge]||[]).length:0;
@@ -18473,13 +18517,15 @@ function _bpNodeEl(n){
       +'<span class="tx">'+escapeHtml(n.tx)+'</span>'+badge+'</div>';
   }
   var F=_BP_FILLS[n.f]||_BP_FILLS.w,k=n.k||'round',shp='';
+  var media=(n.t==='shape')?_bpMediaHtml(n):'';   // 미디어 있으면 마름모/타원 fill은 투명(사진이 보이게), 테두리 stroke는 유지
   sty+='font-size:'+(n.ts||11)+'px;color:'+F.tx+';';
   if(n.t==='shape'&&(k==='diamond'||k==='ellipse')){
     var sw=(F.bd==='transparent')?0:1.5;
+    var sfill=media?'transparent':F.bg;
     shp='<svg class="shp" viewBox="0 0 '+n.w+' '+n.h+'" preserveAspectRatio="none" aria-hidden="true">'
       +(k==='diamond'
-        ?'<polygon points="'+(n.w/2)+',1 '+(n.w-1)+','+(n.h/2)+' '+(n.w/2)+','+(n.h-1)+' 1,'+(n.h/2)+'" fill="'+F.bg+'"'+(sw?' stroke="'+F.bd+'" stroke-width="'+sw+'"':'')+'/>'
-        :'<ellipse cx="'+(n.w/2)+'" cy="'+(n.h/2)+'" rx="'+(n.w/2-1)+'" ry="'+(n.h/2-1)+'" fill="'+F.bg+'"'+(sw?' stroke="'+F.bd+'" stroke-width="'+sw+'"':'')+'/>')
+        ?'<polygon points="'+(n.w/2)+',1 '+(n.w-1)+','+(n.h/2)+' '+(n.w/2)+','+(n.h-1)+' 1,'+(n.h/2)+'" fill="'+sfill+'"'+(sw?' stroke="'+F.bd+'" stroke-width="'+sw+'"':'')+'/>'
+        :'<ellipse cx="'+(n.w/2)+'" cy="'+(n.h/2)+'" rx="'+(n.w/2-1)+'" ry="'+(n.h/2-1)+'" fill="'+sfill+'"'+(sw?' stroke="'+F.bd+'" stroke-width="'+sw+'"':'')+'/>')
       +'</svg>';
     sty+='background:transparent;border-color:transparent;';
   }else if(n.t==='text'){
@@ -18489,7 +18535,7 @@ function _bpNodeEl(n){
     if(k==='rect')sty+='border-radius:3px;';
   }
   var bwrap=badge?'<span class="bq-c">'+badge+'</span>':'';
-  return '<div class="bpn" data-id="'+n.id+'" style="'+sty+'">'+shp+'<span class="tx">'+escapeHtml(n.tx)+'</span>'+bwrap+'</div>';
+  return '<div class="bpn'+(media?' hasmedia':'')+'" data-id="'+n.id+'" style="'+sty+'">'+media+shp+'<span class="tx">'+escapeHtml(n.tx)+'</span>'+bwrap+'</div>';
 }
 function _bpRenderNodes(){
   var host=document.getElementById('bp-nodes');if(!host||!_bpS)return;
@@ -18914,6 +18960,114 @@ function _bpZO(top){
 function _bpSetFill(k){var n=_bpN(_bpS.sel[0]);if(!n)return;_bpMut();n.f=k;_bpDirty();_bpRenderNodes();_bpPropsSync();}
 function _bpSetKind(k){var n=_bpN(_bpS.sel[0]);if(!n)return;_bpMut();n.k=k;_bpDirty();_bpRenderNodes();_bpRenderEdges();_bpPropsSync();}
 function _bpSetTs(s){var n=_bpN(_bpS.sel[0]);if(!n)return;_bpMut();n.ts=s;_bpDirty();_bpRenderNodes();_bpPropsSync();}
+// ── 미디어(사진·영상) — 도형/구역에 사진(업로드 압축·이미지 링크)·유튜브/Vimeo 임베드 삽입. 삽입 시 맞춤(폭맞춤=cover/원본비율=contain) 질문(운영자 260710) ──
+function _bpMediaNode(){var n=_bpN(_bpS.sel[0]);return (n&&(n.t==='shape'||n.t==='frame'))?n:null;}
+function _bpSetImg(src,fit){
+  var n=_bpMediaNode();if(!n||!src)return;
+  _bpMut();delete n.emb;n.im=src;n.imf=(fit==='contain')?'contain':'cover';
+  _bpDirty();_bpRenderNodes();_bpPropsSync();_bpMediaSizeWarn();
+}
+function _bpSetEmb(src){
+  var n=_bpMediaNode();if(!n||!src)return;
+  _bpMut();delete n.im;delete n.imf;n.emb=src;
+  _bpDirty();_bpRenderNodes();_bpPropsSync();
+}
+function _bpMediaFit(f){var n=_bpMediaNode();if(!n||!n.im)return;_bpMut();n.imf=(f==='contain')?'contain':'cover';_bpDirty();_bpRenderNodes();_bpPropsSync();}
+function _bpMediaClear(){var n=_bpMediaNode();if(!n)return;_bpMut();delete n.im;delete n.imf;delete n.emb;_bpDirty();_bpRenderNodes();_bpPropsSync();}
+function _bpMediaOpen(){var n=_bpMediaNode();if(!n||!n.emb)return;var w=_bpEmbToWatch(n.emb);if(w)window.open(w,'_blank','noopener');}
+// 삽입 시 맞춤 질문 — showChoice(보드 위로 z 상향, _bpSaveNow 전례). 반환 'cover'|'contain'|false(취소)
+async function _bpAskFit(){
+  var cm=document.getElementById('confirm-modal');if(cm)cm.style.zIndex='var(--z-confirm)';
+  var pick;
+  try{
+    pick=await showChoice('사진을 이 도형에 어떻게 맞출까?<br><span style="font-size:12px;color:var(--dim)">폭맞춤 = 박스를 꽉 채우고 넘치는 부분은 잘라내요 · 원본 비율 = 사진 전체가 비율 그대로 들어가고 남는 곳은 여백이에요.</span>',
+      [{label:'폭맞춤(꽉 채움)',value:'cover',cls:'yes'},{label:'원본 비율 유지',value:'contain',cls:'yes'}],{title:'사진 맞춤',html:true});
+  }finally{if(cm)cm.style.zIndex='';}
+  return pick;
+}
+function _bpMediaUpload(){
+  if(!_bpMediaNode())return;
+  var inp=document.createElement('input');inp.type='file';inp.accept='image/png,image/jpeg,image/webp,image/gif';
+  inp.onchange=function(){
+    var f=inp.files&&inp.files[0];if(!f)return;
+    if(!/^image\//.test(f.type||'')){showToast('이미지 파일만 넣을 수 있어요','error');return;}
+    _bpCompressImage(f,function(src){
+      if(!src){showToast('이미지를 읽지 못했어요','error');return;}
+      _bpAskFit().then(function(fit){if(fit)_bpSetImg(src,fit);});
+    });
+  };
+  inp.click();
+}
+function _bpMediaLink(){
+  if(!_bpMediaNode())return;
+  var u=(window.prompt('이미지 주소(URL)를 붙여넣어 주세요 — https:// 로 시작','')||'').trim();
+  if(!u)return;
+  if(!_bpMediaSrcOk(u)){showToast('https:// 로 시작하는 이미지 주소만 돼요','error');return;}
+  _bpAskFit().then(function(fit){if(fit)_bpSetImg(u,fit);});
+}
+function _bpMediaEmbed(){
+  if(!_bpMediaNode())return;
+  var u=(window.prompt('유튜브/Vimeo 영상 주소를 붙여넣어 주세요\n예: https://youtu.be/… · https://www.youtube.com/watch?v=… · https://vimeo.com/…','')||'').trim();
+  if(!u)return;
+  var emb=_bpEmbedFromUrl(u);
+  if(!emb){showToast('유튜브·Vimeo 링크만 임베드돼요(영상 파일 업로드는 아직 지원 안 해요)','error');return;}
+  _bpSetEmb(emb);
+}
+// 캔버스 리사이즈 압축 — 원본이 이미 작으면(예산 이내) png/gif/webp는 그대로(투명·애니메이션 보존), 아니면 최대 1280px 축소 + JPEG 품질 하향 루프로 개당 예산 이내
+function _bpCompressImage(file,cb){
+  var budget=240000;   // 개당 base64 예산(~180KB 바이너리)
+  var rd=new FileReader();
+  rd.onerror=function(){cb(null);};
+  rd.onload=function(){
+    var orig=rd.result;
+    // 작고 투명/애니메이션 보존이 중요한 타입은 재인코딩 없이 그대로 — 로고 흰 매트·움짤 정지 방지(분신술 거버넌스/효율 MED)
+    if(typeof orig==='string'&&orig.length<=budget&&/^data:image\/(png|gif|webp);base64,/i.test(orig)){cb(orig);return;}
+    var img=new Image();
+    img.onerror=function(){cb(null);};
+    img.onload=function(){
+      try{
+        var maxD=1280,w=img.naturalWidth||img.width,hh=img.naturalHeight||img.height;
+        if(!w||!hh){cb(null);return;}
+        var sc=Math.min(1,maxD/Math.max(w,hh));
+        var cw=Math.max(1,Math.round(w*sc)),ch=Math.max(1,Math.round(hh*sc));
+        var cv=document.createElement('canvas');cv.width=cw;cv.height=ch;
+        var ctx=cv.getContext('2d');
+        ctx.fillStyle='white';ctx.fillRect(0,0,cw,ch);   // 큰 이미지 JPEG 재인코딩 시에만 — 투명부 검정 방지 흰 매트(캔버스 이미지처리값, UI 팔레트 색 아님)
+        ctx.drawImage(img,0,0,cw,ch);
+        var q=0.9,out=cv.toDataURL('image/jpeg',q);   // 예산 넘으면 품질 단계 하향
+        while(out.length>budget&&q>0.4){q=Math.round((q-0.1)*10)/10;out=cv.toDataURL('image/jpeg',q);}
+        cb(out&&out.indexOf('data:image/')===0?out:null);
+      }catch(e){cb(null);}
+    };
+    img.src=orig;
+  };
+  rd.readAsDataURL(file);
+}
+// 유튜브/Vimeo URL → 임베드 URL(엄격 화이트리스트). 지원 밖이면 null.
+// ⚠ 도메인·ID 길이({6,20}/{5,12})는 _bpEmbedOk(저장 재검증)·_bpEmbToWatch(워치 변환)와 3벌 동기 필수 — 한쪽만 바꾸면 삽입은 되나 재로딩 시 새니타이저가 emb를 제거해 영상이 사라진다.
+function _bpEmbedFromUrl(u){
+  var m=String(u||'').match(/(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/)|youtu\.be\/)([A-Za-z0-9_-]{6,20})/);
+  if(m)return 'https://www.youtube.com/embed/'+m[1];
+  m=String(u||'').match(/(?:player\.)?vimeo\.com\/(?:video\/)?(\d{5,12})/);
+  if(m)return 'https://player.vimeo.com/video/'+m[1];
+  return null;
+}
+function _bpEmbToWatch(emb){
+  var m=String(emb||'').match(/youtube\.com\/embed\/([A-Za-z0-9_-]{6,20})/);
+  if(m)return 'https://www.youtube.com/watch?v='+m[1];
+  m=String(emb||'').match(/player\.vimeo\.com\/video\/(\d{5,12})/);
+  if(m)return 'https://vimeo.com/'+m[1];
+  return null;
+}
+// 도표가 계정 저장 한도에 근접하면 1회 안내(하드 거절은 Worker 413 → _bpSrvFlush에서 별도 안내)
+function _bpMediaSizeWarn(){
+  if(!_bpS)return;
+  try{
+    var bytes=JSON.stringify(_bpS.doc).length;
+    if(bytes>_BP_SRV_CAP){if(!_bpS._warnBig){_bpS._warnBig=true;showToast('도표가 커서 계정·공유 저장 한도에 근접했어요 — 사진을 줄이거나 링크로 넣는 걸 권장해요','info');}}
+    else _bpS._warnBig=false;
+  }catch(e){}
+}
 function _bpFrameOpt(o){
   var n=_bpN(_bpS.sel[0]);if(!n)return;
   _bpMut();
@@ -19061,6 +19215,21 @@ function _bpPropsHtml(){
         +'<button'+(n.dash?' class="on"':'')+' onclick="_bpFrameOpt(\'dash\')">점선</button>'
         +'<button'+(n.bc==='g'?' class="on"':'')+' onclick="_bpFrameOpt(\'bc\')">그린 테두리</button>'
         +'<button'+(n.lab==='bc'?' class="on"':'')+' onclick="_bpFrameOpt(\'lab\')">라벨 하단</button></div>';
+    }
+    if(n.t==='shape'||n.t==='frame'){
+      h+='<div class="pl">미디어 (사진·영상)</div>';
+      if(n.im){
+        h+='<div class="bp-seg">'
+          +'<button title="박스를 꽉 채우고 넘치는 부분은 잘라내요"'+(n.imf!=='contain'?' class="on"':'')+' onclick="_bpMediaFit(\'cover\')">폭맞춤</button>'
+          +'<button title="사진 전체가 비율 그대로, 남는 곳은 여백"'+(n.imf==='contain'?' class="on"':'')+' onclick="_bpMediaFit(\'contain\')">원본 비율</button></div>'
+          +'<div class="bp-seg"><button onclick="_bpMediaClear()">사진 제거</button></div>';
+      }else if(n.emb){
+        h+='<div class="bp-seg"><button onclick="_bpMediaOpen()">▶ 새 탭에서 열기</button></div>'
+          +'<div class="bp-seg"><button onclick="_bpMediaClear()">영상 제거</button></div>';
+      }else{
+        h+='<div class="bp-seg"><button onclick="_bpMediaUpload()">사진 넣기</button><button onclick="_bpMediaLink()">이미지 링크</button></div>'
+          +'<div class="bp-seg"><button onclick="_bpMediaEmbed()">유튜브·영상 링크</button></div>';
+      }
     }
     if(n.t!=='div'&&n.t!=='frame'){
       h+='<div class="pl">문의 수집 배지</div><div class="bp-seg">'

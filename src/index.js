@@ -864,9 +864,9 @@ __name(handleDeleteMessage, "handleDeleteMessage");
 // 삭제 = 행 클리어(handleDeleteSheetRow 방식) — ID 빈 행은 목록 필터에서 걸러진다.
 // 신원은 기존 앱 신뢰 모델 계승(클라이언트가 user/dept 전달 — 신청·메시지와 동일 위상). 갱신·삭제 = 소유자 또는 admin.
 var DGM_SHEET = "도표";
-var DGM_CHUNKS = 10;
+var DGM_CHUNKS = 24;   // 도표 1개당 본문 청크 수 — 사진 base64 임베드 여유 확보(운영자 260710). 총 상한 = DGM_CHUNKS×DGM_CHUNK_SIZE = 672KB. 10→24는 하위호환(기존 ≤10청크 도표 그대로 읽힘 · 청크수 min-clamp) · 기존 '도표' 시트 헤더는 handleDgmSave의 확장 마이그레이션으로 본문11~24 열 추가.
 var DGM_CHUNK_SIZE = 28000;
-var DGM_HEADERS = ["ID", "이름", "소유자", "부서", "공유범위", "저장시각", "청크수", "본문1", "본문2", "본문3", "본문4", "본문5", "본문6", "본문7", "본문8", "본문9", "본문10"];
+var DGM_HEADERS = ["ID", "이름", "소유자", "부서", "공유범위", "저장시각", "청크수", "본문1", "본문2", "본문3", "본문4", "본문5", "본문6", "본문7", "본문8", "본문9", "본문10", "본문11", "본문12", "본문13", "본문14", "본문15", "본문16", "본문17", "본문18", "본문19", "본문20", "본문21", "본문22", "본문23", "본문24"];
 function dgmScopeOk(s) { return s === "비공개" || s === "팀" || s === "전체"; }
 __name(dgmScopeOk, "dgmScopeOk");
 function dgmCanSee(r, user, dept) {
@@ -916,6 +916,16 @@ async function handleDgmSave(token, body, isAdm) {
   const values = [id, name, owner, dept, scope, kstNowText(), String(Math.max(1, Math.ceil(jsonBody.length / DGM_CHUNK_SIZE)))].concat(chunks);
   const { driveId, itemId } = await ensureNamedSheet(token, DGM_SHEET, DGM_HEADERS, null);
   const sheetPath = sheetPathFor(driveId, itemId, DGM_SHEET);
+  // 헤더 확장 마이그레이션 — 기존 '도표' 시트가 본문1~10만 있는데 이 저장이 11청크 이상을 쓰면, 헤더 없는 열은 handleGetSheet(헤더행 매핑)에서 유실됨. DGM_CHUNKS 10→24 확장분 헤더를 데이터보다 먼저 채운다(큰 도표 저장 시에만·멱등).
+  //   ⚠️ 실패를 삼키지 않는다 — 헤더 없는 열에 본문11~24를 쓰면 GET에서 잘려 «ok 보고+복원 불가(특히 공유 뷰어)»가 된다. 확장 실패는 위로 전파 → 라우트 500 → 프론트 srvFail(로컬 보존) → 다음 큐에서 재시도. 읽을 수 없는 데이터를 쓰고 성공이라 보고하는 것보다 낫다(분신술 서버 감사 HIGH).
+  if (jsonBody.length > 10 * DGM_CHUNK_SIZE) {
+    const hc = colLetter(DGM_HEADERS.length);
+    const cur = await graphGet(token, `${sheetPath}/range(address='A1:${hc}1')?$select=values`);
+    const row1 = (cur && cur.values && cur.values[0]) ? cur.values[0] : [];
+    let curLen = 0;
+    for (let j = 0; j < row1.length; j++) if (String(row1[j] == null ? "" : row1[j]).trim() !== "") curLen = j + 1;
+    if (curLen < DGM_HEADERS.length) await graphPatch(token, `${sheetPath}/range(address='A1:${hc}1')`, { values: [DGM_HEADERS] });
+  }
   const lastCol = colLetter(values.length);
   async function writeRow(row) {
     const addr = `A${row}:${lastCol}${row}`;
