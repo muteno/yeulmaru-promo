@@ -4780,14 +4780,15 @@ function _srailEditCfg(kind,key){
       cols:[{ed:'c1',k:'누계유료',label:'누계유료',w:'22%'},{ed:'c2',k:'누계총인원',label:'누계총인원',w:'22%'},{ed:'c3',k:'일일총인원',label:'일일총인원',w:'20%'}],
       hint:'점유율(달성률)은 누계유료·목표관객으로 저장 시 자동 계산돼요',   // [델타 감사5 LOW] 파생 필드 오해 소거
       emptyMsg:'이 전시의 전시일일 행이 없어요 — [+ 행 추가]로 시작',
-      sig:function(rows){ return rows.map(function(r){return [_salesNum(r['기준일자']),_salesNum(r['누계유료']),_salesNum(r['누계총인원']),_salesNum(r['일일총인원'])].join('|');}).sort().join(';'); },
+      sig:function(rows){ return rows.map(function(r){return [_salesNum(r['기준일자']),_salesNum(r['누계유료']),_salesNum(r['누계총인원']),_salesNum(r['일일총인원']),_salesNum(r['점유율'])].join('|');}).sort().join(';'); },   // 점유율 포함 — goal 부재 분기에서 점유율-only 외부 변경도 탐지(델타 감사2 ④)
       validateRow:function(r,i){
         if(String(r['누계유료']||'').trim()===''||isNaN(parseInt(r['누계유료'],10)))return (i+1)+'행 누계유료가 숫자가 아니에요';
         var t=String(r['누계총인원']||'').trim(); if(t!==''&&isNaN(parseInt(t,10)))return (i+1)+'행 누계총인원이 숫자가 아니에요';
         var dd=String(r['일일총인원']||'').trim(); if(dd!==''&&isNaN(parseInt(dd,10)))return (i+1)+'행 일일총인원이 숫자가 아니에요';
         return null;
       },
-      fillNewRow:function(row,last){ row['전시ID']=String(key).trim(); if(last){row['누계유료']=String(_salesNum(last['누계유료'])||'');row['누계총인원']=String(_salesNum(last['누계총인원'])||'');} },
+      fillNewRow:function(row,last){ row['전시ID']=String(key).trim(); if(exm&&exm.name)row['전시명']=exm.name;   // 전시명 동봉 — 시트 사람 가독성(델타 감사3 LOW-3)
+        if(last){row['누계유료']=String(_salesNum(last['누계유료'])||'');row['누계총인원']=String(_salesNum(last['누계총인원'])||'');} },
       // 점유율 = 누계유료/목표관객(원본 정의 계승 — 마스터 목표관객 있을 때만 재계산, 없으면 원값 보존)
       recompute:function(mine,headers){
         if(!(goal&&goal>0))return;
@@ -4823,6 +4824,8 @@ async function _srailEditOpen(kind,key){
   if(kind!=='perf'&&kind!=='ex'){ showToast('지원하지 않는 실적 종류예요','error'); return; }   // [분신술 델타 감사1 LOW] 미지 kind의 무언 perf 폴백 제거 — 교육 등 확장 시 오귀속(엉뚱한 시트 편집 UI) 방지
   _srailEditClose();
   var cfg=_srailEditCfg(kind,key);
+  // [분신술 델타 감사2 MED] 빈 키(전시ID 미부여 마스터 행 등) = keyVal '' 매칭이 시트의 빈ID 행 전부를 흡입 — 원천 차단
+  if(!cfg.keyVal){ showToast('이 항목은 ID가 없어 수정할 수 없어요 — 시트에서 ID부터 부여해줘','error'); return; }
   var wrap=document.createElement('div'); wrap.id='srail-edit-modal';
   wrap.innerHTML='<div class="modal-bg show" style="z-index:var(--z-confirm)" onclick="if(event.target===this)_srailEditClose()"><div class="modal" style="width:600px;max-width:94vw;position:relative;text-align:left"><button class="modal-x" onclick="_srailEditClose()" title="닫기" aria-label="닫기">✕</button>'
     +'<h3 style="margin:0 0 4px;padding-right:40px">실적 수정 — '+escapeHtml(cfg.dispName)+'</h3>'
