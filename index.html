@@ -1744,6 +1744,11 @@ table.promo-board-table thead th:last-child{border-top-right-radius:11px}
 .srail-delta.fl{color:var(--dim)}
 .srail-spark{margin-top:7px}
 .srail-spark svg{display:block;width:100%;height:34px}
+/* 판매 차트 범례(운영자 260710) — 차트 아래 2열 띠 · 색 전부 :root 토큰 계승(새 색 0) */
+.srail-leg{margin:10px 5px 2px;padding-top:8px;border-top:1px solid var(--border);display:grid;grid-template-columns:1fr 1fr;column-gap:14px;row-gap:6px}
+.srail-leg-i{display:flex;align-items:center;gap:6px;white-space:nowrap;font-size:10.5px;color:var(--neutral-text);font-weight:600;font-variant-numeric:tabular-nums}
+.srail-leg-i .d{flex:none;width:9px;height:9px;border-radius:50%;display:inline-block}
+.srail-leg-i .n{color:var(--green);font-weight:800;font-size:11.5px}
 .srail-bar{position:relative;height:3px;border-radius:999px;background:var(--past-bg);margin-top:8px}
 .srail-bar>i{position:absolute;left:0;top:0;bottom:0;border-radius:999px;background:var(--green)}
 .srail-bar>b{position:absolute;top:-3.5px;width:2px;height:10px;border-radius:1px;background:var(--danger)}
@@ -4562,22 +4567,23 @@ function _srailTrend(p){
   s+='<path d="'+area+'" fill="rgba(74,77,231,.09)"/>';
   s+='<path d="'+solid+'" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>';
   if(T>N)s+='<path d="'+dashed+'" fill="none" stroke="var(--muted)" stroke-width="2.5" stroke-dasharray="3 3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>';
-  s+='<line x1="'+pts[todayIdx][0].toFixed(1)+'" y1="'+padT+'" x2="'+pts[todayIdx][0].toFixed(1)+'" y2="'+(H-padB)+'" stroke="var(--accent)" stroke-opacity=".18" stroke-width="1" stroke-dasharray="2 2"/>';
+  s+='<line x1="'+pts[todayIdx][0].toFixed(1)+'" y1="'+padT+'" x2="'+pts[todayIdx][0].toFixed(1)+'" y2="'+(H-padB)+'" stroke="var(--danger)" stroke-opacity=".22" stroke-width="1" stroke-dasharray="2 2"/>';
   // [260710 운영자] 차트 글자 크기 = 어제대비(11.5px)로 전부 통일(점 위 좌석·증감·날짜·Today·종료 예상 — "증감이 중요")
-  s+='<text x="'+pts[todayIdx][0].toFixed(1)+'" y="'+(padT-14)+'" text-anchor="middle" font-size="11.5" font-weight="800" fill="var(--accent)">📌 Today</text>';
   var R=3.6;
+  // 📌 Today = 빨강 강조(운영자 260710) + 라벨을 상단 고정 대신 점 바로 위(값·변동 스택 위)로 하강 · 상단 클램프(padT-14)로 고점유 시 관통 방지
+  s+='<text x="'+pts[todayIdx][0].toFixed(1)+'" y="'+Math.max(pts[todayIdx][1]-R-6-19-16,padT-14).toFixed(1)+'" text-anchor="middle" font-size="11.5" font-weight="800" fill="var(--danger)">📌 Today</text>';
   pts.forEach(function(q,i){
     var future=i>todayIdx,today=(i===todayIdx),recent=(i>=todayIdx-2);
     var seat=seatOf(q[2]),prevSeat=(i>0)?seatOf(vals[i-1]):null,dseat=(prevSeat!=null)?(seat-prevSeat):null;
     // [260710 운영자] 예측 제외일(x) = 속빈 점 + 툴팁 · 증감 라벨 회색 — 이 날 증분은 예측 평균에서 빠져 있음을 표시(실측 좌석 표기는 그대로)
     var isX=!future&&days[i]&&days[i].x;
     var dotX='<circle cx="'+q[0].toFixed(1)+'" cy="'+q[1].toFixed(1)+'" r="'+R+'" fill="var(--surface-solid)" stroke="var(--accent)" stroke-width="1.6"><title>예측 제외한 날 (이벤트성 판매 — 예상 계산에서 빠짐)</title></circle>';
-    if(today)s+='<circle cx="'+q[0].toFixed(1)+'" cy="'+q[1].toFixed(1)+'" r="'+(R+2.2)+'" fill="var(--muted)"/>'+(isX?dotX:'<circle cx="'+q[0].toFixed(1)+'" cy="'+q[1].toFixed(1)+'" r="'+R+'" fill="var(--accent)"/>');
+    if(today)s+='<circle cx="'+q[0].toFixed(1)+'" cy="'+q[1].toFixed(1)+'" r="'+(R+2.2)+'" fill="var(--muted)"/>'+(isX?dotX:'<circle cx="'+q[0].toFixed(1)+'" cy="'+q[1].toFixed(1)+'" r="'+R+'" fill="var(--danger)"/>');
     else s+=isX?dotX:'<circle cx="'+q[0].toFixed(1)+'" cy="'+q[1].toFixed(1)+'" r="'+R+'" fill="var('+(future?'--muted':'--accent')+')"/>';
-    var col=today?'var(--accent)':(recent?'var(--text)':'var(--dim)'),sy=(q[1]-R-6).toFixed(1);
+    var col=today?'var(--danger)':(recent?'var(--text)':'var(--dim)'),sy=(q[1]-R-6).toFixed(1);
     s+='<text x="'+q[0].toFixed(1)+'" y="'+sy+'" text-anchor="middle" font-size="11.5" font-weight="'+(today?'800':'700')+'" fill="'+col+'">'+seat+'</text>';
     if(dseat!=null&&recent)s+='<text x="'+q[0].toFixed(1)+'" y="'+(parseFloat(sy)-19).toFixed(1)+'" text-anchor="middle" font-size="11.5" font-weight="800" fill="var('+(isX?'--muted':'--green')+')">'+(dseat>=0?'+':'')+dseat+'</text>';
-    if((T-1-i)%2===0)s+='<text x="'+q[0].toFixed(1)+'" y="'+(H-7)+'" text-anchor="middle" font-size="11.5" font-weight="700" fill="'+(today?'var(--accent)':(future?'var(--muted)':'var(--dim)'))+'">'+labels[i]+'</text>';
+    if((T-1-i)%2===0)s+='<text x="'+q[0].toFixed(1)+'" y="'+(H-7)+'" text-anchor="middle" font-size="11.5" font-weight="700" fill="'+(today?'var(--danger)':(future?'var(--muted)':'var(--dim)'))+'">'+labels[i]+'</text>';
   });
   if(showEnd){
     var lastQ=pts[pts.length-1], ex=W-padX-6, ey=yOf(occEnd), seatEnd=seatOf(occEnd);
@@ -4626,6 +4632,13 @@ function _srailCard(p){
     +(p.noData?'':'<div class="srail-occrow"><span class="srail-occ">'+p.occ.toFixed(1)+'%</span><span class="srail-delta '+dCls+'">'+dStr+'</span><span class="srail-seatsub">'+p.seats.toLocaleString()+'석</span><span class="srail-occcap">점유율</span></div>')
     +(p.noData?'<div class="srail-r2"><span style="font-size:13px;color:var(--dim);font-weight:600;margin-left:16px">집계 전입니다.'+(p._saleN?' · 판매 '+p._saleN+'일차':'')+'</span></div>':'')
     +(p.noData?'':'<div class="srail-spark" style="margin-top:10px">'+_srailTrend(p)+'</div>')
+    +(p.noData?'':'<div class="srail-leg" aria-hidden="true">'
+      +'<div class="srail-leg-i"><span class="d" style="background:var(--accent)"></span>일일 판매 누계</div>'
+      +'<div class="srail-leg-i"><span class="n">+N</span> 일일 판매 변동</div>'
+      +'<div class="srail-leg-i"><span class="d" style="background:var(--danger)"></span>오늘</div>'
+      +'<div class="srail-leg-i"><span class="d" style="background:var(--muted)"></span>예상 일일 판매 누계</div>'
+      +'<div class="srail-leg-i"><span class="d" style="background:var(--c2)"></span>예상 판매 누계</div>'
+      +'</div>')
     +fc
     +'<div class="srail-bar"><i style="width:'+Math.min(p.occ,100).toFixed(1)+'%"></i><b style="left:'+Math.min(tgt,100)+'%"></b></div>'
     +'<div class="srail-r3"><span>'+p.seats.toLocaleString()+' / '+p.totalOpen.toLocaleString()+'석</span>'+(p.noData?'<span class="tgt">목표 '+tgt+'%</span>':'<span class="tgt '+(gap>=0?'ok':'bad')+'">목표 '+tgt+'% '+(gap>=0?'+':'')+gap.toFixed(1)+'%p</span>')+'</div>'
@@ -4889,9 +4902,9 @@ function _srailDrillSvg(p){
   if(tgt<=yMax){ var ty=Y(tgt); svg+='<line x1="'+mL+'" y1="'+ty.toFixed(1)+'" x2="'+(W-mR)+'" y2="'+ty.toFixed(1)+'" stroke="var(--accent)" stroke-width="1" stroke-dasharray="4 3" opacity="0.55"/><text x="'+(W-mR)+'" y="'+(ty-4).toFixed(1)+'" text-anchor="end" font-size="10.5" fill="var(--accent)">목표 '+tgt+'%</text>'; }
   svg+='<path d="'+area+'" fill="rgba(74,77,231,.08)"/>';
   svg+='<path d="'+line+'" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>';
-  ser.pts.forEach(function(q){ svg+='<circle cx="'+X(q.d).toFixed(1)+'" cy="'+Y(q.occ).toFixed(1)+'" r="3" fill="var(--accent)"><title>D+'+q.d+' · '+(q.bd.getMonth()+1)+'/'+q.bd.getDate()+' · '+q.occ.toFixed(1)+'%'+(q.seats!=null?' ('+q.seats.toLocaleString()+'석)':'')+'</title></circle>'; });
+  ser.pts.forEach(function(q){ svg+='<circle cx="'+X(q.d).toFixed(1)+'" cy="'+Y(q.occ).toFixed(1)+'" r="3" fill="var('+(q===lp?'--danger':'--accent')+')"><title>D+'+q.d+' · '+(q.bd.getMonth()+1)+'/'+q.bd.getDate()+' · '+q.occ.toFixed(1)+'%'+(q.seats!=null?' ('+q.seats.toLocaleString()+'석)':'')+'</title></circle>'; });
   var lx=X(lp.d), lpNearEdge=lx>W-EZ-56;
-  svg+='<text x="'+(lpNearEdge?(lx-6):(lx+5)).toFixed(1)+'" y="'+Math.max(Y(lp.occ)-6,11).toFixed(1)+'" text-anchor="'+(lpNearEdge?'end':'start')+'" font-size="12.5" font-weight="700" fill="var(--accent)">'+lp.occ.toFixed(1)+'%</text>';
+  svg+='<text x="'+(lpNearEdge?(lx-6):(lx+5)).toFixed(1)+'" y="'+Math.max(Y(lp.occ)-6,11).toFixed(1)+'" text-anchor="'+(lpNearEdge?'end':'start')+'" font-size="12.5" font-weight="700" fill="var(--danger)">'+lp.occ.toFixed(1)+'%</text>';   // 마지막 점(=오늘) 빨강 통일(운영자 260710)
   if(showEnd){
     var ex=W-mR-8, ey=Y(occEnd), bx=(lx+ex)/2, by=(Y(lp.occ)+ey)/2;
     var _sl=(ey-Y(lp.occ))/((ex-lx)||1);
