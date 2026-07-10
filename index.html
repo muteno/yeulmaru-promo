@@ -1959,7 +1959,7 @@ table.promo-board-table thead th:last-child{border-top-right-radius:11px}
 </div>
 
 <div class="toast" id="toast"></div>
-<div class="msg-toast" id="msg-toast"></div>
+<div class="msg-toast" id="msg-toast" role="status" aria-live="polite"></div>
 <div class="overlay-load" id="overlay-load"><span class="ol-dots" aria-hidden="true"><i></i><i></i><i></i></span><span id="ol-text"></span></div>
 
 <div class="modal-bg" id="prog-modal">
@@ -8591,7 +8591,7 @@ function showMsgToast(m, extra){
   h+='<div class="mt-head"><span class="mt-badge '+(isImp?'i':'n')+'">'+(isImp?'중요':'일반')+'</span><span class="mt-time">'+escapeHtml(tm+more)+'</span></div>';
   h+='<div class="mt-title">'+escapeHtml(title)+'</div>';
   if(sub) h+='<div class="mt-sub">'+escapeHtml(sub)+'</div>';
-  h+='<span class="mt-open" onclick="_msgToastOpen()">열기 &rarr;</span>';
+  h+='<span class="mt-open" role="button" tabindex="0" onclick="_msgToastOpen()" onkeydown="if(event.key===\'Enter\'){event.preventDefault();_msgToastOpen();}">열기 &rarr;</span>';
   h+='</div>';
   h+='<button class="mt-check" title="확인" aria-label="확인" onclick="_msgToastCheck()">✓</button>';
   el.className='msg-toast'+(isImp?' imp':'');
@@ -13488,12 +13488,12 @@ function adminRoute(id){
 //  - 자동_낮에만 (boolean, 09:00~18:00 외 자동 차단 — 260611 9-6 통일, default true)
 //  - 자동_일요일 (boolean, 일요일 자동 차단, default true)
 //  - 자동_휴무 (boolean, 담당자 휴무일 자동 차단, default false)
-let APPLY_SETTINGS={접수ON:false,접수월:[],자동_낮에만:true,자동_일요일:true,자동_휴무:false};
+let APPLY_SETTINGS={접수ON:false,접수월:[],자동_낮에만:true,자동_일요일:true,자동_휴무:false,이메일알림:false};
 let APPLY_SETTINGS_ROWS={};
 let APPLY_EXCLUSIONS=[]; // [{rowIndex, date, start, end}]
 
 // 자동 키 default 값
-const APPLY_AUTO_DEFAULTS={'자동_낮에만':true,'자동_일요일':true,'자동_휴무':false};
+const APPLY_AUTO_DEFAULTS={'자동_낮에만':true,'자동_일요일':true,'자동_휴무':false,'이메일알림':false};
 
 // === 접수월 헬퍼 — 배열/단수 둘 다 정규화 (구버전 데이터 호환) ===
 function getApplyMonths(){
@@ -13525,7 +13525,7 @@ async function loadApplySettings(){
   try{
     const d=await api('GET','/api/sheet/applysettings');
     // default 값으로 초기화
-    APPLY_SETTINGS={접수ON:false,접수월:[],자동_낮에만:APPLY_AUTO_DEFAULTS['자동_낮에만'],자동_일요일:APPLY_AUTO_DEFAULTS['자동_일요일'],자동_휴무:APPLY_AUTO_DEFAULTS['자동_휴무']};
+    APPLY_SETTINGS={접수ON:false,접수월:[],자동_낮에만:APPLY_AUTO_DEFAULTS['자동_낮에만'],자동_일요일:APPLY_AUTO_DEFAULTS['자동_일요일'],자동_휴무:APPLY_AUTO_DEFAULTS['자동_휴무'],이메일알림:APPLY_AUTO_DEFAULTS['이메일알림']};
     APPLY_SETTINGS_ROWS={};
     APPLY_EXCLUSIONS=[];
     (d.rows||[]).forEach(function(r){
@@ -13650,6 +13650,13 @@ function renderApplySettings(loadOk){
     html+='<label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;user-select:none"><input type="checkbox" '+(APPLY_SETTINGS['자동_낮에만']?'checked':'')+' onchange="setApplyAuto(\'자동_낮에만\',this.checked)" style="margin:0;cursor:pointer;accent-color:var(--accent)">낮에만 (9~18시)</label>';
     html+='<label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;user-select:none"><input type="checkbox" '+(APPLY_SETTINGS['자동_일요일']?'checked':'')+' onchange="setApplyAuto(\'자동_일요일\',this.checked)" style="margin:0;cursor:pointer;accent-color:var(--accent)">화-토</label>';
     html+='<label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;user-select:none"><input type="checkbox" '+(APPLY_SETTINGS['자동_휴무']?'checked':'')+' onchange="setApplyAuto(\'자동_휴무\',this.checked)" style="margin:0;cursor:pointer;accent-color:var(--accent)">휴무</label>';
+    html+='</div>';
+    html+='</div>';
+    // 알림 설정 (이메일 = 향후 큐잉 발송용 · 기본 off · 앱 내 메시지함은 항상 동작)
+    html+='<div style="display:flex;align-items:center;gap:14px;margin-bottom:6px;flex-wrap:wrap">';
+    html+='<label style="font-size:11px;color:var(--neutral-text);font-weight:600;letter-spacing:0.5px;white-space:nowrap;min-width:64px;padding-left:8px">알림</label>';
+    html+='<div style="display:flex;align-items:center;gap:14px;font-size:12px;color:var(--neutral-text)">';
+    html+='<label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;user-select:none"><input type="checkbox" '+(APPLY_SETTINGS['이메일알림']?'checked':'')+' onchange="setApplyAuto(\'이메일알림\',this.checked)" style="margin:0;cursor:pointer;accent-color:var(--accent)">이메일 알림 <span style="color:var(--muted);font-size:10px">(준비 중 · 메시지함은 항상 동작)</span></label>';
     html+='</div>';
     html+='</div>';
     // 공통 시간 입력
