@@ -15565,8 +15565,8 @@ async function saveProgram(rowIndex){
   if(!form)return;
   const fd=new FormData(form);
   if(!rowIndex){try{await loadPrograms();}catch(_e){}}   // [검증반영] 신규 저장 직전 프로그램 재조회 → _genProgramId 순번을 최신 캐시로 계산(동시/연속 등록 완화). 완전 차단은 Worker 유일성 몫.
-  // ⚠️ 실제 '프로그램' 시트 컬럼: A~J(NO·콘텐츠구분·풀네임·줄임말·판매시작·판매종료·시작·종료·담당자·장소)
-  //    · K=URL(폼 입력) · L=프로그램ID(구'공연ID') · M=홍보시작일 · N=구 홍보종료일(폐지 — 판매종료일 se로 통합, 빈값 저장). 프로그램ID는 폼에 필드가 없으니 기존 값 보존.
+  // ⚠️ 실제 '프로그램' 시트 컬럼: A~M(NO·콘텐츠구분·풀네임·줄임말·판매시작·판매종료·시작·종료·담당자·장소)
+  //    · K=URL(폼 입력) · L=프로그램ID(구'공연ID') · M=홍보시작일. (구 N 홍보종료일·O·P 세로막대형 열 = 260710 삭제 → 배열 13개) 프로그램ID는 폼에 필드가 없으니 기존 값 보존.
   const existing=rowIndex?(_programsCache.find(p=>p._rowIndex===rowIndex)||null):null;
   const values=[
     Number(fd.get('NO'))||'',               // A NO
@@ -15581,8 +15581,7 @@ async function saveProgram(rowIndex){
     fd.get('장소')||'',                      // J 장소
     (fd.get('URL')||'').trim(),              // K URL — 폼 입력값(기존값 prefill → 안 건드리면 유지·수정/삭제 반영)
     (existing&&(existing['프로그램ID']||existing['공연ID']))||_genProgramId(fd.get('시작일')),    // L 프로그램ID(#71): 기존 보존, 신규·빈값이면 시작일 기반 자동생성(YYMMDD_NN)
-    isoToExcelSerial(fd.get('홍보시작일')),  // M 홍보시작일(노출일) — 전 콘텐츠 opt-in (OFF면 빈값)
-    ''                                       // N — 구 홍보종료일 폐지(판매종료일 se로 통합). 빈값 저장 · 엑셀 열은 후속 삭제 대상
+    isoToExcelSerial(fd.get('홍보시작일'))   // M 홍보시작일(노출일·마지막 열) — 전 콘텐츠 opt-in (OFF면 빈값). 구 N(홍보종료일)·O·P(세로막대형) 엑셀 열은 260710 삭제 완료 → 시트 A~M 13열
   ];
   showOverlayLoad('\uC800\uC7A5 \uC911\uC785\uB2C8\uB2E4...');
   try{
