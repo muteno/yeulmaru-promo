@@ -560,9 +560,9 @@ button{font-family:inherit;cursor:pointer}
 /* ═══ HEADER ═══ */
 /* 헤더 밴드 전경색 제거(운영자 260705) — 옛 불투명 --bg 판때기가 메시 위를 덮던 것 → 투명(메시가 그대로 이어짐) */
 .hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:0;flex-wrap:wrap;gap:12px;position:sticky;top:56px;z-index:6;background:transparent;padding:16px 0 12px 0}
-/* ═══ 배너 펫(산책 마스코트) — .hdr 하단 라인(요일 헤더 바로 위)을 좌우로 산책. 공 차는 모션은 webp에 내장, CSS는 좌우 이동만 ═══ */
-.pet{position:relative;display:block;margin-top:-42px;margin-left:clamp(120px,14%,200px);height:40px;width:auto;pointer-events:none;user-select:none;z-index:6;will-change:transform,opacity;filter:drop-shadow(0 3px 3px rgba(0,0,0,.35));opacity:0}
-.pet.in{opacity:1;animation:petEnter .75s cubic-bezier(.2,1.25,.4,1) both,petStroll 9s ease-in-out .75s infinite}
+/* ═══ 캘린더 하단 펫 무대(운영자 260710) — 공차는 애(pet.webp) ⇄ 픽셀 펫(pet_crab.png)이 같은 레인에서 번갈아 페이드 등장·퇴장(사이클=JS _petCycle). 공 차는 모션은 webp 내장, 좌우 이동은 petStroll·크랩은 rAF 배회. 페이드=opacity 인라인+transition(애니는 transform만) ═══ */
+.pet{position:relative;display:block;margin-top:-42px;margin-left:clamp(120px,14%,200px);height:40px;width:auto;pointer-events:none;user-select:none;z-index:6;will-change:transform,opacity;filter:drop-shadow(0 3px 3px rgba(0,0,0,.35));opacity:0;transition:opacity .7s ease}
+.pet.walk{animation:petStroll 9s ease-in-out infinite}
 @keyframes petStroll{
   0%{transform:translateX(0) scaleX(1)}
   9%{transform:translateX(136px) scaleX(1)}
@@ -578,13 +578,11 @@ button{font-family:inherit;cursor:pointer}
   98%{transform:translateX(0) scaleX(1)}
   100%{transform:translateX(0) scaleX(1)}
 }
-@keyframes petEnter{
-  0%{opacity:0;transform:translateX(-170px) scaleX(1)}
-  60%{opacity:1}
-  100%{opacity:1;transform:translateX(0) scaleX(1)}
-}
-@media (prefers-reduced-motion:reduce){.pet{opacity:1}.pet.in{animation:none}}
-@media (max-width:768px){.pet{display:none}}
+/* 픽셀 펫(게) — 노뮤트 에디터서 이전(흰색 키잉 보강본 image/pet_crab.png). 82프레임 아틀라스(원본셀 132×120·표시 0.75배=99×90·10열9행)·30fps 스텝(픽셀 보간 금지)·rAF 배회. .crablane=캘린더 아랫변 앵커(높이0=레이아웃 무점유·#cal 형제라 renderCal 생존) */
+.crablane{position:relative;height:0;z-index:6;pointer-events:none}
+.petcrab{position:absolute;left:0;bottom:0;width:99px;height:90px;background:url(image/pet_crab.png) no-repeat;background-size:990px 810px;image-rendering:pixelated;pointer-events:none;user-select:none;will-change:transform,opacity;filter:drop-shadow(0 3px 3px rgba(0,0,0,.35));opacity:0;transition:opacity .7s ease}
+@media (prefers-reduced-motion:reduce){.pet{opacity:1}.pet.walk{animation:none}.crablane{display:none}}
+@media (max-width:768px){.pet{display:none}.crablane{display:none}}
 .month-nav{display:flex;align-items:center;gap:16px}
 .arrow{width:38px;height:38px;border-radius:50%;border:1px solid rgba(0,0,0,0.06);background:var(--glass);backdrop-filter:blur(8px);font-size:18px;display:flex;align-items:center;justify-content:center;color:#666;transition:all .2s;box-shadow:0 2px 8px rgba(0,0,0,0.04)}
 .arrow:hover{background:var(--accent-light);color:var(--accent);border-color:var(--accent-glow);box-shadow:0 4px 12px rgba(74,77,231,0.15)}
@@ -1974,7 +1972,8 @@ table.promo-board-table thead th:last-child{border-top-right-radius:11px}
       <div id="chips" style="position:sticky;top:56px;z-index:6;height:0;display:flex;justify-content:flex-end;padding-right:8px"></div>
       <div class="cal-head-wrap" id="cal-head-wrap"></div>
         <div class="cal" id="cal"></div>
-        <img class="pet" src="image/pet.webp" alt="" aria-hidden="true" draggable="false"><!-- 캘린더 맨 아래 셀 아랫변 기준(운영자 260710 "너무 위에서 심란") — #cal 형제라 renderCal innerHTML에 안 지워짐 -->
+        <img class="pet" src="image/pet.webp" alt="" aria-hidden="true" draggable="false"><!-- 공차는 애 — 캘린더 맨 아래 셀 아랫변 기준(운영자 260710 "너무 위에서 심란") · #cal 형제라 renderCal innerHTML에 안 지워짐 -->
+        <div class="crablane" aria-hidden="true"><div class="petcrab"></div></div><!-- 픽셀 펫(게) 레인 — 노뮤트서 이전 · #cal 형제(renderCal 생존)라 공차는 애와 같은 하단 무대서 번갈아 등장 -->
     </div>
     <!-- 판매 레일 — 판매현황·분석 보드와 _salesState 캐시 공유. data-panel = 레일 클릭이 사이드패널 closePanel을 타지 않게.
          운영자 260710 확정: 제목 = 박스 밖 유리 스트립(월헤더 라인 중앙) · 기준일(srail-asof)/[분석]/[새로고침] 푸터 = 숨김(마크업 제거·JS는 els 가드 dormant).
@@ -15704,12 +15703,56 @@ function _typeLoop(elId,text,speed){
   }
   setTimeout(tick,100);
 }
-var _petShown=false;
-function _petEnter(){
-  // 데이터 로딩이 끝나면 펫이 왼쪽에서 챠르륵 슬라이드+살짝 오버슈트하며 한 번만 등장
-  if(_petShown)return;_petShown=true;
-  var p=document.querySelector('.pet');if(!p)return;
-  requestAnimationFrame(function(){p.classList.add('in');});
+// ── 캘린더 하단 펫 무대 — 공차는 애(pet.webp) ⇄ 픽셀 펫(pet_crab.png) 번갈아 등장(운영자 260710) ──
+// 사이클: 공차는 애 페이드인→산책→페이드아웃 → GAP → 크랩 페이드인→배회→페이드아웃 → REST → 반복.
+// 페이드=opacity 인라인+CSS transition(.pet/.petcrab), 이동=petStroll(공)·rAF 배회(크랩). 타이밍은 _PET에서 조절.
+var _petCycleOn=false;
+var _PET={FADE:700, BALL:9000, GAP:10000, CRAB:10000, REST:30000};   // ms: 페이드 · 공차는 애 노출 · 사이 텀 · 크랩 노출 · 휴식(운영자 예시)
+var _crabGeo={tw:132,th:120,frames:82,cols:10,fps:30,scale:0.75};     // 아틀라스 지오메트리(노뮤트 계승) → 표시 99×90·30fps 스텝
+function _petEnter(){   // loadData서 호출 = 사이클 1회 시동(_petCycleOn 가드로 중복 무해)
+  if(_petCycleOn)return;
+  if(matchMedia('(prefers-reduced-motion:reduce)').matches){   // 감속 선호 = 정적(공차는 애만 CSS로 노출·크랩 미출현)
+    var p0=document.querySelector('.pet'); if(p0)p0.style.opacity='1'; return;
+  }
+  _petCycleOn=true; _petCycle();
+}
+function _petCycle(){
+  var ball=document.querySelector('.pet');
+  if(!ball)return;
+  ball.classList.add('walk');                                    // 1) 공차는 애 페이드인 + 산책
+  requestAnimationFrame(function(){ball.style.opacity='1';});
+  setTimeout(function(){                                          // 노출 끝 → 페이드아웃
+    ball.style.opacity='0';
+    setTimeout(function(){ball.classList.remove('walk');}, _PET.FADE);   // 안 보일 때 산책 정지(원점 리셋=미시)
+    setTimeout(function(){                                        // 2) GAP 후 크랩 방문
+      _crabVisit(function(){ setTimeout(_petCycle, _PET.REST); });        // 크랩 퇴장 후 REST 쉬고 반복
+    }, _PET.GAP);
+  }, _PET.FADE + _PET.BALL);
+}
+function _crabVisit(done){
+  var crab=document.querySelector('.crablane .petcrab');
+  if(!crab || crab.offsetParent===null){ setTimeout(done, _PET.CRAB); return; }   // 크랩 없음/모바일 숨김 = 시간만 흘려 사이클 유지
+  var g=_crabGeo, W=g.tw*g.scale, H=g.th*g.scale;
+  var laneW=(crab.offsetParent&&crab.offsetParent.clientWidth)||innerWidth, maxX=Math.max(40, laneW-W);
+  var t0=performance.now(), last=t0;
+  var x=Math.random()*maxX*0.6, dir=Math.random()<0.5?-1:1, speed=(16+Math.random()*14)/1000, pauseUntil=0;   // px/ms
+  crab.style.transform='translateX('+x+'px) scaleX('+dir+')'; crab.style.opacity='0';
+  requestAnimationFrame(function(){crab.style.opacity='1';});   // 페이드인
+  (function step(now){
+    var dt=Math.min(64, now-last); last=now;
+    var f=Math.floor((now-t0)/(1000/g.fps))%g.frames;           // 30fps 프레임 스텝(픽셀 보간 금지)
+    crab.style.backgroundPosition=(-(f%g.cols)*W)+'px '+(-Math.floor(f/g.cols)*H)+'px';
+    if(now>=pauseUntil){                                        // 배회 = rAF 이동(종종 방향전환·멈춤)
+      x+=dir*speed*dt;
+      if(x<0){x=0;dir=1;}else if(x>maxX){x=maxX;dir=-1;}
+      else if(Math.random()<0.0025)dir=-dir;
+      if(Math.random()<0.002)pauseUntil=now+(900+Math.random()*1700);
+    }
+    crab.style.transform='translateX('+x+'px) scaleX('+dir+')';
+    if(now-t0 < _PET.CRAB && !document.hidden){ requestAnimationFrame(step); return; }
+    crab.style.opacity='0';                                     // 페이드아웃 → done
+    setTimeout(done, _PET.FADE);
+  })(performance.now());
 }
 // 캘린더 로딩 스켈레톤(글래스 셀 18칸 + 광택 스윕) — 바 폭은 자리표시용 고정 패턴(난수 금지)
 function _calSkelHtml(){
