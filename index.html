@@ -15476,7 +15476,8 @@ function openProgramForm(rowIndex){
     홍보시작:existing?excelDateInputValue(existing['홍보시작일']):'',   // 노출일(opt-in) — 비우면 홍보 대상에서 제외(전 콘텐츠)
     홍보종료:existing?excelDateInputValue(existing['홍보종료일']):'',   // 비우면 공연 종료일 자동 적용
     담당자:existing?existing['담당자']:'',
-    장소:existing?existing['장소']:'대극장'
+    장소:existing?existing['장소']:'대극장',
+    URL:existing?(existing['URL']||existing['공연 URL']||existing['상세 링크']||existing['링크']||''):''
   };
   let html='<div class="modal-bg show" style="z-index:9500" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeProgramForm)"><div class="modal" style="width:96vw;max-width:480px;max-height:88vh;overflow:auto;padding:24px;position:relative">';
   html+='<button class="modal-x" onclick="closeProgramForm()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:14px;float:none;margin:0;z-index:10">✕</button>';
@@ -15494,6 +15495,7 @@ function openProgramForm(rowIndex){
   html+='<div style="display:flex;gap:10px"><div style="flex:1"><label>판매시작일 <span style="font-size:10px;color:#888;font-weight:400">(선택·사업분석용)</span></label><input name="판매시작일" type="date" value="'+v.판매시작+'"></div><div style="flex:1"><label>판매종료일 <span style="font-size:10px;color:#888;font-weight:400">(선택)</span></label><input name="판매종료일" type="date" value="'+v.판매종료+'"></div></div>';
   html+='<div><label>담당자 <span style="font-size:10px;color:#888;font-weight:400">(콘텐츠구분 따라 필터)</span></label><select name="담당자">'+buildManagerOptions(v.구분,v.담당자)+'</select></div>';
   html+='<div><label>장소</label><input name="장소" type="text" value="'+escapeHtml(v.장소)+'"></div>';
+  html+='<div><label>URL <span style="font-size:10px;color:var(--dim);font-weight:400">(예매·상세 링크 · 선택)</span></label><input name="URL" type="url" value="'+escapeHtml(v.URL)+'" placeholder="https://www.yeulmaru.org/..."></div>';
   html+='<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px;padding-top:14px;border-top:1px solid #eee">';
   html+='<button type="button" onclick="closeProgramForm()" style="padding:9px 18px;border:1px solid var(--glass-bd);border-radius:10px;background:var(--glass-surface);backdrop-filter:blur(8px);box-shadow:var(--glass-shadow);cursor:pointer;font-size:13px">취소</button>';
   html+='<button type="submit" style="padding:9px 22px;background:var(--accent);color:#fff;border:0;border-radius:10px;cursor:pointer;font-weight:600;font-size:13px">저장</button>';
@@ -15547,7 +15549,7 @@ async function saveProgram(rowIndex){
   const fd=new FormData(form);
   if(!rowIndex){try{await loadPrograms();}catch(_e){}}   // [검증반영] 신규 저장 직전 프로그램 재조회 → _genProgramId 순번을 최신 캐시로 계산(동시/연속 등록 완화). 완전 차단은 Worker 유일성 몫.
   // ⚠️ 실제 '프로그램' 시트 컬럼: A~J(NO·콘텐츠구분·풀네임·줄임말·판매시작·판매종료·시작·종료·담당자·장소)
-  //    · K=URL · L=프로그램ID(구'공연ID') · M=홍보시작일 · N=홍보종료일. URL/프로그램ID는 폼에 필드가 없으니 기존 값 보존(신규·빈값은 시작일 기반 자동 부여).
+  //    · K=URL(폼 입력) · L=프로그램ID(구'공연ID') · M=홍보시작일 · N=홍보종료일. 프로그램ID는 폼에 필드가 없으니 기존 값 보존(신규·빈값은 시작일 기반 자동 부여).
   const existing=rowIndex?(_programsCache.find(p=>p._rowIndex===rowIndex)||null):null;
   const values=[
     Number(fd.get('NO'))||'',               // A NO
@@ -15560,7 +15562,7 @@ async function saveProgram(rowIndex){
     isoToExcelSerial(fd.get('종료일')),      // H 종료일
     fd.get('담당자')||'',                    // I 담당자
     fd.get('장소')||'',                      // J 장소
-    existing?(existing['URL']||''):'',       // K URL (기존 보존)
+    (fd.get('URL')||'').trim(),              // K URL — 폼 입력값(기존값 prefill → 안 건드리면 유지·수정/삭제 반영)
     (existing&&(existing['프로그램ID']||existing['공연ID']))||_genProgramId(fd.get('시작일')),    // L 프로그램ID(#71): 기존 보존, 신규·빈값이면 시작일 기반 자동생성(YYMMDD_NN)
     isoToExcelSerial(fd.get('홍보시작일')),  // M 홍보시작일(노출일) — 전 콘텐츠 opt-in (OFF면 빈값)
     isoToExcelSerial(fd.get('홍보종료일'))   // N 홍보종료일 (비우면 앱이 공연 종료일 적용)
