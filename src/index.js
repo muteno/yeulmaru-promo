@@ -410,6 +410,35 @@ async function handleDeleteSheetRow(token, sheetName, row, role, slug) {
 __name(handleDeleteSheetRow, "handleDeleteSheetRow");
 
 
+// === [260710] 회원 시트 전용 로더 — 7열(A~G: 휴대폰정규화·이름·주소1~4·우편번호) × 5,000행 청크 읽기 ===
+// usedRange 전체(17열×30k=505k셀) 단일 호출은 Graph 504·재시도 증폭·isolate 메모리 압박(분신술 성능 감사 HIGH)
+// → 크기만 먼저 조회($select=rowCount) 후 A{s}:G{e} 청크(~35k셀/콜)로 나눠 읽는다. 열 순서는 v2 정제본 A~G 고정.
+async function memberSheetRead(token, sheetName) {
+  const { driveId, itemId } = await findFile(token);
+  const base = sheetPathFor(driveId, itemId, sheetName);
+  const ur = await graphGet(token, `${base}/usedRange?$select=rowCount`);
+  const totalRows = ur.rowCount || 0;
+  if (totalRows < 2) return { headers: [], rows: [] };
+  const CHUNK = 5000;
+  let headers = [];
+  const rows = [];
+  for (let s = 1; s <= totalRows; s += CHUNK) {
+    const e = Math.min(s + CHUNK - 1, totalRows);
+    const part = await graphGet(token, `${base}/range(address='A${s}:G${e}')?$select=values`);
+    const vals = part.values || [];
+    for (let i = 0; i < vals.length; i++) {
+      if (s === 1 && i === 0) { headers = vals[0].map((h) => String(h == null ? "" : h)); continue; }
+      const row = vals[i];
+      if (row.every((cv) => cv === "" || cv === null || cv === undefined)) continue;
+      const obj = {};
+      headers.forEach((h, j) => { obj[h] = row[j]; });
+      rows.push(obj);
+    }
+  }
+  return { headers, rows };
+}
+__name(memberSheetRead, "memberSheetRead");
+
 // === 자동 취소: 보류 3일 경과 → 취소 (cron 매일 KST 10:00 실행) ===
 async function autoCancelStalePending(env) {
   const token = await getToken(env);
@@ -1830,6 +1859,23 @@ var index_default = {
           if (sheet) {
             try {
               const opsName = opsSheetName(sheet);
+              // [보안 260710 분신술 HIGH-1] 회원 시트 = 소비자 PII 3만 행 — 클라 admin 게이트는 콘솔로 우회 가능하므로
+              //  서버가 강제한다(log 시트 GET 선례 계승). 응답은 no-store(브라우저 디스크 캐시 잔류 차단). ⚠ Cloudflare 재배포 필요.
+              if (opsName === "운영_회원") {
+                const memAuth = await checkAdmin(request, env, token);
+                if (!memAuth.admin) return json({ error: "Admin only (member data)" }, env, 403);
+                if (url.searchParams.get("fresh") === "1") delete opsCache[opsName];
+                // [성능 260710 분신술 HIGH] 30k행 usedRange 단일 읽기 = Graph 504·isolate 메모리 리스크
+                //  → 조회 UI가 쓰는 7열(A~G)만 5,000행 청크로 분할 읽기 + 캐시 TTL_SHORT(상주 최소화).
+                const c = opsCache[opsName];
+                let data;
+                if (c && Date.now() < c.expires) data = c.data;
+                else { data = await memberSheetRead(token, opsName); opsCache[opsName] = { data, expires: Date.now() + TTL_SHORT }; }
+                return new Response(JSON.stringify({ sheet, headers: data.headers, rows: data.rows, count: data.rows.length }), {
+                  status: 200,
+                  headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...corsHeaders(env) }
+                });
+              }
               // [분신술 260710 H2] fresh=1 = isolate 로컬 5분 캐시 우회(실시간 조회) — 실적 수정 모달의 편집 기준·저장 직전 재조회용.
               //  다른 isolate가 방금 쓴 변경을 stale 캐시로 놓쳐 전체 재작성이 그 변경을 지우는 동시성 유실 창 축소.
               if (url.searchParams.get("fresh") === "1") delete opsCache[opsName];
