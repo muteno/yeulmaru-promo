@@ -2113,7 +2113,7 @@ const DAYS=['화','수','목','금','토','일'];
 const DAY_NAMES=['일','월','화','수','목','금','토'];
 const MENUS=[
   {label:'캘린더',id:'cal'},
-  {label:'일정 관리',id:'schedule'},
+  {label:'상품 등록 및 홍보 신청',id:'schedule'},   // [260710 운영자] 구 '일정 관리' — 캘린더 다음 핵심 메뉴
   {label:'콘텐츠 제작',id:'content'},
   {label:'플랫폼 현황',id:'platform'},
   {label:'사업현황',id:'sales'},
@@ -11059,7 +11059,7 @@ function openBatchWizard(prefillDate){
   var _refKey=prefillDate||getTodayKey();
   var _anyPromo=PERFS.some(function(p){return p.ps;});
   var _ord={c:0,e:1,a:2,r:3};
-  var perfs=PERFS.filter(function(p){ var _pe=p.pe||p.e; if(!_pe||_pe<_refKey)return false; if(!_anyPromo)return true; if(!p.ps)return false; return true; });
+  var perfs=PERFS.filter(function(p){ var _pe=p.pe||p.e; if(!_pe||_pe<_refKey)return false; if(!_anyPromo)return true; if(!p.ps)return false; if(p.ps>_refKey)return false; return true; });   // [260710 운영자] 홍보 시작일(ps)이 아직 안 온 프로그램 = 목록 제외(홍보/판매/공연 시작은 서로 다름)
   perfs.sort(function(a,b){ return (_ord[a.t]==null?9:_ord[a.t])-(_ord[b.t]==null?9:_ord[b.t]); });
   _batchState={ rows: perfs.map(function(p){ var sh=(p.n||''); return {program:p.f, programType:p.t, programEnd:p.e||'', short:sh, checked:false, date:prefillDate||getTodayKey(), time:'10:00', plats:[], content:(sh?sh+' ':''), contentTouched:false}; }) };
   var el=document.getElementById('batch-wizard');
@@ -11097,7 +11097,7 @@ function _batchRender(){
   var body=''; rows.forEach(function(r,i){ body+=_batchRowHtml(r,i); });
   if(!body)body='<tr><td colspan="5" style="text-align:center;color:#aaa;padding:26px">지금 홍보 신청 가능한 프로그램이 없어요</td></tr>';
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeBatchWizard)"><div class="modal" style="width:min(880px,96vw);max-height:90vh;display:flex;flex-direction:column;position:relative"><button class="modal-x" onclick="closeBatchWizard()" style="position:absolute;top:14px;right:14px;z-index:10">✕</button>'
-    +'<div style="padding-bottom:10px;border-bottom:1px solid #eee;margin-bottom:10px"><h3 style="margin:0">📋 일정 등록 <span style="font-size:12px;color:#888;font-weight:400">· 여러 건 한 번에</span></h3><div style="font-size:11.5px;color:#888;margin-top:4px">등록할 프로그램을 체크하고 홍보 일시·위치·내용을 정하세요. <b>홍보 위치는 복수 선택</b> 가능(위치마다 1건). 상세(본문·타겟)는 등록 후 각 건에서. <span style="color:#bbb">(열 경계 드래그로 너비 조절)</span></div></div>'
+    +'<div style="padding-bottom:10px;border-bottom:1px solid #eee;margin-bottom:10px"><h3 style="margin:0">📋 홍보 일괄 신청 <span style="font-size:12px;color:#888;font-weight:400">· 여러 건 한 번에</span></h3><div style="font-size:11.5px;color:#888;margin-top:4px">등록할 프로그램을 체크하고 홍보 일시·위치·내용을 정하세요. <b>홍보 위치는 복수 선택</b> 가능(위치마다 1건). 상세(본문·타겟)는 등록 후 각 건에서. <span style="color:#bbb">(열 경계 드래그로 너비 조절)</span></div></div>'
     +'<div style="overflow:auto;flex:1;border-radius:10px;border:1px solid #f0f0f0"><table class="promo-board-table batch-board-table" style="width:100%;border-collapse:collapse;font-size:12.5px;table-layout:fixed"><thead><tr style="background:rgba(74,77,231,0.95);color:#fff;font-size:11px;letter-spacing:0.3px">'
     + _batchSh('sel','✓',44) + _batchSh('program','프로그램',210) + _batchSh('datetime','홍보 일시',124) + _batchSh('plat','홍보 위치 <button onclick="event.stopPropagation();_batchBulkPlat(this)" style="margin-left:5px;font-size:9px;font-weight:700;color:#fff;background:rgba(255,255,255,0.28);border:0;border-radius:5px;padding:2px 7px;cursor:pointer">일괄</button>',180) + '<th data-col="content" style="padding:9px 8px;text-align:center;color:#fff">홍보 내용 입력</th>'
     +'</tr></thead><tbody>'+body+'</tbody></table></div>'
@@ -11135,7 +11135,7 @@ function _batchPop(anchor,html){
 }
 function _batchOpenDt(i,anchor){
   var r=_batchState&&_batchState.rows[i]; if(!r)return;
-  _batchPop(anchor,'<div style="font-size:11px;color:#888;margin-bottom:6px;font-weight:600">홍보 일시</div><input type="date" id="bdt-d" value="'+escapeHtml(r.date)+'" style="'+_batchCellInp+';margin-bottom:6px"><input type="time" id="bdt-t" step="600" value="'+escapeHtml(r.time||'10:00')+'" onwheel="_batchTimeWheel(event,this)" title="마우스 휠로 10분 단위 조정" style="'+_batchCellInp+'"><button onclick="_batchDtDone('+i+')" style="width:100%;margin-top:8px;padding:7px;border:0;background:var(--accent);color:#fff;border-radius:7px;cursor:pointer;font-size:12px;font-weight:600">완료</button>');
+  _batchPop(anchor,'<div style="font-size:11px;color:#888;margin-bottom:6px;font-weight:600">홍보 일시</div><input type="date" id="bdt-d" value="'+escapeHtml(r.date||getTodayKey())+'" style="'+_batchCellInp+';margin-bottom:6px"><input type="time" id="bdt-t" step="600" value="'+escapeHtml(r.time||'10:00')+'" onwheel="_batchTimeWheel(event,this)" title="마우스 휠로 10분 단위 조정" style="'+_batchCellInp+'"><button onclick="_batchDtDone('+i+')" style="width:100%;margin-top:8px;padding:7px;border:0;background:var(--accent);color:#fff;border-radius:7px;cursor:pointer;font-size:12px;font-weight:600">완료</button>');
   var d=document.getElementById('bdt-d'), t=document.getElementById('bdt-t');
   d.onchange=function(){
     // 홍보 불가 기간 검증 — 벗어나면 되돌림
@@ -17635,10 +17635,10 @@ var _nbState=_nbDefaultState();
 // 일정 관리 드롭다운 — 일정 등록(배치 위저드, 기본) / 일정 확인(기존 보드)
 function _scheduleMenuBuild(menu){
   var itemCss='display:flex;align-items:center;gap:10px;width:100%;padding:11px 14px;border:0;text-align:left;font-size:13px;font-weight:600;color:#333;border-radius:9px;cursor:pointer;font-family:inherit;transition:background .12s';
-  menu.innerHTML='<div style="padding:8px 14px 6px;font-size:11px;color:#999;font-weight:700">일정</div>'
-    +'<button type="button" onclick="_ddCloseAll();openBatchWizard()" style="'+itemCss+';background:rgba(74,77,231,0.06)" onmouseenter="this.style.background=\'rgba(74,77,231,0.12)\'" onmouseleave="this.style.background=\'rgba(74,77,231,0.06)\'"><span style="flex:1">일정 등록</span><span style="font-size:10px;color:var(--accent);font-weight:700">기본</span></button>'
-    +'<button type="button" onclick="_ddCloseAll();openPromoBoard()" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'">일정 확인</button>'
-    +'<button type="button" onclick="_ddCloseAll();openTicketReg()" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'">티켓 등록 신청</button>';
+  menu.innerHTML='<div style="padding:8px 14px 6px;font-size:11px;color:#999;font-weight:700">상품 등록 및 홍보 신청</div>'
+    +'<button type="button" onclick="_ddCloseAll();openTicketReg()" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'">상품 등록 및 변경</button>'
+    +'<button type="button" onclick="_ddCloseAll();openBatchWizard()" style="'+itemCss+';background:rgba(74,77,231,0.06)" onmouseenter="this.style.background=\'rgba(74,77,231,0.12)\'" onmouseleave="this.style.background=\'rgba(74,77,231,0.06)\'"><span style="flex:1">홍보 일괄 신청</span><span style="font-size:10px;color:var(--accent);font-weight:700">기본</span></button>'
+    +'<button type="button" onclick="_ddCloseAll();openPromoBoard()" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'">홍보 일정 확인</button>';   // [260710 운영자] 순서·용어 확정(구 일정 등록/확인·티켓 등록 신청)
 }
 function _contentMenuBuild(menu){
   menu.innerHTML='<div style="padding:8px 14px 6px;font-size:11px;color:#999;font-weight:700">콘텐츠 제작</div>'
