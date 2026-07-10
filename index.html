@@ -8394,6 +8394,29 @@ async function _spToggleDone(rowIndex){
 function _msgGet(){
   try { return JSON.parse(localStorage.getItem('nomute_messages') || '[]'); } catch(e){ return []; }
 }
+// 불편사항 접수 알림 판별 — refNo가 신청번호(No)가 아니라 불편사항 id('q'+ts)라
+// 신청 목록(records)에서 절대 못 찾는다. 클릭 시 '불편사항 관리' 화면으로 보내야 열린다.
+function _isQaMessage(m){
+  if(!m) return false;
+  if(m.trigger === '불편사항 접수') return true;
+  return /^q\d{6,}/.test((m.refNo||'').toString().trim());
+}
+// 메시지가 '열 수 있는 대상'을 가지는가 — 대상 없는(DB 싱크 어긋난) 메시지는 목록·배지에서 숨긴다.
+//  · 참조 없는 순수 알림 = 표시(클릭해도 무해)  · 불편사항 = 관리 화면으로 열림
+//  · records 미로드/0건 = 판정 보류하고 표시(로그인 직후 배지 폴링이 신청 메시지를 오숨김하는 것 방지)
+function _msgHasTarget(m){
+  if(!m) return true;
+  const refNo = (m.refNo||'').toString().trim();
+  if(!refNo) return true;
+  if(_isQaMessage(m)) return true;
+  // 사유(reason)를 담은 종결 통보(반려 등)는 대상 레코드가 삭제돼도 메시지 자체가 정보다 → 표시 유지.
+  //   반려(rejectPromo)는 record 하드삭제 + 사유 필수(if(!reason)return) → refNo가 records에 영영 없지만
+  //   신청자에게 '왜 반려됐는지' 사유 전달이 목적이라 숨기면 안 됨. 숨김 대상 = 사유 없는 순수
+  //   상태알림(신청중→예정·예정→완료)이 신청 삭제로 고아된 것뿐(분신술 감사1·2 HIGH 반영).
+  if((m.reason||'').toString().trim()) return true;
+  if(!Array.isArray(records) || records.length===0) return true;
+  return records.some(function(r){ return (r['No']||r['NO']||'').toString().trim() === refNo; });
+}
 
 // === 메시지함 API hybrid (Worker 있으면 SharePoint sync, 없으면 localStorage fallback) ===
 const _MSG_API_BASE = 'https://yeulmaru-promo-api.yeulmarumaster.workers.dev';
@@ -8512,7 +8535,7 @@ function refreshMsgBoxBadge(){
 function _refreshMsgBoxBadgeSync(){
   const myAppl = _msgMyAppl();
   const allMsgs = _msgGet();
-  const myMsgs = allMsgs.filter(function(m){ return m.recipient === myAppl && !m.read; });
+  const myMsgs = allMsgs.filter(function(m){ return m.recipient === myAppl && !m.read && _msgHasTarget(m); });
   const importantCount = myMsgs.filter(function(m){ return m.type === '중요'; }).length;
   const total = myMsgs.length;
   const btn = document.getElementById('msgbox-btn');
@@ -8544,7 +8567,8 @@ async function openMsgBox(){
     return;
   }
   const allMsgs = _msgGet();
-  const myMsgs = allMsgs.filter(function(m){ return m.recipient === myAppl; });
+  // 대상 없는(DB 싱크 어긋난) 메시지는 숨긴다 — 메시지함에 보이는 건 전부 열려야 한다(운영자 260710)
+  const myMsgs = allMsgs.filter(function(m){ return m.recipient === myAppl && _msgHasTarget(m); });
   myMsgs.sort(function(a, b){
     if(a.type === '중요' && b.type !== '중요') return -1;
     if(a.type !== '중요' && b.type === '중요') return 1;
@@ -8606,6 +8630,15 @@ function markMsgRead(id){
     _msgSave(msgs);
   }
   refreshMsgBoxBadge();
+  // 불편사항 접수 알림 → '불편사항 관리' 화면으로 (refNo=불편사항 id라 신청 목록엔 없다 — 260710 버그수정)
+  if(_isQaMessage(m)){
+    try {
+      closeMsgBox();
+      if(typeof openQaBoard === 'function'){ openQaBoard((m.refNo||'').toString().trim()); return; }
+    } catch(_e){ console.error('[msg qa navigate]', _e); }
+    openMsgBox();
+    return;
+  }
   // 메시지 클릭 → 일정 확인 및 관리 모달 자동 진입 (refNo로 record 찾기)
   const refNo = (m.refNo||'').toString().trim();
   if(refNo && Array.isArray(records)){
@@ -8628,10 +8661,9 @@ function markMsgRead(id){
         console.error('[msg navigate]', _e);
         showToast('일정 모달 진입 실패: '+(_e.message||_e),'error');
       }
-    } else {
-      // record 못 찾음 (삭제됨 또는 권한 X) — msgbox 유지 + 안내
-      try{ showToast('해당 신청 내역을 찾을 수 없어요 (삭제됨 또는 권한 없음)','info'); }catch(e){}
     }
+    // 대상 못 찾음 = DB 싱크 어긋남 → 이 메시지는 openMsgBox 필터(_msgHasTarget)가 이미 숨긴다.
+    //   여기 도달 = 레이스(방금 삭제 등) — 조용히 목록 새로고침해 사라지게 둔다(빈 화면 토스트 제거).
   }
   // refNo 없는 일반 메시지 또는 navigate 실패 → msgbox 새로고침
   openMsgBox();
@@ -15297,7 +15329,9 @@ async function loadData(){
   try{const d=await api('GET','/api/records');var _all=(d.records||[]).map(function(r,i){return Object.assign({},r,{_rowIndex:(r._rowIndex!==undefined?r._rowIndex:i+2)});});_DRAFTS=_all.filter(_isDraftRec);records=_all.filter(function(r){return !_isDraftRec(r);});}catch(e){console.error(e);_typingId++;if(cal)cal.innerHTML='<div style="text-align:center;padding:60px;color:var(--danger);font-size:14px">데이터 로드 실패</div>';return;}
   // 특별 일정 — 위에서 병렬 출발한 것 완료 대기 (실패해도 records 렌더는 진행)
   try{await _spP;}catch(e){}
-  _typingId++;render();_petEnter();if(typeof _refreshSeenMod==='function')_refreshSeenMod();}
+  _typingId++;render();_petEnter();if(typeof _refreshSeenMod==='function')_refreshSeenMod();
+  // records 로드 완료 → 메시지함 배지 즉시 재계산(대상 없는 고아 메시지 과다표시 flicker ~10초 제거, 분신술 감사4 권고)
+  try{ if(typeof refreshMsgBoxBadge==='function') refreshMsgBoxBadge(); }catch(_e){}}
 
 // SharePoint Graph API 일관성 지연 회피용 - 변경 후 row 수 검증 + 자동 재시도
 async function syncReload(expectedDelta){
@@ -19927,8 +19961,11 @@ async function _qaSubmit(){
 }
 
 // === 불편사항 관리 (admin) — 접수 목록 확인 + 상태/처리메모 업데이트 ===
-var _qaData=[], _qaFilterState={status:'all',cat:'all'};
-async function openQaBoard(){
+var _qaData=[], _qaFilterState={status:'all',cat:'all'}, _qaHighlightId=null;
+async function openQaBoard(highlightId){
+  _qaHighlightId = (highlightId||'').toString().trim() || null;
+  // 메시지함에서 특정 건으로 진입하면 그 건이 필터에 가려지지 않게 필터 초기화
+  if(_qaHighlightId){ _qaFilterState={status:'all',cat:'all'}; }
   const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeAdminPanel)"><div class="modal" style="width:96vw;max-width:1000px;max-height:88vh;overflow:auto;padding:24px;position:relative"><button onclick="backToAdminMenu()" title="뒤로" aria-label="뒤로" style="position:absolute;top:14px;right:54px;float:none;margin:0;width:32px;height:32px;border-radius:50%;border:1px solid var(--glass-bd);background:var(--glass-surface);backdrop-filter:blur(8px);color:var(--accent);cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:10;box-shadow:var(--glass-shadow)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button><button class="modal-x" onclick="closeAdminPanel()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:14px;float:none;margin:0;z-index:10">✕</button><div id="qa-board-body" style="text-align:center;padding:40px;color:#888">'+_ldHtml(16)+'로딩 중</div></div></div>';
   let el=document.getElementById('admin-panel');
   if(!el){el=document.createElement('div');el.id='admin-panel';document.body.appendChild(el);}
@@ -19977,7 +20014,8 @@ function _qaBoardRender(){
     rows.forEach(function(r){
       var ri=r._rowIndex, st=r['상태']||'접수';
       var stColor=st==='완료'?'#2e7d32':(st==='처리중'?'#e67e22':'#c0392b');
-      html+='<tr>';
+      var _qid=(r['ID']||'').toString();
+      html+='<tr'+(_qid?' data-qa-id="'+escapeHtml(_qid)+'"':'')+'>';
       html+='<td style="font-size:11px;white-space:nowrap;color:#999">'+escapeHtml(r['KST']||'')+'</td>';
       html+='<td style="font-size:12px">'+escapeHtml(r['사용자']||'')+((r['부서'])?('<br><span style="color:#aaa;font-size:10px">'+escapeHtml(r['부서'])+'</span>'):'')+'</td>';
       html+='<td><span style="background:#F0EFFB;color:var(--accent);padding:2px 8px;border-radius:8px;font-size:11px;white-space:nowrap">'+escapeHtml(r['분류']||'기타')+'</span></td>';
@@ -19989,6 +20027,22 @@ function _qaBoardRender(){
     html+='</tbody></table>';
   }
   body.innerHTML=html;
+  // 메시지함에서 특정 불편사항 클릭해 진입한 경우 해당 행으로 스크롤 + 잠깐 강조
+  if(_qaHighlightId){
+    var _hid=_qaHighlightId; _qaHighlightId=null;
+    try{
+      var _hrows=body.querySelectorAll('[data-qa-id]');
+      for(var _hi=0;_hi<_hrows.length;_hi++){
+        if(_hrows[_hi].getAttribute('data-qa-id')===_hid){
+          var _htr=_hrows[_hi];
+          _htr.scrollIntoView({block:'center'});
+          _htr.style.transition='background 0.5s'; _htr.style.background='var(--accent-light)';
+          (function(el){ setTimeout(function(){ try{ el.style.background=''; }catch(_e){} }, 2200); })(_htr);
+          break;
+        }
+      }
+    }catch(_e){}
+  }
 }
 async function _qaSaveRow(rowIndex){
   var stSel=document.getElementById('qa-st-'+rowIndex), memoIn=document.getElementById('qa-memo-'+rowIndex);
