@@ -1778,7 +1778,7 @@ table.promo-board-table thead th:last-child{border-top-right-radius:11px}
 .sr-ai-card .sr-ai-hd{margin-top:2px}
 .srail-drill{padding-bottom:16px}
 .sr-ai-hd{display:flex;align-items:center;gap:5px;font-size:11.5px;font-weight:800;color:var(--accent);margin:10px 0 3px}
-.sr-ai-item{display:flex;align-items:flex-start;gap:7px;font-size:11.5px;line-height:1.55;margin:5px 0;color:var(--text)}
+.sr-ai-item{display:flex;align-items:flex-start;gap:7px;font-size:11.5px;line-height:1.55;margin:6px 0 4px;color:var(--text)}   /* [260710 운영자] 위6/아래4 비대칭 — 한글 글리프가 라인박스 상단에 그려져 구분선 사이에서 위로 쏠려 보이던 것 시각 중앙 보정(박스 간격 5/5는 실측 대칭이었음) */
 .sr-ai-item .bu{width:5px;height:5px;border-radius:999px;flex-shrink:0;margin-top:6px;background:var(--accent)}
 .sr-ai-item b{font-weight:800}
 .sr-ai-div{height:1px;background:var(--border);width:calc(100% - 28px);margin:2px 0}
@@ -1923,7 +1923,7 @@ table.promo-board-table thead th:last-child{border-top-right-radius:11px}
     <aside id="sales-rail" data-panel aria-label="판매 현황 (판매중 공연)">
       <div class="srail-ttlzone" id="srail-ttlzone"></div>
       <div class="srail">
-        <div class="srail-head" id="srail-head"><span class="srail-ttltext">판매 현황</span><span class="srail-cnt" id="srail-cnt" style="display:none">0</span><div class="srail-sum" id="srail-sum" style="display:none"></div></div>
+        <div class="srail-head" id="srail-head"><span class="srail-ttltext">판매 현황</span><span class="srail-cnt" id="srail-cnt" style="display:none">0</span><div class="srail-sum" id="srail-sum" style="display:none"></div><span id="srail-nav-slot" style="margin-left:auto;display:none;flex-shrink:0"></span></div>
         <div class="srail-body" id="srail-body"></div>
       </div>
     </aside>
@@ -4118,6 +4118,8 @@ function _salesFmtDates(dates){
   groups.push(cur);
   return groups.map(function(g){var a=g[0],b=g[g.length-1]; if(a.getTime()===b.getTime())return f(a); if(a.getMonth()===b.getMonth())return (a.getMonth()+1)+'.'+a.getDate()+'('+ws[a.getDay()]+')~'+b.getDate()+'('+ws[b.getDay()]+')'; return f(a)+'~'+f(b);}).join(', ');
 }
+// [260710 운영자] 「예측 제외」 행 판정 — 일일입력 '예측제외' 컬럼(실적 수정 모달이 'Y' 기록). 그 날 증분을 예측 평균에서 뺀다(단체 150명·2차 오픈 등 이벤트 변수).
+function _fcExcl(r){ var v=String((r&&r['예측제외'])||'').trim().toUpperCase(); return v!==''&&v!=='N'&&v!=='FALSE'&&v!=='0'; }
 function _salesBuild(){
   var master={},masterById={};
   ((_salesState.master&&_salesState.master.rows)||[]).map(_salesNorm).forEach(function(m){
@@ -4183,18 +4185,22 @@ function _salesBuild(){
     if(status==='active'&&lastShow&&lastShow<today)status='ended';
     // [분석보드] 추가 필드(기존 필드 불변): 최근 7일 점유율 스파크라인 / 어제대비 %p / 데이터 출처
     var spark=rows.slice(-7).map(function(r){return totalOpen>0?Math.min((_salesNum(r['합계좌석'])||0)/totalOpen*100,100):0;});
-    // 레일 10일 추이용 — 최근 7일 실측(좌석·기준일자·점유율). 예측(추세 연장·종료 예상)은 렌더 시 — 실측 7건부터(_SRAIL_FC_MIN).
-    var days=rows.slice(-7).map(function(r){var s=_salesNum(r['합계좌석']); return {bd:_salesNum(r['기준일자']),seat:(s==null?0:s),occ:(s!=null&&totalOpen>0)?Math.min(s/totalOpen*100,100):0};});
+    // 레일 10일 추이용 — 최근 7일 실측(좌석·기준일자·점유율·x=예측 제외 표시). 예측(추세 연장·종료 예상)은 렌더 시 — 실측 7건부터(_SRAIL_FC_MIN).
+    var days=rows.slice(-7).map(function(r){var s=_salesNum(r['합계좌석']); return {bd:_salesNum(r['기준일자']),seat:(s==null?0:s),occ:(s!=null&&totalOpen>0)?Math.min(s/totalOpen*100,100):0,x:_fcExcl(r)?1:0};});
     var deltaPP=(diff!==null&&totalOpen>0)?diff/totalOpen*100:null;
-    // [260710 운영자] 예측 일평균 fcRate(석/일) = (마지막 누적 − 첫 실측 누적) ÷ 두 기준일 사이 달력일수 —
-    // 첫 실측점을 기준선으로 빼므로 「첫날 0→누적 점프(오픈 버스트)」가 자동 제외(운영자 "첫일 제외 평균").
-    // 최근 3점 기울기 대체(초반·스파이크에 널뛰던 것) — 카드 점선 예측·예상 문구·카드/드릴 종료 예상 4곳의 단일 소스.
+    // [260710 운영자] 예측 일평균 fcRate(석/일) = (마지막 누적 − 첫 실측 누적) ÷ 달력일수 — 첫 실측점 기준선 제외(첫날 버스트 배제).
+    // 구현 = 인접 구간(증분·달력일수) 합산: 제외 0건이면 기존 두 점 식과 동치, 「예측 제외」 체크일(단체 유입·2차 오픈 등)은
+    // 그 구간을 통째로 스킵 = 그 이벤트가 없던 것처럼(운영자 260710 — 실측 표기·점유율은 불변, 예측 4표면만 반영).
     var fcRate=null;
     if(rows.length>=2){
-      var _fr=rows[0], _lr=rows[rows.length-1];
-      var _frD=_salesDate(String(_salesNum(_fr['기준일자']))), _lrD=_salesDate(String(_salesNum(_lr['기준일자'])));
-      var _fcSpan=(_frD&&_lrD)?Math.max(1,Math.round((_lrD-_frD)/86400000)):Math.max(1,rows.length-1);
-      fcRate=((_salesNum(_lr['합계좌석'])||0)-(_salesNum(_fr['합계좌석'])||0))/_fcSpan;
+      var _num=0,_den=0;
+      for(var _fi=1;_fi<rows.length;_fi++){
+        if(_fcExcl(rows[_fi]))continue;   // 구간 끝점이 제외일 = 증분·일수 차감(누적이라 다음 구간 기준선엔 자동 반영)
+        var _aD=_salesDate(String(_salesNum(rows[_fi-1]['기준일자']))), _bD=_salesDate(String(_salesNum(rows[_fi]['기준일자'])));
+        _num+=(_salesNum(rows[_fi]['합계좌석'])||0)-(_salesNum(rows[_fi-1]['합계좌석'])||0);
+        _den+=(_aD&&_bD)?Math.max(1,Math.round((_bD-_aD)/86400000)):1;
+      }
+      fcRate=_den>0?(_num/_den):0;   // 전 구간 제외 = 0석/일(이벤트 빼면 무판매 = 평탄 예측 — null이면 구식 폴백이 제외를 무시하게 되므로 0)
     }
     var source=m?'master':(ops?'fallback':'none');
     perfs.push({name:name,seats:seats,money:money,diff:diff,occ:occ,totalOpen:totalOpen,dday:dday,dateStr:dateStr,수익성:(m&&m.수익성)?m.수익성:_profitType(name,genre),목표:(m?m.목표:50),startDate:startDate,endDate:endDate,status:status,genre:genre,gubun:(ops?ops.gubun:''),enriched:(!m&&!!ops),spark:spark,days:days,deltaPP:deltaPP,source:source,saleStart:((m&&m.티켓오픈)||(pgf&&pgf.ss?_salesDate(pgf.ss):null)||null),fcRate:fcRate,_mid:((m&&m.ID)||rid||'')});   // [260710 버그수정] days 탑재 누락 — A1(PR 171)이 로컬 생성만 하고 안 실어 카드 추이가 실데이터에서 상시 '수집 전'이었음 · [260710 운영자] endDate(판매 종료일) 탑재 — 카드/드릴 차트 종료 예상점용 · saleStart(티켓오픈) = 「판매 N일차」 소스(레일이 프로그램 시트 ss 폴백)
@@ -4333,6 +4339,7 @@ function _srailInit(force){
   if(_srailBusy&&!force)return;   // force = 스톨 뚫고 재발사 허용(세대 토큰이 구응답 폐기)
   _srailBusy=true;
   var gen=++_srailGen;
+  _srailNavSlot('');   // 로딩 진입 시 nav 우측 [← 목록] 잔존 방지
   // [260710 운영자] 로딩 표기 = 좌측 캘린더 스켈레톤과 동일 — 문구(.cal-load-msg 스펙: 정중앙·accent 75%·14px/600·_ldHtml(16)·「불러오는 중」) + 광택 스윕(.sk-sweep 공용, "스캔 모션까지")
   els.body.innerHTML='<div style="position:relative;height:100%"><div class="sk-sweep" aria-hidden="true"></div><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--accent);opacity:.75;font-size:14px;font-weight:600">'+_ldHtml(16)+'불러오는 중</div></div>';
   Promise.all([
@@ -4563,11 +4570,14 @@ function _srailTrend(p){
   pts.forEach(function(q,i){
     var future=i>todayIdx,today=(i===todayIdx),recent=(i>=todayIdx-2);
     var seat=seatOf(q[2]),prevSeat=(i>0)?seatOf(vals[i-1]):null,dseat=(prevSeat!=null)?(seat-prevSeat):null;
-    if(today)s+='<circle cx="'+q[0].toFixed(1)+'" cy="'+q[1].toFixed(1)+'" r="'+(R+2.2)+'" fill="var(--muted)"/><circle cx="'+q[0].toFixed(1)+'" cy="'+q[1].toFixed(1)+'" r="'+R+'" fill="var(--accent)"/>';
-    else s+='<circle cx="'+q[0].toFixed(1)+'" cy="'+q[1].toFixed(1)+'" r="'+R+'" fill="var('+(future?'--muted':'--accent')+')"/>';
+    // [260710 운영자] 예측 제외일(x) = 속빈 점 + 툴팁 · 증감 라벨 회색 — 이 날 증분은 예측 평균에서 빠져 있음을 표시(실측 좌석 표기는 그대로)
+    var isX=!future&&days[i]&&days[i].x;
+    var dotX='<circle cx="'+q[0].toFixed(1)+'" cy="'+q[1].toFixed(1)+'" r="'+R+'" fill="var(--surface-solid)" stroke="var(--accent)" stroke-width="1.6"><title>예측 제외한 날 (이벤트성 판매 — 예상 계산에서 빠짐)</title></circle>';
+    if(today)s+='<circle cx="'+q[0].toFixed(1)+'" cy="'+q[1].toFixed(1)+'" r="'+(R+2.2)+'" fill="var(--muted)"/>'+(isX?dotX:'<circle cx="'+q[0].toFixed(1)+'" cy="'+q[1].toFixed(1)+'" r="'+R+'" fill="var(--accent)"/>');
+    else s+=isX?dotX:'<circle cx="'+q[0].toFixed(1)+'" cy="'+q[1].toFixed(1)+'" r="'+R+'" fill="var('+(future?'--muted':'--accent')+')"/>';
     var col=today?'var(--accent)':(recent?'var(--text)':'var(--dim)'),sy=(q[1]-R-6).toFixed(1);
     s+='<text x="'+q[0].toFixed(1)+'" y="'+sy+'" text-anchor="middle" font-size="11.5" font-weight="'+(today?'800':'700')+'" fill="'+col+'">'+seat+'</text>';
-    if(dseat!=null&&recent)s+='<text x="'+q[0].toFixed(1)+'" y="'+(parseFloat(sy)-19).toFixed(1)+'" text-anchor="middle" font-size="11.5" font-weight="800" fill="var(--green)">'+(dseat>=0?'+':'')+dseat+'</text>';
+    if(dseat!=null&&recent)s+='<text x="'+q[0].toFixed(1)+'" y="'+(parseFloat(sy)-19).toFixed(1)+'" text-anchor="middle" font-size="11.5" font-weight="800" fill="var('+(isX?'--muted':'--green')+')">'+(dseat>=0?'+':'')+dseat+'</text>';
     if((T-1-i)%2===0)s+='<text x="'+q[0].toFixed(1)+'" y="'+(H-7)+'" text-anchor="middle" font-size="11.5" font-weight="700" fill="'+(today?'var(--accent)':(future?'var(--muted)':'var(--dim)'))+'">'+labels[i]+'</text>';
   });
   if(showEnd){
@@ -4713,6 +4723,7 @@ function _srailRenderInner(els){
     if(dp){ if(dp._kind==='ex')_srailRenderDrillEx(els,dp,actives.length); else _srailRenderDrill(els,dp,actives.length); return; }
     _srailView={mode:'list',name:null};
   }
+  _srailNavSlot('');   // 목록 = nav바 우측 [← 목록] 제거(드릴 전용)
   if(els.cnt){ els.cnt.textContent=actives.length; els.cnt.style.display=actives.length?'':'none'; }
   if(els.asof)els.asof.textContent=_srailAsof();
   if(els.sum){
@@ -4768,16 +4779,14 @@ function _srailRenderDrill(els,p,activeCount){
   var peerOcc=peers.map(function(q){return q.occ;}).sort(function(a,b){return a-b;});
   var peerMed=peerOcc.length?peerOcc[Math.floor(peerOcc.length/2)]:null;
   var medTxt=(peerMed!==null)?('또래('+peers.length+'건) 중앙값 '+peerMed.toFixed(0)+'% 대비 '+(occ-peerMed>=0?'+':'')+(occ-peerMed).toFixed(0)+'%p'):'비교할 또래 종료공연 없음';
-  // 다음 액션 (분석 보드 드릴과 동일 판정)
-  var act;
-  if(noData)act='첫 판매 실적 입력 대기 — 일일입력하면 추이·목표 대비가 표시돼요';
-  else if(p.startDate&&ddTxt.indexOf('D+')===0)act='판매 종료 — 결과 리뷰 권장';
-  else if(gap< -8)act='⚠ 목표 대비 부진 — 추가 홍보/프로모션 검토';
-  else if(peerMed!==null&&occ<peerMed-5)act='또래 평균 하회 — 채널 확대 검토';
-  else if(gap>=0)act='목표 달성권 — 현 페이스 유지';
-  else act='정상 페이스 — 모니터링 지속';
+  // [260710 운영자] 액션 문구(「목표 대비 부진 …」 등) 제거 + [← 목록] = 판매 현황 nav바 우측으로 + [실적 수정][자세히 보기] = 드릴 우측 상단
+  _srailNavSlot('<button class="ana-back" style="margin-bottom:0;padding:4px 10px;font-size:11px" onclick="_srailBack()">← 목록</button>');
   var h='<div class="srail-drill">';
-  h+='<div class="srail-dhd"><button class="ana-back" style="margin-bottom:0;padding:4px 10px;font-size:11px" onclick="_srailBack()">← 목록</button><span class="srail-dname" title="'+escapeHtml(p.name)+'">'+escapeHtml(p.name)+'</span></div>';
+  h+='<div class="srail-dhd"><span class="srail-dname" title="'+escapeHtml(p.name)+'">'+escapeHtml(p.name)+'</span>'
+    +'<span style="display:inline-flex;gap:6px;flex-shrink:0;margin-left:auto">'
+    +((typeof userRole!=='undefined'&&userRole==='admin')?'<button class="ana-chip" onclick="_srailEditOpen(\''+_anaEsc(p.name)+'\')" title="이 공연의 일일입력 실적을 시트(DB)에서 불러와 수정 · 특정 날짜를 예측 계산에서 제외(관리자 전용)">실적 수정</button>':'')
+    +'<button class="ana-chip" onclick="_srailOpenBoard(\''+_anaEsc(p.name)+'\')" title="분석 보드에서 비슷한 공연 비교까지 자세히 보기">자세히 보기</button>'
+    +'</span></div>';
   h+='<div class="srail-meta" style="margin-bottom:8px">'+escapeHtml((p.genre||'기타')+' · '+ax+' · 오픈석 '+p.totalOpen.toLocaleString()+'석'+(p.dateStr?' · '+p.dateStr:''))+'</div>';
   h+='<div class="ana-kpis">';
   h+='<div class="ana-kpi"><div class="lab">현재 누적 점유율</div><div class="val">'+(noData?'집계 전':occ.toFixed(1)+'%')+'</div></div>';
@@ -4797,11 +4806,13 @@ function _srailRenderDrill(els,p,activeCount){
   h+='<div class="sr-ai-div"></div>';
   h+=_srailAiRow('var(--accent)','최대 레버',_anaTopLever(_anaDailySeries(p)));
   h+='</div>';
-  h+='<div class="sr-ai-card" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span class="ana-next" style="margin-top:0">▶ '+act+'</span><button class="ana-chip" onclick="_srailOpenBoard(\''+_anaEsc(p.name)+'\')" title="분석 보드에서 비슷한 공연 비교까지 크게 보기">크게 보기</button>'
-    +((typeof userRole!=='undefined'&&userRole==='admin')?'<button class="ana-chip" onclick="_srailEditOpen(\''+_anaEsc(p.name)+'\')" title="이 공연의 일일입력 실적을 시트(DB)에서 불러와 수정(관리자 전용)">실적 수정</button>':'')
-    +'</div>';
   h+='</div>';
   els.body.innerHTML=h;
+}
+// 판매 현황 nav바(흰 헤더 행) 우측 슬롯 — 드릴 = [← 목록](뒤로가기), 목록 = 비움(운영자 260710)
+function _srailNavSlot(html){
+  var s=document.getElementById('srail-nav-slot'); if(!s)return;
+  s.innerHTML=html||''; s.style.display=html?'':'none';
 }
 // 전시 인라인 드릴 — 분석 보드 전시 드릴(_anaExhibDrillRender) 계승: KPI + 일별 달성률 추이(_anaExhibTrend 재사용)
 function _srailRenderDrillEx(els,e,activeCount){
@@ -4815,7 +4826,9 @@ function _srailRenderDrillEx(els,e,activeCount){
   else {dStr='보합';dCol='var(--dim)';}
   var endTxt=(e._endD===null||e._endD===undefined)?'-':_salesDdayStr(e._endD);
   var h='<div class="srail-drill">';
-  h+='<div class="srail-dhd"><button class="ana-back" style="margin-bottom:0;padding:4px 10px;font-size:11px" onclick="_srailBack()">← 목록</button><span class="srail-dname" title="'+escapeHtml(e.name)+'">'+escapeHtml(e.name)+'</span></div>';
+  _srailNavSlot('<button class="ana-back" style="margin-bottom:0;padding:4px 10px;font-size:11px" onclick="_srailBack()">← 목록</button>');   // [260710 운영자] 뒤로가기 = nav바 우측(공연 드릴과 동일)
+  h+='<div class="srail-dhd"><span class="srail-dname" title="'+escapeHtml(e.name)+'">'+escapeHtml(e.name)+'</span>'
+    +'<span style="display:inline-flex;gap:6px;flex-shrink:0;margin-left:auto"><button class="ana-chip" onclick="_srailOpenBoardEx(\''+_anaEsc(e.id)+'\')" title="분석 보드 전시 탭에서 자세히 보기">자세히 보기</button></span></div>';
   h+='<div class="srail-meta" style="margin-bottom:8px">'+escapeHtml('전시 · '+e.profit+' · '+_srailMD(e.시작일)+'~'+_srailMD(e.종료일)+' · 진행중')+'</div>';
   h+='<div class="ana-kpis">';
   h+='<div class="ana-kpi"><div class="lab">달성률 (유료/목표관객)</div><div class="val">'+e.occ.toFixed(1)+'%</div></div>';
@@ -4829,7 +4842,6 @@ function _srailRenderDrillEx(els,e,activeCount){
   h+=_srailAiHd();
   h+=_srailAiRow(e.occ>=100?'var(--green)':'var(--peach-text)','상황','목표관객 '+_srailNumTxt(e._goal)+'명 대비 유료 '+_srailNumTxt(e._paid)+'명 ('+(e.occ>=100?'초과달성 ':'')+(e.occ-100>=0?'+':'')+(e.occ-100).toFixed(1)+'%p) · 달성률은 좌석 점유가 아니라 목표 대비 비율');
   h+='</div>';
-  h+='<div class="sr-ai-card" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><button class="ana-chip" onclick="_srailOpenBoardEx(\''+_anaEsc(e.id)+'\')" title="분석 보드 전시 탭에서 크게 보기">크게 보기</button></div>';
   h+='</div>';
   els.body.innerHTML=h;
 }
@@ -4917,14 +4929,14 @@ function _srailEditClose(){ var el=document.getElementById('srail-edit-modal'); 
 // 원본 공연명(트림) — _salesBuild dmap 키와 동일 축(카드 1:1)
 function _srailEditNameOf(r){ return String((_salesNorm(r)['공연명'])||'').trim(); }
 // 이 공연 행 시그니처 — 외부 변경 감지용(숫자 정규화로 표현 차이 흡수)
-function _srailEditSig(rows){ return rows.map(function(r){return [_salesNum(r['기준일자']),_salesNum(r['합계좌석']),_salesNum(r['합계금액'])].join('|');}).sort().join(';'); }
+function _srailEditSig(rows){ return rows.map(function(r){return [_salesNum(r['기준일자']),_salesNum(r['합계좌석']),_salesNum(r['합계금액']),(_fcExcl(r)?'X':'')].join('|');}).sort().join(';'); }   // 예측제외 플래그도 외부 변경 감지 대상(260710)
 async function _srailEditOpen(name){
   if(typeof userRole==='undefined'||userRole!=='admin'){ showToast('관리자만 수정할 수 있어요','error'); return; }
   _srailEditClose();
   var wrap=document.createElement('div'); wrap.id='srail-edit-modal';
   wrap.innerHTML='<div class="modal-bg show" style="z-index:var(--z-confirm)" onclick="if(event.target===this)_srailEditClose()"><div class="modal" style="width:560px;max-width:94vw;position:relative;text-align:left"><button class="modal-x" onclick="_srailEditClose()" title="닫기" aria-label="닫기">✕</button>'
     +'<h3 style="margin:0 0 4px;padding-right:40px">실적 수정 — '+escapeHtml(name)+'</h3>'
-    +'<div style="font-size:11.5px;color:var(--dim);margin-bottom:12px">시트(운영_일일입력)에서 방금 불러온 값이에요. 저장하면 시트에 바로 반영됩니다.</div>'
+    +'<div style="font-size:11.5px;color:var(--dim);margin-bottom:12px">시트(운영_일일입력)에서 방금 불러온 값이에요. 저장하면 시트에 바로 반영됩니다.<br>「예측 제외」 = 단체 유입·2차 티켓 오픈처럼 이벤트성 판매가 낀 날 — 체크하면 그 날 증분을 <b>예상(추세) 계산에서만</b> 빼요(실측 표기·점유율은 그대로).</div>'
     +'<div id="srail-edit-body" style="max-height:56vh;overflow-y:auto"><div style="padding:26px 0;text-align:center;color:var(--dim);font-size:12px">'+_ldHtml(13)+'시트에서 불러오는 중</div></div>'
     +'<div style="display:flex;gap:8px;margin-top:14px;justify-content:space-between;align-items:center"><button class="ana-chip" onclick="_srailEditAddRow()">+ 행 추가</button><span style="flex:1"></span><button class="m-btn cancel" onclick="_srailEditClose()">취소</button><button class="m-btn save" onclick="_srailEditSave()">저장</button></div>'
     +'</div></div>';
@@ -4947,20 +4959,28 @@ async function _srailEditOpen(name){
 function _srailEditRender(){
   var b=document.getElementById('srail-edit-body'); if(!b)return;
   var h='<table style="width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums"><thead><tr>'
-    +['기준일자(YYYYMMDD)','합계좌석','합계금액',''].map(function(t){return '<th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--border2);font-size:11px;color:var(--dim);font-weight:700">'+t+'</th>';}).join('')+'</tr></thead><tbody>';
-  if(!_srailEdit.rows.length)h+='<tr><td colspan="4" style="padding:18px 8px;color:var(--dim);text-align:center">이 공연의 일일입력 행이 없어요 — [+ 행 추가]로 시작</td></tr>';
+    +['기준일자(YYYYMMDD)','합계좌석','합계금액','예측 제외',''].map(function(t){return '<th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--border2);font-size:11px;color:var(--dim);font-weight:700">'+t+'</th>';}).join('')+'</tr></thead><tbody>';
+  if(!_srailEdit.rows.length)h+='<tr><td colspan="5" style="padding:18px 8px;color:var(--dim);text-align:center">이 공연의 일일입력 행이 없어요 — [+ 행 추가]로 시작</td></tr>';
   _srailEdit.rows.forEach(function(r,i){
     var inSt='width:100%;box-sizing:border-box;padding:7px 9px;border:1px solid var(--border2);border-radius:8px;font-size:12.5px;font-family:inherit;background:var(--surface-solid);color:var(--text)';
     h+='<tr>'
-      +'<td style="padding:4px 4px 4px 8px;width:34%"><input data-ed="bd" data-i="'+i+'" value="'+escapeHtml(String(r['기준일자']||''))+'" inputmode="numeric" maxlength="8" style="'+inSt+'"></td>'
-      +'<td style="padding:4px;width:26%"><input data-ed="seat" data-i="'+i+'" value="'+escapeHtml(String(_salesNum(r['합계좌석'])==null?'':_salesNum(r['합계좌석'])))+'" inputmode="numeric" style="'+inSt+'"></td>'
-      +'<td style="padding:4px;width:30%"><input data-ed="money" data-i="'+i+'" value="'+escapeHtml(String(_salesNum(r['합계금액'])==null?'':_salesNum(r['합계금액'])))+'" inputmode="numeric" style="'+inSt+'"></td>'
+      +'<td style="padding:4px 4px 4px 8px;width:31%"><input data-ed="bd" data-i="'+i+'" value="'+escapeHtml(String(r['기준일자']||''))+'" inputmode="numeric" maxlength="8" style="'+inSt+'"></td>'
+      +'<td style="padding:4px;width:24%"><input data-ed="seat" data-i="'+i+'" value="'+escapeHtml(String(_salesNum(r['합계좌석'])==null?'':_salesNum(r['합계좌석'])))+'" inputmode="numeric" style="'+inSt+'"></td>'
+      +'<td style="padding:4px;width:27%"><input data-ed="money" data-i="'+i+'" value="'+escapeHtml(String(_salesNum(r['합계금액'])==null?'':_salesNum(r['합계금액'])))+'" inputmode="numeric" style="'+inSt+'"></td>'
+      +'<td style="padding:4px;text-align:center;width:56px"><input type="checkbox" data-ed="excl" data-i="'+i+'"'+(_fcExcl(r)?' checked':'')+' style="width:16px;height:16px;accent-color:var(--c2);cursor:pointer" title="이 날 증분을 예상(추세) 계산에서 제외 — 단체·2차 오픈 등 이벤트성 판매"></td>'
       +'<td style="padding:4px;text-align:center"><button class="ana-chip" title="이 행 삭제" onclick="_srailEditDelRow('+i+')">삭제</button></td>'
       +'</tr>';
   });
   h+='</tbody></table>';
   b.innerHTML=h;
   b.querySelectorAll('input[data-ed]').forEach(function(inp){
+    if(inp.dataset.ed==='excl'){
+      inp.addEventListener('change',function(){
+        var i=parseInt(this.dataset.i,10), r=_srailEdit.rows[i]; if(!r)return;
+        r['예측제외']=this.checked?'Y':'';   // [260710 운영자] 예측 제외 플래그 — 시트 '예측제외' 컬럼(저장 시 헤더 없으면 맨 끝 추가)
+      });
+      return;
+    }
     inp.addEventListener('input',function(){
       var i=parseInt(this.dataset.i,10), r=_srailEdit.rows[i]; if(!r)return;
       var v=this.value.replace(/[^0-9]/g,''); this.value=v;
@@ -5015,6 +5035,8 @@ async function _srailEditSave(){
     if(_srailEditSig(mineFresh)!==_srailEdit.baseSig){ throw new Error('다른 곳에서 이 공연 실적이 갱신됐어 — 모달을 다시 열어 최신값 확인 후 수정해줘'); }
     // 이 공연 행 재구성: 날짜순 + 전일대비(석) 재계산(첫 행 = 공란). ⚠️ 편집 행 키는 _salesNorm(공백 제거)이라 원본 헤더는 정규화 키로 역조회.
     var nk=function(hh){return String(hh).replace(/\s+/g,'');};
+    // [260710 운영자] '예측제외' 컬럼 — 시트에 없으면 맨 끝 신설(열 추가 = 맨 끝 append 철칙). 타 공연 행은 빈값, append 저장(_dailySubmit)은 헤더 이름 매핑이라 무영향
+    headers=headers.slice(); if(!headers.some(function(hh){return nk(hh)==='예측제외';}))headers.push('예측제외');
     var deltaHdr=headers.filter(function(hh){return nk(hh)==='전일대비(석)';})[0]||null;
     var mine=_srailEdit.rows.slice().sort(function(a,b){return parseInt(a['기준일자'],10)-parseInt(b['기준일자'],10);});
     mine.forEach(function(r,i){
