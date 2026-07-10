@@ -4187,7 +4187,7 @@ function _salesBuild(){
     var days=rows.slice(-7).map(function(r){var s=_salesNum(r['합계좌석']); return {bd:_salesNum(r['기준일자']),seat:(s==null?0:s),occ:(s!=null&&totalOpen>0)?Math.min(s/totalOpen*100,100):0};});
     var deltaPP=(diff!==null&&totalOpen>0)?diff/totalOpen*100:null;
     var source=m?'master':(ops?'fallback':'none');
-    perfs.push({name:name,seats:seats,money:money,diff:diff,occ:occ,totalOpen:totalOpen,dday:dday,dateStr:dateStr,수익성:(m&&m.수익성)?m.수익성:_profitType(name,genre),목표:(m?m.목표:50),startDate:startDate,endDate:endDate,status:status,genre:genre,gubun:(ops?ops.gubun:''),enriched:(!m&&!!ops),spark:spark,days:days,deltaPP:deltaPP,source:source,_mid:((m&&m.ID)||rid||'')});   // [260710 버그수정] days 탑재 누락 — A1(PR 171)이 로컬 생성만 하고 안 실어 카드 추이가 실데이터에서 상시 '수집 전'이었음 · [260710 운영자] endDate(판매 종료일) 탑재 — 카드/드릴 차트 종료 예상점용
+    perfs.push({name:name,seats:seats,money:money,diff:diff,occ:occ,totalOpen:totalOpen,dday:dday,dateStr:dateStr,수익성:(m&&m.수익성)?m.수익성:_profitType(name,genre),목표:(m?m.목표:50),startDate:startDate,endDate:endDate,status:status,genre:genre,gubun:(ops?ops.gubun:''),enriched:(!m&&!!ops),spark:spark,days:days,deltaPP:deltaPP,source:source,saleStart:((m&&m.티켓오픈)||(pgf&&pgf.ss?_salesDate(pgf.ss):null)||null),_mid:((m&&m.ID)||rid||'')});   // [260710 버그수정] days 탑재 누락 — A1(PR 171)이 로컬 생성만 하고 안 실어 카드 추이가 실데이터에서 상시 '수집 전'이었음 · [260710 운영자] endDate(판매 종료일) 탑재 — 카드/드릴 차트 종료 예상점용 · saleStart(티켓오픈) = 「판매 N일차」 소스(레일이 프로그램 시트 ss 폴백)
   });
   // [판매중 노출] 일일입력 실적이 아직 없어도, 공연마스터 '상태=판매중'(또는 티켓오픈~종료 기간)인 공연은
   // 레일·판매보드에 "집계 전(0석)" 카드로 노출 — 티켓 오픈 직후 데이터 공백기에도 홍보계획과 함께 판매현황이 읽히게(운영자 260707).
@@ -4215,7 +4215,7 @@ function _salesBuild(){
     if(mm.ID&&rounds[mm.ID])dateStr2=_salesFmtDates(rounds[mm.ID]);
     else if(start2){var ws2=['일','월','화','수','목','금','토'];dateStr2=(start2.getMonth()+1)+'.'+start2.getDate()+'('+ws2[start2.getDay()]+')';}
     var genre2=opsF?opsF.genre:'';
-    perfs.push({name:nm,seats:0,money:0,diff:null,occ:0,totalOpen:totalOpen2,dday:dday2,dateStr:dateStr2,수익성:mm.수익성||_profitType(nm,genre2),목표:mm.목표||50,startDate:start2,endDate:mm.종료||null,status:'active',genre:genre2,gubun:(opsF?opsF.gubun:''),enriched:false,spark:[],deltaPP:null,source:'master',noData:true});
+    perfs.push({name:nm,seats:0,money:0,diff:null,occ:0,totalOpen:totalOpen2,dday:dday2,dateStr:dateStr2,수익성:mm.수익성||_profitType(nm,genre2),목표:mm.목표||50,startDate:start2,endDate:mm.종료||null,status:'active',genre:genre2,gubun:(opsF?opsF.gubun:''),enriched:false,spark:[],deltaPP:null,source:'master',saleStart:(mm.티켓오픈||null),noData:true});
   });
   // [판매중 노출 2차] 공연마스터·일일입력에 아예 없는 신규 오픈 공연(하반기 라인업 등)은 프로그램 시트(PERFS)
   // 판매기간(판매시작일≤오늘≤판매종료일, 종료 폴백=공연 종료일)으로 잡아 "집계 전(0석)" 카드로 노출(운영자 260708 — 마스터 미등록 공연이 판매 현황에 안 뜸).
@@ -4240,7 +4240,7 @@ function _salesBuild(){
     if(start3){var ws3=['일','월','화','수','목','금','토'];dateStr3=(start3.getMonth()+1)+'.'+start3.getDate()+'('+ws3[start3.getDay()]+')';}
     var genre3=opsP?opsP.genre:'';
     seenNames[_uName(nm3)]=1;   // 프로그램 시트 안 동명 중복 방어
-    perfs.push({name:nm3,seats:0,money:0,diff:null,occ:0,totalOpen:totalOpen3,dday:dday3,dateStr:dateStr3,수익성:_profitType(nm3,genre3),목표:50,startDate:start3,endDate:_salesDate(until)||null,status:'active',genre:genre3,gubun:(opsP?opsP.gubun:''),enriched:false,spark:[],deltaPP:null,source:'program',noData:true,_mid:(pg.id||'')});
+    perfs.push({name:nm3,seats:0,money:0,diff:null,occ:0,totalOpen:totalOpen3,dday:dday3,dateStr:dateStr3,수익성:_profitType(nm3,genre3),목표:50,startDate:start3,endDate:_salesDate(until)||null,status:'active',genre:genre3,gubun:(opsP?opsP.gubun:''),enriched:false,spark:[],deltaPP:null,source:'program',saleStart:(_salesDate(pg.ss)||null),noData:true,_mid:(pg.id||'')});
   });
   return perfs;
 }
@@ -4414,6 +4414,73 @@ function _srailExhibs(){
     });
   }catch(err){ console.warn('[srail exhib]',err); return []; }
 }
+// ── [운영자 260710] 레일 노출축 = 「현재 홍보중」(선택 A) — 프로그램 시트 홍보창(ps~pe, 종료 폴백=프로그램 종료일 e) 우선,
+//    홍보일 미지정·조인 실패 = 판매기간 폴백(기존 판매중 판정 유지 — 시트 미입력으로 판매중 공연이 사라지는 누락 방지).
+//    창 정의는 캘린더 홍보 신청 게이트(11.2k대 _pe=p.pe||p.e)와 동일 계승. 판매 보드·분석 보드는 전수 유지(레일만 필터).
+function _srailPgIdx(){
+  var idx={byId:{},byName:{}};
+  ((typeof PERFS!=='undefined'&&PERFS)||[]).forEach(function(pg){
+    if(pg.id&&!idx.byId[String(pg.id)])idx.byId[String(pg.id)]=pg;
+    var f=_uName(pg.f||''), n=_uName(pg.n||'');
+    if(f&&!idx.byName[f])idx.byName[f]=pg;
+    if(n&&!idx.byName[n])idx.byName[n]=pg;
+  });
+  return idx;
+}
+function _srailPgOf(idx,id,name){ if(!idx)return null; return (id&&idx.byId[String(id)])||idx.byName[_uName(name||'')]||null; }
+function _srailTodayISO(){ var t=new Date(); return t.getFullYear()+'-'+('0'+(t.getMonth()+1)).slice(-2)+'-'+('0'+t.getDate()).slice(-2); }
+// 홍보중 판정: true/false = 홍보창(ps~pe||e) 지정 프로그램의 창 안/밖 · null = 홍보일 미지정·조인 실패(호출측 판매기간 폴백)
+function _srailPromoOn(pg){
+  if(!pg||!pg.ps)return null;
+  var t=_srailTodayISO(); if(t<pg.ps)return false;
+  var end=pg.pe||pg.e; return end?(t<=end):true;
+}
+// 판매 N일차(당일=1일차, 운영자 260710 확정) — 소스 = 공연마스터 티켓오픈(saleStart) → 프로그램 시트 판매시작일(ss) 폴백. 오픈 전·미상 = null
+function _srailSaleDayN(saleStart,pg){
+  var d=(saleStart instanceof Date)?saleStart:null;
+  if(!d&&pg&&pg.ss)d=_salesDate(pg.ss);
+  if(!d)return null;
+  var t=new Date(); t.setHours(0,0,0,0);
+  var n=Math.floor((t-new Date(d.getFullYear(),d.getMonth(),d.getDate()))/86400000)+1;
+  return n>=1?n:null;
+}
+// [운영자 260710] 전시 「집계 전」 카드 — "전시뿐만 아니라 프로그램단으로 봐야 누락이 없어":
+// ① 전시마스터(무료·종료 제외)의 전시일일 0건 중 실적 카드(_srailExhibs)가 선점하지 않은 것 — 진행중 0건은 실적 0% 카드가
+//    선점하므로 여기선 주로 '예정'이 잡힌다(분신술 커버리지 감사 확인) ② 프로그램 시트 전용 전시(t='e', 마스터 미등록)를
+// 오픈 기간(판매시작일≤오늘≤판매종료일, 폴백=종료일 — 공연 3차 폴백과 동일 원칙) 안이면 noData 카드로 노출.
+// 홍보창 밖(promo false) = 숨김. 창 정보 전무(마스터만 있음) = 전시 진행 기간(시작~종료) 폴백.
+function _srailExhibsPre(pgIdx,exActives){
+  var out=[], today=new Date(); today.setHours(0,0,0,0);
+  var todayISO=_srailTodayISO();
+  var seen={}; (exActives||[]).forEach(function(e){ seen[_uName(e.name)]=1; });
+  function openWin(pg){ if(!pg||!pg.ss)return null; var until=pg.se||pg.e; if(!until)return null; if(pg.e&&pg.e<todayISO)return false; return (pg.ss<=todayISO&&todayISO<=until); }
+  function push(name,id,profit,sd,ed,goal,pg){
+    if(!name||seen[_uName(name)])return; seen[_uName(name)]=1;
+    if(_srailPromoOn(pg)===false)return;
+    var open=openWin(pg);
+    var openOk=(open===true)||(open===null&&!!(sd&&ed&&sd<=today&&today<=ed));
+    if(!openOk)return;
+    out.push({_kind:'ex',noData:true,id:(id||''),name:name,profit:(profit||''),occ:0,deltaPP:null,spark:[],daily:[],
+      시작일:sd,종료일:ed,_dday:(sd?Math.round((sd-today)/86400000):null),_endD:(ed?Math.round((ed-today)/86400000):null),
+      _paid:null,_total:null,_goal:(goal!=null?goal:null),_saleN:_srailSaleDayN(null,pg)});
+  }
+  try{
+    if(_anaState&&_anaState._exMaster){
+      _anaExhibBuild().forEach(function(e){
+        if(e.profit==='무료'||e.status==='ended'){ seen[_uName(e.name)]=1; return; }   // 노출 제외라도 dedup 명단엔 등재 — 프로그램 시트(t='e') 경로로 무료·종료 전시가 되살아나는 누수 차단(분신술 품질 감사 LOW)
+        if(e.daily&&e.daily.length)return;
+        push(e.name,e.id,e.profit,_salesDate(e.시작일),_salesDate(e.종료일),_salesNum(e.목표관객),_srailPgOf(pgIdx,null,e.name));
+      });
+    }
+  }catch(err){ console.warn('[srail exhib pre]',err); }
+  ((typeof PERFS!=='undefined'&&PERFS)||[]).forEach(function(pg){
+    if(pg.t!=='e')return;
+    var nm=String(pg.f||pg.n||'').trim(); if(!nm)return;
+    if(pg.n&&seen[_uName(pg.n)])return;   // 줄임말 축 dedup — 마스터 전시명이 줄임말과만 일치하는 이중 노출 방지(_salesBuild 3차 dedup 미러, 분신술 커버리지 감사 LOW)
+    push(nm,'','',_salesDate(pg.s),_salesDate(pg.e),null,pg);
+  });
+  return out;
+}
 // 스파크라인(최근 7일 점유율) — _anaSpark 계승·레일용 가변폭(viewBox 스케일) + 면 채움. 색 = accent 토큰·alpha 변주만.
 function _srailSpark(arr){
   arr=(arr||[]).filter(function(v){return v!==null&&v!==undefined&&!isNaN(v);});
@@ -4516,7 +4583,7 @@ function _srailDdayColor(d){ return (d!==null&&d!==undefined&&(d<0||d<=14))?_sal
 function _srailCard(p){
   var _d=_srailDelta(p.deltaPP), dCls=_d.c, dStr=_d.s;
   var tgt=p.목표||50, gap=p.occ-tgt;
-  var meta=(p.genre||'기타')+' · '+_anaProfitAxis(p['수익성'])+(p.dateStr?' · '+p.dateStr:'');
+  var meta=(p.genre||'기타')+' · '+_anaProfitAxis(p['수익성'])+(p.dateStr?' · '+p.dateStr:'')+((!p.noData&&p._saleN)?' · 판매 '+p._saleN+'일차':'');   // [260710 운영자] 판매 N일차(당일=1일차) — 티켓오픈→판매시작일 소스. noData 카드는 「집계 전입니다.」 옆 1곳만(분신술 N일차 감사 MED — 이중 표기 방지)
   var dd=_salesDdayStr(p.dday);
   // title=순수 HTML 속성 → escapeHtml / onclick=JS 문자열 → _anaEsc (컨텍스트별 이스케이프 분리, 분신술 5호 MED)
   var fc='';
@@ -4530,7 +4597,7 @@ function _srailCard(p){
     +'<div class="srail-hd"><div class="srail-tt"><div class="srail-name">'+escapeHtml(p.name)+'</div><div class="srail-meta">'+escapeHtml(meta)+'</div></div>'
     +(dd?'<span class="srail-dday" style="color:'+_srailDdayColor(p.dday)+'">'+dd+'</span>':'')+'</div>'
     +(p.noData?'':'<div class="srail-occrow"><span class="srail-occ">'+p.occ.toFixed(1)+'%</span><span class="srail-delta '+dCls+'">'+dStr+'</span><span class="srail-seatsub">'+p.seats.toLocaleString()+'석</span><span class="srail-occcap">점유율</span></div>')
-    +(p.noData?'<div class="srail-r2"><span style="font-size:13px;color:var(--dim);font-weight:600;margin-left:16px">집계 전입니다.</span></div>':'')
+    +(p.noData?'<div class="srail-r2"><span style="font-size:13px;color:var(--dim);font-weight:600;margin-left:16px">집계 전입니다.'+(p._saleN?' · 판매 '+p._saleN+'일차':'')+'</span></div>':'')
     +(p.noData?'':'<div class="srail-spark" style="margin-top:10px">'+_srailTrend(p)+'</div>')
     +fc
     +'<div class="srail-bar"><i style="width:'+Math.min(p.occ,100).toFixed(1)+'%"></i><b style="left:'+Math.min(tgt,100)+'%"></b></div>'
@@ -4542,7 +4609,17 @@ function _srailNumTxt(v){ return (v===null||v===undefined||isNaN(v))?'—':Math.
 // 전시 카드 — 분석 보드 전시 목록(달성률·어제대비·누적유료) 계승. ⚠️ 달성률 = 누계유료/목표관객(좌석 점유 아님, 100%↑=초과달성)
 function _srailCardEx(e){
   var _d=_srailDelta(e.deltaPP), dCls=_d.c, dStr=_d.s;
-  var meta='전시 · '+e.profit+((e.시작일||e.종료일)?(' · '+_srailMD(e.시작일)+'~'+_srailMD(e.종료일)):'');
+  var meta='전시'+(e.profit?' · '+e.profit:'')+((e.시작일||e.종료일)?(' · '+_srailMD(e.시작일)+'~'+_srailMD(e.종료일)):'')+((!e.noData&&e._saleN)?' · 판매 '+e._saleN+'일차':'');   // [260710 운영자] 판매 N일차 = 전 프로그램 공통. noData는 「집계 전입니다.」 옆 1곳만(분신술 N일차 감사 MED — 이중 표기 방지)
+  // [260710 운영자] 전시 「집계 전」 카드 — 공연 noData 카드와 동형(시작 D-day·집계 전입니다.·판매 N일차). 드릴 미연결(전시일일 0건 = 열 내용 없음)
+  if(e.noData){
+    var ddPre=(e._dday===null||e._dday===undefined)?'':_salesDdayStr(e._dday);
+    return '<div class="srail-card" style="cursor:default" title="'+escapeHtml(e.name)+'">'
+      +'<div class="srail-r1"><span class="srail-name">'+escapeHtml(e.name)+'</span>'+(ddPre?'<span class="srail-dday" style="color:'+_srailDdayColor(e._dday)+'">'+ddPre+'</span>':'')+'</div>'
+      +'<div class="srail-meta">'+escapeHtml(meta)+'</div>'
+      +'<div class="srail-r2"><span style="font-size:13px;color:var(--dim);font-weight:600;margin-left:16px">집계 전입니다.'+(e._saleN?' · 판매 '+e._saleN+'일차':'')+'</span></div>'
+      +(e._goal!=null?'<div class="srail-r3"><span>목표 '+_srailNumTxt(e._goal)+'명</span></div>':'')
+      +'</div>';
+  }
   var dd=(e._endD===null||e._endD===undefined)?'':('종료 '+_salesDdayStr(e._endD));
   return '<div class="srail-card" role="button" tabindex="0" onclick="_srailDrill(\'ex\',\''+_anaEsc(e.id)+'\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click();}" title="'+escapeHtml(e.name)+' — 개별 분석 (레일 안에서 열려요)">'
     +'<div class="srail-r1"><span class="srail-name">'+escapeHtml(e.name)+'</span>'+(dd?'<span class="srail-dday" style="color:'+_srailDdayColor(e._endD)+'">'+dd+'</span>':'')+'</div>'
@@ -4603,6 +4680,12 @@ function _srailRenderInner(els){
   var perfActives=perfs.filter(function(p){return p.status==='active';});
   perfActives.forEach(function(p){p._kind='perf';});
   var exActives=_srailExhibs();
+  // [운영자 260710] 노출축 = 「현재 홍보중」 — 홍보창(ps~pe||e) 밖이면 숨김(미지정·조인 실패 = 판매기간 폴백 = 그대로 통과) + 판매 N일차 주석
+  var pgIdx=_srailPgIdx();
+  perfActives=perfActives.filter(function(p){ var pg=_srailPgOf(pgIdx,p._mid,p.name); p._saleN=_srailSaleDayN(p.saleStart,pg); return _srailPromoOn(pg)!==false; });
+  exActives=exActives.filter(function(e){ var pg=_srailPgOf(pgIdx,null,e.name); e._saleN=_srailSaleDayN(null,pg); return _srailPromoOn(pg)!==false; });
+  // [운영자 260710] 전시 「집계 전」 카드 합류(전시일일 0건 마스터 전시 + 프로그램 시트 전용 전시 — 프로그램단 커버리지)
+  exActives=exActives.concat(_srailExhibsPre(pgIdx,exActives));
   // 정렬 축 통일: 시작일 임박순(진행 중=음수 최상단, 미상은 마지막) · 동률이면 집계 전(noData) 카드는 실적 카드 뒤 · 점유율/달성률 낮은 순(주의 대상 위로)
   var actives=perfActives.concat(exActives)
     .sort(function(a,b){ var ad=(a._kind==='ex'?a._dday:a.dday), bd=(b._kind==='ex'?b._dday:b.dday); ad=(ad===null||ad===undefined)?9e9:ad; bd=(bd===null||bd===undefined)?9e9:bd; if(ad!==bd)return ad-bd; if(!!a.noData!==!!b.noData)return a.noData?1:-1; return a.occ-b.occ; });
@@ -5551,8 +5634,26 @@ function _dailyAllowedCats(){
 function _dailyMasters(){
   var rows=((_dailyState.master&&_dailyState.master.rows)||[]).map(_salesNorm);
   var catIdx=_dailyCatIndex(); var allowed=_dailyAllowedCats();
+  // [운영자 260710] "일일입력에 이미 종료된 공연이 뜸" — 마스터 '상태=판매중' 문자열만 믿지 않고 판매 현황(_salesBuild)과 동일 보정:
+  // 티켓오픈 전 · 판매종료 지남 · 마지막 공연일 지남(회차상세→운영대장→판매종료 폴백) = 제외. 회차·운영대장 캐시는 있을 때만(레일이 선로딩 — 없으면 마스터 날짜만으로 판정).
+  var _tdy=new Date(); _tdy.setHours(0,0,0,0);
+  var lastById={};
+  try{
+    if(typeof _salesState!=='undefined'&&_salesState&&_salesState.rounds&&_salesState.rounds.rows){
+      _salesState.rounds.rows.map(_salesNorm).forEach(function(r){ var id=String(r['ID']||'').trim(); var d=_salesDate(r['공연일']); if(!id||!d)return; if(!lastById[id]||d>lastById[id])lastById[id]=d; });
+    }
+  }catch(_e){}
   var out=rows
-    .filter(function(m){ return String(m['상태']||'').trim()==='판매중'; })  // 판매중만
+    .filter(function(m){
+      if(String(m['상태']||'').trim()!=='판매중')return false;
+      var tk=_salesDate(m['티켓오픈일']); if(tk&&tk>_tdy)return false;             // 아직 오픈 전 (컬럼명 = _salesBuild 마스터 파싱과 동일 '티켓오픈일')
+      var en=_salesDate(m['종료일']); if(en&&en<_tdy)return false;                 // 판매 종료 ('종료일')
+      var id=String(m['ID']||'').trim(), nm=String(m['사업명']||'').trim();
+      var last=lastById[id]||null;
+      try{ if(typeof _salesState!=='undefined'&&_salesState&&_salesState.ops){ var o=(id?_opsLookupById(id):null)||_opsLookup(nm,(en||tk||_tdy).getFullYear()); if(o&&o.last&&(!last||o.last>last))last=o.last; } }catch(_e2){}
+      if(!last&&en)last=en;
+      return !(last&&last<_tdy);                                                   // 마지막 공연일 지남 = 종료
+    })
     .map(function(m){ var name=String(m['사업명']||'').trim(); return {name:name, id:String(m['ID']||'').trim(), open:(_salesNum(m['총오픈석'])||((_salesNum(m['기준석'])||926)*(_salesNum(m['총회차'])||1))), cat:(catIdx[_uName(name)]||'')}; });
   // [운영자 260708] 공연마스터 미등록 신규 오픈 공연 폴백 — 목록에 없으면 집계 자체를 못 넣는다.
   // 프로그램 시트 판매기간(판매시작일≤오늘≤판매종료일, 폴백=공연 종료일)로 판정 — 판매 현황 3차 폴백(_salesBuild)과 동일 원칙.
