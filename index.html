@@ -1754,6 +1754,9 @@ table.promo-board-table thead th:last-child{border-top-right-radius:11px}
 /* [260710 운영자] 카드 도형 한 레이어 내림 — 흰 전경 도형(배경 .85·테두리·그림자·radius) 제거 = 캘린더 활성 셀(rgba(255,255,255,0), .c 계승)처럼
    글래스 위에 글자 직접 + 구분선(rgba(0,0,0,.07) = .week 주 구분선 계승)으로만 구분. 박스(.srail)·헤더(.srail-head)는 불변(운영자 "건들지 마"). */
 .srail-card{background:rgba(255,255,255,0);border:none;border-bottom:1px solid rgba(0,0,0,.07);border-radius:0;box-shadow:none;padding:15px 16px;margin-bottom:0;cursor:pointer;transition:background .15s}
+/* [260710 운영자] 집계 전(오픈 후 입력 0건) 카드 = read-only 음영 + 흰 글자 오버레이 — 딤 = --backdrop(26,26,46) 알파 변주 §3.5② · 글자 = --surface-solid */
+.srail-card.ro{position:relative}
+.srail-ro{position:absolute;inset:0;border-radius:inherit;background:rgba(26,26,46,.34);display:flex;align-items:center;justify-content:center;color:var(--surface-solid);font-size:14px;font-weight:800;text-align:center;line-height:1.5;padding:0 16px;pointer-events:none}
 .srail-card:last-child{border-bottom:none}
 .srail-card:hover{background:var(--past-bg)}
 .srail-r1{display:flex;align-items:baseline;gap:11px;min-width:0}   /* [260710 운영자 플그 확정] 이름↔D-day 8→11 */
@@ -4679,11 +4682,11 @@ function _srailCard(p){
     var _p3=Math.max(0,Math.min(100,_o[_o.length-1]+_g*3)), _s3=Math.round((p.totalOpen||926)*_p3/100), _cum=_s3-p.seats;
     fc='<div class="srail-fc">📈 예상 (이 추세면) 3일 뒤 <b>'+_s3.toLocaleString()+'석</b> · 누적 '+(_cum>=0?'+':'')+_cum+'</div>';
   }
-  return '<div class="srail-card" role="button" tabindex="0" onclick="_srailDrill(\'perf\',\''+_anaEsc(p.name)+'\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click();}" title="'+escapeHtml(p.name)+' — 개별 분석 (레일 안에서 열려요)">'
+  return '<div class="srail-card'+(p.noData?' ro':'')+'" role="button" tabindex="0" onclick="_srailDrill(\'perf\',\''+_anaEsc(p.name)+'\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click();}" title="'+escapeHtml(p.name)+' — 개별 분석 (레일 안에서 열려요)">'
     +'<div class="srail-r1"><div class="srail-name">'+escapeHtml(p.name)+'</div>'+(dd?'<span class="srail-dday" style="color:'+_srailDdayColor(p.dday)+'">'+dd+'</span>':'')+'</div>'
     +'<div class="srail-meta">'+escapeHtml(meta)+'</div>'
     +(p.noData?'':'<div class="srail-occrow"><span class="srail-occcap">점유율</span><span class="srail-occ">'+p.occ.toFixed(1)+'%</span><span class="srail-delta '+dCls+'">'+dStr+'</span><span class="srail-seatsub">( <b style="color:var(--accent);font-weight:800">'+p.seats.toLocaleString()+'</b> / '+p.totalOpen.toLocaleString()+' )</span></div>')
-    +(p.noData?'<div class="srail-r2"><span style="font-size:13px;color:var(--dim);font-weight:600;margin-left:16px">집계 전입니다.'+(p._saleN?' · 판매 '+p._saleN+'일차':'')+'</span></div>':'')
+    +(p.noData?'<div class="srail-ro">집계 전입니다.'+(p._saleN?' · 판매 '+p._saleN+'일차':'')+'</div>':'')
     +(p.noData?'':'<div class="srail-spark" style="margin-top:10px">'+_srailTrend(p)+'</div>')
     +fc
     +'<div class="srail-bar"><i style="width:'+Math.min(p.occ,100).toFixed(1)+'%"></i><b style="left:'+Math.min(tgt,100)+'%"></b></div>'
@@ -4699,11 +4702,11 @@ function _srailCardEx(e){
   // [260710 운영자] 전시 「집계 전」 카드 — 공연 noData 카드와 동형(시작 D-day·집계 전입니다.·판매 N일차). 드릴 미연결(전시일일 0건 = 열 내용 없음)
   if(e.noData){
     var ddPre=(e._dday===null||e._dday===undefined)?'':_salesDdayStr(e._dday);
-    return '<div class="srail-card" style="cursor:default" title="'+escapeHtml(e.name)+'">'
+    return '<div class="srail-card ro" style="cursor:default" title="'+escapeHtml(e.name)+'">'
       +'<div class="srail-r1"><span class="srail-name">'+escapeHtml(e.name)+'</span>'+(ddPre?'<span class="srail-dday" style="color:'+_srailDdayColor(e._dday)+'">'+ddPre+'</span>':'')+'</div>'
       +'<div class="srail-meta">'+escapeHtml(meta)+'</div>'
-      +'<div class="srail-r2"><span style="font-size:13px;color:var(--dim);font-weight:600;margin-left:16px">집계 전입니다.'+(e._saleN?' · 판매 '+e._saleN+'일차':'')+'</span></div>'
       +(e._goal!=null?'<div class="srail-r3"><span>목표 '+_srailNumTxt(e._goal)+'명</span></div>':'')
+      +'<div class="srail-ro">집계 전입니다.'+(e._saleN?' · 판매 '+e._saleN+'일차':'')+'</div>'
       +'</div>';
   }
   var dd=(e._endD===null||e._endD===undefined)?'':('종료 '+_salesDdayStr(e._endD));
