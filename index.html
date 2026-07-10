@@ -4186,8 +4186,18 @@ function _salesBuild(){
     // 레일 10일 추이용 — 최근 7일 실측(좌석·기준일자·점유율). 예측(추세 연장·종료 예상)은 렌더 시 — 실측 7건부터(_SRAIL_FC_MIN).
     var days=rows.slice(-7).map(function(r){var s=_salesNum(r['합계좌석']); return {bd:_salesNum(r['기준일자']),seat:(s==null?0:s),occ:(s!=null&&totalOpen>0)?Math.min(s/totalOpen*100,100):0};});
     var deltaPP=(diff!==null&&totalOpen>0)?diff/totalOpen*100:null;
+    // [260710 운영자] 예측 일평균 fcRate(석/일) = (마지막 누적 − 첫 실측 누적) ÷ 두 기준일 사이 달력일수 —
+    // 첫 실측점을 기준선으로 빼므로 「첫날 0→누적 점프(오픈 버스트)」가 자동 제외(운영자 "첫일 제외 평균").
+    // 최근 3점 기울기 대체(초반·스파이크에 널뛰던 것) — 카드 점선 예측·예상 문구·카드/드릴 종료 예상 4곳의 단일 소스.
+    var fcRate=null;
+    if(rows.length>=2){
+      var _fr=rows[0], _lr=rows[rows.length-1];
+      var _frD=_salesDate(String(_salesNum(_fr['기준일자']))), _lrD=_salesDate(String(_salesNum(_lr['기준일자'])));
+      var _fcSpan=(_frD&&_lrD)?Math.max(1,Math.round((_lrD-_frD)/86400000)):Math.max(1,rows.length-1);
+      fcRate=((_salesNum(_lr['합계좌석'])||0)-(_salesNum(_fr['합계좌석'])||0))/_fcSpan;
+    }
     var source=m?'master':(ops?'fallback':'none');
-    perfs.push({name:name,seats:seats,money:money,diff:diff,occ:occ,totalOpen:totalOpen,dday:dday,dateStr:dateStr,수익성:(m&&m.수익성)?m.수익성:_profitType(name,genre),목표:(m?m.목표:50),startDate:startDate,endDate:endDate,status:status,genre:genre,gubun:(ops?ops.gubun:''),enriched:(!m&&!!ops),spark:spark,days:days,deltaPP:deltaPP,source:source,saleStart:((m&&m.티켓오픈)||(pgf&&pgf.ss?_salesDate(pgf.ss):null)||null),_mid:((m&&m.ID)||rid||'')});   // [260710 버그수정] days 탑재 누락 — A1(PR 171)이 로컬 생성만 하고 안 실어 카드 추이가 실데이터에서 상시 '수집 전'이었음 · [260710 운영자] endDate(판매 종료일) 탑재 — 카드/드릴 차트 종료 예상점용 · saleStart(티켓오픈) = 「판매 N일차」 소스(레일이 프로그램 시트 ss 폴백)
+    perfs.push({name:name,seats:seats,money:money,diff:diff,occ:occ,totalOpen:totalOpen,dday:dday,dateStr:dateStr,수익성:(m&&m.수익성)?m.수익성:_profitType(name,genre),목표:(m?m.목표:50),startDate:startDate,endDate:endDate,status:status,genre:genre,gubun:(ops?ops.gubun:''),enriched:(!m&&!!ops),spark:spark,days:days,deltaPP:deltaPP,source:source,saleStart:((m&&m.티켓오픈)||(pgf&&pgf.ss?_salesDate(pgf.ss):null)||null),fcRate:fcRate,_mid:((m&&m.ID)||rid||'')});   // [260710 버그수정] days 탑재 누락 — A1(PR 171)이 로컬 생성만 하고 안 실어 카드 추이가 실데이터에서 상시 '수집 전'이었음 · [260710 운영자] endDate(판매 종료일) 탑재 — 카드/드릴 차트 종료 예상점용 · saleStart(티켓오픈) = 「판매 N일차」 소스(레일이 프로그램 시트 ss 폴백)
   });
   // [판매중 노출] 일일입력 실적이 아직 없어도, 공연마스터 '상태=판매중'(또는 티켓오픈~종료 기간)인 공연은
   // 레일·판매보드에 "집계 전(0석)" 카드로 노출 — 티켓 오픈 직후 데이터 공백기에도 홍보계획과 함께 판매현황이 읽히게(운영자 260707).
@@ -4506,7 +4516,8 @@ function _srailTrend(p){
   // [260710 운영자] 예측 게이트 — 실측 _SRAIL_FC_MIN(7)건부터만 추이 연장·종료 예상(달력 7일 아님). 미만 = 실측만 그림(days는 상류 slice(-7) 캡이라 length 7 = 실측 7건 이상)
   var fc7=days.length>=_SRAIL_FC_MIN;
   var vals=occ.slice();
-  if(fc7){ var g=(occ.length>=3)?((occ[occ.length-1]-occ[occ.length-3])/2):(occ[occ.length-1]-occ[occ.length-2]); for(var k=1;k<=2;k++)vals.push(Math.max(0,Math.min(100,occ[occ.length-1]+g*k))); }   // 예측 2일(운영자 260710 — 그래프만, 예상 요약 문구는 3일 유지)
+  // [260710 운영자] 예측 기울기 = 전 기간 일평균 fcRate(첫 실측 기준선 제외 — 첫날 버스트 배제) · %p/일. 미탑재 시 구 최근점 기울기 폴백
+  if(fc7){ var g=(p.fcRate!=null&&tot>0)?(p.fcRate/tot*100):((occ.length>=3)?((occ[occ.length-1]-occ[occ.length-3])/2):(occ[occ.length-1]-occ[occ.length-2])); for(var k=1;k<=2;k++)vals.push(Math.max(0,Math.min(100,occ[occ.length-1]+g*k))); }   // 예측 2일(운영자 260710 — 그래프만, 예상 요약 문구는 3일 유지)
   var N=occ.length, todayIdx=N-1, T=vals.length;
   function md(bd){var s=String(bd);return s.length===8?(parseInt(s.slice(4,6),10)+'/'+parseInt(s.slice(6,8),10)):'';}
   var ld=_salesDate(String(days[days.length-1].bd));
@@ -4522,11 +4533,15 @@ function _srailTrend(p){
   var showEnd=(fc7&&kEnd!==null&&kEnd>=3&&!p.noData&&endD>=_tdy);   // fc7 = 실측 7건 미만 종료 예상 생략(운영자 260710) · endD>=오늘 = 스테일 종료일 방어(상류 status 필터의 이중 안전 — 분신술 감사3)
   var occEnd=null;
   if(showEnd){
-    // [분신술 260710 감사3 MED-2] 종료 예상 기울기 = 실제 달력일당(드릴과 단위 통일) — 입력에 날짜 공백이 있어도 g(샘플 스텝당·예측 2일 전용 확정 로직)와 달리 과/저추정 없음
-    var _i0=Math.max(0,days.length-3);
-    var _d0=_salesDate(String(days[_i0].bd));
-    var _span=(ld&&_d0)?Math.max(1,Math.round((ld-_d0)/86400000)):Math.max(1,(days.length-1)-_i0);
-    var _gDay=(occ[occ.length-1]-occ[_i0])/_span;
+    // [260710 운영자] 종료 예상 기울기 = 전 기간 일평균 fcRate(첫 실측 기준선 제외) — 구 최근 3점 달력일 기울기 대체(막판 스퍼트·주말 스파이크에 널뛰던 것). 미탑재 시 구식 폴백
+    var _gDay;
+    if(p.fcRate!=null&&tot>0){ _gDay=p.fcRate/tot*100; }
+    else{
+      var _i0=Math.max(0,days.length-3);
+      var _d0=_salesDate(String(days[_i0].bd));
+      var _span=(ld&&_d0)?Math.max(1,Math.round((ld-_d0)/86400000)):Math.max(1,(days.length-1)-_i0);
+      _gDay=(occ[occ.length-1]-occ[_i0])/_span;
+    }
     occEnd=Math.max(0,Math.min(100,occ[occ.length-1]+_gDay*kEnd));
   }
   var EZ=showEnd?74:0;   // 종료 예상 존(중략 텀 + 점·라벨 자리)
@@ -4589,7 +4604,9 @@ function _srailCard(p){
   var fc='';
   var _fd=(p.days||[]).filter(function(d){return d&&d.seat!=null;});
   if(_fd.length>=_SRAIL_FC_MIN && !p.noData){   // [260710 운영자] 예상 문구도 실측 7건부터(차트 예측 게이트와 동일 기준)
-    var _o=_fd.map(function(d){return d.occ;}); var _g=(_o.length>=3)?((_o[_o.length-1]-_o[_o.length-3])/2):(_o[_o.length-1]-_o[_o.length-2]);
+    var _o=_fd.map(function(d){return d.occ;});
+    // [260710 운영자] 예상 기울기 = 전 기간 일평균 fcRate(첫 실측 기준선 제외) %p/일 — 「3일 뒤」가 달력 3일 의미로 정확해짐(구 최근점 스텝당 폴백 유지)
+    var _g=(p.fcRate!=null&&(p.totalOpen||926)>0)?(p.fcRate/(p.totalOpen||926)*100):((_o.length>=3)?((_o[_o.length-1]-_o[_o.length-3])/2):(_o[_o.length-1]-_o[_o.length-2]));
     var _p3=Math.max(0,Math.min(100,_o[_o.length-1]+_g*3)), _s3=Math.round((p.totalOpen||926)*_p3/100), _cum=_s3-p.seats;
     fc='<div class="srail-fc">📈 예상 (이 추세면) 3일 뒤 <b>'+_s3.toLocaleString()+'석</b> · 누적 '+(_cum>=0?'+':'')+_cum+'</div>';
   }
@@ -4831,16 +4848,17 @@ function _srailDrillSvg(p){
   var tgt=p.목표||50;
   var maxD=ser.pts[ser.pts.length-1].d; if(maxD<1)maxD=1;
   var lp=ser.pts[ser.pts.length-1];
-  // [260710 운영자] 종료일 예상 — 마지막 실측 뒤 축 중략(⫽) 텀 + 판매 종료일 1점(강조색2). 추세 = 최근 3점 일평균 기울기.
+  // [260710 운영자] 종료일 예상 — 마지막 실측 뒤 축 중략(⫽) 텀 + 판매 종료일 1점(강조색2). 추세 = 전 기간 일평균 fcRate(첫 실측 기준선 제외).
   var endD=(p.endDate instanceof Date)?p.endDate:null;
   var kEnd=(endD&&lp.bd)?Math.round((endD-lp.bd)/86400000):null;
   var _tdy2=new Date(); _tdy2.setHours(0,0,0,0);
   var showEnd=(ser.pts.length>=_SRAIL_FC_MIN&&kEnd!==null&&kEnd>=3&&endD>=_tdy2);   // 실측 7건부터 종료 예상(운영자 260710, 달력일 아님) + 스테일 종료일 방어(분신술 감사3)
   var occEnd=null;
   if(showEnd){
-    var p0=ser.pts[Math.max(0,ser.pts.length-3)];
-    var dd=(lp.d-p0.d)||1;
-    var slope=(lp.occ-p0.occ)/dd;
+    // [260710 운영자] 종료 예상 기울기 = 전 기간 일평균 fcRate(첫 실측 기준선 제외) — 카드와 단일 소스(구 최근 3점 폴백 유지)
+    var slope;
+    if(p.fcRate!=null&&p.totalOpen>0){ slope=p.fcRate/p.totalOpen*100; }
+    else{ var p0=ser.pts[Math.max(0,ser.pts.length-3)]; var dd=(lp.d-p0.d)||1; slope=(lp.occ-p0.occ)/dd; }
     occEnd=Math.max(0,Math.min(100,lp.occ+slope*kEnd));
   }
   var yMax=Math.max(tgt,lp.occ,(occEnd||0));
