@@ -4282,7 +4282,7 @@ function _srailInit(force){
   if(window.innerWidth<=1200)return;
   _srailAlignTop();
   // 전시 캐시 = 분석 보드와 공유(_anaState._exDaily/_exMaster) — 레일이 선채우면 분석 보드 전시 탭도 즉시 열림
-  _anaState=_anaState||{screen:1,cat:'공연',profit:'예술성',genre:'전체',year:null,drillName:null,xstep:3,cmp:{tray:[],bars:false}};
+  _anaState=_anaState||{screen:1,cat:'공연',profit:{'예술성':true,'사업성':true},genre:'전체',year:null,drillName:null,xstep:3,cmp:{tray:[],bars:false}};
   if(force){
     _salesState.master=null;_salesState.daily=null;_salesState.rounds=null;_salesState.ops=null;_salesState._opsIdx=null;
     _anaState._exDaily=null;_anaState._exMaster=null;
@@ -4911,7 +4911,7 @@ function openAnalyticsBoard(){
     +'</div>'
     +'<div id="ana-body" style="flex:1;overflow:auto;padding:18px 24px;min-width:0"></div>'
     +'</div></div>';
-  _anaState=_anaState||{screen:1,cat:'공연',profit:'예술성',genre:'전체',year:null,drillName:null,xstep:3,cmp:{tray:[],bars:false}};
+  _anaState=_anaState||{screen:1,cat:'공연',profit:{'예술성':true,'사업성':true},genre:'전체',year:null,drillName:null,xstep:3,cmp:{tray:[],bars:false}};
   _anaState.screen=1;   // 진입 = 항상 판매현황(스크린1)
   _anaState.exDrillId=null;   // [분신술 260710 감사4] 잔존 전시 드릴이 스택/공연 복귀를 탈취하던 회귀 차단 — 진입 = 항상 스택(레일 [크게 보기](전시)는 이 뒤에 exDrillId를 다시 세팅하므로 무해)
   _anaState.escHandler=function(e){if(e.key==='Escape')closeAnalyticsBoard();};
@@ -4980,14 +4980,15 @@ function _anaPerfSecHtml(){
   var yrActive=perfs.filter(function(p){return p.status==='active'&&_anaPerfYear(p)===yr;});
   var nArt=yrActive.filter(function(p){return _anaProfitAxis(p['수익성'])==='예술성';}).length;
   var nBiz=yrActive.filter(function(p){return _anaProfitAxis(p['수익성'])==='사업성';}).length;
-  // 필터 바: 세그먼트(예술성/사업성) + 장르칩 + 연도
+  // 필터 바: 세그먼트(예술성·사업성 멀티토글, 기본 둘다) + 장르칩 + 연도
+  var pf=_anaState.profit; if(!pf||typeof pf!=='object'){ pf={'예술성':true,'사업성':true}; _anaState.profit=pf; }   // 옛 단일선택 문자열 상태 → 둘다 켬으로 이관(운영자 260710)
   h+='<div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-bottom:8px">';
-  h+='<div class="ana-seg"><button class="'+(_anaState.profit==='예술성'?'on':'')+'" onclick="_anaSetProfit(\'예술성\')">예술성 '+nArt+'</button><button class="'+(_anaState.profit==='사업성'?'on':'')+'" onclick="_anaSetProfit(\'사업성\')">사업성 '+nBiz+'</button></div>';
+  h+='<div class="ana-seg"><button class="'+(pf['예술성']?'on':'')+'" onclick="_anaTogProfit(\'예술성\')">예술성 '+nArt+'</button><button class="'+(pf['사업성']?'on':'')+'" onclick="_anaTogProfit(\'사업성\')">사업성 '+nBiz+'</button></div>';
   // 연도 select
   h+='<select class="ana-sel" onchange="_anaSetYear(this.value)">'+yrList.map(function(y){return '<option value="'+y+'"'+(y===yr?' selected':'')+'>'+y+'년</option>';}).join('')+'</select>';
   h+='</div>';
   // 장르 칩 (선택 세그먼트 내 모수)
-  var segPerfs=yrActive.filter(function(p){return _anaProfitAxis(p['수익성'])===_anaState.profit;});
+  var segPerfs=yrActive.filter(function(p){return pf[_anaProfitAxis(p['수익성'])];});
   var gCount={}; segPerfs.forEach(function(p){var g=(p.genre||'기타');gCount[g]=(gCount[g]||0)+1;});
   var gKeys=Object.keys(gCount).sort(function(a,b){return gCount[b]-gCount[a];});
   if(_anaState.genre!=='전체'&&gKeys.indexOf(_anaState.genre)<0)_anaState.genre='전체';
@@ -5066,7 +5067,7 @@ function _anaExhibSecHtml(){
   var ex=_anaExhibBuild();
   var yrs={}; ex.forEach(function(e){if(e.year)yrs[e.year]=1;});
   var yrList=Object.keys(yrs).map(Number).sort(function(a,b){return b-a;});
-  if(!_anaState.exProfit)_anaState.exProfit='예술성';
+  var xpf=_anaState.exProfit; if(!xpf||typeof xpf!=='object'){ xpf={'예술성':true,'사업성':true}; _anaState.exProfit=xpf; }   // 멀티토글 기본 둘다(운영자 260710)
   if(_anaState.exYear===undefined||_anaState.exYear===null||yrList.indexOf(_anaState.exYear)<0)_anaState.exYear=yrList.length?yrList[0]:(new Date().getFullYear());
   var yr=_anaState.exYear;
   var h='';
@@ -5074,10 +5075,10 @@ function _anaExhibSecHtml(){
   var nArt=yrEx.filter(function(e){return e.profit==='예술성';}).length;
   var nBiz=yrEx.filter(function(e){return e.profit==='사업성';}).length;
   h+='<div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-bottom:14px">';
-  h+='<div class="ana-seg"><button class="'+(_anaState.exProfit==='예술성'?'on':'')+'" onclick="_anaSetExProfit(\'예술성\')">예술성 '+nArt+'</button><button class="'+(_anaState.exProfit==='사업성'?'on':'')+'" onclick="_anaSetExProfit(\'사업성\')">사업성 '+nBiz+'</button></div>';
+  h+='<div class="ana-seg"><button class="'+(xpf['예술성']?'on':'')+'" onclick="_anaTogExProfit(\'예술성\')">예술성 '+nArt+'</button><button class="'+(xpf['사업성']?'on':'')+'" onclick="_anaTogExProfit(\'사업성\')">사업성 '+nBiz+'</button></div>';
   h+='<select class="ana-sel" onchange="_anaSetExYear(this.value)">'+yrList.map(function(y){return '<option value="'+y+'"'+(y===yr?' selected':'')+'>'+y+'년</option>';}).join('')+'</select>';
   h+='</div>';
-  var rows=yrEx.filter(function(e){return e.profit===_anaState.exProfit;}).sort(function(a,b){ if((a.status==='active')!==(b.status==='active'))return a.status==='active'?-1:1; return b.occ-a.occ;});
+  var rows=yrEx.filter(function(e){return xpf[e.profit];}).sort(function(a,b){ if((a.status==='active')!==(b.status==='active'))return a.status==='active'?-1:1; return b.occ-a.occ;});
   h+='<table class="ana-tbl"><thead><tr><td>전시</td><td>최근 7일 추이</td><td style="text-align:right">달성률</td><td style="text-align:right">어제대비</td><td style="text-align:right">누적유료</td><td style="text-align:center">상태</td></tr></thead><tbody>';
   if(!rows.length){ h+='<tr><td colspan="6"><div class="u-empty"><div class="ico">📭</div><div class="msg">조건에 맞는 전시가 없어요</div></div></td></tr>'; }
   rows.forEach(function(e){
@@ -5101,7 +5102,7 @@ function _anaExhibSecHtml(){
   h+='<div style="color:#bbb;font-size:11px;margin-top:12px">행 클릭 → 전시 상세 · 달성률 = 누계유료/목표관객(원본 점유율, 100%↑=초과달성) · 데이터: 운영_전시일일/전시마스터</div>';
   return h;
 }
-function _anaSetExProfit(p){ _anaState.exProfit=p; _anaRender(); }
+function _anaTogExProfit(p){ var s=_anaState.exProfit; if(!s||typeof s!=='object')s={'예술성':true,'사업성':true}; s[p]=!s[p]; if(!s['예술성']&&!s['사업성'])s[p]=true; _anaState.exProfit=s; _anaRender(); }
 function _anaSetExYear(y){ _anaState.exYear=parseInt(y,10); _anaRender(); }
 function _anaExhibDrill(id){ _anaState.exDrillId=id; _anaRender(); }
 function _anaExhibBack(){ _anaState.exDrillId=null; _anaRender(); }
@@ -5139,7 +5140,7 @@ function _anaExhibTrend(daily){
     +'<text x="'+(W-padR)+'" y="'+(H-8)+'" text-anchor="end" font-size="9" fill="#999">'+fmtD(pts[pts.length-1].d)+'</text>'
     +'</svg>';
 }
-function _anaSetProfit(p){ _anaState.profit=p; _anaState.genre='전체'; _anaRender(); }
+function _anaTogProfit(p){ var s=_anaState.profit; if(!s||typeof s!=='object')s={'예술성':true,'사업성':true}; s[p]=!s[p]; if(!s['예술성']&&!s['사업성'])s[p]=true; _anaState.profit=s; _anaState.genre='전체'; _anaRender(); }
 function _anaSetGenre(g){ _anaState.genre=g; _anaRender(); }
 function _anaSetYear(y){ _anaState.year=parseInt(y,10); _anaState.genre='전체'; _anaRender(); }
 // 7일 스파크라인 SVG (perf.spark = 최근 7일 점유율%). 상승=accent / 하락=#9A9CE0, 끝 점.
