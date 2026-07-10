@@ -4575,13 +4575,15 @@ function _srailTrend(p){
     }
     occEnd=Math.max(0,Math.min(100,occ[occ.length-1]+_gDay*kEnd));
   }
-  // [260710 운영자] 7건 미만도 예측 카드와 「동일 골격」 — Today 위치 = 같은 슬롯 비율(N+2 분모) + ???존(≈ 중략 + ???) 상시 예약
-  var slots=N+2;
+  // [260710 운영자 확정] 전 카드 고정 골격 = [과거 6칸][Today][예측 2칸][종료 존] — Today는 항상 같은 세로선(슬롯 6).
+  // 실측이 부족하면 왼쪽 과거 칸이 빈 점선으로 남고, 데이터가 쌓일수록 Today 기준 좌측으로 역행하며 채워진다(6칸 완충 = 7건 = 예측 시작).
+  var slots=9, offset=Math.max(0,7-N);
   var EZ=(showEnd||!fc7)?74:0;   // 종료 예상 존(중략 텀 + 점·라벨 자리) — 7건 미만은 ???존으로 사용
   var scaleVals=vals.slice(); if(showEnd)scaleVals.push(occEnd);
   var mn=Math.min.apply(null,scaleVals),mx=Math.max.apply(null,scaleVals),span=mx-mn;if(span<0.6)span=0.6;mn-=span*.2;mx+=span*.34;
   var yOf=function(v){return padT+(H-padT-padB)*(1-(v-mn)/(mx-mn));};
-  var pts=vals.map(function(v,i){var x=padX+(W-2*padX-EZ)*i/(slots-1);var y=yOf(v);return [x,y,v];});
+  var xAt=function(si){return padX+(W-2*padX-EZ)*si/(slots-1);};   // si = 고정 슬롯 인덱스(0~8)
+  var pts=vals.map(function(v,i){return [xAt(offset+i),yOf(v),v];});
   function seg(a,b){return pts.slice(a,b).map(function(q,i){return (i?'L':'M')+q[0].toFixed(1)+' '+q[1].toFixed(1);}).join(' ');}
   var solid=seg(0,N),dashed='M'+pts[todayIdx][0].toFixed(1)+' '+pts[todayIdx][1].toFixed(1)+' '+pts.slice(N).map(function(q){return 'L'+q[0].toFixed(1)+' '+q[1].toFixed(1);}).join(' ');
   var area=solid+' L'+pts[todayIdx][0].toFixed(1)+' '+(H-padB)+' L'+pts[0][0].toFixed(1)+' '+(H-padB)+' Z';
@@ -4612,8 +4614,17 @@ function _srailTrend(p){
     if(showTO&&i===0)s+='<text x="'+q[0].toFixed(1)+'" y="'+(parseFloat(sy)-26).toFixed(1)+'" text-anchor="start" font-size="11.5" font-weight="800" fill="var(--dim)">T/O</text>';   // 좌측 정렬 = 시작점 왼쪽으로 안 나감(운영자 260710)
     s+='<text x="'+q[0].toFixed(1)+'" y="'+sy+'" text-anchor="middle" font-size="11.5" font-weight="'+(today?'800':'700')+'" fill="'+col+'">'+seat+'</text>';
     if(dseat!=null&&recent)s+='<text x="'+q[0].toFixed(1)+'" y="'+(parseFloat(sy)-19).toFixed(1)+'" text-anchor="middle" font-size="11.5" font-weight="800" fill="var('+(isX?'--muted':'--green')+')">'+(dseat>=0?'+':'')+dseat+'</text>';
-    if((slots-1-i)%2===0)s+='<text x="'+q[0].toFixed(1)+'" y="'+(H-7)+'" text-anchor="middle" font-size="11.5" font-weight="700" fill="'+(today?'var(--danger)':(future?'var(--muted)':'var(--dim)'))+'">'+labels[i]+'</text>';
+    if((slots-1-(offset+i))%2===0)s+='<text x="'+q[0].toFixed(1)+'" y="'+(H-7)+'" text-anchor="middle" font-size="11.5" font-weight="700" fill="'+(today?'var(--danger)':(future?'var(--muted)':'var(--dim)'))+'">'+labels[i]+'</text>';
   });
+  // [260710 운영자] 왼쪽 빈 과거 칸 — 아직 안 채워진 자리는 점선 + 날짜만(회색): 뒤(Today)부터 좌측으로 채워지는 완충 구간
+  if(offset>0){
+    s+='<line x1="'+xAt(0).toFixed(1)+'" y1="'+pts[0][1].toFixed(1)+'" x2="'+pts[0][0].toFixed(1)+'" y2="'+pts[0][1].toFixed(1)+'" stroke="var(--muted)" stroke-width="2" stroke-dasharray="3 3" stroke-linecap="round" vector-effect="non-scaling-stroke" stroke-opacity=".55"/>';
+    for(var ei=0;ei<offset;ei++){
+      if((slots-1-ei)%2!==0)continue;
+      var eD=ld?new Date(ld.getTime()-(N-1+offset-ei)*86400000):null;
+      if(eD)s+='<text x="'+xAt(ei).toFixed(1)+'" y="'+(H-7)+'" text-anchor="middle" font-size="11.5" font-weight="700" fill="var(--muted)">'+((eD.getMonth()+1)+'/'+eD.getDate())+'</text>';
+    }
+  }
   // [260710 운영자] 7건 미만 = 예측·종료 값을 모름 — 골격은 예측 카드와 동일(회색 점선 + ≈ 중략 + c2 존)하되 값 대신 「???」
   if(!fc7){
     var lq2=pts[N-1], pEnd=W-padX-EZ, ex2=W-padX-6, y2=lq2[1];
@@ -4625,7 +4636,7 @@ function _srailTrend(p){
     s+='<text x="'+bx2.toFixed(1)+'" y="'+(y2+4.5).toFixed(1)+'" text-anchor="middle" font-size="13" font-weight="800" fill="var(--c2)">≈</text>';
     s+='<text x="'+ex2.toFixed(1)+'" y="'+(y2-R-6).toFixed(1)+'" text-anchor="end" font-size="11.5" font-weight="800" fill="var(--c2)">???</text>';
     s+='<text x="'+ex2.toFixed(1)+'" y="'+(y2-R-6-26).toFixed(1)+'" text-anchor="end" font-size="11.5" font-weight="800" fill="var(--c2)">종료</text>';   // 핀 제거(운영자 260710 "핀 같은 거 다 없애자") — showEnd 확정 라벨 「종료」 미러
-    for(var fi2=N;fi2<slots;fi2++){ if((slots-1-fi2)%2===0&&labels[fi2])s+='<text x="'+(padX+(W-2*padX-EZ)*fi2/(slots-1)).toFixed(1)+'" y="'+(H-7)+'" text-anchor="middle" font-size="11.5" font-weight="700" fill="var(--muted)">'+labels[fi2]+'</text>'; }
+    for(var fi2=0;fi2<2;fi2++){ var _si=7+fi2; if((slots-1-_si)%2===0&&labels[N+fi2])s+='<text x="'+xAt(_si).toFixed(1)+'" y="'+(H-7)+'" text-anchor="middle" font-size="11.5" font-weight="700" fill="var(--muted)">'+labels[N+fi2]+'</text>'; }   // 미래 라벨 = 고정 슬롯 7·8(라벨 배열은 N 뒤 2개)
     if(endD&&endD>=_tdy)s+='<text x="'+ex2.toFixed(1)+'" y="'+(H-7)+'" text-anchor="end" font-size="11.5" font-weight="700" fill="var(--c2)">'+((endD.getMonth()+1)+'/'+endD.getDate())+'</text>';
   }
   if(showEnd){
