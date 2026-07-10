@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>회원 DB 주소 표준화·휴대폰 인덱싱 정제 (260710)</title>
+<style>
+:root{
+  --accent:#4A4DE7; --accent-light:#E8E8FD; --peach-text:#D88455; --c2:#D88455;
+  --bg:linear-gradient(135deg,#FDF6F3 0%,#F0EBF5 50%,#EBF0F8 100%);
+  --surface-solid:#fff; --glass-surface:rgba(255,255,255,.78); --glass-bd:rgba(255,255,255,.6);
+  --glass-shadow:0 8px 32px rgba(74,77,231,0.08),0 2px 8px rgba(0,0,0,0.04);
+  --border:rgba(0,0,0,0.09); --text:#1A1A2E; --dim:#888; --muted:#bbb;
+  --green:#1A6B3C; --danger-btn:#E24B4A; --neutral:#EEEDF3; --neutral-text:#6B6B7B;
+  --radius:16px; --radius-lg:20px; --r-btn:10px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Malgun Gothic','Apple SD Gothic Neo',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding:26px 20px 70px;-webkit-font-smoothing:antialiased}
+.wrap{max-width:900px;margin:0 auto}
+h1{font-size:20px;font-weight:800;margin-bottom:4px}
+.sub{font-size:12.5px;color:var(--neutral-text);font-weight:600;line-height:1.6;margin-bottom:20px}
+.sub b{color:var(--accent)}
+.card{background:var(--glass-surface);border:1px solid var(--glass-bd);border-radius:var(--radius);box-shadow:var(--glass-shadow);padding:18px 20px;margin-bottom:16px}
+.card h2{font-size:14.5px;font-weight:800;margin-bottom:10px;color:var(--accent)}
+.card h2 .n{display:inline-block;background:var(--accent-light);color:var(--accent);border-radius:8px;font-size:11px;padding:2px 8px;margin-right:7px;vertical-align:1px}
+p,li{font-size:13px;line-height:1.75}
+ul{padding-left:18px;margin:6px 0}
+table{border-collapse:collapse;width:100%;margin:10px 0;font-size:12.5px}
+th{background:var(--neutral);color:var(--neutral-text);font-weight:700;text-align:left;padding:7px 10px;border:1px solid var(--border)}
+td{padding:6px 10px;border:1px solid var(--border);background:var(--surface-solid)}
+td.num{text-align:right;font-variant-numeric:tabular-nums}
+.big{display:flex;gap:12px;flex-wrap:wrap;margin:8px 0 4px}
+.stat{flex:1 1 150px;background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--r-btn);padding:12px 14px}
+.stat .v{font-size:21px;font-weight:800;color:var(--accent);font-variant-numeric:tabular-nums}
+.stat .k{font-size:11px;color:var(--dim);font-weight:600;margin-top:2px}
+code{background:var(--neutral);border-radius:5px;padding:1px 6px;font-size:12px}
+.warn{color:var(--danger-btn);font-weight:700}
+.ok{color:var(--green);font-weight:700}
+.note{font-size:11.5px;color:var(--dim);line-height:1.7;margin-top:8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>회원 DB 주소 표준화 · 휴대폰 인덱싱 정제</h1>
+<div class="sub">260710 · 회원 29,752행 — 주소를 <b>주소1(시도)·주소2(시군구)·주소3(읍면동/도로명)·주소4(상세)·우편번호</b> 5단으로 분해하고, 휴대폰번호를 인덱스 키로 정규화. 예매 데이터 결합 전 기초 정제. <b>산출 xlsx는 개인정보라 채팅 전달만 — 레포에는 스크립트·통계 보고서만 커밋.</b></div>
+
+<div class="card"><h2><span class="n">1</span>분해 규칙 — 시·군·구를 한 단위로</h2>
+<p>통합·특별시는 <b>시 자체가 1주소</b>이고 그 아래 구/시/군이 2주소, 일반 도는 도가 1주소·시/군이 2주소. 그래서 <b>주소2가 전국 어디든 같은 급(시군구)</b>이 되어 지역 집계가 바로 가능하다.</p>
+<table>
+<tr><th>예시 원본</th><th>주소1</th><th>주소2</th><th>주소3</th><th>주소4</th><th>우편번호</th></tr>
+<tr><td>[59715] 전남 여수시 오림1길 3 2층</td><td>전남광주통합특별시</td><td>여수시</td><td>오림1길</td><td>3 2층</td><td class="num">59715</td></tr>
+<tr><td>[58006] … 순천시 해룡면 좌야로 179 …</td><td>전남광주통합특별시</td><td>순천시</td><td>해룡면</td><td>좌야로 179 …</td><td class="num">58006</td></tr>
+<tr><td>[03403] 서울 은평구 역말로 82-1 502호</td><td>서울특별시</td><td>은평구</td><td>역말로</td><td>82-1 502호</td><td class="num">03403</td></tr>
+<tr><td>[13586] 경기 성남시 분당구 돌마로486번길 7</td><td>경기도</td><td>성남시 분당구</td><td>돌마로486번길</td><td>7</td><td class="num">13586</td></tr>
+</table>
+<ul>
+<li><b>주소3</b> = 읍·면·법정동이 있으면 그것, 도로명주소라 동이 없으면 도로명(<code>~로</code>·<code>~길</code>). <code>104동</code> 같은 아파트 동은 법정동으로 오인하지 않게 차단.</li>
+<li><b>시도 표기 통일</b>: <code>전남</code>·<code>전라남도</code>·<code>광주</code>·<code>광주광역시</code> → <b>전남광주통합특별시</b> 하나로. 나머지도 정식명(<code>서울</code>→서울특별시, <code>경기</code>→경기도, <code>전북</code>·<code>전라북도</code>→전북특별자치도 등). 표기가 몇 글자씩 어긋나던 게 전부 한 값으로 합쳐짐.</li>
+<li><b>우편번호</b> = 별도 컬럼. 신형 5자리 그대로, 구형 6자리는 값 보존+<code>구형우편번호</code> 플래그.</li>
+</ul></div>
+
+<div class="card"><h2><span class="n">2</span>결과 — 확정률 99.9%</h2>
+<div class="big">
+<div class="stat"><div class="v">29,752</div><div class="k">전체 행</div></div>
+<div class="stat"><div class="v">29,722</div><div class="k">시군구 확정 (99.90%)</div></div>
+<div class="stat"><div class="v">211</div><div class="k">깨진 주소 자동 복구</div></div>
+<div class="stat"><div class="v">30</div><div class="k">불명 잔여 (0.10%)</div></div>
+</div>
+<p>우편번호·시도가 아예 없거나 대괄호 안에 주소가 들어간 비정상 646행 중 <b>211행을 자동 복구</b> — 방법: 정상 행들로 <b>(우편번호→시군구)·(도로명→시군구)·(법정동→시군구) 사전</b>을 이 DB 자체에서 만들어 역추적(사전은 해당 지역이 90% 이상 지배할 때만 채택 = 오분류 방지). 복구 유형: 텍스트 내 시군구명 발견 124 · 도로명 61 · 우편번호 23 · 법정동 3.</p>
+<p>잔여 30행 = 영문 주소, <code>ㅇㄴ</code>·빈값 같은 정보 부재, 전국에 흔한 도로명뿐이라 특정 불가한 것 — <b>「주소요확인」 시트</b>에 모아둠(주소플래그로 필터 가능).</p>
+<p class="note">검증: 유형별 스팟체크 + 복구 211행 전수 눈검사 + 재조합 토큰 손실 검사(샘플 3,000행 — 실질 손실 0) + 아파트동 오인 0건 + 시도 오탐 검사(아파트명 속 「세종」 오탐을 검증에서 잡아 토큰 경계 규칙으로 수정 완료).</p></div>
+
+<div class="card"><h2><span class="n">3</span>지역 분포 (주소1·주소2 기준 상위)</h2>
+<table>
+<tr><th>주소1</th><th>주소2</th><th style="text-align:right">회원수</th></tr>
+<tr><td>전남광주통합특별시</td><td>여수시</td><td class="num">14,772</td></tr>
+<tr><td>전남광주통합특별시</td><td>순천시</td><td class="num">6,496</td></tr>
+<tr><td>전남광주통합특별시</td><td>광양시</td><td class="num">2,959</td></tr>
+<tr><td>전남광주통합특별시</td><td>북구·광산구·서구·남구·동구(옛 광주 5구)</td><td class="num">1,066</td></tr>
+<tr><td>전남광주통합특별시</td><td>고흥군</td><td class="num">242</td></tr>
+<tr><td>서울특별시</td><td>25개 구 합계</td><td class="num">996</td></tr>
+<tr><td>경기도</td><td>—</td><td class="num">726</td></tr>
+<tr><td>경상남도</td><td>—</td><td class="num">486</td></tr>
+</table>
+<p>전남광주통합특별시가 26,331명(88.5%). 전체 시도×시군구 234조합은 산출 파일 <b>「지역집계」 시트</b>에 전부 있음.</p></div>
+
+<div class="card"><h2><span class="n">4</span>휴대폰번호 인덱스</h2>
+<ul>
+<li><b>정규화</b>: 전 행을 <code>010-XXXX-XXXX</code>로 통일(<code>휴대폰정규화</code> 컬럼 — 인덱스 키로 이걸 쓰면 됨). 빈 번호 0건.</li>
+<li><b class="warn">중복 959개 번호 · 1,943행</b>: 같은 번호가 여러 행 — 882개는 이름까지 동일(같은 사람이 아이디 여러 개), 77개는 이름 상이(가족 공유·번호 재사용 추정). <b>행 삭제는 안 함</b> — <code>휴대폰중복</code> 컬럼에 <code>중복(대표)</code>(등록일 최신)/<code>중복</code>으로 표시하고 <b>「중복번호」 시트</b>에 번호순 정렬로 모아둠. 예매 데이터 결합 시 대표 행 기준 병합 권장.</li>
+<li><b>이상 번호 56건</b>: 자릿수 부족·지역번호(061)·가짜값(000…) — <code>휴대폰상태</code>에 <code>휴대폰이상</code> 표시(원본 보존).</li>
+</ul></div>
+
+<div class="card"><h2><span class="n">5</span>산출물·재사용</h2>
+<ul>
+<li><b>산출 파일(채팅 전달)</b>: <code>회원DB_주소정제_260710.xlsx</code> — 시트 4개: <b>정제본</b>(29,752행 · 휴대폰정규화·이름·주소1~4·우편번호를 앞 컬럼으로, 원본 컬럼은 뒤에 그대로 보존) · <b>지역집계</b>(234행) · <b>주소요확인</b>(710행 = 복구·구형·불명 등 주소플래그 있는 행) · <b>중복번호</b>(1,943행).</li>
+<li><b>정제 스크립트(레포)</b>: <code>tools/scratch/주소정제_260710.py</code> — <code>python3 주소정제_260710.py 원본.xlsx 출력.xlsx</code>. 다음 회원 DB 갱신·예매 데이터 결합 때 재실행 가능.</li>
+<li><b class="warn">개인정보 원칙</b>: 이름·전화·주소가 든 원본/산출 xlsx는 레포(공개 Pages) 반입 금지 — 채팅 전달만.</li>
+</ul>
+<p class="note">한계·주의: ① 도로명주소 행은 법정동 정보 자체가 없어 주소3이 도로명 — 동 단위 통계가 꼭 필요하면 우편번호나 도로명→행정동 공공 매핑을 별도로 붙여야 함. ② 구형 6자리 우편번호 326건은 신형 변환표 없이 값만 보존. ③ 복구 행은 전수 눈검사를 했지만 원천이 손상된 주소라 「주소요확인」 시트로 최종 확인 가능하게 분리해둠.</p></div>
+</div>
+</body>
+</html>
