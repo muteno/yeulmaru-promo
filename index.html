@@ -1488,6 +1488,8 @@ table.promo-board-table th:last-child .col-resize-handle{display:none}
 .ve-stage video,.ve-stage iframe{width:100%;height:100%;border:0;background:var(--text)}
 .ve-stage video{object-fit:contain}
 .ve-stage-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;color:rgba(255,255,255,.55);font-size:12.5px;text-align:center;padding:18px;line-height:1.7}
+.ve-stage.ve-pick{cursor:pointer}
+.ve-stage.ve-pick:hover .ve-stage-empty{color:rgba(255,255,255,.8)}
 .ve-cap{position:absolute;max-width:88%;text-align:center;line-height:1.5;pointer-events:none;white-space:pre-wrap;word-break:keep-all;z-index:3}
 .ve-cap-bg{position:absolute;inset:0;border-radius:8px}
 .ve-cap-tx{position:relative}
@@ -1507,7 +1509,7 @@ table.promo-board-table th:last-child .col-resize-handle{display:none}
 .ve-cut{display:flex;gap:6px;align-items:center;margin-top:6px;flex-wrap:wrap}
 .modal .ve-cut input.nb-input{width:74px;flex:none;text-align:center}   /* .modal input:not(…) 전역(특이도 0,3,1)의 width:100% 상쇄 — 동특이도 후순위로 승 */
 /* 모자이크·트래킹 대상 영역(운영자 260711 "좇는 부분") — 다크 스테이지 위 가시성 = 옐로(--c6)·살몬(--c2) 계열, 전부 토큰·알파 변주 */
-#ve-marks{position:absolute;inset:0;pointer-events:none;z-index:4}
+#ve-marks{position:absolute;inset:0;pointer-events:none;z-index:7}   /* 그리기 레이어(z6) 위 — 박스는 클릭 통과(none), × 삭제만 상시 동작 */
 .ve-mark{position:absolute;border-radius:4px}
 .ve-mark.mo{border:2px dashed var(--c6);background:rgba(245,180,0,.16)}
 .ve-mark.tr{border:2px solid var(--c2);background:rgba(216,132,85,.14)}
@@ -3146,7 +3148,9 @@ async function initLoginScreen(){
       +'<button type="button" onclick="msLogin()" style="width:100%;padding:12px;background:var(--glass-surface);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border:1px solid var(--glass-bd);color:var(--text);box-shadow:var(--glass-shadow);border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px"><svg width="18" height="18" viewBox="0 0 23 23"><path fill="#f25022" d="M1 1h10v10H1z"/><path fill="#7fba00" d="M12 1h10v10H12z"/><path fill="#00a4ef" d="M1 12h10v10H1z"/><path fill="#ffb900" d="M12 12h10v10H12z"/></svg>Microsoft 계정으로 로그인</button>'+_dhint;
   }
 }
-function _fullLogout(){ try{password='';userRole='user';['pw','role','myApplicant','myUser','subAdminPin'].forEach(function(k){sessionStorage.removeItem(k);});}catch(e){} try{if(typeof _memPurge==='function')_memPurge();}catch(e){} console.log('[fullLogout] done'); }   // 회원 PII 캐시·모달 소거(분신술 보안 MED-4 — 비리로드 로그아웃 경로 힙 잔류 차단)
+function _fullLogout(){
+  try{if(typeof _veState!=='undefined'&&_veState){if(_veState._urls)_veState._urls.forEach(function(u){try{URL.revokeObjectURL(u);}catch(_e){}});_veState=null;}}catch(_e){}   // 영상 편집기 인메모리 소거 — 비리로드 로그아웃 경로 힙 잔류 차단(_memPurge와 동일 계층, 분신술 R2 HIGH-1)
+  try{password='';userRole='user';['pw','role','myApplicant','myUser','subAdminPin'].forEach(function(k){sessionStorage.removeItem(k);});}catch(e){} try{if(typeof _memPurge==='function')_memPurge();}catch(e){} console.log('[fullLogout] done'); }   // 회원 PII 캐시·모달 소거(분신술 보안 MED-4 — 비리로드 로그아웃 경로 힙 잔류 차단)
 async function goToPinStep(skipEnsure){
   console.log('[goToPin] start skipEnsure=',skipEnsure,'_loginEmail=',_loginEmail,'MANAGERS=',MANAGERS?MANAGERS.length:'null');
   try{
@@ -19789,7 +19793,7 @@ function _bpInqDel(id,i){
   _bpDirty();_bpRenderNodes();_bpPopRender(id);
 }
 
-// PLAY ZONE 드롭다운 — 도화지(다이어그램 에디터, 인앱) + 플레이그라운드 콘텐츠(에니어그램·티켓 셀러, playground/ 자체완결 페이지 새 탭)
+// PLAY ZONE 드롭다운 — 도화지(다이어그램 에디터, 인앱) + 플레이그라운드 콘텐츠(에니어그램, playground/ 자체완결 페이지 새 탭 · 티켓 셀러는 260711 운영자 지시로 제거)
 // (색은 기존 드롭다운의 raw 회색 대신 토큰 --text/--dim 계승 — 게이트 총량 유지)
 function _playzoneMenuBuild(menu){
   var itemCss='display:flex;align-items:center;gap:10px;width:100%;padding:11px 14px;border:0;text-align:left;font-size:13px;font-weight:600;color:var(--text);border-radius:9px;cursor:pointer;font-family:inherit;transition:background .12s';
@@ -21233,7 +21237,7 @@ function _nbCopyFallback(t,okMsg){
 //  2. 자막 삽입: [1]의 제작본 불러오기/영상 삽입/URL → 위치(9분할) · 표기법 · 디자인(자막·배경) — 미리보기 오버레이에 실시간 반영
 //  3. 영상 프롬프팅: 스토리 → 모델 → 개요(비율·화질·프레임·길이) → 표현(실사/화풍 3단) → 네거티브 → 정교화(참조 이미지) → 오디오
 //  산출 = 각 탭의 작업 사양서/프롬프트 텍스트(복사·전달용) — 실제 렌더링·AI 처리는 외부 도구 몫(앱은 사양 조립과 미리보기까지).
-//  상태 = 인메모리(_veState), 닫으면 소멸(공용 PC 원칙 — 블로그 도우미와 동일). 색 = 팔레트 폐쇄형 토큰만(§🚨), 새 raw hex 0.
+//  상태 = 사용자 귀속 임시 보관(인메모리 + localStorage yw_ve_draft_v1:{사용자}) — 자동분 30분 휘발·[임시 저장] = 무기한·사용자 전환 시 파기(운영자 260711). 색 = 팔레트 폐쇄형 토큰만(§🚨), 새 raw hex 0.
 // ============================================================
 var _veState=null;
 // 선택지 정본 — 외부 AI 도구명은 고유명사 원문 유지
@@ -21281,14 +21285,21 @@ function _veDraftKey(){var u=_veUserKey();return u?('yw_ve_draft_v1:'+u):'';}
 function _veSerial(){
   // 파일(blob) 소스는 실체 저장 불가(용량) — 라벨만 남기고 복원 시 재삽입 안내(lost)
   function packSrc(s){if(!s)return null;if(s.kind==='file')return {kind:'file',url:'',label:s.label,lost:true};return {kind:s.kind,url:s.url,label:s.label};}
+  function pack(o){var c={};for(var k in o)if(k!=='src'&&k!=='draw')c[k]=o[k];if('src' in o)c.src=packSrc(o.src);return c;}   // 전 필드 자동 직렬화(신규 필드 누락 방지) — src=blob 제외 팩·draw=트랜지언트 제외
   var s=_veState;
-  return {tab:s.tab,
-    edit:{src:packSrc(s.edit.src),ratio:s.edit.ratio,genModel:s.edit.genModel,cuts:s.edit.cuts,frame:s.edit.frame,snd:s.edit.snd,vol:s.edit.vol,extras:s.edit.extras,marks:s.edit.marks,keyColor:s.edit.keyColor,note:s.edit.note,out:s.edit.out},
-    sub:(function(o){var c={};for(var k in o)if(k!=='src')c[k]=o[k];c.src=packSrc(o.src);return c;})(s.sub),
-    prompt:s.prompt,
+  return {tab:s.tab,edit:pack(s.edit),sub:pack(s.sub),prompt:pack(s.prompt),
     made:s.made?{src:packSrc(s.made.src),at:s.made.at}:null};
 }
 var _veDraftT=null;
+function _veDraftFlush(){   // 디바운스 무시 즉시 저장 — pagehide/닫기용(유실 창 봉합)
+  clearTimeout(_veDraftT);
+  var k=_veDraftKey();if(!k||!_veState)return;
+  if(_veState._owner&&_veState._owner!==_veUserKey())return;
+  var pin=!!_veState._pinned;
+  try{var prev=JSON.parse(localStorage.getItem(k)||'null');if(prev&&prev.pinned)pin=true;}catch(_e){}
+  try{localStorage.setItem(k,JSON.stringify({ts:Date.now(),pinned:pin,data:_veSerial()}));}catch(_e){}
+}
+window.addEventListener('pagehide',function(){try{_veDraftFlush();}catch(_e){}});
 function _veDraftSave(){
   if(!_veState)return;
   _veState._touch=Date.now();
@@ -21313,13 +21324,35 @@ function _veDraftPin(){
   if(!_veUserKey()){showToast('로그인 후에 임시 저장할 수 있어요','error');return;}
   _veState._pinned=true;
   var k=_veDraftKey();
-  try{localStorage.setItem(k,JSON.stringify({ts:Date.now(),pinned:true,data:_veSerial()}));showToast('임시 저장했어요 — 시간 제한 없이 유지돼요','success');}
+  try{localStorage.setItem(k,JSON.stringify({ts:Date.now(),pinned:true,data:_veSerial()}));showToast('임시 저장했어요 — 시간 제한 없이 유지돼요','success');
+    var pb=document.getElementById('ve-pinbtn');if(pb)pb.textContent='저장됨';}
   catch(_e){showToast('임시 저장 실패 — 저장 공간을 확인해 주세요','error');}
 }
 function _veRestore(d){
-  var st=_veDefaultState(),data=d.data||{};
-  ['edit','sub','prompt'].forEach(function(tk){var o=data[tk];if(!o)return;for(var k in st[tk])if(k in o)st[tk][k]=o[k];});
-  st.made=data.made||null;st.tab=data.tab||'edit';st._pinned=!!d.pinned;st.edit.draw='';
+  // draft = 신뢰 불가 입력 — 키 화이트리스트 + 기본값과 같은 타입 강제(배열은 배열만·숫자는 유한값만·문자열은 String), 소스/마크/컷은 형상 정규화(손상 draft로 렌더 붕괴 방지)
+  var st=_veDefaultState(),data=(d&&typeof d.data==='object'&&d.data)?d.data:{};
+  ['edit','sub','prompt'].forEach(function(tk){
+    var o=data[tk];if(!o||typeof o!=='object')return;
+    for(var k in st[tk]){
+      if(!(k in o))continue;
+      var dv=st[tk][k],v=o[k];
+      if(Array.isArray(dv)){st[tk][k]=Array.isArray(v)?v:dv;}
+      else if(typeof dv==='number'){st[tk][k]=(typeof v==='number'&&isFinite(v))?v:(isFinite(+v)?+v:dv);}
+      else if(typeof dv==='boolean'){st[tk][k]=!!v;}
+      else if(dv===null||typeof dv==='object'){st[tk][k]=(v&&typeof v==='object')?v:null;}
+      else{st[tk][k]=(v==null)?dv:String(v);}
+    }
+  });
+  function okSrc(s){return (s&&typeof s==='object'&&typeof s.url==='string'&&typeof s.label==='string')?{kind:(s.kind==='embed'||s.kind==='file')?s.kind:'url',url:s.url,label:s.label}:null;}
+  st.edit.src=okSrc(st.edit.src);st.sub.src=okSrc(st.sub.src);
+  st.edit.cuts=st.edit.cuts.filter(function(c){return c&&typeof c==='object';}).map(function(c){return {s:String(c.s||''),e:String(c.e||'')};});
+  st.edit.marks=st.edit.marks.filter(function(m){return m&&typeof m==='object';}).slice(0,20).map(function(m){
+    function n(v){v=+v;return isFinite(v)?Math.max(0,Math.min(100,v)):0;}
+    return {t:(m.t==='tr')?'tr':'mo',x:n(m.x),y:n(m.y),w:n(m.w),h:n(m.h),at:String(m.at||'')};
+  });
+  var md=data.made;st.made=(md&&okSrc(md.src))?{src:okSrc(md.src),at:String(md.at||'')}:null;
+  st.tab=(data.tab==='sub'||data.tab==='prompt')?data.tab:'edit';
+  st._pinned=!!d.pinned;st.edit.draw='';
   return st;
 }
 function openVideoEditor(tab){
@@ -21354,7 +21387,7 @@ function openVideoEditor(tab){
     +'<button type="button" class="prog-tab" data-t="sub" onclick="_veTab(\'sub\')" style="flex:none;padding:7px 16px">2. 자막 삽입</button>'
     +'<button type="button" class="prog-tab" data-t="prompt" onclick="_veTab(\'prompt\')" style="flex:none;padding:7px 16px">3. 영상 프롬프팅</button>'
     +'</div>'
-    +'<button type="button" class="btn btn--neutral btn--sm" style="margin-left:auto;margin-right:34px" onclick="_veDraftPin()">임시 저장</button>'
+    +'<button type="button" class="btn btn--neutral btn--sm" id="ve-pinbtn" style="margin-left:auto;margin-right:34px" onclick="_veDraftPin()">'+(_veState._pinned?'저장됨':'임시 저장')+'</button>'
     +'</div>'
     +'<div id="ve-body" style="flex:1;overflow:auto;padding:20px 24px;min-width:0;min-height:0"></div>'
     +'</div></div>';
@@ -21364,8 +21397,8 @@ function openVideoEditor(tab){
 }
 function closeVideoEditor(){
   if(_veState&&_veState.escHandler){document.removeEventListener('keydown',_veState.escHandler);_veState.escHandler=null;}
-  // 닫아도 유지(운영자 260711 — 사용자 귀속 임시 보관으로 대체): 상태 인메모리 보존 + draft 기록. objectURL은 페이지 수명까지 유지(세션 내 재열기 시 파일 소스 생존).
-  if(_veState){_veState.edit.draw='';_veDraftSave();}
+  // 닫아도 유지(운영자 260711 — 사용자 귀속 임시 보관으로 대체): 상태 인메모리 보존 + 즉시 기록. objectURL은 페이지 수명까지 유지(세션 내 재열기 시 파일 소스 생존).
+  if(_veState){_veState.edit.draw='';_veDraftFlush();}
   var el=document.getElementById('ve-board');if(el)el.innerHTML='';
 }
 function _veTab(t){if(!_veState)return;_veState.tab=t;_veRender();}
@@ -21433,7 +21466,8 @@ function _veRadioT(tabKey,key,val,el){
   var sib=el.parentElement?el.parentElement.querySelectorAll('.nb-chip'):[];
   for(var i=0;i<sib.length;i++)sib[i].classList.remove('on');
   if(st[key]===val)el.classList.add('on');
-  if(tabKey==='edit'&&key==='ratio')_veStageSync();   // 비율 = 스테이지 프레임 스타일만 갱신(비디오 요소 유지)
+  if(tabKey==='edit'&&key==='ratio'){_veStageSync();
+    if(_veState.edit.marks.length)showToast('비율을 바꾸면 지정한 영역 위치가 어긋날 수 있어요 — 미리보기에서 확인해 주세요','error');}   // 마크 = 프레임 % 기준(분신술 R2 UX M1)
   _veDraftSave();
 }
 function _veStageSync(){
@@ -21476,11 +21510,13 @@ function _veStageHtml(tabKey){
 function _veStagePick(){var f=document.getElementById('ve-file');if(f)f.click();}
 // ── 모자이크·트래킹 대상 영역 — 미리보기 위 드래그로 지정(운영자 260711 "글이 아니라 좇는 부분이 생겨야") ──
 function _veMarksHtml(){
+  // 복원 draft = 신뢰 불가 입력 — 타입 화이트리스트·좌표 숫자 강제·시점 이스케이프(저장형 XSS 차단, 분신술 R2 보안)
   var ms=_veState.edit.marks,h='',no={mo:0,tr:0};
+  function n(v){v=+v;return isFinite(v)?Math.max(0,Math.min(100,Math.round(v*10)/10)):0;}
   for(var i=0;i<ms.length;i++){
-    var m=ms[i];no[m.t]++;
-    h+='<div class="ve-mark '+m.t+'" style="left:'+m.x+'%;top:'+m.y+'%;width:'+m.w+'%;height:'+m.h+'%">'
-      +'<span class="lb">'+(m.t==='mo'?'모자이크 ':'트래킹 ')+no[m.t]+(m.at?' · '+m.at:'')+'</span>'
+    var m=ms[i]||{},tp=(m.t==='tr')?'tr':'mo';no[tp]++;
+    h+='<div class="ve-mark '+tp+'" style="left:'+n(m.x)+'%;top:'+n(m.y)+'%;width:'+n(m.w)+'%;height:'+n(m.h)+'%">'
+      +'<span class="lb">'+(tp==='mo'?'모자이크 ':'트래킹 ')+no[tp]+(m.at?' · '+escapeHtml(String(m.at)):'')+'</span>'
       +'<button type="button" class="x" title="영역 삭제" onclick="_veMarkDel('+i+')">✕</button></div>';
   }
   return h;
@@ -21489,7 +21525,7 @@ function _veMarksSync(){var b=document.getElementById('ve-marks');if(b)b.innerHT
 function _veMarkDel(i){_veState.edit.marks.splice(i,1);_veMarksSync();}
 function _veDrawMode(t){
   var e=_veState.edit;
-  if(!e.src||( e.src.kind==='file'&&!e.src.url)){showToast('먼저 영상을 삽입해 주세요','error');return;}
+  if(_veEditLocked()){showToast('먼저 영상을 삽입해 주세요','error');return;}
   e.draw=(e.draw===t)?'':t;
   _veRender();   // 그리기 레이어·버튼 상태 반영(비디오 스냅샷 복원으로 재생 지점 유지)
   if(e.draw){var stg=document.getElementById('ve-stage');if(stg)stg.scrollIntoView({block:'nearest'});}   // 스테이지가 모달 헤더에 가려진 채 드래그가 시작되는 것 방지
@@ -21512,6 +21548,7 @@ function _veDrawWire(){
       var q=pct(up),x=Math.min(sx,q.x),y=Math.min(sy,q.y),w=Math.abs(q.x-sx),h=Math.abs(q.y-sy);
       if(ghost&&ghost.parentNode)ghost.parentNode.removeChild(ghost);ghost=null;
       if(w<2||h<2)return;   // 오클릭 무시
+      if(_veState.edit.marks.length>=20){showToast('영역은 20개까지 지정할 수 있어요','error');return;}
       var vid=document.getElementById('ve-video'),at=vid?_veFmtT(vid.currentTime||0):'';
       var rr=function(n){return Math.round(n*10)/10;};
       _veState.edit.marks.push({t:_veState.edit.draw,x:rr(x),y:rr(y),w:rr(w),h:rr(h),at:at});
@@ -21530,7 +21567,7 @@ function _veSrcPanel(tabKey){
   h+='<div class="nb-row" style="gap:6px;margin-bottom:10px">';
   if(tabKey==='sub'){
     var has=!!(_veState.made&&_veState.made.src);
-    h+='<button type="button" class="btn '+(has?'btn--primary':'btn--neutral')+' btn--sm"'+(has?'':' disabled title="1. 영상 편집 탭에서 제작본을 먼저 지정해 주세요"')+' onclick="_veLoadMade()">제작본 불러오기</button>';
+    h+='<button type="button" class="btn '+(has?'btn--primary':'btn--neutral')+' btn--sm"'+(has?'':' disabled title="1. 영상 편집에서 [반영하기]를 누르면 이어져요"')+' onclick="_veLoadMade()">제작본 불러오기</button>';
   }
   h+='<button type="button" class="btn btn--ghost btn--sm" onclick="document.getElementById(\'ve-file\').click()">영상 파일 삽입</button>';
   h+='<input id="ve-url" class="nb-input" style="flex:1;min-width:150px;width:auto;padding:8px 11px;font-size:12.5px" placeholder="영상 링크 (http://…)" onkeydown="if(event.key===\'Enter\')_veUrlLoad(\''+tabKey+'\')">';   // 문구 단순화(운영자 260711)
@@ -21542,22 +21579,36 @@ function _veSrcPanel(tabKey){
   }
   return h;
 }
+function _veUrlUsed(u){   // blob URL이 아직 참조 중인지 — 편집·자막 소스와 제작본 3곳 대조
+  if(!u||!_veState)return false;
+  var s=_veState;return [s.edit.src,s.sub.src,s.made&&s.made.src].some(function(x){return x&&x.url===u;});
+}
+function _veUrlGc(u){   // 미참조가 된 blob 즉시 반환(장수명 페이지 누수 방지)
+  if(!u||u.indexOf('blob:')!==0||_veUrlUsed(u))return;
+  try{URL.revokeObjectURL(u);}catch(_e){}
+  if(_veState)_veState._urls=_veState._urls.filter(function(x){return x!==u;});
+}
 function _veFilePick(inp,tabKey){
   var f=inp.files&&inp.files[0];inp.value='';
   if(!f)return;
   if(f.type&&!/^video\//.test(f.type)){showToast('영상 파일만 삽입할 수 있어요','error');return;}
+  var old=_veState[tabKey].src;
   var u=URL.createObjectURL(f);_veState._urls.push(u);
   _veState[tabKey].src={kind:'file',url:u,label:f.name||'로컬 영상'};
+  if(tabKey==='edit'&&old){_veState.edit.marks=[];_veState.edit.draw='';}   // 소스 교체 = 이전 영상 위 지정 영역 무효(스테일 마크 방지)
+  if(old&&old.kind==='file')_veUrlGc(old.url);
   _veRender();
 }
 function _veUrlLoad(tabKey){
   var el=document.getElementById('ve-url'),u=(el&&el.value||'').trim();
   if(!u){showToast('URL을 입력해 주세요','error');return;}
-  var emb=_bpEmbedFromUrl(u);
+  var emb=_bpEmbedFromUrl(u),old=_veState[tabKey].src;
   _veState[tabKey].src=emb?{kind:'embed',url:emb,label:u}:{kind:'url',url:u,label:u};
+  if(tabKey==='edit'&&old){_veState.edit.marks=[];_veState.edit.draw='';}
+  if(old&&old.kind==='file')_veUrlGc(old.url);
   _veRender();
 }
-function _veSrcClear(tabKey){_veState[tabKey].src=null;if(tabKey==='edit')_veState.edit.draw='';_veRender();}
+function _veSrcClear(tabKey){var old=_veState[tabKey].src;_veState[tabKey].src=null;if(tabKey==='edit'){_veState.edit.marks=[];_veState.edit.draw='';}if(old&&old.kind==='file')_veUrlGc(old.url);_veRender();}
 function _veLoadMade(){
   var m=_veState.made;
   if(!m||!m.src){showToast('아직 제작본이 없어요 — 1. 영상 편집 탭에서 지정해 주세요','error');return;}
@@ -21595,6 +21646,8 @@ function _veApply(){
     _veState.sub.out=_veSpecSub();
     _nbCopyText(_veState.sub.out,'반영했어요 — 자막 요청서 복사됨');
   }
+  var box=document.getElementById('ve-req');   // 확인 박스 타깃 갱신(재렌더 없음 = 미디어 유지)
+  if(box){box.style.display='';var ta=box.querySelector('textarea');if(ta)ta.value=_veState[tab].out||'';}
   _veDraftSave();
 }
 function _veCopy(){
@@ -21605,7 +21658,7 @@ function _veCopy(){
 // ── 1. 영상 편집 ──
 function _veBodyEdit(){
   // 설명문 최소화(운영자 260711 "설명 다 없애 — 안다는 전제·UX 최우선") · 소스 종속(컷·모자이크·트래킹·키잉)은 삽입 전 잠금
-  var e=_veState.edit,lock=!e.src||(e.src.kind==='file'&&!e.src.url),h='<div class="nb-wrap" style="height:auto">';
+  var e=_veState.edit,lock=_veEditLocked(),h='<div class="nb-wrap" style="height:auto">';
   var lockBadge=' — <span style="color:var(--c2);font-weight:700">영상 삽입 후</span>';
   h+='<div class="nb-col" style="overflow:visible">';
   h+='<div class="nb-col-head">소스</div>';
@@ -21638,11 +21691,18 @@ function _veBodyEdit(){
     if(ky)h+='<div class="nb-field" style="margin-top:10px"><span class="nb-label">키 색</span>'+_veChips('edit','keyColor',_VE_KEY_COLORS,false)+'</div>';
   }
   h+='<div class="nb-row" style="margin-top:24px"><button type="button" class="btn btn--primary btn--md" onclick="_veApply()">반영하기</button></div>';
+  h+=_veReqBox('edit');
   h+='</div></div>';
   return h;
 }
+function _veReqBox(tabKey){   // 반영 결과 확인 박스 — 평소 숨김, [반영하기] 후 노출(분신술 R2 UX H1: 클립보드-온리 불가시 해소)
+  var out=_veState[tabKey].out||'';
+  return '<div id="ve-req"'+(out?'':' style="display:none"')+'><div class="nb-lr" style="margin-top:14px"><div class="nb-lr-l">요청서 (복사됨 — 편집 담당에게 붙여넣어 전달)</div></div>'
+    +'<textarea class="nb-out" readonly style="min-height:130px">'+escapeHtml(out)+'</textarea></div>';
+}
+function _veEditLocked(){var s=_veState&&_veState.edit.src;return !s||(s.kind==='file'&&!s.url);}   // 소스 종속 잠금 공용 술어 — 미삽입·유실(lost) 동일 취급
 function _veCutsHtml(){
-  var cuts=_veState.edit.cuts,locked=!_veState.edit.src;   // 소스 없음 = 잠금(값은 보존 — 재삽입 시 그대로 활성)
+  var cuts=_veState.edit.cuts,locked=_veEditLocked();   // 잠금(값은 보존 — 재삽입 시 그대로 활성)
   if(!cuts.length)return '<div style="font-size:11.5px;color:var(--dim);margin-top:4px">'+(locked?'컷 구간은 첨부한 영상 구간에 종속 — 영상을 삽입하면 잡을 수 있어요':'구간을 추가하지 않으면 전체 구간을 그대로 써요')+'</div>';
   var h='',dis=locked?' disabled':'';
   for(var i=0;i<cuts.length;i++){
@@ -21659,11 +21719,11 @@ function _veCutsHtml(){
   return h;
 }
 function _veCutLocked(){
-  if(_veState&&_veState.edit.src)return false;
+  if(!_veEditLocked())return false;
   showToast('컷 구간은 첨부한 영상 구간에 종속돼요 — 먼저 영상을 삽입해 주세요','error');return true;
 }
-function _veCutAdd(){if(_veCutLocked())return;_veState.edit.cuts.push({s:'',e:''});var c=document.getElementById('ve-cuts');if(c){c.innerHTML=_veCutsHtml();_veCutMark();}}
-function _veCutDel(i){if(_veCutLocked())return;_veState.edit.cuts.splice(i,1);var c=document.getElementById('ve-cuts');if(c){c.innerHTML=_veCutsHtml();_veCutMark();}}
+function _veCutAdd(){if(_veCutLocked())return;_veState.edit.cuts.push({s:'',e:''});var c=document.getElementById('ve-cuts');if(c){c.innerHTML=_veCutsHtml();_veCutMark();}_veDraftSave();}
+function _veCutDel(i){if(_veCutLocked())return;_veState.edit.cuts.splice(i,1);var c=document.getElementById('ve-cuts');if(c){c.innerHTML=_veCutsHtml();_veCutMark();}_veDraftSave();}
 function _veCutSet(i,k,v){if(_veCutLocked())return;var c=_veState.edit.cuts[i];if(c)c[k]=String(v||'').trim();_veCutMark();_veDraftSave();}
 function _veCutNow(i,k){
   if(_veCutLocked())return;
@@ -21672,6 +21732,7 @@ function _veCutNow(i,k){
   var c=_veState.edit.cuts[i];if(!c)return;
   c[k]=_veFmtT(v.currentTime||0);
   var box=document.getElementById('ve-cuts');if(box){box.innerHTML=_veCutsHtml();_veCutMark();}
+  _veDraftSave();
 }
 function _veFmtT(sec){sec=Math.max(0,Math.round(sec));return Math.floor(sec/60)+':'+('0'+(sec%60)).slice(-2);}
 // 컷 시각 검증(분신술 UX MED-2) — 분:초/초 형식만 인정, 시작≥끝·형식 오류 = 해당 행 인풋 레드 보더 + 사양서에 ⚠ 표기
@@ -21731,6 +21792,7 @@ function _veBodySub(){
   h+='<div class="nb-field"><span class="nb-label">배경 투명도</span>'+_veSlider("_veCapSlide('bgAlpha',this.value,'%','ve-ba-v')",0,100,5,s.bgAlpha,s.bgAlpha+'%','ve-ba-v')+'</div>';
   h+='</div>';
   h+='<div class="nb-row" style="margin-top:24px"><button type="button" class="btn btn--primary btn--md" onclick="_veApply()">반영하기</button></div>';
+  h+=_veReqBox('sub');
   h+='</div></div>';
   return h;
 }
@@ -21874,7 +21936,7 @@ function _veSpecEdit(){
   L.push('■ 프레임 개선: '+(e.frame.length?e.frame.join(', '):'없음'));
   L.push('■ 음향: '+(e.snd.length?'제거 — '+e.snd.join(', '):'제거 없음')+' · 음량 '+(e.vol===100?'유지(100%)':e.vol+'%로 보정'));
   // 모자이크·트래킹 = 드래그 지정 영역 좌표(%)+지정 시점 / 키잉 = 키 색 — 켠 기능만 줄 생성(운영자 260711 "글이 아니라 실체 지정")
-  function mk(list){return list.map(function(m,i){return (i+1)+'번 (x '+m.x+'% · y '+m.y+'% · '+m.w+'%×'+m.h+'%'+(m.at?' · '+m.at+' 기준':'')+')';}).join(' · ');}
+  function mk(list){return list.map(function(m,i){return (i+1)+'번 (x '+m.x+'% · y '+m.y+'% · '+m.w+'%×'+m.h+'%'+(m.at?' · '+m.at+' 시점':'')+')';}).join(' · ')+' — 미리보기 프레임(비율 '+(e.ratio||'원본 유지')+') 기준';}
   if(e.extras.indexOf('모자이크')>=0){var mo=e.marks.filter(function(m){return m.t==='mo';});L.push('■ 모자이크: '+(mo.length?mk(mo):'(영역 미지정)'));}
   if(e.extras.indexOf('트래킹')>=0){var tr=e.marks.filter(function(m){return m.t==='tr';});L.push('■ 트래킹: '+(tr.length?mk(tr):'(대상 미지정)'));}
   if(e.extras.indexOf('키잉(배경 분리)')>=0)L.push('■ 키잉(배경 분리): '+(e.keyColor||'(키 색 미지정)'));
@@ -21887,7 +21949,7 @@ function _veSpecSub(){
   for(var j=0;j<_VE_FONTS.length;j++)if(_VE_FONTS[j][0]===s.font)fnt=_VE_FONTS[j][1];
   for(var k=0;k<_VE_WEIGHTS.length;k++)if(_VE_WEIGHTS[k][0]===s.weight)wt=_VE_WEIGHTS[k][1];
   L.push('[자막 요청서] '+_veStamp()+' (KST)');
-  L.push('■ 소스: '+(s.src?s.src.label+(s.src.label.indexOf('[제작본]')===0?' — 1. 영상 편집 사양서와 함께 전달':''):'(미지정 — 사양만 전달)'));
+  L.push('■ 소스: '+(s.src?s.src.label+(s.src.label.indexOf('[제작본]')===0?' — 1. 영상 편집 요청서와 함께 전달':''):'(미지정 — 사양만 전달)'));
   L.push('■ 위치: '+posLb+' · 가장자리 여백 '+s.margin+'%');
   L.push('■ 표기법: '+(s.styles.length?s.styles.join(', '):'기본'));
   L.push('■ 자막: 크기 '+s.capSize+'px · 색 '+cc[1]+' · 폰트 '+fnt+' · '+wt);
