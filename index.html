@@ -4875,12 +4875,20 @@ function _srailCardEx(e){
 // ── 레일 캐러셀 (판매중 공연 1장씩 · 버튼/점/드래그 넘김 + 유휴 자동넘김) ──
 // 자동넘김 = 아무 동작 없을 때만: SRAIL_CAR_IDLE 유휴 뒤 다음 공연. 캐러셀·타 기능 등 아무 상호작용이나 하면 정지 → SRAIL_CAR_HOLD 유휴 뒤 재개.
 var _srailCar={idx:0,count:0,autoT:null,resumeT:null,bound:null,swiped:false};
-var SRAIL_CAR_IDLE=7000, SRAIL_CAR_HOLD=10000;
+var SRAIL_CAR_IDLE=8000, SRAIL_CAR_HOLD=10000, SRAIL_CAR_WRAP=10000;   // [260711 운영자] 자동넘김 8초 · 맨끝→맨처음 전환만 WRAP 10초 · HOLD=상호작용 후 재개 유휴
 function _srailCarActive(){ var vp=document.querySelector('.srail-vp'); return !!(vp&&vp.offsetParent&&_srailView.mode==='list'&&_srailCar.count>=2); }
 function _srailCarApply(anim){ var tr=document.querySelector('.srail-track'); if(!tr)return; if(anim)tr.classList.remove('srail-drag'); else tr.classList.add('srail-drag'); tr.style.transform='translateX('+(-_srailCar.idx*100)+'%)'; document.querySelectorAll('.srail-dot').forEach(function(d,i){ d.classList.toggle('on',i===_srailCar.idx); }); document.querySelectorAll('.srail-slide').forEach(function(s,i){ if(i===_srailCar.idx)s.removeAttribute('inert'); else s.setAttribute('inert',''); }); }   // 오프스크린 슬라이드=inert(키보드 포커스·상호작용 차단, 감사4 L2)
 function _srailCarTo(i,anim){ if(_srailCar.count<1)return; _srailCar.idx=((i%_srailCar.count)+_srailCar.count)%_srailCar.count; _srailCarApply(anim!==false); }
-function _srailCarStartAuto(){ if(_srailCar.autoT||_srailCar.count<2)return; _srailCar.autoT=setInterval(function(){ if(document.hidden||!_srailCarActive())return; _srailCarTo(_srailCar.idx+1,true); },SRAIL_CAR_IDLE); }
-function _srailCarStopAuto(){ if(_srailCar.autoT){clearInterval(_srailCar.autoT);_srailCar.autoT=null;} }
+function _srailCarStartAuto(){
+  if(_srailCar.autoT||_srailCar.count<2)return;
+  var _tick=function(){
+    if(document.hidden||!_srailCarActive()){ _srailCar.autoT=setTimeout(_tick,SRAIL_CAR_IDLE); return; }   // 숨김·비활성 = 안 넘기고 재확인 대기
+    _srailCarTo(_srailCar.idx+1,true);
+    _srailCar.autoT=setTimeout(_tick, _srailCar.idx===_srailCar.count-1?SRAIL_CAR_WRAP:SRAIL_CAR_IDLE);   // 방금 마지막 도착 = 다음(맨처음)까지 10초, 그 외 8초
+  };
+  _srailCar.autoT=setTimeout(_tick,SRAIL_CAR_IDLE);
+}
+function _srailCarStopAuto(){ if(_srailCar.autoT){clearTimeout(_srailCar.autoT);_srailCar.autoT=null;} }   // [260711] setInterval→재귀 setTimeout 전환에 맞춰 clearTimeout
 function _srailCarKick(){ _srailCarStopAuto(); if(_srailCar.resumeT)clearTimeout(_srailCar.resumeT); _srailCar.resumeT=setTimeout(function(){ _srailCar.resumeT=null; if(_srailCarActive())_srailCarStartAuto(); },SRAIL_CAR_HOLD); }
 function _srailCarStop(){ _srailCarStopAuto(); if(_srailCar.resumeT){clearTimeout(_srailCar.resumeT);_srailCar.resumeT=null;} if(_srailCar.bound){ ['pointerdown','keydown','wheel','touchstart'].forEach(function(ev){ document.removeEventListener(ev,_srailCar.bound,true); }); _srailCar.bound=null; } }
 function _srailCarMount(count){
@@ -4963,7 +4971,19 @@ function _srailRenderInner(els){
     return;
   }
   // 운영자 260710 확정: 2건↑도 세로 스택(캐러셀 A2 폐지 — _srailCar* 함수군은 dormant 잔존, 재활성 시 이 분기만 복원).
-  els.body.innerHTML=actives.map(function(x){return x._kind==='ex'?_srailCardEx(x):_srailCard(x);}).join('')+_srailExErrNote();
+  // [260711 운영자] 캐러셀 부활 — 2건↑은 카드 1장씩 자동순환(8초·끝→처음 10초, _srailCar* 인프라·CSS 계승). 1건은 단일 표시.
+  if(actives.length>=2){
+    els.body.style.display='flex';els.body.style.flexDirection='column';els.body.style.overflowY='hidden';
+    els.body.innerHTML='<div class="srail-vp"><div class="srail-track">'
+      +actives.map(function(x){return '<div class="srail-slide">'+(x._kind==='ex'?_srailCardEx(x):_srailCard(x))+'</div>';}).join('')
+      +'</div></div><div class="srail-dots">'
+      +actives.map(function(x,i){return '<button class="srail-dot" onclick="_srailCarTo('+i+',true)" aria-label="'+(i+1)+'번째 공연"></button>';}).join('')
+      +'</div>'+_srailExErrNote();
+    _srailCarMount(actives.length);
+  } else {
+    els.body.style.display='';els.body.style.flexDirection='';els.body.style.overflowY='';
+    els.body.innerHTML=actives.map(function(x){return x._kind==='ex'?_srailCardEx(x):_srailCard(x);}).join('')+_srailExErrNote();
+  }
 }
 function _srailExErrNote(){
   // 상시 [새로고침] 푸터는 운영자 260710 확정으로 제거 — 에러 시에만 인라인 재시도 제공
