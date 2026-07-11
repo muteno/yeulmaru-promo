@@ -1636,7 +1636,7 @@ var index_default = {
         }
       }
 
-      // 전역 앱 설정 — KV 영구(cfg:<키>). pets_visible = 캘린더 하단 장식 펫(공차는 애·크랩·LOVE 3마리 랜덤) 표시. GET 공개·POST 관리자(운영자 260711). ⚠ Worker는 별도 Cloudflare 배포 필요
+      // 전역 앱 설정 — KV 영구(cfg:<키>). pets_visible = 캘린더 하단 장식 펫(공차는 애·크랩·LOVE 3마리 랜덤) 표시. GET=로그인 사용자 공개·POST=관리자(checkAdmin = 슈퍼 OR 서브admin PIN · 타 관리자 쓰기와 동일 게이트 · 운영자 260711). ⚠ Worker는 별도 Cloudflare 배포 필요
       if (url.pathname === "/api/config") {
         if (request.method === "GET") {
           let pets = false;
@@ -1644,7 +1644,10 @@ var index_default = {
           return json({ pets_visible: pets }, env);
         }
         if (request.method === "POST") {
-          if (role !== "admin") return json({ error: "Admin only" }, env, 403);
+          // roleOf(비번-only)는 ADMIN_PASSWORD만 admin → 클라는 APP_PASSWORD('0510')+PIN을 보내므로 checkAdmin(토큰·PIN 인지)로 검증(타 관리자 쓰기와 동일 · 슈퍼admin 개념 폐기 반영, 분신술 재검증 260711)
+          let _cfgAuth = { admin: false };
+          try { _cfgAuth = await checkAdmin(request, env, await getToken(env)); } catch (e) { return json({ error: "auth_failed: " + String(e) }, env, 500); }
+          if (!_cfgAuth.admin) return json({ error: "Admin only" }, env, 403);
           let b = {};
           try { b = await request.json(); } catch (e) {}
           try { await env.ops_kv.put("cfg:pets_visible", b.pets_visible ? "1" : "0"); } catch (e) { return json({ error: String(e) }, env, 500); }
