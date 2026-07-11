@@ -21295,7 +21295,10 @@ function _veDraftSave(){
   clearTimeout(_veDraftT);
   _veDraftT=setTimeout(function(){
     var k=_veDraftKey();if(!k||!_veState)return;
-    try{localStorage.setItem(k,JSON.stringify({ts:Date.now(),pinned:!!_veState._pinned,data:_veSerial()}));}catch(_e){}
+    if(_veState._owner&&_veState._owner!==_veUserKey())return;   // 디바운스 창에서 사용자가 바뀌면 저장 스킵 — 타인 키 교차 오염 차단
+    var pin=!!_veState._pinned;
+    try{var prev=JSON.parse(localStorage.getItem(k)||'null');if(prev&&prev.pinned)pin=true;}catch(_e){}   // 다른 탭에서 고정한 draft를 자동 저장이 미고정으로 격하하지 않게
+    try{localStorage.setItem(k,JSON.stringify({ts:Date.now(),pinned:pin,data:_veSerial()}));}catch(_e){}
   },400);
 }
 function _veDraftLoad(){
@@ -21323,10 +21326,14 @@ function openVideoEditor(tab){
   var t=(tab==='sub'||tab==='prompt')?tab:'edit';
   var el=document.getElementById('ve-board');
   // 이미 열려 있으면 리셋 없이 탭 전환만 — 작업 유실 방지
-  if(el&&el.innerHTML&&_veState){_veState.tab=t;_veRender();return;}
+  if(el&&el.innerHTML&&_veState&&_veState._owner===_veUserKey()){_veState.tab=t;_veRender();return;}
   if(!el){el=document.createElement('div');el.id='ve-board';document.body.appendChild(el);}
   try{if(_veState&&_veState.escHandler)document.removeEventListener('keydown',_veState.escHandler);}catch(_e){}
   // 페이지를 벗어나도 유지(운영자 260711): ① 세션 내 재열기 = 인메모리 그대로(파일 포함) — 단 미저장(pinned 아님) 30분 경과 = 휘발 ② 새 세션 = 사용자 귀속 draft 복원(파일은 재삽입 안내)
+  if(_veState&&_veState._owner!==_veUserKey()){   // 사용자 전환 = 이전 사용자 인메모리 즉시 파기(귀속 — 타 사용자 노출 차단)
+    if(_veState._urls)_veState._urls.forEach(function(u){try{URL.revokeObjectURL(u);}catch(_e){}});
+    _veState=null;
+  }
   if(_veState&&!_veState._pinned&&(Date.now()-(_veState._touch||0))>_VE_DRAFT_TTL){
     if(_veState._urls)_veState._urls.forEach(function(u){try{URL.revokeObjectURL(u);}catch(_e){}});
     _veState=null;var k0=_veDraftKey();if(k0){try{var d0=JSON.parse(localStorage.getItem(k0)||'null');if(d0&&!d0.pinned)localStorage.removeItem(k0);}catch(_e){}}
@@ -21335,6 +21342,7 @@ function openVideoEditor(tab){
     var d=_veDraftLoad();
     _veState=d?_veRestore(d):_veDefaultState();
   }
+  _veState._owner=_veUserKey();
   _veState.tab=t;_veState._touch=Date.now();
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeVideoEditor)">'
     +'<div class="modal" style="width:96vw;max-width:1120px;height:92vh;max-height:92vh;padding:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:var(--surface-solid);border-radius:var(--radius)">'   // 운영자 선택값 260711: 라운드 24→16 = --radius 동값 계승
