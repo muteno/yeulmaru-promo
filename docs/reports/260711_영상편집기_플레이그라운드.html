@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>영상 편집기 플레이그라운드 — 조정 축 200 (260711)</title>
+<style>
+/* ── :root 토큰 사본 (index.html 2블록 발췌 — 값 SSOT 계승) ── */
+:root{
+  --accent:#4A4DE7; --accent-light:#E8E8FD; --accent-glow:rgba(74,77,231,0.15);
+  --peach:#F0C4B8; --peach-light:#FBF0EC; --peach-bg:#FDF6F3; --peach-text:#D88455;
+  --bg:linear-gradient(135deg,#FDF6F3 0%,#F0EBF5 50%,#EBF0F8 100%);
+  --surface-solid:#fff; --glass:rgba(255,255,255,0.55);
+  --glass-shadow:0 8px 32px rgba(74,77,231,0.08),0 2px 8px rgba(0,0,0,0.04);
+  --border:rgba(0,0,0,0.09); --border2:rgba(0,0,0,0.12);
+  --text:#1A1A2E; --dim:#888; --muted:#bbb;
+  --green:#1A6B3C; --danger:#E24B4A; --danger-btn:#E24B4A;
+  --radius:16px; --radius-lg:20px; --radius-xl:24px;
+  --neutral:#EEEDF3; --neutral-d:#E1DFEC; --neutral-text:#6B6B7B;
+  --r-btn:10px; --r-pop:16px; --r-modal:20px;
+  --elev:0 20px 56px rgba(74,77,231,.16),0 6px 18px rgba(26,26,46,.07);
+  --backdrop:rgba(26,26,46,.42);
+  --glass-surface:rgba(255,255,255,.78); --glass-menu:rgba(255,255,255,.45); --glass-bd:rgba(255,255,255,.6);
+  --c1:#4A4DE7; --c2:#D88455; --c3:#1A6B3C; --c4:#C02872; --c5:#2D8AB3; --c6:#F5B400;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{font-family:'Pretendard','Apple SD Gothic Neo','Malgun Gothic',sans-serif;background:var(--bg);color:var(--text);font-size:13px;line-height:1.6;padding:20px 14px 60px}
+.pgwrap{max-width:1560px;margin:0 auto}
+h1{font-size:18px;margin:0 0 4px}
+.pgmeta{font-size:11.5px;color:var(--dim);margin-bottom:14px}
+.cols{display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap}
+.stagewrap{flex:1 1 620px;min-width:0;position:sticky;top:10px}
+.console{flex:0 0 460px;max-width:100%;background:rgba(255,255,255,.82);border:1px solid var(--border);border-radius:16px;padding:14px;max-height:92vh;overflow:auto}
+@media(max-width:1150px){.stagewrap{position:static}.console{flex:1 1 100%;max-height:none}}
+
+/* ── 브라우저 창 프레임(실사용 = 데스크톱, 캘린더 전례 폭 계승) ── */
+.frame{width:min(960px,96vw);margin:0 auto;background:var(--surface-solid);border:1px solid var(--border2);border-radius:14px;overflow:hidden;box-shadow:0 18px 48px rgba(26,26,46,.14)}
+.frame-bar{display:flex;align-items:center;gap:6px;padding:8px 12px;background:var(--neutral);border-bottom:1px solid var(--border)}
+.frame-bar i{width:10px;height:10px;border-radius:50%;background:var(--muted);display:inline-block}
+.frame-bar span{font-size:10.5px;color:var(--neutral-text);margin-left:6px}
+.viewport{position:relative;background:var(--bg);height:640px;overflow:hidden}
+.stagecap{text-align:center;font-size:11px;color:var(--dim);margin-top:8px}
+/* 비교 모드 — 두 뷰포트 나란히 */
+.viewport .half{position:absolute;top:0;bottom:0;width:50%;overflow:hidden}
+.viewport .half.L{left:0;border-right:1.5px dashed var(--border2)}
+.viewport .half.R{right:0}
+.halfcap{position:absolute;top:6px;left:50%;transform:translateX(-50%);z-index:9;font-size:10px;font-weight:800;background:var(--text);color:var(--surface-solid);border-radius:99px;padding:2px 10px;opacity:.75;pointer-events:none}
+
+/* ── 재현: 모달 백드롭 + 편집기 (튜닝 스코프 .app — 변수 --t-*, 기본값 = 현행 실측) ── */
+.app{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(26,26,46,var(--t-bdA));backdrop-filter:blur(calc(var(--t-bdBlur)*1px))}
+.app .vemodal{background:var(--t-mBg);border:1px solid rgba(255,255,255,var(--t-mBdA));border-radius:calc(var(--t-mRad)*1px);width:96%;max-width:calc(var(--t-mW)*1px);height:92%;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 80px rgba(74,77,231,calc(.12*var(--t-mShd))),0 8px 24px rgba(0,0,0,calc(.08*var(--t-mShd)));animation:pgFadeUp var(--t-mvT) var(--t-mvCurve)}
+@keyframes pgFadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+.app .vehead{padding:calc(var(--t-hPy)*1px) calc(var(--t-hPx)*1px) calc(var(--t-hPb)*1px);border-bottom:1px solid rgba(0,0,0,var(--t-hBdA));display:flex;align-items:center;gap:calc(var(--t-hGap)*1px);flex-wrap:wrap;flex-shrink:0}
+.app .vettl{font-size:calc(var(--t-ttlFs)*1px);font-weight:var(--t-ttlFw);color:var(--text)}
+.app .vetabs{display:flex;gap:calc(var(--t-tGap)*1px);background:var(--t-tWrapBg);border-radius:calc(var(--t-tWrapRad)*1px);padding:calc(var(--t-tWrapPad)*1px)}
+.app .vetab{border:0;cursor:pointer;background:transparent;font-family:inherit;line-height:1;padding:calc(var(--t-tPy)*1px) calc(var(--t-tPx)*1px);font-size:calc(var(--t-tFs)*1px);font-weight:var(--t-tFw);color:var(--t-tOffC);border-radius:calc(var(--t-tRad)*1px);transition:all var(--t-tTrT)}
+.app .vetab:hover{color:var(--text)}
+.app .vetab.active{background:var(--t-tOnBg);color:var(--t-tOnC);font-weight:var(--t-tOnFw);backdrop-filter:blur(calc(var(--t-tOnBlur)*1px));box-shadow:0 8px 32px rgba(74,77,231,calc(.08*var(--t-tOnShd))),0 2px 8px rgba(0,0,0,calc(.04*var(--t-tOnShd)))}
+.app .vex{position:absolute;top:14px;right:18px;width:calc(var(--t-xSz)*1px);height:calc(var(--t-xSz)*1px);border-radius:50%;border:0;background:rgba(74,77,231,var(--t-xBgA));color:var(--accent);cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;z-index:5}
+.app .vebody{flex:1;overflow:auto;padding:calc(var(--t-bPy)*1px) calc(var(--t-bPx)*1px);min-height:0}
+.app .vewrap{display:grid;grid-template-columns:var(--t-colL) var(--t-colR);gap:calc(var(--t-colGap)*1px)}
+.app .vecol{min-width:0}
+.app .vecolhead{font-size:calc(var(--t-chFs)*1px);font-weight:var(--t-chFw);color:var(--t-chC);margin-bottom:calc(var(--t-chMb)*1px)}
+.app .vefield{margin-bottom:calc(var(--t-fGap)*1px)}
+.app .velabel{font-size:calc(var(--t-lbFs)*1px);font-weight:var(--t-lbFw);color:var(--t-lbC);margin-bottom:calc(var(--t-lbMb)*1px);letter-spacing:calc(var(--t-lbLs)*1px);display:block}
+/* 섹션 헤더 */
+.app .vesec{display:flex;align-items:center;gap:calc(var(--t-sGap)*1px);font-size:calc(var(--t-sFs)*1px);font-weight:var(--t-sFw);color:var(--t-sC);margin:calc(var(--t-sMt)*1px) 0 calc(var(--t-sMb)*1px);padding-top:calc(var(--t-sPt)*1px);border-top:var(--t-sLine) rgba(0,0,0,var(--t-sLineA))}
+.app .vesec.first{margin-top:0;padding-top:0;border-top:0}
+.app .vesec .n{width:calc(var(--t-sNSz)*1px);height:calc(var(--t-sNSz)*1px);border-radius:calc(var(--t-sNRad)*1px);background:var(--t-sNBg);color:var(--t-sNC);display:inline-flex;align-items:center;justify-content:center;font-size:calc(var(--t-sNFs)*1px);font-weight:800;flex-shrink:0}
+.app .vesec .sub{font-weight:600;font-size:calc(var(--t-sSubFs)*1px);color:var(--dim)}
+/* 칩 */
+.app .chips{display:flex;flex-wrap:wrap;gap:calc(var(--t-cGapY)*1px) calc(var(--t-cGapX)*1px)}
+.app .chip{display:inline-flex;align-items:center;border:1px solid rgba(255,255,255,var(--t-cBdA));background:rgba(255,255,255,var(--t-cBgA));backdrop-filter:blur(calc(var(--t-cBlur)*1px));box-shadow:0 8px 32px rgba(74,77,231,calc(.08*var(--t-cShd))),0 2px 8px rgba(0,0,0,calc(.04*var(--t-cShd)));color:var(--text);font-size:calc(var(--t-cFs)*1px);font-weight:var(--t-cFw);cursor:pointer;font-family:inherit;line-height:1;padding:calc(var(--t-cPy)*1px) calc(var(--t-cPx)*1px);border-radius:calc(var(--t-cRad)*1px);transition:background var(--t-cTrT),border-color var(--t-cTrT),color var(--t-cTrT);user-select:none}
+.app .chip:hover{border-color:var(--t-cHovBd)}
+.app .chip.on{background:var(--t-cOnBg);border-color:var(--t-cOnBd);color:var(--t-cOnC);font-weight:var(--t-cOnFw);box-shadow:0 4px 12px rgba(74,77,231,var(--t-cOnShdA))}
+/* 버튼 */
+.app .b{font-family:inherit;font-weight:var(--t-btFw);border:1px solid transparent;cursor:pointer;padding:calc(var(--t-btPy)*1px) calc(var(--t-btPx)*1px);font-size:calc(var(--t-btFs)*1px);border-radius:calc(var(--t-btRad)*1px);transition:all var(--t-btTrT);line-height:1.15}
+.app .b:hover{transform:translateY(calc(var(--t-btLift)*-1px))}
+.app .b:active{transform:translateY(0) scale(var(--t-btPress))}
+.app .b.pri{background:var(--t-btPriBg);color:var(--t-btPriC);box-shadow:0 2px 8px rgba(74,77,231,calc(.16*var(--t-btPriShd)))}
+.app .b.neu{background:var(--t-btNeuBg);color:var(--t-btNeuC)}
+.app .b.gho{background:transparent;color:var(--t-btGhoC);border-color:rgba(74,77,231,var(--t-btGhoBdA))}
+/* 입력 */
+.app .inp,.app .ta{width:100%;border:1px solid rgba(0,0,0,var(--t-inBdA));border-radius:calc(var(--t-inRad)*1px);padding:calc(var(--t-inPy)*1px) calc(var(--t-inPx)*1px);font-size:calc(var(--t-inFs)*1px);font-family:inherit;color:var(--text);background:var(--t-inBg);line-height:var(--t-taLh);transition:border-color .15s,box-shadow .15s}
+.app .inp:focus,.app .ta:focus{outline:none;border-color:var(--t-inFocC);box-shadow:0 0 0 calc(var(--t-inRingW)*1px) rgba(74,77,231,var(--t-inRingA))}
+.app .ta{resize:vertical;min-height:calc(var(--t-taMinH)*1px)}
+.app .inp::placeholder,.app .ta::placeholder{color:var(--t-inPhC)}
+/* 스테이지 + 자막 */
+.app .stage{position:relative;width:100%;background:var(--t-stBg);border:1px solid rgba(0,0,0,var(--t-stBdA));border-radius:calc(var(--t-stRad)*1px);overflow:hidden;display:flex;align-items:center;justify-content:center;aspect-ratio:16/9;max-height:calc(var(--t-stMaxH)*1vh)}
+.app .stage-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:calc(var(--t-seGap)*1px);color:rgba(255,255,255,var(--t-seA));font-size:calc(var(--t-seFs)*1px);text-align:center;padding:18px;line-height:var(--t-seLh)}
+.app .stage-empty .ico{font-size:calc(var(--t-seIco)*1px);line-height:1}
+.app .cap{position:absolute;max-width:calc(var(--t-capMaxW)*1%);text-align:center;line-height:var(--t-capLh);pointer-events:none;white-space:pre-wrap;word-break:keep-all;z-index:3;font-size:calc(var(--t-capFs)*1px);font-weight:var(--t-capFw);color:var(--t-capC);font-family:var(--t-capFont);letter-spacing:calc(var(--t-capLs)*1px)}
+.app .cap .bgl{position:absolute;inset:calc(var(--t-capPad)*-.55px) calc(var(--t-capPad)*-1px);border-radius:calc(var(--t-capBgRad)*1px);background:var(--t-capBg);opacity:var(--t-capBgO);backdrop-filter:blur(calc(var(--t-capBgBlur)*1px))}
+.app .cap .tx{position:relative}
+/* 9분할 · 스와치 · 레인지 · 값 · 스위치 */
+.app .pos9{display:grid;grid-template-columns:repeat(3,1fr);gap:calc(var(--t-p9Gap)*1px);max-width:calc(var(--t-p9W)*1px)}
+.app .pos9 button{aspect-ratio:var(--t-p9AR);border:1px solid rgba(0,0,0,var(--t-p9BdA));border-radius:calc(var(--t-p9Rad)*1px);background:var(--surface-solid);cursor:pointer;transition:all .12s;padding:0}
+.app .pos9 button:hover{border-color:var(--t-p9HovBd)}
+.app .pos9 button.on{background:var(--t-p9OnBg);border-color:var(--t-p9OnBg);box-shadow:0 2px 8px rgba(74,77,231,var(--t-p9OnShdA))}
+.app .swt{width:calc(var(--t-swSz)*1px);height:calc(var(--t-swSz)*1px);border-radius:calc(var(--t-swRad)*1px);border:1px solid rgba(0,0,0,var(--t-swBdA));cursor:pointer;padding:0;transition:transform .12s,box-shadow .12s}
+.app .swt:hover{transform:translateY(calc(var(--t-swLift)*-1px))}
+.app .swt.on{box-shadow:0 0 0 calc(var(--t-swRingIn)*1px) var(--surface-solid),0 0 0 calc(var(--t-swRingOut)*1px) var(--t-swRingC)}
+.app .pgswc,.app .pgswb{gap:calc(var(--t-swGap)*1px)!important}
+.app .rng{width:100%;min-width:0;accent-color:var(--t-rngC);cursor:pointer;margin:calc(var(--t-rngMy)*1px) 0}
+.app .val{font-size:calc(var(--t-valFs)*1px);color:var(--t-valC);font-variant-numeric:tabular-nums;white-space:nowrap;flex-shrink:0}
+.app .rrow{display:flex;align-items:center;gap:calc(var(--t-rngGap)*1px)}
+.app .sw2{width:calc(var(--t-onW)*1px);height:calc(var(--t-onH)*1px);border-radius:calc(var(--t-onH)*.55px);background:var(--t-onOff);position:relative;cursor:pointer;transition:background var(--t-onTrT);display:inline-block;flex:0 0 auto}
+.app .sw2.on{background:var(--t-onOn)}
+.app .sw2 .k{position:absolute;top:2px;left:2px;width:calc(var(--t-onH)*1px - 4px);height:calc(var(--t-onH)*1px - 4px);border-radius:50%;background:var(--surface-solid);transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,.25)}
+.app .sw2.on .k{left:calc(var(--t-onW)*1px - var(--t-onH)*1px + 2px)}
+/* 산출 · 노트 · 컷 · 소스 */
+.app .lr{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:calc(var(--t-outMt)*1px) 0 9px}
+.app .btnrow{display:flex;gap:calc(var(--t-outBtnGap)*1px)}
+.app .lrl{font-size:calc(var(--t-lrFs)*1px);font-weight:700;color:var(--t-lrC)}
+.app .out{width:100%;min-height:calc(var(--t-outMinH)*1px);border:1px solid rgba(0,0,0,var(--t-outBdA));border-radius:calc(var(--t-outRad)*1px);padding:calc(var(--t-outPy)*1px) calc(var(--t-outPx)*1px);font-size:calc(var(--t-outFs)*1px);line-height:var(--t-outLh);font-family:inherit;color:var(--text);background:var(--t-outBg);white-space:pre-wrap;resize:none}
+.app .note{font-size:calc(var(--t-ntFs)*1px);color:var(--t-ntC);line-height:var(--t-ntLh);margin-top:calc(var(--t-ntMt)*1px);background:rgba(0,0,0,var(--t-ntBgA));border-radius:calc(var(--t-ntRad)*1px);padding:calc(var(--t-ntPy)*1px) calc(var(--t-ntPx)*1px)}
+.app .cut{display:flex;gap:calc(var(--t-cutGap)*1px);align-items:center;margin-top:calc(var(--t-cutMt)*1px);flex-wrap:wrap}
+.app .cut .inp{width:calc(var(--t-cutW)*1px);flex:none;text-align:center;padding:calc(var(--t-cutPy)*1px) 8px;font-size:calc(var(--t-cutFs)*1px)}
+.app .srow{display:flex;gap:calc(var(--t-srGap)*1px);align-items:center;flex-wrap:wrap;margin-bottom:calc(var(--t-srMb)*1px)}
+.app .srow .inp{flex:1;min-width:150px;width:auto;padding:8px 11px;font-size:12.5px}
+/* 드롭다운 재현(메뉴 미리보기 — 콘솔 [메뉴 미리보기]로 토글) */
+.app .dd{position:absolute;top:14px;left:14px;z-index:8;min-width:calc(var(--t-ddW)*1px);background:var(--glass-menu);backdrop-filter:blur(9px);border:1px solid var(--glass-bd);border-radius:calc(var(--t-ddWrapRad)*1px);box-shadow:var(--elev);padding:calc(var(--t-ddPad)*1px)}
+.app .dd .glb{padding:8px 14px 6px;font-size:calc(var(--t-ddGlFs)*1px);color:var(--t-ddGlC);font-weight:700}
+.app .dd .it{display:flex;align-items:center;width:100%;padding:calc(var(--t-ddPy)*1px) calc(var(--t-ddPx)*1px);border:0;background:none;text-align:left;font-size:calc(var(--t-ddFs)*1px);font-weight:var(--t-ddFw);color:var(--text);border-radius:calc(var(--t-ddRad)*1px);cursor:pointer;font-family:inherit;transition:background .12s}
+.app .dd .it:hover{background:rgba(74,77,231,var(--t-ddHovA))}
+.app .dd .sep{margin:6px 8px 0;padding:8px 6px 4px;font-size:calc(var(--t-ddGlFs)*1px);color:var(--t-ddGlC);font-weight:700;border-top:1px solid rgba(0,0,0,var(--t-ddSepA))}
+
+/* ── 현행 고정본(.base — 비교 기준, 값 하드코딩 = 실측 그대로) ── */
+.base{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(26,26,46,.4);backdrop-filter:blur(4px)}
+.base .vemodal{background:#fff;border:1px solid rgba(255,255,255,.55);border-radius:24px;width:96%;max-width:1120px;height:92%;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 80px rgba(74,77,231,.12),0 8px 24px rgba(0,0,0,.08)}
+.base .vehead{padding:15px 24px 12px;border-bottom:1px solid rgba(0,0,0,.09);display:flex;align-items:center;gap:14px}
+.base .vettl{font-size:16px;font-weight:700}
+.base .vetabs{display:flex;gap:2px;background:#EEEDF3;border-radius:10px;padding:3px}
+.base .vetab{border:0;background:transparent;font-family:inherit;line-height:1;padding:7px 16px;font-size:12px;font-weight:600;color:#888;border-radius:8px}
+.base .vetab.active{background:rgba(255,255,255,.78);color:#4A4DE7;box-shadow:0 8px 32px rgba(74,77,231,.08),0 2px 8px rgba(0,0,0,.04)}
+.base .vebody{flex:1;overflow:auto;padding:20px 24px}
+.base .vewrap{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.base .vecolhead{font-size:13.5px;font-weight:700;margin-bottom:12px}
+.base .velabel{font-size:12px;font-weight:600;color:#666;margin-bottom:7px;display:block}
+.base .vesec{display:flex;align-items:center;gap:7px;font-size:13px;font-weight:800;margin:18px 0 10px;padding-top:14px;border-top:1px dashed rgba(0,0,0,.09)}
+.base .vesec.first{margin-top:0;padding-top:0;border-top:0}
+.base .vesec .n{width:20px;height:20px;border-radius:6px;background:#E8E8FD;color:#4A4DE7;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:800}
+.base .chips{display:flex;flex-wrap:wrap;gap:6px}
+.base .chip{display:inline-flex;border:1px solid rgba(255,255,255,.6);background:rgba(255,255,255,.78);color:#1A1A2E;font-size:12px;padding:5px 11px;border-radius:999px;line-height:1;box-shadow:0 8px 32px rgba(74,77,231,.08),0 2px 8px rgba(0,0,0,.04)}
+.base .chip.on{background:#4A4DE7;border-color:#4A4DE7;color:#fff;font-weight:600}
+.base .stage{position:relative;background:#1A1A2E;border-radius:12px;aspect-ratio:16/9;max-height:46vh;display:flex;align-items:center;justify-content:center}
+.base .stage-empty{display:flex;flex-direction:column;align-items:center;gap:9px;color:rgba(255,255,255,.55);font-size:12.5px;text-align:center;line-height:1.7}
+.base .stage-empty .ico{font-size:30px;line-height:1}
+.base .cap{position:absolute;bottom:6%;left:50%;transform:translateX(-50%);max-width:88%;font-size:30px;font-weight:700;color:#fff;line-height:1.5;text-align:center}
+.base .cap .bgl{position:absolute;inset:-5.5px -10px;border-radius:8px;background:#1A1A2E;opacity:.55}
+.base .cap .tx{position:relative}
+.base .b{font-weight:700;border:1px solid transparent;padding:7px 14px;font-size:12px;border-radius:8px;line-height:1.15;font-family:inherit}
+.base .b.pri{background:#4A4DE7;color:#fff;box-shadow:0 2px 8px rgba(74,77,231,.16)}
+.base .b.gho{background:transparent;color:#4A4DE7;border-color:rgba(74,77,231,.25)}
+
+/* ── 콘솔 UI ── */
+.csec{border-top:1px solid var(--border);padding:12px 2px}
+.csec:first-child{border-top:0;padding-top:2px}
+.ctitle{font-size:12px;font-weight:800;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.ctitle .cnt{font-size:10.5px;color:var(--dim);font-weight:600}
+.viewseg,.presetrow{display:flex;gap:6px;flex-wrap:wrap}
+.vbtn{border:1px solid var(--glass-bd);background:var(--glass-surface);border-radius:9px;padding:6px 12px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;color:var(--text)}
+.vbtn.on{background:var(--accent);border-color:var(--accent);color:var(--surface-solid)}
+.pbtn{border:1px solid var(--glass-bd);background:var(--glass-surface);border-radius:99px;padding:7px 13px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;color:var(--text)}
+.pbtn.on{background:var(--accent);border-color:var(--accent);color:var(--surface-solid)}
+.search{width:100%;border:1px solid var(--border2);border-radius:9px;padding:8px 11px;font-size:12px;font-family:inherit;margin-bottom:8px}
+details.grp{border:1px solid var(--border);border-radius:11px;margin-bottom:8px;background:var(--surface-solid);overflow:hidden}
+details.grp summary{cursor:pointer;padding:9px 12px;font-size:12px;font-weight:800;list-style:none;display:flex;align-items:center;gap:8px}
+details.grp summary::-webkit-details-marker{display:none}
+details.grp summary .tri{transition:transform .15s;font-size:9px;color:var(--dim)}
+details.grp[open] summary .tri{transform:rotate(90deg)}
+details.grp summary .gcnt{margin-left:auto;font-size:10px;color:var(--dim);font-weight:600}
+.grpbody{padding:2px 12px 10px}
+.ax{display:grid;grid-template-columns:130px 1fr 86px;gap:8px;align-items:center;padding:4px 0;font-size:11.5px}
+.ax .nm{color:var(--text);font-weight:600;line-height:1.3}
+.ax .nm .w{color:var(--c2);font-weight:800;margin-left:3px;cursor:help}
+.ax input[type=range]{width:100%;accent-color:var(--accent);cursor:pointer;min-width:0}
+.ax select{width:100%;font-family:inherit;font-size:11px;padding:4px 6px;border:1px solid var(--border2);border-radius:7px;background:var(--surface-solid)}
+.ax .vv{font-variant-numeric:tabular-nums;text-align:right;color:var(--neutral-text);font-size:10.5px;line-height:1.25}
+.ax .vv .tag{display:block;font-size:9px;font-weight:800}
+.ax .vv .tag.inh{color:var(--green)}
+.ax .vv .tag.upd{color:var(--c2)}
+.warnbar{display:none;background:var(--peach-light);border:1px solid rgba(216,132,85,.35);color:var(--peach-text);border-radius:9px;padding:7px 11px;font-size:11px;font-weight:700;margin:6px 0}
+.warnbar.show{display:block}
+pre.outp{background:var(--surface-solid);border:1px solid var(--border);border-radius:10px;padding:10px;font-size:10.5px;line-height:1.55;max-height:240px;overflow:auto;white-space:pre-wrap;word-break:break-all;font-family:ui-monospace,Consolas,monospace}
+.copyrow{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.cpbtn{border:0;background:var(--accent);color:var(--surface-solid);border-radius:9px;padding:9px 16px;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit}
+.cpbtn.sub{background:var(--neutral);color:var(--neutral-text)}
+.notes{font-size:10.5px;color:var(--dim);line-height:1.7}
+.notes b{color:var(--neutral-text)}
+/* 복사 확인 모달 */
+.pgmodal-bg{position:fixed;inset:0;background:var(--backdrop);display:none;align-items:center;justify-content:center;z-index:99}
+.pgmodal-bg.show{display:flex}
+.pgmodal{background:var(--surface-solid);border-radius:16px;max-width:520px;width:92vw;padding:20px 22px;box-shadow:var(--elev);font-size:12.5px}
+.pgmodal h3{margin:0 0 8px;font-size:14px}
+.pgmodal ul{margin:6px 0;padding-left:18px;max-height:180px;overflow:auto}
+.pgmodal .acts{display:flex;gap:6px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap}
+.toastbox{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:var(--text);color:var(--surface-solid);border-radius:99px;padding:9px 18px;font-size:12px;font-weight:700;opacity:0;pointer-events:none;transition:opacity .2s;z-index:120}
+.toastbox.show{opacity:.94}
+</style></head><body>
+<div class="pgwrap">
+<h1>🎬 영상 편집기 플레이그라운드 — 조정 축 <span id="axn">…</span>개</h1>
+<div class="pgmeta">260711 · 대상 = 콘텐츠 제작 ▸ 영상 편집기(3탭 모달, PR #273 신설분) · 좌 = 실물 재현(만져짐) / 우 = 콘솔 · 기본값 = 현행 실측 · 축 3분류(자유 / 사다리 눈금 / 팔레트 폐쇄 셀렉트)</div>
+<div class="cols">
+  <div class="stagewrap">
+    <div class="frame">
+      <div class="frame-bar"><i></i><i></i><i></i><span>yeulmaru.github.io/yeulmaru-promo — 영상 편집기</span></div>
+      <div class="viewport" id="vp"></div>
+    </div>
+    <div class="stagecap" id="scap">모달 안 탭·칩·스와치·9분할·스위치를 직접 눌러보며 조정하세요 — 자막 문구도 입력됩니다</div>
+  </div>
+  <aside class="console">
+    <div class="csec">
+      <div class="ctitle">보기</div>
+      <div class="viewseg" id="viewseg"></div>
+    </div>
+    <div class="csec">
+      <div class="ctitle">프리셋 <span class="cnt">현행 포함 4종 · ★ = 추천</span></div>
+      <div class="presetrow" id="presets"></div>
+    </div>
+    <div class="csec">
+      <div class="ctitle">미세조정 <span class="cnt" id="axcnt"></span></div>
+      <input class="search" id="q" placeholder="축 검색 (예: 자막, 라운드, 칩, 배경…)">
+      <div class="warnbar" id="warnbar"></div>
+      <div id="groups"></div>
+    </div>
+    <div class="csec">
+      <div class="ctitle">선택값 출력</div>
+      <div class="viewseg" style="margin-bottom:8px"><button class="vbtn on" id="outDiff">변경분만</button><button class="vbtn" id="outAll">전체 축</button></div>
+      <pre class="outp" id="out"></pre>
+      <div class="copyrow"><button class="cpbtn" id="copy">선택값 복사</button><button class="cpbtn sub" id="reset">현행으로 초기화</button></div>
+    </div>
+    <div class="csec">
+      <div class="ctitle">재현 한계 각주</div>
+      <div class="notes">
+        · 재현은 <b>디자인 껍데기</b>다 — 파일 삽입·URL 로드·사양서 생성 등 실기능 로직은 실물에서만 동작(탭 전환·칩/스와치/9분할/스위치 토글·자막 문구 입력·오버레이 반영은 여기서도 실동작).<br>
+        · 실물 모달 높이 92vh를 프레임(640px 뷰포트) 기준 92%로 근사 — 실제 화면에선 더 큼.<br>
+        · <b>레인지 슬라이더 색은 브라우저 네이티브(accent-color)</b>라 트랙 형태 커스텀 불가(실물 동일 제약).<br>
+        · 글래스 blur는 브라우저·GPU에 따라 미세 차이. 모달 등장 모션(pgFadeUp)은 재열기 버튼으로 확인.<br>
+        · 스위치(.sw)의 ON/OFF 라벨 텍스트(::after)는 크기 축소 시 실물에서 잘릴 수 있음 — 폭·높이 축은 ⚠(전앱 공용 컴포넌트 축).<br>
+        · 비교 보기는 50% 폭 2분할이라 실제보다 좁게 보임 — 판단은 [튜닝]/[현행] 단독 보기 기준.
+      </div>
+    </div>
+  </aside>
+</div>
+</div>
+<div class="pgmodal-bg" id="cpmodal"><div class="pgmodal">
+  <h3>⚠ 기틀 이탈 축 포함 — 기틀 갱신 역제안</h3>
+  <div>아래 축이 사다리·토큰 밖 값(또는 역할색 재지정)이에요. 이대로 복사하면 <b>「🔁 기틀 갱신 역제안」 블록</b>이 포함돼요 — 회신 시 §🚨 승인·편입 3점 세트로 <b>기틀 자체(전 앱 동일 축 일괄)</b>를 갱신하는 경로예요.</div>
+  <ul id="cpwarnlist"></ul>
+  <div class="acts"><button class="cpbtn" id="cpAll">역제안 포함 복사</button><button class="cpbtn sub" id="cpInh">계승분만 복사</button><button class="cpbtn sub" id="cpNo">취소</button></div>
+</div></div>
+<div class="toastbox" id="toast"></div>
+
+<script>
+'use strict';
+/* ══ 팔레트(폐쇄) · 사다리(실측) ══ */
+var PAL=[
+ ['var(--accent)','인디고(--accent)'],['var(--c2)','살몬(--c2)'],['var(--c3)','딥그린(--c3)'],
+ ['var(--c4)','마젠타(--c4)'],['var(--c5)','시안(--c5)'],['var(--c6)','옐로(--c6)'],
+ ['var(--green)','그린(--green)'],['var(--danger)','레드(--danger)'],
+ ['var(--text)','다크(--text)'],['var(--neutral-text)','뉴트럴텍스트'],['var(--dim)','딤(--dim)'],['var(--muted)','뮤트(--muted)'],
+ ['var(--surface-solid)','흰색(--surface-solid)'],['var(--neutral)','뉴트럴(--neutral)'],['var(--neutral-d)','뉴트럴D'],
+ ['var(--accent-light)','인디고 라이트'],['var(--peach-light)','피치 라이트'],['var(--peach)','피치'],
+ ['var(--glass-surface)','글래스(진)'],['var(--glass)','글래스(연)'],['#cfd3dc','스위치OFF 회색(실물 상수)']
+];
+var LAD_FS=[8,9,10,10.5,11,11.5,12,12.5,13,13.5,14,15,16,18,20];
+var LAD_RAD=[0,2,3,4,6,7,8,9,10,11,12,14,16,20,24];
+var LAD_FW=[300,400,500,600,700,800,900];
+var FONTS=[['inherit','고딕(기본)'],['Georgia,serif','명조'],['ui-monospace,monospace','모노']];
+var CURVES=[['cubic-bezier(.4,0,.2,1)','주력 커브(계승)'],['ease','ease'],['ease-out','ease-out'],['linear','linear']];
+var LINES=[['1px dashed','점선(현행)'],['1px solid','실선'],['0 none','없음']];
+var POSN={tl:'좌상',tc:'상단',tr:'우상',ml:'좌중',mc:'중앙',mr:'우중',bl:'좌하',bc:'하단',br:'우하'};
+
+/* ══ 축 정의 — k · 그룹 · 이름 · 종류(rng/sel) · 현행값 · cls(free/ladder/color/enum) ══ */
+function R(k,g,nm,min,max,step,cur,unit,cls,lad){return{k:k,g:g,nm:nm,t:'rng',min:min,max:max,step:step,cur:cur,unit:unit||'px',cls:cls||'free',lad:lad};}
+function S(k,g,nm,opts,cur,cls){return{k:k,g:g,nm:nm,t:'sel',opts:opts,cur:cur,cls:cls||'enum'};}
+var AXES=[
+/* 1 모달 셸 (13) */
+R('mW','모달 셸','모달 최대폭',900,1320,10,1120),
+R('mRad','모달 셸','모달 라운드',0,32,1,24,'px','ladder',LAD_RAD),
+R('mShd','모달 셸','모달 그림자 강도',0,2,.05,1,'x'),
+R('mBdA','모달 셸','모달 테두리 알파',0,1,.05,.55,''),
+R('bdA','모달 셸','백드롭 어둡기',0,.8,.02,.4,''),
+R('bdBlur','모달 셸','백드롭 블러',0,14,1,4),
+R('hPy','모달 셸','헤더 세로 패딩',6,26,1,15),
+R('hPx','모달 셸','헤더 가로 패딩',10,40,1,24),
+R('hGap','모달 셸','헤더 요소 간격',6,30,1,14),
+R('hBdA','모달 셸','헤더 밑선 알파',0,.3,.01,.09,''),
+R('ttlFs','모달 셸','제목 글자 크기',12,22,.5,16,'px','ladder',LAD_FS),
+S('ttlFw','모달 셸','제목 굵기',LAD_FW.map(function(w){return[String(w),String(w)];}),'700','ladder'),
+R('xSz','모달 셸','닫기(X) 버튼 크기',24,44,1,32),
+R('xBgA','모달 셸','닫기 배경 알파',0,.4,.01,.08,''),
+/* 2 탭 (15) */
+S('tWrapBg','탭','탭 컨테이너 배경',PAL,'var(--neutral)','color'),
+R('tWrapRad','탭','컨테이너 라운드',0,24,1,10,'px','ladder',LAD_RAD),
+R('tWrapPad','탭','컨테이너 패딩',0,10,1,3),
+R('tGap','탭','탭 간격',0,12,1,2),
+R('tPy','탭','탭 세로 패딩',4,14,1,7),
+R('tPx','탭','탭 가로 패딩',8,30,1,16),
+R('tFs','탭','탭 글자 크기',10,16,.5,12,'px','ladder',LAD_FS),
+S('tFw','탭','탭 글자 굵기',LAD_FW.map(function(w){return[String(w),String(w)];}),'600','ladder'),
+R('tRad','탭','탭 라운드',0,20,1,8,'px','ladder',LAD_RAD),
+S('tOnBg','탭','활성 탭 배경',PAL,'var(--glass-surface)','color'),
+S('tOnC','탭','활성 탭 글자색',PAL,'var(--accent)','color'),
+S('tOnFw','탭','활성 탭 굵기',LAD_FW.map(function(w){return[String(w),String(w)];}),'600','ladder'),
+S('tOffC','탭','비활성 글자색',PAL,'var(--dim)','color'),
+R('tOnShd','탭','활성 그림자 강도',0,2,.05,1,'x'),
+S('mvCurve','탭','모달 등장 커브',CURVES,'cubic-bezier(.4,0,.2,1)'),
+/* 3 본문 레이아웃 (10) */
+R('bPy','레이아웃','본문 세로 패딩',8,36,1,20),
+R('bPx','레이아웃','본문 가로 패딩',10,44,1,24),
+R('colGap','레이아웃','2열 간격',8,44,1,20),
+R('colL','레이아웃','좌열 비율',.6,1.6,.05,1,'fr'),
+R('colR','레이아웃','우열 비율',.6,1.6,.05,1,'fr'),
+R('fGap','레이아웃','필드 간 간격',6,28,1,15),
+R('chFs','레이아웃','칼럼 헤드 크기',11,17,.5,13.5,'px','ladder',LAD_FS),
+S('chFw','레이아웃','칼럼 헤드 굵기',LAD_FW.map(function(w){return[String(w),String(w)];}),'700','ladder'),
+S('chC','레이아웃','칼럼 헤드 색',PAL,'var(--text)','color'),
+R('chMb','레이아웃','칼럼 헤드 밑여백',4,24,1,12),
+/* 4 섹션 헤더 (13) */
+R('sMt','섹션 헤더','위 여백',6,34,1,18),
+R('sMb','섹션 헤더','아래 여백',4,22,1,10),
+R('sPt','섹션 헤더','위 패딩(선 아래)',0,26,1,14),
+S('sLine','섹션 헤더','구분선 스타일',LINES,'1px dashed'),
+R('sLineA','섹션 헤더','구분선 알파',0,.3,.01,.09,''),
+R('sGap','섹션 헤더','배지-제목 간격',3,16,1,7),
+R('sFs','섹션 헤더','제목 크기',11,17,.5,13,'px','ladder',LAD_FS),
+S('sFw','섹션 헤더','제목 굵기',LAD_FW.map(function(w){return[String(w),String(w)];}),'800','ladder'),
+S('sC','섹션 헤더','제목 색',PAL,'var(--text)','color'),
+R('sNSz','섹션 헤더','번호 배지 크기',14,30,1,20),
+R('sNRad','섹션 헤더','배지 라운드',0,15,1,6,'px','ladder',LAD_RAD),
+S('sNBg','섹션 헤더','배지 배경',PAL,'var(--accent-light)','color'),
+S('sNC','섹션 헤더','배지 글자색',PAL,'var(--accent)','color'),
+R('sNFs','섹션 헤더','배지 글자 크기',8,14,.5,11,'px','ladder',LAD_FS),
+R('sSubFs','섹션 헤더','서브라벨 크기',8,13,.5,11,'px','ladder',LAD_FS),
+/* 5 라벨 (6) */
+R('lbFs','라벨','라벨 글자 크기',10,15,.5,12,'px','ladder',LAD_FS),
+S('lbFw','라벨','라벨 굵기',LAD_FW.map(function(w){return[String(w),String(w)];}),'600','ladder'),
+S('lbC','라벨','라벨 색',PAL,'var(--neutral-text)','color'),
+R('lbMb','라벨','라벨 밑여백',2,14,1,7),
+R('lbLs','라벨','라벨 자간',-.5,1.5,.05,0),
+/* 6 칩 (16) */
+R('cPy','칩','칩 세로 패딩',2,12,.5,5),
+R('cPx','칩','칩 가로 패딩',6,22,.5,11),
+R('cRad','칩','칩 라운드',4,999,1,999,'px','ladder',LAD_RAD.concat([999])),
+R('cFs','칩','칩 글자 크기',10,15,.5,12,'px','ladder',LAD_FS),
+S('cFw','칩','칩 글자 굵기',LAD_FW.map(function(w){return[String(w),String(w)];}),'400','ladder'),
+R('cGapX','칩','칩 가로 간격',2,14,1,6),
+R('cGapY','칩','칩 세로 간격',2,14,1,6),
+R('cBdA','칩','칩 테두리 알파',0,1,.05,.6,''),
+R('cBgA','칩','칩 배경 알파(글래스)',0,1,.02,.78,''),
+R('cBlur','칩','칩 블러',0,16,1,8),
+R('cShd','칩','칩 그림자 강도',0,2,.05,1,'x'),
+S('cHovBd','칩','호버 테두리색',PAL,'var(--accent)','color'),
+S('cOnBg','칩','활성 칩 배경',PAL,'var(--accent)','color'),
+S('cOnC','칩','활성 칩 글자색',PAL,'var(--surface-solid)','color'),
+S('cOnFw','칩','활성 칩 굵기',LAD_FW.map(function(w){return[String(w),String(w)];}),'600','ladder'),
+R('cOnShdA','칩','활성 그림자 알파',0,.5,.02,.22,''),
+/* 7 버튼 (14) */
+R('btPy','버튼','버튼 세로 패딩',4,14,.5,7),
+R('btPx','버튼','버튼 가로 패딩',8,28,1,14),
+R('btRad','버튼','버튼 라운드',4,20,1,8,'px','ladder',LAD_RAD),
+R('btFs','버튼','버튼 글자 크기',10,15,.5,12,'px','ladder',LAD_FS),
+S('btFw','버튼','버튼 굵기',LAD_FW.map(function(w){return[String(w),String(w)];}),'700','ladder'),
+S('btPriBg','버튼','프라이머리 배경',PAL,'var(--accent)','color'),
+R('btPriShd','버튼','프라이머리 그림자',0,2,.05,1,'x'),
+S('btNeuBg','버튼','뉴트럴 배경',PAL,'var(--neutral)','color'),
+S('btNeuC','버튼','뉴트럴 글자색',PAL,'var(--neutral-text)','color'),
+S('btGhoC','버튼','고스트 글자색',PAL,'var(--accent)','color'),
+R('btGhoBdA','버튼','고스트 보더 알파',0,1,.05,.25,''),
+R('btLift','버튼','호버 리프트',0,3,.5,1),
+R('srGap','버튼','소스 행 버튼 간격',2,14,1,6),
+R('srMb','버튼','소스 행 밑여백',4,20,1,10),
+/* 8 입력 (12) */
+R('inRad','입력','입력 라운드',4,20,1,11,'px','ladder',LAD_RAD),
+R('inPy','입력','입력 세로 패딩',6,16,1,11),
+R('inPx','입력','입력 가로 패딩',8,20,1,13),
+R('inFs','입력','입력 글자 크기',11,15.5,.5,13.5,'px','ladder',LAD_FS),
+R('inBdA','입력','입력 보더 알파',.02,.3,.01,.11,''),
+S('inFocC','입력','포커스 보더색',PAL,'var(--accent)','color'),
+R('inRingW','입력','포커스 링 두께',0,7,.5,4),
+R('inRingA','입력','포커스 링 알파',0,.4,.01,.15,''),
+S('inPhC','입력','플레이스홀더 색',PAL,'var(--muted)','color'),
+R('taLh','입력','텍스트영역 행간',1.2,2.2,.05,1.6,''),
+R('taMinH','입력','자막 문구칸 높이',40,120,2,58),
+R('cutW','입력','컷 시각칸 폭',56,110,2,74),
+/* 9 스테이지 (8) */
+S('stBg','스테이지','스테이지 배경',PAL,'var(--text)','color'),
+R('stRad','스테이지','스테이지 라운드',0,24,1,12,'px','ladder',LAD_RAD),
+R('stMaxH','스테이지','최대 높이(vh)',26,64,1,46,'vh'),
+R('seIco','스테이지','빈상태 아이콘 크기',18,48,1,30),
+R('seFs','스테이지','빈상태 글자 크기',10,15,.5,12.5,'px','ladder',LAD_FS),
+R('seA','스테이지','빈상태 글자 알파',.2,1,.05,.55,''),
+R('seGap','스테이지','빈상태 간격',3,18,1,9),
+R('seLh','스테이지','빈상태 행간',1.2,2.2,.05,1.7,''),
+/* 10 자막 오버레이 (14) */
+R('capFs','자막','자막 크기(기본값)',14,64,1,30),
+S('capC','자막','자막 색(기본값)',PAL,'var(--surface-solid)','color'),
+S('capFw','자막','자막 굵기(기본값)',LAD_FW.map(function(w){return[String(w),String(w)];}),'700','ladder'),
+S('capFont','자막','자막 폰트(기본값)',FONTS,'inherit'),
+S('capPos','자막','기본 위치',Object.keys(POSN).map(function(p){return[p,POSN[p]];}),'bc'),
+R('capMg','자막','가장자리 여백 %',2,20,1,6,'%'),
+R('capLh','자막','자막 행간',1.1,2,.05,1.5,''),
+R('capMaxW','자막','자막 최대폭 %',50,100,1,88,'%'),
+R('capLs','자막','자막 자간',-1,3,.1,0),
+S('capBg','자막','배경 색(기본값)',PAL,'var(--text)','color'),
+R('capBgO','자막','배경 불투명도',0,1,.05,.55,''),
+R('capPad','자막','배경 둘레 여백',0,24,1,10),
+R('capBgRad','자막','배경 라운드',0,18,1,8,'px','ladder',LAD_RAD),
+R('capDemo','자막','미리보기 문구 크기 배율',.5,1.6,.05,1,'x'),
+/* 11 9분할 (8) */
+R('p9W','9분할','그리드 폭',120,260,2,186),
+R('p9Gap','9분할','셀 간격',2,12,1,5),
+S('p9AR','9분할','셀 비율',[['5/3','5:3(현행)'],['16/9','16:9'],['4/3','4:3'],['1/1','1:1']],'5/3'),
+R('p9Rad','9분할','셀 라운드',0,14,1,7,'px','ladder',LAD_RAD),
+R('p9BdA','9분할','셀 보더 알파',.02,.3,.01,.09,''),
+S('p9OnBg','9분할','선택 셀 색',PAL,'var(--accent)','color'),
+R('p9OnShdA','9분할','선택 그림자 알파',0,.5,.02,.25,''),
+/* 12 스와치 (8) */
+R('swSz','스와치','스와치 크기',18,40,1,26),
+R('swRad','스와치','스와치 라운드',0,20,1,8,'px','ladder',LAD_RAD),
+R('swBdA','스와치','스와치 보더 알파',.02,.3,.01,.09,''),
+R('swRingIn','스와치','선택 링 안쪽(흰)',1,5,.5,2.5),
+R('swRingOut','스와치','선택 링 바깥',2.5,8,.5,4.5),
+S('swRingC','스와치','선택 링 색',PAL,'var(--accent)','color'),
+/* 13 레인지·값 (5) */
+S('rngC','레인지','레인지 색(accent-color)',PAL,'var(--accent)','color'),
+R('rngMy','레인지','레인지 상하 여백',0,10,1,2),
+R('valFs','레인지','값 라벨 크기',9,14,.5,11.5,'px','ladder',LAD_FS),
+S('valC','레인지','값 라벨 색',PAL,'var(--dim)','color'),
+/* 14 스위치 (6) */
+R('onW','스위치','스위치 폭 ⚠전앱 공용',36,60,1,46),
+R('onH','스위치','스위치 높이 ⚠전앱 공용',16,28,1,20),
+S('onOn','스위치','ON 색',PAL,'var(--accent)','color'),
+S('onOff','스위치','OFF 색',PAL,'#cfd3dc','color'),
+/* 15 산출 (10) */
+R('outMt','산출','산출부 위 여백',6,30,1,16),
+R('lrFs','산출','산출 라벨 크기',10,15,.5,12.5,'px','ladder',LAD_FS),
+S('lrC','산출','산출 라벨 색',PAL,'var(--neutral-text)','color'),
+R('outMinH','산출','출력칸 최소 높이',100,300,5,170),
+R('outRad','산출','출력칸 라운드',4,20,1,12,'px','ladder',LAD_RAD),
+R('outPy','산출','출력칸 세로 패딩',8,24,1,15),
+R('outPx','산출','출력칸 가로 패딩',8,26,1,17),
+R('outFs','산출','출력 글자 크기',11,15.5,.5,13.5,'px','ladder',LAD_FS),
+R('outLh','산출','출력 행간',1.3,2.4,.05,1.9,''),
+S('outBg','산출','출력칸 배경',[['var(--surface-solid)','흰색'],['#fdfdff','틴트 흰(실물 상수)'],['var(--peach-bg)','피치 배경'],['var(--neutral)','뉴트럴']],'#fdfdff','color'),
+/* 16 노트 (7) */
+R('ntFs','노트','노트 글자 크기',9.5,13.5,.5,11.5,'px','ladder',LAD_FS),
+S('ntC','노트','노트 글자색',PAL,'var(--muted)','color'),
+R('ntBgA','노트','노트 배경 알파(흑)',0,.12,.005,.03,''),
+R('ntRad','노트','노트 라운드',4,16,1,9,'px','ladder',LAD_RAD),
+R('ntPy','노트','노트 세로 패딩',4,16,1,9),
+R('ntPx','노트','노트 가로 패딩',6,20,1,12),
+R('ntLh','노트','노트 행간',1.3,2.2,.05,1.7,''),
+/* 17 컷 행 (3) */
+R('cutGap','컷 행','컷 행 간격',2,14,1,6),
+R('cutMt','컷 행','컷 행 위 여백',2,14,1,6),
+/* 18 드롭다운(메뉴) (9) */
+R('ddPy','드롭다운','항목 세로 패딩',6,16,1,11),
+R('ddPx','드롭다운','항목 가로 패딩',8,22,1,14),
+R('ddFs','드롭다운','항목 글자 크기',11,15,.5,13,'px','ladder',LAD_FS),
+S('ddFw','드롭다운','항목 굵기',LAD_FW.map(function(w){return[String(w),String(w)];}),'600','ladder'),
+R('ddRad','드롭다운','항목 라운드',4,16,1,9,'px','ladder',LAD_RAD),
+R('ddHovA','드롭다운','호버 배경 알파',.02,.2,.005,.07,''),
+R('ddGlFs','드롭다운','그룹 라벨 크기',9,13,.5,11,'px','ladder',LAD_FS),
+S('ddGlC','드롭다운','그룹 라벨 색',PAL,'var(--dim)','color'),
+R('ddSepA','드롭다운','구분선 알파',0,.3,.01,.09,''),
+/* 19 모션·전이 (6) */
+R('mvT','모션','모달 등장 시간',.1,.6,.01,.25,'s'),
+R('tTrT','모션','탭 전환 전이',.05,.5,.01,.15,'s'),
+R('cTrT','모션','칩 전이',.05,.4,.01,.12,'s'),
+R('btTrT','모션','버튼 전이',.05,.4,.01,.15,'s'),
+R('onTrT','모션','스위치 전이',.05,.5,.01,.2,'s'),
+R('btPress','모션','버튼 눌림 스케일',.9,1,.005,.98,'x'),
+/* 20 보강 축 (21) */
+R('hPb','모달 셸','헤더 아래 패딩',4,24,1,12),
+S('mBg','모달 셸','모달 배경',[['var(--surface-solid)','흰색(현행)'],['var(--glass-surface)','글래스(진)'],['var(--peach-bg)','피치 배경'],['var(--neutral)','뉴트럴']],'var(--surface-solid)','color'),
+R('tOnBlur','탭','활성 탭 블러',0,16,1,8),
+S('cOnBd','칩','활성 칩 테두리색',PAL,'var(--accent)','color'),
+S('btPriC','버튼','프라이머리 글자색',PAL,'var(--surface-solid)','color'),
+S('inBg','입력','입력칸 배경',[['var(--surface-solid)','흰색(현행)'],['var(--peach-bg)','피치 배경'],['var(--neutral)','뉴트럴']],'var(--surface-solid)','color'),
+R('stBdA','스테이지','스테이지 테두리 알파',0,.3,.01,0,''),
+R('capBgBlur','자막','배경 블러(글래스 자막)',0,14,1,0),
+R('capBoxMt','자막','문구칸 위 여백',4,26,1,12),
+S('p9HovBd','9분할','셀 호버 테두리색',PAL,'var(--accent)','color'),
+R('p9FGap','9분할','9분할-여백 슬라이더 간격',8,34,1,18),
+R('swLift','스와치','스와치 호버 리프트',0,3,.5,1),
+R('swGap','스와치','스와치 간격',2,14,1,6),
+R('rngGap','레인지','레인지-값 간격',4,20,1,10),
+R('outBtnGap','산출','생성·복사 버튼 간격',2,14,1,6),
+R('outBdA','산출','출력칸 보더 알파',.02,.3,.01,.11,''),
+R('madeMt','레이아웃','제작본 행 위 여백',4,22,1,10),
+R('cutPy','컷 행','컷 입력 세로 패딩',4,12,1,7),
+R('cutFs','컷 행','컷 입력 글자 크기',10,15,.5,12.5,'px','ladder',LAD_FS),
+R('ddW','드롭다운','메뉴 최소폭',170,300,2,210),
+R('ddPad','드롭다운','메뉴 패딩',2,14,1,6),
+R('ddWrapRad','드롭다운','메뉴 라운드',6,24,1,16,'px','ladder',LAD_RAD)
+];
+
+/* ══ 프리셋(현행 포함 4 · 지오메트리 위주 = 역할색 재지정 없음) ══ */
+var DEFAULTS={};AXES.forEach(function(a){DEFAULTS[a.k]=a.cur;});
+var PRESETS=[
+ {id:'p0',nm:'현행',st:{}},
+ {id:'p1',nm:'★ 소프트 스튜디오',star:1,st:{tWrapRad:12,tRad:10,cRad:999,cPy:6,cPx:13,cGapX:7,cGapY:7,btRad:10,inRad:12,stRad:14,sNRad:8,fGap:17,colGap:24,sMt:22,sPt:16,outRad:14,ntRad:11,bPy:24,bPx:28,hPy:17,mShd:1.25,cShd:1.2}},
+ {id:'p2',nm:'컴팩트(밀도)',st:{mW:1060,hPy:11,hPx:18,bPy:14,bPx:18,colGap:14,fGap:11,sMt:13,sPt:10,sMb:7,cPy:4,cPx:9,cFs:11.5,cGapX:5,cGapY:5,btPy:6,btPx:12,btFs:11.5,inPy:9,inPx:11,taMinH:48,outMinH:130,stMaxH:38,lbMb:5,chMb:9,sNSz:18,tPy:6,tPx:13}},
+ {id:'p3',nm:'딥 포커스 스테이지',st:{bdA:.52,bdBlur:7,stMaxH:54,stRad:16,seA:.68,capDemo:1.15,mShd:1.4,tOnShd:1.3,cBgA:.9,cBlur:10}}
+];
+
+/* ══ 상태 ══ */
+var state={},viewMode='tune',outMode='diff',activeTab=1,capText='예울마루에서 만나요',
+    demoChips={},demoPos='bc',demoSw=true,demoSwatch='var(--surface-solid)';
+Object.keys(DEFAULTS).forEach(function(k){state[k]=DEFAULTS[k];});
+
+function near(a,b){return Math.abs((+a)-(+b))<.0001;}
+function isLadderOff(a,v){if(a.cls!=='ladder')return false;var lad=a.lad||(a.t==='sel'?null:null);
+  if(a.t==='sel')return false; /* select 사다리 = 항상 눈금 안 */
+  return !(a.lad||[]).some(function(x){return near(x,v);});}
+function isColorOff(a,v){return a.cls==='color'&&String(v)!==String(a.cur);}
+function axWarn(a){var v=state[a.k];
+  if(a.cls==='ladder'&&a.t==='rng')return isLadderOff(a,v);
+  if(a.cls==='color')return isColorOff(a,v);
+  return false;}
+function changed(a){return String(state[a.k])!==String(a.cur);}
+
+/* ══ 재현 DOM ══ */
+var vp=document.getElementById('vp');
+function esc(s){return String(s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function chipRow(list,key){var h='<div class="chips">';list.forEach(function(o,i){var on=!!(demoChips[key]&&demoChips[key][i]);h+='<button type="button" class="chip'+(on?' on':'')+'" data-ck="'+key+'" data-ci="'+i+'">'+esc(o)+'</button>';});return h+'</div>';}
+function bodyTab1(){
+ return '<div class="vewrap">'
+  +'<div class="vecol"><div class="vecolhead">기본 영상 삽입 또는 URL 입력</div>'
+  +'<div class="srow"><button class="b gho">영상 파일 삽입</button><input class="inp" placeholder="영상 직링크(mp4 등) 또는 유튜브·Vimeo 주소"><button class="b neu">불러오기</button></div>'
+  +'<div class="vesec first"><span class="n">1</span><span>미리보기 화면</span></div>'
+  +'<div class="stage"><div class="stage-empty"><div class="ico">🎞️</div><div>영상 파일을 삽입하거나 URL을 불러오면<br>미리보기가 여기 표시돼요</div></div></div>'
+  +'<div class="srow" style="margin-top:calc(var(--t-madeMt)*1px)"><button class="b gho">이 영상을 제작본으로 지정</button><span class="val">지정하면 2. 자막 삽입이 이어받아요</span></div>'
+  +'<div class="lr"><div class="lrl">산출 — 작업 사양서</div><div class="btnrow"><button class="b pri">사양서 생성</button><button class="b neu">복사</button></div></div>'
+  +'<textarea class="out" readonly placeholder="[생성]을 누르면 선택값이 사양서 텍스트로 조립돼요"></textarea>'
+  +'<div class="note">미리보기 프레임 = 리사이징 비율 선택값 · 음량 슬라이더는 미리보기 소리에 바로 반영돼요(100% 초과 증폭은 사양서에만 기록)</div></div>'
+  +'<div class="vecol">'
+  +'<div class="vesec first"><span class="n">2</span><span>리사이징</span></div>'
+  +'<div class="vefield"><span class="velabel">비율 선택</span>'+chipRow(['원본 유지','16:9','9:16','1:1','4:5','21:9'],'ratio')+'</div>'
+  +'<div class="vefield"><span class="velabel">모델 선택 (생성형 — 화면 확장·아웃페인트)</span>'+chipRow(['사용 안 함(크롭·레터박스)','Runway 아웃페인트','Kling 화면 확장','Pika 캔버스 확장','Adobe Firefly'],'gen')+'</div>'
+  +'<div class="vesec"><span class="n">3</span><span>영상 편집</span></div>'
+  +'<div class="vefield"><span class="velabel">구간 보정 (컷 편집 — 남길 구간, 분:초)</span>'
+  +'<div class="cut"><span class="val" style="width:14px;text-align:right">1</span><input class="inp" value="0:05"><button class="b gho" style="padding:4px 8px">현재</button><span class="val">~</span><input class="inp" value="0:48"><button class="b gho" style="padding:4px 8px">현재</button><button class="b neu" style="padding:4px 10px">삭제</button></div>'
+  +'<button class="b neu" style="margin-top:8px">구간 추가</button></div>'
+  +'<div class="vefield"><span class="velabel">프레임 개선 (복수 선택)</span>'+chipRow(['프레임 보간(부드럽게)','업스케일(화질 향상)','흔들림 보정','노이즈 제거'],'frame')+'</div>'
+  +'<div class="vesec"><span class="n">4</span><span>음향 편집</span></div>'
+  +'<div class="vefield"><span class="velabel">특정 음향 제거 (복수 선택)</span>'+chipRow(['배경 소음','바람 소리','전기 잡음(험)','박수·환호','배경 음악(BGM)','음성만 남기기'],'snd')+'</div>'
+  +'<div class="vefield"><span class="velabel">음량 보정</span><div class="rrow"><input type="range" class="rng" min="0" max="150" value="110"><span class="val">110%</span></div></div>'
+  +'<div class="vesec"><span class="n">5</span><span>기타 기능</span><span class="sub">복수 선택 가능</span></div>'
+  +'<div class="vefield">'+chipRow(['모자이크','트래킹','키잉(배경 분리)'],'extra')+'</div>'
+  +'<div class="vefield"><span class="velabel">상세 요청 (선택)</span><textarea class="ta" placeholder="예: 관객 얼굴 전체 모자이크 · 무대 위 인물 트래킹"></textarea></div>'
+  +'</div></div>';
+}
+function bodyTab2(){
+ var demo=capText||'자막 미리보기 문구';
+ return '<div class="vewrap">'
+  +'<div class="vecol"><div class="vecolhead">제작본 불러오기 · 기본 영상 삽입 · URL 입력</div>'
+  +'<div class="srow"><button class="b pri">제작본 불러오기</button><button class="b gho">영상 파일 삽입</button><input class="inp" placeholder="영상 직링크 또는 유튜브·Vimeo 주소"><button class="b neu">불러오기</button></div>'
+  +'<div class="vesec first"><span class="n">1</span><span>미리보기 화면</span><span class="sub">자막이 실시간으로 얹혀요</span></div>'
+  +'<div class="stage"><div class="stage-empty"><div class="ico">🎞️</div><div>영상 없이도 자막 스타일을 미리 볼 수 있어요</div></div>'
+  +'<div class="cap pgcap"><span class="bgl"></span><span class="tx">'+esc(demo)+'</span></div></div>'
+  +'<div class="vefield" style="margin-top:calc(var(--t-capBoxMt)*1px)"><span class="velabel">자막 문구 (미리보기 즉시 반영)</span><textarea class="ta pgcaptxt">'+esc(capText)+'</textarea></div>'
+  +'<div class="lr"><div class="lrl">산출 — 자막 사양서</div><div class="btnrow"><button class="b pri">사양서 생성</button><button class="b neu">복사</button></div></div>'
+  +'<textarea class="out" readonly placeholder="[생성]을 누르면 선택값이 자막 사양서로 조립돼요"></textarea></div>'
+  +'<div class="vecol">'
+  +'<div class="vesec first"><span class="n">2</span><span>위치</span></div>'
+  +'<div class="vefield" style="display:flex;gap:calc(var(--t-p9FGap)*1px);flex-wrap:wrap"><div><span class="velabel">화면 9분할 선택</span><div class="pos9 pgpos9"></div></div>'
+  +'<div style="flex:1;min-width:150px"><span class="velabel">가장자리 여백</span><div class="rrow"><input type="range" class="rng" min="2" max="20" value="6"><span class="val">6%</span></div></div></div>'
+  +'<div class="vesec"><span class="n">3</span><span>표기법</span><span class="sub">복수 선택</span></div>'
+  +'<div class="vefield">'+chipRow(['표준어 교정','구어체 유지','화자 구분 [이름]','외래어 한글 표기','숫자 아라비아 표기','존댓말 통일'],'style')+'</div>'
+  +'<div class="vesec"><span class="n">4</span><span>디자인</span></div>'
+  +'<div class="vefield"><span class="velabel">가) 자막 편집 — 자막 크기</span><div class="rrow"><input type="range" class="rng" min="14" max="64" value="34"><span class="val">34px</span></div></div>'
+  +'<div class="vefield"><span class="velabel">자막 색 (브랜드 팔레트 폐쇄형)</span><div style="display:flex;flex-wrap:wrap" class="pgswc"></div></div>'
+  +'<div class="vefield"><span class="velabel">자막 폰트</span>'+chipRow(['고딕(기본)','명조','모노'],'font')+'</div>'
+  +'<div class="vefield"><span class="velabel">굵기</span>'+chipRow(['보통','굵게','아주 굵게'],'wt')+'</div>'
+  +'<div class="vefield" style="display:flex;align-items:center;gap:10px;margin-top:18px"><span class="velabel" style="margin:0">나) 자막 배경 편집</span><div class="sw2 pgsw2'+(demoSw?' on':'')+'"><div class="k"></div></div></div>'
+  +'<div class="pgbgset"'+(demoSw?'':' style="display:none"')+'><div class="vefield"><span class="velabel">배경 크기 (글자 둘레 여백)</span><div class="rrow"><input type="range" class="rng" min="0" max="24" value="10"><span class="val">10px</span></div></div>'
+  +'<div class="vefield"><span class="velabel">배경 색</span><div style="display:flex;flex-wrap:wrap" class="pgswb"></div></div>'
+  +'<div class="vefield"><span class="velabel">배경 투명도 (높을수록 투명)</span><div class="rrow"><input type="range" class="rng" min="0" max="100" value="45"><span class="val">45%</span></div></div></div>'
+  +'</div></div>';
+}
+function bodyTab3(){
+ return '<div class="vewrap">'
+  +'<div class="vecol">'
+  +'<div class="vesec first"><span class="n">1</span><span>스토리 기입</span></div>'
+  +'<div class="vefield"><textarea class="ta" style="min-height:150px">밤의 예울마루 대극장 로비. 샹들리에 불빛 아래 관객들이 설레는 표정으로 입장하고, 카메라는 문 밖에서 로비 안쪽으로 천천히 밀고 들어간다.</textarea></div>'
+  +'<div class="lr"><div class="lrl">산출 — 영상 생성 프롬프트</div><div class="btnrow"><button class="b pri">프롬프트 생성</button><button class="b neu">복사</button></div></div>'
+  +'<textarea class="out" readonly>[영상 생성 프롬프트] 모델: Veo 3\n\n◼ 스토리\n밤의 예울마루 대극장 로비…\n\n◼ 표현: 화풍 — 애니메이션 › 재패니메이션\n◼ 개요: 16:9 · 1080p · 24fps · 8초\n◼ 오디오: 자동 생성 BGM</textarea>'
+  +'<div class="note">생성한 프롬프트는 선택한 모델의 입력창에 그대로 붙여 넣는 용도예요.</div></div>'
+  +'<div class="vecol">'
+  +'<div class="vesec first"><span class="n">2</span><span>모델 선택</span></div>'
+  +'<div class="vefield">'+chipRow(['Veo 3','Sora','Kling 2.1','Runway Gen-4','Pika 2.2','Luma Dream Machine','Hailuo(MiniMax)'],'model')+'</div>'
+  +'<div class="vesec"><span class="n">3</span><span>영상 개요</span></div>'
+  +'<div class="vefield"><span class="velabel">비율</span>'+chipRow(['16:9','9:16','1:1','4:5','21:9'],'pr')+'</div>'
+  +'<div class="vefield"><span class="velabel">화질</span>'+chipRow(['720p','1080p','4K'],'pq')+'</div>'
+  +'<div class="vefield"><span class="velabel">프레임</span>'+chipRow(['24fps','30fps','60fps'],'pf')+'</div>'
+  +'<div class="vefield"><span class="velabel">길이</span>'+chipRow(['5초','8초','10초','15초','30초'],'pd')+'</div>'
+  +'<div class="vesec"><span class="n">4</span><span>영상 표현</span></div>'
+  +'<div class="vefield"><span class="velabel">표현 방식 — 실사 또는 화풍</span>'+chipRow(['실사','화풍'],'pm')+'</div>'
+  +'<div class="vefield"><span class="velabel">표현2 화풍</span>'+chipRow(['애니메이션','3D 렌더','수채화','유화','파스텔','픽셀 아트','스톱모션','일러스트','웹툰','레트로 필름'],'p2')+'</div>'
+  +'<div class="vefield"><span class="velabel">표현3 화풍 — 애니메이션 세부</span>'+chipRow(['2D 셀 애니','재패니메이션','카툰','모션 그래픽'],'p3')+'</div>'
+  +'<div class="vefield"><span class="velabel">네거티브 설정</span>'+chipRow(['글자·자막·워터마크','왜곡된 손·신체','저화질·블러','과포화·플리커','로고·브랜드 노출'],'neg')+'</div>'
+  +'<div class="vefield" style="display:flex;align-items:center;gap:10px;margin-top:18px"><span class="velabel" style="margin:0">정교화 여부 — 참조 이미지 생성</span><div class="sw2 on"><div class="k"></div></div></div>'
+  +'<div class="vefield"><span class="velabel">참조 이미지 모델</span>'+chipRow(['Imagen 3','Midjourney','FLUX','DALL·E 3','Stable Diffusion 3'],'ref')+'</div>'
+  +'<div class="vefield"><span class="velabel">오디오 선택</span>'+chipRow(['없음(무음)','자동 생성 BGM','현장음(앰비언스)','내레이션 자리 비움','효과음 중심'],'aud')+'</div>'
+  +'</div></div>';
+}
+function modalHtml(scope){
+ var tabs=['1. 영상 편집','2. 자막 삽입','3. 영상 프롬프팅'];
+ var h='<div class="vemodal"><button class="vex" title="닫기(재현)">✕</button><div class="vehead"><span class="vettl">🎬 영상 편집기</span><div class="vetabs">';
+ tabs.forEach(function(t,i){h+='<button class="vetab'+((i+1)===activeTab?' active':'')+'" data-tab="'+(i+1)+'">'+t+'</button>';});
+ h+='</div></div><div class="vebody">'+(activeTab===1?bodyTab1():activeTab===2?bodyTab2():bodyTab3())+'</div></div>';
+ return h;
+}
+function ddHtml(){
+ return '<div class="dd"><div class="glb">콘텐츠 제작</div><button type="button" class="it">네이버 블로그</button>'
+  +'<div class="sep">영상 편집기</div><button type="button" class="it">1. 영상 편집</button><button type="button" class="it">2. 자막 삽입</button><button type="button" class="it">3. 영상 프롬프팅</button></div>';
+}
+function renderVP(){
+ var h='';
+ if(viewMode==='cmp'){
+   h='<div class="half L"><div class="halfcap">튜닝</div><div class="app" id="app" style="position:absolute;inset:0;width:200%;transform:scale(.5);transform-origin:top left;height:200%">'+(ddOpen?ddHtml():'')+modalHtml('app')+'</div></div>'
+    +'<div class="half R"><div class="halfcap">현행(고정)</div><div class="base" style="position:absolute;inset:0;width:200%;transform:scale(.5);transform-origin:top left;height:200%">'+modalHtml('base')+'</div></div>';
+ }else if(viewMode==='base'){
+   h='<div class="base">'+modalHtml('base')+'</div>';
+ }else{
+   h='<div class="app" id="app">'+(ddOpen?ddHtml():'')+modalHtml('app')+'</div>';
+ }
+ vp.innerHTML=h;
+ wireVP();applyAll();
+}
+function wireVP(){
+ vp.querySelectorAll('.vetab').forEach(function(b){b.onclick=function(){activeTab=+b.dataset.tab;renderVP();};});
+ vp.querySelectorAll('.chip[data-ck]').forEach(function(b){b.onclick=function(){
+   var k=b.dataset.ck,i=b.dataset.ci;demoChips[k]=demoChips[k]||{};demoChips[k][i]=!demoChips[k][i];
+   b.classList.toggle('on',!!demoChips[k][i]);};});
+ vp.querySelectorAll('.pgcaptxt').forEach(function(ta){ta.oninput=function(){capText=ta.value;
+   vp.querySelectorAll('.pgcap .tx').forEach(function(tx){tx.textContent=(capText.trim()||'자막 미리보기 문구');});};});
+ vp.querySelectorAll('.pgsw2').forEach(function(sw){sw.onclick=function(){demoSw=!demoSw;
+   vp.querySelectorAll('.pgsw2').forEach(function(x){x.classList.toggle('on',demoSw);});
+   vp.querySelectorAll('.pgbgset').forEach(function(st){st.style.display=demoSw?'':'none';});
+   vp.querySelectorAll('.pgcap .bgl').forEach(function(bg){bg.style.display=demoSw?'':'none';});};});
+ var capCols=[['var(--surface-solid)','흰색'],['var(--text)','검정'],['var(--accent)','인디고'],['var(--c2)','살몬'],['var(--c6)','옐로'],['var(--green)','그린'],['var(--danger)','레드'],['var(--c5)','시안']];
+ vp.querySelectorAll('.pgpos9').forEach(function(p9){
+   Object.keys(POSN).forEach(function(p){var b=document.createElement('button');b.type='button';b.title=POSN[p];if(p===demoPos)b.className='on';
+     b.onclick=function(){demoPos=p;vp.querySelectorAll('.pgpos9').forEach(function(g){var bs=g.querySelectorAll('button');Object.keys(POSN).forEach(function(pp,j){bs[j].classList.toggle('on',pp===demoPos);});});placeCap();};
+     p9.appendChild(b);});
+ });
+ vp.querySelectorAll('.pgswc').forEach(function(swc){
+   capCols.forEach(function(c){var b=document.createElement('button');b.type='button';b.className='swt'+(demoSwatch===c[0]?' on':'');b.style.background=c[0];b.title=c[1];
+     b.onclick=function(){demoSwatch=c[0];vp.querySelectorAll('.pgswc .swt').forEach(function(x){x.classList.toggle('on',x.title===c[1]);});placeCap();};
+     swc.appendChild(b);});
+ });
+ vp.querySelectorAll('.pgswb').forEach(function(swb){
+   [['var(--text)','검정'],['var(--surface-solid)','흰색'],['var(--accent)','인디고']].forEach(function(c,i){var b=document.createElement('button');b.type='button';b.className='swt'+(i===0?' on':'');b.style.background=c[0];b.title=c[1];
+     b.onclick=function(){vp.querySelectorAll('.pgswb .swt').forEach(function(x){x.classList.toggle('on',x.title===c[1]);});vp.querySelectorAll('.pgcap .bgl').forEach(function(bg){bg.style.background=c[0];});};
+     swb.appendChild(b);});
+ });
+ placeCap();
+}
+function placeCap(){
+ var p=demoPos;
+ vp.querySelectorAll('.pgcap').forEach(function(cap){
+   var m=(cap.closest('.base')?6:state.capMg)+'%';   // 현행 고정본은 여백 축 고정(6%) — 튜닝값 미전파
+   cap.style.top='';cap.style.bottom='';cap.style.left='';cap.style.right='';cap.style.transform='';
+   if(p.charAt(0)==='t')cap.style.top=m;else if(p.charAt(0)==='m')cap.style.top='50%';else cap.style.bottom=m;
+   if(p.charAt(1)==='l')cap.style.left=m;else if(p.charAt(1)==='r')cap.style.right=m;else cap.style.left='50%';
+   var dx=(p.charAt(1)==='c')?'-50%':'0',dy=(p.charAt(0)==='m')?'-50%':'0';
+   if(dx!=='0'||dy!=='0')cap.style.transform='translate('+dx+','+dy+')';
+   if(demoSwatch)cap.style.color=demoSwatch;
+ });
+}
+
+/* ══ 콘솔 구축 ══ */
+var groupsEl=document.getElementById('groups'),axRows={};
+function buildConsole(){
+ var byG={};AXES.forEach(function(a){(byG[a.g]=byG[a.g]||[]).push(a);});
+ var gi=0,h='';
+ Object.keys(byG).forEach(function(g){
+   h+='<details class="grp"'+(gi<2?' open':'')+'><summary><span class="tri">▶</span>'+esc(g)+'<span class="gcnt">'+byG[g].length+'축</span></summary><div class="grpbody">';
+   byG[g].forEach(function(a){
+     h+='<div class="ax" data-k="'+a.k+'" data-nm="'+esc(a.g+' '+a.nm)+'"><div class="nm">'+esc(a.nm)+'<span class="w" style="display:none" title="사다리·토큰 밖 = 기틀 갱신 역제안 대상">⚠</span></div><div>';
+     if(a.t==='rng'){
+       var listId='';
+       if(a.cls==='ladder'&&a.lad){listId='lad-'+a.k;}
+       h+='<input type="range" min="'+a.min+'" max="'+a.max+'" step="'+a.step+'" value="'+state[a.k]+'"'+(listId?' list="'+listId+'"':'')+' data-ax="'+a.k+'">';
+       if(listId){h+='<datalist id="'+listId+'">'+a.lad.map(function(v){return '<option value="'+v+'"></option>';}).join('')+'</datalist>';}
+     }else{
+       h+='<select data-ax="'+a.k+'">'+a.opts.map(function(o){return '<option value="'+esc(o[0])+'"'+(String(state[a.k])===String(o[0])?' selected':'')+'>'+esc(o[1])+'</option>';}).join('')+'</select>';
+     }
+     h+='</div><div class="vv"><span class="cv"></span><span class="tag"></span></div></div>';
+   });
+   h+='</div></details>';gi++;
+ });
+ groupsEl.innerHTML=h;
+ groupsEl.querySelectorAll('[data-ax]').forEach(function(el){
+   var k=el.dataset.ax;
+   el.addEventListener('input',function(){state[k]=(el.tagName==='SELECT')?el.value:+el.value;markCustom();applyAll();});
+ });
+ groupsEl.querySelectorAll('.ax').forEach(function(row){axRows[row.dataset.k]=row;});
+}
+document.getElementById('q').addEventListener('input',function(){
+ var q=this.value.trim().toLowerCase();
+ groupsEl.querySelectorAll('.ax').forEach(function(r){r.style.display=(!q||r.dataset.nm.toLowerCase().indexOf(q)>=0)?'':'none';});
+ groupsEl.querySelectorAll('details.grp').forEach(function(d){
+   var vis=Array.prototype.some.call(d.querySelectorAll('.ax'),function(r){return r.style.display!=='none';});
+   d.style.display=vis?'':'none';if(q)d.open=true;});
+});
+
+/* ══ 프리셋 ══ */
+var presetsEl=document.getElementById('presets'),curPreset='p0';
+function buildPresets(){
+ presetsEl.innerHTML='';
+ PRESETS.forEach(function(p){
+   var b=document.createElement('button');b.className='pbtn'+(curPreset===p.id?' on':'');b.textContent=(p.star?'★ ':'')+p.nm.replace(/^★ /,'');
+   b.onclick=function(){curPreset=p.id;state={};Object.keys(DEFAULTS).forEach(function(k){state[k]=DEFAULTS[k];});Object.keys(p.st).forEach(function(k){state[k]=p.st[k];});buildPresets();syncInputs();applyAll();};
+   presetsEl.appendChild(b);
+ });
+}
+function markCustom(){if(curPreset!=='custom'){curPreset='custom';presetsEl.querySelectorAll('.pbtn').forEach(function(b){b.classList.remove('on');});}}
+function syncInputs(){
+ groupsEl.querySelectorAll('[data-ax]').forEach(function(el){var k=el.dataset.ax;
+   if(el.tagName==='SELECT')el.value=String(state[k]);else el.value=state[k];});
+}
+
+/* ══ 보기 모드 ══ */
+var viewsegEl=document.getElementById('viewseg'),ddOpen=false;
+[['tune','튜닝'],['base','현행(고정)'],['cmp','좌우 비교'],['reopen','모달 재열기(모션)']].forEach(function(v){
+ var b=document.createElement('button');b.className='vbtn'+(v[0]==='tune'?' on':'');b.textContent=v[1];b.dataset.vm=v[0];
+ b.onclick=function(){
+   if(v[0]==='reopen'){renderVP();return;}
+   viewMode=v[0];viewsegEl.querySelectorAll('.vbtn[data-vm]').forEach(function(x){x.classList.remove('on');});b.classList.add('on');renderVP();
+ };
+ viewsegEl.appendChild(b);
+});
+var ddBtn=document.createElement('button');ddBtn.className='vbtn';ddBtn.textContent='메뉴 미리보기';
+ddBtn.onclick=function(){ddOpen=!ddOpen;ddBtn.classList.toggle('on',ddOpen);renderVP();};
+viewsegEl.appendChild(ddBtn);
+
+/* ══ 반영 ══ */
+function fmt(a,v){if(a.t==='sel')return v;var u=a.unit||'px';return (u==='')?String(Math.round(v*1000)/1000):String(Math.round(v*1000)/1000)+u;}
+function applyAll(){
+ var app=document.getElementById('app');
+ if(app){AXES.forEach(function(a){var v=state[a.k];
+   var cssv;
+   if(a.t==='sel')cssv=String(v);
+   else if(a.unit==='fr')cssv=v+'fr';           /* grid는 var 그대로 소비 — 단위 포함 주입 */
+   else if(a.unit==='s')cssv=v+'s';
+   else cssv=String(v); /* px·vh·%·무단위·배율은 CSS에서 calc(var*1px 등)로 곱함 — 숫자만 주입 */
+   app.style.setProperty('--t-'+a.k,cssv);
+ });
+ /* 데모 자막 크기 배율 — capFs×capDemo */
+ app.style.setProperty('--t-capFs',String(state.capFs*state.capDemo));
+ }
+ var warn=0;
+ AXES.forEach(function(a){var row=axRows[a.k];if(!row)return;
+   var w=axWarn(a);if(w)warn++;
+   row.querySelector('.w').style.display=w?'':'none';
+   row.querySelector('.cv').textContent=fmt(a,state[a.k])+(changed(a)?'':' (현행)');
+   var tag=row.querySelector('.tag');
+   if(!changed(a)){tag.textContent='';}
+   else if(w){tag.textContent='⚠ 갱신 역제안';tag.className='tag upd';}
+   else{tag.textContent=(a.cls==='ladder'||a.cls==='color')?'계승(눈금 안)':'갱신 후보';tag.className='tag '+((a.cls==='ladder'||a.cls==='color')?'inh':'upd');}
+ });
+ var wb=document.getElementById('warnbar');
+ if(warn>0){wb.textContent='⚠ 기틀 이탈 '+warn+'축 — 복사 시 「기틀 갱신 역제안」 블록이 포함돼요';wb.classList.add('show');}
+ else wb.classList.remove('show');
+ placeCap();buildOut();
+}
+
+/* ══ 출력 ══ */
+var outEl=document.getElementById('out');
+document.getElementById('outDiff').onclick=function(){outMode='diff';this.classList.add('on');document.getElementById('outAll').classList.remove('on');buildOut();};
+document.getElementById('outAll').onclick=function(){outMode='all';this.classList.add('on');document.getElementById('outDiff').classList.remove('on');buildOut();};
+function outText(includeWarn){
+ var lines=['[영상 편집기 커스텀 — 선택값 '+(outMode==='diff'?'(변경분)':'(전체)')+']'];
+ var warns=[];
+ var byG={};AXES.forEach(function(a){(byG[a.g]=byG[a.g]||[]).push(a);});
+ Object.keys(byG).forEach(function(g){
+   var rows=byG[g].filter(function(a){return outMode==='all'||changed(a);});
+   if(!rows.length)return;
+   lines.push('');lines.push('■ '+g);
+   rows.forEach(function(a){
+     var w=axWarn(a);
+     var tag=!changed(a)?'현행':(w?'⚠기틀 갱신':((a.cls==='ladder'||a.cls==='color')?'계승':'갱신 후보'));
+     lines.push('- '+a.nm+': '+fmt(a,state[a.k])+'  [현행 '+fmt(a,a.cur)+'] ('+tag+')');
+     if(w)warns.push({a:a});
+   });
+ });
+ if(warns.length&&includeWarn){
+   lines.push('');lines.push('🔁 기틀 갱신 역제안 — 아래 축은 사다리·토큰 밖(§🚨 승인·편입 3점 세트 경로, 적용 = 전 앱 동일 축 일괄)');
+   warns.forEach(function(x){lines.push('· '+x.a.g+' › '+x.a.nm+': 현행 기틀 '+fmt(x.a,x.a.cur)+' → 제안 '+fmt(x.a,state[x.a.k]));});
+ }
+ return {text:lines.join('\n'),warns:warns};
+}
+function buildOut(){outEl.textContent=outText(true).text;}
+
+/* ══ 복사(⚠ 모달) ══ */
+function toast(m){var t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(toast._t);toast._t=setTimeout(function(){t.classList.remove('show');},2200);}
+function doCopy(txt){
+ if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(txt).then(function(){toast('복사했어요 📋');},function(){fallbackCopy(txt);});}
+ else fallbackCopy(txt);
+}
+function fallbackCopy(txt){var ta=document.createElement('textarea');ta.value=txt;ta.style.position='fixed';ta.style.left='-9999px';document.body.appendChild(ta);ta.select();try{document.execCommand('copy');toast('복사했어요 📋');}catch(e){toast('복사 실패 — 출력을 직접 선택해 주세요');}document.body.removeChild(ta);}
+var cpm=document.getElementById('cpmodal');
+document.getElementById('copy').onclick=function(){
+ var r=outText(true);
+ if(!r.warns.length){doCopy(r.text);return;}
+ var ul=document.getElementById('cpwarnlist');ul.innerHTML='';
+ r.warns.forEach(function(x){var li=document.createElement('li');li.textContent=x.a.g+' › '+x.a.nm+' — 현행 '+fmt(x.a,x.a.cur)+' → '+fmt(x.a,state[x.a.k]);ul.appendChild(li);});
+ cpm.classList.add('show');
+};
+document.getElementById('cpAll').onclick=function(){cpm.classList.remove('show');doCopy(outText(true).text);};
+document.getElementById('cpInh').onclick=function(){cpm.classList.remove('show');
+ var keep=outText(false).text+'\n\n(⚠ 기틀 이탈 축 '+outText(true).warns.length+'개는 제외하고 복사했어요)';doCopy(keep);};
+document.getElementById('cpNo').onclick=function(){cpm.classList.remove('show');};
+cpm.addEventListener('click',function(e){if(e.target===cpm)cpm.classList.remove('show');});
+document.getElementById('reset').onclick=function(){curPreset='p0';state={};Object.keys(DEFAULTS).forEach(function(k){state[k]=DEFAULTS[k];});buildPresets();syncInputs();applyAll();toast('현행 실측값으로 초기화');};
+
+/* ══ 초기화 ══ */
+document.getElementById('axn').textContent=AXES.length;
+document.getElementById('axcnt').textContent='총 '+AXES.length+'축 · 자유/사다리/팔레트 3분류 · 검색 지원';
+buildConsole();buildPresets();renderVP();
+</script>
+</body></html>
