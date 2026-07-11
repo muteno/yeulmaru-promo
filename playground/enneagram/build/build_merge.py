@@ -5,9 +5,9 @@ import io, json, os
 
 SP = os.path.dirname(os.path.abspath(__file__))   # this build/ folder
 DESK = os.path.dirname(SP)                          # toolkit root: sources + output live here
-analyzer = io.open(DESK + r'\enneagram_analyzer.html', encoding='utf-8').read()
-transcripts = io.open(DESK + r'\enneagram_transcripts.js', encoding='utf-8').read()
-book = io.open(DESK + r'\enneagram_book.html', encoding='utf-8').read()
+analyzer = io.open(os.path.join(DESK, 'enneagram_analyzer.html'), encoding='utf-8').read()
+transcripts = io.open(os.path.join(DESK, 'enneagram_transcripts.js'), encoding='utf-8').read()
+book = io.open(os.path.join(DESK, 'enneagram_book.html'), encoding='utf-8').read()
 font_b64 = io.open(os.path.join(SP, 'pretendard_b64.txt')).read().strip()
 
 def sub(text, old, new, label):
@@ -77,8 +77,10 @@ inject = ('<script>\n'
           '</script>\n</body>')
 analyzer = sub(analyzer, '</body>', inject, '</body>')
 
-out = DESK + r'\enneagram_all.html'
-io.open(out, 'w', encoding='utf-8').write(analyzer)
+out = os.path.join(DESK, 'enneagram_all.html')
+# 산출물은 CRLF 로 고정 출력 — git 추적 대상이라 빌드 OS(Windows/Linux)에 따라
+# 줄바꿈이 달라지면 4MB 파일 전체가 diff 로 잡힌다. 플랫폼 불문 CRLF 로 통일.
+io.open(out, 'w', encoding='utf-8', newline='\r\n').write(analyzer)
 print('merged ->', out)
 print('size_kb=%d  (analyzer+transcripts+book)' % (len(analyzer.encode('utf-8')) // 1024))
 print('has_book_tab:', "label:'이론'" in analyzer)
