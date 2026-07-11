@@ -351,6 +351,18 @@
   .lec-chip{font-size:11.5px;font-weight:700;color:var(--ink);background:#f4ede0;border:none;border-radius:14px;padding:5px 10px;cursor:pointer;max-width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:all .15s;}
   .lec-chip:hover{background:var(--ink);color:var(--bg);}
   .ico-tps{display:flex;gap:5px;justify-content:center;margin-bottom:6px;}
+  /* 강의 원문 발췌 인용 — .lec-snip(#f7f1e6) 발췌색 + 유형색 좌측선 계승(새 색 0) */
+  .th-quote{position:relative;background:#f7f1e6;border-radius:10px;border-left:3px solid var(--qc,var(--line));padding:9px 12px;margin-bottom:9px;overflow:hidden;}
+  .th-quote .qmark{position:absolute;top:0;right:9px;font-family:Georgia,serif;font-weight:900;font-size:34px;line-height:1.2;color:var(--line);pointer-events:none;user-select:none;}
+  .th-qlb{display:block;font-size:10px;font-weight:800;letter-spacing:.5px;color:var(--sub);margin-bottom:3px;}
+  .th-qt{font-size:12.5px;line-height:1.6;color:var(--ink);position:relative;z-index:1;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;}
+  .th-qsrc{display:flex;justify-content:flex-end;margin-top:6px;}
+  .th-axis{font-size:12.5px;line-height:1.55;background:var(--bg);border-radius:10px;padding:8px 11px;margin-bottom:9px;}
+  .th-axis .th-clb{color:var(--sub);}
+  .sub1bio{font-size:11px;color:var(--sub);font-weight:700;margin-right:4px;}
+  .tri-grid{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;}
+  .tri-code{display:inline-flex;gap:2px;background:var(--bg);border-radius:8px;padding:3px;}
+  .tri-d{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:5px;font-size:11.5px;font-weight:800;}
 </style>
 </head>
 <body>
@@ -582,6 +594,8 @@ const WINGS={1:[9,2],2:[1,3],3:[2,4],4:[3,5],5:[4,6],6:[5,7],7:[6,8],8:[7,9],9:[
 const T = n => TYPES.find(t=>t.n===n);
 const cvar = n => `var(${T(n).cvar})`;
 const tvar = n => `var(${T(n).tvar})`;
+// 한글 받침 판별 조사 (예: 사고→'가' / 감정·본능→'이')
+const josa=(w,a,b)=>{const c=w.charCodeAt(w.length-1);return w+((c>=0xAC00&&c<=0xD7A3&&(c-0xAC00)%28!==0)?a:b);};
 
 /* ============ 교재(이론) 데이터 — enneagram_book.html 원문 기반. 개인/그룹 분석에 녹임 ============ */
 // ① 호나이 3분법(사회적 태도) — '억압된 중심'으로 묶은 세 그룹
@@ -644,9 +658,9 @@ const FACADE_LEC=[18,8,3];
 
 // ⑤ 하위유형(본능 변형) — 공통 3결
 const SUBTYPE=[
-  {name:'자기보존', q:'안전·건강·재물·공간', tell:'방에 들어가면 온도·자리부터 본다'},
-  {name:'사회적', q:'집단·지위·내 역할', tell:'사람 관계와 그 속 내 위치를 본다'},
-  {name:'일대일', q:'끌리는 특정 한 사람과의 강렬함', tell:'눈에 꽂히는 한 사람을 본다'},
+  {name:'자기보존', bio:'개체 유지 본능', q:'안전·건강·재물·공간', tell:'방에 들어가면 온도·자리부터 본다'},
+  {name:'사회적', bio:'종족(동족) 유지 본능', q:'집단·지위·내 역할', tell:'사람 관계와 그 속 내 위치를 본다'},
+  {name:'일대일', bio:'성적(끌림) 본능', q:'끌리는 특정 한 사람과의 강렬함', tell:'눈에 꽂히는 한 사람을 본다'},
 ];
 const SUBTYPE_LEC=[48,47,49];
 
@@ -655,6 +669,51 @@ const MONEY={1:'선악·바름의 문제 — 낭비는 죄',2:'내 사람에게 
 const TIME_CENTER={'본능(장)':{when:'현재',desc:'지금의 흐름·감각에 산다'},'가슴':{when:'과거',desc:'지나온 감정에 뿌리를 둔다'},'머리':{when:'미래',desc:'앞으로를 내다보고 대비한다'}};
 const SUCCESS_HORNEY={assertive:'실현·정복 — 손에 쥐는 성취',withdrawn:'의미·깊이 — 남다른 나의 완성',compliant:'\'나\'가 아닌 \'우리\'의 문제 — 정의 실현·가까운 이의 성공·공동체의 성공'};
 const LIFE_LEC={money:[25,26],time:[22,23,24],success:[27,28]};
+
+/* ============ 교재 이론 데이터 (2차 심화) — 분열·거울쌍·캐릭터·도형축·트라이타입 + 강의 발췌 ============ */
+// 분열(스트레스) 방향 계기 — book ch8, INTEGRATE의 대칭. (기존 dislikes 오용을 교체)
+const DISINTEGRATE={
+  1:'옳은 말만 했는데 다 떠난다 느끼며, 자기도 모르게 4번의 고립·우울로 가라앉는다.',
+  2:'베풂을 몰라준다는 억울함이 쌓이면, 8번처럼 강압적으로 요구하고 조종하려 든다.',
+  3:'성과가 무너질 위기에 몰리면, 9번처럼 방전·잠수·무기력으로 손을 놓는다.',
+  4:'버림받을까 두려우면, 2번처럼 상대에게 매달리고 인정을 갈구한다.',
+  5:'압도당하면, 7번처럼 산만해지고 세상을 비웃는 블랙 유머로 달아난다.',
+  6:'실패 공포가 과열되면, 3번처럼 일중독·이미지로 불안을 덮으려 한다.',
+  7:'결핍에 갇힐까 두려우면, 1번처럼 경직되고 남을 비판하며 통제하려 든다.',
+  8:'통제를 잃을까 두려우면, 5번처럼 숨어들어 고립·냉소·의심에 빠진다.',
+  9:'단절이 두려우면, 6번처럼 불안·의심·걱정에 안절부절못한다.',
+};
+// 마주보는 거울쌍(통합·분열 방향이 대칭). 1차유형(3·6·9)은 삼각형이라 짝 없음.
+const MIRROR={1:8,8:1,2:7,7:2,4:5,5:4};
+// 역량 그룹(1·3·5)이 눌러 둔 감정 — book ch6. 낙관·반응은 그룹 단위라 생략.
+const HARMONIC_EMO={1:'허탈·좌절',3:'초라함',5:'공허·고독'};
+// 유형별 친숙한 캐릭터 — book ch11 (강연자의 예시적 해석)
+const CHAR={1:'캡틴 아메리카',2:'스파이더맨',3:'아이언맨',4:'완다',5:'비전',6:'블랙위도',7:'스타로드',8:'토르(8w7)',9:'헐크'};
+// 도형 위치 — 상하축(현실↔블랙홀)·좌우축(주관↔객관), book ch2·강의#18
+const AXIS={
+  8:'상단 · 오감으로 겪는 현실 세계의 최전선',1:'상단 · 오감으로 겪는 현실 세계의 최전선',9:'상단 · 현실 세계 한복판의 완충지대',
+  3:'오른쪽 · 주관·감정(자기 이미지)의 꼭짓점',2:'오른쪽 위 · 주관·감정 쪽',
+  6:'왼쪽 · 객관·사고(세계·언어)의 꼭짓점',7:'왼쪽 위 · 객관·사고 쪽',
+  4:'최하단 · 주관의 밑바닥, ‘존재의 구멍’에 가장 가까운 예술·심리의 자리',5:'최하단 · 객관의 밑바닥, ‘존재의 구멍’에 가장 가까운 과학의 자리',
+};
+// 트라이타입 — 세 중심 대표 1개씩(코어 고정, 나머지 두 센터에서 조합 = 9코드)
+const CENTERS3={gut:[8,9,1],heart:[2,3,4],head:[5,6,7]};
+// 강의 발췌 인용 — 손 큐레이션(유튜브 자동자막 재구성, 축자 인용 아님). {t, lec}
+const LQUOTE={
+  compliant:{t:'어른이 되고도 여전히 나한테 이래라저래라 하는 존재가 있는데, 그게 나를 포함한 더 큰 나, ‘우리’예요. 그래서 자기 생각을 젖혀 두고 전체의 뜻을 따르려 하죠.',lec:11},
+  assertive:{t:'이 사람들이 감정이 없는 게 아니에요. 아주 격한 감정이 있는데, 다만 그걸 타인과 나누기가 어려운 거죠.',lec:10},
+  withdrawn:{t:'현실을 몸으로 직접 겪는 게 아니라 사고와 감정을 거쳐 ‘해석’해요. 그래서 같은 공간에 있어도 늘 한 박자 늦은 듯 보이죠.',lec:12},
+  positive:{t:'‘괜찮아, 진짜 괜찮아’라고 하지만 사실 괜찮지 않아요. 그냥 ‘괜찮아’로 덮는, 일종의 정신승리죠.',lec:32},
+  competent:{t:'문제 앞에서 움직이지 않고 침착하게 생각해요. 감정 스위치를 내리고 오직 능력으로 상황을 돌파하려 하죠.',lec:36},
+  reactive:{t:'자기 영역에 들어온 침입자에 반응하는 야생동물처럼, 선을 넘으면 튕겨내다가도 넘지 않으면 갑자기 얌전해져요.',lec:38},
+  arrow:{t:'고착을 의식해서 내려놓으면 통합, 끝까지 붙들면 분열이에요. 분열은 무의식적이라 자기가 그러는 줄도 몰라요.',lec:42},
+  arrow9:{t:'9번은 늘 자기를 내려놓으려 하죠. 그런데 그 ‘내려놓음’ 자체가 고착이에요 — 내려놓는 것 자체를 내려놓아야 합니다.',lec:42},
+  facade:{t:'겉모습은 극과 극으로 달라도 속은 비슷한 사람들이에요 — 본능이 모티브가 되는 사람들이죠.',lec:8},
+  facade_low:{t:'4번·5번은 도형 가장 아래, 그 아래가 열려 있어요. 이걸 ‘존재의 구멍’, 블랙홀이라 부릅니다.',lec:18},
+  subtype:{t:'방에 들어갔을 때 제일 먼저 관심이 가는 게 뭔지 — 그게 하위유형을 가릅니다.',lec:48},
+  tritype:{t:'세 중심에서 하나씩 골라 코드를 만들어요. 125라면 코어는 1번인데 감정은 2번, 사고는 5번으로 쓰는 사람이죠.',lec:49},
+  money:{t:'‘어머니는 짜장면이 싫다고 하셨어’죠. 착해서라기보다, 자기 이미지가 ‘착한 사람’이라 그렇게 쓰는 거예요.',lec:25},
+};
 
 /* ============ 데이터 저장 ============ */
 const STORAGE_KEY='enneagram_people_v1';
@@ -1045,7 +1104,7 @@ function drawAnalysis(){
         <div class="bignum">${p.type}</div>
         <div class="nick">${p.name} · ${t.en}</div>
         <h3>${t.n}번 ${t.name}</h3>
-        <div class="wingtag">${wingLabel} · ${t.center.replace('(장)','장')} 중심 · ${t.emo}</div>
+        <div class="wingtag">${wingLabel} · ${t.center.replace('(장)','장')} 중심 · ${t.emo} · 🎬 ${CHAR[p.type]}</div>
         <p class="motive">${t.motive}</p>
         <div class="fear-desire">
           <div class="fd"><div class="lb">기본 욕구</div><div class="vl">${t.desire}</div></div>
@@ -1092,7 +1151,7 @@ function drawAnalysis(){
         <div class="rel-line stress">
           <div class="rl-head"><span class="pill" style="background:${cvar(t.stress)};color:${tvar(t.stress)};width:24px;height:24px;font-size:12px">${t.stress}</span>▼ 스트레스받으면 · ${st.name}의 그늘</div>
           <div class="rl-people">${chips(bk.stress,'#b0413e',`이 그룹엔 ${t.stress}번(${st.name})이 없어요`)}</div>
-          <p class="rl-note">지치면 이런 함정 → ${st.dislikes.slice(0,3).join(' · ')} 등에 취약</p>
+          <p class="rl-note">지치면 → ${DISINTEGRATE[p.type]}</p>
         </div>
         <div class="rel-compat">
           <div class="rc-t">궁합 <span>· 일반적 경향, 재미로</span></div>
@@ -1113,38 +1172,59 @@ function drawAnalysis(){
 }
 
 /* ===== 이론 카드 (개인 분석 심화) — 교재 5렌즈를 유형에 맞춰 ===== */
-function lecChips(ids){
+function lecChips(ids,exclude){
   if(!LEC.length||!ids)return '';
-  const f=ids.map(i=>LEC.find(l=>l.i===i)).filter(Boolean);
+  let f=ids.map(i=>LEC.find(l=>l.i===i)).filter(Boolean);
+  if(exclude)f=f.filter(x=>x.i!==exclude);
   if(!f.length)return '';
   return `<div class="lec-chips">${f.map(x=>`<button class="lec-chip" onclick="openLecture(${x.i})" title="${esc(lecTitleClean(x.title))}">▶ ${esc(lecTitleClean(x.title))}</button>`).join('')}</div>`;
 }
 function miniTps(nums,active){
   return nums.map(n=>`<span class="mtp${n===active?' on':''}" style="background:${cvar(n)};color:${tvar(n)}">${n}</span>`).join('');
 }
+// 강의 원문 발췌 인용 블록 (figure/blockquote; #f7f1e6 발췌색 + 유형색 좌측선 계승)
+function theoryQuote(key,type){
+  const q=LQUOTE[key]; if(!q)return '';
+  const src=LEC.find(l=>l.i===q.lec);
+  return `<figure class="th-quote" style="--qc:${cvar(type)}"><span class="qmark">&rdquo;</span>
+    <figcaption class="th-qlb">❝ 강의 원문 발췌</figcaption>
+    <blockquote class="th-qt">${q.t}</blockquote>
+    ${src?`<div class="th-qsrc"><button class="lec-chip" onclick="openLecture(${src.i})" title="${esc(lecTitleClean(src.title))}">▶ ${esc(lecTitleClean(src.title))}</button></div>`:''}</figure>`;
+}
+const centerOf=n=>{for(const k in CENTERS3)if(CENTERS3[k].includes(n))return k;};
+function tritypeCodes(core){
+  const mine=centerOf(core), o=Object.keys(CENTERS3).filter(k=>k!==mine), r=[];
+  CENTERS3[o[0]].forEach(a=>CENTERS3[o[1]].forEach(b=>r.push(''+core+a+b)));
+  return r;
+}
 function theoryCards(type){
   const t=T(type);
-  const h=HORNEY[HORNEY_OF[type]], m=HARMONIC[HARMONIC_OF[type]], fc=FACADE[type];
-  const st=T(t.stress), tc=TIME_CENTER[t.center];
+  const hk=HORNEY_OF[type], mk=HARMONIC_OF[type];
+  const h=HORNEY[hk], m=HARMONIC[mk], fc=FACADE[type];
+  const tc=TIME_CENTER[t.center], mir=MIRROR[type], emo=HARMONIC_EMO[type];
   const c1=`<div class="th-card">
-    <div class="th-h"><span class="th-ico">🧩</span><div><div class="th-t">사회적 태도 · 호나이 3분법</div><div class="th-s">${h.name} <span class="th-tag">${h.tag} · ${h.repressed}이 왕따</span></div></div></div>
+    <div class="th-h"><span class="th-ico">🧩</span><div><div class="th-t">사회적 태도 · 호나이 3분법</div><div class="th-s">${h.name} <span class="th-tag">${h.tag} · ${josa(h.repressed,'이','가')} 왕따</span></div></div></div>
     <div class="th-members">${miniTps(h.types,type)}<span class="th-mnote">겉(전략)이 같은 셋</span></div>
     <p class="th-desc">${h.desc}</p>
-    <div class="th-you">${type}번의 속마음 코드 &nbsp;→&nbsp; <b style="color:${cvar(type)}">${HORNEY_MOTIVE[type]}</b></div>
+    ${theoryQuote(hk,type)}
+    <div class="th-you">${type}번의 속마음(동기) &nbsp;→&nbsp; <b style="color:${cvar(type)}">${HORNEY_MOTIVE[type]}</b></div>
     <div class="th-care"><span class="th-clb">🌱 왕따 된 기능 깨우기</span>${h.care}</div>
-    ${lecChips(h.lec)}</div>`;
+    ${lecChips(h.lec,LQUOTE[hk].lec)}</div>`;
   const c2=`<div class="th-card">
     <div class="th-h"><span class="th-ico">🎭</span><div><div class="th-t">감정 처리 · 하모닉 그룹</div><div class="th-s">${m.name} <span class="th-tag">${m.tag}</span></div></div></div>
     <div class="th-members">${miniTps(m.types,type)}<span class="th-mnote">힘들 때 반응이 닮은 셋</span></div>
     <p class="th-desc">${m.desc}</p>
+    ${emo?`<div class="th-you">${type}번이 눌러 둔 감정 &nbsp;→&nbsp; <b style="color:${cvar(type)}">${emo}</b> <span class="th-mnote">스위치를 켜면 이게 올라옵니다</span></div>`:''}
+    ${theoryQuote(mk,type)}
     <div class="th-care"><span class="th-clb">💬 이 사람이 힘들어할 때</span>${m.care}</div>
-    ${lecChips(m.lec)}</div>`;
+    ${lecChips(m.lec,LQUOTE[mk].lec)}</div>`;
   const c3=`<div class="th-card">
     <div class="th-h"><span class="th-ico">🧭</span><div><div class="th-t">통합과 분열 · 선을 따라</div><div class="th-s">놓으면 ${t.grow}번처럼 · 버티면 ${t.stress}번처럼</div></div></div>
     <div class="th-arrow grow"><span class="mtp" style="background:${cvar(t.grow)};color:${tvar(t.grow)}">${t.grow}</span><div><b>▲ 통합(성장)</b> ${INTEGRATE[type]}</div></div>
-    <div class="th-arrow stress"><span class="mtp" style="background:${cvar(t.stress)};color:${tvar(t.stress)}">${t.stress}</span><div><b>▼ 분열(스트레스)</b> 지치면 ${st.name}의 그늘로 — ${st.dislikes.slice(0,3).join(' · ')}에 취약.</div></div>
-    <div class="th-principle">${ARROW_PRINCIPLE}</div>
-    ${lecChips(ARROW_LEC[type])}</div>`;
+    <div class="th-arrow stress"><span class="mtp" style="background:${cvar(t.stress)};color:${tvar(t.stress)}">${t.stress}</span><div><b>▼ 분열(스트레스)</b> ${DISINTEGRATE[type]}</div></div>
+    ${theoryQuote(type===9?'arrow9':'arrow',type)}
+    <div class="th-principle">${ARROW_PRINCIPLE} 변신은 새 성격이 아니라 원래 잠재된 성향이 상황 따라 드러나는 것.${mir?` <b>거울쌍 ${mir}번</b>과 방향이 대칭이죠.`:''}</div>
+    ${lecChips(ARROW_LEC[type],42)}</div>`;
   let fbody;
   if(fc.primary){
     fbody=`<div class="th-badge">1차(주) 유형 · 삼각형 꼭짓점</div>
@@ -1158,22 +1238,32 @@ function theoryCards(type){
   const c4=`<div class="th-card">
     <div class="th-h"><span class="th-ico">🔺</span><div><div class="th-t">도형 구조 · 겉과 속</div><div class="th-s">${fc.primary?'1차 유형(3·6·9)':'2차 유형'}</div></div></div>
     ${fbody}
-    ${lecChips(FACADE_LEC)}</div>`;
+    <div class="th-axis"><span class="th-clb">📐 도형에서의 위치</span>${AXIS[type]}</div>
+    ${theoryQuote((type===4||type===5)?'facade_low':'facade',type)}
+    ${lecChips(FACADE_LEC,(type===4||type===5)?18:8)}</div>`;
   const c5=`<div class="th-card">
     <div class="th-h"><span class="th-ico">🔍</span><div><div class="th-t">하위유형 · 본능 변형</div><div class="th-s">같은 ${type}번도 세 갈래</div></div></div>
-    <div class="sub3">${SUBTYPE.map(s=>`<div class="sub1"><b>${s.name}</b><span class="sub1q">${s.q}</span><em>“${s.tell}”</em></div>`).join('')}</div>
-    <div class="th-care"><span class="th-clb">※</span>일대일은 ‘성욕’이 아니라 강렬함·몰입. 유형이 헷갈릴 때 실마리가 됩니다.</div>
-    ${lecChips(SUBTYPE_LEC)}</div>`;
+    <div class="sub3">${SUBTYPE.map(s=>`<div class="sub1"><b>${s.name}</b> <span class="sub1bio">${s.bio}</span><span class="sub1q">${s.q}</span><em>“${s.tell}”</em></div>`).join('')}</div>
+    ${theoryQuote('subtype',type)}
+    <div class="th-care"><span class="th-clb">＃ 표기·감별</span>보통 둘을 스택으로 <b>9w8 sx</b>처럼 씁니다. 하위유형이 유형을 가리기도 — 확실한 ‘일대일 5번’은 드라이한 관찰자처럼 안 보이죠.</div>
+    ${lecChips(SUBTYPE_LEC,48)}</div>`;
   const c6=`<div class="th-card">
     <div class="th-h"><span class="th-ico">💰</span><div><div class="th-t">삶에서 · 돈·시간·성공</div><div class="th-s">일상에서 드러나는 결</div></div></div>
     <div class="life-row"><span class="life-lb">돈</span><span>${MONEY[type]}</span></div>
     <div class="life-row"><span class="life-lb">시간</span><span><b>${tc.when}</b>를 산다 — ${tc.desc} <span class="th-mnote">${t.center.replace('(장)','장')} 중심</span></span></div>
-    <div class="life-row"><span class="life-lb">성공</span><span>${SUCCESS_HORNEY[HORNEY_OF[type]]}</span></div>
-    ${lecChips([...LIFE_LEC.money,...LIFE_LEC.time,...LIFE_LEC.success])}</div>`;
+    <div class="life-row"><span class="life-lb">성공</span><span>${SUCCESS_HORNEY[hk]}</span></div>
+    ${theoryQuote('money',type)}
+    ${lecChips([...LIFE_LEC.money,...LIFE_LEC.time,...LIFE_LEC.success],25)}</div>`;
+  const codes=tritypeCodes(type);
+  const c7=`<div class="th-card">
+    <div class="th-h"><span class="th-ico">🧬</span><div><div class="th-t">트라이타입 · 세 중심의 조합</div><div class="th-s">코어 ${type}번 고정 · 나머지 두 축이 갈린다</div></div></div>
+    <p class="th-desc">세 중심(장·가슴·머리)에서 대표를 하나씩 골라 세 자리 코드를 만듭니다. <b>코어 ${type}번은 고정</b>, 감정·사고 포인트는 상황 따라 달라지죠. ${type}번이 가질 수 있는 9가지 조합:</p>
+    <div class="tri-grid">${codes.map(c=>`<span class="tri-code">${[...c].map(d=>`<span class="tri-d" style="background:${cvar(+d)};color:${tvar(+d)}">${d}</span>`).join('')}</span>`).join('')}</div>
+    ${theoryQuote('tritype',type)}</div>`;
   return `<div class="theory-wrap">
     <div class="theory-head"><h3>🎓 이론으로 더 깊이 — <span style="color:${cvar(type)}">${type}번 ${t.name}</span></h3>
-      <p>교재의 다섯 렌즈로 본 ${t.name}. 각 카드의 <b>▶ 강의</b>를 누르면 원 강의를 바로 볼 수 있어요.</p></div>
-    <div class="theory-grid">${c1}${c2}${c3}${c4}${c5}${c6}</div>
+      <p>교재의 일곱 렌즈로 본 ${t.name}. <b>❝ 강의 원문 발췌</b>는 유튜브 자동자막을 뜻이 통하도록 다듬은 것, <b>▶ 버튼</b>으로 원 강의를 볼 수 있어요.</p></div>
+    <div class="theory-grid">${c1}${c2}${c3}${c4}${c5}${c6}${c7}</div>
   </div>`;
 }
 
