@@ -3597,11 +3597,16 @@ async function initApp(){
   //   · 캘린더(records+특별일정)를 먼저 그리고, 프로그램/마스터/카페·장도/접수설정은 백그라운드 병렬로 채움.
   //   · 순서 의존성은 loadPrograms→updatePerfOpen 하나뿐(나머지 로더 결과는 updatePerfOpen이 안 씀).
   //   · loadPromoSpecial 중복 호출 제거 — loadData가 이미 특별일정을 로드함.
-  loadData();  // records + 특별일정 → render() : 캘린더 즉시 표시
-  // 판매 레일 — 백그라운드 병렬(캘린더 비차단), _salesState 공유 캐시 선채움.
+  var _calP=loadData();  // records + 특별일정 → render() : 캘린더 즉시 표시
+  // 판매 레일 — _salesState 공유 캐시 선채움.
+  // [로딩 성능 260711 운영자] 레일 6시트(일일입력·공연마스터·회차상세·세부운영관리대장·전시일일·전시마스터)를
+  //   캘린더(records/특별일정) 로드 '완료 뒤'로 미룬다 — 로그인 직후 동시요청 폭주(캘린더+마스터+레일6 ≈17개)를
+  //   시간축 분산해 캘린더에 네트워크 우선권(레일은 사용자가 볼 때 잠깐 늦어도 무해). 비차단 성격은 그대로.
   // ⚠️ setTimeout 필수: F5 세션복원은 부트 IIFE가 "파싱 중" initApp을 동기 호출 — 그 시점엔 뒤쪽 var(_salesState 등)가
   //    할당 전(undefined)이라 동기 호출 시 레일이 조용히 죽는다(분신술 4호 HIGH — 260705 TDZ 참사와 동일 클래스).
-  setTimeout(function(){ try{_srailInit();}catch(_e){console.warn('[initApp srail]',_e);} },0);
+  //    → loadData().finally(비동기)면 파싱 완료 후 실행이라 TDZ 안전(+_srailInit 자체 _salesState undefined 방어 유지).
+  var _srailDefer=function(){ setTimeout(function(){ try{_srailInit();}catch(_e){console.warn('[initApp srail]',_e);} },0); };
+  if(_calP&&_calP.finally)_calP.finally(_srailDefer); else _srailDefer();
   var _pPrograms=loadPrograms().then(function(){ updatePerfOpen(); _perfReady=true;
     // 판매 레일이 PERFS보다 먼저 그려졌으면 재렌더 — 프로그램 시트 폴백 카드(마스터 미등록 판매중 공연) 누락 방지
     if(typeof _salesState!=='undefined'&&_salesState&&_salesState.daily&&_salesState.master&&!_srailBusy){try{_srailRender();}catch(_e){}}
