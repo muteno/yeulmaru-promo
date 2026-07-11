@@ -1636,6 +1636,22 @@ var index_default = {
         }
       }
 
+      // 전역 앱 설정 — KV 영구(cfg:<키>). pets_visible = 캘린더 하단 장식 펫(공차는 애·크랩·LOVE 3마리 랜덤) 표시. GET 공개·POST 관리자(운영자 260711). ⚠ Worker는 별도 Cloudflare 배포 필요
+      if (url.pathname === "/api/config") {
+        if (request.method === "GET") {
+          let pets = false;
+          try { pets = (await env.ops_kv.get("cfg:pets_visible")) === "1"; } catch (e) {}
+          return json({ pets_visible: pets }, env);
+        }
+        if (request.method === "POST") {
+          if (role !== "admin") return json({ error: "Admin only" }, env, 403);
+          let b = {};
+          try { b = await request.json(); } catch (e) {}
+          try { await env.ops_kv.put("cfg:pets_visible", b.pets_visible ? "1" : "0"); } catch (e) { return json({ error: String(e) }, env, 500); }
+          return json({ ok: true, pets_visible: !!b.pets_visible }, env);
+        }
+      }
+
       // === 콘텐츠 제작 — 네이버 블로그 초안 AI 생성 (Graph 토큰 불요) ===
       // ANTHROPIC_API_KEY 미설정 시 503 → 프론트가 로컬 템플릿 생성기로 폴백.
       if (url.pathname === "/api/content/blog" && request.method === "POST") {
