@@ -410,6 +410,49 @@ async function handleDeleteSheetRow(token, sheetName, row, role, slug) {
 __name(handleDeleteSheetRow, "handleDeleteSheetRow");
 
 
+// === [260710] 회원 시트 전용 로더 — A~L 청크 읽기 → 7열(A~G) + 연령대(생년월일 L 파생)만 응답 ===
+// usedRange 전체(17열×30k=505k셀) 단일 호출은 Graph 504·재시도 증폭·isolate 메모리 압박(분신술 성능 감사 HIGH)
+// → 크기만 먼저 조회($select=rowCount) 후 A{s}:L{e} 청크(3,000행×12열=3.6만 셀/콜 — 기존 안전선 유지)로 분할.
+// 개인정보 최소화: 생년월일 원값·아이디(K)·중간 플래그(H~J)는 응답에 싣지 않고 연령대("40대")만 파생 전송(개요 통계용).
+async function memberSheetRead(token, sheetName) {
+  const { driveId, itemId } = await findFile(token);
+  const base = sheetPathFor(driveId, itemId, sheetName);
+  const ur = await graphGet(token, `${base}/usedRange?$select=rowCount`);
+  const totalRows = ur.rowCount || 0;
+  if (totalRows < 2) return { headers: [], rows: [] };
+  const CHUNK = 3000;
+  const kstYear = new Date(Date.now() + 9 * 3600 * 1e3).getUTCFullYear();
+  const ageBand = (birth) => {
+    const m = String(birth == null ? "" : birth).trim().match(/^(19|20)\d{2}/);
+    if (!m) return "";
+    const age = kstYear - parseInt(m[0], 10);
+    if (age < 0 || age > 110) return "";
+    if (age < 10) return "10세 미만";
+    return Math.min(Math.floor(age / 10), 8) * 10 + "대";   // 80대+는 80대로 캡
+  };
+  let srcHeaders = [];
+  const KEEP = 7;   // A~G = 휴대폰정규화·이름·주소1~4·우편번호 (v2 정제본 열 순서 고정)
+  const rows = [];
+  for (let s = 1; s <= totalRows; s += CHUNK) {
+    const e = Math.min(s + CHUNK - 1, totalRows);
+    const part = await graphGet(token, `${base}/range(address='A${s}:L${e}')?$select=values`);
+    const vals = part.values || [];
+    for (let i = 0; i < vals.length; i++) {
+      if (s === 1 && i === 0) { srcHeaders = vals[0].map((h) => String(h == null ? "" : h)); continue; }
+      const row = vals[i];
+      if (row.every((cv) => cv === "" || cv === null || cv === undefined)) continue;
+      const obj = {};
+      for (let j = 0; j < KEEP; j++) obj[srcHeaders[j]] = row[j];
+      const bi = srcHeaders.indexOf("생년월일");   // 생년월일(L) — 헤더 탐색이라 열 이동에도 내성
+      obj["연령대"] = ageBand(bi >= 0 ? row[bi] : row[11]);
+      rows.push(obj);
+    }
+  }
+  const headers = srcHeaders.slice(0, KEEP).concat(["연령대"]);
+  return { headers, rows };
+}
+__name(memberSheetRead, "memberSheetRead");
+
 // === 자동 취소: 보류 3일 경과 → 취소 (cron 매일 KST 10:00 실행) ===
 async function autoCancelStalePending(env) {
   const token = await getToken(env);
@@ -835,9 +878,9 @@ __name(handleDeleteMessage, "handleDeleteMessage");
 // 삭제 = 행 클리어(handleDeleteSheetRow 방식) — ID 빈 행은 목록 필터에서 걸러진다.
 // 신원은 기존 앱 신뢰 모델 계승(클라이언트가 user/dept 전달 — 신청·메시지와 동일 위상). 갱신·삭제 = 소유자 또는 admin.
 var DGM_SHEET = "도표";
-var DGM_CHUNKS = 10;
+var DGM_CHUNKS = 24;   // 도표 1개당 본문 청크 수 — 사진 base64 임베드 여유 확보(운영자 260710). 총 상한 = DGM_CHUNKS×DGM_CHUNK_SIZE = 672KB. 10→24는 하위호환(기존 ≤10청크 도표 그대로 읽힘 · 청크수 min-clamp) · 기존 '도표' 시트 헤더는 handleDgmSave의 확장 마이그레이션으로 본문11~24 열 추가.
 var DGM_CHUNK_SIZE = 28000;
-var DGM_HEADERS = ["ID", "이름", "소유자", "부서", "공유범위", "저장시각", "청크수", "본문1", "본문2", "본문3", "본문4", "본문5", "본문6", "본문7", "본문8", "본문9", "본문10"];
+var DGM_HEADERS = ["ID", "이름", "소유자", "부서", "공유범위", "저장시각", "청크수", "본문1", "본문2", "본문3", "본문4", "본문5", "본문6", "본문7", "본문8", "본문9", "본문10", "본문11", "본문12", "본문13", "본문14", "본문15", "본문16", "본문17", "본문18", "본문19", "본문20", "본문21", "본문22", "본문23", "본문24"];
 function dgmScopeOk(s) { return s === "비공개" || s === "팀" || s === "전체"; }
 __name(dgmScopeOk, "dgmScopeOk");
 function dgmCanSee(r, user, dept) {
@@ -887,6 +930,16 @@ async function handleDgmSave(token, body, isAdm) {
   const values = [id, name, owner, dept, scope, kstNowText(), String(Math.max(1, Math.ceil(jsonBody.length / DGM_CHUNK_SIZE)))].concat(chunks);
   const { driveId, itemId } = await ensureNamedSheet(token, DGM_SHEET, DGM_HEADERS, null);
   const sheetPath = sheetPathFor(driveId, itemId, DGM_SHEET);
+  // 헤더 확장 마이그레이션 — 기존 '도표' 시트가 본문1~10만 있는데 이 저장이 11청크 이상을 쓰면, 헤더 없는 열은 handleGetSheet(헤더행 매핑)에서 유실됨. DGM_CHUNKS 10→24 확장분 헤더를 데이터보다 먼저 채운다(큰 도표 저장 시에만·멱등).
+  //   ⚠️ 실패를 삼키지 않는다 — 헤더 없는 열에 본문11~24를 쓰면 GET에서 잘려 «ok 보고+복원 불가(특히 공유 뷰어)»가 된다. 확장 실패는 위로 전파 → 라우트 500 → 프론트 srvFail(로컬 보존) → 다음 큐에서 재시도. 읽을 수 없는 데이터를 쓰고 성공이라 보고하는 것보다 낫다(분신술 서버 감사 HIGH).
+  if (jsonBody.length > 10 * DGM_CHUNK_SIZE) {
+    const hc = colLetter(DGM_HEADERS.length);
+    const cur = await graphGet(token, `${sheetPath}/range(address='A1:${hc}1')?$select=values`);
+    const row1 = (cur && cur.values && cur.values[0]) ? cur.values[0] : [];
+    let curLen = 0;
+    for (let j = 0; j < row1.length; j++) if (String(row1[j] == null ? "" : row1[j]).trim() !== "") curLen = j + 1;
+    if (curLen < DGM_HEADERS.length) await graphPatch(token, `${sheetPath}/range(address='A1:${hc}1')`, { values: [DGM_HEADERS] });
+  }
   const lastCol = colLetter(values.length);
   async function writeRow(row) {
     const addr = `A${row}:${lastCol}${row}`;
@@ -1830,6 +1883,23 @@ var index_default = {
           if (sheet) {
             try {
               const opsName = opsSheetName(sheet);
+              // [보안 260710 분신술 HIGH-1] 회원 시트 = 소비자 PII 3만 행 — 클라 admin 게이트는 콘솔로 우회 가능하므로
+              //  서버가 강제한다(log 시트 GET 선례 계승). 응답은 no-store(브라우저 디스크 캐시 잔류 차단). ⚠ Cloudflare 재배포 필요.
+              if (opsName === "운영_회원") {
+                const memAuth = await checkAdmin(request, env, token);
+                if (!memAuth.admin) return json({ error: "Admin only (member data)" }, env, 403);
+                if (url.searchParams.get("fresh") === "1") delete opsCache[opsName];
+                // [성능 260710 분신술 HIGH] 30k행 usedRange 단일 읽기 = Graph 504·isolate 메모리 리스크
+                //  → 조회 UI가 쓰는 7열(A~G)만 5,000행 청크로 분할 읽기 + 캐시 TTL_SHORT(상주 최소화).
+                const c = opsCache[opsName];
+                let data;
+                if (c && Date.now() < c.expires) data = c.data;
+                else { data = await memberSheetRead(token, opsName); opsCache[opsName] = { data, expires: Date.now() + TTL_SHORT }; }
+                return new Response(JSON.stringify({ sheet, headers: data.headers, rows: data.rows, count: data.rows.length }), {
+                  status: 200,
+                  headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...corsHeaders(env) }
+                });
+              }
               // [분신술 260710 H2] fresh=1 = isolate 로컬 5분 캐시 우회(실시간 조회) — 실적 수정 모달의 편집 기준·저장 직전 재조회용.
               //  다른 isolate가 방금 쓴 변경을 stale 캐시로 놓쳐 전체 재작성이 그 변경을 지우는 동시성 유실 창 축소.
               if (url.searchParams.get("fresh") === "1") delete opsCache[opsName];

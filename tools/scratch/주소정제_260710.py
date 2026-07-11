@@ -144,6 +144,60 @@ def norm_phone(p):
         return f'{d[:3]}-{d[3:6]}-{d[6:]}', ''
     return p.strip(), '휴대폰이상'
 
+
+# ── 4) 동화(洞化) — 도로명 주소3을 동·읍면으로 (자체 전파 매핑) ──────
+RE_PAREN_DONG = re.compile(r'\(([가-힣]\w*(?:동|가|리))\b')
+RE_DONGISH = re.compile(r'(동|가|읍|면|리)$')
+
+def _a3_head(a3): return a3.split(' ')[0] if a3 else ''
+def _is_dongish(a3): return bool(a3) and bool(RE_DONGISH.search(_a3_head(a3)))
+
+def dongify(df):
+    """주소3이 도로명인 행을 동·읍면 단위로 복원.
+    씨앗 = 지번식 행(주소3=동)의 (우편번호→동) + 도로명 행 괄호 참고항목의 (도로명→동)
+    → zip 전파로 (시군구,도로명)→동 증식(85% 지배 시만 채택). 도로명은 주소4 선두에 보존."""
+    def dominant(c, min_n=2, ratio=0.85):
+        (top, cnt), tot = c.most_common(1)[0], sum(c.values())
+        return top if cnt >= min_n and cnt/tot >= ratio else None
+    zipc, roadc = defaultdict(Counter), defaultdict(Counter)
+    for _, r in df.iterrows():
+        z, a3, sgg, orig = r['우편번호'], r['주소3'], r['주소2'], r['주소(원본)']
+        dong = None
+        if _is_dongish(a3): dong = a3
+        else:
+            m = RE_PAREN_DONG.search(orig)
+            if m:
+                dong = m.group(1)
+                if sgg and a3: roadc[(sgg, _a3_head(a3))][dong] += 1
+        if dong and z and len(z) == 5: zipc[z][dong] += 1
+    zip_map = {k: v for k, c in zipc.items() if (v := dominant(c))}
+    road_map = {k: v for k, c in roadc.items() if (v := dominant(c))}
+    for _, r in df.iterrows():   # 1차 전파: zip으로 동이 정해지는 도로명을 사전에 증식
+        z, a3, sgg = r['우편번호'], r['주소3'], r['주소2']
+        if not a3 or _is_dongish(a3): continue
+        if (sgg, _a3_head(a3)) in road_map: continue
+        if z in zip_map and sgg: roadc[(sgg, _a3_head(a3))][zip_map[z]] += 1
+    road_map = {k: v for k, c in roadc.items() if (v := dominant(c))}
+    new_a3, new_a4, src = [], [], []
+    for _, r in df.iterrows():
+        a3, a4, z, sgg = r['주소3'], r['주소4'], r['우편번호'], r['주소2']
+        if not a3 or _is_dongish(a3):
+            new_a3.append(a3); new_a4.append(a4); src.append('')
+            continue
+        # 증거 우선순위(분신술 데이터 감사 F2·재심사 권고) = 행 자신의 괄호 참고항목(자기신고)
+        # > 자기 우편번호(순도 99.9%+ 실측) > 도로명 최빈동. 도로가 동 경계를 넘는 경우
+        # (상암로·여문2로·여천체육공원길 등) 구체 증거가 사전 최빈값을 이긴다.
+        m = RE_PAREN_DONG.search(r['주소(원본)'])
+        pdong = m.group(1) if m else None
+        zd = zip_map.get(z)
+        dong = pdong or zd or road_map.get((sgg, _a3_head(a3)))
+        if dong:
+            new_a3.append(dong); new_a4.append((a3 + ' ' + a4).strip())
+            src.append('동복원(참고항목)' if pdong else ('동복원(우편번호)' if zd else '동복원(도로명)'))
+        else:
+            new_a3.append(a3); new_a4.append(a4); src.append('동미상(도로명유지)')
+    return new_a3, new_a4, src
+
 # ── 메인 ─────────────────────────────────────────────────────
 def main():
     df = pd.read_excel(SRC, dtype=str).fillna('')
@@ -295,15 +349,30 @@ def main():
             '휴대폰중복','주소플래그','휴대폰상태',
             '아이디','생년월일','이메일','등록일','휴대폰번호','주소','전화번호']
     out = df[cols].rename(columns={'휴대폰번호':'휴대폰번호(원본)','주소':'주소(원본)'})
+    old_ver = out.copy()                          # 도로명 혼재본(동화 전) 보존
+    na3, na4, dsrc = dongify(out)
+    out = out.copy()
+    out['주소3'], out['주소4'] = na3, na4
+    out['주소플래그'] = [', '.join([p for p in [f, d if d.startswith('동') else ''] if p])
+                        for f, d in zip(out['주소플래그'], dsrc)]
     piv = out[out['주소1']!=''].groupby(['주소1','주소2']).size().reset_index(name='회원수') \
             .sort_values(['회원수'], ascending=False)
+    # 동별집계 = 진짜 동·읍면만(분신술 데이터 감사 F1 — 동미상 도로명이 가짜 동으로 집계 오염되는 것 차단)
+    piv3 = out[(out['주소1']!='')&(out['주소3'].map(_is_dongish))].groupby(['주소1','주소2','주소3']).size() \
+            .reset_index(name='회원수').sort_values('회원수', ascending=False)
     need = out[out['주소플래그']!='']
     dups = out[out['휴대폰중복']!=''].sort_values(['휴대폰정규화','등록일'])
     with pd.ExcelWriter(OUT, engine='openpyxl') as w:
-        out.to_excel(w, sheet_name='정제본', index=False)
+        out.to_excel(w, sheet_name='운영_회원', index=False)      # 통합문서에 이 시트명 그대로 복사 → 앱 /api/ops?sheet=회원
+        old_ver.to_excel(w, sheet_name='도로명혼재본(구버전)', index=False)
         piv.to_excel(w, sheet_name='지역집계', index=False)
+        piv3.to_excel(w, sheet_name='동별집계', index=False)
         need.to_excel(w, sheet_name='주소요확인', index=False)
         dups.to_excel(w, sheet_name='중복번호', index=False)
+    miss = Counter((s, _a3_head(a)) for s, a, d in zip(out['주소2'], out['주소3'], dsrc) if d == '동미상(도로명유지)')
+    pd.DataFrame([(s, r, v) for (s, r), v in miss.most_common()], columns=['시군구','도로명','행수']) \
+        .to_csv(OUT.replace('.xlsx', '_미커버도로명.csv'), index=False)
+    print(f"동화: {Counter(dsrc)}")
 
     # ── 리포트 ──
     print(f"총 {n}행")
