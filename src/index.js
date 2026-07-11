@@ -410,31 +410,45 @@ async function handleDeleteSheetRow(token, sheetName, row, role, slug) {
 __name(handleDeleteSheetRow, "handleDeleteSheetRow");
 
 
-// === [260710] 회원 시트 전용 로더 — 7열(A~G: 휴대폰정규화·이름·주소1~4·우편번호) × 5,000행 청크 읽기 ===
+// === [260710] 회원 시트 전용 로더 — A~L 청크 읽기 → 7열(A~G) + 연령대(생년월일 L 파생)만 응답 ===
 // usedRange 전체(17열×30k=505k셀) 단일 호출은 Graph 504·재시도 증폭·isolate 메모리 압박(분신술 성능 감사 HIGH)
-// → 크기만 먼저 조회($select=rowCount) 후 A{s}:G{e} 청크(~35k셀/콜)로 나눠 읽는다. 열 순서는 v2 정제본 A~G 고정.
+// → 크기만 먼저 조회($select=rowCount) 후 A{s}:L{e} 청크(3,000행×12열=3.6만 셀/콜 — 기존 안전선 유지)로 분할.
+// 개인정보 최소화: 생년월일 원값·아이디(K)·중간 플래그(H~J)는 응답에 싣지 않고 연령대("40대")만 파생 전송(개요 통계용).
 async function memberSheetRead(token, sheetName) {
   const { driveId, itemId } = await findFile(token);
   const base = sheetPathFor(driveId, itemId, sheetName);
   const ur = await graphGet(token, `${base}/usedRange?$select=rowCount`);
   const totalRows = ur.rowCount || 0;
   if (totalRows < 2) return { headers: [], rows: [] };
-  const CHUNK = 5000;
-  let headers = [];
+  const CHUNK = 3000;
+  const kstYear = new Date(Date.now() + 9 * 3600 * 1e3).getUTCFullYear();
+  const ageBand = (birth) => {
+    const m = String(birth == null ? "" : birth).trim().match(/^(19|20)\d{2}/);
+    if (!m) return "";
+    const age = kstYear - parseInt(m[0], 10);
+    if (age < 0 || age > 110) return "";
+    if (age < 10) return "10세 미만";
+    return Math.min(Math.floor(age / 10), 8) * 10 + "대";   // 80대+는 80대로 캡
+  };
+  let srcHeaders = [];
+  const KEEP = 7;   // A~G = 휴대폰정규화·이름·주소1~4·우편번호 (v2 정제본 열 순서 고정)
   const rows = [];
   for (let s = 1; s <= totalRows; s += CHUNK) {
     const e = Math.min(s + CHUNK - 1, totalRows);
-    const part = await graphGet(token, `${base}/range(address='A${s}:G${e}')?$select=values`);
+    const part = await graphGet(token, `${base}/range(address='A${s}:L${e}')?$select=values`);
     const vals = part.values || [];
     for (let i = 0; i < vals.length; i++) {
-      if (s === 1 && i === 0) { headers = vals[0].map((h) => String(h == null ? "" : h)); continue; }
+      if (s === 1 && i === 0) { srcHeaders = vals[0].map((h) => String(h == null ? "" : h)); continue; }
       const row = vals[i];
       if (row.every((cv) => cv === "" || cv === null || cv === undefined)) continue;
       const obj = {};
-      headers.forEach((h, j) => { obj[h] = row[j]; });
+      for (let j = 0; j < KEEP; j++) obj[srcHeaders[j]] = row[j];
+      const bi = srcHeaders.indexOf("생년월일");   // 생년월일(L) — 헤더 탐색이라 열 이동에도 내성
+      obj["연령대"] = ageBand(bi >= 0 ? row[bi] : row[11]);
       rows.push(obj);
     }
   }
+  const headers = srcHeaders.slice(0, KEEP).concat(["연령대"]);
   return { headers, rows };
 }
 __name(memberSheetRead, "memberSheetRead");

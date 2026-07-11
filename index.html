@@ -19463,7 +19463,7 @@ function _salesMenuBuild(menu){
     +(userRole==='admin'?'<button type="button" onclick="_ddCloseAll();openDailyInput()" style="'+itemCss+';background:rgba(74,77,231,0.06)" onmouseenter="this.style.background=\'rgba(74,77,231,0.12)\'" onmouseleave="this.style.background=\'rgba(74,77,231,0.06)\'"><span style="flex:1">일일 실적 입력</span></button>':'')
     +'<button type="button" onclick="_ddCloseAll();openAnalyticsBoard()" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'">판매 실적 조회</button>'
     +'<button type="button" onclick="_ddCloseAll();openBusinessBoard()" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'">연간 실적 분석</button>'   // [260710 운영자] 1 일일 실적 입력(관리자) · 2 판매 실적 조회 · 3 연간 실적 분석
-    +(userRole==='admin'?'<button type="button" onclick="_ddCloseAll();openMemberLookup()" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'">회원 조회</button>':'');   // 회원 DB(운영_회원 시트) read-only 조회 — 개인정보라 관리자 전용
+    +(userRole==='admin'?'<button type="button" onclick="_ddCloseAll();openMemberLookup()" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'"><span style="flex:1">회원 조회</span><span onclick="event.stopPropagation();_ddCloseAll();openMemberOverview()" title="회원 기본 개요 (거주지·연령·분포 맵)" style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:7px;color:var(--accent)" onmouseenter="this.style.background=\'var(--accent-light)\';event.stopPropagation()" onmouseleave="this.style.background=\'none\'"><svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M2 12V7M7 12V2M12 12V5"/></svg></span></button>':'');   // 회원 DB(운영_회원 시트) read-only 조회 — 개인정보라 관리자 전용 · 우측 미니 차트 = 기본 개요 모달(운영자 260711 "세부 메뉴 우측에 기본 개요")
 }
 // === [260710] 회원 조회 — 통합문서 '운영_회원' 시트 read-only (admin 전용 — Worker도 동일 게이트 강제) ===
 // 데이터 = 회원DB 주소정제 v2(주소1 시도·주소2 시군구·주소3 동/읍면·주소4 상세·우편번호·휴대폰정규화).
@@ -19568,6 +19568,117 @@ function _memRender(){
     +'<tr><th style="'+th+'">이름</th><th style="'+th+'">휴대폰</th><th style="'+th+'">시도</th><th style="'+th+'">시군구</th><th style="'+th+'">동·읍면</th><th style="'+th+'">상세</th><th style="'+th+'">우편번호</th></tr>'
     +shown.map(function(r){return '<tr><td style="'+td+';font-weight:700">'+_memEsc(r['이름'])+'</td><td style="'+td+';font-variant-numeric:tabular-nums">'+_memEsc(r['휴대폰정규화']||r['휴대폰번호'])+'</td><td style="'+td+'">'+_memEsc(r['주소1'])+'</td><td style="'+td+'">'+_memEsc(r['주소2'])+'</td><td style="'+td+'">'+_memEsc(r['주소3'])+'</td><td style="'+td+';max-width:250px;overflow:hidden;text-overflow:ellipsis">'+_memEsc(r['주소4'])+'</td><td style="'+td+';font-variant-numeric:tabular-nums">'+_memEsc(r['우편번호'])+'</td></tr>';}).join('')
     +'</table>'+(shown.length?'':'<div style="padding:22px;text-align:center;font-size:12.5px;color:var(--dim)">결과가 없어요</div>');
+}
+
+// === [260711] 회원 기본 개요 — 홍보현황(pb-modal) 셸 계승 · 거주지 TOP5 + 연령대 + 전국 분포 버블맵 (admin 전용) ===
+// 데이터 = _memState(회원 조회와 공유) — 연령대 필드는 Worker memberSheetRead 파생값(생년월일 원값 미전송).
+// 맵 = 인라인 SVG 남한 실루엣 + 위경도→등장방형 투영 버블(외부 요청 0) · 색 = --accent 알파 변주(팔레트 폐쇄 §🚨).
+var _MEM_GEO={   // 좌표 [경도,위도,라벨방향] — 전남광주통합특별시는 실분포 인지 위해 주요 시군구 개별, 그 외 시도 = 중심 1점. 방향 = 인접 버블 라벨 겹침 분산(여수·순천·광양 밀집)
+  '서울특별시':[126.98,37.55,'n'],'인천광역시':[126.70,37.45,'w'],'경기도':[127.20,37.40,'e'],'강원특별자치도':[128.30,37.70,'n'],
+  '충청북도':[127.70,36.80,'e'],'충청남도':[126.85,36.50,'w'],'세종특별자치시':[127.28,36.48,'n'],'대전광역시':[127.38,36.35,'e'],
+  '전북특별자치도':[127.10,35.75,'w'],'경상북도':[128.70,36.40,'e'],'대구광역시':[128.60,35.87,'e'],'울산광역시':[129.31,35.54,'e'],
+  '부산광역시':[129.05,35.15,'s'],'경상남도':[128.25,35.30,'n'],'제주특별자치도':[126.55,33.40,'s'],
+  '전남광주통합특별시|여수시':[127.66,34.76,'s'],'전남광주통합특별시|순천시':[127.49,34.95,'w'],'전남광주통합특별시|광양시':[127.70,34.97,'e'],
+  '전남광주통합특별시|목포시':[126.39,34.81,'w'],'전남광주통합특별시|고흥군':[127.28,34.60,'s'],'전남광주통합특별시|광주':[126.85,35.16,'n'],
+  '전남광주통합특별시':[126.90,34.95,'w']   // 그 외 전남 시군 폴백
+};
+var _MEM_GJ_GU={'동구':1,'서구':1,'남구':1,'북구':1,'광산구':1};   // 옛 광주 5구 → '광주' 한 점으로 합산
+function _memGeoKey(sido,sgg){
+  if(sido!=='전남광주통합특별시')return _MEM_GEO[sido]?sido:null;
+  if(_MEM_GJ_GU[sgg])return '전남광주통합특별시|광주';
+  return _MEM_GEO['전남광주통합특별시|'+sgg]?('전남광주통합특별시|'+sgg):'전남광주통합특별시';
+}
+function _memXY(lonlat){return [(lonlat[0]-124.5)*65,(39-lonlat[1])*80];}   // lon124.5~131.5·lat33~39 → 455×480 (위도/경도 km비 보정)
+function closeMemberOverview(){var el=document.getElementById('member-ov');if(el)el.remove();}
+async function openMemberOverview(){
+  if(userRole!=='admin'){showToast('회원 개요는 관리자 전용이에요','error');return;}
+  closeMemberOverview();
+  var el=document.createElement('div');el.id='member-ov';
+  el.innerHTML='<div class="modal-bg show" style="z-index:var(--z-modal)" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeMemberOverview)">'
+    +'<div class="modal pb-modal" style="width:96vw;max-width:1100px;height:88vh;max-height:88vh;overflow:hidden;padding:0;position:relative;display:flex;flex-direction:column">'
+    +'<button class="modal-x" onclick="closeMemberOverview()" title="닫기" aria-label="닫기" style="position:absolute;top:16px;right:18px;float:none;margin:0;z-index:10">✕</button>'
+    +'<div id="mem-ov-body" style="flex:1;overflow:auto;padding:26px 30px;text-align:center;color:var(--dim)">'+_ldHtml(16)+'회원 데이터 불러오는 중…</div>'
+    +'</div></div>';
+  document.body.appendChild(el);
+  if(!_memState||!_memState.rows.length)await _memLoad(false);
+  // 개요는 연령대 필드 필요 — 옛 Worker 응답 캐시(연령대 없음)면 1회 신선 재로드
+  if(_memState&&_memState.rows.length&&_memState.rows[0]['연령대']===undefined){await _memLoad(true);}
+  _memOvRender();
+}
+function _memOvRender(){
+  var body=document.getElementById('mem-ov-body');
+  if(!body)return;
+  if(!_memState||!_memState.rows.length){body.innerHTML='<div style="padding:40px;font-size:13px;color:var(--danger)">회원 데이터를 못 불러왔어요 — 통합문서 「운영_회원」 시트를 확인해 주세요</div>';return;}
+  var rows=_memState.rows,n=rows.length;
+  // 집계: 시군구·시도·연령대·지오
+  var sgg={},sido={},age={},geo={},unloc=0;
+  rows.forEach(function(r){
+    var s1=String(r['주소1']||'').trim(),s2=String(r['주소2']||'').trim();
+    if(s1){sido[s1]=(sido[s1]||0)+1;}else{unloc++;}
+    if(s1&&s2){var kk=s1+'|'+s2;sgg[kk]=(sgg[kk]||0)+1;var gk=_memGeoKey(s1,s2);if(gk)geo[gk]=(geo[gk]||0)+1;}
+    var a=String(r['연령대']||'').trim()||'미상';age[a]=(age[a]||0)+1;
+  });
+  var top5=Object.keys(sgg).map(function(k){return [k,sgg[k]];}).sort(function(a,b){return b[1]-a[1];}).slice(0,5);
+  var jgj=sido['전남광주통합특별시']||0;
+  var AGE_ORDER=['10세 미만','10대','20대','30대','40대','50대','60대','70대','80대','미상'];
+  var ages=AGE_ORDER.filter(function(a){return age[a];}).map(function(a){return [a,age[a]];});
+  var topAge=ages.filter(function(x){return x[0]!=='미상';}).sort(function(a,b){return b[1]-a[1];})[0];
+  var pct=function(c){return (c/n*100).toFixed(1);};
+  // KPI 4
+  var kpi='<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px">'
+    +[['총 회원',n.toLocaleString()+'명',''],
+      ['전남광주통합특별시',pct(jgj)+'%',jgj.toLocaleString()+'명'],
+      ['최다 거주지',top5.length?top5[0][0].split('|')[1]:'—',top5.length?top5[0][1].toLocaleString()+'명':''],
+      ['최다 연령대',topAge?topAge[0]:'—',topAge?pct(topAge[1])+'%':'']]
+    .map(function(s){return '<div style="flex:1 1 150px;background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--r-btn);padding:13px 16px;text-align:left"><div style="font-size:11px;color:var(--dim);font-weight:600">'+s[0]+'</div><div style="font-size:20px;font-weight:800;color:var(--accent);font-variant-numeric:tabular-nums">'+_memEsc(s[1])+'</div>'+(s[2]?'<div style="font-size:10.5px;color:var(--dim)">'+_memEsc(s[2])+'</div>':'')+'</div>';}).join('')
+    +'</div>';
+  // 바 헬퍼 (분석보드 결 계승 — 토큰 알파 변주)
+  var bar=function(label,cnt,max,sub){var w=max?Math.max(2,cnt/max*100):0;
+    return '<div style="display:flex;align-items:center;gap:9px;margin:7px 0"><div style="flex:0 0 92px;font-size:12px;font-weight:600;color:var(--text);text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+_memEsc(label)+'</div>'
+      +'<div style="flex:1;height:16px;background:var(--past-bg);border-radius:6px;overflow:hidden"><div style="width:'+w+'%;height:100%;background:var(--accent);opacity:.72;border-radius:6px"></div></div>'
+      +'<div style="flex:0 0 86px;font-size:11.5px;color:var(--dim);text-align:left;font-variant-numeric:tabular-nums">'+cnt.toLocaleString()+'명'+(sub?' · '+sub:'')+'</div></div>';};
+  var maxT=top5.length?top5[0][1]:0;
+  var topHtml='<div style="font-size:13px;font-weight:800;margin-bottom:6px;text-align:left">거주지 TOP 5 <span style="font-size:10.5px;color:var(--dim);font-weight:500">(시군구 기준 · 전국)</span></div>'
+    +top5.map(function(t){var p=t[0].split('|');return bar(p[1],t[1],maxT,pct(t[1])+'%');}).join('');
+  var maxA=ages.length?Math.max.apply(null,ages.map(function(a){return a[1];})):0;
+  var ageHtml='<div style="font-size:13px;font-weight:800;margin:18px 0 6px;text-align:left">연령대 분포 <span style="font-size:10.5px;color:var(--dim);font-weight:500">(생년월일 기준 · 만나이 근사)</span></div>'
+    +ages.map(function(a){return bar(a[0],a[1],maxA,pct(a[1])+'%');}).join('');
+  body.style.textAlign='left';body.style.color='var(--text)';
+  body.innerHTML='<div style="font-size:16px;font-weight:800;margin-bottom:2px">회원 기본 개요</div>'
+    +'<div style="font-size:11.5px;color:var(--dim);margin-bottom:14px">운영_회원 시트 · 주소 미상 '+unloc.toLocaleString()+'명 제외 집계 · 개인 식별 없음(집계 전용)</div>'
+    +kpi
+    +'<div style="display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start">'
+    +'<div style="flex:1 1 340px;min-width:300px;background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius);padding:14px"><div style="font-size:13px;font-weight:800;margin-bottom:4px">전국 분포 맵 <span style="font-size:10.5px;color:var(--dim);font-weight:500">(버블 = 회원수 비례)</span></div>'+_memOvMap(geo)+'</div>'
+    +'<div style="flex:1 1 380px;min-width:320px;background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px">'+topHtml+ageHtml+'</div>'
+    +'</div>';
+}
+function _memOvMap(geo){
+  // 남한 실루엣(대략 위경도 폴리곤 — 인지용 근사) + 제주 타원
+  var outline=[[126.9,37.9],[126.68,37.78],[126.6,37.5],[126.4,37.1],[126.5,36.7],[126.15,36.7],[126.3,36.2],[126.5,36.0],[126.3,35.5],[126.4,35.0],[126.25,34.7],[126.5,34.3],[127.0,34.55],[127.35,34.45],[127.75,34.6],[128.1,34.85],[128.45,34.8],[128.9,34.95],[129.1,35.1],[129.3,35.35],[129.42,35.9],[129.48,36.1],[129.38,36.5],[129.42,37.1],[129.1,37.55],[128.8,38.05],[128.35,38.35],[127.7,38.32],[127.15,38.2]];
+  var d=outline.map(function(p,i){var xy=_memXY(p);return (i?'L':'M')+xy[0].toFixed(1)+' '+xy[1].toFixed(1);}).join('')+'Z';
+  var jj=_memXY([126.55,33.40]);
+  var keys=Object.keys(geo);if(!keys.length)return '<div style="padding:30px;font-size:12px;color:var(--dim)">지역 데이터 없음</div>';
+  var max=Math.max.apply(null,keys.map(function(k){return geo[k];}));
+  var order=keys.sort(function(a,b){return geo[b]-geo[a];});
+  var bubbles=order.map(function(k,i){
+    var ll=_MEM_GEO[k];if(!ll)return '';
+    var xy=_memXY(ll),c=geo[k],r=5+Math.sqrt(c/max)*33;
+    var label=k.indexOf('|')>=0?k.split('|')[1]:k.replace(/(특별자치도|특별자치시|광역시|특별시)$/,'');
+    var showLb=i<7;
+    // 라벨 = 방향 힌트(_MEM_GEO[2])로 버블 밖 분산 — 밀집 지역(여수·순천·광양) 겹침 방지
+    var dir=ll[2]||'n',lx=xy[0],ly=xy[1],anchor='middle';
+    if(dir==='n'){ly=xy[1]-r-15;}else if(dir==='s'){ly=xy[1]+r+8;}
+    else if(dir==='e'){lx=xy[0]+r+5;ly=xy[1]-6;anchor='start';}
+    else{lx=xy[0]-r-5;ly=xy[1]-6;anchor='end';}
+    return '<circle cx="'+xy[0].toFixed(1)+'" cy="'+xy[1].toFixed(1)+'" r="'+r.toFixed(1)+'" fill="var(--accent)" opacity="0.28"/>'
+      +'<circle cx="'+xy[0].toFixed(1)+'" cy="'+xy[1].toFixed(1)+'" r="'+r.toFixed(1)+'" fill="none" stroke="var(--accent)" opacity="0.55" stroke-width="1.2"/>'
+      +(showLb?'<text x="'+lx.toFixed(1)+'" y="'+ly.toFixed(1)+'" text-anchor="'+anchor+'" font-size="12" font-weight="700" fill="var(--text)">'+_memEsc(label)+'</text>'
+      +'<text x="'+lx.toFixed(1)+'" y="'+(ly+12).toFixed(1)+'" text-anchor="'+anchor+'" font-size="10" fill="var(--dim)">'+geo[k].toLocaleString()+'명</text>':'');
+  }).join('');
+  return '<svg viewBox="0 0 455 496" style="width:100%;height:auto;display:block" role="img" aria-label="전국 회원 분포 버블맵">'
+    +'<path d="'+d+'" fill="var(--accent)" opacity="0.06" stroke="var(--border2)" stroke-width="1"/>'
+    +'<ellipse cx="'+jj[0].toFixed(1)+'" cy="'+jj[1].toFixed(1)+'" rx="26" ry="10" fill="var(--accent)" opacity="0.06" stroke="var(--border2)" stroke-width="1"/>'
+    +bubbles+'</svg>';
 }
 
 // [260710 운영자] 에니어그램 모달화 — 새 탭 → 메인 위 모달(iframe 임베드) + 전체화면 토글 + ↗ 새 탭 + ✕. 도화지와 동일 셸.
