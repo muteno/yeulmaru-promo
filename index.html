@@ -117,7 +117,7 @@ button{font-family:inherit;cursor:pointer}
 @media (prefers-reduced-motion:reduce){.pin.lit{animation:none}.pin-wrap.success .dot-ring circle{animation:none;stroke-dashoffset:0}.pin-wrap.success .pin-slot::before{animation:none}.pin-wrap.hint1 .pin-slot:first-child .dot-ring{opacity:0}.pin-wrap.hint1 .pin-slot:first-child .dot-ring circle{animation:none}}
 #login-msg{font-size:13px;height:18px;color:var(--danger);margin-top:10px}
 /* [260708] 메시지 영역 하나로 통합 — 평상시 안내(무채색 var(--muted)), 입력 시작하면 비움, 틀리면 같은 자리 danger 대체 */
-#login-msg.lm-hint{color:var(--accent);font-weight:600}  /* [260709] 안내문구 강조색 계승(기존 muted는 유리 위에서 매몰) */
+#login-msg.lm-hint{color:var(--peach-text);font-weight:600;margin-top:18px}  /* [260712] 안내문구 = 서브코어 살몬(--peach-text) + 핀칸에서 조금 더 아래로(운영자) · 강조색 계승(기존 muted는 유리 위에서 매몰) */
 #login-load{font-size:13px;height:18px;color:var(--accent);margin-top:4px}
 /* 진입 전환 = 카드 리프트 디졸브 — PIN 카드가 떠오르며 사라지고 셰이더가 body 그라데이션(var(--bg))으로 디졸브,
    앱 셸(nav→hdr→cal)이 순차 등장(_appEnterStagger). 색 = 흰색 alpha 변주(§3.5②)+기존 토큰만.
@@ -1964,7 +1964,7 @@ html::-webkit-scrollbar{width:8px}
       </div>
       <div id="login-msg"></div>
       <div id="login-load"></div>
-      <button type="button" onclick="backToAccountStep()" style="margin-top:16px;background:none;border:0;color:var(--accent);font-weight:600;font-size:12px;cursor:pointer;text-decoration:underline;text-underline-offset:3px">← 계정 다시 선택</button>
+      <button type="button" onclick="backToAccountStep()" style="margin-top:30px;background:none;border:0;color:var(--muted);font-weight:600;font-size:12px;cursor:pointer">← 계정 다시 선택</button>
     </div>
   </div></div>
 </div>
@@ -3209,9 +3209,14 @@ function _enterPinInputStep(){
   const a=document.getElementById('account-step'); if(a)a.style.display='none';
   const ps=document.getElementById('pin-step'); if(ps)ps.style.display='';
   const pa=document.getElementById('pin-account');
-  if(pa)pa.innerHTML='<b style="color:var(--accent)">'+escapeHtml(_loginEmail)+'</b> 로 로그인';
+  if(pa)pa.innerHTML='<b style="color:var(--text)">'+escapeHtml(_loginEmail)+'</b>';
   _pinClear(false);
-  if(pins[0])pins[0].focus();
+  // [260712 운영자] 첫 PIN 칸 자동 포커스 → 모바일 키보드 유도. display 전환 직후 focus가 무시되는 브라우저(Android 등) 대비 rAF·지연 재시도.
+  //  ⚠ iOS Safari는 사용자 제스처 컨텍스트 밖(여기 = MS인증/목록 로드 await 이후) programmatic focus로 키보드를 못 띄우는 플랫폼 정책 → 강제 불가(첫 칸 탭 필요).
+  function _pinAutoFocus(){ try{ if(pins[0]){ pins[0].focus({preventScroll:true}); } }catch(_e){ try{if(pins[0])pins[0].focus();}catch(__e){} } }
+  _pinAutoFocus();
+  if(typeof requestAnimationFrame==='function')requestAnimationFrame(_pinAutoFocus);
+  setTimeout(function(){ if(window._pinActive && pins[0] && document.activeElement!==pins[0]) _pinAutoFocus(); },80);
   if(typeof _pinFirstHintStart==='function')_pinFirstHintStart();   // [260710 운영자] 입력 전 첫 칸 안내 링(입력 시작 시 해제)
   // [260708] 진입 시 안내문구(무채색) 노출 — 입력 시작하면 사라지고, 틀리면 이 자리를 에러가 대체
   var lm=document.getElementById('login-msg'); if(lm){lm.textContent='PIN 번호를 입력해주세요';lm.classList.add('lm-hint');}
@@ -4028,7 +4033,7 @@ function lockScreen(){
   if(typeof startLoginShader==='function'){try{startLoginShader();}catch(e){}}
   const a=document.getElementById('account-step'); if(a)a.style.display='none';
   const ps=document.getElementById('pin-step'); if(ps)ps.style.display='';
-  const pa=document.getElementById('pin-account'); if(pa)pa.innerHTML='<b style="color:var(--accent)">'+escapeHtml(_loginEmail||'')+'</b>';
+  const pa=document.getElementById('pin-account'); if(pa)pa.innerHTML='<b style="color:var(--text)">'+escapeHtml(_loginEmail||'')+'</b>';
   const lm=document.getElementById('login-msg'); if(lm){ lm.textContent=(Math.round((IDLE_MS||600000)/60000))+'분간 입력이 없어 잠금되었습니다'; lm.style.color='#e53935'; lm.style.fontSize='11px'; lm.style.marginTop='6px'; }
   const ll=document.getElementById('login-load'); if(ll)ll.textContent='';
   _pinClear(false);
