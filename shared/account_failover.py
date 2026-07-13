@@ -20,7 +20,18 @@ import urllib.request
 
 # ⚠️ shared/claude_failover.js 의 CHAIN·워크플로 env(ACC_*) 매핑 순서와 반드시 동일(순환).
 CHAIN = ["EMS1130G", "EMS1130N", "MUTENO", "MUTENONA", "NOMUTEFB"]
-THRESHOLD = int(os.environ.get("PROMOTE_THRESHOLD", "2") or "2")   # 활성 계정 쿼터 몇 회 누적 시 승격
+
+
+def _threshold():
+    """PROMOTE_THRESHOLD → 정수(하한 1). 비정수·0·음수는 기본 2로 방어(import 크래시·즉시승격 방지)."""
+    try:
+        v = int(os.environ.get("PROMOTE_THRESHOLD", "2") or "2")
+        return v if v >= 1 else 2
+    except (ValueError, TypeError):
+        return 2
+
+
+THRESHOLD = _threshold()   # 활성 계정 쿼터 몇 회 누적 시 승격
 API = "https://api.github.com"
 
 
@@ -105,9 +116,13 @@ def main():
         return 0
 
     sig = os.environ.get("NOMUTE_QUOTA_SIGNAL") or os.path.join(
-        os.environ.get("GITHUB_WORKSPACE", "."), ".nomute_active_quota")
+        os.environ.get("GITHUB_WORKSPACE") or os.environ.get("RUNNER_TEMP") or "/tmp", ".nomute_active_quota")
     if not os.path.exists(sig):
         return 0   # 이번 런에 활성 계정이 쿼터로 안 막힘 = 조용히 종료(hits 불변)
+    try:
+        os.remove(sig)   # 신호 소비 즉시 삭제(재사용 워크스페이스에서 스테일 재카운트 방지)
+    except OSError:
+        pass
 
     active = (os.environ.get("ACTIVE_ACCOUNT") or CHAIN[0]).strip()
     if active not in CHAIN:
