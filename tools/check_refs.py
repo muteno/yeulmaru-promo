@@ -19,7 +19,7 @@ TARGETS = ["CLAUDE.md", "docs/앱지침.md"]
 
 # 비파일 표기 허용 목록 — 레포명·세션 키 나열 등 파일 경로가 아닌 백틱 원문
 ALLOW = {
-    "yeulmaru/yeulmaru-promo",
+    "muteno/yeulmaru-promo",
     "role/pw/subAdminPin/myApplicant/myUserDept",
 }
 

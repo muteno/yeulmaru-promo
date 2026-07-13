@@ -7,7 +7,7 @@
 ## 구조
 
 ```
-[GitHub: yeulmaru-promo/signage] ──(GitHub Pages 배포)──> https://yeulmaru.github.io/yeulmaru-promo/signage/ <──(5min poll)── [사이니지 DID]
+[GitHub: yeulmaru-promo/signage] ──(GitHub Pages 배포)──> https://muteno.github.io/yeulmaru-promo/signage/ <──(5min poll)── [사이니지 DID]
         ▲
         │ promo 앱 "사이니지 관리"가 GitHub API로 manifest.json + 이미지 커밋
 ```
@@ -31,7 +31,7 @@
 기존 Cloudflare URL(`https://yeulmaru-signage.pages.dev`)에서 아래로 변경:
 
 ```
-https://yeulmaru.github.io/yeulmaru-promo/signage/   (소문자 필수)
+https://muteno.github.io/yeulmaru-promo/signage/   (소문자 필수)
 ```
 
 현장에서 USB 키보드로: Home → URL Launcher Settings → Install Web App → 위 URL 등록 → 재부팅.
@@ -49,5 +49,5 @@ https://yeulmaru.github.io/yeulmaru-promo/signage/   (소문자 필수)
 
 ## 디버그
 
-- 새 사진을 안 가져올 때: GitHub Pages 배포 성공 확인 → 브라우저로 `https://yeulmaru.github.io/yeulmaru-promo/signage/` 직접 열어 확인 → 기기 URL Launcher 재시작.
+- 새 사진을 안 가져올 때: GitHub Pages 배포 성공 확인 → 브라우저로 `https://muteno.github.io/yeulmaru-promo/signage/` 직접 열어 확인 → 기기 URL Launcher 재시작.
 - MDC 원격 재부팅: `samsung-mdc {사이니지IP}:1515 power reboot`

@@ -28,7 +28,7 @@
 
 ## 1. GitHub
 
-- **레포**: `yeulmaru/yeulmaru-promo` (Public) · **사이트**: https://yeulmaru.github.io/yeulmaru-promo/
+- **레포**: `muteno/yeulmaru-promo` (Public) · **사이트**: https://muteno.github.io/yeulmaru-promo/
 - **계정**: `yeulmarulicense@gmail.com`
 
 ### 1-a. Fine-grained PAT — 블로그 글쓰기 도우미 (⚠️ 260701 브라우저→Worker 시크릿 이관)
@@ -38,7 +38,7 @@
   - ⚠️ 예전 토스트 **"Contents: write 필요"** = 그 토큰에 이 권한이 없다는 뜻 (이제 서버 PAT가 이 권한을 가져야 함).
 - **용도**: Worker가 대행 ①`POST /dispatches` (초안 생성 트리거 = repository_dispatch[nb-blog]) ②`GET /contents/drafts/<id>.json` (결과 폴링). 프론트는 `POST /api/blog/dispatch`·`GET /api/blog/draft?id=`로 **Worker만** 호출(X-App-Password 게이트). 톤 참조는 이제 localStorage 전용(GitHub 저장 폐지).
 - **발급**: https://github.com/settings/personal-access-tokens/new → Resource owner `yeulmaru` → Only select repositories `yeulmaru-promo` → Permissions: **Contents → Read and write** → Generate → 값 복사
-- **Worker에 넣는 법**: Cloudflare 대시보드 → Workers & Pages → `yeulmaru-promo-api` → Settings → Variables and Secrets → **Secret 추가 `GITHUB_PAT`** = 복사한 값 → 저장 → 배포. (또는 `wrangler secret put GITHUB_PAT`) 대체 이름 `GH_BLOG_PAT`/`GITHUB_TOKEN`도 인식. repo/branch는 `GITHUB_REPO`/`GITHUB_BRANCH`로 오버라이드(기본 `yeulmaru/yeulmaru-promo`·`main`).
+- **Worker에 넣는 법**: Cloudflare 대시보드 → Workers & Pages → `yeulmaru-promo-api` → Settings → Variables and Secrets → **Secret 추가 `GITHUB_PAT`** = 복사한 값 → 저장 → 배포. (또는 `wrangler secret put GITHUB_PAT`) 대체 이름 `GH_BLOG_PAT`/`GITHUB_TOKEN`도 인식. repo/branch는 `GITHUB_REPO`/`GITHUB_BRANCH`로 오버라이드(기본 `muteno/yeulmaru-promo`·`main`).
 - **회전(교체)**: GitHub에서 Regenerate → 새 값을 Worker 시크릿 `GITHUB_PAT`에 갱신 → 재배포. **브라우저는 건드릴 것 없음.** 만료일은 짧게(7~90일).
 - **미설정 시**: 시크릿 없으면 `/api/blog/dispatch`가 503 → 프론트가 '초안 생성이 서버에 아직 설정되지 않았어요' 토스트. 앱 나머지 기능은 무관하게 정상.
 
@@ -83,7 +83,7 @@
 
 - **clientId**: `9f3a0105-aa86-4a8b-bad0-bd651688d854` *(공개 SPA client ID, `index.html:1609`)*
 - **tenant(authority)**: `…/95768064-89cb-48c0-b5e5-e7bd309abcbd`
-- **플랫폼**: **SPA** · redirectUri = `https://yeulmaru.github.io/yeulmaru-promo/` (**trailing slash 필수**, Web 아님 — CORS)
+- **플랫폼**: **SPA** · redirectUri = `https://muteno.github.io/yeulmaru-promo/` (**trailing slash 필수**, Web 아님 — CORS)
 - **스코프**: `Files.Read`, `Files.Read.All`, `Sites.Read.All`
 - **용도**: MS 신원확인(로그인 시 PIN과 2중) + SharePoint 사이트/폴더 선택기
 - **콘솔**: portal.azure.com → App registrations. *(서비스계정 client secret = Worker의 `AZURE_CLIENT_SECRET`, 여기 clientId와 별개)*

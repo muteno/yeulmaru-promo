@@ -78,13 +78,13 @@ const API = 'https://yeulmaru-promo-api.YOUR.workers.dev';
 git init
 git add .
 git commit -m "feat: 홍보 계획표 v1"
-git remote add origin https://github.com/yeulmaru/yeulmaru-promo.git
+git remote add origin https://github.com/muteno/yeulmaru-promo.git
 git push -u origin main
 ```
 
 GitHub → Settings → Pages → Source: main, /(root) → Save
 
-URL: `https://yeulmaru.github.io/yeulmaru-promo/web/`
+URL: `https://muteno.github.io/yeulmaru-promo/`
 
 ## 트러블슈팅
 

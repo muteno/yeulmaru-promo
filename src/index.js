@@ -1458,7 +1458,7 @@ __name(structurePromoText, "structurePromoText");
 function ghBlogCfg(env) {
   return {
     pat: env.GITHUB_PAT || env.GH_BLOG_PAT || env.GITHUB_TOKEN || "",
-    repo: env.GITHUB_REPO || "yeulmaru/yeulmaru-promo",
+    repo: env.GITHUB_REPO || "muteno/yeulmaru-promo",
     branch: env.GITHUB_BRANCH || "main"
   };
 }
