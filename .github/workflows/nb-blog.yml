@@ -31,7 +31,13 @@ jobs:
       - name: Generate via claude -p
         uses: actions/github-script@v7
         env:
-          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN_EMS1130G }}
+          # 계정 선택은 여기서만 — ACTIVE_ACCOUNT 부터 체인 순환(shared/claude_failover.js). 각 계정 토큰을 ACC_<계정명> 으로.
+          ACTIVE_ACCOUNT: ${{ vars.ACTIVE_ACCOUNT || 'EMS1130G' }}
+          ACC_EMS1130G: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN_EMS1130G }}
+          ACC_EMS1130N: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN_EMS1130N }}
+          ACC_MUTENO: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN_MUTENO }}
+          ACC_MUTENONA: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN_MUTENONA }}
+          ACC_NOMUTEFB: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN_NOMUTEFB }}
         with:
           retries: 3
           script: |
@@ -115,18 +121,16 @@ jobs:
               }
             }
 
-            // ---- claude -p 실행 ----
+            // ---- claude -p 실행 (활성 계정부터 체인 순환 폴오버 — 쿼터 시 다음 계정) ----
             // 리서치 모드(BW-2)에서만 WebSearch·WebFetch 허용 + 멀티턴. 그 외(수정요청·structure)는 기존과 동일한 1턴.
             // cwd를 러너 임시폴더로 — 레포 CLAUDE.md(앱 개발 지침)가 글쓰기 컨텍스트에 섞이지 않게 격리.
             const args = ['-p', '--model', 'claude-opus-4-8', '--effort', 'max'];
             if (doResearch) args.push('--max-turns', '20', '--allowedTools', 'WebSearch,WebFetch');
             else args.push('--max-turns', '1');
-            let raw = '', err = '';
-            try {
-              raw = execFileSync('claude', args, { input: prompt, encoding: 'utf8', maxBuffer: 20 * 1024 * 1024, cwd: process.env.RUNNER_TEMP || '/tmp' }).trim();
-            } catch (e) {
-              err = String((e && (e.stderr || '')) + ' ' + (e && (e.message || e))).trim().slice(0, 1500);
-            }
+            const path = require('path');
+            const { runClaudeWithFailover } = require(path.join(process.env.GITHUB_WORKSPACE, 'shared/claude_failover.js'));
+            const _r = runClaudeWithFailover({ args, input: prompt, cwd: process.env.RUNNER_TEMP || '/tmp' });
+            let raw = _r.ok ? _r.raw : '', err = _r.ok ? '' : (_r.error || '');
 
             // ---- 결과 객체 ----
             let out;
@@ -168,3 +172,13 @@ jobs:
               catch (e) { try { execFileSync('git', ['pull', '--rebase', 'origin', 'main']); } catch (e2) {} }
             }
             if (!pushed) core.setFailed('push 실패');
+
+      # 활성 계정이 이번 런에 쿼터로 폴오버됐으면 누적 → THRESHOLD(2)회+ 면 다음 계정으로 자동 전진.
+      # 승격은 concurrency 로 직렬화되는 이 워크플로에서만 실행(경쟁 방지) — vars.ACTIVE_ACCOUNT 하나면 전 워크플로에 반영.
+      # GH_VARS_TOKEN 없으면 no-op = 라이브 무해. 신호(.nomute_active_quota)는 같은 job workspace 공유로 자동 일치.
+      - name: 활성 계정 자동 승격(쿼터 누적 시)
+        if: always()
+        env:
+          GH_VARS_TOKEN: ${{ secrets.GH_VARS_TOKEN }}
+          ACTIVE_ACCOUNT: ${{ vars.ACTIVE_ACCOUNT || 'EMS1130G' }}
+        run: python3 shared/account_failover.py

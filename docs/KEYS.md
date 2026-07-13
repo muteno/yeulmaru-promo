@@ -2,7 +2,7 @@
 
 > **이 문서엔 비밀값을 적지 않는다.** 키의 *이름·위치·용도·발급/회전 절차*만. 실제 값은 각 플랫폼 콘솔/시크릿에만 존재.
 > 공개 식별자(MSAL clientId, Naver client key)는 이미 `index.html`에 박혀 있어 그대로 표기.
-> Last updated: 2026-06-20 (KST)
+> Last updated: 2026-07-13 (KST)
 
 ---
 
@@ -11,7 +11,8 @@
 | 플랫폼 | 키(이름) | 비밀? | 사는 곳 | 용도 |
 |---|---|---|---|---|
 | **GitHub** | Fine-grained **PAT** | 🔒 | **Cloudflare Worker 시크릿** `GITHUB_PAT` (260701 브라우저→서버 이관) | 블로그 도우미: 초안 생성 트리거 + 결과 폴링 (Worker가 대행) |
-| **GitHub** | `CLAUDE_CODE_OAUTH_TOKEN_EMS1130G` | 🔒 | Repo → Settings → Secrets → **Actions** | 초안 생성 엔진 (`claude -p` opus 4.8) |
+| **GitHub** | `CLAUDE_CODE_OAUTH_TOKEN_*` (5계정: EMS1130G·EMS1130N·MUTENO·MUTENONA·NOMUTEFB) | 🔒 | Repo → Settings → Secrets → **Actions** | 초안 생성 엔진 (`claude -p` opus 4.8) — 활성 계정 쿼터 시 순환 폴오버 |
+| **GitHub** | `GH_VARS_TOKEN` (Fine-grained PAT · Variables RW) | 🔒 | Repo → Settings → Secrets → **Actions** | 활성 계정 자동 승격이 `vars.ACTIVE_ACCOUNT` 를 쓰는 권한 |
 | **Cloudflare** | `APP_PASSWORD` | 🔒 | Worker Variables/Secrets | 일반 사용자 앱 비번 (X-App-Password) |
 | **Cloudflare** | `ADMIN_PASSWORD` | 🔒 | Worker Variables/Secrets | 관리자/슈퍼 비번 = **DB 스크립트 `DB_PW` 값** |
 | **Cloudflare** | `AZURE_TENANT_ID/CLIENT_ID/CLIENT_SECRET` | 🔒 | Worker Secrets | Graph API 서비스계정 → SharePoint Excel 읽기/쓰기 |
@@ -41,12 +42,22 @@
 - **회전(교체)**: GitHub에서 Regenerate → 새 값을 Worker 시크릿 `GITHUB_PAT`에 갱신 → 재배포. **브라우저는 건드릴 것 없음.** 만료일은 짧게(7~90일).
 - **미설정 시**: 시크릿 없으면 `/api/blog/dispatch`가 503 → 프론트가 '초안 생성이 서버에 아직 설정되지 않았어요' 토스트. 앱 나머지 기능은 무관하게 정상.
 
-### 1-b. Actions Secret `CLAUDE_CODE_OAUTH_TOKEN_EMS1130G` — 초안 생성 엔진
-- **무엇**: Claude **구독(Max) OAuth 토큰** (`sk-ant-oat…`), 계정 `ems1130g@gmail.com`
-- **용도**: `.github/workflows/nb-blog.yml`·`blog-draft.yml`에서 `claude -p --model claude-opus-4-8 --effort max` 실행 = **실제 글쓰기 엔진** (월 $200 Max 구독이라 초안당 추가비용 0)
-- **위치**: Repo → Settings → Secrets and variables → **Actions** → `CLAUDE_CODE_OAUTH_TOKEN_EMS1130G`
-- **발급/회전**: 로컬에서 `claude setup-token` → 출력된 `sk-ant-oat…`를 위 secret에 갱신
-- **주의**: 구독 OAuth는 **Actions의 `claude -p`에서만** 동작(원시 Messages API 불가). 만료되면 초안 생성이 통째로 실패 → 재발급.
+### 1-b. Actions Secret `CLAUDE_CODE_OAUTH_TOKEN_*` (5계정) — 초안 생성 엔진 + 순환 폴오버
+- **무엇**: Claude **구독(Max) OAuth 토큰** (`sk-ant-oat…`) 5개. 계정·순서(체인) = `EMS1130G`(활성 기본) → `EMS1130N` → `MUTENO` → `MUTENONA` → `NOMUTEFB`.
+- **용도**: `nb-blog.yml`·`blog-draft.yml`에서 `claude -p --model claude-opus-4-8 --effort max` 실행 = **실제 글쓰기 엔진** (Max 구독이라 초안당 추가비용 0). 활성 계정(`vars.ACTIVE_ACCOUNT`, 없으면 EMS1130G)이 주간 쿼터로 막히면 `shared/claude_failover.js`가 체인의 다음 계정으로 **순환 폴오버**해 결과물을 확보.
+- **위치**: Repo → Settings → Secrets and variables → **Actions** → `CLAUDE_CODE_OAUTH_TOKEN_<계정명>` (각 계정 1개).
+- **발급/회전**: 각 계정 로컬에서 `claude setup-token` → 출력된 `sk-ant-oat…`를 해당 secret에 갱신.
+- **주의**: 구독 OAuth는 **Actions의 `claude -p`에서만** 동작(원시 Messages API 불가). 만료되면 그 계정만 폴오버로 건너뛰고, 전 계정 만료 시 초안 생성 실패.
+- **⚠️ 계정 추가/제거 시 동기화 지점(반드시 전부)**: ①`shared/claude_failover.js` `CHAIN` ②`shared/account_failover.py` `CHAIN` ③`nb-blog.yml` env `ACC_*` ④`blog-draft.yml` env `ACC_*` ⑤(체인 선두 변경 시) 각 워크플로 `|| 'EMS1130G'` 기본값 ⑥해당 `CLAUDE_CODE_OAUTH_TOKEN_*` 시크릿. CHAIN 4곳(①②③④)이 어긋나면 폴오버/승격 오작동.
+
+### 1-c. Actions Secret `GH_VARS_TOKEN` — 활성 계정 자동 승격(sticky failover)
+- **무엇**: Fine-grained **PAT**, 권한 = 이 레포 **Variables: Read and write** (딱 이것만 — 최소권한).
+- **용도**: 활성 계정 쿼터가 THRESHOLD(기본 2)회 누적되면 `shared/account_failover.py`가 `vars.ACTIVE_ACCOUNT`를 체인의 다음 계정으로 PATCH(승격) + `ACTIVE_QUOTA_HITS` 카운트 관리. **승격은 concurrency로 직렬화되는 `nb-blog.yml`에서만** 실행(경쟁 방지) — vars 하나 바꾸면 전 워크플로 반영.
+- **위치**: Repo → Settings → Secrets and variables → **Actions** → `GH_VARS_TOKEN` (⚠️ Variables 탭 아님, **Secrets** 탭).
+- **발급**: github.com/settings/personal-access-tokens/new → Only select repositories `yeulmaru-promo` → Permissions → **Variables: Read and write** → Generate → 값 복사.
+- **미설정 시**: 승격 완전 no-op(라이브 무해). 폴오버(다계정)는 GH_VARS_TOKEN 없이도 동작 — 승격만 비활성.
+- **실측**: Actions 탭 → `account-selftest` → Run workflow → 로그 `🎉 PAT 실측 통과`면 정상(활성 계정 무손상, probe 변수만 왕복).
+- **상태 변수(자동 관리, 손대지 말 것)**: `vars.ACTIVE_ACCOUNT`(현재 활성 계정명) · `vars.ACTIVE_QUOTA_HITS`(쿼터 누적 카운트).
 
 ---
 
@@ -97,7 +108,8 @@
 
 ```
 블로그 초안:  브라우저(X-App-Password) ──▶ Worker(GITHUB_PAT) ──dispatch──▶ Actions(nb-blog.yml)
-              Actions가 CLAUDE_CODE_OAUTH_TOKEN으로 claude -p 실행 ──▶ drafts/<id>.json
+              Actions가 활성 CLAUDE_CODE_OAUTH_TOKEN(쿼터 시 5계정 순환 폴오버)으로 claude -p 실행 ──▶ drafts/<id>.json
+              활성 쿼터 2회 누적 시 GH_VARS_TOKEN이 vars.ACTIVE_ACCOUNT를 다음 계정으로 자동 승격
               브라우저 ──▶ Worker가 PAT로 결과 폴링·디코드해 화면 표시
 데이터(시트): 브라우저 + APP_PASSWORD/Sub-PIN ──▶ Worker ──AZURE_*──▶ Graph ──▶ SharePoint Excel
 OCR:          브라우저 ──▶ Worker(GEMINI_API_KEY) ──▶ 텍스트
