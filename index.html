@@ -2588,6 +2588,24 @@ function _pinHintUpdate(){ var lm=document.getElementById('login-msg'); if(!lm)r
 // [260710 운영자 "컴맹 배려"] PIN 진입 시 첫 칸 안내 링 — 입력 전까지 강조색으로 한 바퀴씩(0.3초 텀) 반복
 function _pinFirstHintStart(){ var w=document.querySelector('.pin-wrap'); if(w)w.classList.add('hint1'); }
 function _pinFirstHintStop(){ var w=document.querySelector('.pin-wrap'); if(w)w.classList.remove('hint1'); }
+// [260714 운영자 "첫 핀 자동 커서 안 됨 — 마우스로 눌러야"] 첫 PIN 칸 포커스 견고화 — 모든 진입 경로(_enterPinInputStep·lockScreen) 공용.
+//  ① 즉시+rAF+지연(50/150/350ms) 다중 재시도 = display 전환 직후 레이아웃 전이라 focus가 무시되는 브라우저·비동기 진입(목록 로드 await 후) 커버.
+//  ② 창 포커스/가시화 복구(1회 바인딩·비활성 시 no-op) = 리다이렉트 복귀 직후·팝업 종료 레이스·비밀번호매니저 오버레이로 문서가 비활성이라 자동 focus가 유실된 경우,
+//     사용자가 창으로 돌아오는 순간 첫 칸을 잡아 "클릭 없이 첫 키 입력이 바로 들어가게" 한다. 첫 칸이 비어있고·보이고·미포커스일 때만 동작(입력 중 재소환 없음).
+//  ⚠ iOS Safari는 사용자 제스처 밖 programmatic focus로 소프트키보드를 못 띄우는 플랫폼 정책 → 강제 불가(첫 칸 탭 필요). 데스크톱·안드로이드는 이 경로로 커버.
+function _pinFocusFirst(){
+  function _try(){ try{ if(pins[0])pins[0].focus({preventScroll:true}); }catch(_e){ try{if(pins[0])pins[0].focus();}catch(__e){} } }
+  function _need(){ return pins[0] && pins[0].offsetParent!==null && !pins[0].value && document.activeElement!==pins[0]; }
+  _try();
+  if(typeof requestAnimationFrame==='function')requestAnimationFrame(function(){ if(_need())_try(); });
+  [50,150,350].forEach(function(ms){ setTimeout(function(){ if(_need())_try(); },ms); });
+  if(!window._pinRefocusBound){
+    window._pinRefocusBound=true;
+    var _rf=function(){ if(_need())_try(); };   // pin-step 숨김(로그인 성공·계정복귀) 시 offsetParent=null → 자동 no-op, 별도 해제 불필요
+    window.addEventListener('focus',_rf);
+    document.addEventListener('visibilitychange',_rf);
+  }
+}
 pins.forEach((el,i)=>{
   // 방금 입력한 칸만 숫자 노출(lit), 0.6초 뒤 채운 동그라미로(filled). 원=.pin-slot::before, 숫자=input → 물리 분리로 겹침 없음.
   var _fill=function(){el.type='password';el.classList.remove('lit');el.classList.add('filled');};
@@ -3220,12 +3238,7 @@ function _enterPinInputStep(){
   const pa=document.getElementById('pin-account');
   if(pa)pa.innerHTML='<b style="color:var(--peach-text)">'+escapeHtml(_loginEmail)+'</b>';
   _pinClear(false);
-  // [260712 운영자] 첫 PIN 칸 자동 포커스 → 모바일 키보드 유도. display 전환 직후 focus가 무시되는 브라우저(Android 등) 대비 rAF·지연 재시도.
-  //  ⚠ iOS Safari는 사용자 제스처 컨텍스트 밖(여기 = MS인증/목록 로드 await 이후) programmatic focus로 키보드를 못 띄우는 플랫폼 정책 → 강제 불가(첫 칸 탭 필요).
-  function _pinAutoFocus(){ try{ if(pins[0]){ pins[0].focus({preventScroll:true}); } }catch(_e){ try{if(pins[0])pins[0].focus();}catch(__e){} } }
-  _pinAutoFocus();
-  if(typeof requestAnimationFrame==='function')requestAnimationFrame(_pinAutoFocus);
-  setTimeout(function(){ if(window._pinActive && pins[0] && document.activeElement!==pins[0]) _pinAutoFocus(); },80);
+  if(typeof _pinFocusFirst==='function')_pinFocusFirst();   // [260714] 견고화된 첫 칸 자동 포커스(다중 재시도 + 창 포커스 복구) — 클릭 없이 바로 입력
   if(typeof _pinFirstHintStart==='function')_pinFirstHintStart();   // [260710 운영자] 입력 전 첫 칸 안내 링(입력 시작 시 해제)
   // [260708] 진입 시 안내문구(무채색) 노출 — 입력 시작하면 사라지고, 틀리면 이 자리를 에러가 대체
   var lm=document.getElementById('login-msg'); if(lm){lm.textContent='PIN 번호를 입력해주세요';lm.classList.add('lm-hint');}
@@ -4046,7 +4059,7 @@ function lockScreen(){
   const lm=document.getElementById('login-msg'); if(lm){ lm.textContent=(Math.round((IDLE_MS||600000)/60000))+'분간 입력이 없어 잠금되었습니다'; lm.style.color='#e53935'; lm.style.fontSize='11px'; lm.style.marginTop='6px'; }
   const ll=document.getElementById('login-load'); if(ll)ll.textContent='';
   _pinClear(false);
-  if(pins[0])pins[0].focus();
+  if(typeof _pinFocusFirst==='function')_pinFocusFirst(); else if(pins[0])pins[0].focus();   // [260714] 잠금 재진입도 견고화 포커스로 통일(경로 일관성)
   if(typeof _pinFirstHintStart==='function')_pinFirstHintStart();   // [분신술 260710 감사5] 잠금 재진입도 PIN 진입 — 첫 칸 안내 링 발동(경로 일관성)
 }
 function toggleMobileNav(){
