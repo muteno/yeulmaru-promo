@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>판매현황 캐러셀 내비 플레이그라운드 — dots 위치·좌우버튼 (v1 · 20260714_102408)</title>
+<style>
+/* ═══ 0. 루트 토큰 사본 — index.html :root 계승(창작 금지) ═══ */
+:root{
+  --accent:#4A4DE7; --accent-light:#E8E8FD; --accent-glow:rgba(74,77,231,0.15);
+  --peach:#F0C4B8; --peach-light:#FBF0EC; --peach-bg:#FDF6F3; --peach-text:#D88455;
+  --bg:linear-gradient(135deg,#FDF6F3 0%,#F0EBF5 50%,#EBF0F8 100%);
+  --surface-solid:#fff; --glass:rgba(255,255,255,0.55);
+  --glass-shadow:0 8px 32px rgba(74,77,231,0.08),0 2px 8px rgba(0,0,0,0.04);
+  --border:rgba(0,0,0,0.09); --border2:rgba(0,0,0,0.12);
+  --text:#1A1A2E; --dim:#888; --muted:#bbb;
+  --green:#1A6B3C;
+  --radius:16px; --radius-lg:20px; --radius-xl:24px;
+  --neutral:#EEEDF3; --neutral-d:#E1DFEC; --neutral-text:#6B6B7B;
+  --r-btn:10px; --elev:0 20px 56px rgba(74,77,231,.16),0 6px 18px rgba(26,26,46,.07);
+  --glass-surface:rgba(255,255,255,.78); --glass-bd:var(--glass);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);min-height:100vh;
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Apple SD Gothic Neo',sans-serif;padding:22px 18px 60px}
+h1{font-size:19px;font-weight:800;letter-spacing:-.3px}
+.sub{font-size:12.5px;color:var(--dim);margin:6px 0 18px;line-height:1.65}
+.sub b{color:var(--text)}
+.wrap{display:flex;flex-wrap:wrap;gap:20px;align-items:flex-start;max-width:1200px;margin:0 auto}
+.stagewrap{flex:1 1 560px;min-width:340px}
+.console{flex:0 1 380px;min-width:300px;background:var(--surface-solid);border:1px solid var(--border);
+  border-radius:var(--radius-lg);padding:16px;box-shadow:var(--glass-shadow);position:sticky;top:14px}
+.csec{padding:13px 0;border-bottom:1px dashed var(--border)}
+.csec:first-child{padding-top:2px}.csec:last-child{border-bottom:none;padding-bottom:2px}
+.ct{font-size:11px;font-weight:800;color:var(--dim);letter-spacing:1px;margin-bottom:11px}
+.ct em{font-style:normal;font-weight:600;color:var(--muted);letter-spacing:0;margin-left:6px}
+.row{margin:11px 0}
+.lb{display:flex;align-items:baseline;gap:7px;margin-bottom:5px}
+.lb b{font-size:12px;font-weight:700;color:var(--text)}
+.lb .tg{font-size:10.5px;color:var(--muted);font-weight:600}
+.lb .vl{margin-left:auto;font-size:11.5px;font-weight:800;color:var(--accent);font-variant-numeric:tabular-nums}
+input[type=range]{width:100%;accent-color:var(--accent);height:4px}
+.segs{display:flex;gap:6px}
+.seg{flex:1;font-size:11.5px;font-weight:700;color:var(--neutral-text);background:var(--neutral);border:1px solid var(--border);
+  border-radius:var(--r-btn);padding:7px 4px;cursor:pointer;text-align:center;transition:.15s}
+.seg.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.tog{display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;font-weight:600;color:var(--text)}
+.tog input{width:16px;height:16px;accent-color:var(--accent)}
+.copybtn{width:100%;margin-top:4px;background:var(--accent);color:#fff;border:none;border-radius:var(--r-btn);
+  padding:11px;font-size:12.5px;font-weight:800;cursor:pointer}
+.copybtn:hover{background:#3d40d4}
+.out{margin-top:10px;background:#0f1020;color:#d7d8ff;border-radius:10px;padding:11px 12px;font-size:11px;line-height:1.65;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;word-break:break-all;max-height:210px;overflow:auto}
+
+/* ═══ 프레임 — 판매현황 패널 재현 ═══ */
+.frame{width:min(640px,96vw);margin:0 auto}
+.stagecap{text-align:center;font-size:11.5px;color:var(--dim);margin:12px auto 0;line-height:1.7;max-width:600px}
+.stagecap b{color:var(--text)}
+
+/* #sales-rail → .srail (유리박스, 캘린더 높이 캡 재현) ─ index.html L1834 계승 */
+.srail{position:relative;height:640px;display:flex;flex-direction:column;
+  background:rgba(255,255,255,.53);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  border:1px solid rgba(255,255,255,.7);border-radius:var(--radius-xl);box-shadow:var(--glass-shadow);overflow:hidden}
+/* 흰 헤더행 — index.html L1832 계승 */
+.srail-head{flex-shrink:0;min-height:47px;display:flex;align-items:center;gap:10px;padding:1px 16px 0;
+  background:rgba(255,255,255,.9);backdrop-filter:blur(11px);border-bottom:1px solid rgba(0,0,0,.07)}
+.srail-ttltext{font-size:14px;font-weight:800;color:var(--text)}
+.srail-cnt{font-size:10.5px;font-weight:800;color:var(--accent);background:transparent;border:1px solid rgba(74,77,231,.18);
+  border-radius:999px;padding:1px 8px;font-variant-numeric:tabular-nums}
+.srail-sum{font-size:12px;color:var(--neutral-text);font-weight:600;margin-left:7px}
+.srail-sum .g{color:var(--green);font-weight:800}
+.srail-body{flex:1;overflow:hidden;padding:4px 0 0;min-height:0;display:flex;flex-direction:column}
+
+/* 캐러셀 ─ index.html L1893~ 계승 */
+.srail-vp{flex:1;min-height:0;overflow:hidden;position:relative;touch-action:pan-y}
+.srail-track{display:flex;height:100%;will-change:transform;transition:transform .4s cubic-bezier(.55,0,.45,1)}
+.srail-slide{flex:0 0 100%;min-width:0;overflow-y:auto;padding:0 2px}
+
+/* dots ─ 변수 배선: --dot-align(정렬) · --dot-mb(하단 여백=위로 밀기) */
+.srail-dots{display:flex;gap:5px;align-items:center;flex-wrap:wrap;
+  justify-content:var(--dot-align,center);align-self:stretch;margin-bottom:var(--dot-mb,0px)}
+.srail-dot{width:6px;height:6px;border-radius:999px;background:var(--muted);border:none;padding:0;cursor:pointer;
+  transition:background .2s,width .2s}
+.srail-dot.on{background:var(--accent);width:16px}
+
+/* 좌우 버튼 ─ .srail 기준 절대배치, 걸침 --oh · 세로 --btop · 크기 --bs (index.html .srail-cbtn 계승) */
+.srail-cbtn{position:absolute;z-index:5;top:var(--btop,42%);transform:translateY(-50%);
+  width:var(--bs,26px);height:var(--bs,26px);border-radius:999px;border:1px solid var(--glass-bd);
+  background:var(--glass-surface);color:var(--accent);font-size:calc(var(--bs,26px)*.58);font-weight:800;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;line-height:1;padding:0;
+  box-shadow:0 2px 8px rgba(26,26,46,.12);transition:border-color .15s,background .15s}
+.srail-cbtn:hover{border-color:var(--accent);background:var(--accent-light)}
+.srail-cbtn.prev{left:calc(-1 * var(--oh,0.333) * var(--bs,26px))}
+.srail-cbtn.next{right:calc(-1 * var(--oh,0.333) * var(--bs,26px))}
+
+/* 프레임 여백 = 버튼이 밖으로 나가므로 좌우 패딩 확보(실앱은 #sales-rail 안, 여기선 잘림 방지용) */
+.framepad{padding:0 22px}
+
+/* ── 재현용 카드 콘텐츠(축약) ── */
+.mock{padding:14px 16px}
+.mock-tt{font-size:16px;font-weight:800;color:var(--text)}
+.mock-dday{color:var(--peach-text);font-weight:800;margin-left:6px;font-size:13px}
+.mock-meta{font-size:11.5px;color:var(--dim);margin-top:4px}
+.mock-occrow{display:flex;align-items:baseline;gap:8px;margin-top:12px}
+.mock-occ{font-size:26px;font-weight:800;color:var(--accent)}
+.mock-occsub{font-size:11.5px;color:var(--green);font-weight:700}
+.mock-occcap{font-size:11.5px;color:var(--dim)}
+.mock-chart{height:150px;border:1px solid var(--border);border-radius:var(--r-btn);background:var(--surface-solid);
+  margin-top:12px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11.5px;position:relative;overflow:hidden}
+.mock-chart svg{position:absolute;inset:0;width:100%;height:100%}
+.mock-bar{margin-top:12px;height:7px;border-radius:999px;background:rgba(0,0,0,.06);overflow:hidden}
+.mock-bar>i{display:block;height:100%;background:var(--green);border-radius:999px}
+.mock-barcap{display:flex;justify-content:space-between;font-size:11px;color:var(--dim);margin-top:6px}
+</style>
+</head>
+<body>
+<h1>판매현황 캐러셀 내비 — 위치 플레이그라운드</h1>
+<p class="sub">
+현행: <b>자동 슬라이드 dots가 카드 좌측·바닥에 쏠려</b> 있고(<code>max-width:62%</code>+정렬 없음), <b>좌우 이동버튼은 dormant</b>(CSS만 있고 DOM 미배선).<br>
+여기서 ① <b>dots 정렬·세로위치</b> ② <b>좌우버튼 걸침·세로위치·크기</b>를 맞추고 → 좌우버튼/점으로 <b>루프(끝→처음)</b> 확인 → <b>[선택값 복사]</b>로 답장하면 index.html에 배선할게.
+</p>
+<div class="wrap">
+  <div class="stagewrap">
+    <div class="frame framepad">
+      <div class="srail" id="srail">
+        <div class="srail-head">
+          <span class="srail-ttltext">판매 현황</span>
+          <span class="srail-cnt">3</span>
+          <span class="srail-sum">전일 대비 <span style="color:var(--muted)">|</span> 공연 <span class="g">+30석</span></span>
+        </div>
+        <div class="srail-body">
+          <div class="srail-vp">
+            <div class="srail-track" id="track"></div>
+          </div>
+          <div class="srail-dots" id="dots"></div>
+        </div>
+        <button class="srail-cbtn prev" id="prev" aria-label="이전">‹</button>
+        <button class="srail-cbtn next" id="next" aria-label="다음">›</button>
+      </div>
+    </div>
+    <p class="stagecap">
+      카드 높이 640px = <b>캘린더 높이 캡 재현</b>(콘텐츠가 짧아 아래가 빔 → 현행 dots가 그 바닥에 고정됨).<br>
+      좌우버튼은 <b>.srail 박스 좌우 라인</b> 기준 — <b>1/3 밖 · 2/3 안</b>이 기본값(슬라이더로 조정).
+    </p>
+  </div>
+
+  <aside class="console">
+    <div class="csec">
+      <div class="ct">① 슬라이드 점(dots) <em>자동 슬라이드 인디케이터</em></div>
+      <div class="row">
+        <div class="lb"><b>가로 정렬</b><span class="tg">현행=좌측 쏠림 버그</span></div>
+        <div class="segs" id="seg-align">
+          <div class="seg" data-v="flex-start">좌</div>
+          <div class="seg on" data-v="center">가운데</div>
+          <div class="seg" data-v="flex-end">우</div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="lb"><b>세로 위치</b><span class="tg">바닥에서 위로 밀기</span><span class="vl" id="vl-mb">150px</span></div>
+        <input type="range" id="r-mb" min="0" max="420" step="2" value="150">
+      </div>
+    </div>
+
+    <div class="csec">
+      <div class="ct">② 좌우 이동 버튼 <em>끝→처음 루프 내장</em></div>
+      <div class="row">
+        <div class="lb"><b>걸침 비율(밖으로)</b><span class="tg">1/3≈0.33 · 라인 밖 비율</span><span class="vl" id="vl-oh">0.33</span></div>
+        <input type="range" id="r-oh" min="0" max="0.6" step="0.01" value="0.33">
+      </div>
+      <div class="row">
+        <div class="lb"><b>세로 위치</b><span class="tg">카드 상단 기준 %</span><span class="vl" id="vl-bt">42%</span></div>
+        <input type="range" id="r-bt" min="8" max="92" step="1" value="42">
+      </div>
+      <div class="row">
+        <div class="lb"><b>버튼 크기</b><span class="tg">현행 .srail-cbtn=26</span><span class="vl" id="vl-bs">30px</span></div>
+        <input type="range" id="r-bs" min="20" max="44" step="1" value="30">
+      </div>
+      <label class="tog" style="margin-top:12px"><input type="checkbox" id="c-show" checked> 좌우 버튼 표시</label>
+    </div>
+
+    <div class="csec">
+      <div class="ct">③ 동작 확인</div>
+      <label class="tog"><input type="checkbox" id="c-auto"> 자동 슬라이드(8초·끝→처음 10초 재현)</label>
+      <p class="sub" style="margin:9px 0 0">‹ › 눌러 <b>루프</b> 확인 — 마지막에서 다음 = 처음으로, 처음에서 이전 = 마지막으로.</p>
+    </div>
+
+    <div class="csec">
+      <div class="ct">④ 선택값</div>
+      <button class="copybtn" id="copy">📋 선택값 복사</button>
+      <div class="out" id="out"></div>
+    </div>
+  </aside>
+</div>
+
+<script>
+/* ── 3개 슬라이드(달 샤베트 카드 축약 재현) ── */
+var SLIDES=[
+  {tt:'뮤지컬 &lt;달 샤베트&gt;',dday:'D-79',meta:'뮤지컬(어린이) · 예술성 · 10.1(목) · 판매 5일차',occ:'52.9%',sub:'+2.8%p',cap:'( 490 / 926 )',fill:53,bar:'490 / 926석',goal:'목표 50% +2.9%p'},
+  {tt:'브런치 클래식',dday:'D-12',meta:'클래식(성인) · 대중성 · 8.24(일) · 판매 21일차',occ:'71.4%',sub:'+3.5%p',cap:'( 500 / 700 )',fill:71,bar:'500 / 700석',goal:'목표 65% +6.4%p'},
+  {tt:'재즈 인 더 파크',dday:'D-40',meta:'재즈(성인) · 예술성 · 9.9(화) · 판매 3일차',occ:'34.2%',sub:'+1.1%p',cap:'( 205 / 600 )',fill:34,bar:'205 / 600석',goal:'목표 45% -10.8%p'}
+];
+var track=document.getElementById('dots')?null:null;
+var $=function(id){return document.getElementById(id);};
+var elTrack=$('track'),elDots=$('dots'),srail=$('srail');
+var N=SLIDES.length, idx=0, autoT=null;
+
+function cardHtml(s){
+  return '<div class="mock">'
+    +'<div class="mock-tt">'+s.tt+'<span class="mock-dday">'+s.dday+'</span></div>'
+    +'<div class="mock-meta">'+s.meta+'</div>'
+    +'<div class="mock-occrow"><span class="mock-occ">'+s.occ+'</span><span class="mock-occsub">'+s.sub+'</span><span class="mock-occcap">'+s.cap+'</span></div>'
+    +'<div class="mock-chart"><svg viewBox="0 0 300 150" preserveAspectRatio="none"><polyline points="20,120 70,118 120,116 170,70 230,60 280,58" fill="none" stroke="var(--accent)" stroke-width="2" opacity=".55"/></svg>추이 차트(재현)</div>'
+    +'<div class="mock-bar"><i style="width:'+s.fill+'%"></i></div>'
+    +'<div class="mock-barcap"><span>'+s.bar+'</span><span>'+s.goal+'</span></div>'
+    +'</div>';
+}
+elTrack.innerHTML=SLIDES.map(function(s){return '<div class="srail-slide">'+cardHtml(s)+'</div>';}).join('');
+elDots.innerHTML=SLIDES.map(function(s,i){return '<button class="srail-dot" data-i="'+i+'" aria-label="'+(i+1)+'번째"></button>';}).join('');
+
+function apply(){
+  elTrack.style.transform='translateX('+(-idx*100)+'%)';
+  elDots.querySelectorAll('.srail-dot').forEach(function(d,i){d.classList.toggle('on',i===idx);});
+}
+function go(i){ idx=((i%N)+N)%N; apply(); }   /* ← 루프(끝→처음) 핵심: modulo. 실앱 _srailCarTo 와 동일 */
+apply();
+
+elDots.addEventListener('click',function(e){var b=e.target.closest('.srail-dot');if(b)go(+b.dataset.i);});
+$('prev').addEventListener('click',function(){go(idx-1);});
+$('next').addEventListener('click',function(){go(idx+1);});
+
+/* 컨트롤 배선 */
+function setVar(k,v){srail.style.setProperty(k,v);}
+$('seg-align').addEventListener('click',function(e){
+  var s=e.target.closest('.seg');if(!s)return;
+  $('seg-align').querySelectorAll('.seg').forEach(function(x){x.classList.toggle('on',x===s);});
+  setVar('--dot-align',s.dataset.v);emit();
+});
+function bindRange(id,varName,fmt,unit){
+  var r=$(id),vl=$('vl-'+id.split('-')[1]);
+  r.addEventListener('input',function(){
+    var val=r.value;
+    setVar(varName,val+(unit||''));
+    vl.textContent=fmt?fmt(val):val+(unit||'');
+    emit();
+  });
+}
+bindRange('r-mb','--dot-mb',null,'px');
+bindRange('r-oh','--oh',function(v){return (+v).toFixed(2);},'');
+bindRange('r-bt','--btop',null,'%');
+bindRange('r-bs','--bs',null,'px');
+
+$('c-show').addEventListener('change',function(){
+  var d=this.checked?'flex':'none';$('prev').style.display=d;$('next').style.display=d;emit();
+});
+$('c-auto').addEventListener('change',function(){
+  if(autoT){clearTimeout(autoT);autoT=null;}
+  if(this.checked){
+    var tick=function(){ go(idx+1); autoT=setTimeout(tick, idx===N-1?10000:8000); };
+    autoT=setTimeout(tick,8000);
+  }
+});
+
+/* 초기값 반영 */
+setVar('--dot-align','center');setVar('--dot-mb','150px');
+setVar('--oh','0.33');setVar('--btop','42%');setVar('--bs','30px');
+
+function emit(){
+  var align=$('seg-align').querySelector('.seg.on').dataset.v;
+  var mb=$('r-mb').value, oh=(+$('r-oh').value).toFixed(2), bt=$('r-bt').value, bs=$('r-bs').value, show=$('c-show').checked;
+  var alignKo={'flex-start':'좌','center':'가운데','flex-end':'우'}[align];
+  var out=
+'━━ 판매현황 캐러셀 내비 선택값 (20260714_'+'v1) ━━\n\n'+
+'[① dots — index.html .srail-dots L1900]\n'+
+'  justify-content: '+align+';   /* '+alignKo+' 정렬 */\n'+
+'  align-self: center;            /* 컨테이너 자체 가운데(좌측쏠림 해소) */\n'+
+'  margin-bottom: '+mb+'px;       /* 바닥에서 위로 */\n'+
+'  /* max-width:62% 제거(좌우버튼이 밖으로 빠져 폭 여유) */\n\n'+
+'[② 좌우버튼 — .srail-cbtn 재배선(dormant→활성)]\n'+
+(show?
+'  표시: ON\n'+
+'  크기(w=h): '+bs+'px\n'+
+'  걸침(밖 비율): '+oh+'  → left/right: calc(-1 * '+oh+' * '+bs+'px) = '+(-oh*bs).toFixed(1)+'px\n'+
+'  세로 위치: top '+bt+'% (translateY -50%)\n'+
+'  루프: _srailCarTo 의 modulo 로 이미 구현됨(끝→처음)\n'
+:'  표시: OFF (좌우버튼 미사용)\n')+
+'\n[③ DOM 배선 필요]\n'+
+'  · _srailRenderInner(L5012~) 캐러셀 분기에 prev/next <button class="srail-cbtn"> 2개 추가\n'+
+'  · .srail(#sales-rail 내부)에 position:relative 확인(버튼 절대배치 기준)\n'+
+'  · onclick=_srailCarTo(idx±1,true) — 루프 자동';
+  $('out').textContent=out;
+}
+emit();
+$('copy').addEventListener('click',function(){
+  navigator.clipboard.writeText($('out').textContent).then(function(){
+    var b=$('copy');var t=b.textContent;b.textContent='✓ 복사됨';setTimeout(function(){b.textContent=t;},1400);
+  });
+});
+</script>
+</body>
+</html>
