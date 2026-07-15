@@ -18050,6 +18050,9 @@ function _bnavMore(){
 //     → drafts/<id>.json 커밋 → _nbPollDraft()가 폴링해 수신.
 //  [블로그 개선 BW-1~5] 응답 = {text, tags(네이버 태그 30, BW-5), research(리서치 노트, BW-2)}.
 //     생성·코멘트 반영마다 versions[]에 스냅샷(1차·2차… 칩 전환 = BW-3, 인메모리 — 닫으면 소멸 유지).
+//  [블로그 개선 BW-6~8] 본문 속 「[사진: 설명 — 캡션: "…"]」 단독 줄 = 사진 자리(BW-6) — 결과 영역의
+//     [📷 사진 채우기] 뷰에서 슬롯 카드+사진 넣기 버튼으로 채움(사진은 현재 버전 객체 귀속·인메모리, 복사 시 HTML로 동봉).
+//     기승전결 아크(BW-7)·덕후 디테일(BW-8)·톤 변주(BW-1 강화)는 nb-blog.yml 프롬프트 계약이 담당.
 // ============================================================
 // (글 유형 템플릿 제거 — '왜·누구에게·무엇을' 목적·타겟·핵심 메시지 기반으로 재설계)
 var _NB_TONELIB_KEY='nb_tone_lib_v1';
@@ -18072,7 +18075,7 @@ var _NB_TEMPLATES=[
   ['review','후기·현장형','1) 방문 계기 / 기대\n2) 현장 분위기 묘사\n3) 공연 하이라이트\n4) 솔직한 감상\n5) 추천 + 다음 공연 안내'],
   ['info','정보 요약형','1) 핵심 정보 먼저 (일시·장소·가격·예매)\n2) 공연 개요\n3) 관람 포인트\n4) 예매 링크 / 문의']
 ];
-function _nbDefaultState(){return {length:'보통', voice:'정중하고 따뜻한', emoji:true, tgt:{}, hooks:['',''], facts:{}, extra:'', tplMode:'auto', tplSel:'', tplText:'', output:'', versions:[], verCur:-1, comments:[], ocrText:'', ocrFiles:[], ocrThumb:'', ocrBusy:false, analyzeBusy:false, genBusy:false, _toneDraft:'', escHandler:null};}
+function _nbDefaultState(){return {length:'보통', voice:'정중하고 따뜻한', emoji:true, tgt:{}, hooks:['',''], facts:{}, extra:'', tplMode:'auto', tplSel:'', tplText:'', output:'', outView:'edit', versions:[], verCur:-1, comments:[], ocrText:'', ocrFiles:[], ocrThumb:'', ocrBusy:false, analyzeBusy:false, genBusy:false, _toneDraft:'', escHandler:null};}
 var _nbState=_nbDefaultState();
 
 // 상단 '콘텐츠 제작' 드롭다운 (네이버 블로그 + 향후 채널 확장)
@@ -20810,19 +20813,21 @@ function _nbOnFile(input){
   }).catch(function(e){_nbState.ocrBusy=false;_nbRender();showToast('이미지 처리 실패: '+String((e&&e.message)||e),'error');});
 }
 // OCR용 압축 — 긴 상세페이지 글자 가독성 우선: '폭'만 제한(세로 길이는 넉넉히 허용), 고품질.
-function _nbCompress(file){
+// opt로 용도별 상한 조정 가능(BW-6 본문 사진은 폭 1080·용량 소형) — 무인자 호출(OCR)은 기존 동작 그대로.
+function _nbCompress(file,opt){
+  opt=opt||{};
   return new Promise(function(res,rej){
     var img=new Image(),url=URL.createObjectURL(file);
     img.onload=function(){
       try{
         var w=img.naturalWidth||img.width,h=img.naturalHeight||img.height;
-        var maxW=1600,maxH=14000,maxPx=24000000; // 폭 제한·세로 넉넉·총픽셀 안전상한
+        var maxW=opt.maxW||1600,maxH=opt.maxH||14000,maxPx=opt.maxPx||24000000; // 폭 제한·세로 넉넉·총픽셀 안전상한
         var sc=Math.min(1,maxW/w,maxH/h,Math.sqrt(maxPx/(w*h)));
         var cw=Math.max(1,Math.round(w*sc)),ch=Math.max(1,Math.round(h*sc));
         var c=document.createElement('canvas');c.width=cw;c.height=ch;
         var ctx=c.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,cw,ch);ctx.drawImage(img,0,0,cw,ch);
-        var q=0.92,dataURL=c.toDataURL('image/jpeg',q);
-        while(dataURL.length>7000000&&q>0.5){q-=0.1;dataURL=c.toDataURL('image/jpeg',q);} // 페이로드 한도면 품질만 낮춤
+        var q=opt.q||0.92,cap=opt.cap||7000000,dataURL=c.toDataURL('image/jpeg',q);
+        while(dataURL.length>cap&&q>0.5){q-=0.1;dataURL=c.toDataURL('image/jpeg',q);} // 페이로드 한도면 품질만 낮춤
         URL.revokeObjectURL(url);
         res({dataURL:dataURL,mime:'image/jpeg'});
       }catch(e){URL.revokeObjectURL(url);rej(e);}
@@ -21050,9 +21055,22 @@ function _nbRender(){
   }).join('');
   var tplMode=s.tplMode||'auto';
   // (정리) 톤참조 목록·기본틀 프리셋·_ff 헬퍼는 현재 폼에서 미노출 — 매 렌더 죽은 계산이라 제거.
+  // [BW-6] 사진 자리 뷰 토글 — 본문에 사진 자리가 있을 때만 노출(없으면 편집 뷰로 폴백). outHtml 계산보다 먼저 실행.
+  var pvHtml='';
+  if(s.output&&!s.genBusy){
+    var _slots=_nbPhotoSlots(s.output);
+    if(_slots.length){
+      var _ph=_nbPhotoMap(),_done=_slots.filter(function(_,i){return _ph[i];}).length;
+      pvHtml='<div class="nb-chiprow" style="margin:0 0 8px;align-items:center">'
+        +'<span class="nb-chip'+(s.outView!=='preview'?' on':'')+'" onclick="_nbOutView(\'edit\')">✏️ 편집</span>'
+        +'<span class="nb-chip'+(s.outView==='preview'?' on':'')+'" onclick="_nbOutView(\'preview\')">📷 사진 채우기 '+_done+'/'+_slots.length+'</span>'
+        +'<span style="font-size:10.5px;color:var(--muted)">사진 자리에 사진을 채우면 복사할 때 함께 나가요</span>'
+      +'</div>';
+    }else if(s.outView==='preview'){s.outView='edit';}
+  }
   var outHtml=s.genBusy
     ? '<div class="nb-out-empty"><div class="nb-writing">✍️</div><div style="margin-top:14px;font-weight:700;color:#666">초안을 쓰는 중입니다<span class="nb-dots"><i>.</i><i>.</i><i>.</i></span></div><div style="font-size:11.5px;color:#bbb;margin-top:7px">'+(s.genKind==='revise'?'코멘트를 반영해 다시 쓰는 중이에요':'공연·출연진·작품을 웹에서 조사해 살을 붙이는 중 — 보통 2~5분 걸려요')+'</div></div>'
-    : (s.output? '<textarea id="nb-output" class="nb-out" oninput="_nbOutEdit(this.value)">'+escapeHtml(s.output)+'</textarea>' : '<div class="nb-out-empty"><div class="nb-flow"><span>›</span><span>›</span><span>›</span></div><div style="font-size:28px;margin-bottom:10px">📝</div>타겟을 고르고 공연 상세페이지를 올린 뒤<br><b>[초안 생성]</b>을 누르면<br>블로그 초안과 추천 태그 30개가 나타나요</div>');
+    : (s.output? ((s.outView==='preview')?_nbPreviewHtml(s):'<textarea id="nb-output" class="nb-out" oninput="_nbOutEdit(this.value)">'+escapeHtml(s.output)+'</textarea>') : '<div class="nb-out-empty"><div class="nb-flow"><span>›</span><span>›</span><span>›</span></div><div style="font-size:28px;margin-bottom:10px">📝</div>타겟을 고르고 공연 상세페이지를 올린 뒤<br><b>[초안 생성]</b>을 누르면<br>초안과 사진 자리 제안, 추천 태그 30개가 나타나요</div>');
   // [BW-3] 버전 칩 — 초안이 2개부터 노출. 현재 버전 = on, 클릭 = 전환(편집분 보존)
   var _cv=(s.versions&&s.verCur>=0)?s.versions[s.verCur]:null;
   var verHtml='';
@@ -21112,6 +21130,8 @@ function _nbRender(){
        +(s.output&&!s.genBusy?'<button type="button" class="nb-btn ghost" onclick="_nbCopy()" style="padding:5px 13px;font-size:12px">📋 복사</button>':'')
      +'</div>'
      +verHtml
+     +pvHtml
+     +'<input type="file" id="nb-photo-file" accept="image/*" style="display:none" onchange="_nbPhotoFile(this)">'
      +outHtml
      +'<div class="nb-row" style="margin-top:12px">'
        +'<button type="button" class="nb-btn primary" '+(s.genBusy?'disabled':'')+' onclick="_nbGenerate()">'+(s.genBusy?'✍️ 작성 중':'⚡ 초안 생성')+'</button>'
@@ -21184,8 +21204,10 @@ async function _nbGenerate(){
     if(_st!==_nbState)return;
     if(!res||res.ok===false||!String(res.text||'').trim())throw new Error((res&&res.error)||'빈 응답');
     _nbState.genBusy=false;
+    var _pvN=_nbPhotoSlots(res.text).length;   // [BW-6] 사진 자리가 있으면 곧장 채우기 뷰로 — '이미 완성 수준' 흐름
+    _nbState.outView=_pvN?'preview':'edit';
     _nbSetOutput(res.text,{tags:res.tags,research:res.research,label:'초안 생성'});
-    showToast('초안을 작성했어요 — 태그 '+((res.tags&&res.tags.length)||0)+'개 포함 ✨','success');
+    showToast('초안을 작성했어요 — '+(_pvN?'사진 자리 '+_pvN+'곳·':'')+'태그 '+((res.tags&&res.tags.length)||0)+'개 ✨','success');
   }catch(e){
     if(_st!==_nbState)return;   // 🔒 세대 가드
     _nbState.genBusy=false;_nbRender();
@@ -21239,6 +21261,72 @@ function _nbOutEdit(v){
   if(_nbState.verCur>=0&&vs[_nbState.verCur])vs[_nbState.verCur].text=v;
   _nbSaveState();
 }
+// ===== [BW-6] 사진 자리 — 본문 속 「[사진: 설명 — 캡션: "…"]」 단독 줄을 슬롯으로 인식 =====
+// 파서는 관대하게: 「[사진 제안: …]」 변형, 캡션 구분자 — | - : 전부 수용. 본문을 txt/ph 파트 배열로 쪼갠다.
+function _nbPhotoParse(text){
+  var re=/^[ \t]*\[사진[^:\[\]]*:\s*([^\]]+)\][ \t]*$/gm;
+  var parts=[],last=0,m,idx=0,t=String(text||'');
+  while((m=re.exec(t))){
+    parts.push({t:'txt',v:t.slice(last,m.index)});
+    var body=m[1].trim(),desc=body,cap='';
+    var cm=body.match(/^(.*?)(?:\s*[—–|-]\s*)?캡션\s*(?:제안)?\s*[:：]\s*(.*)$/);
+    if(cm){desc=cm[1].trim();cap=cm[2].trim().replace(/^["'「“]|["'」”]$/g,'');}
+    parts.push({t:'ph',i:idx++,desc:desc||body,cap:cap,raw:m[0].trim()});
+    last=m.index+m[0].length;
+  }
+  parts.push({t:'txt',v:t.slice(last)});
+  return parts;
+}
+function _nbPhotoSlots(text){return _nbPhotoParse(text).filter(function(p){return p.t==='ph';});}
+// 사진 첨부 저장소 — 현재 버전 객체 귀속(버전 전환 시 그 버전의 사진이 따라옴). 인메모리 — 닫으면 소멸(공용 PC 원칙 유지).
+function _nbPhotoMap(){
+  var vs=_nbState.versions||[],cv=(_nbState.verCur>=0)?vs[_nbState.verCur]:null;
+  if(cv){if(!cv.photos)cv.photos={};return cv.photos;}
+  if(!_nbState._photos)_nbState._photos={};return _nbState._photos;
+}
+function _nbOutView(v){_nbState.outView=v;_nbRender();}
+function _nbPhotoPick(i){_nbState._photoSlot=i;var f=document.getElementById('nb-photo-file');if(f)f.click();}
+function _nbPhotoFile(input){
+  var file=input&&input.files&&input.files[0];if(!file)return;input.value='';
+  if(!/^image\//.test(file.type||'')){showToast('이미지 파일을 올려 주세요','error');return;}
+  var i=_nbState._photoSlot,_st=_nbState;   // 🔒 세대 가드 — 리셋 후 결과 역류 방지(기존 OCR 패턴 계승)
+  _nbCompress(file,{maxW:1080,maxH:6000,q:0.85,cap:1800000}).then(function(r){
+    if(_st!==_nbState)return;
+    _nbPhotoMap()[i]={src:r.dataURL,name:file.name||''};
+    _nbRender();showToast('사진을 채웠어요 — [복사]하면 사진까지 함께 나가요 📸','success');
+  }).catch(function(e){if(_st!==_nbState)return;showToast('이미지 처리 실패: '+String((e&&e.message)||e),'error');});
+}
+function _nbPhotoDel(i){delete _nbPhotoMap()[i];_nbRender();}
+// [BW-6] 사진 채우기 뷰 — 본문을 사진 자리 기준으로 쪼개 텍스트/슬롯 카드로 렌더. 색·형태 = 기존 토큰·컴포넌트만.
+function _nbPreviewHtml(s){
+  var parts=_nbPhotoParse(s.output),ph=_nbPhotoMap();
+  var h='<div class="nb-out" style="overflow:auto;cursor:auto">';
+  parts.forEach(function(p){
+    if(p.t==='txt'){var v=p.v.replace(/^\n+|\n+$/g,'');if(v)h+='<div style="white-space:pre-wrap;margin:8px 0">'+escapeHtml(v)+'</div>';return;}
+    var at=ph[p.i];
+    h+='<div style="margin:12px 0;border:1.5px dashed '+(at?'var(--border2)':'var(--accent)')+';border-radius:12px;padding:12px;background:'+(at?'var(--past-bg)':'var(--accent-light)')+'">'
+      +'<div style="font-size:11.5px;font-weight:700;color:var(--accent)">📷 사진 자리 '+(p.i+1)+' <span style="color:var(--dim);font-weight:500">— '+escapeHtml(p.desc)+'</span></div>'
+      +(p.cap?'<div style="font-size:11px;color:var(--dim);margin-top:3px">캡션 제안: '+escapeHtml(p.cap)+'</div>':'')
+      +(at
+        ? '<img src="'+at.src+'" alt="'+escapeHtml(p.desc)+'" style="max-width:100%;border-radius:9px;margin-top:8px;display:block">'
+          +'<div class="nb-row" style="gap:6px;margin-top:7px"><button type="button" class="nb-btn ghost" style="padding:5px 12px;font-size:11.5px" onclick="_nbPhotoPick('+p.i+')">바꾸기</button><button type="button" class="nb-btn ghost" style="padding:5px 12px;font-size:11.5px" onclick="_nbPhotoDel('+p.i+')">빼기</button></div>'
+        : '<button type="button" class="nb-btn primary" style="padding:7px 15px;font-size:12px;margin-top:8px" onclick="_nbPhotoPick('+p.i+')">＋ 사진 넣기</button>')
+      +'</div>';
+  });
+  return h+'</div>';
+}
+// [BW-6] 사진 포함 내보내기 HTML — 클립보드 text/html 전용 콘텐츠(앱 UI 아님·색 지정 없음). 미첨부 자리는 안내 텍스트로 남긴다.
+function _nbExportHtml(text){
+  var parts=_nbPhotoParse(text),ph=_nbPhotoMap(),h='';
+  function txt(v){v.split(/\n{2,}/).forEach(function(pg){pg=pg.replace(/^\n+|\n+$/g,'');if(pg)h+='<p>'+escapeHtml(pg).replace(/\n/g,'<br>')+'</p>';});}
+  parts.forEach(function(p){
+    if(p.t==='txt'){txt(p.v);return;}
+    var at=ph[p.i];
+    if(at){h+='<p><img src="'+at.src+'" alt="'+escapeHtml(p.desc)+'"></p>';if(p.cap)h+='<p><i>'+escapeHtml(p.cap)+'</i></p>';}
+    else h+='<p>'+escapeHtml(p.raw)+'</p>';
+  });
+  return h;
+}
 // [BW-5] 현재 버전의 추천 태그를 「#태그 #태그 …」 한 줄로 복사 — 네이버 태그란에 붙여넣기용
 function _nbTagsCopy(){
   var vs=_nbState.versions||[],cv=(_nbState.verCur>=0)?vs[_nbState.verCur]:null;
@@ -21275,6 +21363,18 @@ function _nbAssembleDraft(o){
 function _nbCopy(){
   var t=_nbState.output||'';
   if(!t){showToast('먼저 초안을 생성해 주세요','error');return;}
+  // [BW-6] 사진이 채워져 있으면 text/html(이미지 동봉)로 복사 — 블로그 에디터에 사진까지 붙는다. 실패·미지원 시 텍스트 폴백.
+  var slots=_nbPhotoSlots(t),ph=_nbPhotoMap();
+  var has=slots.some(function(_,i){return ph[i];});
+  if(has&&navigator.clipboard&&navigator.clipboard.write&&window.ClipboardItem){
+    try{
+      var html=_nbExportHtml(t);
+      navigator.clipboard.write([new ClipboardItem({'text/html':new Blob([html],{type:'text/html'}),'text/plain':new Blob([t],{type:'text/plain'})})])
+        .then(function(){showToast('사진 포함으로 복사했어요 — 블로그 에디터에 붙여넣어 보세요 📸','success');})
+        .catch(function(){_nbCopyText(t,'초안을 복사했어요 📋 (사진 포함 복사는 이 브라우저에서 미지원)');});
+      return;
+    }catch(e){/* 폴백 ↓ */}
+  }
   _nbCopyText(t,'초안을 복사했어요 📋');
 }
 // 클립보드 복사 공용 — 초안(_nbCopy)·태그(_nbTagsCopy) 공유
