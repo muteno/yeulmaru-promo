@@ -1078,13 +1078,12 @@ table.promo-board-table th:last-child .col-resize-handle{display:none}
 .cb-fab:active{transform:scale(0.94)}
 .cb-fab svg{width:26px;height:26px;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.15))}
 .cb-fab::after{content:'';position:absolute;inset:-3px;border-radius:50%;border:2px solid rgba(74,77,231,0.35);animation:cbPulse 2.6s ease-out 1s 3}
-/* === 불편사항 접수(QA) 버튼 — 예울이 FAB 위, 강조 === */
-.qa-fab{position:fixed;right:26px;bottom:94px;z-index:95;display:flex;align-items:center;gap:7px;padding:9px 15px 9px 13px;border:none;border-radius:24px;background:linear-gradient(135deg,#FF8F5E 0%,#FB6A6A 58%,#F2545B 100%);color:#fff;cursor:pointer;font-family:inherit;font-weight:700;font-size:12.5px;box-shadow:0 8px 22px rgba(242,84,91,0.4),0 2px 8px rgba(0,0,0,0.12);transition:transform .22s cubic-bezier(.34,1.4,.64,1),box-shadow .22s;animation:cbPop .5s cubic-bezier(.34,1.56,.64,1) backwards .15s}
-.qa-fab:hover{transform:translateY(-3px) scale(1.04);box-shadow:0 14px 30px rgba(242,84,91,0.5)}
-.qa-fab:active{transform:scale(0.96)}
-.qa-fab svg{width:18px;height:18px;flex:none}
-.qa-fab::after{content:'';position:absolute;inset:-3px;border-radius:24px;border:2px solid rgba(242,84,91,0.45);animation:cbPulse 2.6s ease-out 1.4s 3;pointer-events:none}
-.qa-fab-label{white-space:nowrap;letter-spacing:-0.2px}
+/* === 불편사항 접수(QA) 버튼 — 예울이 FAB(56px) 위 확성기 미니 원형, 절반 크기(28px)로 동반 === */
+.qa-fab{position:fixed;right:40px;bottom:90px;z-index:95;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border:none;border-radius:50%;background:linear-gradient(135deg,#FF8F5E 0%,#FB6A6A 58%,#F2545B 100%);color:#fff;cursor:pointer;font-family:inherit;box-shadow:0 4px 12px rgba(242,84,91,0.26),0 1px 4px rgba(0,0,0,0.10);transition:transform .22s cubic-bezier(.34,1.4,.64,1),box-shadow .22s;animation:cbPop .5s cubic-bezier(.34,1.56,.64,1) backwards .15s}
+.qa-fab:hover{transform:translateY(-3px) scale(1.09);box-shadow:0 8px 18px rgba(242,84,91,0.32)}
+.qa-fab:active{transform:scale(0.94)}
+.qa-fab svg{width:15px;height:15px;flex:none}
+.qa-fab::after{content:'';position:absolute;inset:-2px;border-radius:50%;border:1.5px solid rgba(242,84,91,0.3);animation:cbPulse 2.6s ease-out 1.4s 3;pointer-events:none}
 /* === 카카오 본문 이모지 피커 === */
 .pw-emoji-pop{position:fixed;z-index:10000;width:284px;max-height:208px;overflow-y:auto;background:#fff;border:1px solid rgba(0,0,0,0.1);border-radius:12px;box-shadow:0 14px 44px rgba(0,0,0,0.2);padding:8px;display:flex;flex-wrap:wrap;gap:2px;animation:acctDrop .16s ease}
 .pw-emoji-x{width:32px;height:32px;border:none;background:transparent;border-radius:8px;font-size:19px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
@@ -7746,7 +7745,7 @@ function _pmapRenderDashboard(c){
       +'<div class="pm-ctrl" id="pm-ctrl"></div>'
     +'</div>'
     +'<div class="pm-ov pm-ov-stats" id="pm-ov-stats"><div class="pm-cards" id="pm-cards"></div></div>'
-    +'<div class="pm-ov pm-ov-feed" id="pm-ov-feed"><div class="pm-feed-hd">최근 홍보 신청</div><div class="pm-feed" id="pm-feed"></div></div>'
+    +'<div class="pm-ov pm-ov-feed" id="pm-ov-feed"><div class="pm-feed-hd">다가올 프로그램</div><div class="pm-feed" id="pm-feed"></div></div>'
     +'</div>';
   _pmapRenderCards();
   _pmapRenderCtrl();
@@ -7800,18 +7799,34 @@ function _pmapRenderCards(){
     +card('이번 달 홍보',mCnt,'건','오늘 '+todayCnt+'건');
 }
 function _pmapFeedHtml(){
-  const rs=((((typeof records!=='undefined')&&records)||[]).slice())
-    .filter(function(r){const st=String(r['진행 상태']||'');return st!=='취소'&&st!=='임시';})
-    .sort(function(a,b){return getRecDateKey(b).localeCompare(getRecDateKey(a));})
-    .slice(0,9);
-  if(!rs.length)return '<div class="pm-feed-empty">최근 신청 내역이 없어요</div>';
-  return rs.map(function(r){
-    const k=getRecDateKey(r);
-    const st=statusToPrimary(r['진행 상태']);
-    const stTok=st==='완료'?'--green':(st==='예정'?'--accent':'--c2');
-    return '<div class="pm-feed-item"><span class="pm-feed-date">'+escapeHtml(k.slice(5))+'</span>'
-      +'<span class="pm-feed-txt">'+escapeHtml(String(r['플랫폼 1']||'—'))+' · '+escapeHtml(String(r['콘텐츠 제목']||r['프로그램']||'(제목 없음)'))+'</span>'
-      +'<span class="pm-feed-st" style="color:var('+stTok+')">'+escapeHtml(st||'')+'</span></div>';
+  // [260714 운영자] 오프라인 홍보 현황 우측 패널 = '다가올 프로그램' 홍보 신청 대상 목록.
+  //   공연·전시·예술교육 구분 없이 노출, 대관(t==='r')만 제외 = '기획만'.
+  //   신청 가능(다가올) 판별 = 홍보 일괄 신청(openBatchWizard)과 동일한 노출창(ps ≤ 오늘 ≤ se||e) 재사용.
+  const _perfs=((typeof PERFS!=='undefined')&&PERFS)||[];
+  if(!_perfs.length)return '<div class="pm-feed-empty">다가올 프로그램이 없어요</div>';
+  const _refKey=(typeof getTodayKey==='function')?getTodayKey():'';
+  const _anyPromo=_perfs.some(function(p){return p.ps;});
+  const ps=_perfs.filter(function(p){
+    if(p.t==='r')return false;                              // 대관 제외 = 기획만
+    const _pe=p.se||p.e; if(!_pe||_pe<_refKey)return false;  // 홍보 종료(판매종료|공연종료) 지난 것 제외
+    if(!_anyPromo)return true;
+    if(!p.ps)return false;                                  // 홍보시작일 미설정 제외
+    if(p.ps>_refKey)return false;                           // 아직 홍보 시작 전 제외
+    return true;
+  }).sort(function(a,b){return String(a.s||a.ps||'').localeCompare(String(b.s||b.ps||''));}).slice(0,12);
+  if(!ps.length)return '<div class="pm-feed-empty">다가올 프로그램이 없어요</div>';
+  return ps.map(function(p){
+    const sk=String(p.s||p.ps||'');
+    let dd='',ddTok='--accent';
+    if(sk&&_refKey){
+      const diff=Math.round((new Date(sk+'T00:00:00')-new Date(_refKey+'T00:00:00'))/86400000);
+      if(diff>0){dd='D-'+diff;ddTok='--accent';}
+      else if(diff===0){dd='D-DAY';ddTok='--danger';}
+      else{dd='진행중';ddTok='--green';}
+    }
+    return '<div class="pm-feed-item"><span class="pm-feed-date">'+escapeHtml(sk?sk.slice(5).replace('-','/'):'—')+'</span>'
+      +'<span class="pm-feed-txt">'+_batchBadge(p.t)+escapeHtml(String(p.n||p.f||'(제목 없음)'))+'</span>'
+      +'<span class="pm-feed-st" style="color:var('+ddTok+')">'+escapeHtml(dd)+'</span></div>';
   }).join('');
 }
 function _pmapRenderCtrl(){
@@ -18072,8 +18087,8 @@ function _promoMenuBuild(menu){
   var itemCss='display:flex;align-items:center;gap:10px;width:100%;padding:11px 14px;border:0;text-align:left;font-size:13px;font-weight:600;color:var(--text);border-radius:9px;cursor:pointer;font-family:inherit;transition:background .12s';
   menu.innerHTML='<div style="padding:8px 14px 6px;font-size:11px;color:var(--dim);font-weight:700">홍보 신청·확인</div>'
     +'<button type="button" onclick="_ddCloseAll();openBatchWizard()" style="'+itemCss+';background:rgba(74,77,231,0.06)" onmouseenter="this.style.background=\'rgba(74,77,231,0.12)\'" onmouseleave="this.style.background=\'rgba(74,77,231,0.06)\'"><span style="flex:1">홍보 일괄 신청</span><span style="font-size:10px;color:var(--accent);font-weight:700">기본</span></button>'
-    +'<button type="button" onclick="_ddCloseAll();openPromoBoard()" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'">홍보 계획</button>'
-    +'<button type="button" onclick="_ddCloseAll();openPlatformBoard()" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'">홍보 현황</button>';   // [260711 운영자] 홍보 일괄 신청(기본)·홍보 계획·홍보 현황
+    +'<button type="button" onclick="_ddCloseAll();openPromoBoard()" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'">온라인 홍보 현황</button>'
+    +'<button type="button" onclick="_ddCloseAll();openPlatformBoard()" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'">오프라인 홍보 현황</button>';   // [260714 운영자] 홍보 일괄 신청(기본)·온라인 홍보 현황(openPromoBoard)·오프라인 홍보 현황(openPlatformBoard)
 }
 function _contentMenuBuild(menu){
   // [260711 운영자] 영상 편집기 3분류 신설 — 1 영상 편집 · 2 자막 삽입 · 3 영상 프롬프팅 (한 도구, 탭 진입점 3개)
@@ -22044,9 +22059,9 @@ function _cbLog(kind,query,answer,match){
 function _qaMount(){
   if(document.getElementById('qa-fab'))return;
   const b=document.createElement('button');
-  b.id='qa-fab';b.className='qa-fab';b.title='불편사항 접수';b.onclick=_qaOpen;
-  // 픽토그램: 확성기(메가폰) — "의견을 들려주세요"
-  b.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11v2a1 1 0 0 0 1 1h2l4.5 3.5a1 1 0 0 0 1.5-.9V7.4a1 1 0 0 0-1.5-.9L6 10H4a1 1 0 0 0-1 1z"/><path d="M16 9a3 3 0 0 1 0 6"/><path d="M19 6a7 7 0 0 1 0 12"/></svg><span class="qa-fab-label">불편사항 접수</span>';
+  b.id='qa-fab';b.className='qa-fab';b.title='불편사항 접수';b.setAttribute('aria-label','불편사항 접수');b.onclick=_qaOpen;
+  // 픽토그램: 확성기(메가폰) — "의견을 들려주세요" · 라벨 없는 미니 원형(예울이 FAB 절반)
+  b.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11v2a1 1 0 0 0 1 1h2l4.5 3.5a1 1 0 0 0 1.5-.9V7.4a1 1 0 0 0-1.5-.9L6 10H4a1 1 0 0 0-1 1z"/><path d="M16 9a3 3 0 0 1 0 6"/><path d="M19 6a7 7 0 0 1 0 12"/></svg>';
   document.body.appendChild(b);
 }
 function _qaOpen(){
