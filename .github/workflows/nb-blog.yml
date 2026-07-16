@@ -73,7 +73,14 @@ jobs:
               const FLABEL = { overview: '개요(무엇을·왜)', when: '일시(언제)', where: '장소(어디서)', who: '출연·주최(누가)', price: '가격·예매·문의', detail: '상세 내용' };
               const factLines = [];
               ['overview', 'when', 'where', 'who', 'price', 'detail'].forEach((k) => { const v = String(F[k] || '').trim(); if (v) factLines.push('- ' + FLABEL[k] + ': ' + v); });
-              const refs = Array.isArray(p.refs) ? p.refs.map((r) => String((r && r.text) || '').trim()).filter(Boolean).slice(-5) : [];
+              let refs = Array.isArray(p.refs) ? p.refs.map((r) => String((r && r.text) || '').trim()).filter(Boolean).slice(-5) : [];
+              // [톤 앵커] 브라우저 참조가 비면 docs/tone-refs.json(실제 사람 글)을 서버측 로드해 결(톤·리듬) 앵커로 — 새 창·시크릿창도 항상 사람 글 기준을 갖게 (blog-draft.yml 패턴 재사용)
+              if (!refs.length) {
+                try {
+                  const _rf = await github.rest.repos.getContent({ ...context.repo, path: 'docs/tone-refs.json', ref: context.payload.repository.default_branch });
+                  refs = (JSON.parse(Buffer.from(_rf.data.content, 'base64').toString('utf8')) || []).map((r) => String((r && r.text) || '').trim()).filter(Boolean).slice(-3);
+                } catch (e) { /* 없거나 실패 시 앵커 없이 진행 */ }
+              }
               const isMania = /마니아/.test(String(p.target || ''));                       // [BW-8] 타겟 '마니아' 토글 → 덕후 디테일 깊이
               const photoCnt = ({ '짧게': '2~3', '길게': '5~6' })[p.length] || '3~5';      // [BW-6] 분량별 사진 자리 수
               const isCaster = !String(p.voice || '').trim() || String(p.voice).indexOf('캐스터') > -1;   // [캐스터] 기본 톤 = 라디오 캐스터. 정중/친근 선택 시 false → 페르소나 미주입(기존 동작)
@@ -110,7 +117,7 @@ jobs:
                 prompt += "# 기본 톤 — 라디오 캐스터 페르소나 [캐스터]\n";
                 prompt += "위 문체 계약·우선순위를 지키되, 그 위에 라디오 방송 진행자가 청취자에게 오늘 소식을 전하듯 가볍고 경쾌한 목소리를 입힌다:\n";
                 prompt += "- 독자를 「여러분」으로 부르고 곳곳에서 자연스럽게 되묻는다(「아세요?」 「어떠세요?」 「같이 가보실래요?」). 단 매 문단 반복은 금지 — 온도가 오르는 대목에만.\n";
-                prompt += "- 첫 문장은 말 걸듯 여는 것을 우선(질문·감탄·짧은 인용 — 위 서사 「기」의 여는 방식과 같은 선택). 밝고 경쾌하되 광고 과장은 금지, 「귀가 호강할 거예요」 「발걸음하기 딱 좋은」처럼 생활 감각의 표현으로.\n";
+                prompt += "- 첫 문장은 말 걸듯 여는 것을 우선 — 특히 독자가 이미 귀·이름으로 아는 것(익숙한 멜로디·장면·유명세·숫자)에서 출발해 「그게 실은 이 무대에 있다」로 뒤집으면 강력하다(예: 「그 노키아 벨소리, 원곡이 클래식 기타곡인 거 아세요?」). 밝고 경쾌하되 광고 과장은 금지, 「귀가 호강할 거예요」처럼 생활 감각의 표현으로.\n";
                 prompt += "- 문단 이음: 한 문단의 끝(정서·궁금증·방금 꺼낸 단어)을 다음 문단 첫머리가 받아 이어가 — 뚝 끊고 새 주제로 점프하지 않게. 단 이음 방식(되묻기·같은 단어 이어받기·정서 이어가기)은 매번 다르게(같은 이음 반복도 AI 티).\n";
                 prompt += "- 마무리는 방송 클로징처럼 가벼운 초대 한 줄로 닫는다(예: 「그럼, 여수 예울마루에서 기다릴게요」) — 위 서사 「결」과 어긋나지 않게.\n\n";
               }
