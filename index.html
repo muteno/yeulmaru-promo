@@ -975,7 +975,7 @@ table.promo-board-table th:last-child .col-resize-handle{display:none}
 .toast.error::before{content:"✕ ";color:var(--danger);font-weight:700;margin-right:4px}
 /* 새 메시지 알림 토스트 (요청4 · 260710 선택값 배선) — 체크(✓) 눌러야 닫힘·자동 타이머 없음.
    기존 .toast(저장·에러용 3초 자동)와 별개 컴포넌트. 색 전부 토큰/흰색 alpha 변주(팔레트 폐쇄). */
-.msg-toast{position:fixed;bottom:43px;left:50%;transform:translateX(-50%) translateY(26px);max-width:488px;width:max-content;padding:20px 28px;background:rgba(255,255,255,0.46);backdrop-filter:blur(15px) saturate(1.3);-webkit-backdrop-filter:blur(15px) saturate(1.3);border:1px solid var(--glass-border);border-radius:14px;box-shadow:var(--glass-shadow);color:var(--text);z-index:1000001;opacity:0;pointer-events:none;transition:opacity .42s ease,transform .42s ease;display:flex;gap:14px;align-items:flex-start}
+.msg-toast{position:fixed;bottom:43px;left:50%;transform:translateX(-50%) translateY(26px);max-width:488px;width:max-content;padding:20px 28px;background:rgba(26,26,46,0.82);backdrop-filter:blur(15px) saturate(1.3);-webkit-backdrop-filter:blur(15px) saturate(1.3);border:1px solid var(--glass-border);border-radius:14px;box-shadow:var(--glass-shadow);color:var(--surface-solid);z-index:1000001;opacity:0;pointer-events:none;transition:opacity .42s ease,transform .42s ease;display:flex;gap:14px;align-items:flex-start}   /* 260715 분신술: 다크글래스 판(--text rgb·alpha .82 = appbar 계승) + 전 텍스트 흰색 — 반투명 흰 판 위 흰 글자 대비 붕괴 해소, 배경 무관 또렷 */
 .msg-toast.show{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto}
 .msg-toast.imp{border-color:rgba(226,75,74,.4)}
 .mt-main{min-width:0;flex:1}
@@ -983,10 +983,10 @@ table.promo-board-table th:last-child .col-resize-handle{display:none}
 .mt-badge{display:inline-block;font-size:9px;font-weight:700;padding:2px 8px;border-radius:8px;letter-spacing:.3px}
 .mt-badge.n{background:var(--dim);color:var(--surface-solid);font-weight:600}
 .mt-badge.i{background:var(--danger);color:var(--surface-solid)}
-.mt-time{font-size:10px;color:var(--muted);font-variant-numeric:tabular-nums}
-.mt-title{font-size:12.5px;font-weight:700;color:var(--text);line-height:1.4;margin-bottom:3px}
-.mt-sub{font-size:12px;color:var(--neutral-text);line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.mt-open{margin-top:8px;display:inline-block;font-size:11px;font-weight:700;color:var(--accent);cursor:pointer}
+.mt-time{font-size:10px;color:var(--surface-solid);font-variant-numeric:tabular-nums}   /* 260715: 하단 예울마루 사진 위 가독성 — 흰색(운영자 요청·토큰 계승) */
+.mt-title{font-size:12.5px;font-weight:700;color:var(--surface-solid);line-height:1.4;margin-bottom:3px}   /* 260715 분신술: 다크글래스 통일 — 제목도 흰색(어두운 제목/흰 본문 모순 제거) */
+.mt-sub{font-size:12px;color:var(--surface-solid);line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}   /* 260715: 사진 위 가독성 — 흰색(운영자 요청·토큰 계승) */
+.mt-open{margin-top:8px;display:inline-block;font-size:11px;font-weight:700;color:var(--accent-light);cursor:pointer}   /* 260715 분신술: 다크글래스 위 링크 — 밝은 accent로 대비 확보 */
 .mt-check{flex-shrink:0;width:34px;height:34px;border-radius:50%;border:1.5px solid var(--border2);background:var(--surface-solid);color:var(--neutral-text);font-size:16px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;font-family:inherit;padding:0;line-height:1}
 .mt-check:hover{background:var(--accent);border-color:var(--accent);color:var(--surface-solid);transform:scale(1.05)}
 @media(max-width:640px){.msg-toast{bottom:calc(80px + env(safe-area-inset-bottom,0px));max-width:none;left:14px;right:14px;width:auto;transform:translateY(26px)}.msg-toast.show{transform:translateY(0)}}
@@ -6061,6 +6061,7 @@ function _anaDrillFromHeat(name){
 
 // === [DB통합] 일일입력 폼 (운영_일일입력에 기록 — Streamlit 입력 대체) ===
 var _dailyState = { master:null, programs:null };
+var _dailyOrigin=null;   // [260715] 일일 판매 입력 저장 후 '직전 메뉴' 복원용 출처(salesboard·analytics·salesmenu)
 function _dailyToday(){ var d=new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
 // 프로그램(콘텐츠구분) 인덱스: 정규화 공연명 → 콘텐츠구분 (공연마스터엔 카테고리가 없어 프로그램에서 조인)
 function _dailyCatIndex(){
@@ -6125,8 +6126,11 @@ function _dailyMasters(){
   });
   return out.filter(function(m){ if(!m.name)return false; if(!allowed)return true; if(!m.cat)return true; return allowed.indexOf(m.cat)>=0; });  // 담당 카테고리만(카테고리 미상=조인실패는 표시해 입력 누락 방지)
 }
-function openDailyInput(){
+function openDailyInput(origin){
   if(userRole!=='admin'){showToast('관리자만 입력할 수 있어요','error');return;}
+  // [260715] 저장 후 직전 메뉴 복원 — 명시 출처 없으면 현재 열린 보드로 자동 판별(둘 다 없으면 사업 실적 메뉴에서 진입)
+  _dailyOrigin=origin||((document.getElementById('analytics-board')&&document.getElementById('analytics-board').innerHTML)?'analytics':((document.getElementById('sales-board')&&document.getElementById('sales-board').innerHTML)?'salesboard':'salesmenu'));
+  window._dsxGen=(window._dsxGen||0)+1;   // [260715 분신술] 세대++ — 이전 세션 orphan 파싱이 이 폼을 덮어쓰지 못하게
   let el=document.getElementById('daily-input');
   if(!el){el=document.createElement('div');el.id='daily-input';document.body.appendChild(el);}
   el.innerHTML='<div class="modal-bg show" style="z-index:99990" onclick="if(event.target===this)closeDailyInput()"><div class="modal" style="width:96vw;max-width:760px;max-height:90vh;overflow:auto;padding:0;position:relative;background:#fff"><button class="modal-x" onclick="closeDailyInput()" title="닫기" style="position:absolute;top:14px;right:22px;z-index:10">✕</button><div style="padding:18px 22px;border-bottom:1px solid #eee;font-size:15px;font-weight:700">➕ 일일 판매 입력</div><div id="daily-body" style="padding:18px 22px"><div style="text-align:center;color:#888;padding:30px">'+_ldHtml(16)+'공연 목록 불러오는 중</div></div></div></div>';
@@ -6136,7 +6140,21 @@ function openDailyInput(){
     api('GET','/api/programs').then(function(d){return (d&&d.programs)||[];}).catch(function(){return [];})
   ]).then(function(res){_dailyState.master=res[0];_dailyState.programs=res[1];_dailyRenderForm();}).catch(function(e){var b=document.getElementById('daily-body');if(b)b.innerHTML='<div style="color:var(--danger);text-align:center;padding:30px">공연 목록 로드 실패: '+escapeHtml(e.message||String(e))+'</div>';});
 }
-function closeDailyInput(){ var el=document.getElementById('daily-input'); if(el)el.innerHTML=''; window._dsxState=null; window._dsxPending=null; if(_dailyState)_dailyState._gSaved=false; }
+function closeDailyInput(){ var el=document.getElementById('daily-input'); if(el)el.innerHTML=''; window._dsxState=null; window._dsxPending=null; window._dsxGen=(window._dsxGen||0)+1; if(_dailyState)_dailyState._gSaved=false; }
+// [260715] 저장 완료 후 '직전 메뉴'로 복원 — 캘린더 메인으로 빠지지 않게. 보드는 재오픈(새 실적 반영), 메뉴 진입은 드롭다운 재오픈(모바일 등 앵커 불가 시 판매 실적 조회로 대체).
+function _navBtnByLabel(lbl){ var r=null; document.querySelectorAll('.nav-btn').forEach(function(b){ if((b.textContent||'').trim()===lbl)r=b; }); return r; }
+function _dailyRestoreOrigin(){
+  var o=_dailyOrigin; _dailyOrigin=null;
+  if(o==='salesboard'){ if(typeof openSalesBoard==='function')openSalesBoard(); return; }
+  if(o==='analytics'){ if(typeof openAnalyticsBoard==='function')openAnalyticsBoard(); return; }
+  if(o==='salesmenu'){
+    var btn=_navBtnByLabel('사업 실적');
+    if(btn&&btn.offsetParent!==null&&typeof _ddOpen==='function'&&typeof _salesMenuBuild==='function'){ _ddOpen(btn,_salesMenuBuild,210,'sales'); return; }
+    if(typeof openAnalyticsBoard==='function')openAnalyticsBoard(); return;
+  }
+  // 폴백(구 동작 보존): 분석 보드가 떠 있었으면 유지
+  if(document.getElementById('analytics-board')&&document.getElementById('analytics-board').innerHTML)openAnalyticsBoard();
+}
 // [운영자 260710] 선택한 기준일자에 이미 일일입력 행이 있는 공연명 집합 — 폼 목록에서 제외("이미 등록한 공연은 없어지게").
 //   소스 = 레일 캐시(_salesState.daily). 캐시 미로딩이면 null 반환 → 필터 스킵(데이터 없이 잘못 숨기는 것 방지). 매칭 = 공연명 trim 정확 일치(실적 수정과 동일 축).
 function _dailyRegisteredSet(ymd){
@@ -6244,20 +6262,28 @@ async function _dailySubmit(){
     closeDailyInput();
     _salesState.master=null;_salesState.daily=null;_salesState.rounds=null;
     try{_srailInit();}catch(_e){}  // 판매 레일 최신화(일일입력 반영 재fetch)
-    if(document.getElementById('analytics-board')&&document.getElementById('analytics-board').innerHTML){openAnalyticsBoard();}
+    _dailyRestoreOrigin();
   }catch(e){ if(msg)msg.textContent='저장 실패: '+(e.message||e); _btnBusy(btn,false,'저장'); }
 }
 // === 티켓링크 판매현황 업로드(.xls·.xlsx) → 순판매를 날짜순 누적해 일일입력에 자동 반영 ===
 // 서식 A(티켓링크 「거래 일자별 집계」): 헤더행 '일자'+'상품명', 상품명 우측이 총판매합계(현금 매수/금액·카드 매수/금액). 상품명별 그룹.
 // 서식 B(레거시 「상품별 일별 판매현황」): A열 '상품명:'/날짜, F~I 순판매. 공연 자동매칭 실패 시 미리보기에서 직접 선택 가능.
-function _dsxDrop(e){ e.preventDefault(); var dz=document.getElementById('d-xdrop'); if(dz)dz.style.background='none'; var fs=e.dataTransfer&&e.dataTransfer.files; if(fs&&fs.length)_dsxParse(Array.prototype.slice.call(fs)); }
-function _dsxFiles(input){ var fs=Array.prototype.slice.call(input.files||[]); input.value=''; if(fs.length)_dsxParse(fs); }
-function _dsxParse(files){
+function _dsxDrop(e,append){ e.preventDefault(); var dz=e.currentTarget||document.getElementById('d-xdrop'); if(dz&&dz.style)dz.style.background='none'; var fs=e.dataTransfer&&e.dataTransfer.files; if(fs&&fs.length)_dsxParse(Array.prototype.slice.call(fs),append); }
+function _dsxFiles(input,append){ var fs=Array.prototype.slice.call(input.files||[]); input.value=''; if(fs.length)_dsxParse(fs,append); }
+// [260715 분신술] 저장 버튼 busy 동기화 — 파싱 진행 중(_dsxBusy>0)엔 저장 잠금(파싱 완료 전 stale 저장 방지)
+function _dsxSyncBusy(){ var b=document.getElementById('d-xsave'); if(!b)return; var hasP=!!(window._dsxPending&&window._dsxPending.length); b.disabled=(!!window._dsxBusy)||!hasP; }
+// [260715 분신술] 미리보기 되돌리기 — 잘못 붙인 파일 개별 제거 / 전체 비우기(누적 후 실수 복구)
+function _dsxRemoveCard(idx){ var st=window._dsxState; if(!st||!st.results)return; if(idx<0||idx>=st.results.length)return; st.results.splice(idx,1); if(st.results.length)_dsxRender(); else { window._dsxState=null; _dailyRenderForm(); } }
+function _dsxClearAll(){ window._dsxState=null; _dailyRenderForm(); }
+function _dsxParse(files, append){
   if(files.some(function(f){return f.size>20*1024*1024;})){showToast('파일이 너무 커요(20MB 제한)','error');return;}
   if(files.some(function(f){return !/\.x(lsx|ls)$/i.test(f.name);})){showToast('xls·xlsx 파일만 올릴 수 있어요','error');return;}
   showToast('판매현황 읽는 중','info');
+  // [260715 분신술] 파싱 중 저장 잠금(_dsxBusy) + 세대 토큰(_g) — 파싱 완료 전 저장/닫힘·재오픈으로 인한 첨부 무음 유실·orphan 렌더 차단
+  var _g=window._dsxGen||0; window._dsxBusy=(window._dsxBusy||0)+1; _dsxSyncBusy();
+  var _done=function(){ window._dsxBusy=Math.max(0,(window._dsxBusy||0)-1); _dsxSyncBusy(); return _g!==(window._dsxGen||0); };
   _ensureXLSX(function(err){   // SheetJS = .xls(BIFF)·.xlsx 통합 파서 — 티켓링크 다운로드가 구형 .xls라 JSZip 단독으론 못 엶
-    if(err){showToast('엑셀 라이브러리 로드 실패 — 네트워크 확인 후 다시 시도','error');return;}
+    if(err){ if(!_done())showToast('엑셀 라이브러리 로드 실패 — 네트워크 확인 후 다시 시도','error'); return; }
     Promise.all([
       Promise.all(files.map(function(f){
         return Promise.resolve().then(function(){   // arrayBuffer 미지원 구형 브라우저의 동기 throw도 체인 안에서 잡히게(분신술 비동기 MED)
@@ -6270,9 +6296,10 @@ function _dsxParse(files){
       })),
       api('GET','/api/ops?sheet='+encodeURIComponent('일일입력')).catch(function(){return {headers:[],rows:[],_getFailed:1};}) // dedup 대조용 기존 행(실패 시 경고)
     ]).then(function(r){
+      if(_done())return;   // [260715] 닫힘/재오픈으로 무효화된 파싱 = 폐기(닫힌 폼 위 렌더·stale 병합 방지)
       var flat=[]; r[0].forEach(function(arr){ (Array.isArray(arr)?arr:[arr]).forEach(function(x){flat.push(x);}); });
-      _dsxPreview(flat, r[1]);
-    }).catch(function(e){ showToast('읽기 실패: '+(e.message||e),'error'); });
+      _dsxPreview(flat, r[1], append);
+    }).catch(function(e){ if(_done())return; showToast('읽기 실패: '+(e.message||e),'error'); });
   });
 }
 // 일별 순판매 → 날짜순 누적(일일입력이 '누적' 기록 구조). 두 서식 공통.
@@ -6327,7 +6354,7 @@ function _dsxExtract(wb, fname){
 function _dsxUname(s){ try{return _uName(s);}catch(_){return String(s||'').replace(/\s+/g,'').toLowerCase();} }
 // 최장 공통 부분문자열 길이 (mjs 260618_daily_ingest 정본 계승 — 보일러플레이트 붙어도 핵심 겹침으로 매칭)
 function _dsxLcs(a,b){ var best=0,n=b.length,prev=new Array(n+1).fill(0); for(var i=1;i<=a.length;i++){ var cur=new Array(n+1).fill(0); for(var j=1;j<=n;j++){ if(a[i-1]===b[j-1]){ cur[j]=prev[j-1]+1; if(cur[j]>best)best=cur[j]; } } prev=cur; } return best; }
-function _dsxPreview(results, existingData){
+function _dsxPreview(results, existingData, append){
   var body=document.getElementById('daily-body'); if(!body)return;
   // 매칭/선택 후보 = 판매중 공연. byName=선택값(공연명)→마스터 역참조. nameMap/cands=자동매칭용(정규화명 2자 이상, 오매칭 방지)
   var mlist=_dailyMasters(), nameMap={}, cands=[], byName={};
@@ -6352,7 +6379,16 @@ function _dsxPreview(results, existingData){
     return {m:nameMap[best]};
   };
   // 각 결과에 자동매칭 주입(chosen 초기값 = 자동매칭 성공 공연) — 실패해도 chosen='' 로 두고 사용자 선택 대기
-  results.forEach(function(R){ if(R.error)return; var rr=resolve(R.pname); R.autoName=rr.m?rr.m.name:''; R.ambiguous=!!rr.ambiguous; R.chosen=rr.m?rr.m.name:''; });
+  results.forEach(function(R){ if(R.error||R._resolved)return; var rr=resolve(R.pname); R.autoName=rr.m?rr.m.name:''; R.ambiguous=!!rr.ambiguous; R.chosen=rr.m?rr.m.name:''; R._resolved=1; });
+  // [260715 누적·갱신] append면 기존 미리보기에 이어붙임 — 같은 (파일|공연)은 최신본으로 '교체'(동명 갱신본 무음 무시 방지), 신규는 추가. 분신술 MED×3 대응.
+  if(append && window._dsxState && window._dsxState.results && window._dsxState.results.length){
+    var _merged=window._dsxState.results.filter(function(R){return !R.error;});
+    var _idx={}; _merged.forEach(function(R,i){ _idx[(R.file||'')+'|'+(R.pname||'')]=i; });
+    var _upd=0,_new=0;
+    results.forEach(function(R){ var k=(R.file||'')+'|'+(R.pname||''); if(!R.error && _idx[k]!=null){ _merged[_idx[k]]=R; _upd++; } else { if(!R.error){ _idx[k]=_merged.length; _new++; } _merged.push(R); } });
+    results=_merged;
+    try{ showToast(((_new?_new+'개 공연 추가':'')+((_new&&_upd)?' · ':'')+(_upd?_upd+'개 갱신':''))||'변경 없음','info'); }catch(_e){}
+  }
   window._dsxState={results:results, byName:byName, nameMap:nameMap, cands:cands, existing:existing, dedupWarn:dedupWarn};
   _dsxRender();
 }
@@ -6365,13 +6401,15 @@ function _dsxRender(){
   var pending=[], anyChosen=false, seenPend={};  // seenPend = 이번 업로드 배치 내 (공연|날짜) 상호 dedup(분신술 공통 지적)
   var h='<div style="font-size:15px;font-weight:700;margin-bottom:3px">📄 판매현황 반영 미리보기</div>';
   h+='<div style="font-size:12px;color:var(--dim);margin-bottom:14px">순판매를 날짜순 <b>누적</b>한 값이에요. 공연이 자동 인식되면 그대로, 못 잡으면 <b>공연을 선택</b>하면 저장·분석돼요. 이미 있는 날짜는 건너뛰어요. 누적이 정확하려면 <b>전체 기간</b> 다운로드본을 올려주세요.</div>';
+  // [260715] 미리보기에서도 파일 더 붙이기 — 여러 개 이어붙여 한 번에 저장(줄줄이 누적). append=1로 기존 카드 보존.
+  h+='<div id="d-xdrop2" role="button" tabindex="0" aria-label="판매현황 파일 더 올리기" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();document.getElementById(\'d-xfile2\').click();}" ondragover="event.preventDefault();this.style.background=\'var(--accent-light)\'" ondragleave="this.style.background=\'none\'" ondrop="_dsxDrop(event,1)" onclick="if(event.target.id!==\'d-xfile2\')document.getElementById(\'d-xfile2\').click()" style="border:1.5px dashed var(--accent);border-radius:var(--r-pop);padding:9px 13px;margin-bottom:12px;cursor:pointer;display:flex;align-items:center;gap:9px;transition:background .15s"><span style="font-size:16px">➕</span><div style="flex:1;min-width:0"><div style="font-size:12.5px;font-weight:700;color:var(--accent)">파일 더 올리기</div><div style="font-size:11px;color:var(--dim);margin-top:1px">여러 개 이어붙여 한 번에 저장 · 같은 파일은 최신본으로 갱신</div></div><input type="file" id="d-xfile2" accept=".xlsx,.xls" multiple style="display:none" onchange="_dsxFiles(this,1)"></div>';
   if(st.dedupWarn)h+='<div style="padding:9px 12px;border-radius:8px;background:var(--accent-light);margin-bottom:12px;font-size:12px;color:var(--danger)">⚠️ 기존 일일입력을 못 읽어 중복 확인을 못 했어요 — 이미 입력한 날짜면 중복될 수 있으니 확인 후 저장하세요</div>';
   st.results.forEach(function(R, idx){
-    if(R.error){ h+='<div style="padding:9px 12px;border-radius:8px;background:var(--accent-light);margin-bottom:10px;font-size:12px;color:var(--danger)">⚠️ '+escapeHtml(R.file||'')+' — '+escapeHtml(R.error)+'</div>'; return; }
+    if(R.error){ h+='<div style="padding:9px 12px;border-radius:8px;background:var(--accent-light);margin-bottom:10px;font-size:12px;color:var(--danger);display:flex;align-items:flex-start;gap:8px"><span style="flex:1;min-width:0">⚠️ '+escapeHtml(R.file||'')+' — '+escapeHtml(R.error)+'</span><button onclick="_dsxRemoveCard('+idx+')" title="제거" aria-label="제거" style="border:0;background:none;color:var(--danger);cursor:pointer;font-size:13px;line-height:1;padding:0 2px;flex-shrink:0">✕</button></div>'; return; }
     var chosen=R.chosen||'', m=chosen?byName[chosen]:null, last=R.days[R.days.length-1];
     if(chosen)anyChosen=true;
     h+='<div style="border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:12px">';
-    h+='<div style="font-weight:700;font-size:13.5px">'+escapeHtml(R.pname)+'</div>';
+    h+='<div style="display:flex;align-items:flex-start;gap:8px"><div style="font-weight:700;font-size:13.5px;flex:1;min-width:0">'+escapeHtml(R.pname)+'</div><button onclick="_dsxRemoveCard('+idx+')" title="이 파일 제거" aria-label="이 파일 제거" style="border:0;background:none;color:var(--danger);cursor:pointer;font-size:14px;line-height:1;padding:2px 4px;flex-shrink:0">✕</button></div>';
     if(m&&R.autoName===chosen&&!R.manual)h+='<div style="font-size:11.5px;color:var(--green);margin:2px 0 6px">→ 공연 「'+escapeHtml(m.name)+'」 자동 인식 · 오픈석 '+(m.open||0).toLocaleString()+' · 최종 누적 '+last.seat.toLocaleString()+'석 / '+last.money.toLocaleString()+'원</div>';
     else if(m)h+='<div style="font-size:11.5px;color:var(--green);margin:2px 0 6px">→ 공연 「'+escapeHtml(m.name)+'」 선택됨 · 오픈석 '+(m.open||0).toLocaleString()+' · 최종 누적 '+last.seat.toLocaleString()+'석 / '+last.money.toLocaleString()+'원</div>';
     else if(R.ambiguous)h+='<div style="font-size:11.5px;color:var(--peach-text);margin:2px 0 6px">비슷한 공연이 여럿이라 자동으로 못 정했어요 — 아래에서 공연을 선택하면 저장·분석돼요</div>';
@@ -6396,10 +6434,11 @@ function _dsxRender(){
   });
   h+='<div id="d-msg" style="font-size:12px;color:var(--danger);margin-top:6px;min-height:16px"></div>';
   var btnLabel=pending.length?(pending.length+'건 저장'):(anyChosen?'저장할 신규 없음':'공연을 선택하세요');
-  h+='<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px;padding-top:14px;border-top:1px solid var(--border)"><button onclick="_dailyRenderForm()" class="m-btn cancel">← 폼으로</button><button onclick="_dsxSubmit()" class="m-btn save" id="d-xsave"'+(pending.length?'':' disabled')+'>'+btnLabel+'</button></div>';
+  h+='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:8px;padding-top:14px;border-top:1px solid var(--border)"><button onclick="_dsxClearAll()" class="m-btn cancel" title="미리보기 전체 비우기">전체 비우기</button><div style="display:flex;gap:8px"><button onclick="_dailyRenderForm()" class="m-btn cancel">← 폼으로</button><button onclick="_dsxSubmit()" class="m-btn save" id="d-xsave"'+((pending.length&&!window._dsxBusy)?'':' disabled')+'>'+btnLabel+'</button></div></div>';
   window._dsxPending=pending; body.innerHTML=h;
 }
 async function _dsxSubmit(){
+  if(window._dsxBusy){ showToast('파일 읽는 중이에요 — 잠시 후 저장','info'); return; }   // [260715 분신술] 파싱 중 stale 저장 차단(첨부 무음 유실 방지)
   var rows=window._dsxPending||[]; var msg=document.getElementById('d-msg');
   if(!rows.length){if(msg)msg.textContent='저장할 항목이 없어요';return;}
   var btn=document.getElementById('d-xsave'); _btnBusy(btn,true,'저장 중');
@@ -6409,8 +6448,8 @@ async function _dsxSubmit(){
     closeDailyInput();
     _salesState.master=null;_salesState.daily=null;_salesState.rounds=null;
     try{_srailInit();}catch(_e){}
-    if(document.getElementById('analytics-board')&&document.getElementById('analytics-board').innerHTML){openAnalyticsBoard();}
-  }catch(e){ if(msg)msg.textContent='저장 실패: '+(e.message||e); _btnBusy(btn,false,rows.length+'건 저장'); }
+    _dailyRestoreOrigin();
+  }catch(e){ var m2=document.getElementById('d-msg')||msg; if(m2)m2.textContent='저장 실패: '+(e.message||e); _btnBusy(document.getElementById('d-xsave')||btn,false,rows.length+'건 저장'); }   // [260715 분신술] await 중 재렌더로 노드 분리 시 오류 표시 유실 방지 — 재취득
 }
 function _salesToggleEnded(){ _salesState.showEnded=!_salesState.showEnded; _salesRender(); }
 function _salesDdayColor(d){ if(d===null)return '#555'; if(d<0)return '#999'; if(d<=7)return '#E08600'; if(d<=14)return '#C9A800'; return '#555'; }
@@ -18050,6 +18089,9 @@ function _bnavMore(){
 //     → drafts/<id>.json 커밋 → _nbPollDraft()가 폴링해 수신.
 //  [블로그 개선 BW-1~5] 응답 = {text, tags(네이버 태그 30, BW-5), research(리서치 노트, BW-2)}.
 //     생성·코멘트 반영마다 versions[]에 스냅샷(1차·2차… 칩 전환 = BW-3, 인메모리 — 닫으면 소멸 유지).
+//  [블로그 개선 BW-6~8] 본문 속 「[사진: 설명 — 캡션: "…"]」 단독 줄 = 사진 자리(BW-6) — 결과 영역의
+//     [📷 사진 채우기] 뷰에서 슬롯 카드+사진 넣기 버튼으로 채움(사진은 현재 버전 객체 귀속·인메모리, 복사 시 HTML로 동봉).
+//     기승전결 아크(BW-7)·덕후 디테일(BW-8)·톤 변주(BW-1 강화)는 nb-blog.yml 프롬프트 계약이 담당.
 // ============================================================
 // (글 유형 템플릿 제거 — '왜·누구에게·무엇을' 목적·타겟·핵심 메시지 기반으로 재설계)
 var _NB_TONELIB_KEY='nb_tone_lib_v1';
@@ -18072,7 +18114,7 @@ var _NB_TEMPLATES=[
   ['review','후기·현장형','1) 방문 계기 / 기대\n2) 현장 분위기 묘사\n3) 공연 하이라이트\n4) 솔직한 감상\n5) 추천 + 다음 공연 안내'],
   ['info','정보 요약형','1) 핵심 정보 먼저 (일시·장소·가격·예매)\n2) 공연 개요\n3) 관람 포인트\n4) 예매 링크 / 문의']
 ];
-function _nbDefaultState(){return {length:'보통', voice:'라디오 캐스터처럼 가볍고 경쾌한', emoji:true, tgt:{}, hooks:['',''], facts:{}, extra:'', tplMode:'auto', tplSel:'', tplText:'', output:'', versions:[], verCur:-1, comments:[], ocrText:'', ocrFiles:[], ocrThumb:'', ocrBusy:false, analyzeBusy:false, genBusy:false, _toneDraft:'', escHandler:null};}
+function _nbDefaultState(){return {length:'보통', voice:'정중하고 따뜻한', emoji:true, tgt:{}, hooks:['',''], facts:{}, extra:'', tplMode:'auto', tplSel:'', tplText:'', output:'', outView:'edit', versions:[], verCur:-1, comments:[], ocrText:'', ocrFiles:[], ocrThumb:'', ocrBusy:false, analyzeBusy:false, genBusy:false, _toneDraft:'', escHandler:null};}
 var _nbState=_nbDefaultState();
 
 // 상단 '콘텐츠 제작' 드롭다운 (네이버 블로그 + 향후 채널 확장)
@@ -20810,19 +20852,21 @@ function _nbOnFile(input){
   }).catch(function(e){_nbState.ocrBusy=false;_nbRender();showToast('이미지 처리 실패: '+String((e&&e.message)||e),'error');});
 }
 // OCR용 압축 — 긴 상세페이지 글자 가독성 우선: '폭'만 제한(세로 길이는 넉넉히 허용), 고품질.
-function _nbCompress(file){
+// opt로 용도별 상한 조정 가능(BW-6 본문 사진은 폭 1080·용량 소형) — 무인자 호출(OCR)은 기존 동작 그대로.
+function _nbCompress(file,opt){
+  opt=opt||{};
   return new Promise(function(res,rej){
     var img=new Image(),url=URL.createObjectURL(file);
     img.onload=function(){
       try{
         var w=img.naturalWidth||img.width,h=img.naturalHeight||img.height;
-        var maxW=1600,maxH=14000,maxPx=24000000; // 폭 제한·세로 넉넉·총픽셀 안전상한
+        var maxW=opt.maxW||1600,maxH=opt.maxH||14000,maxPx=opt.maxPx||24000000; // 폭 제한·세로 넉넉·총픽셀 안전상한
         var sc=Math.min(1,maxW/w,maxH/h,Math.sqrt(maxPx/(w*h)));
         var cw=Math.max(1,Math.round(w*sc)),ch=Math.max(1,Math.round(h*sc));
         var c=document.createElement('canvas');c.width=cw;c.height=ch;
         var ctx=c.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,cw,ch);ctx.drawImage(img,0,0,cw,ch);
-        var q=0.92,dataURL=c.toDataURL('image/jpeg',q);
-        while(dataURL.length>7000000&&q>0.5){q-=0.1;dataURL=c.toDataURL('image/jpeg',q);} // 페이로드 한도면 품질만 낮춤
+        var q=opt.q||0.92,cap=opt.cap||7000000,dataURL=c.toDataURL('image/jpeg',q);
+        while(dataURL.length>cap&&q>0.5){q-=0.1;dataURL=c.toDataURL('image/jpeg',q);} // 페이로드 한도면 품질만 낮춤
         URL.revokeObjectURL(url);
         res({dataURL:dataURL,mime:'image/jpeg'});
       }catch(e){URL.revokeObjectURL(url);rej(e);}
@@ -21050,9 +21094,22 @@ function _nbRender(){
   }).join('');
   var tplMode=s.tplMode||'auto';
   // (정리) 톤참조 목록·기본틀 프리셋·_ff 헬퍼는 현재 폼에서 미노출 — 매 렌더 죽은 계산이라 제거.
+  // [BW-6] 사진 자리 뷰 토글 — 본문에 사진 자리가 있을 때만 노출(없으면 편집 뷰로 폴백). outHtml 계산보다 먼저 실행.
+  var pvHtml='';
+  if(s.output&&!s.genBusy){
+    var _slots=_nbPhotoSlots(s.output);
+    if(_slots.length){
+      var _ph=_nbPhotoMap(),_done=_slots.filter(function(_,i){return _ph[i];}).length;
+      pvHtml='<div class="nb-chiprow" style="margin:0 0 8px;align-items:center">'
+        +'<span class="nb-chip'+(s.outView!=='preview'?' on':'')+'" onclick="_nbOutView(\'edit\')">✏️ 편집</span>'
+        +'<span class="nb-chip'+(s.outView==='preview'?' on':'')+'" onclick="_nbOutView(\'preview\')">📷 사진 채우기 '+_done+'/'+_slots.length+'</span>'
+        +'<span style="font-size:10.5px;color:var(--muted)">사진 자리에 사진을 채우면 복사할 때 함께 나가요</span>'
+      +'</div>';
+    }else if(s.outView==='preview'){s.outView='edit';}
+  }
   var outHtml=s.genBusy
     ? '<div class="nb-out-empty"><div class="nb-writing">✍️</div><div style="margin-top:14px;font-weight:700;color:#666">초안을 쓰는 중입니다<span class="nb-dots"><i>.</i><i>.</i><i>.</i></span></div><div style="font-size:11.5px;color:#bbb;margin-top:7px">'+(s.genKind==='revise'?'코멘트를 반영해 다시 쓰는 중이에요':'공연·출연진·작품을 웹에서 조사해 살을 붙이는 중 — 보통 2~5분 걸려요')+'</div></div>'
-    : (s.output? '<textarea id="nb-output" class="nb-out" oninput="_nbOutEdit(this.value)">'+escapeHtml(s.output)+'</textarea>' : '<div class="nb-out-empty"><div class="nb-flow"><span>›</span><span>›</span><span>›</span></div><div style="font-size:28px;margin-bottom:10px">📝</div>타겟을 고르고 공연 상세페이지를 올린 뒤<br><b>[초안 생성]</b>을 누르면<br>블로그 초안과 추천 태그 30개가 나타나요</div>');
+    : (s.output? ((s.outView==='preview')?_nbPreviewHtml(s):'<textarea id="nb-output" class="nb-out" oninput="_nbOutEdit(this.value)">'+escapeHtml(s.output)+'</textarea>') : '<div class="nb-out-empty"><div class="nb-flow"><span>›</span><span>›</span><span>›</span></div><div style="font-size:28px;margin-bottom:10px">📝</div>타겟을 고르고 공연 상세페이지를 올린 뒤<br><b>[초안 생성]</b>을 누르면<br>초안과 사진 자리 제안, 추천 태그 30개가 나타나요</div>');
   // [BW-3] 버전 칩 — 초안이 2개부터 노출. 현재 버전 = on, 클릭 = 전환(편집분 보존)
   var _cv=(s.versions&&s.verCur>=0)?s.versions[s.verCur]:null;
   var verHtml='';
@@ -21112,6 +21169,8 @@ function _nbRender(){
        +(s.output&&!s.genBusy?'<button type="button" class="nb-btn ghost" onclick="_nbCopy()" style="padding:5px 13px;font-size:12px">📋 복사</button>':'')
      +'</div>'
      +verHtml
+     +pvHtml
+     +'<input type="file" id="nb-photo-file" accept="image/*" style="display:none" onchange="_nbPhotoFile(this)">'
      +outHtml
      +'<div class="nb-row" style="margin-top:12px">'
        +'<button type="button" class="nb-btn primary" '+(s.genBusy?'disabled':'')+' onclick="_nbGenerate()">'+(s.genBusy?'✍️ 작성 중':'⚡ 초안 생성')+'</button>'
@@ -21184,8 +21243,10 @@ async function _nbGenerate(){
     if(_st!==_nbState)return;
     if(!res||res.ok===false||!String(res.text||'').trim())throw new Error((res&&res.error)||'빈 응답');
     _nbState.genBusy=false;
+    var _pvN=_nbPhotoSlots(res.text).length;   // [BW-6] 사진 자리가 있으면 곧장 채우기 뷰로 — '이미 완성 수준' 흐름
+    _nbState.outView=_pvN?'preview':'edit';
     _nbSetOutput(res.text,{tags:res.tags,research:res.research,label:'초안 생성'});
-    showToast('초안을 작성했어요 — 태그 '+((res.tags&&res.tags.length)||0)+'개 포함 ✨','success');
+    showToast('초안을 작성했어요 — '+(_pvN?'사진 자리 '+_pvN+'곳·':'')+'태그 '+((res.tags&&res.tags.length)||0)+'개 ✨','success');
   }catch(e){
     if(_st!==_nbState)return;   // 🔒 세대 가드
     _nbState.genBusy=false;_nbRender();
@@ -21239,6 +21300,72 @@ function _nbOutEdit(v){
   if(_nbState.verCur>=0&&vs[_nbState.verCur])vs[_nbState.verCur].text=v;
   _nbSaveState();
 }
+// ===== [BW-6] 사진 자리 — 본문 속 「[사진: 설명 — 캡션: "…"]」 단독 줄을 슬롯으로 인식 =====
+// 파서는 관대하게: 「[사진 제안: …]」 변형, 캡션 구분자 — | - : 전부 수용. 본문을 txt/ph 파트 배열로 쪼갠다.
+function _nbPhotoParse(text){
+  var re=/^[ \t]*\[사진[^:\[\]]*:\s*([^\]]+)\][ \t]*$/gm;
+  var parts=[],last=0,m,idx=0,t=String(text||'');
+  while((m=re.exec(t))){
+    parts.push({t:'txt',v:t.slice(last,m.index)});
+    var body=m[1].trim(),desc=body,cap='';
+    var cm=body.match(/^(.*?)(?:\s*[—–|-]\s*)?캡션\s*(?:제안)?\s*[:：]\s*(.*)$/);
+    if(cm){desc=cm[1].trim();cap=cm[2].trim().replace(/^["'「“]|["'」”]$/g,'');}
+    parts.push({t:'ph',i:idx++,desc:desc||body,cap:cap,raw:m[0].trim()});
+    last=m.index+m[0].length;
+  }
+  parts.push({t:'txt',v:t.slice(last)});
+  return parts;
+}
+function _nbPhotoSlots(text){return _nbPhotoParse(text).filter(function(p){return p.t==='ph';});}
+// 사진 첨부 저장소 — 현재 버전 객체 귀속(버전 전환 시 그 버전의 사진이 따라옴). 인메모리 — 닫으면 소멸(공용 PC 원칙 유지).
+function _nbPhotoMap(){
+  var vs=_nbState.versions||[],cv=(_nbState.verCur>=0)?vs[_nbState.verCur]:null;
+  if(cv){if(!cv.photos)cv.photos={};return cv.photos;}
+  if(!_nbState._photos)_nbState._photos={};return _nbState._photos;
+}
+function _nbOutView(v){_nbState.outView=v;_nbRender();}
+function _nbPhotoPick(i){_nbState._photoSlot=i;var f=document.getElementById('nb-photo-file');if(f)f.click();}
+function _nbPhotoFile(input){
+  var file=input&&input.files&&input.files[0];if(!file)return;input.value='';
+  if(!/^image\//.test(file.type||'')){showToast('이미지 파일을 올려 주세요','error');return;}
+  var i=_nbState._photoSlot,_st=_nbState;   // 🔒 세대 가드 — 리셋 후 결과 역류 방지(기존 OCR 패턴 계승)
+  _nbCompress(file,{maxW:1080,maxH:6000,q:0.85,cap:1800000}).then(function(r){
+    if(_st!==_nbState)return;
+    _nbPhotoMap()[i]={src:r.dataURL,name:file.name||''};
+    _nbRender();showToast('사진을 채웠어요 — [복사]하면 사진까지 함께 나가요 📸','success');
+  }).catch(function(e){if(_st!==_nbState)return;showToast('이미지 처리 실패: '+String((e&&e.message)||e),'error');});
+}
+function _nbPhotoDel(i){delete _nbPhotoMap()[i];_nbRender();}
+// [BW-6] 사진 채우기 뷰 — 본문을 사진 자리 기준으로 쪼개 텍스트/슬롯 카드로 렌더. 색·형태 = 기존 토큰·컴포넌트만.
+function _nbPreviewHtml(s){
+  var parts=_nbPhotoParse(s.output),ph=_nbPhotoMap();
+  var h='<div class="nb-out" style="overflow:auto;cursor:auto">';
+  parts.forEach(function(p){
+    if(p.t==='txt'){var v=p.v.replace(/^\n+|\n+$/g,'');if(v)h+='<div style="white-space:pre-wrap;margin:8px 0">'+escapeHtml(v)+'</div>';return;}
+    var at=ph[p.i];
+    h+='<div style="margin:12px 0;border:1.5px dashed '+(at?'var(--border2)':'var(--accent)')+';border-radius:12px;padding:12px;background:'+(at?'var(--past-bg)':'var(--accent-light)')+'">'
+      +'<div style="font-size:11.5px;font-weight:700;color:var(--accent)">📷 사진 자리 '+(p.i+1)+' <span style="color:var(--dim);font-weight:500">— '+escapeHtml(p.desc)+'</span></div>'
+      +(p.cap?'<div style="font-size:11px;color:var(--dim);margin-top:3px">캡션 제안: '+escapeHtml(p.cap)+'</div>':'')
+      +(at
+        ? '<img src="'+at.src+'" alt="'+escapeHtml(p.desc)+'" style="max-width:100%;border-radius:9px;margin-top:8px;display:block">'
+          +'<div class="nb-row" style="gap:6px;margin-top:7px"><button type="button" class="nb-btn ghost" style="padding:5px 12px;font-size:11.5px" onclick="_nbPhotoPick('+p.i+')">바꾸기</button><button type="button" class="nb-btn ghost" style="padding:5px 12px;font-size:11.5px" onclick="_nbPhotoDel('+p.i+')">빼기</button></div>'
+        : '<button type="button" class="nb-btn primary" style="padding:7px 15px;font-size:12px;margin-top:8px" onclick="_nbPhotoPick('+p.i+')">＋ 사진 넣기</button>')
+      +'</div>';
+  });
+  return h+'</div>';
+}
+// [BW-6] 사진 포함 내보내기 HTML — 클립보드 text/html 전용 콘텐츠(앱 UI 아님·색 지정 없음). 미첨부 자리는 안내 텍스트로 남긴다.
+function _nbExportHtml(text){
+  var parts=_nbPhotoParse(text),ph=_nbPhotoMap(),h='';
+  function txt(v){v.split(/\n{2,}/).forEach(function(pg){pg=pg.replace(/^\n+|\n+$/g,'');if(pg)h+='<p>'+escapeHtml(pg).replace(/\n/g,'<br>')+'</p>';});}
+  parts.forEach(function(p){
+    if(p.t==='txt'){txt(p.v);return;}
+    var at=ph[p.i];
+    if(at){h+='<p><img src="'+at.src+'" alt="'+escapeHtml(p.desc)+'"></p>';if(p.cap)h+='<p><i>'+escapeHtml(p.cap)+'</i></p>';}
+    else h+='<p>'+escapeHtml(p.raw)+'</p>';
+  });
+  return h;
+}
 // [BW-5] 현재 버전의 추천 태그를 「#태그 #태그 …」 한 줄로 복사 — 네이버 태그란에 붙여넣기용
 function _nbTagsCopy(){
   var vs=_nbState.versions||[],cv=(_nbState.verCur>=0)?vs[_nbState.verCur]:null;
@@ -21275,6 +21402,18 @@ function _nbAssembleDraft(o){
 function _nbCopy(){
   var t=_nbState.output||'';
   if(!t){showToast('먼저 초안을 생성해 주세요','error');return;}
+  // [BW-6] 사진이 채워져 있으면 text/html(이미지 동봉)로 복사 — 블로그 에디터에 사진까지 붙는다. 실패·미지원 시 텍스트 폴백.
+  var slots=_nbPhotoSlots(t),ph=_nbPhotoMap();
+  var has=slots.some(function(_,i){return ph[i];});
+  if(has&&navigator.clipboard&&navigator.clipboard.write&&window.ClipboardItem){
+    try{
+      var html=_nbExportHtml(t);
+      navigator.clipboard.write([new ClipboardItem({'text/html':new Blob([html],{type:'text/html'}),'text/plain':new Blob([t],{type:'text/plain'})})])
+        .then(function(){showToast('사진 포함으로 복사했어요 — 블로그 에디터에 붙여넣어 보세요 📸','success');})
+        .catch(function(){_nbCopyText(t,'초안을 복사했어요 📋 (사진 포함 복사는 이 브라우저에서 미지원)');});
+      return;
+    }catch(e){/* 폴백 ↓ */}
+  }
   _nbCopyText(t,'초안을 복사했어요 📋');
 }
 // 클립보드 복사 공용 — 초안(_nbCopy)·태그(_nbTagsCopy) 공유
