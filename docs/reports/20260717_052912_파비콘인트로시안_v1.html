@@ -1,0 +1,530 @@
+<meta charset="utf-8">
+<title>예울마루 · 파비콘 + 60fps 글래스 인트로 시안 v1</title>
+<!--
+  20260717_052912_파비콘인트로시안_v1
+  · 목적: 첨부 "그라디언트 두상" 시안을 (1) 글자 없는 파비콘 (2) 글래스모피즘 60fps 인트로로 예울마루에 이식
+  · 원본의 쨍한 주황빨강/파랑 = 팔레트 폐쇄형 밖(⚠) → 살몬(#D88455)↔인디고(#4A4DE7) 계승이 정본. 원본 비비드는 ⚠ 토글.
+  · 자기완결 1파일 · 외부요청 0 · 인라인 CSS/JS · docs/reports 스냅샷(check_design 비대상)
+  · 폰트: 시스템 스택(오프라인 재현). 프로덕션 = Pretendard / DM Serif (⑤ 각주)
+-->
+<style>
+  :root{
+    /* ── 예울마루 팔레트 폐쇄형 사본 (index.html :root 실측) ── */
+    --accent:#4A4DE7; --accent-light:#E8E8FD; --accent-glow:rgba(74,77,231,.15);
+    --peach:#F0C4B8; --peach-light:#FBF0EC; --peach-bg:#FDF6F3; --peach-text:#D88455;
+    --ink:#1A1A2E; --c3:#1A6B3C; --c4:#C02872; --c5:#2D8AB3; --c6:#F5B400;
+    --bg-lav:#F0EBF5; --bg-blu:#EBF0F8;
+    /* ── 콘솔 셸(다크 테크노) ── */
+    --sh:#0e0e18; --sh2:#16172a; --line:rgba(255,255,255,.10); --line2:rgba(255,255,255,.18);
+    --tx:#eef0ff; --dim:#9aa0c8; --mut:#666a92;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic","Segoe UI",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:radial-gradient(1200px 700px at 78% -10%,#1c1e3a 0%,var(--sh) 55%);color:var(--tx);font-family:var(--sans);-webkit-font-smoothing:antialiased;line-height:1.45}
+  .pg{max-width:1320px;margin:0 auto;padding:22px clamp(14px,3vw,34px) 60px}
+  /* header */
+  .hd{display:flex;flex-wrap:wrap;align-items:baseline;gap:10px 16px;padding-bottom:14px;border-bottom:1px solid var(--line)}
+  .hd h1{font-size:19px;font-weight:800;letter-spacing:-.3px}
+  .hd .sub{font-family:var(--mono);font-size:11px;color:var(--dim);letter-spacing:.5px}
+  .hd .spacer{flex:1}
+  .fpspill{font-family:var(--mono);font-size:11px;color:var(--dim);border:1px solid var(--line);border-radius:999px;padding:4px 11px;display:inline-flex;gap:7px;align-items:center}
+  .fpspill b{color:#7CF5B0;font-weight:700}
+  .fpspill .dot{width:6px;height:6px;border-radius:50%;background:#7CF5B0;box-shadow:0 0 8px #7CF5B0}
+  /* tabs */
+  .tabs{display:flex;gap:6px;margin:16px 0 18px}
+  .tab{font-family:var(--mono);font-size:12px;letter-spacing:.4px;color:var(--dim);background:var(--sh2);border:1px solid var(--line);border-radius:11px;padding:9px 16px;cursor:pointer;transition:.16s}
+  .tab:hover{color:var(--tx);border-color:var(--line2)}
+  .tab.on{color:#fff;background:linear-gradient(120deg,var(--accent),#6d6fff);border-color:transparent;box-shadow:0 6px 20px rgba(74,77,231,.35)}
+  /* layout */
+  .wrap{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:20px;align-items:start}
+  @media(max-width:920px){.wrap{grid-template-columns:1fr}}
+  .stage{background:var(--sh2);border:1px solid var(--line);border-radius:20px;padding:20px;min-height:200px}
+  .stagecap{font-family:var(--mono);font-size:11px;color:var(--mut);margin-top:12px;text-align:center}
+  aside.console{background:var(--sh2);border:1px solid var(--line);border-radius:20px;padding:16px 15px;position:sticky;top:14px}
+  .csec{padding:13px 3px;border-top:1px dashed var(--line)}
+  .csec:first-child{border-top:0;padding-top:3px}
+  .csec>.lbl{font-family:var(--mono);font-size:10px;letter-spacing:1.2px;color:var(--mut);text-transform:uppercase;margin-bottom:11px}
+  /* rows */
+  .row{display:grid;grid-template-columns:96px 1fr 52px;align-items:center;gap:9px;margin:9px 0}
+  .row label{font-size:12px;color:var(--dim)}
+  .row output{font-family:var(--mono);font-size:11px;color:var(--tx);text-align:right;font-variant-numeric:tabular-nums}
+  input[type=range]{-webkit-appearance:none;appearance:none;height:4px;border-radius:3px;background:linear-gradient(90deg,var(--accent),#7d7fff);outline:none}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;border-radius:50%;background:#fff;border:2px solid var(--accent);cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.4)}
+  input[type=range].warn{background:linear-gradient(90deg,#E24B4A,#ff8a5c)}
+  select,input[type=text]{width:100%;font-family:var(--sans);font-size:12px;color:var(--tx);background:#0c0c16;border:1px solid var(--line);border-radius:9px;padding:7px 9px}
+  select.warn{border-color:#E24B4A;color:#ffb0a6}
+  .seg{display:flex;gap:5px;flex-wrap:wrap}
+  .seg button{flex:1;min-width:56px;font-family:var(--mono);font-size:11px;color:var(--dim);background:#0c0c16;border:1px solid var(--line);border-radius:8px;padding:7px 6px;cursor:pointer;transition:.14s}
+  .seg button.on{color:#fff;background:var(--accent);border-color:transparent}
+  .seg button:hover:not(.on){border-color:var(--line2);color:var(--tx)}
+  .chk{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--dim);cursor:pointer;user-select:none;margin:8px 0}
+  .chk input{width:15px;height:15px;accent-color:var(--accent)}
+  /* presets */
+  .presets{display:flex;flex-wrap:wrap;gap:7px}
+  .presets button{font-family:var(--mono);font-size:11px;color:var(--dim);background:#0c0c16;border:1px solid var(--line);border-radius:999px;padding:7px 12px;cursor:pointer;transition:.14s}
+  .presets button:hover{color:var(--tx);border-color:var(--line2)}
+  .presets button.star{color:#ffe08a;border-color:rgba(245,180,0,.4)}
+  .presets button.warn{color:#ffb0a6;border-color:rgba(226,75,74,.4)}
+  /* output */
+  pre.out{font-family:var(--mono);font-size:10.5px;line-height:1.5;color:#c7cbf5;background:#0b0b14;border:1px solid var(--line);border-radius:11px;padding:12px;max-height:230px;overflow:auto;white-space:pre-wrap;word-break:break-all}
+  .btnrow{display:flex;gap:8px;margin-top:9px}
+  .btnrow button{flex:1;font-family:var(--sans);font-weight:700;font-size:12.5px;color:#fff;background:linear-gradient(120deg,var(--accent),#6d6fff);border:0;border-radius:10px;padding:11px;cursor:pointer;transition:.14s}
+  .btnrow button.ghost{background:#0c0c16;color:var(--dim);border:1px solid var(--line)}
+  .btnrow button:hover{filter:brightness(1.08)}
+  .note{font-size:11px;line-height:1.7;color:var(--mut)}
+  .note b{color:var(--dim)}
+  .warnbadge{display:inline-block;font-family:var(--mono);font-size:10px;color:#ffb0a6;background:rgba(226,75,74,.12);border:1px solid rgba(226,75,74,.4);border-radius:6px;padding:2px 7px;margin-left:6px}
+
+  /* ══════════ 파비콘 미리보기 ══════════ */
+  .favgrid{display:flex;flex-wrap:wrap;gap:26px;align-items:flex-end;justify-content:center;padding:14px 6px}
+  .favcell{display:flex;flex-direction:column;align-items:center;gap:9px}
+  .favcell .cap{font-family:var(--mono);font-size:10px;color:var(--mut)}
+  .favcell .frame{border-radius:12px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,.4)}
+  .ctxrow{display:flex;gap:20px;justify-content:center;align-items:center;margin-top:18px;padding-top:16px;border-top:1px dashed var(--line);flex-wrap:wrap}
+  /* fake browser tab + phone home to judge real context */
+  .tab-demo{display:flex;align-items:center;gap:8px;background:#26283f;border:1px solid var(--line);border-radius:9px 9px 0 0;padding:7px 12px 8px;max-width:220px}
+  .tab-demo .t{font-size:11px;color:#cfd2f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .home-demo{width:70px;height:70px;border-radius:16px;overflow:hidden;box-shadow:0 8px 22px rgba(0,0,0,.45);position:relative}
+  .home-demo .nm{position:absolute;left:0;right:0;bottom:-19px;text-align:center;font-size:9px;color:#cfd2f0}
+  .checker{background-image:linear-gradient(45deg,#20223a 25%,transparent 25%),linear-gradient(-45deg,#20223a 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#20223a 75%),linear-gradient(-45deg,transparent 75%,#20223a 75%);background-size:14px 14px;background-position:0 0,0 7px,7px -7px,-7px 0}
+
+  /* ══════════ 인트로 폰 프레임 ══════════ */
+  .phonewrap{display:flex;justify-content:center;padding:6px}
+  .phone{width:326px;height:652px;border-radius:40px;padding:11px;background:linear-gradient(160deg,#2a2c48,#111226);box-shadow:0 30px 80px rgba(0,0,0,.55),inset 0 0 0 1px rgba(255,255,255,.06);position:relative}
+  .screen{position:relative;width:100%;height:100%;border-radius:30px;overflow:hidden;background:var(--bg-lav)}
+  .notch{position:absolute;top:11px;left:50%;transform:translateX(-50%);width:96px;height:22px;background:#0c0c16;border-radius:0 0 14px 14px;z-index:40}
+
+  /* 인트로 내부 — 여기 변수는 --i-* */
+  .intro{position:absolute;inset:0;overflow:hidden;
+    --i-warm:#D88455; --i-cool:#4A4DE7; --i-core:#F0C4B8;
+    --i-blur:46px; --i-amp:26px; --i-dur:9s; --i-intensity:.9; --i-mask:1;
+    --i-glassblur:14px; --i-glassop:.5; --i-tx:#1A1A2E; --i-txcaps:rgba(26,26,46,.62);
+    background:
+      radial-gradient(120% 80% at 50% -12%,rgba(255,255,255,.6),transparent 60%),
+      linear-gradient(158deg,var(--bg-lav) 0%,var(--bg-blu) 55%,#dfe4f4 100%);
+  }
+  .intro.dark{ --i-tx:#fff; --i-txcaps:rgba(255,255,255,.7);
+    background:linear-gradient(158deg,#171a33 0%,#0f1024 60%,#0a0b1a 100%);}
+  .intro.peach{ background:linear-gradient(158deg,var(--peach-bg) 0%,var(--peach-light) 50%,#f4e7f0 100%);}
+  /* aura layer (optionally masked into a head bust) */
+  .aura{position:absolute;inset:0;filter:blur(var(--i-blur));opacity:var(--i-intensity);will-change:transform}
+  .intro.masked .aura{ -webkit-mask:var(--headmask) center 20%/78% 96% no-repeat; mask:var(--headmask) center 20%/78% 96% no-repeat; }
+  .blob{position:absolute;border-radius:50%;will-change:transform;mix-blend-mode:normal}
+  .blob.b1{width:66%;height:52%;left:8%;top:6%;background:radial-gradient(circle at 40% 38%,var(--i-core),var(--i-warm) 45%,transparent 72%);animation:drift1 var(--i-dur) ease-in-out infinite alternate}
+  .blob.b2{width:62%;height:60%;right:2%;top:14%;background:radial-gradient(circle at 60% 45%,var(--i-cool),transparent 68%);animation:drift2 calc(var(--i-dur)*1.18) ease-in-out infinite alternate}
+  .blob.b3{width:44%;height:40%;left:26%;top:2%;background:radial-gradient(circle at 50% 50%,#fff8,transparent 65%);animation:drift3 calc(var(--i-dur)*.82) ease-in-out infinite alternate}
+  @keyframes drift1{from{transform:translate3d(calc(var(--i-amp)*-1),calc(var(--i-amp)*-.6),0) scale(1)}to{transform:translate3d(var(--i-amp),calc(var(--i-amp)*.7),0) scale(1.12)}}
+  @keyframes drift2{from{transform:translate3d(var(--i-amp),calc(var(--i-amp)*-.4),0) scale(1.08)}to{transform:translate3d(calc(var(--i-amp)*-1.1),var(--i-amp),0) scale(.96)}}
+  @keyframes drift3{from{transform:translate3d(0,calc(var(--i-amp)*-.5),0) scale(.9)}to{transform:translate3d(calc(var(--i-amp)*.6),calc(var(--i-amp)*.5),0) scale(1.15)}}
+  .paused .blob{animation-play-state:paused}
+  /* fine contour lines on lower bust */
+  .contour{position:absolute;left:0;right:0;bottom:0;height:34%;opacity:.5;pointer-events:none;
+    background:repeating-radial-gradient(120% 90% at 50% 120%,transparent 0 5px,rgba(26,26,46,.10) 5px 6px);
+    -webkit-mask:linear-gradient(transparent,#000 60%);mask:linear-gradient(transparent,#000 60%)}
+  .intro.dark .contour{background:repeating-radial-gradient(120% 90% at 50% 120%,transparent 0 5px,rgba(255,255,255,.12) 5px 6px)}
+  .intro:not(.masked) .contour{display:none}
+  /* editorial overlay */
+  .ov{position:absolute;inset:0;z-index:10;display:flex;flex-direction:column;color:var(--i-tx)}
+  .corner{position:absolute;width:16px;height:16px;border:1.4px solid var(--i-txcaps);opacity:.7}
+  .corner.tl{top:16px;left:16px;border-right:0;border-bottom:0}
+  .corner.tr{top:16px;right:16px;border-left:0;border-bottom:0}
+  .corner.bl{bottom:16px;left:16px;border-right:0;border-top:0}
+  .corner.br{bottom:16px;right:16px;border-left:0;border-top:0}
+  .tick{position:absolute;background:var(--i-txcaps);opacity:.55}
+  .tick.tm{top:14px;left:50%;width:1px;height:12px}
+  .tick.bm{bottom:14px;left:50%;width:1px;height:12px}
+  .tick.lm{left:14px;top:50%;height:1px;width:12px}
+  .tick.rm{right:14px;top:50%;height:1px;width:12px}
+  .wordmark{text-align:center;padding-top:34px}
+  .wordmark .w1{font-size:26px;font-weight:300;letter-spacing:1px;line-height:1}
+  .wordmark .w1 b{font-weight:700}
+  .wordmark .w2{font-family:var(--mono);font-size:9.5px;letter-spacing:3px;margin-top:7px;color:var(--i-txcaps);font-weight:700}
+  .midblock{margin-top:auto;padding:0 26px 0}
+  .kicker{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:9.5px;letter-spacing:2.5px;color:var(--i-txcaps);font-weight:700}
+  .kicker .rule{flex:1;height:1px;background:var(--i-txcaps);opacity:.5}
+  .kicker .ring{width:11px;height:11px;border-radius:50%;border:2px solid currentColor;position:relative}
+  .headline{font-weight:800;letter-spacing:-1px;line-height:.98;margin-top:16px;text-transform:uppercase;font-size:var(--i-hsize,42px)}
+  .headline .arw{display:inline-block;font-weight:400;transform:translateY(-2px)}
+  .glasscard{position:relative;margin:0 18px 20px;margin-top:20px;padding:16px 18px 18px;border-radius:20px;
+    background:rgba(255,255,255,var(--i-glassop));
+    -webkit-backdrop-filter:blur(var(--i-glassblur)) saturate(1.4);backdrop-filter:blur(var(--i-glassblur)) saturate(1.4);
+    border:1px solid rgba(255,255,255,.5);box-shadow:0 12px 40px rgba(26,26,46,.14)}
+  .intro.dark .glasscard{background:rgba(255,255,255,calc(var(--i-glassop)*.28));border-color:rgba(255,255,255,.16)}
+  .glasscard.off{background:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;border:0;box-shadow:none;padding:16px 8px}
+  .dots{display:flex;gap:8px;justify-content:center;align-items:center;margin:16px auto 24px;padding:9px 16px;width:max-content;border-radius:999px;
+    background:rgba(255,255,255,calc(var(--i-glassop)*.7));-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.45)}
+  .intro.dark .dots{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.14)}
+  .dots i{width:6px;height:6px;border-radius:50%;background:var(--i-txcaps);opacity:.5;transition:.3s}
+  .dots i.on{width:20px;border-radius:3px;opacity:1;background:var(--i-cool)}
+  .align-note{font-family:var(--mono)}
+</style>
+
+<div class="pg">
+  <div class="hd">
+    <h1>예울마루 · 파비콘 + 인트로 시안</h1>
+    <span class="sub" id="stamp">v1 · 20260717_052912 KST</span>
+    <span class="spacer"></span>
+    <span class="fpspill"><span class="dot"></span>MOTION <b id="fps">60</b> fps</span>
+  </div>
+
+  <div class="tabs">
+    <button class="tab on" data-tab="fav">◎ 파비콘 (글자 없는 오라)</button>
+    <button class="tab" data-tab="intro">▶ 60fps 글래스 인트로</button>
+  </div>
+
+  <!-- ══════════════ 파비콘 탭 ══════════════ -->
+  <div class="wrap" id="tab-fav">
+    <div>
+      <div class="stage">
+        <div class="favgrid" id="favgrid"></div>
+        <div class="ctxrow">
+          <div class="tab-demo"><span id="ctx-tab-ico"></span><span class="t">예울마루 홍보 계획표</span><span style="color:#666">✕</span></div>
+          <div class="home-demo checker"><div id="ctx-home"></div><span class="nm">예울마루</span></div>
+        </div>
+      </div>
+      <div class="stagecap">위 = 실제 파비콘 크기(16·32·48·180·512px) · 아래 = 브라우저 탭 / 홈스크린 실맥락</div>
+    </div>
+    <aside class="console">
+      <div class="csec">
+        <div class="lbl">프리셋</div>
+        <div class="presets" id="fav-presets"></div>
+      </div>
+      <div class="csec">
+        <div class="lbl">형태 · 지오메트리</div>
+        <div class="row"><label>모서리 R</label><input type="range" id="f_radius" min="0" max="50" step="1"><output id="f_radius_o"></output></div>
+        <div class="row"><label>코어 크기</label><input type="range" id="f_size" min="40" max="130" step="1"><output id="f_size_o"></output></div>
+        <div class="row"><label>코어 X</label><input type="range" id="f_cx" min="20" max="80" step="1"><output id="f_cx_o"></output></div>
+        <div class="row"><label>코어 Y</label><input type="range" id="f_cy" min="15" max="75" step="1"><output id="f_cy_o"></output></div>
+        <div class="row"><label>글로우 확산</label><input type="range" id="f_glow" min="0" max="60" step="1"><output id="f_glow_o"></output></div>
+        <div class="row"><label>쿨 혼합</label><input type="range" id="f_mix" min="0" max="100" step="1"><output id="f_mix_o"></output></div>
+      </div>
+      <div class="csec">
+        <div class="lbl">색 · 팔레트 폐쇄 (⚠ = 팔레트 밖)</div>
+        <div class="row" style="grid-template-columns:96px 1fr"><label>배경</label><select id="f_bg"></select></div>
+        <div class="row" style="grid-template-columns:96px 1fr"><label>웜 코어</label><select id="f_warm"></select></div>
+        <div class="row" style="grid-template-columns:96px 1fr"><label>쿨 엣지</label><select id="f_cool"></select></div>
+      </div>
+      <div class="csec">
+        <div class="lbl">브랜드 정체성</div>
+        <label class="chk"><input type="checkbox" id="f_mono"> ‘예’ 모노그램 겹치기 <span style="color:var(--mut)">(파비콘에서도 예울마루로 읽힘)</span></label>
+        <div class="row"><label>모노 투명도</label><input type="range" id="f_monoop" min="0" max="100" step="1"><output id="f_monoop_o"></output></div>
+        <label class="chk"><input type="checkbox" id="f_grain"> 미세 그레인</label>
+      </div>
+      <div class="csec">
+        <div class="lbl">선택값 · 내보내기</div>
+        <pre class="out" id="fav-out"></pre>
+        <div class="btnrow">
+          <button id="fav-copy">선택값 복사</button>
+          <button class="ghost" id="fav-svg">SVG 다운로드</button>
+        </div>
+      </div>
+      <div class="csec note">
+        <b>⑤ 재현 한계</b> · 원본 3D 두상은 오라 오브로 추상화(파비콘은 16px에서 형태만 읽힘). 원본 비비드 주황·파랑은 <span class="warnbadge">팔레트 밖</span> — 계승 기본은 살몬↔인디고. ⚠ 색 선택 시 복사에 「기틀 갱신 역제안」 포함.
+      </div>
+    </aside>
+  </div>
+
+  <!-- ══════════════ 인트로 탭 ══════════════ -->
+  <div class="wrap" id="tab-intro" style="display:none">
+    <div>
+      <div class="stage">
+        <div class="phonewrap">
+          <div class="phone">
+            <div class="notch"></div>
+            <div class="screen">
+              <div class="intro masked" id="intro">
+                <div class="aura" id="aura">
+                  <div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div>
+                </div>
+                <div class="contour"></div>
+                <div class="ov">
+                  <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+                  <span class="tick tm"></span><span class="tick bm"></span><span class="tick lm"></span><span class="tick rm"></span>
+                  <div class="wordmark">
+                    <div class="w1" id="i_wm">예울<b>마루</b></div>
+                    <div class="w2" id="i_wm2">PROMO · CONTENT PLATFORM</div>
+                  </div>
+                  <div class="midblock">
+                    <div class="kicker"><span class="ring"></span><span id="i_kick">NOTE TO SELF</span><span class="rule"></span></div>
+                    <div class="headline" id="i_head"></div>
+                  </div>
+                  <div class="glasscard" id="i_glass">
+                    <div style="font-size:11px;line-height:1.55;color:var(--i-txcaps)" id="i_body">공연·전시·홍보 콘텐츠 신청부터 관리까지 — 예울마루의 모든 흐름을 한 화면에서.</div>
+                  </div>
+                  <div class="dots"><i class="on"></i><i></i><i></i><i></i><i></i></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="stagecap">폰 프레임(9:19.5) · 모션은 GPU 컴포짓(transform/opacity)만 사용 → 60fps · 우측 상단 실측 fps</div>
+    </div>
+    <aside class="console">
+      <div class="csec">
+        <div class="lbl">프리셋</div>
+        <div class="presets" id="intro-presets"></div>
+      </div>
+      <div class="csec">
+        <div class="lbl">모션 (60fps 고정 · 드리프트 튜닝)</div>
+        <div class="row"><label>속도(주기)</label><input type="range" id="i_dur" min="4" max="18" step="0.5"><output id="i_dur_o"></output></div>
+        <div class="row"><label>진폭</label><input type="range" id="i_amp" min="6" max="60" step="1"><output id="i_amp_o"></output></div>
+        <div class="row"><label>오라 강도</label><input type="range" id="i_int" min="30" max="100" step="1"><output id="i_int_o"></output></div>
+        <div class="row"><label>오라 블러</label><input type="range" id="i_blur" min="20" max="80" step="1"><output id="i_blur_o"></output></div>
+        <label class="chk"><input type="checkbox" id="i_mask" checked> 두상 실루엣 마스크(글로우를 머리 안에)</label>
+        <label class="chk"><input type="checkbox" id="i_pause"> 모션 일시정지</label>
+      </div>
+      <div class="csec">
+        <div class="lbl">글래스모피즘</div>
+        <div class="row"><label>글래스 블러</label><input type="range" id="i_gblur" min="0" max="30" step="1"><output id="i_gblur_o"></output></div>
+        <div class="row"><label>글래스 불투명</label><input type="range" id="i_gop" min="0" max="90" step="1"><output id="i_gop_o"></output></div>
+        <label class="chk"><input type="checkbox" id="i_glassoff"> 글래스 카드 제거(텍스트만)</label>
+      </div>
+      <div class="csec">
+        <div class="lbl">정렬 · 크기 (기틀 인지 축)</div>
+        <div class="row"><label>헤드라인 크기</label><input type="range" id="i_hsize" min="28" max="54" step="1"><output id="i_hsize_o"></output></div>
+        <div class="row" style="grid-template-columns:96px 1fr"><label>바탕 톤</label><select id="i_tone"></select></div>
+        <div class="row" style="grid-template-columns:96px 1fr"><label>웜(오라)</label><select id="i_warm"></select></div>
+        <div class="row" style="grid-template-columns:96px 1fr"><label>쿨(오라)</label><select id="i_cool"></select></div>
+      </div>
+      <div class="csec">
+        <div class="lbl">카피 (편집)</div>
+        <div class="row" style="grid-template-columns:64px 1fr"><label>헤드라인</label><input type="text" id="i_headtx" value="FORGET →|PERFECTION,|JUST PUBLISH."></div>
+        <div style="font-size:10px;color:var(--mut);margin:2px 0 8px 68px">| = 줄바꿈 · → 자동 화살표</div>
+        <div class="row" style="grid-template-columns:64px 1fr"><label>키커</label><input type="text" id="i_kicktx" value="NOTE TO SELF"></div>
+        <div class="seg" style="margin-top:8px"><button data-copy="ref" class="on">원본 카피</button><button data-copy="ko">예울마루 국문</button><button data-copy="hero">런칭 히어로</button></div>
+      </div>
+      <div class="csec">
+        <div class="lbl">선택값</div>
+        <pre class="out" id="intro-out"></pre>
+        <div class="btnrow"><button id="intro-copy">선택값 복사</button></div>
+      </div>
+      <div class="csec note">
+        <b>⑤ 재현 한계</b> · 폰트 = 시스템 스택(프로덕션 Pretendard/DM Serif). 원본 3D 와이어 두상 = 오라+실루엣 마스크+컨투어로 근사. 비비드 원색 = <span class="warnbadge">팔레트 밖 ⚠</span>. backdrop-filter는 사파리/크로뮴 최신 기준.
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script>
+/* ══════════ 팔레트(폐쇄) + ⚠ 팔레트밖 옵션 ══════════ */
+const PAL = [
+  {v:'#4A4DE7', n:'인디고 --accent'},
+  {v:'#E8E8FD', n:'인디고틴트 --accent-light'},
+  {v:'#D88455', n:'살몬 --peach-text'},
+  {v:'#F0C4B8', n:'피치 --peach'},
+  {v:'#FBF0EC', n:'피치라이트 --peach-light'},
+  {v:'#FDF6F3', n:'피치배경 --peach-bg'},
+  {v:'#1A1A2E', n:'잉크 --ink'},
+  {v:'#2D8AB3', n:'시안 --c5'},
+  {v:'#C02872', n:'마젠타 --c4'},
+  {v:'#1A6B3C', n:'딥그린 --c3'},
+  {v:'#F5B400', n:'옐로 --c6'},
+];
+const WARN = [
+  {v:'#FF4D2E', n:'⚠ 원본 비비드 오렌지 (팔레트 밖)'},
+  {v:'#2E5BFF', n:'⚠ 원본 비비드 블루 (팔레트 밖)'},
+];
+const NAMEOF = {}; [...PAL,...WARN].forEach(o=>NAMEOF[o.v.toUpperCase()]=o.n);
+const isWarn = v => WARN.some(o=>o.v.toUpperCase()===String(v).toUpperCase());
+function fillSelect(sel, val){
+  sel.innerHTML='';
+  const og1=document.createElement('optgroup'); og1.label='팔레트(계승)';
+  PAL.forEach(o=>{const e=new Option(o.n,o.v); og1.appendChild(e);});
+  const og2=document.createElement('optgroup'); og2.label='⚠ 팔레트 밖 (역제안 대상)';
+  WARN.forEach(o=>{const e=new Option(o.n,o.v); og2.appendChild(e);});
+  sel.append(og1,og2); sel.value=val; syncWarnSel(sel);
+}
+function syncWarnSel(sel){ sel.classList.toggle('warn', isWarn(sel.value)); }
+
+/* ══════════ 탭 전환 ══════════ */
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x===t));
+  document.getElementById('tab-fav').style.display = t.dataset.tab==='fav'?'':'none';
+  document.getElementById('tab-intro').style.display = t.dataset.tab==='intro'?'':'none';
+});
+
+/* ══════════ FPS 미터 ══════════ */
+(function(){let last=performance.now(),fr=0;const el=document.getElementById('fps');
+ function loop(now){fr++;if(now-last>=500){el.textContent=Math.round(fr*1000/(now-last));fr=0;last=now;}requestAnimationFrame(loop);}
+ requestAnimationFrame(loop);})();
+
+/* ═══════════════════ 파비콘 ═══════════════════ */
+const FAV_DEF = {radius:26, size:88, cx:38, cy:34, glow:34, mix:58, bg:'#1A1A2E', warm:'#D88455', cool:'#4A4DE7', mono:true, monoop:16, grain:false};
+let fav = {...FAV_DEF};
+const FAV_PRESETS = [
+  {id:'star', nm:'★ 오라+예 (추천)', st:{...FAV_DEF}},
+  {id:'pure', nm:'순수 오라', st:{...FAV_DEF, mono:false}},
+  {id:'light',nm:'라이트 배경', st:{...FAV_DEF, bg:'#EBF0F8', warm:'#D88455', cool:'#4A4DE7', monoop:22}},
+  {id:'indigo',nm:'인디고 단색계', st:{...FAV_DEF, warm:'#E8E8FD', cool:'#4A4DE7', mix:74}},
+  {id:'src', nm:'⚠ 원본 비비드', warn:true, st:{...FAV_DEF, warm:'#FF4D2E', cool:'#2E5BFF', mix:62, mono:false, bg:'#12132a'}},
+];
+function favSVG(s, px){
+  const R = (s.radius/100*512).toFixed(1);
+  const cx=(s.cx/100*512).toFixed(1), cy=(s.cy/100*512).toFixed(1);
+  const rad=(s.size/100*300).toFixed(1);
+  const coolR=(s.size/100*340).toFixed(1);
+  const coolcx=(512-cx*0.55).toFixed(1), coolcy=(cy*1).toFixed(1);
+  const blur=(s.glow/100*70).toFixed(1);
+  const coolStop=(30+s.mix*0.55).toFixed(0);
+  const grain = s.grain? `<filter id="gr"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch"/><feColorMatrix type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 .04 0"/></filter><rect width="512" height="512" filter="url(#gr)" opacity=".5"/>`:'';
+  const mono = s.mono? `<text x="256" y="272" font-family="'Apple SD Gothic Neo','Malgun Gothic',sans-serif" font-weight="800" font-size="316" letter-spacing="-8" fill="#fff" fill-opacity="${(s.monoop/100).toFixed(2)}" text-anchor="middle" dominant-baseline="central">예</text>`:'';
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="${px}" height="${px}">
+<defs>
+ <clipPath id="c"><rect width="512" height="512" rx="${R}"/></clipPath>
+ <radialGradient id="w" cx="${(cx/512*100).toFixed(1)}%" cy="${(cy/512*100).toFixed(1)}%" r="60%">
+  <stop offset="0%" stop-color="#fff" stop-opacity=".9"/>
+  <stop offset="22%" stop-color="${s.warm}"/>
+  <stop offset="70%" stop-color="${s.warm}" stop-opacity="0"/>
+ </radialGradient>
+ <radialGradient id="cl" cx="${(coolcx/512*100).toFixed(1)}%" cy="${(coolcy/512*100).toFixed(1)}%" r="66%">
+  <stop offset="0%" stop-color="${s.cool}" stop-opacity=".95"/>
+  <stop offset="${coolStop}%" stop-color="${s.cool}" stop-opacity="0"/>
+ </radialGradient>
+ <filter id="b" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="${blur}"/></filter>
+</defs>
+<g clip-path="url(#c)">
+ <rect width="512" height="512" fill="${s.bg}"/>
+ <g filter="url(#b)">
+  <circle cx="${coolcx}" cy="${coolcy}" r="${coolR}" fill="url(#cl)"/>
+  <circle cx="${cx}" cy="${cy}" r="${rad}" fill="url(#w)"/>
+ </g>
+ ${grain}
+ ${mono}
+</g>
+</svg>`;
+}
+function favRender(){
+  const sizes=[[512,'512 · 스토어'],[180,'180 · iOS'],[48,'48'],[32,'32 · 탭'],[16,'16 · 파비콘']];
+  const disp={512:150,180:110,48:48,32:32,16:16};
+  document.getElementById('favgrid').innerHTML = sizes.map(([px,cap])=>{
+    const d=disp[px];
+    return `<div class="favcell"><div class="frame" style="width:${d}px;height:${d}px">${favSVG(fav,d)}</div><div class="cap">${cap}</div></div>`;
+  }).join('');
+  document.getElementById('ctx-tab-ico').innerHTML = favSVG(fav,16);
+  document.getElementById('ctx-home').innerHTML = favSVG(fav,70);
+  favOut();
+}
+function favOut(){
+  const warnCols=[['배경',fav.bg],['웜',fav.warm],['쿨',fav.cool]].filter(([_,v])=>isWarn(v));
+  let t = `[파비콘 선택값]\n`;
+  t+=`모서리R=${fav.radius}%  코어=${fav.size} (x${fav.cx} y${fav.cy})\n`;
+  t+=`글로우=${fav.glow}  쿨혼합=${fav.mix}%\n`;
+  t+=`배경=${fav.bg} (${NAMEOF[fav.bg.toUpperCase()]||'?'})\n`;
+  t+=`웜코어=${fav.warm} (${NAMEOF[fav.warm.toUpperCase()]||'?'})\n`;
+  t+=`쿨엣지=${fav.cool} (${NAMEOF[fav.cool.toUpperCase()]||'?'})\n`;
+  t+=`모노그램 예=${fav.mono?'ON '+fav.monoop+'%':'off'}  그레인=${fav.grain?'ON':'off'}\n`;
+  t+=`\n→ 배선: image/favicon.svg 교체 + favicon-32/16.png 재출력 + apple-touch-icon(180) + pwa-icon 192/512\n`;
+  if(warnCols.length){
+    t+=`\n⚠ 팔레트 이탈 ${warnCols.length}축 → 🔁 기틀 갱신 역제안\n`;
+    warnCols.forEach(([k,v])=>{t+=`  · ${k}=${v} = 팔레트 밖. 편입하려면 운영자 승인 → :root 신규 토큰 → 기틀 §0 등재 (전 앱 동축 영향)\n`;});
+  } else { t+=`\n✅ 전 축 팔레트 계승 — 즉시 배선 가능`; }
+  document.getElementById('fav-out').textContent=t;
+}
+function bindFav(){
+  const ids=['radius','size','cx','cy','glow','mix','monoop'];
+  ids.forEach(k=>{const el=document.getElementById('f_'+k);const o=document.getElementById('f_'+k+'_o');
+    el.value=fav[k]; o.textContent=fav[k]+(['radius','cx','cy','mix','monoop'].includes(k)?'%':'');
+    el.oninput=()=>{fav[k]=+el.value; o.textContent=el.value+(['radius','cx','cy','mix','monoop'].includes(k)?'%':''); favRender();};});
+  ['bg','warm','cool'].forEach(k=>{const el=document.getElementById('f_'+k); fillSelect(el,fav[k]);
+    el.onchange=()=>{fav[k]=el.value; syncWarnSel(el); favRender();};});
+  document.getElementById('f_mono').checked=fav.mono;
+  document.getElementById('f_mono').onchange=e=>{fav.mono=e.target.checked;favRender();};
+  document.getElementById('f_grain').checked=fav.grain;
+  document.getElementById('f_grain').onchange=e=>{fav.grain=e.target.checked;favRender();};
+  const pc=document.getElementById('fav-presets');
+  pc.innerHTML=FAV_PRESETS.map(p=>`<button class="${p.id==='star'?'star':''} ${p.warn?'warn':''}" data-p="${p.id}">${p.nm}</button>`).join('');
+  pc.querySelectorAll('button').forEach(b=>b.onclick=()=>{const p=FAV_PRESETS.find(x=>x.id===b.dataset.p);fav={...p.st};bindFav();favRender();});
+}
+document.getElementById('fav-copy').onclick=()=>{navigator.clipboard&&navigator.clipboard.writeText(document.getElementById('fav-out').textContent);flash(document.getElementById('fav-copy'));};
+document.getElementById('fav-svg').onclick=()=>{
+  const blob=new Blob([favSVG(fav,512)],{type:'image/svg+xml'});const u=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=u;a.download='yeulmaru-favicon.svg';a.click();URL.revokeObjectURL(u);
+};
+
+/* ═══════════════════ 인트로 ═══════════════════ */
+const COPY = {
+  ref:{head:'FORGET →|PERFECTION,|JUST PUBLISH.', kick:'NOTE TO SELF'},
+  ko:{head:'지금,|예울마루를|알리다.', kick:'예울마루 · 홍보'},
+  hero:{head:'홍보의|모든 것을|한 곳에서.', kick:'CONTENT PLATFORM'},
+};
+const INT_DEF={dur:9, amp:26, int:90, blur:46, mask:true, pause:false, gblur:14, gop:50, glassoff:false, hsize:42, tone:'lav', warm:'#D88455', cool:'#4A4DE7'};
+let intro={...INT_DEF};
+const INT_PRESETS=[
+  {id:'star',nm:'★ 살몬↔인디고 글래스', st:{...INT_DEF}},
+  {id:'calm',nm:'차분 · 느린 드리프트', st:{...INT_DEF, dur:14, amp:16, int:78, blur:54}},
+  {id:'dark',nm:'다크 오라', st:{...INT_DEF, tone:'dark', int:96, gop:38}},
+  {id:'peach',nm:'피치 톤온톤', st:{...INT_DEF, tone:'peach', warm:'#D88455', cool:'#C02872'}},
+  {id:'src',nm:'⚠ 원본 비비드', warn:true, st:{...INT_DEF, tone:'dark', warm:'#FF4D2E', cool:'#2E5BFF', int:98}},
+];
+const HEADMASK = "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 130'><path d='M50 4 C30 4 22 20 22 38 C22 52 28 62 34 68 C30 72 22 76 16 84 C8 94 6 110 6 130 L94 130 C94 110 92 94 84 84 C78 76 70 72 66 68 C72 62 78 52 78 38 C78 20 70 4 50 4 Z' fill='black'/></svg>\")";
+function applyIntro(){
+  const el=document.getElementById('intro');
+  el.className='intro'+(intro.mask?' masked':'')+(intro.tone==='dark'?' dark':'')+(intro.tone==='peach'?' peach':'');
+  document.getElementById('aura').parentElement.classList.toggle('paused',intro.pause);
+  el.classList.toggle('paused',intro.pause);
+  el.style.setProperty('--headmask',HEADMASK);
+  el.style.setProperty('--i-dur',intro.dur+'s');
+  el.style.setProperty('--i-amp',intro.amp+'px');
+  el.style.setProperty('--i-intensity',(intro.int/100).toFixed(2));
+  el.style.setProperty('--i-blur',intro.blur+'px');
+  el.style.setProperty('--i-glassblur',intro.gblur+'px');
+  el.style.setProperty('--i-glassop',(intro.gop/100).toFixed(2));
+  el.style.setProperty('--i-hsize',intro.hsize+'px');
+  el.style.setProperty('--i-warm',intro.warm);
+  el.style.setProperty('--i-cool',intro.cool);
+  el.style.setProperty('--i-core', intro.tone==='peach'?'#F0C4B8':'#F0C4B8');
+  document.getElementById('i_glass').classList.toggle('off',intro.glassoff);
+  // headline
+  const raw=document.getElementById('i_headtx').value;
+  document.getElementById('i_head').innerHTML = raw.split('|').map(l=>
+    l.replace(/→/g,'<span class="arw">→</span>')).join('<br>');
+  document.getElementById('i_kick').textContent=document.getElementById('i_kicktx').value;
+  introOut();
+}
+function introOut(){
+  const warnCols=[['웜',intro.warm],['쿨',intro.cool]].filter(([_,v])=>isWarn(v));
+  let t=`[인트로 선택값]\n`;
+  t+=`모션: 주기=${intro.dur}s 진폭=${intro.amp}px 강도=${intro.int}% 블러=${intro.blur}px\n`;
+  t+=`마스크(두상)=${intro.mask?'ON':'off'}  일시정지=${intro.pause?'ON':'off'}\n`;
+  t+=`글래스: 블러=${intro.gblur}px 불투명=${intro.gop}% ${intro.glassoff?'(카드제거)':''}\n`;
+  t+=`헤드라인=${intro.hsize}px  바탕톤=${intro.tone}\n`;
+  t+=`웜=${intro.warm} (${NAMEOF[intro.warm.toUpperCase()]||'?'}) · 쿨=${intro.cool} (${NAMEOF[intro.cool.toUpperCase()]||'?'})\n`;
+  t+=`카피: "${document.getElementById('i_headtx').value.replace(/\|/g,' / ')}"\n`;
+  t+=`\n→ 배선: index.html 진입 스플래시(1회 노출·localStorage) · transform/opacity 애니만(60fps)\n`;
+  if(warnCols.length){ t+=`\n⚠ 팔레트 이탈 ${warnCols.length}축 → 🔁 기틀 갱신 역제안 (운영자 승인 → :root 토큰 → 기틀 §0)\n`;
+    warnCols.forEach(([k,v])=>t+=`  · ${k}=${v} 팔레트 밖\n`);
+  } else t+=`\n✅ 전 축 팔레트 계승`;
+  document.getElementById('intro-out').textContent=t;
+}
+function bindIntro(){
+  const map=[['dur','s'],['amp','px'],['int','%'],['blur','px'],['gblur','px'],['gop','%'],['hsize','px']];
+  map.forEach(([k,u])=>{const el=document.getElementById('i_'+k),o=document.getElementById('i_'+k+'_o');
+    el.value=intro[k];o.textContent=intro[k]+u;
+    el.oninput=()=>{intro[k]=+el.value;o.textContent=el.value+u;applyIntro();};});
+  [['mask','i_mask'],['pause','i_pause'],['glassoff','i_glassoff']].forEach(([k,id])=>{
+    const el=document.getElementById(id);el.checked=intro[k];el.onchange=()=>{intro[k]=el.checked;applyIntro();};});
+  ['warm','cool'].forEach(k=>{const el=document.getElementById('i_'+k);fillSelect(el,intro[k]);
+    el.onchange=()=>{intro[k]=el.value;syncWarnSel(el);applyIntro();};});
+  const tone=document.getElementById('i_tone');
+  tone.innerHTML=[['lav','라벤더(기본 --bg)'],['peach','피치'],['dark','다크']].map(([v,n])=>`<option value="${v}">${n}</option>`).join('');
+  tone.value=intro.tone; tone.onchange=()=>{intro.tone=tone.value;applyIntro();};
+  document.getElementById('i_headtx').oninput=applyIntro;
+  document.getElementById('i_kicktx').oninput=applyIntro;
+  document.querySelectorAll('[data-copy]').forEach(b=>b.onclick=()=>{
+    document.querySelectorAll('[data-copy]').forEach(x=>x.classList.toggle('on',x===b));
+    const c=COPY[b.dataset.copy];document.getElementById('i_headtx').value=c.head;document.getElementById('i_kicktx').value=c.kick;applyIntro();});
+  const pc=document.getElementById('intro-presets');
+  pc.innerHTML=INT_PRESETS.map(p=>`<button class="${p.id==='star'?'star':''} ${p.warn?'warn':''}" data-p="${p.id}">${p.nm}</button>`).join('');
+  pc.querySelectorAll('button').forEach(b=>b.onclick=()=>{const p=INT_PRESETS.find(x=>x.id===b.dataset.p);intro={...p.st};bindIntro();applyIntro();});
+}
+document.getElementById('intro-copy').onclick=()=>{navigator.clipboard&&navigator.clipboard.writeText(document.getElementById('intro-out').textContent);flash(document.getElementById('intro-copy'));};
+
+function flash(b){const t=b.textContent;b.textContent='✓ 복사됨';setTimeout(()=>b.textContent=t,1100);}
+
+/* init */
+bindFav(); favRender();
+bindIntro(); applyIntro();
+</script>
