@@ -4357,7 +4357,9 @@ function _salesBuild(){
     var _gOps=ops||(rid?_opsLookupById(rid):null)||_opsLookup(name,salesYear);
     // [260710 운영자] 운영대장 장르1이 비면 프로그램 시트 N열 「구분」 폴백('기타' 소멸) — 기존 장르1 값은 그대로 우선(회귀 0)
     var genre=(_gOps&&_gOps.genre)?_gOps.genre:_pgGenre(rid,name);
-    var totalOpen=(m&&m.총오픈석)?m.총오픈석:(ops?base*(ops.count||1):base*((m&&m.총회차)||1));
+    // [다회차 분모] 총오픈석 미기입 마스터 공연: 회차수 = max(총회차, 회차상세 행수, 운영대장 행수) — 총회차까지 비면 ×1(단회차) 분모로 점유율이 부풀던 어긋남 보정(집계 전 카드 루프는 이미 운영대장 회차 반영 — 정합)
+    var _rc=m?Math.max(m.총회차||1,(m.ID&&rounds[m.ID]&&rounds[m.ID].length)||1,(_gOps&&_gOps.count)||1):1;
+    var totalOpen=(m&&m.총오픈석)?m.총오픈석:(ops?base*(ops.count||1):base*_rc);
     var occ=totalOpen>0?Math.max(0,Math.min(seats/totalOpen*100,100)):0;   // [분신술 보안LOW] 하한 0 — admin 콘솔 음수 좌석 주입 시 음수 occ 방지
     var startDate=m?m.시작:(ops&&ops.first?ops.first:null);
     var endDate=m?m.종료:(ops&&ops.last?ops.last:null);
@@ -6086,10 +6088,10 @@ function _dailyMasters(){
   // [운영자 260710] "일일입력에 이미 종료된 공연이 뜸" — 마스터 '상태=판매중' 문자열만 믿지 않고 판매 현황(_salesBuild)과 동일 보정:
   // 티켓오픈 전 · 판매종료 지남 · 마지막 공연일 지남(회차상세→운영대장→판매종료 폴백) = 제외. 회차·운영대장 캐시는 있을 때만(레일이 선로딩 — 없으면 마스터 날짜만으로 판정).
   var _tdy=new Date(); _tdy.setHours(0,0,0,0);
-  var lastById={};
+  var lastById={}, cntById={};   // cntById = 회차상세 행수(ID별) — 다회차 분모 폴백용
   try{
     if(typeof _salesState!=='undefined'&&_salesState&&_salesState.rounds&&_salesState.rounds.rows){
-      _salesState.rounds.rows.map(_salesNorm).forEach(function(r){ var id=String(r['ID']||'').trim(); var d=_salesDate(r['공연일']); if(!id||!d)return; if(!lastById[id]||d>lastById[id])lastById[id]=d; });
+      _salesState.rounds.rows.map(_salesNorm).forEach(function(r){ var id=String(r['ID']||'').trim(); var d=_salesDate(r['공연일']); if(!id||!d)return; if(!lastById[id]||d>lastById[id])lastById[id]=d; cntById[id]=(cntById[id]||0)+1; });
     }
   }catch(_e){}
   var out=rows
@@ -6103,7 +6105,11 @@ function _dailyMasters(){
       if(!last&&en)last=en;
       return !(last&&last<_tdy);                                                   // 마지막 공연일 지남 = 종료
     })
-    .map(function(m){ var name=String(m['사업명']||'').trim(); return {name:name, id:String(m['ID']||'').trim(), open:(_salesNum(m['총오픈석'])||((_salesNum(m['기준석'])||926)*(_salesNum(m['총회차'])||1))), cat:(catIdx[_uName(name)]||'')}; });
+    .map(function(m){ var name=String(m['사업명']||'').trim(); var id=String(m['ID']||'').trim();
+      // [다회차 분모] 기록되는 점유율도 판매현황(_salesBuild)과 동일 보정 — 회차수 = max(총회차, 회차상세 행수, 운영대장 행수)
+      var oc=null; try{ if(typeof _salesState!=='undefined'&&_salesState&&_salesState.ops){ var en2=_salesDate(m['종료일']),tk2=_salesDate(m['티켓오픈일']); oc=(id?_opsLookupById(id):null)||_opsLookup(name,(en2||tk2||_tdy).getFullYear()); } }catch(_e3){}
+      var rc=Math.max(_salesNum(m['총회차'])||1,cntById[id]||1,(oc&&oc.count)||1);
+      return {name:name, id:id, open:(_salesNum(m['총오픈석'])||((_salesNum(m['기준석'])||926)*rc)), cat:(catIdx[_uName(name)]||'')}; });
   // [운영자 260708] 공연마스터 미등록 신규 오픈 공연 폴백 — 목록에 없으면 집계 자체를 못 넣는다.
   // 프로그램 시트 판매기간(판매시작일≤오늘≤판매종료일, 폴백=공연 종료일)로 판정 — 판매 현황 3차 폴백(_salesBuild)과 동일 원칙.
   // 마스터 전체 이름·ID dedup(마스터 등록 공연은 마스터 판정이 정본 — _salesBuild 3차와 동일 3중 dedup) · 전시·교육·대관 제외(공연 일일판매 범위 밖).
