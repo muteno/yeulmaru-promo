@@ -2857,7 +2857,6 @@ function _appEnterStagger(appEl){
 }
 function _enterApp(){
   window._appEnteredAt=Date.now();  // 알림 토스트 10초 지연 기준(진입 직후 억제)
-  console.log('[_enterApp] CALLED from:',new Error().stack.split('\n').slice(1,3).join(' | '),'| pw=',sessionStorage.getItem('pw'),'| role=',sessionStorage.getItem('role'),'| myAppl=',sessionStorage.getItem('myApplicant'),'| password=',password,'| _loginEmail=',_loginEmail);
   window._pinActive=false;
   try{ if(typeof window._hideCapsWarn==='function') window._hideCapsWarn(); }catch(e){}  // CapsLock 경고 떠다님 차단
   // 진입 전환 = 카드 리프트 디졸브 — 로그인 화면이 보이는 상태에서만 연출(복원·예외 경로는 즉시 전환). 데이터 로딩(initApp)은 연출과 병렬 출발.
@@ -2966,7 +2965,6 @@ async function _authWithEmail(email, pin){
 }
 
 function _enterAsManager(matched, pin, userName){
-  console.log('[_enterAsManager] userName=',userName,'pin=',pin,'from:',new Error().stack.split('\n').slice(1,3).join(' | '));
   const userDept=matched['담당부서']||'';
   const isSubAdmin=isFlagOn(matched['관리자여부']);
   const sessRole=isSubAdmin?'admin':'user';
@@ -3107,7 +3105,6 @@ let _loginEmail='';
 async function initLoginScreen(){
   if(typeof startLoginShader==='function')startLoginShader();
   if(window._pinActive){console.log('[initLogin] blocked: pin active');return;}
-  console.log('[initLogin] CALLED from:',new Error().stack.split('\n').slice(1,4).join(' | '));
   const step=document.getElementById('account-step');
   if(!step)return;
   const ps=document.getElementById('pin-step'); if(ps)ps.style.display='none';
@@ -3188,14 +3185,11 @@ function _fullLogout(){
   try{if(typeof _veState!=='undefined'&&_veState){if(_veState._urls)_veState._urls.forEach(function(u){try{URL.revokeObjectURL(u);}catch(_e){}});_veState=null;}}catch(_e){}   // 영상 편집기 인메모리 소거 — 비리로드 로그아웃 경로 힙 잔류 차단(_memPurge와 동일 계층, 분신술 R2 HIGH-1)
   try{password='';userRole='user';['pw','role','myApplicant','myUser','subAdminPin'].forEach(function(k){sessionStorage.removeItem(k);});}catch(e){} try{if(typeof _memPurge==='function')_memPurge();}catch(e){} console.log('[fullLogout] done'); }   // 회원 PII 캐시·모달 소거(분신술 보안 MED-4 — 비리로드 로그아웃 경로 힙 잔류 차단)
 async function goToPinStep(skipEnsure){
-  console.log('[goToPin] start skipEnsure=',skipEnsure,'_loginEmail=',_loginEmail,'MANAGERS=',MANAGERS?MANAGERS.length:'null');
   try{
   const step=document.getElementById('account-step');
   if(step)step.innerHTML='<div style="color:#999;font-size:13px;padding:24px 0">'+_ldHtml(12)+'Microsoft 인증 확인 중</div>';
   if(!skipEnsure){
-    console.log('[goToPin] _msalEnsureToken...');
     const v=await _msalEnsureToken(_loginEmail);
-    console.log('[goToPin] ensureToken →',v);
     if(!v){ showToast('Microsoft 인증이 필요합니다','error'); initLoginScreen(); return; }
     _loginEmail=v;
   }
@@ -3204,11 +3198,9 @@ async function goToPinStep(skipEnsure){
   if(!MANAGERS||!MANAGERS.length){ password='0510'; try{await loadManagers();}catch(e){console.error('[goToPin] retry fail:',e);} password=''; }
   if(!MANAGERS||!MANAGERS.length){ if(typeof showToast==='function')showToast('담당자 목록을 불러오지 못했어요 — 네트워크 확인 후 다시 시도해주세요','error'); initLoginScreen(); return; }
   const matched=(MANAGERS||[]).find(function(m){return String(_authGetCol(m,_EMAIL_KEYS)||'').trim().toLowerCase()===_loginEmail;});
-  console.log('[goToPin] matched=',matched?matched['담당자']:'null','계정여부=',matched?_authGetCol(matched,_ACTIVE_KEYS):'N/A');
   if(!matched){ if(typeof showToast==='function')showToast('등록되지 않은 계정입니다. 관리자에게 문의하세요','error'); initLoginScreen(); return; }
   if(isFlagOn(_authGetCol(matched,_LEAVE_KEYS))){ if(typeof showToast==='function')showToast('휴직 상태 계정입니다. 관리자에게 문의하세요','error'); initLoginScreen(); return; }
   if(!isFlagOn(_authGetCol(matched,_ACTIVE_KEYS))){
-    console.log('[goToPin] BLOCKED by _ACTIVE_KEYS');
     const astep=document.getElementById('account-step');
     if(astep){ astep.style.display='';
       astep.innerHTML='<div style="font-size:14px;color:var(--danger);font-weight:700;margin-bottom:6px">본 프로그램에 접근 권한이 없습니다</div><div style="font-size:12px;color:#888;margin-bottom:18px">관리자에게 문의해주세요</div><button type="button" onclick="initLoginScreen()" style="width:100%;padding:10px;background:none;border:0;color:#999;font-size:12px;cursor:pointer;text-decoration:underline">다른 계정으로</button>';
@@ -3218,9 +3210,7 @@ async function goToPinStep(skipEnsure){
   }
   const storedPin=_pin4(_authGetCol(matched,_PIN_KEYS));
   const userName=matched['담당자']||'';
-  console.log('[goToPin] storedPin?',!!storedPin,'userName=',userName);
   if(!storedPin){
-    console.log('[goToPin] no PIN → _promptNewPin');
     const newPin=await _promptNewPin(userName);
     if(!newPin){ initLoginScreen(); return; }
     try{
@@ -3230,7 +3220,6 @@ async function goToPinStep(skipEnsure){
     }catch(e){ console.error('[set-pin]',e); if(typeof showToast==='function')showToast('PIN 설정 실패: '+e.message,'error'); initLoginScreen(); return; }
     _enterAsManager(matched, newPin, userName);
   } else {
-    console.log('[goToPin] → _enterPinInputStep');
     _enterPinInputStep();
   }
   }catch(err){ console.error('[goToPin] UNCAUGHT:',err); if(typeof showToast==='function')showToast('로그인 처리 중 오류가 발생했습니다','error'); if(typeof initLoginScreen==='function')initLoginScreen(); }
@@ -3251,32 +3240,6 @@ function _enterPinInputStep(){
   // [260708] 진입 시 안내문구(무채색) 노출 — 입력 시작하면 사라지고, 틀리면 이 자리를 에러가 대체
   var lm=document.getElementById('login-msg'); if(lm){lm.textContent='PIN 번호를 입력해주세요';lm.classList.add('lm-hint');}
   var ll=document.getElementById('login-load'); if(ll)ll.textContent='';
-  console.log('[pinInput] DONE account=',a?a.style.display:'null','pin=',ps?ps.style.display:'null');
-  // ── 진단: getComputedStyle + 조상 체인 ──
-  (function _diag(){
-    var _a=document.getElementById('account-step'),_p=document.getElementById('pin-step');
-    var cs_a=_a?getComputedStyle(_a):null, cs_p=_p?getComputedStyle(_p):null;
-    console.log('[DIAG-0ms] account inline=',_a?_a.style.display:'null','computed=',cs_a?cs_a.display:'null',
-      '| pin inline=',_p?_p.style.display:'null','computed=',cs_p?cs_p.display:'null',
-      '| pin-vis=',cs_p?cs_p.visibility:'null','| pin-opacity=',cs_p?cs_p.opacity:'null',
-      '| pin-h=',cs_p?cs_p.height:'null','| pin-rect=',_p?JSON.stringify(_p.getBoundingClientRect()):'null');
-    // 조상 display 체인
-    var el=_p,chain=[];
-    while(el){chain.push(el.id||el.tagName+'.'+el.className.split(' ')[0]+'[d='+getComputedStyle(el).display+']');el=el.parentElement;}
-    console.log('[DIAG-0ms] ancestor-chain=',chain.join(' → '));
-  })();
-  setTimeout(function(){
-    var _a=document.getElementById('account-step'),_p=document.getElementById('pin-step');
-    var cs_a=_a?getComputedStyle(_a):null, cs_p=_p?getComputedStyle(_p):null;
-    console.log('[DIAG-500ms] account inline=',_a?_a.style.display:'null','computed=',cs_a?cs_a.display:'null',
-      '| pin inline=',_p?_p.style.display:'null','computed=',cs_p?cs_p.display:'null',
-      '| pin-vis=',cs_p?cs_p.visibility:'null','| pin-h=',cs_p?cs_p.height:'null',
-      '| pin-rect=',_p?JSON.stringify(_p.getBoundingClientRect()):'null');
-    // 조상 다시
-    var el=_p,chain=[];
-    while(el){chain.push(el.id||el.tagName+'.'+el.className.split(' ')[0]+'[d='+getComputedStyle(el).display+']');el=el.parentElement;}
-    console.log('[DIAG-500ms] ancestor-chain=',chain.join(' → '));
-  },500);
 }function backToAccountStep(){
   if(sessionStorage.getItem('pw')){console.log('[backToAccount] blocked — pw exists, reload artifact');return;}
   // 사용자가 명시적으로 계정을 다시 고르는 흐름 → 자동 PIN 진입 방지(수동 버튼 표시)
@@ -3317,31 +3280,6 @@ async function msLogin(){
 }
 
 // 슈퍼admin 2차 비밀번호 입력 모달
-function _promptSuperSecret(){
-  const p = new Promise(function(resolve){
-    const inpSt='width:100%;padding:11px 44px 11px 14px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:12px;font-size:14px;outline:none;box-sizing:border-box;font-family:inherit;letter-spacing:2px;text-align:center';
-    const eyeSt='position:absolute;right:10px;top:50%;transform:translateY(-50%);background:transparent;border:0;cursor:pointer;color:#888;padding:6px;line-height:1;border-radius:6px;display:flex;align-items:center;justify-content:center;transition:color .12s';
-    const eyeIcon='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
-    const html='<div class="modal-bg show" id="super-sec-modal" style="z-index:99999" onclick="if(event.target===this)_resolveSuperSec(null)"><div class="modal" style="max-width:360px;padding:24px;text-align:left;position:relative"><button class="modal-x" onclick="_resolveSuperSec(null)" title="닫기">✕</button><h3 style="margin:0 0 4px">슈퍼관리자 인증</h3><div style="font-size:12px;color:#888;margin-bottom:14px">2차 비밀번호를 입력해 주세요.</div><div style="position:relative"><input id="super-sec-in" type="password" autocomplete="off" maxlength="40" style="'+inpSt+'"><button type="button" onclick="_togglePwdVisibility(\'super-sec-in\', this)" title="보기" style="'+eyeSt+'">'+eyeIcon+'</button></div><div id="super-sec-msg" style="font-size:11px;color:var(--danger);margin-top:8px;min-height:14px"></div><div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end"><button onclick="_resolveSuperSec(null)" class="m-btn cancel">취소</button><button onclick="_resolveSuperSecOk()" class="m-btn save">확인</button></div></div></div>';
-    let el=document.getElementById('super-sec-modal');
-    if(el)el.remove();
-    document.body.insertAdjacentHTML('beforeend',html);
-    window._superSecResolver=resolve;
-    setTimeout(function(){const i=document.getElementById('super-sec-in');if(i)i.focus();},80);
-    document.getElementById('super-sec-in').addEventListener('keydown',function(ev){if(ev.key==='Enter')_resolveSuperSecOk();});
-  });
-  return p;
-}
-function _resolveSuperSec(val){
-  const el=document.getElementById('super-sec-modal');
-  if(el)el.remove();
-  if(window._superSecResolver){window._superSecResolver(val);window._superSecResolver=null;}
-}
-function _resolveSuperSecOk(){
-  const v=document.getElementById('super-sec-in').value;
-  if(!v){document.getElementById('super-sec-msg').textContent='2차 비밀번호를 입력해 주세요';return;}
-  _resolveSuperSec(v);
-}
 
 // 최초 PIN 설정 모달 (4자리)
 function _promptNewPin(userName){
@@ -3376,8 +3314,8 @@ async function _msalHasLiveSession(){try{const inst=await _msalGet();if(!inst)re
 function _zombieToLogin(){try{['pw','role','myApplicant','myUserDept','subAdminPin'].forEach(function(k){sessionStorage.removeItem(k);});}catch(e){}password='';userRole='user';try{document.getElementById('app').style.display='none';var _l=document.getElementById('login');if(_l){_l.style.display='flex';_l.style.opacity='1';_l.style.visibility='visible';_l.classList.remove('login-leave');}var _zc=document.querySelector('.login-card');if(_zc)_zc.classList.remove('lc-lift');}catch(e){}if(typeof initLoginScreen==='function')initLoginScreen();}
 // [분신술 260710 감사2] 자동 loginRedirect 후 브라우저 뒤로가기 → bfcache 복원이면 '이동 중' 스피너로 동결(리로드가 없어 initLoginScreen 미재실행) — 로그인 화면 표시 중 복원 시에만 리로드로 재기동(앱 사용 중 복원은 무간섭)
 window.addEventListener('pageshow',function(e){ try{ if(e.persisted){ var _l=document.getElementById('login'); if(_l&&_l.style.display!=='none')location.reload(); } }catch(_e){} });
-var _idleLockDisabled=true; var IDLE_MS=10*60*1000; // hoisted above session-restore IIFE: on F5 _enterAppFromSession→resetIdleTimer runs here, before the original (later) declaration executed; undefined IDLE_MS made setTimeout(lockScreen,undefined)=0ms → instant false lock
-(function(){try{localStorage.removeItem('myApplicant');localStorage.removeItem('myUserDept');}catch(e){}const s=sessionStorage.getItem('pw');if(s){if(s==='0511'){console.log('[IIFE] super-admin pw=0511 → initApp (no MSAL identity needed)');}else{console.log('[IIFE] pw branch → restoring session pw=',s);}_enterAppFromSession();_msalHasLiveSession().then(function(ok){if(!ok){console.warn('[IIFE] MSAL session not confirmed, but keeping app (pw exists)');}else{console.log('[IIFE] MSAL session OK');}});}else{var _rp=null;try{_rp=localStorage.getItem('_resumePin');}catch(e){} if(_rp){try{localStorage.removeItem('_resumePin');}catch(e){} _loginEmail=_rp; console.log('[IIFE] _resumePin HIT email=',_rp); if(typeof startLoginShader==='function'){try{startLoginShader();}catch(e){}} if(typeof goToPinStep==='function'){setTimeout(function(){goToPinStep(true);},0);}else{console.warn('[IIFE] goToPinStep not defined, fallback initLoginScreen');if(typeof initLoginScreen==='function')initLoginScreen();}}else{console.log('[IIFE] no pw, no _resumePin → initLoginScreen');if(typeof initLoginScreen==='function')initLoginScreen();}}})();
+var _idleLockDisabled=false; var IDLE_MS=10*60*1000; /* 260717 원복: 점검용 임시 OFF가 44일 방치 → 보안 자동잠금 복구 */ // hoisted above session-restore IIFE: on F5 _enterAppFromSession→resetIdleTimer runs here, before the original (later) declaration executed; undefined IDLE_MS made setTimeout(lockScreen,undefined)=0ms → instant false lock
+(function(){try{localStorage.removeItem('myApplicant');localStorage.removeItem('myUserDept');}catch(e){}const s=sessionStorage.getItem('pw');if(s){_enterAppFromSession();_msalHasLiveSession();}else{var _rp=null;try{_rp=localStorage.getItem('_resumePin');}catch(e){} if(_rp){try{localStorage.removeItem('_resumePin');}catch(e){} _loginEmail=_rp; if(typeof startLoginShader==='function'){try{startLoginShader();}catch(e){}} if(typeof goToPinStep==='function'){setTimeout(function(){goToPinStep(true);},0);}else{if(typeof initLoginScreen==='function')initLoginScreen();}}else{if(typeof initLoginScreen==='function')initLoginScreen();}}})();
 
 async function api(method,path,body){
   const headers={'Content-Type':'application/json','X-App-Password':password};
@@ -8629,7 +8567,6 @@ function _renderVenuePins(){
       const x = ((e.clientX - rect.left) / rect.width * 100).toFixed(1);
       const y = ((e.clientY - rect.top) / rect.height * 100).toFixed(1);
       const txt = 'x:'+x+', y:'+y;
-      console.log('[venue-pin-edit]', txt);
       try{ navigator.clipboard && navigator.clipboard.writeText(txt); }catch(err){}
       // 토스트
       c.querySelectorAll('.vm-coord-toast').forEach(n => n.remove());
@@ -13402,7 +13339,6 @@ function confirmFolderTreeSelection(){
     input.style.background = '#F0F8E0';
     setTimeout(function(){ input.style.background = '#F0F0F5'; }, 800);
   }
-  console.log('[folderTree] OK', {idx: _folderTreeCurrentIdx, treePath: _folderTreeSelectedPath, newPath: newPath, _pwData_folders: _pwData.folders.slice()});
   showToast('선택됨: ' + _folderTreeSelectedName,'info');
   closeFolderTreeModal();
 }
@@ -20924,7 +20860,7 @@ function openNaverBlogTool(){
     +'<div id="nblog-body" style="flex:1;overflow:auto;padding:20px 24px;min-width:0;min-height:0"></div>'
     +'</div></div>';
   if(_nbState.escHandler)document.removeEventListener('keydown',_nbState.escHandler);
-  _nbState.escHandler=function(e){if(e.key==='Escape'){var cm=document.getElementById('nb-cmt-modal');if(cm&&cm.innerHTML){_nbCmtClose();return;}closeNaverBlogTool();}};
+  _nbState.escHandler=function(e){if(e.key==='Escape')closeNaverBlogTool();};
   document.addEventListener('keydown',_nbState.escHandler);
   _nbRender();
 }
@@ -21128,114 +21064,9 @@ function _nbBuildPayload(){
     ocrText:String(s.ocrText||'').trim(),   // 홍보물 OCR 원문이 사실의 바탕(분석 단계 없이 그대로 전달)
     extra:String(s.extra||'').trim(),template:(s.tplMode==='fixed'?String(s.tplText||'').trim():''),keys:[],length:'보통',voice:s.voice,emoji:s.emoji,refs:(_nbToneLib()||[]).slice(-5).map(function(r){return {text:String((r&&r.text)||'').slice(0,4000)};})};   // [검증반영] 톤 참조는 워크플로가 쓰는 만큼(최근5개·각4000자)만 실어 dispatch payload 비대·422 방지
 }
-// 초안 다듬기 — 기존 초안 + 수정 요청을 함께 보내 재생성
-async function _nbRefine(){
-  var inp=document.getElementById('nb-revise');if(!inp)return;
-  var revise=String(inp.value||'').trim();
-  if(!revise){showToast('어떻게 고칠지 적어 주세요','error');inp.focus();return;}
-  var prev=String(_nbState.output||'').trim();
-  if(!prev){showToast('먼저 초안을 생성해 주세요','error');return;}
-  var o=_nbBuildPayload();o.prevDraft=prev;o.revise=revise;
-  var _st=_nbState;   // 🔒 세대 가드
-  inp.disabled=true;
-  try{
-    var r=await api('POST','/api/content/blog',o);
-    if(_st!==_nbState)return;
-    if(!r||!r.text)throw new Error('빈 응답');
-    _nbSetOutput(r.text);inp.value='';
-    showToast('수정 요청을 반영했어요 ✨','success');
-  }catch(e){showToast('수정 실패: '+String((e&&e.message)||e),'error');}
-  finally{var i2=document.getElementById('nb-revise');if(i2)i2.disabled=false;}
-}
-
-// 💬 코멘트 모달 — 1차 초안 후 계속 코멘트를 남겨 다듬는 스레드(좌:현재 초안 / 우:코멘트). 각 코멘트는 기존 초안+의견으로 재생성.
-function _nbCmtOpen(){
-  if(!String(_nbState.output||'').trim()){showToast('먼저 초안을 생성해 주세요','error');return;}
-  var el=document.getElementById('nb-cmt-modal');
-  if(!el){el=document.createElement('div');el.id='nb-cmt-modal';document.body.appendChild(el);}
-  _nbCmtRender();
-  setTimeout(function(){var i=document.getElementById('nb-cmt-input');if(i)i.focus();},40);
-}
-function _nbCmtClose(){var el=document.getElementById('nb-cmt-modal');if(el)el.innerHTML='';}
-function _nbCmtRender(){
-  var el=document.getElementById('nb-cmt-modal');if(!el)return;
-  var s=_nbState,cmts=s.comments||[];
-  var thread=cmts.length
-    ? cmts.map(function(c,i){return '<div style="margin-bottom:9px"><div style="background:var(--accent);color:#fff;padding:8px 11px;border-radius:12px 12px 3px 12px;font-size:12.5px;line-height:1.55;max-width:92%;margin-left:auto;white-space:pre-wrap">'+escapeHtml(c.text)+'</div><div style="font-size:10px;color:#bbb;text-align:right;margin-top:2px">#'+(i+1)+' 반영됨</div></div>';}).join('')
-    : '<div class="nb-note">바꾸고 싶은 점을 코멘트로 남기면 그 의견을 반영해 다시 써 드려요. <b>여러 번 이어서</b> 코멘트할 수 있어요.<br><br>예) "두 번째 문단을 더 짧게" · "가격 정보를 앞쪽으로" · "좀 더 친근한 말투로" · "마지막에 예매 독려 한 줄"</div>';
-  el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,_nbCmtClose)">'
-    +'<div class="modal" style="width:94vw;max-width:880px;height:88vh;max-height:88vh;padding:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:#fff">'
-    +'<button class="modal-x" onclick="_nbCmtClose()" title="닫기" style="position:absolute;top:13px;right:22px;z-index:10">✕</button>'
-    +'<div style="padding:15px 22px;border-bottom:1px solid #eee;font-size:15px;font-weight:700">💬 코멘트로 다듬기 <span style="font-size:11px;color:#aaa;font-weight:500">· 의견을 남기면 반영해 다시 써요</span></div>'
-    +'<div style="flex:1;display:flex;min-height:0">'
-      +'<div style="flex:1.25;border-right:1px solid #eee;display:flex;flex-direction:column;min-width:0">'
-        +'<div style="padding:8px 16px;font-size:11px;color:#888;font-weight:700;border-bottom:1px solid #f3f3f7;flex-shrink:0">현재 초안 <span style="color:#bbb;font-weight:500">· 직접 수정해도 돼요</span></div>'
-        +'<textarea id="nb-cmt-draft" style="flex:1;border:0;padding:14px 17px;font-size:13px;line-height:1.85;resize:none;outline:none;font-family:inherit;color:var(--text);white-space:pre-wrap" oninput="_nbState.output=this.value;_nbSaveState()">'+escapeHtml(s.output||'')+'</textarea>'
-      +'</div>'
-      +'<div style="flex:1;display:flex;flex-direction:column;min-width:0;background:#fafaff">'
-        +'<div style="padding:8px 16px;font-size:11px;color:#888;font-weight:700;border-bottom:1px solid #f3f3f7;flex-shrink:0">코멘트 ('+cmts.length+')</div>'
-        +'<div id="nb-cmt-thread" style="flex:1;overflow:auto;padding:14px 16px;min-height:0">'+thread+'</div>'
-        +'<div style="border-top:1px solid #eee;padding:10px 14px;flex-shrink:0">'
-          +'<textarea id="nb-cmt-input" class="nb-input" style="min-height:56px;resize:vertical" placeholder="이 초안에서 바꾸고 싶은 점을 적어 주세요" onkeydown="if(event.key===\'Enter\'&&(event.metaKey||event.ctrlKey))_nbCmtSend()"></textarea>'
-          +'<div class="nb-row" style="margin-top:7px;justify-content:space-between;align-items:center">'
-            +'<span style="font-size:10.5px;color:#c4c4c4">⌘/Ctrl+Enter 로 전송</span>'
-            +'<button type="button" id="nb-cmt-send" class="nb-btn primary" onclick="_nbCmtSend()" style="padding:8px 16px">반영하기 ↻</button>'
-          +'</div>'
-        +'</div>'
-      +'</div>'
-    +'</div>'
-    +'</div></div>';
-}
-async function _nbCmtSend(){
-  var inp=document.getElementById('nb-cmt-input');if(!inp)return;
-  var txt=String(inp.value||'').trim();
-  if(!txt){showToast('코멘트를 입력해 주세요','error');inp.focus();return;}
-  var prev=String(_nbState.output||'').trim();
-  if(!prev){showToast('초안이 없어요','error');return;}
-  var btn=document.getElementById('nb-cmt-send');_btnBusy(btn,true,'반영 중');
-  var _st=_nbState;   // 🔒 세대 가드
-  inp.disabled=true;
-  try{
-    var o=_nbBuildPayload();o.prevDraft=prev;o.revise=txt;
-    var r=await api('POST','/api/content/blog',o);
-    if(_st!==_nbState)return;
-    if(!r||!r.text)throw new Error('빈 응답');
-    _nbState.comments=(_nbState.comments||[]).concat([{text:txt,ts:Date.now()}]);
-    _nbState.output=r.text;_nbSaveState();
-    _nbCmtRender();                 // 모달 갱신(새 초안+코멘트)
-    var bd=document.getElementById('nblog-body');if(bd)_nbRender();  // 뒤 메인 도구 초안도 동기화
-    showToast('코멘트를 반영했어요 ✨','success');
-  }catch(e){
-    showToast('반영 실패: '+String((e&&e.message)||e),'error');
-    var b2=document.getElementById('nb-cmt-send');_btnBusy(b2,false,'반영하기 ↻');
-    var i2=document.getElementById('nb-cmt-input');if(i2)i2.disabled=false;
-  }
-}
 
 // 톤 참조 — 이 브라우저 localStorage 전용(_nbState._toneLib 메모리 캐시 + localStorage 미러). GitHub 동기화 없음(브라우저 무토큰).
 function _nbToneLib(){return _nbState._toneLib||[];}
-function _nbToneToggleList(){_nbState.toneListOpen=!_nbState.toneListOpen;_nbRender();}
-function _nbToneCache(refs,sha){
-  _nbState._toneLib=Array.isArray(refs)?refs:[];
-  if(sha!==undefined)_nbState._toneSha=sha;
-  try{localStorage.setItem(_NB_TONELIB_KEY,JSON.stringify(_nbState._toneLib));}catch(e){}
-}
-// (제거됨) 브라우저 PAT + 톤 GitHub 동기화 — 초안 트리거/폴링은 Worker 경유로 이관(_nbDispatch/_nbPollDraft), 톤 참조는 localStorage 전용. 브라우저에 GitHub 토큰 없음.
-// 톤 참조 — 이 브라우저(localStorage)에 로컬 저장. GitHub 연결 제거(생성 시 payload로 전달되어 그대로 동작).
-function _nbToneAdd(){
-  var ta=document.getElementById('nb-tone-input');if(!ta)return;
-  var v=(ta.value||'').trim();
-  if(v.length<10){showToast('참조할 글을 조금 더 길게 붙여넣어 주세요','error');return;}
-  var refs=_nbToneLib().concat([{id:'t'+Date.now(),text:v,ts:new Date().toISOString()}]);
-  _nbToneCache(refs);ta.value='';_nbState._toneDraft='';_nbRender();
-  showToast('톤 참조를 저장했어요','success');
-}
-function _nbToneDel(id){
-  try{
-    var refs=_nbToneLib().filter(function(x){return x.id!==id;});
-    _nbToneCache(refs);_nbRender();
-  }catch(e){showToast('삭제 실패: '+String((e&&e.message)||e),'error');}
-}
 
 function _nbRender(){
   var body=document.getElementById('nblog-body');if(!body)return;
@@ -21556,31 +21387,6 @@ function _nbTagsCopy(){
   _nbCopyText(tags.map(function(t){return '#'+t;}).join(' '),'태그 '+tags.length+'개를 복사했어요 🏷️');
 }
 
-// 로컬 임시 초안 — 입력(의도·타겟관점·홍보물 사실)을 정리해 구조화 (AI 연결 전 폴백)
-function _nbAssembleDraft(o){
-  var E=function(x){return o.emoji?x:'';};
-  var F=o.facts||{};
-  var greet={'라디오 캐스터처럼 가볍고 경쾌한':'안녕하세요, 여수 예울마루예요!','정중하고 따뜻한':'안녕하세요, 문화로 일상을 채우는 GS칼텍스 예울마루입니다.','친근하고 편안한':'안녕하세요! 예울마루예요'+(o.emoji?' 😊':''),'감각적이고 생생한':'안녕하세요, 예울마루입니다. 오늘은 특별한 소식을 들고 왔어요.'}[o.voice]||'안녕하세요, 예울마루입니다.';
-  var out=[];
-  out.push((o.topic||'').trim());
-  out.push('');
-  out.push(E('🌿 ')+greet+' 오늘은 «'+(o.topic||'').trim()+'» 이야기를 전해 드릴게요.');
-  out.push('');
-  if(F.overview)out.push(F.overview);
-  if(o.target)out.push(E('🎯 ')+o.target+'께 특히 어울리는 공연이에요.');
-  out.push('');
-  var info=[];
-  if(F.when)info.push('🗓 일시: '+F.when);
-  if(F.where)info.push('📍 장소: '+F.where);
-  if(F.who)info.push('🎭 출연·주최: '+F.who);
-  if(F.price)info.push('🎟 가격·예매: '+F.price);
-  if(info.length){out.push(E('✨ ')+'공연 정보');info.forEach(function(l){out.push(l);});out.push('');}
-  if(F.detail){out.push(F.detail);out.push('');}
-  out.push('(위 정보를 바탕으로 자연스럽게 풀어 써 보세요.)');
-  out.push('');
-  out.push(E('🙌 ')+'예울마루에서 만나요. 많은 관심 부탁드려요!');
-  return out.join('\n').replace(/\n{3,}/g,'\n\n').trim();
-}
 function _nbCopy(){
   var t=_nbState.output||'';
   if(!t){showToast('먼저 초안을 생성해 주세요','error');return;}

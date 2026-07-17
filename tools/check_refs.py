@@ -21,6 +21,8 @@ TARGETS = ["CLAUDE.md", "docs/앱지침.md"]
 ALLOW = {
     "muteno/yeulmaru-promo",
     "role/pw/subAdminPin/myApplicant/myUserDept",
+    # 타 레포(nomute-editor) 소유 — 공통 골격 SYNC 마커가 전파 장치를 가리키는 외부 참조라 이 레포엔 부재가 정상
+    ".github/workflows/claude-sync.yml",
 }
 
 
