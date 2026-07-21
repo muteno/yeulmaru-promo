@@ -2029,12 +2029,22 @@ function lgGuardUrl(raw) {
   if (u.port && u.port !== "80" && u.port !== "443") throw new Error("표준 포트 주소만 가능해요");
   return u;
 }
-function lgFetchPage(u, ms) {
-  return fetch(u.toString(), {
+var LG_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
+// 260721 실측(www.yeulmaru.org 530): 브라우저형 헤더 기본 + 실패/차단(52x·530·403·406) 시 400ms 쉬고 1회 재시도(UA 교대)
+async function lgFetchPage(u, ms) {
+  const mk = (ua) => fetch(u.toString(), {
     redirect: "follow",
     signal: AbortSignal.timeout(ms || 15e3),
-    headers: { "User-Agent": "Mozilla/5.0 (compatible; yeulmaru-linkgrab)", "Accept": "text/html,application/xhtml+xml,*/*" }
+    headers: { "User-Agent": ua, "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", "Accept-Language": "ko,en;q=0.8" }
   });
+  let res = null;
+  try { res = await mk(LG_UA); } catch (_) {}
+  if (!res || res.status >= 520 || res.status === 403 || res.status === 406) {
+    await new Promise((r) => setTimeout(r, 400));
+    try { const r2 = await mk("Mozilla/5.0 (compatible; yeulmaru-linkgrab)"); if (!res || (r2 && r2.status < (res.status || 999))) res = r2; } catch (_) {}
+  }
+  if (!res) throw new Error("connect");
+  return res;
 }
 // 스트리밍 영상 식별 — 영상 섹션에 넣되(stream:true) 파일 다운로드는 불가(yt-dlp 경로 = 인프라 결정 대기)
 function lgStreamInfo(href) {
@@ -2163,7 +2173,7 @@ function lgParseGeneric(html, baseUrl) {
 async function lgHead(url, env) {
   let target;
   try { target = lgGuardUrl(url.searchParams.get("url")); } catch (e) { return json({ error: e.message }, env, 400); }
-  const hdr = { "User-Agent": "Mozilla/5.0 (compatible; yeulmaru-linkgrab)" };
+  const hdr = { "User-Agent": LG_UA, "Accept-Language": "ko,en;q=0.8" };
   try {
     let r = await fetch(target.toString(), { method: "HEAD", redirect: "follow", signal: AbortSignal.timeout(8e3), headers: hdr });
     let size = parseInt(r.headers.get("content-length") || "0", 10) || 0;
@@ -2183,6 +2193,8 @@ async function lgList(url, env) {
   try { target = lgGuardUrl(url.searchParams.get("url")); } catch (e) { return json({ error: e.message }, env, 400); }
   let res;
   try { res = await lgFetchPage(target, 15e3); } catch (_) { return json({ error: "페이지에 접속하지 못했어요(시간 초과·차단)" }, env, 502); }
+  if (res.status >= 520) return json({ error: "이 사이트가 백엔드 자동 접속을 막고 있어요(해외·봇 차단 추정, HTTP " + res.status + ") — 이 링크는 자동 수집이 안 돼요" }, env, 502);
+  if (res.status === 403 || res.status === 406) return json({ error: "이 사이트가 자동 수집을 거부했어요(HTTP " + res.status + ")" }, env, 502);
   if (!res.ok) return json({ error: "페이지 응답 오류 HTTP " + res.status }, env, 502);
   const ct = (res.headers.get("content-type") || "").toLowerCase();
   if (!ct.includes("text/html")) {
@@ -2265,7 +2277,7 @@ async function lgFile(url, env) {
   try { target = lgGuardUrl(url.searchParams.get("url")); } catch (e) { return json({ error: e.message }, env, 400); }
   let res;
   try {
-    res = await fetch(target.toString(), { redirect: "follow", headers: { "User-Agent": "Mozilla/5.0 (compatible; yeulmaru-linkgrab)" } });
+    res = await fetch(target.toString(), { redirect: "follow", headers: { "User-Agent": LG_UA, "Accept-Language": "ko,en;q=0.8" } });
   } catch (_) { return json({ error: "파일을 받아오지 못했어요" }, env, 502); }
   if (!res.ok || !res.body) return json({ error: "원본 응답 오류 HTTP " + res.status }, env, 502);
   const len = parseInt(res.headers.get("content-length") || "0", 10);
