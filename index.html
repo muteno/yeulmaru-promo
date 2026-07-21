@@ -22174,20 +22174,27 @@ function _veSpecPrompt(){
 }
 
 // ============================================================
-// 콘텐츠 제작 ▸ 링크 자료수집 (lg-*) — 운영자 260721
-//  URL 하나 붙여넣으면(링크트리 등) 그 페이지 안의 문서(PDF)·사진·영상·압축 자료를 찾아 [내려받기]로 나열.
-//  백엔드 = Worker /api/linkgrab(목록)·/api/linkgrab/file(첨부 프록시, 탭=바로 저장) — src/index.js linkgrab 블록.
-//  유튜브 등 스트리밍 영상 = 저작권·기술상 다운로드 불가 → [열기]만 제공(안내 문구로 고지).
+// 콘텐츠 제작 ▸ 링크 자료수집 (lg-*) — 운영자 260721 · 260721b 갤러리 개편
+//  URL 붙여넣기 → 페이지 미디어 전수 스캔 → 종류별 섹션(📷사진 그리드 1:1 · 🎬영상 · 📄문서 · 🎧음성 · 🗜압축)
+//  사진 카드 = 1:1 박스 + 우상단 2줄(해상도/용량, head 지연조회+썸네일 실측) + 좌상단 선택 체크 + 받음 배지.
+//  선택 → [선택 받기] 일괄 다운로드(700ms 순차) · 받음 표시/입력 기록(최근 20)은 기기 로컬 보존(lg_got_v1/lg_hist_v1).
+//  백엔드 = Worker /api/linkgrab(스캔)·/file(첨부 프록시)·/head(용량) — src/index.js linkgrab 블록.
+//  유튜브 등 스트리밍 영상 = 저작권·기술상 파일 저장 불가 → [열기]만(전용 저장 경로 yt-dlp = 인프라 결정 대기).
 //  레퍼런스 = nblog 보드 골격(openNaverBlogTool) + _contentMenuBuild 메뉴 문법 그대로 — 신규 raw hex 0(전부 :root 토큰).
 //  이식 노트(노뮤트 에디터): 이 블록 + Worker linkgrab 블록 + 메뉴 항목 1줄이 전부(전역 상태 _lgState 하나 · 의존 = API/escapeHtml/showToast/_btnBusy/모달 공용부).
 // ============================================================
-var _lgState={busy:false,res:null,err:'',lastUrl:'',escHandler:null};
-var _LG_KIND={doc:['문서','var(--accent-light)','var(--accent)'],img:['사진','var(--peach-light)','var(--peach-text)'],video:['영상','var(--today-bg)','var(--c5)'],audio:['소리','var(--today-bg)','var(--c5)'],zip:['압축','var(--neutral)','var(--neutral-text)'],stream:['스트리밍','var(--neutral)','var(--neutral-text)'],link:['링크','var(--neutral)','var(--neutral-text)']};
+var _lgState={busy:false,res:null,err:'',lastUrl:'',escHandler:null,sel:{},meta:{},got:{},histOpen:false};
+var _LG_KIND={doc:['문서','var(--accent-light)','var(--accent)'],img:['사진','var(--peach-light)','var(--peach-text)'],video:['영상','var(--today-bg)','var(--c5)'],audio:['음성','var(--today-bg)','var(--c5)'],zip:['압축','var(--neutral)','var(--neutral-text)'],link:['링크','var(--neutral)','var(--neutral-text)']};
+var _LG_SECTIONS=[['img','📷 사진'],['video','🎬 영상'],['doc','📄 문서'],['audio','🎧 음성'],['zip','🗜 압축'],['link','🔗 기타 링크']];
+var _LG_GOT_KEY='lg_got_v1';   // 이미 받은 항목(URL 키) — 기기 로컬 편의 캐시
+var _LG_HIST_KEY='lg_hist_v1'; // 입력했던 주소 기록(최근 20) — 입력창 토글로 열람
+function _lgLoadGot(){try{return JSON.parse(localStorage.getItem(_LG_GOT_KEY)||'{}')||{};}catch(_e){return {};}}
+function _lgLoadHist(){try{return JSON.parse(localStorage.getItem(_LG_HIST_KEY)||'[]')||[];}catch(_e){return [];}}
 function openLinkGrab(){
   var el=document.getElementById('lg-board');
   if(!el){el=document.createElement('div');el.id='lg-board';document.body.appendChild(el);}
   try{if(_lgState&&_lgState.escHandler)document.removeEventListener('keydown',_lgState.escHandler);}catch(_e){}
-  _lgState={busy:false,res:null,err:'',lastUrl:'',escHandler:null};   // 매번 새로 시작 — 공용 PC 원칙(콘텐츠 제작과 동일)
+  _lgState={busy:false,res:null,err:'',lastUrl:'',escHandler:null,sel:{},meta:{},got:_lgLoadGot(),histOpen:false};   // 결과는 매번 새로(공용 PC 원칙) · 받음/기록만 기기 보존
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeLinkGrab)">'
     +'<div class="modal" style="width:96vw;max-width:720px;max-height:92vh;padding:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:var(--surface-solid)">'
     +'<button class="modal-x" onclick="closeLinkGrab()" title="닫기" style="position:absolute;top:14px;right:22px;z-index:10">✕</button>'
@@ -22200,38 +22207,88 @@ function openLinkGrab(){
 }
 function closeLinkGrab(){
   if(_lgState.escHandler)document.removeEventListener('keydown',_lgState.escHandler);
-  _lgState={busy:false,res:null,err:'',lastUrl:'',escHandler:null};
+  _lgState={busy:false,res:null,err:'',lastUrl:'',escHandler:null,sel:{},meta:{},got:{},histOpen:false};
   var el=document.getElementById('lg-board');if(el)el.innerHTML='';
 }
+function _lgKey(it){return String(it.dl||it.url||'');}
+function _lgFmtSize(b){b=Number(b)||0;if(!b)return'';if(b<1024)return b+'B';if(b<1048576)return (b/1024).toFixed(b<10240?1:0)+'KB';if(b<1073741824)return (b/1048576).toFixed(1)+'MB';return (b/1073741824).toFixed(2)+'GB';}
 function _lgRender(){
   var body=document.getElementById('lg-body');if(!body)return;
-  var h='<div style="font-size:12.5px;color:var(--dim);line-height:1.7;margin-bottom:12px">링크트리·홈페이지 등 <b style="color:var(--text)">페이지 주소를 붙여넣으면</b> 그 안의 문서(PDF)·사진·영상·압축 자료를 찾아 바로 내려받게 나열해요.<br>유튜브 같은 스트리밍 영상은 저작권 보호로 내려받기가 안 돼요 — [열기]로 재생만 가능해요.</div>'
+  var h='<div style="font-size:12.5px;color:var(--dim);line-height:1.7;margin-bottom:12px">주소를 붙여넣으면 그 페이지의 <b style="color:var(--text)">사진·영상·문서·음성을 전부 스캔</b>해 종류별로 보여줘요 — 원하는 것만 골라 받으세요. 한 번 받은 항목엔 받음 표시가 남아요.<br>유튜브 같은 스트리밍 영상은 저작권 보호로 파일 저장이 안 돼요 — [열기]로 재생해 주세요.</div>'
     +'<div style="display:flex;gap:8px;align-items:center">'
     +'<input id="lg-url" class="nb-input" type="url" placeholder="https://linktr.ee/… 또는 자료가 있는 페이지 주소" style="flex:1" onkeydown="if(event.key===\'Enter\')_lgGo()">'
-    +'<button id="lg-go" class="btn btn--primary btn--md" onclick="_lgGo()" style="flex:none">가져오기</button></div>';
+    +'<button id="lg-go" class="btn btn--primary btn--md" onclick="_lgGo()" style="flex:none">가져오기</button>'
+    +'<button class="btn btn--ghost btn--sm" onclick="_lgHistToggle()" style="flex:none">기록'+(_lgState.histOpen?' ▴':' ▾')+'</button></div>'
+    +'<div id="lg-hist"></div>';
   if(_lgState.err)h+='<div style="margin-top:10px;font-size:12.5px;color:var(--danger-btn);font-weight:600">'+escapeHtml(_lgState.err)+'</div>';
   var r=_lgState.res;
   if(r){
-    var dls=(r.items||[]).filter(function(it){return it.dl;});
-    h+='<div style="margin-top:18px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">'
-      +'<div style="font-size:13.5px;font-weight:700;flex:1;min-width:120px">'+escapeHtml(r.title||'결과')+' <span style="color:var(--dim);font-weight:600">— 내려받을 자료 '+dls.length+'건</span></div>'
-      +(dls.length>1?'<button class="btn btn--primary btn--sm" onclick="_lgDlAll()">전체 내려받기</button>':'')
+    var items=r.items||[];
+    h+='<div style="margin-top:16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">'
+      +'<div style="font-size:13.5px;font-weight:700;flex:1;min-width:120px">'+escapeHtml(r.title||'결과')+' <span style="color:var(--dim);font-weight:600">— 자료 '+items.length+'건</span></div>'
       +'</div>';
-    if(!(r.items||[]).length)h+='<div class="u-empty">이 페이지에서 내려받을 자료를 찾지 못했어요</div>';
-    (r.items||[]).forEach(function(it,i){
-      var kd=_LG_KIND[it.kind]||_LG_KIND.link;
-      h+='<div style="display:flex;align-items:center;gap:10px;padding:11px 2px;border-bottom:1px solid var(--border)">'
-        +'<span style="flex:none;font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px;background:'+kd[1]+';color:'+kd[2]+'">'+kd[0]+'</span>'
-        +'<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escapeHtml(it.title||'자료')+'</div>'
-        +(it.note?'<div style="font-size:11px;color:var(--dim);margin-top:1px">'+escapeHtml(it.note)+'</div>':'')+'</div>'
-        +(it.dl?'<button class="btn btn--neutral btn--sm" style="flex:none" onclick="_lgDl('+i+')">내려받기</button>':'')
-        +'<button class="btn btn--ghost btn--sm" style="flex:none" onclick="_lgOpen('+i+')">열기</button>'
+    if(!items.length)h+='<div class="u-empty">이 페이지에서 내려받을 자료를 찾지 못했어요</div>';
+    _LG_SECTIONS.forEach(function(sec){
+      var kind=sec[0],label=sec[1];
+      var idxs=[];items.forEach(function(it,i){if((it.kind||'link')===kind)idxs.push(i);});
+      if(!idxs.length)return;
+      var selectable=idxs.filter(function(i){return items[i].dl;});
+      h+='<div style="margin-top:18px;display:flex;align-items:center;gap:8px">'
+        +'<div style="font-size:13px;font-weight:700">'+label+' <span style="color:var(--dim);font-weight:600">'+idxs.length+'</span></div>'
+        +(selectable.length?'<button class="btn btn--ghost btn--sm" onclick="_lgSelSection(\''+kind+'\')">모두 선택</button>':'')
         +'</div>';
+      if(kind==='img'){
+        h+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:10px;margin-top:10px">';
+        idxs.forEach(function(i){h+=_lgCardHtml(items[i],i);});
+        h+='</div>';
+      }else{
+        idxs.forEach(function(i){h+=_lgRowHtml(items[i],i);});
+      }
     });
+    h+='<div style="height:64px"></div>';   // 하단 선택바에 가리지 않게 여백
+    h+='<div id="lg-selbar" style="position:sticky;bottom:0;margin:0 -24px -20px;padding:12px 24px;background:var(--glass-surface);backdrop-filter:blur(8px);border-top:1px solid var(--border);display:flex;align-items:center;gap:10px">'
+      +'<div id="lg-selinfo" style="flex:1;font-size:12.5px;font-weight:700"></div>'
+      +'<button class="btn btn--ghost btn--sm" onclick="_lgSelAll()">전체 선택</button>'
+      +'<button class="btn btn--ghost btn--sm" onclick="_lgSelNone()">해제</button>'
+      +'<button id="lg-dlsel" class="btn btn--primary btn--md" onclick="_lgDlSel()">선택 받기</button>'
+      +'</div>';
   }
   body.innerHTML=h;
   var inp=document.getElementById('lg-url');
   if(inp&&_lgState.lastUrl)inp.value=_lgState.lastUrl;
+  _lgHistPaint();
+  _lgSelPaint();
+  if(r)_lgMetaScan();
+}
+// 사진 카드 — 1:1 박스 · 우상단 2줄(해상도/용량) · 좌상단 선택 체크 · 하단 받음 배지
+function _lgCardHtml(it,i){
+  var sel=!!_lgState.sel[i],got=!!_lgState.got[_lgKey(it)];
+  var m=_lgState.meta[i]||{};
+  return '<div id="lg-card-'+i+'" onclick="_lgToggle('+i+')" style="position:relative;aspect-ratio:1/1;border-radius:12px;overflow:hidden;cursor:pointer;background:var(--neutral);border:2px solid '+(sel?'var(--accent)':'transparent')+'">'
+    +'<img src="'+escapeHtml(it.thumb||it.url)+'" loading="lazy" referrerpolicy="no-referrer" onload="_lgImgMeta(this,'+i+')" onerror="this.style.display=\'none\'" style="width:100%;height:100%;object-fit:cover;display:block">'
+    +'<div style="position:absolute;top:6px;right:6px;text-align:right;font-size:10px;line-height:1.5;color:var(--surface-solid);background:rgba(26,26,46,.55);border-radius:8px;padding:2px 6px;pointer-events:none">'
+    +'<div id="lg-res-'+i+'">'+(m.w?m.w+'×'+m.h:'해상도 확인 중')+'</div>'
+    +'<div id="lg-size-'+i+'">'+(_lgFmtSize(m.size)||'용량 확인 중')+'</div></div>'
+    +'<div id="lg-chk-'+i+'" style="position:absolute;top:6px;left:6px;width:20px;height:20px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;background:'+(sel?'var(--accent)':'rgba(255,255,255,.75)')+';color:'+(sel?'var(--surface-solid)':'var(--dim)')+'">✓</div>'
+    +'<div id="lg-got-'+i+'" style="position:absolute;bottom:6px;left:6px;font-size:10px;font-weight:700;padding:2px 7px;border-radius:999px;background:var(--green);color:var(--surface-solid);'+(got?'':'display:none')+'">받음</div>'
+    +'<button class="btn btn--ghost btn--sm" onclick="event.stopPropagation();_lgOpen('+i+')" style="position:absolute;bottom:4px;right:4px;padding:2px 8px;font-size:10px">열기</button>'
+    +'</div>';
+}
+// 영상·문서·음성·압축 행 — 종류 블릿 + (영상=1:1 미리보기) + 이름·용량 + 선택·열기
+function _lgRowHtml(it,i){
+  var kd=_LG_KIND[it.kind]||_LG_KIND.link;
+  var sel=!!_lgState.sel[i],got=!!_lgState.got[_lgKey(it)];
+  var m=_lgState.meta[i]||{};
+  var selectable=!!it.dl;
+  return '<div id="lg-card-'+i+'" '+(selectable?'onclick="_lgToggle('+i+')"':'')+' style="display:flex;align-items:center;gap:10px;padding:10px 2px;border-bottom:1px solid var(--border);cursor:'+(selectable?'pointer':'default')+'">'
+    +(selectable?'<div id="lg-chk-'+i+'" style="flex:none;width:20px;height:20px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;background:'+(sel?'var(--accent)':'var(--neutral)')+';color:'+(sel?'var(--surface-solid)':'var(--dim)')+'">✓</div>':'<div style="flex:none;width:20px"></div>')
+    +(it.thumb?'<div style="flex:none;width:52px;height:52px;border-radius:10px;overflow:hidden;background:var(--neutral)"><img src="'+escapeHtml(it.thumb)+'" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display=\'none\'" style="width:100%;height:100%;object-fit:cover;display:block"></div>':'')
+    +'<span style="flex:none;font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px;background:'+kd[1]+';color:'+kd[2]+'">'+kd[0]+'</span>'
+    +'<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escapeHtml(it.title||'자료')
+    +'<span id="lg-got-'+i+'" style="margin-left:6px;font-size:10px;font-weight:700;padding:1px 7px;border-radius:999px;background:var(--green);color:var(--surface-solid);'+(got?'':'display:none')+'">받음</span></div>'
+    +'<div style="font-size:11px;color:var(--dim);margin-top:1px"><span id="lg-size-'+i+'">'+(_lgFmtSize(m.size)||(it.dl?'용량 확인 중':''))+'</span>'+(it.note?' · '+escapeHtml(it.note):'')+'</div></div>'
+    +'<button class="btn btn--ghost btn--sm" style="flex:none" onclick="event.stopPropagation();_lgOpen('+i+')">열기</button>'
+    +'</div>';
 }
 function _lgOpen(i){var it=((_lgState.res||{}).items||[])[i];if(it&&it.url)window.open(it.url,'_blank','noopener');}
 function _lgDlUrl(it){
@@ -22248,7 +22305,8 @@ async function _lgDl(i){
   var it=((_lgState.res||{}).items||[])[i];if(!it||!it.dl)return;
   if(it.via==='direct'){   // 드롭박스 dl=1 등 원본이 직접 저장을 강제하는 링크 = 새 탭 이동
     var a=document.createElement('a');a.href=it.dl;a.target='_blank';a.rel='noopener';document.body.appendChild(a);a.click();
-    setTimeout(function(){try{a.remove();}catch(_e){}},1200);return;
+    setTimeout(function(){try{a.remove();}catch(_e){}},1200);
+    _lgGotMark(i);return;
   }
   try{   // 프록시 경유 = 전 API 공통 X-App-Password 게이트 계승 — 앵커 이동은 헤더를 못 실어 인증 fetch→blob 저장
     var r=await fetch(_lgDlUrl(it),{headers:{'X-App-Password':password}});
@@ -22257,29 +22315,116 @@ async function _lgDl(i){
     var u=URL.createObjectURL(b);
     var a2=document.createElement('a');a2.href=u;a2.download=_lgFileName(it);document.body.appendChild(a2);a2.click();
     setTimeout(function(){try{a2.remove();URL.revokeObjectURL(u);}catch(_e){}},4000);
+    _lgGotMark(i);
   }catch(e){showToast('내려받기 실패 — '+((e&&e.message)||'네트워크 오류'),'error');}
 }
-function _lgDlAll(){
-  var idx=((_lgState.res||{}).items||[]).map(function(it,i){return it.dl?i:-1;}).filter(function(i){return i>=0;});
-  if(!idx.length)return;
-  showToast('자료 '+idx.length+'건 내려받기 시작 — 브라우저가 여러 파일 허용을 물으면 [허용]을 눌러주세요','info');
+// 받음 마킹 — 기기 로컬 보존 + 화면 배지 즉시 갱신(전체 재렌더 없이)
+function _lgGotMark(i){
+  var it=((_lgState.res||{}).items||[])[i];if(!it)return;
+  _lgState.got[_lgKey(it)]=Date.now();
+  try{var g=_lgLoadGot();g[_lgKey(it)]=Date.now();var ks=Object.keys(g);if(ks.length>500){ks.sort(function(a,b){return g[a]-g[b];}).slice(0,ks.length-500).forEach(function(k){delete g[k];});}localStorage.setItem(_LG_GOT_KEY,JSON.stringify(g));}catch(_e){}
+  var b=document.getElementById('lg-got-'+i);if(b)b.style.display='';
+}
+// 선택 토글·일괄 — 화면은 부분 갱신(썸네일 재로딩 깜빡임 방지)
+function _lgToggle(i){
+  var it=((_lgState.res||{}).items||[])[i];if(!it||!it.dl)return;
+  if(_lgState.sel[i])delete _lgState.sel[i];else _lgState.sel[i]=true;
+  _lgTogglePaint(i);_lgSelPaint();
+}
+function _lgTogglePaint(i){
+  var sel=!!_lgState.sel[i];
+  var card=document.getElementById('lg-card-'+i);
+  var chk=document.getElementById('lg-chk-'+i);
+  if(card&&card.style.aspectRatio)card.style.borderColor=sel?'var(--accent)':'transparent';
+  if(chk){chk.style.background=sel?'var(--accent)':(card&&card.style.aspectRatio?'rgba(255,255,255,.75)':'var(--neutral)');chk.style.color=sel?'var(--surface-solid)':'var(--dim)';}
+}
+function _lgEachIdx(fn){(((_lgState.res||{}).items)||[]).forEach(function(it,i){fn(it,i);});}
+function _lgSelAll(){_lgEachIdx(function(it,i){if(it.dl)_lgState.sel[i]=true;});_lgSelRepaintAll();}
+function _lgSelNone(){_lgState.sel={};_lgSelRepaintAll();}
+function _lgSelSection(kind){_lgEachIdx(function(it,i){if(it.dl&&(it.kind||'link')===kind)_lgState.sel[i]=true;});_lgSelRepaintAll();}
+function _lgSelRepaintAll(){_lgEachIdx(function(it,i){if(it.dl)_lgTogglePaint(i);});_lgSelPaint();}
+function _lgSelPaint(){
+  var info=document.getElementById('lg-selinfo'),btn=document.getElementById('lg-dlsel');if(!info)return;
+  var n=0,bytes=0;
+  _lgEachIdx(function(it,i){if(_lgState.sel[i]){n++;bytes+=((_lgState.meta[i]||{}).size)||0;}});
+  info.textContent='선택 '+n+'건'+(bytes?' · 약 '+_lgFmtSize(bytes):'');
+  if(btn)btn.disabled=!n;
+}
+function _lgDlSel(){
+  var idx=[];_lgEachIdx(function(it,i){if(_lgState.sel[i]&&it.dl)idx.push(i);});
+  if(!idx.length){showToast('받을 항목을 먼저 선택해 주세요','error');return;}
+  showToast('선택한 '+idx.length+'건 내려받기 시작 — 브라우저가 여러 파일 허용을 물으면 [허용]을 눌러주세요','info');
   idx.forEach(function(n,seq){setTimeout(function(){_lgDl(n);},seq*700);});
+}
+// 썸네일 로드 → 해상도(원본 픽셀) 기입 · 용량은 head 조회로 채움
+function _lgImgMeta(img,i){
+  var m=_lgState.meta[i]=_lgState.meta[i]||{};
+  m.w=img.naturalWidth;m.h=img.naturalHeight;
+  var el=document.getElementById('lg-res-'+i);if(el&&m.w)el.textContent=m.w+'×'+m.h;
+}
+function _lgMetaScan(){
+  var r=_lgState.res;if(!r)return;
+  var q=[];(r.items||[]).forEach(function(it,i){var m=_lgState.meta[i];if(it.dl&&it.via!=='direct'&&!(m&&m.size))q.push(i);});
+  q=q.slice(0,80);   // 과다 조회 방지 캡
+  var k=0;
+  function next(){
+    if(k>=q.length)return;
+    var i=q[k++];var it=r.items[i];
+    fetch(API+'/api/linkgrab/head?url='+encodeURIComponent(it.dl),{headers:{'X-App-Password':password}})
+      .then(function(x){return x.json();}).catch(function(){return {};})
+      .then(function(d){var m=_lgState.meta[i]=_lgState.meta[i]||{};m.size=(d&&d.size)||0;m.type=(d&&d.type)||'';
+        var el=document.getElementById('lg-size-'+i);if(el)el.textContent=_lgFmtSize(m.size)||'용량 미확인';
+        _lgSelPaint();next();});
+  }
+  for(var w=0;w<4&&w<q.length;w++)next();
+}
+// 접속 기록 — 입력창 토글(인라인 패널) · 최근 20건 기기 보존
+function _lgHistToggle(){_lgState.histOpen=!_lgState.histOpen;_lgRender();}
+function _lgHistPaint(){
+  var box=document.getElementById('lg-hist');if(!box)return;
+  if(!_lgState.histOpen){box.innerHTML='';return;}
+  var hist=_lgLoadHist();
+  var h='<div style="margin-top:8px;border:1px solid var(--border);border-radius:12px;padding:6px 8px;background:var(--past-bg)">';
+  if(!hist.length)h+='<div style="font-size:12px;color:var(--dim);padding:8px 6px">아직 기록이 없어요 — 주소를 한 번 가져오면 여기에 쌓여요</div>';
+  hist.forEach(function(e,n){
+    h+='<div style="display:flex;align-items:center;gap:8px;padding:7px 6px;'+(n?'border-top:1px solid var(--border);':'')+'">'
+      +'<div onclick="_lgHistPick('+n+')" style="flex:1;min-width:0;cursor:pointer"><div style="font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escapeHtml(e.title||e.u)+'</div>'
+      +'<div style="font-size:11px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escapeHtml(e.u)+'</div></div>'
+      +'<button class="btn btn--ghost btn--sm" style="flex:none" onclick="_lgHistDel('+n+')">지움</button></div>';
+  });
+  if(hist.length)h+='<div style="padding:7px 6px;border-top:1px solid var(--border);text-align:right"><button class="btn btn--ghost btn--sm" onclick="_lgHistDel(-1)">전체 지움</button></div>';
+  h+='</div>';
+  box.innerHTML=h;
+}
+function _lgHistPick(n){var e=_lgLoadHist()[n];if(!e)return;_lgState.lastUrl=e.u;_lgState.histOpen=false;_lgRender();_lgGo();}
+function _lgHistDel(n){
+  try{var hist=_lgLoadHist();if(n<0)hist=[];else hist.splice(n,1);localStorage.setItem(_LG_HIST_KEY,JSON.stringify(hist));}catch(_e){}
+  _lgRender();
+}
+function _lgHistSave(u,title){
+  try{
+    var hist=_lgLoadHist().filter(function(e){return e.u!==u;});
+    hist.unshift({u:u,title:String(title||'').slice(0,80),t:Date.now()});
+    localStorage.setItem(_LG_HIST_KEY,JSON.stringify(hist.slice(0,20)));
+  }catch(_e){}
 }
 async function _lgGo(){
   if(_lgState.busy)return;
-  var inp=document.getElementById('lg-url');var u=String(inp&&inp.value||'').trim();
+  var inp=document.getElementById('lg-url');var u=String((inp&&inp.value)||_lgState.lastUrl||'').trim();
   if(!u){showToast('페이지 주소를 먼저 붙여넣어 주세요','error');return;}
   if(!/^https?:\/\//i.test(u))u='https://'+u;
-  _lgState.busy=true;_lgState.err='';_lgState.lastUrl=u;
-  var btn=document.getElementById('lg-go');if(btn)_btnBusy(btn,true,'불러오는 중');
+  _lgState.busy=true;_lgState.err='';_lgState.lastUrl=u;_lgState.sel={};_lgState.meta={};
+  var btn=document.getElementById('lg-go');if(btn)_btnBusy(btn,true,'스캔 중');
   try{
     var r=await fetch(API+'/api/linkgrab?url='+encodeURIComponent(u),{headers:{'X-App-Password':password}});   // 전 API 공통 게이트(X-App-Password) 계승
     var d=await r.json().catch(function(){return {error:'응답 해석 실패'};});
     if(r.status===401)throw new Error('앱 로그인 정보가 필요해요 — 다시 로그인 후 시도해 주세요');
     if(!r.ok||d.error)throw new Error(d.error||('HTTP '+r.status));
     _lgState.res=d;
+    _lgHistSave(u,d.title);
   }catch(e){_lgState.res=null;_lgState.err='가져오기 실패 — '+((e&&e.message)||'네트워크 오류');}
   _lgState.busy=false;
+  _lgState.histOpen=false;
   _lgRender();
 }
 
