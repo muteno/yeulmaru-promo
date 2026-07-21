@@ -1978,6 +1978,10 @@ var index_default = {
         return json(data, env);
       }
 
+      // [260721 운영자] 콘텐츠 제작 ▸ 링크 자료수집 — 목록/파일 프록시 (핸들러 = 파일 하단 linkgrab 블록)
+      if (url.pathname === "/api/linkgrab" && request.method === "GET") return lgList(url, env);
+      if (url.pathname === "/api/linkgrab/file" && request.method === "GET") return lgFile(url, env);
+
       if (url.pathname === "/api/health") return json({ status: "ok", ts: (/* @__PURE__ */ new Date()).toISOString() }, env);
       return json({ error: "Not found" }, env, 404);
     } catch (e) {
@@ -1986,6 +1990,156 @@ var index_default = {
     }
   }
 };
+// ============================================================
+// 콘텐츠 제작 ▸ 링크 자료수집 (linkgrab) — 운영자 260721
+//  URL 하나를 받아 그 페이지 안의 내려받을 자료(PDF·문서·사진·영상·압축)를 목록으로 돌려준다.
+//  GET /api/linkgrab?url=…             → { source, title, items:[{kind,title,url,dl,via,note}] }
+//  GET /api/linkgrab/file?url=…&name=… → 파일 스트리밍 프록시(Content-Disposition: attachment = 탭 즉시 저장)
+//  전용 처리: linktr.ee(__NEXT_DATA__ JSON) · 드롭박스(dl=1 재작성, 폴더=ZIP) · 구글드라이브(uc?export=download)
+//  · 유튜브/스트리밍(kind:'stream' — 저작권·기술상 다운로드 불가, 열기만) · 그 외 = 범용 href/src 스캔.
+//  가드(SSRF·오남용): http/https만 · IP 리터럴/localhost/비표준 포트 차단 · HTML 3MB 캡 · 목록 15초 타임아웃 ·
+//  파일 프록시 300MB 상한. 이식 노트(노뮤트 에디터): 이 블록 + 라우터 2줄 + 프론트 lg-* 블록이 전부(의존 = corsHeaders/json).
+// ============================================================
+var LG_EXT = {
+  doc: /\.(pdf|hwpx?|docx?|xlsx?|pptx?|txt|rtf)(\?|#|$)/i,
+  img: /\.(jpe?g|png|gif|webp|bmp|heic|svg)(\?|#|$)/i,
+  video: /\.(mp4|mov|m4v|webm|avi|mkv)(\?|#|$)/i,
+  audio: /\.(mp3|wav|m4a|aac|flac)(\?|#|$)/i,
+  zip: /\.(zip|7z|rar|tar|gz|alz|egg)(\?|#|$)/i
+};
+function lgKindOf(href) {
+  for (const k in LG_EXT) if (LG_EXT[k].test(href)) return k;
+  return null;
+}
+function lgDec(s) {
+  try { return decodeURIComponent(s); } catch (_) { return s; }
+}
+function lgGuardUrl(raw) {
+  let u;
+  try { u = new URL(String(raw || "")); } catch (_) { throw new Error("주소 형식이 아니에요"); }
+  if (u.protocol !== "http:" && u.protocol !== "https:") throw new Error("http/https 주소만 가능해요");
+  const h = u.hostname.toLowerCase();
+  if (h === "localhost" || h.endsWith(".local") || h.endsWith(".internal") || h.startsWith("[") || /^\d+\.\d+\.\d+\.\d+$/.test(h)) throw new Error("허용되지 않는 주소예요");
+  if (u.port && u.port !== "80" && u.port !== "443") throw new Error("표준 포트 주소만 가능해요");
+  return u;
+}
+function lgFetchPage(u, ms) {
+  return fetch(u.toString(), {
+    redirect: "follow",
+    signal: AbortSignal.timeout(ms || 15e3),
+    headers: { "User-Agent": "Mozilla/5.0 (compatible; yeulmaru-linkgrab)", "Accept": "text/html,application/xhtml+xml,*/*" }
+  });
+}
+// 잘 알려진 저장소·스트리밍 주소의 다운로드 경로 재작성
+function lgSpecial(href) {
+  let u;
+  try { u = new URL(href); } catch (_) { return null; }
+  const h = u.hostname.toLowerCase();
+  if (h === "youtu.be" || h.endsWith("youtube.com") || h.endsWith("vimeo.com") || h.endsWith("arte.tv") || h.endsWith("tv.naver.com") || h.endsWith("tiktok.com"))
+    return { kind: "stream", dl: null, note: "스트리밍 영상 — 내려받기 불가, 열기만 가능" };
+  if (h.endsWith("dropbox.com")) {
+    u.searchParams.set("dl", "1");
+    const folder = u.pathname.includes("/scl/fo/") || u.pathname.startsWith("/sh/");
+    return { kind: folder ? "zip" : (lgKindOf(u.pathname) || "doc"), dl: u.toString(), via: "direct", note: folder ? "폴더 전체를 ZIP 하나로 받아요" : "" };
+  }
+  if (h === "drive.google.com") {
+    const m = u.pathname.match(/\/file\/d\/([^/]+)/);
+    if (m) return { kind: "doc", dl: "https://drive.google.com/uc?export=download&id=" + m[1], via: "direct", note: "대용량은 드라이브 확인 화면을 거쳐요" };
+    if (u.pathname.startsWith("/drive/folders/")) return { kind: "link", dl: null, note: "드라이브 폴더 — 열어서 받아주세요" };
+  }
+  return null;
+}
+// 링크트리 페이지 — __NEXT_DATA__ JSON에서 링크·첨부(EXTENSION documentUrl) 추출
+function lgParseLinktree(html) {
+  const m = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
+  if (!m) return null;
+  let data;
+  try { data = JSON.parse(m[1]); } catch (_) { return null; }
+  const pp = (data.props || {}).pageProps || {};
+  const acct = pp.account || {};
+  const items = [];
+  for (const l of pp.links || []) {
+    const title = String(l.title || "").trim() || "이름 없는 링크";
+    if (l.type === "EXTENSION") {
+      let doc = null;
+      try { doc = JSON.parse((l.context || {}).data || "{}").documentUrl; } catch (_) {}
+      if (doc) items.push({ kind: lgKindOf(doc) || "doc", title, url: doc, dl: doc, via: "proxy", note: "" });
+      continue;
+    }
+    if (!l.url) continue;
+    const sp = lgSpecial(l.url);
+    if (sp) { items.push({ kind: sp.kind, title, url: l.url, dl: sp.dl || null, via: sp.via || "direct", note: sp.note || "" }); continue; }
+    const k = lgKindOf(l.url);
+    items.push(k ? { kind: k, title, url: l.url, dl: l.url, via: "proxy", note: "" } : { kind: "link", title, url: l.url, dl: null, via: "", note: "" });
+  }
+  return { source: "linktree", title: String(acct.pageTitle || acct.username || "").trim(), items };
+}
+// 범용 페이지 — href/src에서 파일 확장자 링크만 수집
+function lgParseGeneric(html, baseUrl) {
+  const items = [];
+  const seen = new Set();
+  const tm = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+  const og = html.match(/property=["']og:title["'][^>]*content=["']([^"']+)/i);
+  const re = /(?:href|src)\s*=\s*["']([^"'\s]+)["']/gi;
+  let m;
+  while ((m = re.exec(html)) && items.length < 120) {
+    let abs;
+    try { abs = new URL(m[1], baseUrl).toString(); } catch (_) { continue; }
+    if (seen.has(abs)) continue;
+    const sp = lgSpecial(abs);
+    const k = sp ? sp.kind : lgKindOf(abs);
+    if (!k || k === "link") continue;
+    seen.add(abs);
+    const name = lgDec((abs.split("?")[0].split("/").pop() || "파일"));
+    items.push({ kind: k, title: name, url: abs, dl: sp ? (sp.dl || null) : abs, via: sp ? (sp.via || "") : "proxy", note: sp ? (sp.note || "") : "" });
+  }
+  return { source: "page", title: String((og && og[1]) || (tm && tm[1]) || "").trim(), items };
+}
+async function lgList(url, env) {
+  let target;
+  try { target = lgGuardUrl(url.searchParams.get("url")); } catch (e) { return json({ error: e.message }, env, 400); }
+  let res;
+  try { res = await lgFetchPage(target, 15e3); } catch (_) { return json({ error: "페이지에 접속하지 못했어요(시간 초과·차단)" }, env, 502); }
+  if (!res.ok) return json({ error: "페이지 응답 오류 HTTP " + res.status }, env, 502);
+  const ct = (res.headers.get("content-type") || "").toLowerCase();
+  if (!ct.includes("text/html")) {
+    // 파일 직링크 — 그 파일 1건짜리 목록으로 응답
+    const k = lgKindOf(target.pathname) || (ct.startsWith("image/") ? "img" : ct.startsWith("video/") ? "video" : "doc");
+    const name = lgDec(target.pathname.split("/").pop() || "파일");
+    return json({ source: "file", title: name, items: [{ kind: k, title: name, url: target.toString(), dl: target.toString(), via: "proxy", note: "" }] }, env);
+  }
+  const buf = await res.arrayBuffer();
+  const html = new TextDecoder("utf-8").decode(buf.byteLength > 3e6 ? buf.slice(0, 3e6) : buf);
+  const host = target.hostname.toLowerCase();
+  let out = null;
+  if (host === "linktr.ee" || host.endsWith(".linktr.ee")) out = lgParseLinktree(html);
+  if (!out) out = lgParseGeneric(html, res.url || target.toString());
+  if (!out.title) out.title = target.hostname;
+  return json(out, env);
+}
+async function lgFile(url, env) {
+  let target;
+  try { target = lgGuardUrl(url.searchParams.get("url")); } catch (e) { return json({ error: e.message }, env, 400); }
+  let res;
+  try {
+    res = await fetch(target.toString(), { redirect: "follow", headers: { "User-Agent": "Mozilla/5.0 (compatible; yeulmaru-linkgrab)" } });
+  } catch (_) { return json({ error: "파일을 받아오지 못했어요" }, env, 502); }
+  if (!res.ok || !res.body) return json({ error: "원본 응답 오류 HTTP " + res.status }, env, 502);
+  const len = parseInt(res.headers.get("content-length") || "0", 10);
+  if (len > 300 * 1024 * 1024) return json({ error: "300MB 초과 파일은 원본 링크로 받아주세요" }, env, 413);
+  let name = String(url.searchParams.get("name") || lgDec(target.pathname.split("/").pop() || "") || "download").replace(/[\r\n"\\]+/g, " ").trim().slice(0, 180) || "download";
+  if (name.indexOf(".") < 0) {
+    const em = (target.pathname.match(/\.[A-Za-z0-9]{1,8}$/) || [""])[0];
+    if (em) name += em;
+  }
+  const h = new Headers(corsHeaders(env));
+  h.set("Content-Type", res.headers.get("content-type") || "application/octet-stream");
+  if (len) h.set("Content-Length", String(len));
+  h.set("Content-Disposition", "attachment; filename*=UTF-8''" + encodeURIComponent(name));
+  h.set("Cache-Control", "no-store");
+  return new Response(res.body, { status: 200, headers: h });
+}
+
 export {
   index_default as default
 };
