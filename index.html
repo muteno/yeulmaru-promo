@@ -22177,7 +22177,7 @@ function _veSpecPrompt(){
 // 콘텐츠 제작 ▸ 링크 자료수집 (lg-*) — 운영자 260721 · 260721b 갤러리 개편
 //  URL 붙여넣기 → 페이지 미디어 전수 스캔 → 종류별 섹션(📷사진 그리드 1:1 · 🎬영상 · 📄문서 · 🎧음성 · 🗜압축)
 //  사진 카드 = 1:1 박스 + 우상단 2줄(해상도/용량, head 지연조회+썸네일 실측) + 좌상단 선택 체크 + 받음 배지.
-//  선택 → [선택 받기] 일괄 다운로드(700ms 순차) · 받음 표시/입력 기록(최근 20)은 기기 로컬 보존(lg_got_v1/lg_hist_v1).
+//  선택 → [선택 받기] 일괄 다운로드(700ms 순차) · 받음 표시 = 기기 로컬(lg_got_v1) · 입력 기록 = 사용자별 최근 1건·12시간 휘발(lg_hist_v2 — 운영자 260721 · 서버/깃 무저장).
 //  백엔드 = Worker /api/linkgrab(스캔)·/file(첨부 프록시)·/head(용량) — src/index.js linkgrab 블록.
 //  유튜브 등 스트리밍 영상 = 저작권·기술상 파일 저장 불가 → [열기]만(전용 저장 경로 yt-dlp = 인프라 결정 대기).
 //  레퍼런스 = nblog 보드 골격(openNaverBlogTool) + _contentMenuBuild 메뉴 문법 그대로 — 신규 raw hex 0(전부 :root 토큰).
@@ -22187,9 +22187,20 @@ var _lgState={busy:false,res:null,err:'',lastUrl:'',escHandler:null,sel:{},meta:
 var _LG_KIND={doc:['문서','var(--accent-light)','var(--accent)'],img:['사진','var(--peach-light)','var(--peach-text)'],video:['영상','var(--today-bg)','var(--c5)'],audio:['음성','var(--today-bg)','var(--c5)'],zip:['압축','var(--neutral)','var(--neutral-text)'],link:['링크','var(--neutral)','var(--neutral-text)']};
 var _LG_SECTIONS=[['img','📷 사진'],['video','🎬 영상'],['doc','📄 문서'],['audio','🎧 음성'],['zip','🗜 압축'],['link','🔗 기타 링크']];
 var _LG_GOT_KEY='lg_got_v1';   // 이미 받은 항목(URL 키) — 기기 로컬 편의 캐시
-var _LG_HIST_KEY='lg_hist_v1'; // 입력했던 주소 기록(최근 20) — 입력창 토글로 열람
+var _LG_HIST_KEY='lg_hist_v2'; // 입력 주소 기록 — 사용자별 최근 1건 · 12시간 휘발(운영자 260721) · 서버/깃 미저장(기기 로컬)
 function _lgLoadGot(){try{return JSON.parse(localStorage.getItem(_LG_GOT_KEY)||'{}')||{};}catch(_e){return {};}}
-function _lgLoadHist(){try{return JSON.parse(localStorage.getItem(_LG_HIST_KEY)||'[]')||[];}catch(_e){return [];}}
+function _lgUser(){try{return sessionStorage.getItem('myApplicant')||'공용';}catch(_e){return '공용';}}
+function _lgLoadHist(){   // 구조 = {사용자: {u,title,t}} — 읽을 때마다 12시간 지난 항목 청소(구 v1 키도 제거)
+  try{
+    try{localStorage.removeItem('lg_hist_v1');}catch(_e2){}
+    var all=JSON.parse(localStorage.getItem(_LG_HIST_KEY)||'{}')||{};
+    var cut=Date.now()-12*3600e3,dirty=false;
+    Object.keys(all).forEach(function(k){if(!all[k]||!(all[k].t>cut)){delete all[k];dirty=true;}});
+    if(dirty)localStorage.setItem(_LG_HIST_KEY,JSON.stringify(all));
+    return all;
+  }catch(_e){return {};}
+}
+function _lgMyHist(){var e=_lgLoadHist()[_lgUser()];return e?[e]:[];}
 function openLinkGrab(){
   var el=document.getElementById('lg-board');
   if(!el){el=document.createElement('div');el.id='lg-board';document.body.appendChild(el);}
@@ -22385,35 +22396,31 @@ function _lgMetaScan(){
   }
   for(var w=0;w<4&&w<q.length;w++)next();
 }
-// 접속 기록 — 입력창 토글(인라인 패널) · 최근 20건 기기 보존
+// 접속 기록 — 입력창 토글(인라인 패널) · 사용자별 최근 1건 · 12시간 휘발(운영자 260721 "깃 무거워짐 방지")
 function _lgHistToggle(){_lgState.histOpen=!_lgState.histOpen;_lgRender();}
 function _lgHistPaint(){
   var box=document.getElementById('lg-hist');if(!box)return;
   if(!_lgState.histOpen){box.innerHTML='';return;}
-  var hist=_lgLoadHist();
-  var h='<div style="margin-top:8px;border:1px solid var(--border);border-radius:12px;padding:6px 8px;background:var(--past-bg)">';
-  if(!hist.length)h+='<div style="font-size:12px;color:var(--dim);padding:8px 6px">아직 기록이 없어요 — 주소를 한 번 가져오면 여기에 쌓여요</div>';
-  hist.forEach(function(e,n){
-    h+='<div style="display:flex;align-items:center;gap:8px;padding:7px 6px;'+(n?'border-top:1px solid var(--border);':'')+'">'
-      +'<div onclick="_lgHistPick('+n+')" style="flex:1;min-width:0;cursor:pointer"><div style="font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escapeHtml(e.title||e.u)+'</div>'
+  var hist=_lgMyHist();
+  var h='<div style="margin-top:8px;border:1px solid var(--border);border-radius:12px;padding:6px 8px;background:var(--past-bg)">'
+    +'<div style="font-size:11px;color:var(--dim);padding:6px 6px 2px">내 최근 기록 1건 — 12시간 지나면 자동 삭제 · 이 기기에만 저장</div>';
+  if(!hist.length)h+='<div style="font-size:12px;color:var(--dim);padding:8px 6px">기록이 없어요 — 주소를 한 번 가져오면 여기에 남아요</div>';
+  hist.forEach(function(e){
+    h+='<div style="display:flex;align-items:center;gap:8px;padding:7px 6px">'
+      +'<div onclick="_lgHistPick()" style="flex:1;min-width:0;cursor:pointer"><div style="font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escapeHtml(e.title||e.u)+'</div>'
       +'<div style="font-size:11px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escapeHtml(e.u)+'</div></div>'
-      +'<button class="btn btn--ghost btn--sm" style="flex:none" onclick="_lgHistDel('+n+')">지움</button></div>';
+      +'<button class="btn btn--ghost btn--sm" style="flex:none" onclick="_lgHistDel()">지움</button></div>';
   });
-  if(hist.length)h+='<div style="padding:7px 6px;border-top:1px solid var(--border);text-align:right"><button class="btn btn--ghost btn--sm" onclick="_lgHistDel(-1)">전체 지움</button></div>';
   h+='</div>';
   box.innerHTML=h;
 }
-function _lgHistPick(n){var e=_lgLoadHist()[n];if(!e)return;_lgState.lastUrl=e.u;_lgState.histOpen=false;_lgRender();_lgGo();}
-function _lgHistDel(n){
-  try{var hist=_lgLoadHist();if(n<0)hist=[];else hist.splice(n,1);localStorage.setItem(_LG_HIST_KEY,JSON.stringify(hist));}catch(_e){}
+function _lgHistPick(){var e=_lgLoadHist()[_lgUser()];if(!e)return;_lgState.lastUrl=e.u;_lgState.histOpen=false;_lgRender();_lgGo();}
+function _lgHistDel(){
+  try{var all=_lgLoadHist();delete all[_lgUser()];localStorage.setItem(_LG_HIST_KEY,JSON.stringify(all));}catch(_e){}
   _lgRender();
 }
 function _lgHistSave(u,title){
-  try{
-    var hist=_lgLoadHist().filter(function(e){return e.u!==u;});
-    hist.unshift({u:u,title:String(title||'').slice(0,80),t:Date.now()});
-    localStorage.setItem(_LG_HIST_KEY,JSON.stringify(hist.slice(0,20)));
-  }catch(_e){}
+  try{var all=_lgLoadHist();all[_lgUser()]={u:u,title:String(title||'').slice(0,80),t:Date.now()};localStorage.setItem(_LG_HIST_KEY,JSON.stringify(all));}catch(_e){}
 }
 // --- 스트리밍 영상 저장(yt-dlp 파이프라인) — 동의 체크 후 요청 → Actions 변환(2~5분) → 서명 URL로 직접 수신 ---
 function _lgYtConsentSet(v){
