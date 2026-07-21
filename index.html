@@ -4180,6 +4180,9 @@ function _salesDate(v){
   var d=new Date(s); return isNaN(d.getTime())?null:d;
 }
 function _salesNorm(row){ const o={}; for(const k in row){ o[String(k).replace(/\s+/g,'')]=row[k]; } return o; }
+// [회차 폴백 260721] 공연 기간 일수(시작~종료 · 하루 1회 가정 — 회차·객석 ⚡자동 생성(PR 315)과 동일 관례).
+// 총회차·회차상세·운영대장이 전부 빈 미래 공연(달 샤베트 등)이 ×1(단회차) 분모로 점유율이 부풀던 재발 차단 — 명시 신호가 하나라도 있으면 그쪽이 항상 우선(추정은 최후 폴백).
+function _salesSpanDays(s,e){ if(!s||!e)return 1; var d=Math.round((e-s)/86400000)+1; return (d>=1&&d<=366)?d:1; }
 // === [DB통합] 공연명 정규화 + 운영대장 폴백 인덱스 (조인키 강화) ===
 // 꺾쇠/언더스코어/'- 여수' 접미사/공백 제거 → 판매 공연명을 운영대장과 매칭.
 function _uName(s){ return String(s||'').replace(/\s*[-–—]\s*여수\s*$/,'').replace(/[〈〉<>「」『』\[\]（）()]/g,'').replace(/[_\-–—·.,’'"~!:：]/g,'').replace(/\s+/g,'').toLowerCase(); }
@@ -4236,11 +4239,11 @@ function _pgGenre(rid,name){
   return (hit&&hit.g)||'';
 }
 function _salesBuild(){
-  var master={},masterById={};
+  var master={},masterById={},masterByU={};   // masterByU = _uName 정규화 폴백(단체 조인 강화 전례 계승) — 일일입력 공연명↔마스터 사업명 표기 차이(꺾쇠·공백 등)로 조인이 끊기면 기준석×1(926) 분모로 떨어지던 갭 방어
   ((_salesState.master&&_salesState.master.rows)||[]).map(_salesNorm).forEach(function(m){
     var name=String(m['사업명']||'').trim(); if(!name)return;
-    var ent={기본석:_salesNum(m['기준석'])||_SALES_FALLBACK_SEAT,총회차:_salesNum(m['총회차'])||1,총오픈석:_salesNum(m['총오픈석']),목표:_salesNum(m['목표점유율'])||50,수익성:String(m['수익성']||'').trim(),티켓오픈:_salesDate(m['티켓오픈일']),종료:_salesDate(m['종료일']),시작:_salesDate(m['시작일']),ID:String(m['ID']||'').trim(),상태:String(m['상태']||'').trim()};
-    master[name]=ent; if(ent.ID)masterById[ent.ID]=ent;
+    var ent={기본석:_salesNum(m['기준석'])||_SALES_FALLBACK_SEAT,총회차:_salesNum(m['총회차'])||1,회차입력:_salesNum(m['총회차']),총오픈석:_salesNum(m['총오픈석']),목표:_salesNum(m['목표점유율'])||50,수익성:String(m['수익성']||'').trim(),티켓오픈:_salesDate(m['티켓오픈일']),종료:_salesDate(m['종료일']),시작:_salesDate(m['시작일']),ID:String(m['ID']||'').trim(),상태:String(m['상태']||'').trim()};   // 회차입력 = 총회차 원시값(null=공란) — 공란→1 기본값과 구분해 기간 폴백(_salesSpanDays) 발동 판정에 사용(260721)
+    master[name]=ent; if(ent.ID)masterById[ent.ID]=ent; var _mu=_uName(name); if(_mu)masterByU[_mu]=ent;
   });
   var rounds={},rseat={};   // rseat = 회차별 오픈객석 집계(ID별 {sum,n,filled}) — 회차마다 오픈 좌석이 달라 곱셈 대신 합산(운영자 260716). 전 회차 충족+회차 수 검증 통과 시 Σ가 분모.
   ((_salesState.rounds&&_salesState.rounds.rows)||[]).map(_salesNorm).forEach(function(r){
@@ -4286,7 +4289,7 @@ function _salesBuild(){
     else if(rows.length>=2)diff=(_salesNum(rows[rows.length-1]['합계좌석'])||0)-(_salesNum(rows[rows.length-2]['합계좌석'])||0);
     // [DB통합 Phase 2] 공연ID 우선 조인 (마이그레이션 후 컬럼 생김) → 이름 조인 폴백
     var rid=String(snap['공연ID']||'').trim();
-    var m=(rid&&masterById[rid])||master[name];
+    var m=(rid&&masterById[rid])||master[name]||masterByU[_uName(name)];   // 3순위 _uName 폴백(260721) — ID·정확일치 실패 시 정규화 매칭(단체 _takeGroup과 동일 사다리)
     // [DB통합] 공연마스터에 없는 공연은 운영대장 폴백: 기준석×회차(=운영행수)로 총오픈석 산출, 장르/구분 보강.
     var by=_salesNum(snap['기준일자']); var salesYear=by?Math.floor(by/10000):null;
     var ops=null;
@@ -4296,8 +4299,10 @@ function _salesBuild(){
     var _gOps=ops||(rid?_opsLookupById(rid):null)||_opsLookup(name,salesYear);
     // [260710 운영자] 운영대장 장르1이 비면 프로그램 시트 N열 「구분」 폴백('기타' 소멸) — 기존 장르1 값은 그대로 우선(회귀 0)
     var genre=(_gOps&&_gOps.genre)?_gOps.genre:_pgGenre(rid,name);
-    // [다회차 분모] 총오픈석 미기입 마스터 공연: 회차수 = max(총회차, 회차상세 행수, 운영대장 행수) — 총회차까지 비면 ×1(단회차) 분모로 점유율이 부풀던 어긋남 보정(집계 전 카드 루프는 이미 운영대장 회차 반영 — 정합)
-    var _rc=m?Math.max(m.총회차||1,(m.ID&&rounds[m.ID]&&rounds[m.ID].length)||1,(_gOps&&_gOps.count)||1):1;
+    // [다회차 분모] 총오픈석 미기입 마스터 공연: 회차수 = max(총회차, 회차상세 행수, 운영대장 행수) — 셋 다 공란(미래 공연 등 = 종전 ×1 부풀림 재발 지점)이면 공연 기간 일수 폴백(_salesSpanDays 260721 · 명시 신호가 하나라도 있으면 추정 미사용)
+    var _rcK=m?Math.max(m.회차입력||0,(m.ID&&rounds[m.ID]&&rounds[m.ID].length)||0,(_gOps&&_gOps.count)||0):0;
+    var _rc=_rcK>0?_rcK:(m?_salesSpanDays(m.시작,m.종료):1);
+    var _rcSrc=_rcK>0?'data':(_rc>1?'span':'');
     // [회차 합산 260716 운영자] 회차상세에 전 회차 오픈객석이 입력되면 합산 = 최종 가용좌석(회차별 상이 반영). 마스터 총회차 기입 시 행수 일치까지 검증 — 불일치·미충족은 기존 추정 유지.
     var _rs=(m&&m.ID&&rseat[m.ID])?rseat[m.ID]:null;
     var _rsOk=!!(_rs&&_rs.n>0&&_rs.filled===_rs.n&&(!(m.총회차>1)||m.총회차===_rs.n));
@@ -4350,7 +4355,7 @@ function _salesBuild(){
       fcRate=_den>0?(_num/_den):0;   // 전 구간 제외 = 0석/일(이벤트 빼면 무판매 = 평탄 예측 — null이면 구식 폴백이 제외를 무시하게 되므로 0)
     }
     var source=m?'master':(ops?'fallback':'none');
-    perfs.push({name:name,seats:seats,money:money,diff:diff,occ:occ,totalOpen:totalOpen,dday:dday,dateStr:dateStr,수익성:(m&&m.수익성)?m.수익성:_profitType(name,genre),목표:(m?m.목표:50),startDate:startDate,endDate:endDate,status:status,genre:genre,gubun:(ops?ops.gubun:''),enriched:(!m&&!!ops),spark:spark,days:days,daysTotal:rows.length,deltaPP:deltaPP,source:source,saleStart:((m&&m.티켓오픈)||(pgf&&pgf.ss?_salesDate(pgf.ss):null)||null),fcRate:fcRate,_mid:((m&&m.ID)||rid||''),groupSeats:gSeat,groupMoney:gMoney,groupCnt:gCnt,_openSrc:(_rsOk?'sum':((m&&m.총오픈석)?'fixed':'est')),_roundsN:((m&&m.ID&&rounds[m.ID])?rounds[m.ID].length:0)});   // daysTotal = 실측 총 행수(차트 T/O 표기 판정 — 창이 전체를 담을 때만)   // [260710 버그수정] days 탑재 누락 — A1(PR 171)이 로컬 생성만 하고 안 실어 카드 추이가 실데이터에서 상시 '수집 전'이었음 · [260710 운영자] endDate(판매 종료일) 탑재 — 카드/드릴 차트 종료 예상점용 · saleStart(티켓오픈) = 「판매 N일차」 소스(레일이 프로그램 시트 ss 폴백)
+    perfs.push({name:name,seats:seats,money:money,diff:diff,occ:occ,totalOpen:totalOpen,dday:dday,dateStr:dateStr,수익성:(m&&m.수익성)?m.수익성:_profitType(name,genre),목표:(m?m.목표:50),startDate:startDate,endDate:endDate,status:status,genre:genre,gubun:(ops?ops.gubun:''),enriched:(!m&&!!ops),spark:spark,days:days,daysTotal:rows.length,deltaPP:deltaPP,source:source,saleStart:((m&&m.티켓오픈)||(pgf&&pgf.ss?_salesDate(pgf.ss):null)||null),fcRate:fcRate,_mid:((m&&m.ID)||rid||''),groupSeats:gSeat,groupMoney:gMoney,groupCnt:gCnt,_openSrc:(_rsOk?'sum':((m&&m.총오픈석)?'fixed':'est')),_roundsN:((m&&m.ID&&rounds[m.ID])?rounds[m.ID].length:0),_rcEst:_rc,_rcSrc:_rcSrc});   // daysTotal = 실측 총 행수(차트 T/O 표기 판정 — 창이 전체를 담을 때만)   // [260710 버그수정] days 탑재 누락 — A1(PR 171)이 로컬 생성만 하고 안 실어 카드 추이가 실데이터에서 상시 '수집 전'이었음 · [260710 운영자] endDate(판매 종료일) 탑재 — 카드/드릴 차트 종료 예상점용 · saleStart(티켓오픈) = 「판매 N일차」 소스(레일이 프로그램 시트 ss 폴백)
   });
   // [판매중 노출] 일일입력 실적이 아직 없어도, 공연마스터 '상태=판매중'(또는 티켓오픈~종료 기간)인 공연은
   // 레일·판매보드에 "집계 전(0석)" 카드로 노출 — 티켓 오픈 직후 데이터 공백기에도 홍보계획과 함께 판매현황이 읽히게(운영자 260707).
@@ -4373,7 +4378,10 @@ function _salesBuild(){
     var base2=mm.기본석||_SALES_FALLBACK_SEAT;
     var _rs2=(mm.ID&&rseat[mm.ID])?rseat[mm.ID]:null;   // [회차 합산 260716] 집계 전 카드도 동일 규칙
     var _rs2Ok=!!(_rs2&&_rs2.n>0&&_rs2.filled===_rs2.n&&(!(mm.총회차>1)||mm.총회차===_rs2.n));
-    var totalOpen2=_rs2Ok?_rs2.sum:(mm.총오픈석||(opsF?base2*(opsF.count||1):base2*(mm.총회차||1)));
+    // [회차 폴백 260721] 본 카드 루프와 동일 max(총회차·회차상세·운영대장) — 종전 opsF 우선(총회차 무시)의 루프 간 분모 불일치도 정렬 · 신호 전무 시 기간 일수
+    var _rcK2=Math.max(mm.회차입력||0,((mm.ID&&rounds[mm.ID])?rounds[mm.ID].length:0),(opsF&&opsF.count)||0);
+    var _rc2=_rcK2>0?_rcK2:_salesSpanDays(mm.시작,mm.종료);
+    var totalOpen2=_rs2Ok?_rs2.sum:(mm.총오픈석||base2*_rc2);
     var start2=mm.시작||(opsF&&opsF.first?opsF.first:null);
     var dday2=start2?Math.round((start2-today)/86400000):null;
     var dateStr2='';
@@ -4381,7 +4389,7 @@ function _salesBuild(){
     else if(start2){var ws2=['일','월','화','수','목','금','토'];dateStr2=(start2.getMonth()+1)+'.'+start2.getDate()+'('+ws2[start2.getDay()]+')';}
     var genre2=opsF?opsF.genre:'';
     var _g2=_takeGroup(nm, (mm&&mm.ID)||''); var gs2=(_g2&&_g2.seat)||0, gm2=(_g2&&_g2.money)||0, gc2=(_g2&&_g2.cnt)||0;   // [단체] 개인 0인 판매중 공연에도 단체 유입 반영 → noData(집계 전) 해제
-    perfs.push({name:nm,seats:gs2,money:gm2,diff:null,occ:(totalOpen2>0?Math.max(0,Math.min(gs2/totalOpen2*100,100)):0),totalOpen:totalOpen2,dday:dday2,dateStr:dateStr2,수익성:mm.수익성||_profitType(nm,genre2),목표:mm.목표||50,startDate:start2,endDate:mm.종료||null,status:'active',genre:genre2,gubun:(opsF?opsF.gubun:''),enriched:false,spark:[],deltaPP:null,source:'master',saleStart:(mm.티켓오픈||null),noData:(gs2>0?false:true),groupSeats:gs2,groupMoney:gm2,groupCnt:gc2,_mid:(mm.ID||''),_openSrc:(_rs2Ok?'sum':(mm.총오픈석?'fixed':'est')),_roundsN:((mm.ID&&rounds[mm.ID])?rounds[mm.ID].length:0)});
+    perfs.push({name:nm,seats:gs2,money:gm2,diff:null,occ:(totalOpen2>0?Math.max(0,Math.min(gs2/totalOpen2*100,100)):0),totalOpen:totalOpen2,dday:dday2,dateStr:dateStr2,수익성:mm.수익성||_profitType(nm,genre2),목표:mm.목표||50,startDate:start2,endDate:mm.종료||null,status:'active',genre:genre2,gubun:(opsF?opsF.gubun:''),enriched:false,spark:[],deltaPP:null,source:'master',saleStart:(mm.티켓오픈||null),noData:(gs2>0?false:true),groupSeats:gs2,groupMoney:gm2,groupCnt:gc2,_mid:(mm.ID||''),_openSrc:(_rs2Ok?'sum':(mm.총오픈석?'fixed':'est')),_roundsN:((mm.ID&&rounds[mm.ID])?rounds[mm.ID].length:0),_rcEst:_rc2,_rcSrc:(_rcK2>0?'data':(_rc2>1?'span':''))});
   });
   // [판매중 노출 2차] 공연마스터·일일입력에 아예 없는 신규 오픈 공연(하반기 라인업 등)은 프로그램 시트(PERFS)
   // 판매기간(판매시작일≤오늘≤판매종료일, 종료 폴백=공연 종료일)으로 잡아 "집계 전(0석)" 카드로 노출(운영자 260708 — 마스터 미등록 공연이 판매 현황에 안 뜸).
@@ -5038,7 +5046,7 @@ function _srailRenderDrill(els,p,activeCount){
     +((typeof userRole!=='undefined'&&userRole==='admin')?'<button class="ana-chip" onclick="_srailRoundsOpen(\''+_anaEsc(p._mid||'')+'\',\''+_anaEsc(p.name)+'\')" title="회차별 공연일·오픈 객석 입력 — 전 회차 입력이 충족되면 합산이 가용좌석(점유율 분모)이 됩니다(관리자 전용)">회차·객석</button>':'')
     +'<button class="ana-chip" onclick="_srailOpenBoard(\''+_anaEsc(p.name)+'\')" title="분석 보드에서 비슷한 공연 비교까지 자세히 보기">자세히 보기</button>'
     +'</span></div>';
-  h+='<div class="srail-meta" style="margin-bottom:8px">'+escapeHtml((p.genre||'기타')+' · '+ax+' · 오픈석 '+p.totalOpen.toLocaleString()+'석'+(p._openSrc==='sum'?' (회차 합산)':'')+(p._roundsN?' · 회차 '+p._roundsN:'')+(p.dateStr?' · '+p.dateStr:''))+'</div>';
+  h+='<div class="srail-meta" style="margin-bottom:8px">'+escapeHtml((p.genre||'기타')+' · '+ax+' · 오픈석 '+p.totalOpen.toLocaleString()+'석'+(p._openSrc==='sum'?' (회차 합산)':'')+(p._roundsN?' · 회차 '+p._roundsN:(p._rcSrc==='span'?' · 회차 '+p._rcEst+' 추정(기간·미입력)':''))+(p.dateStr?' · '+p.dateStr:''))+'</div>';
   h+='<div class="ana-kpis">';
   h+='<div class="ana-kpi"><div class="lab">현재 누적 점유율</div><div class="val">'+(noData?'집계 전':occ.toFixed(1)+'%')+'</div></div>';
   h+='<div class="ana-kpi"><div class="lab">어제대비</div><div class="val" style="color:'+dCol+'">'+dStr+'</div></div>';
@@ -6217,9 +6225,10 @@ function _dailyMasters(){
       return !(last&&last<_tdy);                                                   // 마지막 공연일 지남 = 종료
     })
     .map(function(m){ var name=String(m['사업명']||'').trim(); var id=String(m['ID']||'').trim();
-      // [다회차 분모] 기록되는 점유율도 판매현황(_salesBuild)과 동일 보정 — 회차수 = max(총회차, 회차상세 행수, 운영대장 행수)
+      // [다회차 분모] 기록되는 점유율도 판매현황(_salesBuild)과 동일 보정 — 회차수 = max(총회차, 회차상세 행수, 운영대장 행수) · 셋 다 공란이면 공연 기간 일수 폴백(_salesSpanDays 260721)
       var oc=null; try{ if(typeof _salesState!=='undefined'&&_salesState&&_salesState.ops){ var en2=_salesDate(m['종료일']),tk2=_salesDate(m['티켓오픈일']); oc=(id?_opsLookupById(id):null)||_opsLookup(name,(en2||tk2||_tdy).getFullYear()); } }catch(_e3){}
-      var rc=Math.max(_salesNum(m['총회차'])||1,cntById[id]||1,(oc&&oc.count)||1);
+      var rcK=Math.max(_salesNum(m['총회차'])||0,cntById[id]||0,(oc&&oc.count)||0);
+      var rc=rcK>0?rcK:_salesSpanDays(_salesDate(m['시작일']),_salesDate(m['종료일']));
       var tc=_salesNum(m['총회차'])||1;   // [회차 합산 260716] 전 회차 객석 충족 + (총회차 기입 시) 행수 일치면 Σ오픈좌석이 기록 분모
       var rsOk=!!(id&&cntById[id]&&filledById[id]===cntById[id]&&(!(tc>1)||tc===cntById[id]));
       return {name:name, id:id, open:(rsOk?sumById[id]:(_salesNum(m['총오픈석'])||((_salesNum(m['기준석'])||926)*rc))), cat:(catIdx[_uName(name)]||'')}; });
