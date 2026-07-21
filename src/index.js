@@ -2208,12 +2208,24 @@ async function lgYtId(u) {
   const buf = await crypto.subtle.digest("SHA-1", new TextEncoder().encode(String(u)));
   return "v" + [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 16);
 }
-async function lgYtAsset(env, name) {
+async function lgYtRel(env) {
   const cfg = ghBlogCfg(env);
   const r = await fetch(`https://api.github.com/repos/${cfg.repo}/releases/tags/ytdl-drops`, { headers: { "Authorization": "Bearer " + cfg.pat, "Accept": "application/vnd.github+json", "User-Agent": "yeulmaru-promo-worker" } });
   if (!r.ok) return null;
-  const rel = await r.json();
-  return (rel.assets || []).find((a) => a.name === name) || null;
+  return r.json();
+}
+// 자산 조회 — 단일본(<id>.mp4) 또는 분할본(<id>.pNN.mp4 + <id>.done.json 완료 마커) 인식
+function lgYtLookup(rel, id) {
+  const assets = (rel && rel.assets) || [];
+  const one = assets.find((a) => a.name === id + ".mp4");
+  if (one) return { ready: true, size: one.size, asset: one.id };
+  if (assets.find((a) => a.name === id + ".done.json")) {
+    const re = new RegExp("^" + id + "\\.p\\d+\\.mp4$");
+    const parts = assets.filter((a) => re.test(a.name)).sort((a, b) => (a.name < b.name ? -1 : 1));
+    if (parts.length) return { ready: true, size: parts.reduce((s, p) => s + p.size, 0), parts: parts.map((p) => ({ asset: p.id, size: p.size, name: p.name })) };
+  }
+  if (assets.find((a) => a.name === id + ".err.txt")) return { failed: true };
+  return null;
 }
 async function lgYtDispatch(request, env) {
   const cfg = ghBlogCfg(env);
@@ -2223,8 +2235,8 @@ async function lgYtDispatch(request, env) {
   const vurl = String(b.url || "");
   if (!lgStreamInfo(vurl)) return json({ error: "스트리밍 영상 주소가 아니에요" }, env, 400);
   const id = await lgYtId(vurl);
-  const done = await lgYtAsset(env, id + ".mp4");
-  if (done) return json({ ok: true, id, ready: true, size: done.size, asset: done.id }, env);
+  const hit = lgYtLookup(await lgYtRel(env), id);
+  if (hit && hit.ready) return json(Object.assign({ ok: true, id }, hit), env);   // 같은 영상 변환분(단일/분할) 재사용
   const gr = await fetch(`https://api.github.com/repos/${cfg.repo}/dispatches`, {
     method: "POST",
     headers: { "Authorization": "Bearer " + cfg.pat, "Accept": "application/vnd.github+json", "Content-Type": "application/json", "User-Agent": "yeulmaru-promo-worker" },
@@ -2236,11 +2248,8 @@ async function lgYtDispatch(request, env) {
 async function lgYtStat(url, env) {
   const id = String(url.searchParams.get("id") || "").replace(/[^A-Za-z0-9]/g, "").slice(0, 20);
   if (!id) return json({ error: "id가 필요해요" }, env, 400);
-  const ok = await lgYtAsset(env, id + ".mp4");
-  if (ok) return json({ ready: true, size: ok.size, asset: ok.id }, env);
-  const err = await lgYtAsset(env, id + ".err.txt");
-  if (err) return json({ failed: true }, env);
-  return json({ ready: false }, env);
+  const hit = lgYtLookup(await lgYtRel(env), id);
+  return json(hit || { ready: false }, env);
 }
 async function lgYtFile(url, env) {
   const cfg = ghBlogCfg(env);
