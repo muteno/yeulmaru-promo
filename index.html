@@ -18192,6 +18192,7 @@ function _bnavMore(){
   let h='<div class="bn-sheet">';
   const add=function(emo,label,fnStr){h+='<button class="bn-sheet-item" onclick="this.closest(\'.bn-sheet-bg\').remove();'+fnStr+'"><span class="emo">'+emo+'</span>'+label+'</button>';};
   add('📝','네이버 블로그 글쓰기','openNaverBlogTool()');
+  add('🔗','링크 자료수집','openLinkGrab()');
   add('🧩','플랫폼 현황','openPlatformBoard()');
   add('🏢','연간 누적 실적','openBusinessBoard()');
   if(!isAdmin)add('📈','판매 현황','openAnalyticsBoard()');
@@ -18264,6 +18265,7 @@ function _contentMenuBuild(menu){
   var hov=' onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'"';
   menu.innerHTML='<div style="padding:8px 14px 6px;font-size:11px;color:var(--dim);font-weight:700">콘텐츠 제작</div>'
     +'<button type="button" onclick="_ddCloseAll();openNaverBlogTool()" style="'+itemCss+'"'+hov+'>네이버 블로그</button>'
+    +'<button type="button" onclick="_ddCloseAll();openLinkGrab()" style="'+itemCss+'"'+hov+'>링크 자료수집</button>'   /* [260721 운영자] 네이버 블로그 바로 아래 — URL 붙여넣기 = 자료 일괄 다운로드 */
     +'<div style="margin:6px 8px 0;padding:8px 6px 4px;font-size:11px;color:var(--dim);font-weight:700;border-top:1px solid var(--border)">영상 편집기</div>'
     +'<button type="button" onclick="_ddCloseAll();openVideoEditor(\'edit\')" style="'+itemCss+'"'+hov+'>1. 영상 편집</button>'
     +'<button type="button" onclick="_ddCloseAll();openVideoEditor(\'sub\')" style="'+itemCss+'"'+hov+'>2. 자막 삽입</button>'
@@ -22169,6 +22171,100 @@ function _veSpecPrompt(){
   L.push('◼ 네거티브(피할 것): '+(negs.length?negs.join(', '):'없음'));
   if(p.refine)L.push('◼ 정교화: 참조 이미지 선행 생성 — '+(p.refModel||'(이미지 모델 미선택)')+' → 키프레임·스타일 참조로 영상 모델에 투입');
   return L.join('\n');
+}
+
+// ============================================================
+// 콘텐츠 제작 ▸ 링크 자료수집 (lg-*) — 운영자 260721
+//  URL 하나 붙여넣으면(링크트리 등) 그 페이지 안의 문서(PDF)·사진·영상·압축 자료를 찾아 [내려받기]로 나열.
+//  백엔드 = Worker /api/linkgrab(목록)·/api/linkgrab/file(첨부 프록시, 탭=바로 저장) — src/index.js linkgrab 블록.
+//  유튜브 등 스트리밍 영상 = 저작권·기술상 다운로드 불가 → [열기]만 제공(안내 문구로 고지).
+//  레퍼런스 = nblog 보드 골격(openNaverBlogTool) + _contentMenuBuild 메뉴 문법 그대로 — 신규 raw hex 0(전부 :root 토큰).
+//  이식 노트(노뮤트 에디터): 이 블록 + Worker linkgrab 블록 + 메뉴 항목 1줄이 전부(전역 상태 _lgState 하나 · 의존 = API/escapeHtml/showToast/_btnBusy/모달 공용부).
+// ============================================================
+var _lgState={busy:false,res:null,err:'',lastUrl:'',escHandler:null};
+var _LG_KIND={doc:['문서','var(--accent-light)','var(--accent)'],img:['사진','var(--peach-light)','var(--peach-text)'],video:['영상','var(--today-bg)','var(--c5)'],audio:['소리','var(--today-bg)','var(--c5)'],zip:['압축','var(--neutral)','var(--neutral-text)'],stream:['스트리밍','var(--neutral)','var(--neutral-text)'],link:['링크','var(--neutral)','var(--neutral-text)']};
+function openLinkGrab(){
+  var el=document.getElementById('lg-board');
+  if(!el){el=document.createElement('div');el.id='lg-board';document.body.appendChild(el);}
+  try{if(_lgState&&_lgState.escHandler)document.removeEventListener('keydown',_lgState.escHandler);}catch(_e){}
+  _lgState={busy:false,res:null,err:'',lastUrl:'',escHandler:null};   // 매번 새로 시작 — 공용 PC 원칙(콘텐츠 제작과 동일)
+  el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeLinkGrab)">'
+    +'<div class="modal" style="width:96vw;max-width:720px;max-height:92vh;padding:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:var(--surface-solid)">'
+    +'<button class="modal-x" onclick="closeLinkGrab()" title="닫기" style="position:absolute;top:14px;right:22px;z-index:10">✕</button>'
+    +'<div style="padding:18px 24px;border-bottom:1px solid var(--border);font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px">🔗 <span>링크 자료수집</span></div>'
+    +'<div id="lg-body" style="flex:1;overflow:auto;padding:20px 24px;min-width:0;min-height:0"></div>'
+    +'</div></div>';
+  _lgState.escHandler=function(e){if(e.key==='Escape')closeLinkGrab();};
+  document.addEventListener('keydown',_lgState.escHandler);
+  _lgRender();
+}
+function closeLinkGrab(){
+  if(_lgState.escHandler)document.removeEventListener('keydown',_lgState.escHandler);
+  _lgState={busy:false,res:null,err:'',lastUrl:'',escHandler:null};
+  var el=document.getElementById('lg-board');if(el)el.innerHTML='';
+}
+function _lgRender(){
+  var body=document.getElementById('lg-body');if(!body)return;
+  var h='<div style="font-size:12.5px;color:var(--dim);line-height:1.7;margin-bottom:12px">링크트리·홈페이지 등 <b style="color:var(--text)">페이지 주소를 붙여넣으면</b> 그 안의 문서(PDF)·사진·영상·압축 자료를 찾아 바로 내려받게 나열해요.<br>유튜브 같은 스트리밍 영상은 저작권 보호로 내려받기가 안 돼요 — [열기]로 재생만 가능해요.</div>'
+    +'<div style="display:flex;gap:8px;align-items:center">'
+    +'<input id="lg-url" class="nb-input" type="url" placeholder="https://linktr.ee/… 또는 자료가 있는 페이지 주소" style="flex:1" onkeydown="if(event.key===\'Enter\')_lgGo()">'
+    +'<button id="lg-go" class="btn btn--primary btn--md" onclick="_lgGo()" style="flex:none">가져오기</button></div>';
+  if(_lgState.err)h+='<div style="margin-top:10px;font-size:12.5px;color:var(--danger-btn);font-weight:600">'+escapeHtml(_lgState.err)+'</div>';
+  var r=_lgState.res;
+  if(r){
+    var dls=(r.items||[]).filter(function(it){return it.dl;});
+    h+='<div style="margin-top:18px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">'
+      +'<div style="font-size:13.5px;font-weight:700;flex:1;min-width:120px">'+escapeHtml(r.title||'결과')+' <span style="color:var(--dim);font-weight:600">— 내려받을 자료 '+dls.length+'건</span></div>'
+      +(dls.length>1?'<button class="btn btn--primary btn--sm" onclick="_lgDlAll()">전체 내려받기</button>':'')
+      +'</div>';
+    if(!(r.items||[]).length)h+='<div class="u-empty">이 페이지에서 내려받을 자료를 찾지 못했어요</div>';
+    (r.items||[]).forEach(function(it,i){
+      var kd=_LG_KIND[it.kind]||_LG_KIND.link;
+      h+='<div style="display:flex;align-items:center;gap:10px;padding:11px 2px;border-bottom:1px solid var(--border)">'
+        +'<span style="flex:none;font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px;background:'+kd[1]+';color:'+kd[2]+'">'+kd[0]+'</span>'
+        +'<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escapeHtml(it.title||'자료')+'</div>'
+        +(it.note?'<div style="font-size:11px;color:var(--dim);margin-top:1px">'+escapeHtml(it.note)+'</div>':'')+'</div>'
+        +(it.dl?'<button class="btn btn--neutral btn--sm" style="flex:none" onclick="_lgDl('+i+')">내려받기</button>':'')
+        +'<button class="btn btn--ghost btn--sm" style="flex:none" onclick="_lgOpen('+i+')">열기</button>'
+        +'</div>';
+    });
+  }
+  body.innerHTML=h;
+  var inp=document.getElementById('lg-url');
+  if(inp&&_lgState.lastUrl)inp.value=_lgState.lastUrl;
+}
+function _lgOpen(i){var it=((_lgState.res||{}).items||[])[i];if(it&&it.url)window.open(it.url,'_blank','noopener');}
+function _lgDlUrl(it){
+  if(it.via==='direct')return it.dl;
+  var nm=String(it.title||'').replace(/[\\/:*?"<>|]+/g,' ').trim().slice(0,120);
+  return API+'/api/linkgrab/file?url='+encodeURIComponent(it.dl)+(nm?'&name='+encodeURIComponent(nm):'');
+}
+function _lgDl(i){
+  var it=((_lgState.res||{}).items||[])[i];if(!it||!it.dl)return;
+  var a=document.createElement('a');a.href=_lgDlUrl(it);a.download='';a.rel='noopener';document.body.appendChild(a);a.click();
+  setTimeout(function(){try{a.remove();}catch(_e){}},1200);
+}
+function _lgDlAll(){
+  var idx=((_lgState.res||{}).items||[]).map(function(it,i){return it.dl?i:-1;}).filter(function(i){return i>=0;});
+  if(!idx.length)return;
+  showToast('자료 '+idx.length+'건 내려받기 시작 — 브라우저가 여러 파일 허용을 물으면 [허용]을 눌러주세요','info');
+  idx.forEach(function(n,seq){setTimeout(function(){_lgDl(n);},seq*700);});
+}
+async function _lgGo(){
+  if(_lgState.busy)return;
+  var inp=document.getElementById('lg-url');var u=String(inp&&inp.value||'').trim();
+  if(!u){showToast('페이지 주소를 먼저 붙여넣어 주세요','error');return;}
+  if(!/^https?:\/\//i.test(u))u='https://'+u;
+  _lgState.busy=true;_lgState.err='';_lgState.lastUrl=u;
+  var btn=document.getElementById('lg-go');if(btn)_btnBusy(btn,true,'불러오는 중');
+  try{
+    var r=await fetch(API+'/api/linkgrab?url='+encodeURIComponent(u));
+    var d=await r.json().catch(function(){return {error:'응답 해석 실패'};});
+    if(!r.ok||d.error)throw new Error(d.error||('HTTP '+r.status));
+    _lgState.res=d;
+  }catch(e){_lgState.res=null;_lgState.err='가져오기 실패 — '+((e&&e.message)||'네트워크 오류');}
+  _lgState.busy=false;
+  _lgRender();
 }
 
 // ============================================================
