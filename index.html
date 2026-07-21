@@ -22239,10 +22239,25 @@ function _lgDlUrl(it){
   var nm=String(it.title||'').replace(/[\\/:*?"<>|]+/g,' ').trim().slice(0,120);
   return API+'/api/linkgrab/file?url='+encodeURIComponent(it.dl)+(nm?'&name='+encodeURIComponent(nm):'');
 }
-function _lgDl(i){
+function _lgFileName(it){
+  var nm=String(it.title||'자료').replace(/[\\/:*?"<>|]+/g,' ').trim().slice(0,120)||'자료';
+  if(nm.indexOf('.')<0){var em=(String(it.dl||'').split('?')[0].match(/\.[A-Za-z0-9]{1,8}$/)||[''])[0];if(em)nm+=em;}
+  return nm;
+}
+async function _lgDl(i){
   var it=((_lgState.res||{}).items||[])[i];if(!it||!it.dl)return;
-  var a=document.createElement('a');a.href=_lgDlUrl(it);a.download='';a.rel='noopener';document.body.appendChild(a);a.click();
-  setTimeout(function(){try{a.remove();}catch(_e){}},1200);
+  if(it.via==='direct'){   // 드롭박스 dl=1 등 원본이 직접 저장을 강제하는 링크 = 새 탭 이동
+    var a=document.createElement('a');a.href=it.dl;a.target='_blank';a.rel='noopener';document.body.appendChild(a);a.click();
+    setTimeout(function(){try{a.remove();}catch(_e){}},1200);return;
+  }
+  try{   // 프록시 경유 = 전 API 공통 X-App-Password 게이트 계승 — 앵커 이동은 헤더를 못 실어 인증 fetch→blob 저장
+    var r=await fetch(_lgDlUrl(it),{headers:{'X-App-Password':password}});
+    if(!r.ok){var t=await r.json().catch(function(){return {};});throw new Error(t.error||(r.status===401?'앱 로그인 정보가 필요해요 — 다시 로그인 후 시도해 주세요':'HTTP '+r.status));}
+    var b=await r.blob();
+    var u=URL.createObjectURL(b);
+    var a2=document.createElement('a');a2.href=u;a2.download=_lgFileName(it);document.body.appendChild(a2);a2.click();
+    setTimeout(function(){try{a2.remove();URL.revokeObjectURL(u);}catch(_e){}},4000);
+  }catch(e){showToast('내려받기 실패 — '+((e&&e.message)||'네트워크 오류'),'error');}
 }
 function _lgDlAll(){
   var idx=((_lgState.res||{}).items||[]).map(function(it,i){return it.dl?i:-1;}).filter(function(i){return i>=0;});
@@ -22258,8 +22273,9 @@ async function _lgGo(){
   _lgState.busy=true;_lgState.err='';_lgState.lastUrl=u;
   var btn=document.getElementById('lg-go');if(btn)_btnBusy(btn,true,'불러오는 중');
   try{
-    var r=await fetch(API+'/api/linkgrab?url='+encodeURIComponent(u));
+    var r=await fetch(API+'/api/linkgrab?url='+encodeURIComponent(u),{headers:{'X-App-Password':password}});   // 전 API 공통 게이트(X-App-Password) 계승
     var d=await r.json().catch(function(){return {error:'응답 해석 실패'};});
+    if(r.status===401)throw new Error('앱 로그인 정보가 필요해요 — 다시 로그인 후 시도해 주세요');
     if(!r.ok||d.error)throw new Error(d.error||('HTTP '+r.status));
     _lgState.res=d;
   }catch(e){_lgState.res=null;_lgState.err='가져오기 실패 — '+((e&&e.message)||'네트워크 오류');}
