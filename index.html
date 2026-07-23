@@ -7328,7 +7328,7 @@ function _yrDrawChart(first){
     selCats.forEach(function(c){
       var r=_yrRow(c,st.metric),vv=r?r.v.slice():[];
       traces.push({type:'bar',name:c,x:years,y:vv,marker:{color:col[c],opacity:.5},hovertemplate:'%{x}년 '+c+'<br>%{y:,}<extra></extra>'});   // 막대 = 실적(반투명 → 위 추세선 가독)
-      traces.push({type:'scatter',mode:'lines+markers',name:c+' 추세',x:years,y:vv,line:{color:col[c],width:2,shape:'linear'},marker:{color:col[c],size:5,line:{color:paper,width:1}},hovertemplate:'%{x}년 '+c+'<br>%{y:,}<extra></extra>',showlegend:false});   // 추세선 = 꼭지점 직선 연결(연도별 실측점 → 곡선보간은 없는 중간값 암시라 직선)
+      traces.push({type:'scatter',mode:'lines+markers',name:c+' 추세',x:years,y:vv,line:{color:col[c],width:2.4,shape:'spline',smoothing:1},marker:{color:col[c],size:5,line:{color:paper,width:1}},hovertemplate:'%{x}년 '+c+'<br>%{y:,}<extra></extra>',showlegend:false});   // [260723 운영자] 추세선 곡선(spline) — 참조 대시보드처럼 부드럽게 · 각 연도 실측점은 마커로 정확히 통과(값 정확성 유지)
       var nzv=vv.filter(function(x){return x>0;}),m=nzv.length?nzv.reduce(function(a,b){return a+b;},0)/nzv.length:0;
       shapes.push({type:'rect',xref:'x',yref:'y',x0:years[0]-0.45,x1:years[years.length-1]+0.45,y0:0,y1:m,fillcolor:col[c],opacity:.055,line:{width:0},layer:'below'});   // [260723 운영자] 평균치 배경 밴드(0~평균) — 평균 이하 구간을 분야색으로 은은히(참조 대시보드 '평균 배경' 기법)
       shapes.push({type:'line',xref:'x',yref:'y',x0:years[0]-0.45,x1:years[years.length-1]+0.45,y0:m,y1:m,line:{dash:'dash',color:col[c],width:1.3},opacity:.5});   // 평균 가로선
@@ -7359,6 +7359,10 @@ function _yrRender(){
   var bestIdx=0;for(var i=1;i<combo.length;i++)if(combo[i]>combo[bestIdx])bestIdx=i;
   var nz=combo.filter(function(v){return v>0;}).length||1;
   var avg=Math.round(combo.reduce(function(a,b){return a+b;},0)/nz);
+  var yi25=years.indexOf(2025),yi24=years.indexOf(2024);   // [260723 운영자·한수] 전년 대비 증감 — 최근 취합(2025) vs 직전(2024), 선택 분야·지표 합
+  var dv=(yi25>=0&&yi24>=0)?(combo[yi25]-combo[yi24]):0;
+  var dup=dv>0,ddown=dv<0,dtok=dup?'--green':(ddown?'--danger':'--dim'),darr=dup?'▲':(ddown?'▼':'—');
+  var dpct=(yi24>=0&&combo[yi24]>0)?(' ('+(dup?'+':'−')+Math.abs(dv/combo[yi24]*100).toFixed(1)+'%)'):'';
   var catTxt=selCats.join('·');
   var h='';
   h+='<div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:16px;padding:14px 18px;background:var(--accent-glow);border-radius:14px;border:1px solid var(--accent-light)"><span style="font-size:12px;color:var(--neutral-text);font-weight:700">누적 총 관람객 · 방문객<br><span style="font-weight:500;color:var(--dim)">~2025년</span></span><span style="font-size:26px;font-weight:800;color:var(--accent);font-variant-numeric:tabular-nums"><span id="yr-grand">0</span> 명</span><span style="font-size:11px;color:var(--dim)">예울마루 관람 1,505,706 &nbsp;+&nbsp; 장도 방문 2,184,325</span></div>';
@@ -7373,6 +7377,7 @@ function _yrRender(){
   h+=_yrCard(catTxt+' 누계 '+mLabel,'yr-k1','','--accent');
   h+=_yrCard('최고 연도 ('+years[bestIdx]+')','yr-k2','','--peach-text');
   h+=_yrCard('연평균','yr-k3','','--green');
+  h+='<div style="flex:1;min-width:130px;padding:14px 16px;background:var(--past-bg);border-radius:12px;border:1px solid var(--border)"><div style="font-size:11px;color:var(--dim);font-weight:600;margin-bottom:6px">전년 대비 (2025 vs 2024)</div><div style="font-size:22px;font-weight:800;color:var('+dtok+');font-variant-numeric:tabular-nums">'+darr+' <span id="yr-k4">0</span>'+(dpct?'<span style="font-size:13px;font-weight:700">'+dpct+'</span>':'')+'</div></div>';
   h+='</div>';
   h+='<div style="font-size:13px;font-weight:700;color:var(--text);margin:2px 0 8px">'+(st.year==='all'?('연도별 '+mLabel+' 추이'):(st.year+'년 분야별 '+mLabel))+' <span style="font-weight:400;color:var(--dim);font-size:11px">— '+catTxt+(st.year==='all'?' · 막대=실적, 선=추세, 점선=평균':' · 선택 연도')+'</span></div>';
   h+='<div id="yr-chart" style="height:360px;margin-bottom:18px;animation:fadeUp .45s ease"></div>';
@@ -7383,6 +7388,7 @@ function _yrRender(){
   _yrCountUp(document.getElementById('yr-k1'),selSum,900);
   _yrCountUp(document.getElementById('yr-k2'),combo[bestIdx],900);
   _yrCountUp(document.getElementById('yr-k3'),avg,900);
+  _yrCountUp(document.getElementById('yr-k4'),Math.abs(dv),900);
   _bizEnsurePlotly(function(){_yrDrawChart(!_yrState.opened);_yrState.opened=true;});
 }
 
