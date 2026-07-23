@@ -7316,6 +7316,18 @@ function _yrTable(){
   h+='<div style="font-size:11px;color:var(--dim);line-height:1.7">※ 문화나눔 인원은 관람인원 숫자에 포함되어 있음<br>※ 단위: 회, 일, 명 · ~2026년 1분기는 집계 전(0) · <b style="color:var(--accent)">2025</b>년이 가장 최근 취합본<br>※ 예울마루(망마/장도) 공연·전시 등 관람객 및 장도 방문객 합계(~2025년 누적) = <b style="color:var(--accent)">3,690,031</b> 명</div>';
   return h;
 }
+function _yrMono(xs,ys,seg){   // [260723 운영자] 단조 큐빅(Fritsch–Carlson) — 부드러운 곡선이되 실측점을 위/아래로 절대 초과하지 않음(spline overshoot=봉우리 과장 제거 · 왜곡 0)
+  var n=xs.length; if(n<3)return {x:xs.slice(),y:ys.slice()};
+  seg=seg||16; var i,dx=[],m=[];
+  for(i=0;i<n-1;i++){dx[i]=xs[i+1]-xs[i];m[i]=(ys[i+1]-ys[i])/dx[i];}
+  var t=[]; t[0]=m[0]; t[n-1]=m[n-2];
+  for(i=1;i<n-1;i++){t[i]=(m[i-1]*m[i]<=0)?0:(m[i-1]+m[i])/2;}   // 극점(봉우리·골)에서 접선 0 → 그 지점을 넘지 않음
+  for(i=0;i<n-1;i++){ if(m[i]===0){t[i]=0;t[i+1]=0;continue;} var a=t[i]/m[i],b=t[i+1]/m[i],s=a*a+b*b; if(s>9){var f=3/Math.sqrt(s);t[i]=f*a*m[i];t[i+1]=f*b*m[i];} }
+  var ox=[],oy=[];
+  for(i=0;i<n-1;i++){ var x0=xs[i],y0=ys[i],h=dx[i],m0=t[i],m1=t[i+1],y1=ys[i+1];
+    for(var k=0;k<seg;k++){ var u=k/seg,u2=u*u,u3=u2*u; ox.push(x0+u*h); oy.push((2*u3-3*u2+1)*y0+(u3-2*u2+u)*h*m0+(-2*u3+3*u2)*y1+(u3-u2)*h*m1); } }
+  ox.push(xs[n-1]); oy.push(ys[n-1]); return {x:ox,y:oy};
+}
 function _yrDrawChart(first){
   var div=document.getElementById('yr-chart');if(!div||!window.Plotly)return;
   var st=_yrState,years=_YR.years;
@@ -7328,7 +7340,9 @@ function _yrDrawChart(first){
     selCats.forEach(function(c){
       var r=_yrRow(c,st.metric),vv=r?r.v.slice():[];
       traces.push({type:'bar',name:c,x:years,y:vv,marker:{color:col[c],opacity:.5},hovertemplate:'%{x}년 '+c+'<br>%{y:,}<extra></extra>'});   // 막대 = 실적(반투명 → 위 추세선 가독)
-      traces.push({type:'scatter',mode:'lines+markers',name:c+' 추세',x:years,y:vv,line:{color:col[c],width:2.4,shape:'spline',smoothing:1},marker:{color:col[c],size:5,line:{color:paper,width:1}},hovertemplate:'%{x}년 '+c+'<br>%{y:,}<extra></extra>',showlegend:false});   // [260723 운영자] 추세선 곡선(spline) — 참조 대시보드처럼 부드럽게 · 각 연도 실측점은 마커로 정확히 통과(값 정확성 유지)
+      var _mo=_yrMono(years,vv,16);
+      traces.push({type:'scatter',mode:'lines',name:c+' 추세',x:_mo.x,y:_mo.y,line:{color:col[c],width:2.4,shape:'linear'},hoverinfo:'skip',showlegend:false});   // [260723 운영자] 추세선 = 단조 큐빅 곡선(왜곡 0 · 실측점 초과 안 함)
+      traces.push({type:'scatter',mode:'markers',name:c,x:years,y:vv,marker:{color:col[c],size:5,line:{color:paper,width:1}},hovertemplate:'%{x}년 '+c+'<br>%{y:,}<extra></extra>',showlegend:false});   // 실측점 마커(정확값 통과)
       var nzv=vv.filter(function(x){return x>0;}),m=nzv.length?nzv.reduce(function(a,b){return a+b;},0)/nzv.length:0;
       shapes.push({type:'rect',xref:'x',yref:'y',x0:years[0]-0.45,x1:years[years.length-1]+0.45,y0:0,y1:m,fillcolor:col[c],opacity:.055,line:{width:0},layer:'below'});   // [260723 운영자] 평균치 배경 밴드(0~평균) — 평균 이하 구간을 분야색으로 은은히(참조 대시보드 '평균 배경' 기법)
       shapes.push({type:'line',xref:'x',yref:'y',x0:years[0]-0.45,x1:years[years.length-1]+0.45,y0:m,y1:m,line:{dash:'dash',color:col[c],width:1.3},opacity:.5});   // 평균 가로선
