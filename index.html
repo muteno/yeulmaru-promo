@@ -1990,6 +1990,31 @@ table.promo-board-table thead th:last-child{border-top-right-radius:11px}
 /* 섹션 소제목 = accent 바 프리픽스(.ana-cat-hd 계승) */
 .bizm-sec{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:800;color:var(--text);margin:2px 2px 10px}
 .bizm-sec::before{content:'';width:4px;height:14px;border-radius:2px;background:var(--accent)}
+/* [260723g 운영자 시안] 블러는 패널 프레임에만 · 글자 빼곡한 내부 = 메인 팔레트 흰색(--surface-solid) 불투명 = 크리스프 가독 */
+#app.biz-mode #sales-rail .srail{background:rgba(255,255,255,.55)}   /* 우 패널 = 블러 유지 + 흰색 상향(텍스트 가독) — 선택값 .35 supersede(시안 반영) */
+#app.biz-mode #biz-main .bizm-box{background:rgba(255,255,255,.55)}   /* 좌 프레임도 동일 */
+/* KPI 스트립 = 흰 카드 1장 + 세로 구분선 4칸(시안 — 개별 글래스 카드 폐지) */
+.bizm-strip{display:flex;background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 2px 10px rgba(74,77,231,.04);margin-bottom:14px;overflow:hidden}
+.bizm-strip .cell{flex:1;min-width:0;padding:14px 18px;border-left:1px solid var(--border)}
+.bizm-strip .cell:first-child{border-left:none}
+.bizm-strip .cell .lab{font-size:11px;color:var(--dim);font-weight:600;margin-bottom:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bizm-strip .cell .val{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1;letter-spacing:-.02em}
+/* 컴팩트 실적표 연도창 ‹ › */
+.bizm-yrnav{display:inline-flex;align-items:center;gap:7px;font-size:11px;color:var(--dim);font-weight:600}
+.bizm-yrnav button{width:22px;height:22px;border-radius:7px;border:1.5px solid var(--glass-bd);background:var(--glass-surface);color:var(--text);font-size:13px;line-height:1;cursor:pointer;box-shadow:var(--glass-shadow);font-family:inherit;padding:0;display:inline-flex;align-items:center;justify-content:center}
+.bizm-yrnav button:hover{border-color:var(--accent);color:var(--accent)}
+.bizm-yrnav button:disabled{opacity:.35;cursor:default}
+.bizm-ctbl{width:100%;border-collapse:collapse;font-size:13px;white-space:nowrap}
+.bizm-ctbl thead td{padding:7px 10px;color:var(--dim);font-size:11px;font-weight:700;text-align:right}
+.bizm-ctbl thead td:first-child{text-align:left}
+.bizm-ctbl tbody td{padding:9px 10px;text-align:right;font-variant-numeric:tabular-nums;color:var(--text)}
+.bizm-ctbl tbody td.cat{text-align:left;font-weight:800}
+.bizm-ctbl tbody td.tot{font-weight:800}
+.bizm-ctbl tbody tr.sum td{border-top:2px solid var(--border2);font-weight:800}
+/* 우 판매현황 개요 표(시안) — 일자·프로그램·장소·장르·성격·추이 */
+.mv-tbl thead td{padding:10px;color:var(--dim);font-size:11.5px;font-weight:700;border-bottom:1px solid var(--border)}
+.mv-tbl tbody tr{border-bottom:1px solid var(--border)}
+.mv-tbl tbody tr:last-child{border-bottom:none}
 /* ===== 전앱 커스텀 스크롤바 (운영자 260711 개정: 구획 없는 오버레이 통일 — 판매레일 오버레이 패턴 PR 246 전역화) =====
    운영자 = "스크롤바용 칸을 따로 떼지 마라 — 콘텐츠 100% 꽉 채우고 스크롤은 없는 셈 치고 그 위에". 구 13px 클래식(보더 트랙 pill + 살몬 ▲▼ 화살표 버튼)이
    데스크톱에서 공간 예약 + 별도 열 「구획」 + ▼화살표가 마지막 콘텐츠 덮음 → 전부 폐지.
@@ -4755,46 +4780,61 @@ function _mvDelta(dpp){
   if(dpp<-0.04)return {s:'▼ '+dpp.toFixed(1)+'%p',c:'var(--danger)'};
   return {s:'— 0.0%p',c:'var(--dim)'};
 }
+// [260723g 운영자 시안] 판매현황 = 개요 표: 일자 · 프로그램 · 장소 · 장르(pill) · 성격(pill) · 최근 7일 추이(일별 판매석 미니 막대 + 7일 누적·어제 델타)
+function _mvPill(txt,bg,fg){ return '<span style="display:inline-block;padding:3px 10px;border-radius:999px;font-size:11.5px;font-weight:700;background:'+bg+';color:'+fg+';white-space:nowrap;line-height:1.4">'+escapeHtml(txt)+'</span>'; }
+function _mvSpecPill(ax){ return (ax==='예술성')?_mvPill('예술성','var(--peach-light)','var(--peach-text)'):_mvPill('사업성','var(--accent-light)','var(--accent)'); }   // 예술성=살몬 틴트 · 사업성=인디고 틴트(팔레트 토큰)
+// 일별 판매석 미니 막대(최근 7일 증분·마지막=어제 강조) + 우측 7일 누적 +N석·어제 델타. days = _salesBuild 최근 7일 {seat 누적}
+function _mvBars(days,diff){
+  if(!days||days.length<2)return '<span style="color:var(--muted);font-size:12px">데이터 부족</span>';
+  var d=[]; for(var i=1;i<days.length;i++)d.push(Math.max(0,(days[i].seat||0)-(days[i-1].seat||0)));
+  d=d.slice(-7); if(!d.length)return '<span style="color:var(--muted);font-size:12px">데이터 부족</span>';
+  var mx=Math.max.apply(null,d.concat([1]));
+  var sum7=d.reduce(function(a,b){return a+b;},0);
+  var yest=(diff!==null&&diff!==undefined&&!isNaN(diff))?diff:d[d.length-1];
+  var bars=d.map(function(v,i){var last=(i===d.length-1);var hp=Math.max(12,Math.round(v/mx*100));return '<span style="flex:0 0 7px;height:'+hp+'%;background:var('+(last?'--accent':'--accent-light')+');border-radius:2px"></span>';}).join('');
+  return '<span style="display:inline-flex;align-items:flex-end;justify-content:flex-end;gap:3px;height:28px;vertical-align:middle">'+bars+'</span>'
+    +'<span style="display:inline-block;vertical-align:middle;margin-left:10px;text-align:right;min-width:56px">'
+    +'<span style="display:block;color:var(--accent);font-weight:800;font-size:13px;font-variant-numeric:tabular-nums">+'+sum7.toLocaleString()+'석</span>'
+    +'<span style="display:block;color:var(--dim);font-size:11px;font-variant-numeric:tabular-nums;margin-top:2px">어제 '+(yest>=0?'+':'')+yest.toLocaleString()+'</span></span>';
+}
 function _srailTableHtml(perfs,exs){
   var pgIdx=_srailPgIdx();
+  var WD=['일','월','화','수','목','금','토'];
+  var sd=function(d){ return (d&&d.getMonth)?((d.getMonth()+1)+'.'+d.getDate()+' '+WD[d.getDay()]):''; };
   var list=perfs.slice().sort(function(a,b){var ad=a.startDate?a.startDate.getTime():9e15,bd=b.startDate?b.startDate.getTime():9e15;if(ad!==bd)return ad-bd;return a.name<b.name?-1:1;});
-  // [260723c 운영자 선택값] 행 패딩 10.5/10.5 · 표 글자 14 · 이름 13.5 · 서브 12 · 추이 150 · 헤더 글자 12
-  var tdL='padding:10.5px 10.5px;', tdR='padding:10.5px 10.5px;text-align:right;';
-  var h='<div style="padding:2px 7px 0">';
-  h+='<table class="ana-tbl" style="font-size:14px"><thead><tr><td style="padding:8px 10.5px;font-size:12px">프로그램</td><td style="padding:8px 10.5px;font-size:12px">최근 7일 추이</td><td style="padding:8px 10.5px;font-size:12px;text-align:right">현재</td><td style="padding:8px 10.5px;font-size:12px;text-align:right">어제대비</td></tr></thead><tbody>';
-  if(!list.length)h+='<tr><td colspan="4"><div class="u-empty" style="padding:18px 6px"><div class="ico">🎫</div><div class="msg">판매중 공연이 없어요</div></div></td></tr>';
+  var td='padding:14px 10px;vertical-align:middle;';
+  // [260723g] 글자 빼곡한 표 = 솔리드 흰 카드(--surface-solid) 위 — 패널 프레임 블러(.55)는 카드 밖에서 유지
+  var h='<div style="margin:2px 6px 0;background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 2px 10px rgba(74,77,231,.04);overflow:hidden"><table class="ana-tbl mv-tbl" style="font-size:13.5px;padding:0 4px"><thead><tr>'
+    +'<td style="padding-left:16px">일자</td><td>프로그램</td><td>장소</td><td>장르</td><td>성격</td><td style="text-align:right;padding-right:16px">최근 7일 추이 <span style="font-weight:400;color:var(--muted)">(일별 판매석)</span></td></tr></thead><tbody>';
+  if(!list.length&&!(exs&&exs.length))h+='<tr><td colspan="6"><div class="u-empty" style="padding:18px 6px"><div class="ico">🎫</div><div class="msg">판매중 공연이 없어요</div></div></td></tr>';
   list.forEach(function(p){
-    var pg=_srailPgOf(pgIdx,p._mid,p.name);
-    var venue=(pg&&pg.l)?String(pg.l):'';
-    var sub2=[(p.dateStr||''),(p.genre||'기타'),_anaProfitAxis(p['수익성'])].filter(Boolean).join(' · ');
-    var d=_mvDelta(p.deltaPP);
+    var pg=_srailPgOf(pgIdx,p._mid,p.name), venue=(pg&&pg.l)?String(pg.l):'';
+    var ax=_anaProfitAxis(p['수익성']);
+    var trend=p.noData?('<span style="color:var(--muted);font-size:12px">'+((p.dday!==null&&p.dday>0)?'오픈 예정 · ':'')+'데이터 부족</span>'):_mvBars(p.days,p.diff);
     h+='<tr class="clk" role="button" tabindex="0" onclick="_srailDrill(\'perf\',\''+_anaEsc(p.name)+'\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click();}" title="'+escapeHtml(p.name)+' — 클릭 = 개별 분석">'
-      +'<td style="'+tdL+'"><div class="ana-row-name" style="font-size:13.5px">'+escapeHtml(p.name)
-      +(venue?'<sub style="font-size:12px">'+escapeHtml(venue)+'</sub>':'')
-      +(sub2?'<sub style="font-size:12px">'+escapeHtml(sub2)+'</sub>':'')
-      +'</div></td>'
-      +'<td style="'+tdL+'">'+_anaSpark(p.spark,150)+'</td>'
-      +'<td style="'+tdR+'color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap">'+(p.noData?'<span style="color:var(--dim);font-weight:600">집계 전</span>':p.occ.toFixed(1)+'%')+'</td>'
-      +'<td style="'+tdR+'color:'+d.c+';font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap">'+d.s+'</td>'
+      +'<td style="'+td+'padding-left:16px;color:var(--accent);font-weight:700;white-space:nowrap;font-variant-numeric:tabular-nums">'+sd(p.startDate)+'</td>'
+      +'<td style="'+td+'font-weight:700;color:var(--text)">'+escapeHtml(p.name)+'</td>'
+      +'<td style="'+td+'color:var(--neutral-text);white-space:nowrap">'+escapeHtml(venue||'-')+'</td>'
+      +'<td style="'+td+'">'+_mvPill(p.genre||'기타','var(--neutral)','var(--neutral-text)')+'</td>'
+      +'<td style="'+td+'">'+_mvSpecPill(ax)+'</td>'
+      +'<td style="'+td+'padding-right:16px;text-align:right;white-space:nowrap">'+trend+'</td>'
       +'</tr>';
   });
-  h+='</tbody></table>';
-  if(exs&&exs.length){
-    h+='<div class="ana-cat-hd" style="margin:14px 3px 6px;font-size:12.5px">전시 <span style="font-size:10.5px;color:var(--dim);font-weight:500">· 현재 = 달성률(유료/목표)</span></div>';
-    h+='<table class="ana-tbl" style="font-size:14px"><tbody>';
-    exs.forEach(function(e){
-      var sub=['전시'+(e.profit?' · '+e.profit:''),((e.시작일||e.종료일)?(_srailMD(e.시작일)+'~'+_srailMD(e.종료일)):'')].filter(Boolean).join(' · ');
-      var d=_mvDelta(e.deltaPP);
-      var clk=e.noData?'':(' class="clk" role="button" tabindex="0" onclick="_srailDrill(\'ex\',\''+_anaEsc(e.id)+'\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click();}"');
-      h+='<tr'+clk+'><td style="'+tdL+'"><div class="ana-row-name" style="font-size:13.5px">'+escapeHtml(e.name)+(sub?'<sub style="font-size:12px">'+escapeHtml(sub)+'</sub>':'')+'</div></td>'
-        +'<td style="'+tdL+'">'+_anaSpark(e.spark,150)+'</td>'
-        +'<td style="'+tdR+'color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap">'+(e.noData?'<span style="color:var(--dim);font-weight:600">집계 전</span>':(e.occ!=null?e.occ.toFixed(1)+'%':'—'))+'</td>'
-        +'<td style="'+tdR+'color:'+d.c+';font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap">'+d.s+'</td></tr>';
-    });
-    h+='</tbody></table>';
-  }
-  h+='<div style="color:var(--muted);font-size:11px;padding:8px 3px 10px">행 클릭 → 개별 분석 · 정렬 = 공연일 순 · 데이터 = 운영_일일입력(공연명 조인)</div>';
-  h+='</div>';
+  (exs||[]).forEach(function(e){
+    var dd=(e._endD!==null&&e._endD!==undefined&&e.종료일)?('~'+_srailMD(e.종료일)):(e.시작일?_srailMD(e.시작일):'');
+    var ach;
+    if(e.noData)ach='<span style="color:var(--muted);font-size:12px">집계 전</span>';
+    else if(e.occ!=null){ var pc=Math.max(0,Math.min(100,e.occ)); ach='<span style="display:inline-flex;align-items:center;gap:9px;justify-content:flex-end"><span style="flex:0 0 90px;height:6px;border-radius:999px;background:var(--peach-light);overflow:hidden"><span style="display:block;height:100%;width:'+pc.toFixed(0)+'%;background:var(--peach-text);border-radius:999px"></span></span><b style="color:var(--peach-text);font-weight:800;white-space:nowrap">달성 '+Math.round(e.occ)+'%</b></span>'; }
+    else ach='—';
+    var clk=e.noData?'':(' class="clk" role="button" tabindex="0" onclick="_srailDrill(\'ex\',\''+_anaEsc(e.id)+'\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click();}"');
+    h+='<tr'+clk+'><td style="'+td+'padding-left:16px;color:var(--peach-text);font-weight:700;white-space:nowrap">'+escapeHtml(dd)+'</td>'
+      +'<td style="'+td+'font-weight:700;color:var(--text)">'+escapeHtml(e.name)+'</td>'
+      +'<td style="'+td+'color:var(--neutral-text);white-space:nowrap">전시장</td>'
+      +'<td style="'+td+'">'+_mvPill('전시','var(--neutral)','var(--neutral-text)')+'</td>'
+      +'<td style="'+td+'">'+_mvPill('기획','var(--peach-light)','var(--peach-text)')+'</td>'
+      +'<td style="'+td+'padding-right:16px;text-align:right">'+ach+'</td></tr>';
+  });
+  h+='</tbody></table></div><div style="color:var(--muted);font-size:11px;padding:11px 10px 12px">막대 = 최근 7일 일별 판매석(마지막 = 어제) · 우측 = 7일 누적 · 행 클릭 → 개별 분석</div>';
   return h;
 }
 // 좌측 사업현황(연간 누적 실적) 인라인 보드 — openBusinessBoard(_bizRender) 축약 계승: 필터(연도·기획/대관) + KPI 3 + 월×점유율 산점도(Plotly) + 공연 리스트 표.
@@ -4804,6 +4844,50 @@ function _bizmToggleType(t){_bizmState.types[t]=!_bizmState.types[t];_bizInlineR
 function _bizmSetProfit(p){_bizmState.profit=p;_bizInlineRender();}
 function _bizmSetRounds(b){_bizmState.rounds=b;_bizInlineRender();}
 function _bizmSetRunDays(b){_bizmState.rundays=b;_bizInlineRender();}
+// [260723g 운영자 시안] 1면 컴팩트 = 흰 KPI 스트립 + 추이 차트(만명) + 카테고리별 컴팩트 실적표(연도창 ‹›). 필터 UI 없이 고정(관람·수강 인원·전체 분야) — 상세 조작은 모달(연간 실적 분석).
+var _YRM_ST={cats:{'공연':true,'전시':true,'교육':true},metric:'인원',year:'all'};   // 인라인 차트 전용 고정 상태(모달 _yrState 무오염)
+function _yrmTotRow(){ var r=null; _YR.total.forEach(function(x){if(x.key==='인원')r=x;}); return r; }
+function _yrmRender(){
+  var body=document.getElementById('yrm-body'); if(!body)return;
+  var tr=_yrmTotRow(),years=_YR.years,vals=tr.v;
+  var bi=0; for(var i=1;i<vals.length;i++)if(vals[i]>vals[bi])bi=i;
+  var nz=vals.filter(function(v){return v>0;}); var avg=Math.round(nz.reduce(function(a,b){return a+b;},0)/(nz.length||1));
+  var i25=years.indexOf(2025),i24=years.indexOf(2024);
+  var dv=(i25>=0&&i24>=0)?(vals[i25]-vals[i24]):0, base=(i24>=0)?vals[i24]:0;
+  var dpct=base>0?(dv/base*100):0, dup=dv>=0;
+  var cell=function(lab,val,col){return '<div class="cell"><div class="lab">'+lab+'</div><div class="val" style="color:var('+col+')">'+val+'</div></div>';};
+  var h='<div class="bizm-strip">'
+    +cell('누계 관람·수강',tr.sum.toLocaleString(),'--accent')
+    +cell('최고 연도 ('+years[bi]+')',vals[bi].toLocaleString(),'--text')
+    +cell('연평균',avg.toLocaleString(),'--text')
+    +cell('전년 대비',(dup?'+':'−')+Math.abs(dpct).toFixed(1)+'%',dup?'--green':'--danger')
+    +'</div>';
+  h+='<div class="bizm-card"><div class="ct">연도별 관람·수강 추이 <span class="sub">막대=실적 · 선=추세 (만명)</span></div><div id="yrm-chart" style="height:300px;margin:0 6px 6px;animation:fadeUp .45s ease"></div></div>';
+  h+='<div id="yrm-tbl"></div>';
+  body.innerHTML=h;
+  _yrmTable();
+  _bizEnsurePlotly(function(){ try{_yrDrawChart(true,'yrm',_YRM_ST);}catch(_e){console.warn('[yrm chart]',_e);} });
+}
+function _yrmWin(d){ var win=6,max=_YR.years.length-win; var s=(_bizmState.yrStart==null?max:_bizmState.yrStart)+d; if(s<0)s=0; if(s>max)s=max; _bizmState.yrStart=s; _yrmTable(); }
+function _yrmTable(){
+  var wrap=document.getElementById('yrm-tbl'); if(!wrap)return;
+  var years=_YR.years,win=6,max=years.length-win;
+  if(_bizmState.yrStart==null||_bizmState.yrStart>max)_bizmState.yrStart=max; if(_bizmState.yrStart<0)_bizmState.yrStart=0;
+  var s=_bizmState.yrStart, cols=years.slice(s,s+win);
+  var cats=[['공연','--accent'],['전시','--peach-text'],['교육','--green'],['계','--neutral-text']];
+  var rowOf=function(cat){ if(cat==='계')return _yrmTotRow(); var rs=_YR.cats[cat].rows,r=null; rs.forEach(function(x){if(x.key==='인원')r=x;}); return r; };
+  var h='<div class="bizm-card"><div class="ct" style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px 8px">전체 실적표'
+    +'<span class="bizm-yrnav"><button type="button" aria-label="이전 연도" onclick="_yrmWin(-1)"'+(s<=0?' disabled':'')+'>‹</button>'+cols[0]+'~'+cols[cols.length-1]+'<button type="button" aria-label="다음 연도" onclick="_yrmWin(1)"'+(s>=max?' disabled':'')+'>›</button><span class="sub" style="margin-left:2px">· 인원 기준</span></span></div>';
+  h+='<div style="padding:0 14px 12px;overflow-x:auto"><table class="bizm-ctbl"><thead><tr><td>구분</td>'+cols.map(function(y){return '<td'+(y===_YR_RECENT?' style="color:var(--accent)"':'')+'>'+y+'</td>';}).join('')+'<td style="color:var(--accent)">누계</td></tr></thead><tbody>';
+  cats.forEach(function(c){
+    var r=rowOf(c[0]);
+    h+='<tr'+(c[0]==='계'?' class="sum"':'')+'><td class="cat" style="color:var('+c[1]+')">'+c[0]+'</td>'
+      +cols.map(function(y){var yi=years.indexOf(y);return '<td'+(y===_YR_RECENT?' style="font-weight:700"':'')+'>'+_yrFmt(r.v[yi])+'</td>';}).join('')
+      +'<td class="tot" style="color:var('+c[1]+')">'+_yrFmt(r.sum)+'</td></tr>';
+  });
+  h+='</tbody></table></div></div>';
+  wrap.innerHTML=h;
+}
 // 좌측 페이지([260723c 운영자] "내가 요청한게 좌측 1면, 너가 꺼내온게 넘기면 2면"): 1 = 연간 실적(2012~2026 누적 · openYearBoard 재사용 pfx='yrm') · 2 = 운영대장 현황
 function _bizmGo(d){var p=(_bizmState.page||1)+d; if(p<1)p=2; if(p>2)p=1; _bizmState.dir=d; _bizmState.page=p; _bizInlineRender(); _bizmAnimate();}   // [260723f] dir = 촤르륵 슬라이드 방향
 function _bizmTo(p){var cur=_bizmState.page||1; if(cur===p)return; _bizmState.dir=(p>cur)?1:-1; _bizmState.page=p; _bizInlineRender(); _bizmAnimate();}
@@ -4824,11 +4908,13 @@ function _bizInlineRender(){
   var page=_bizmState.page||1;
   var _pgTag='<span style="font-size:10px;color:var(--accent);font-weight:800;white-space:nowrap;border:1px solid var(--accent-light);background:var(--accent-glow);border-radius:999px;padding:2px 9px;font-variant-numeric:tabular-nums">'+page+' / 2</span>';   // [260723f] 페이지 인디케이터 = accent 알약
   if(page===1){
+    // [260723g 운영자 시안] 누적 총 = 헤더 우측(히어로 박스 폐지) · 부제 = 기간 · 본문 = 컴팩트(_yrmRender)
+    var _grand='<span style="font-size:11.5px;color:var(--neutral-text);font-weight:600;white-space:nowrap">누적 총 <b style="color:var(--accent);font-size:14px;font-weight:800;font-variant-numeric:tabular-nums">'+_YR.grand.toLocaleString()+'</b> 명</span>';
     el.innerHTML='<div style="position:relative">'
-      +_bizmHead(_pgTag,'연간 실적','· 예울마루(망마·장도) 2012 ~ 2026.1Q')
+      +_bizmHead(_grand+_pgTag,'연간 실적',' 2012~2026.1Q')
       +_BIZM_BOX+'<div id="yrm-body"></div>'+_bizmDots()+'</div>'
       +_bizmPageNav()+'</div>';
-    _yrRender('yrm');
+    _yrmRender();
     return;
   }
   if(!_bizState.raw){
@@ -7668,7 +7754,7 @@ function _yrCountUp(el,to,dur){
   if(!el)return;to=Number(to)||0;dur=dur||900;var t0=performance.now();
   (function step(now){var p=Math.min(1,(now-t0)/dur);var e=1-Math.pow(1-p,3);el.textContent=Math.round(to*e).toLocaleString();if(p<1)requestAnimationFrame(step);})(t0);
 }
-function _yrRerenderAll(){ if(document.getElementById('yr-body'))_yrRender('yr'); if(document.getElementById('yrm-body'))_yrRender('yrm'); }   // [260723c] 모달('yr')·메인 인라인('yrm') 동시 존재 가능 — 상태 공유라 양쪽 동기 재렌더
+function _yrRerenderAll(){ if(document.getElementById('yr-body'))_yrRender('yr'); if(document.getElementById('yrm-body')&&typeof _yrmRender==='function')_yrmRender(); }   // [260723c→g] 모달('yr') 필터 변경 = 모달만 재렌더 · 인라인(yrm)은 고정 컴팩트(_yrmRender)라 무영향(호출은 안전 유지)
 function _yrToggleCat(c){var s=_yrState.cats;var on=_YR_CATLIST.filter(function(k){return s[k];});if(s[c]&&on.length===1)return;s[c]=!s[c];_yrRerenderAll();}
 function _yrSetMetric(m){_yrState.metric=m;_yrRerenderAll();}
 function _yrSetYear(y){_yrState.year=(y==='all')?'all':parseInt(y,10);_yrRerenderAll();}
@@ -7754,9 +7840,9 @@ function _yrApplyShadow(pfx){   // [260723 운영자] 콜아웃 칩이 차트 �
     document.querySelectorAll(_cid+' .annotation .bg').forEach(function(r){r.setAttribute('filter','url(#yrDrop)');});
   }catch(e){}
 }
-function _yrDrawChart(first,pfx){
+function _yrDrawChart(first,pfx,stO){
   var div=document.getElementById((pfx||'yr')+'-chart');if(!div||!window.Plotly)return;
-  var st=_yrState,years=_YR.years;
+  var st=stO||_yrState,years=_YR.years;   // [260723g] stO = 인라인 1면 고정 상태(_YRM_ST) — 모달 _yrState 무오염
   var selCats=_YR_CATLIST.filter(function(c){return st.cats[c];});
   var col={'공연':_yrCss('--accent'),'전시':_yrCss('--peach-text'),'교육':_yrCss('--green')};
   var grid=_yrCss('--border'),paper=_yrCss('--surface-solid'),fc=_yrCss('--neutral-text');
