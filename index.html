@@ -1945,12 +1945,12 @@ table.promo-board-table thead th:last-child{border-top-right-radius:11px}
 .mv-seg button{padding:6px 13px;border-radius:8px;border:1.5px solid rgba(255,255,255,.35);background:rgba(255,255,255,.12);color:rgba(255,255,255,.9);font-family:inherit;font-size:12px;font-weight:600;line-height:1;cursor:pointer;transition:background .15s,border-color .15s,color .15s;white-space:nowrap}
 .mv-seg button:hover{border-color:var(--surface-solid);color:var(--surface-solid)}
 .mv-seg button.on{background:var(--surface-solid);border-color:var(--surface-solid);color:var(--accent);box-shadow:0 2px 8px rgba(26,26,46,.15)}
-@media(max-width:900px){.mv-seg{display:none}}   /* 모바일 하단네비 축 — 좁은 폭에선 토글 숨김(가드·하단 네비 불변) */
+@media(max-width:768px){.mv-seg{display:none}}   /* 모바일 가드(≤768) 폭에서만 숨김 — 769px+는 토글 상시 노출([260723 평의회3 HIGH] 캘린더→실적 복귀 경로 보장) */
 #biz-main{display:none}
 #app.biz-mode #chips,#app.biz-mode #cal-head-wrap,#app.biz-mode #cal,#app.biz-mode .pet,#app.biz-mode .crablane{display:none}
 #app.biz-mode #biz-main{display:block}
 #app.biz-mode #sales-rail .srail-leg{display:none}   /* 범례 = 카드 차트 전용 — 표 모드에선 숨김 */
-#app.biz-mode .nav-mnav{opacity:.45}   /* 월 네비 = 캘린더 축 — 실적 모드에선 딤(동작 유지 · 캘린더 복귀 시 반영) */
+#app.biz-mode .nav-mnav{opacity:.45;pointer-events:none}   /* 월 네비 = 캘린더 축 — 실적 모드 딤+클릭 차단([260723 평의회3] 숨은 캘린더 월이 몰래 바뀌는 유령 조작 방지 · 복귀 시 현재월 유지) */
 #sales-rail{transition:opacity .25s ease}
 @media(max-width:1200px){#sales-rail{display:none}}
 /* ===== 전앱 커스텀 스크롤바 (운영자 260711 개정: 구획 없는 오버레이 통일 — 판매레일 오버레이 패턴 PR 246 전역화) =====
@@ -2020,7 +2020,7 @@ html::-webkit-scrollbar{width:8px}
 </div>
 
 <!-- ═══ APP ═══ -->
-<div id="app" style="display:none">
+<div id="app" class="biz-mode" style="display:none"><!-- [260723 평의회3] biz-mode 하드코딩 = 진입 항상 사업 실적(FOUC 1프레임 캘린더 노출 차단 — _mvApply가 이후 상태 동기) -->
   <nav class="nav">
     <button class="hamburger" onclick="toggleMobileNav()" aria-label="메뉴">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>
@@ -4590,6 +4590,8 @@ function _srailInit(force,_fetchGate){
     var els2=_srailEls(); var b=els2.body; if(!b)return;
     if(els2.sum)els2.sum.style.display='none';   // [분신술 260710 감사4] 성공 렌더 후 재시도 실패 시 이전 요약 잔존 방지
     b.innerHTML='<div class="u-empty" style="padding:26px 8px"><div class="ico">📡</div><div class="msg">판매 데이터를 못 불러왔어요</div><button class="ana-chip" onclick="_srailInit(true)">다시 시도</button></div>';
+    // [260723 평의회1·2·4 공통] 실적 모드 = 좌 인라인 보드도 레일 6시트에 기대므로, 실패를 미러(무한 「불러오는 중」 방치 차단) — 재시도 = 동일 _srailInit(true)로 양쪽 복구
+    if(typeof _mainView!=='undefined'&&_mainView==='biz'&&!_bizState.raw){ var bm=document.getElementById('biz-main'); if(bm)bm.innerHTML=_bizmHead('')+_BIZM_BOX+'<div style="text-align:center;padding:50px;color:var(--danger);font-size:13px">운영 데이터를 못 불러왔어요 <button class="ana-chip" onclick="_srailInit(true)" style="margin-left:8px">다시 시도</button></div></div>'; }
   });
   };
   if(_fetchGate&&_fetchGate.finally)_fetchGate.finally(_fire); else _fire();   // 캘린더 로드 완료 뒤 6시트 fetch(게이트 없으면 즉시 = force 재시도·resize 경로)
@@ -4684,12 +4686,13 @@ function setMainView(v,skipFade){
   if(skipFade){_mvApply();return;}
   var mm=document.getElementById('main-area'),sr=document.getElementById('sales-rail');
   [mm,sr].forEach(function(x){if(x)x.style.opacity='0';});
-  setTimeout(function(){ _mvApply(); [mm,sr].forEach(function(x){if(x)x.style.opacity='';}); },140);
+  setTimeout(function(){ try{_mvApply();}finally{[mm,sr].forEach(function(x){if(x)x.style.opacity='';});} },140);   // [260723 평의회1] finally = 예외 시 opacity 0 고착(화면 실종) 차단
 }
 function _mvSync(){
   var el=document.getElementById('mv-seg'); if(!el)return;
-  el.innerHTML='<button type="button" class="'+(_mainView==='cal'?'on':'')+'" onclick="setMainView(\'cal\')">홍보 캘린더</button>'
-    +'<button type="button" class="'+(_mainView==='biz'?'on':'')+'" onclick="setMainView(\'biz\')">사업 실적</button>';
+  el.setAttribute('role','group'); el.setAttribute('aria-label','메인 화면 전환');
+  el.innerHTML='<button type="button" aria-pressed="'+(_mainView==='cal')+'" class="'+(_mainView==='cal'?'on':'')+'" onclick="setMainView(\'cal\')">홍보 캘린더</button>'
+    +'<button type="button" aria-pressed="'+(_mainView==='biz')+'" class="'+(_mainView==='biz'?'on':'')+'" onclick="setMainView(\'biz\')">사업 실적</button>';
 }
 function _mvApply(noRail){
   if(typeof _mainView==='undefined')return;   // F5 복원 파싱 중 방어
@@ -4723,7 +4726,7 @@ function _srailTableHtml(perfs,exs){
     var venue=(pg&&pg.l)?String(pg.l):'';
     var sub2=[(p.dateStr||''),(p.genre||'기타'),_anaProfitAxis(p['수익성'])].filter(Boolean).join(' · ');
     var d=_mvDelta(p.deltaPP);
-    h+='<tr class="clk" onclick="_srailDrill(\'perf\',\''+_anaEsc(p.name)+'\')" title="'+escapeHtml(p.name)+' — 클릭 = 개별 분석">'
+    h+='<tr class="clk" role="button" tabindex="0" onclick="_srailDrill(\'perf\',\''+_anaEsc(p.name)+'\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click();}" title="'+escapeHtml(p.name)+' — 클릭 = 개별 분석">'
       +'<td style="'+tdL+'"><div class="ana-row-name">'+escapeHtml(p.name)
       +(venue?'<sub>'+escapeHtml(venue)+'</sub>':'')
       +(sub2?'<sub>'+escapeHtml(sub2)+'</sub>':'')
@@ -4735,12 +4738,12 @@ function _srailTableHtml(perfs,exs){
   });
   h+='</tbody></table>';
   if(exs&&exs.length){
-    h+='<div class="ana-cat-hd" style="margin:14px 3px 6px;font-size:12.5px">전시</div>';
+    h+='<div class="ana-cat-hd" style="margin:14px 3px 6px;font-size:12.5px">전시 <span style="font-size:10.5px;color:var(--dim);font-weight:500">· 현재 = 달성률(유료/목표)</span></div>';
     h+='<table class="ana-tbl"><tbody>';
     exs.forEach(function(e){
       var sub=['전시'+(e.profit?' · '+e.profit:''),((e.시작일||e.종료일)?(_srailMD(e.시작일)+'~'+_srailMD(e.종료일)):'')].filter(Boolean).join(' · ');
       var d=_mvDelta(e.deltaPP);
-      var clk=e.noData?'':(' class="clk" onclick="_srailDrill(\'ex\',\''+_anaEsc(e.id)+'\')"');
+      var clk=e.noData?'':(' class="clk" role="button" tabindex="0" onclick="_srailDrill(\'ex\',\''+_anaEsc(e.id)+'\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click();}"');
       h+='<tr'+clk+'><td style="'+tdL+'"><div class="ana-row-name">'+escapeHtml(e.name)+(sub?'<sub>'+escapeHtml(sub)+'</sub>':'')+'</div></td>'
         +'<td style="'+tdL+'">'+_anaSpark(e.spark,100)+'</td>'
         +'<td style="'+tdR+'color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap">'+(e.noData?'<span style="color:var(--dim);font-weight:600">집계 전</span>':(e.occ!=null?e.occ.toFixed(1)+'%':'—'))+'</td>'
@@ -4794,11 +4797,12 @@ function _bizInlineRender(){
   if(!any&&types.length)_bizmState.types[types[0]]=true;
   var selTypes=types.filter(function(t){return _bizmState.types[t];});
   var yrRecs=yearAll.filter(function(r){return selTypes.indexOf(r._type)>=0;});
+  // ⚠ 쌍둥이: 아래 gmap 집계 = 모달 _bizRender와 동치 손복사([260723 평의회2] — 한쪽 수정 시 반드시 동시 수정, 괴리 = 좌 보드 값 드리프트)
   var gmap={};
   yrRecs.forEach(function(r){ if(!gmap[r._name])gmap[r._name]={name:r._name,occs:[],paid:0,seat:0,cnt:0,start:r._date,end:r._date,genre:r._genre,type:r._type}; var g=gmap[r._name]; g.occs.push(r._occ); g.paid+=r._paid; g.seat+=r._seat; g.cnt++; if(r._date<g.start)g.start=r._date; if(r._date>g.end)g.end=r._date; });
   var list=Object.keys(gmap).map(function(k){var g=gmap[k];g.avg=g.occs.reduce(function(a,b){return a+b;},0)/g.occs.length;return g;}).sort(function(a,b){return a.end-b.end;});
   var right='<select class="ana-sel" onchange="_bizmSetYear(this.value)">'+years.map(function(y){return '<option value="'+y+'"'+(y===_bizmState.year?' selected':'')+'>'+y+'년</option>';}).join('')+'</select>';
-  types.forEach(function(t){ var on=!!_bizmState.types[t]; var only=selTypes.length===1&&on; right+='<label class="fbar-chip'+(on?' on':'')+(only?' lock':'')+'" style="padding:5px 11px"><input type="checkbox" '+(on?'checked':'')+(only?' disabled':'')+' onchange="_bizmToggleType(\''+t.replace(/'/g,"\\'")+'\')">'+escapeHtml(t)+'</label>'; });
+  types.forEach(function(t){ var on=!!_bizmState.types[t]; var only=selTypes.length===1&&on; right+='<label class="fbar-chip'+(on?' on':'')+(only?' lock':'')+'" style="padding:5px 11px"><input type="checkbox" '+(on?'checked':'')+(only?' disabled':'')+' onchange="_bizmToggleType(\''+_anaEsc(t)+'\')">'+escapeHtml(t)+'</label>'; });   // [260723 평의회4] onchange 이스케이프 = 정본 _anaEsc(따옴표만 치환하던 약식 관례 경화)
   var h=_bizmHead(right)+_BIZM_BOX;
   if(!list.length){ h+='<div style="text-align:center;padding:40px;color:var(--dim)">해당 연도/분류 데이터가 없습니다</div></div>'; el.innerHTML=h; return; }
   var total=list.length,avgAll=list.reduce(function(a,g){return a+g.avg;},0)/list.length,maxAll=Math.max.apply(null,list.map(function(g){return g.avg;}));
@@ -4824,6 +4828,7 @@ function _bizInlineRender(){
   });
   h+='</tbody></table></div>';
   h+='</div>';
+  try{if(window.Plotly&&document.getElementById('bizm-chart'))Plotly.purge('bizm-chart');}catch(_e){}   // [260723 평의회4] innerHTML 파기 전 purge — 상시 메인 재렌더에서 리스너·옵저버 누수 차단
   el.innerHTML=h;
   _bizEnsurePlotly(function(){ try{_bizDrawChart(list, selTypes.length>1, 'bizm-chart', 300);}catch(_e){console.warn('[bizm chart]',_e);} });
 }
@@ -5143,7 +5148,8 @@ function _srailRenderInner(els){
   // 차트 실측 폭 — body 좌우 패딩 28 + 카드 패딩·보더 28 차감(폭 0=레일 미표시 → 폴백 280)
   _srailChartW=Math.max(240,((els.body&&els.body.clientWidth)||0)-56); if(_srailChartW<=240&&!((els.body&&els.body.clientWidth)||0))_srailChartW=280;
   // [260723] 실적 모드 = 좌 인라인 보드 동기 갱신(레일 6시트 fetch가 _bizState.raw를 채우는 수렴점 — 어느 렌더 경로로 와도 좌측이 로딩에 안 갇히게)
-  if(typeof _mainView!=='undefined'&&_mainView==='biz'){ try{_bizInlineRender();}catch(_e){console.warn('[bizm]',_e);} }
+  // 드릴 이동은 우측만 바뀌므로 스킵([260723 평의회4] 좌 보드·차트 불필요 재구성 제거)
+  if(typeof _mainView!=='undefined'&&_mainView==='biz'&&_srailView.mode!=='drill'){ try{_bizInlineRender();}catch(_e){console.warn('[bizm]',_e);} }
   var perfs; try{ perfs=_salesBuild(); }catch(e){ console.warn('[srail build]',e); perfs=[]; }
   // 판매중 공연 + 진행중 전시(종류 무관 "진행중인 건 다" — 운영자 260707). 교육은 시트 생기면 여기 합류(확장점).
   var perfActives=perfs.filter(function(p){return p.status==='active';});
@@ -5151,8 +5157,10 @@ function _srailRenderInner(els){
   var exActives=_srailExhibs();
   // [운영자 260710] 노출축 = 「현재 홍보중」 — 홍보창(ps~se||e) 밖이면 숨김(미지정·조인 실패 = 판매기간 폴백 = 그대로 통과) + 판매 N일차 주석
   var pgIdx=_srailPgIdx();
-  perfActives=perfActives.filter(function(p){ var pg=_srailPgOf(pgIdx,p._mid,p.name); p._saleN=_srailSaleDayN(p.saleStart,pg); return _srailPromoOn(pg)!==false; });
-  exActives=exActives.filter(function(e){ var pg=_srailPgOf(pgIdx,null,e.name); e._saleN=_srailSaleDayN(null,pg); return _srailPromoOn(pg)!==false; });
+  // [260723 평의회2 MED-1] 실적 표 모드 = 판매 축(운영자 원문 「현재 판매중인 프로그램」 — 판매중이면 홍보창 밖이어도 표에 나옴) · 홍보창 필터는 캘린더 카드 모드 전용 유지
+  var _mvBiz=(typeof _mainView!=='undefined'&&_mainView==='biz');
+  perfActives=perfActives.filter(function(p){ var pg=_srailPgOf(pgIdx,p._mid,p.name); p._saleN=_srailSaleDayN(p.saleStart,pg); return _mvBiz?true:(_srailPromoOn(pg)!==false); });
+  exActives=exActives.filter(function(e){ var pg=_srailPgOf(pgIdx,null,e.name); e._saleN=_srailSaleDayN(null,pg); return _mvBiz?true:(_srailPromoOn(pg)!==false); });
   // [운영자 260710] 전시 「집계 전」 카드 합류(전시일일 0건 마스터 전시 + 프로그램 시트 전용 전시 — 프로그램단 커버리지)
   exActives=exActives.concat(_srailExhibsPre(pgIdx,exActives));
   // 정렬 축 통일: 시작일 임박순(진행 중=음수 최상단, 미상은 마지막) · 동률이면 집계 전(noData) 카드는 실적 카드 뒤 · 점유율/달성률 낮은 순(주의 대상 위로)
@@ -7397,14 +7405,16 @@ var _BIZ_TYPE_COLORS={'기획':'#4A4DE7','대관':'#D97706','기타':'#9CA3AF'};
 var _CPAL=['#4A4DE7','#D88455','#1A6B3C','#C02872','#2D8AB3','#F5B400'];
 function _bizEnsurePlotly(cb){
   if(window.Plotly){cb();return;}
+  if(window._plotlyDead){_plotlyFailNote();return;}   // [260723 평의회4] CDN 실패 후 스크립트 무한 재삽입 차단 — 재시도 = 새로고침
   if(window._plotlyQ){window._plotlyQ.push(cb);return;}
   window._plotlyQ=[cb];
   var s=document.createElement('script');
   s.src='https://cdn.plot.ly/plotly-basic-2.27.0.min.js';
   s.onload=function(){var q=window._plotlyQ||[];window._plotlyQ=null;q.forEach(function(f){try{f();}catch(e){console.error('[biz chart]',e);}});};
-  s.onerror=function(){window._plotlyQ=null;var el=document.getElementById('biz-chart');if(el)el.innerHTML='<div style="color:var(--danger);text-align:center;padding:40px;font-size:13px">차트 라이브러리 로드 실패 (오프라인?)</div>';};
+  s.onerror=function(){window._plotlyQ=null;window._plotlyDead=1;_plotlyFailNote();};   // [260723 평의회1·2·4] 모달·메인 인라인 양쪽 표기 + 재삽입 차단
   document.head.appendChild(s);
 }
+function _plotlyFailNote(){ ['biz-chart','bizm-chart'].forEach(function(id){ var el=document.getElementById(id); if(el)el.innerHTML='<div style="color:var(--danger);text-align:center;padding:40px;font-size:13px">차트 라이브러리 로드 실패 (오프라인?)</div>'; }); }
 function _bizDrawChart(list,multi,divId,hgt){   // [260723] divId·hgt = 메인 인라인 보드(bizm-chart·300) 재사용 — 미지정 = 기존 모달(biz-chart·430) 불변
   if(!window.Plotly)return;
   var div=document.getElementById(divId||'biz-chart');if(!div)return;
@@ -7494,6 +7504,7 @@ function _bizRender(){
   if(!anyChecked&&types.length)_bizState.types[types[0]]=true;
   const selTypes=types.filter(function(t){return _bizState.types[t];});
   const yrRecs=yearAll.filter(function(r){return selTypes.indexOf(r._type)>=0;});
+  // ⚠ 쌍둥이: 이 gmap 집계 = 메인 인라인 _bizInlineRender와 동치([260723 평의회2] — 한쪽 수정 시 반드시 동시 수정)
   const gmap={};
   yrRecs.forEach(function(r){
     if(!gmap[r._name])gmap[r._name]={name:r._name,occs:[],paid:0,seat:0,cnt:0,start:r._date,end:r._date,genre:r._genre,type:r._type};
@@ -7510,7 +7521,7 @@ function _bizRender(){
   years.forEach(function(y){h+='<option value="'+y+'"'+(y===_bizState.year?' selected':'')+'>'+y+'년</option>';});
   h+='</select><div style="display:flex;gap:8px;flex-wrap:wrap">';
   types.forEach(function(t){const on=!!_bizState.types[t];const only=selTypes.length===1&&on;
-    h+='<label class="fbar-chip'+(on?' on':'')+(only?' lock':'')+'"><input type="checkbox" '+(on?'checked':'')+(only?' disabled':'')+' onchange="_bizToggleType(\''+t.replace(/'/g,"\\'")+'\')">'+escapeHtml(t)+'</label>';
+    h+='<label class="fbar-chip'+(on?' on':'')+(only?' lock':'')+'"><input type="checkbox" '+(on?'checked':'')+(only?' disabled':'')+' onchange="_bizToggleType(\''+_anaEsc(t)+'\')">'+escapeHtml(t)+'</label>';   // [260723 평의회4] 이스케이프 경화 = _anaEsc(신규 인라인 칩과 동시 — 쌍둥이)
   });
   h+='</div></div>';
   if(!list.length){h+='<div style="text-align:center;padding:40px;color:#888">해당 연도/분류 데이터가 없습니다</div>';body.innerHTML=h;return;}
@@ -18757,7 +18768,7 @@ function _bnavBuild(){
     el.appendChild(b);
   });
 }
-function _bnavCal(){try{closePanel();}catch(_e){}window.scrollTo({top:0,behavior:'smooth'});}
+function _bnavCal(){try{closePanel();}catch(_e){}if(typeof setMainView==='function')setMainView('cal');window.scrollTo({top:0,behavior:'smooth'});}   // [260723 평의회3] 하단네비 캘린더 = 드로어와 동일하게 캘린더 모드 전환 경유(라벨 이중 동작 해소)
 function _bnavMore(){
   const isAdmin=(userRole==='admin');
   let h='<div class="bn-sheet">';
@@ -18765,6 +18776,7 @@ function _bnavMore(){
   add('📝','네이버 블로그 글쓰기','openNaverBlogTool()');
   add('🔗','링크 자료수집','openLinkGrab()');
   add('🧩','플랫폼 현황','openPlatformBoard()');
+  add('⇄','사업 실적 화면 (메인)','setMainView(\'biz\')');   // [260723 평의회3 HIGH] 좁은 폭 토글 숨김 시에도 실적 메인 복귀 경로 보장
   add('🏢','연간 누적 실적','openBusinessBoard()');
   add('📊','연간 실적 (사업 현황)','openYearBoard()');
   if(!isAdmin)add('📈','판매 현황','openAnalyticsBoard()');
