@@ -7430,9 +7430,10 @@ function _yrBand(y,hl){   // 최근(2025) 상시 강조 + 선택 하이라이트
   if(recent)s+='border-left:2px solid var(--accent-light);border-right:2px solid var(--accent-light);';
   return s;
 }
+function _yrScrollTable(dir){ var el=document.getElementById('yr-tscroll'); if(el)el.scrollBy({left:dir*Math.max(220,el.clientWidth*0.7),behavior:'smooth'}); }   // [260723 운영자] 표 가로 스크롤 — 묻히는 연도 열을 ◀▶로 페이지 이동(약 70% 폭씩)
 function _yrTable(){
-  var st=_yrState,years=_YR.years,thCss='padding:8px 10px;',tdCss='padding:7px 10px;';
-  var h='<div style="overflow-x:auto;border:1px solid var(--border);border-radius:12px;margin-bottom:14px">';
+  var st=_yrState,years=_YR.years,thCss='padding:8px 10px;vertical-align:top;',tdCss='padding:7px 10px;';   // [260723 운영자] 헤더 상단정렬 — 2025('최근 취합' 2줄) 때문에 단줄 연도가 중앙정렬로 떠 보이던 것 교정
+  var h='<div id="yr-tscroll" style="overflow-x:auto;border:1px solid var(--border);border-radius:12px;margin-bottom:14px">';   // [260723 운영자] id = 가로 스크롤 타깃(부제줄 ◀▶ 네비가 제어)
   h+='<table style="width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap">';
   h+='<thead><tr style="background:var(--past-bg);color:var(--neutral-text);font-size:11px;font-weight:700">';
   h+='<td colspan="2" style="'+thCss+'text-align:left;position:sticky;left:0;background:var(--past-bg)">구분</td>';
@@ -7508,7 +7509,7 @@ function _yrDrawChart(first){
       if(vi>=0&&vi!==pi)annos.push({x:years[vi],y:vm[vi],text:'최저 '+_man(vv[vi]),showarrow:true,arrowhead:0,arrowwidth:1,arrowcolor:hex,ax:0,ay:28,font:{color:hex,size:9.5},bgcolor:paper,bordercolor:hex,borderwidth:1,borderpad:3});   // 최저 콜아웃(만명)
     });
     annos.push({x:1,y:1.07,xref:'paper',yref:'paper',text:'(단위: 만명)',showarrow:false,xanchor:'right',yanchor:'bottom',font:{color:fc,size:10.5}});   // [260723 운영자] 우상단 단위 표기
-    layout={barmode:'group',height:410,margin:{t:34,r:22,b:48,l:56},paper_bgcolor:paper,plot_bgcolor:paper,font:{family:'inherit',size:11,color:fc},xaxis:{dtick:1,gridcolor:transp,zeroline:false,tickangle:0},yaxis:{gridcolor:grid,zeroline:false,ticksuffix:'',rangemode:'tozero'},showlegend:true,legend:{orientation:'h',y:-0.18,x:0.5,xanchor:'center'},bargap:.5,bargroupgap:.2,annotations:annos};   // [260723 운영자] y축 만명 단위(플롯 ÷10000) — 눈금이 점 라벨과 일치 · 좌여백 축소(만명이라 자릿수↓)
+    layout={barmode:'overlay',height:410,margin:{t:34,r:22,b:48,l:56},paper_bgcolor:paper,plot_bgcolor:paper,font:{family:'inherit',size:11,color:fc},xaxis:{dtick:1,gridcolor:transp,zeroline:false,tickangle:0},yaxis:{gridcolor:grid,zeroline:false,ticksuffix:'',rangemode:'tozero'},showlegend:true,legend:{orientation:'h',y:-0.18,x:0.5,xanchor:'center'},bargap:.6,annotations:annos};   // [260723 운영자] barmode overlay — 막대를 연도 중앙에 겹쳐 세워 곡선 점(마커)이 기둥 중앙에 정확히 얹힘(구 group=좌우 오프셋으로 점↔기둥 어긋남) · y축 만명 단위(÷10000)
   }else{
     var yi=years.indexOf(st.year);
     var ys=selCats.map(function(c){var r=_yrRow(c,st.metric);return r?(r.v[yi]||0):0;});
@@ -7552,7 +7553,8 @@ function _yrRender(){
   h+='</div>';
   h+='<div style="font-size:13px;font-weight:700;color:var(--text);margin:2px 0 8px">'+(st.year==='all'?('연도별 '+mLabel+' 추이'):(st.year+'년 분야별 '+mLabel))+' <span style="font-weight:400;color:var(--dim);font-size:11px">— '+catTxt+(st.year==='all'?' · 막대=실적, 선=추세, 점선=평균':' · 선택 연도')+'</span></div>';
   h+='<div id="yr-chart" style="height:360px;margin-bottom:18px;animation:fadeUp .45s ease"></div>';
-  h+='<div style="font-size:13px;font-weight:700;color:var(--text);margin:2px 0 8px">전체 실적표 <span style="font-weight:400;color:var(--dim);font-size:11px">— 엑셀 원본 그대로 · 선택 연도 열 하이라이트 · 2025 최근 취합 강조</span></div>';
+  var _navCss='width:28px;height:28px;border-radius:8px;border:1.5px solid var(--glass-bd);background:var(--glass-surface);color:var(--text);font-size:16px;font-weight:700;cursor:pointer;line-height:1;font-family:inherit;display:inline-flex;align-items:center;justify-content:center;box-shadow:var(--glass-shadow)';
+  h+='<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin:2px 0 8px"><div style="font-size:13px;font-weight:700;color:var(--text)">전체 실적표 <span style="font-weight:400;color:var(--dim);font-size:11px">— 엑셀 원본 그대로 · 선택 연도 열 하이라이트 · 2025 최근 취합 강조</span></div><div style="display:flex;gap:6px;flex-shrink:0"><button type="button" onclick="_yrScrollTable(-1)" title="이전 연도들 보기" style="'+_navCss+'">‹</button><button type="button" onclick="_yrScrollTable(1)" title="다음 연도들 보기" style="'+_navCss+'">›</button></div></div>';   // [260723 운영자] 묻히는 연도 열 = 부제줄 우측 ◀▶로 가로 스크롤(데이터 안 가리는 위치)
   h+=_yrTable();
   body.innerHTML=h;
   _yrCountUp(document.getElementById('yr-grand'),_YR.grand,1200);
