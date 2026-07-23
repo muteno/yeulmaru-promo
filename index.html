@@ -16984,9 +16984,9 @@ function openProgramForm(rowIndex){
   // 홍보 신청 받기 ON/OFF — 전 콘텐츠(공연·전시·예술교육·대관) 공통 opt-in. ON이면 홍보시작일=오늘 자동 채움(수정 가능),
   // OFF면 홍보시작일 비활성(disabled → FormData 제외 → 빈값 저장 = 홍보 대상 아님). 홍보 노출 종료 = 판매종료일(없으면 공연종료일)로 통합.
   var _promoOn=!!v.홍보시작;
-  html+='<div style="background:#F6F5FF;border:1px solid rgba(74,77,231,0.15);border-radius:10px;padding:10px 12px"><div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:8px"><div style="flex:1;font-size:11.5px;color:var(--accent);font-weight:700">📣 홍보 신청 받기 <span style="font-weight:400;color:#888">— ON이면 홍보시작일~판매종료일 동안 캘린더에서 홍보 신청 가능. OFF면 홍보 대상에서 제외(공연·전시·교육·대관 공통). 홍보 노출 종료는 아래 판매종료일(없으면 공연종료일)이 적용돼요.</span></div><span class="sw'+(_promoOn?' on':'')+'" id="prog-promo-sw" onclick="_progPromoToggle()" title="홍보 신청 받기 ON/OFF" style="margin-top:1px"><span class="sw-k"></span></span></div><div style="display:flex;gap:10px"><div style="flex:1"><label>홍보시작일(노출일)</label><input id="prog-promo-start" name="홍보시작일" type="date" value="'+v.홍보시작+'"'+(_promoOn?'':' disabled')+' style="'+(_promoOn?'':'opacity:0.5;background:#f0f0f0')+'"></div></div></div>';
+  html+='<div style="background:#F6F5FF;border:1px solid rgba(74,77,231,0.15);border-radius:10px;padding:10px 12px"><div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:8px"><div style="flex:1;font-size:11.5px;color:var(--accent);font-weight:700">📣 홍보 신청 받기 <span style="font-weight:400;color:#888">— ON이면 홍보시작일~판매종료일 동안 캘린더에서 홍보 신청 가능. OFF면 홍보 대상에서 제외(공연·전시·교육·대관 공통). 홍보 노출 종료는 아래 판매종료일(없으면 공연종료일)이 적용돼요. <b style="color:var(--accent)">홍보시작일은 판매시작일 당일이거나 그 이전이어야 하고, 판매시작일이 있으면 홍보는 켜져 있어야 해요.</b></span></div><span class="sw'+(_promoOn?' on':'')+'" id="prog-promo-sw" onclick="_progPromoToggle()" title="홍보 신청 받기 ON/OFF" style="margin-top:1px"><span class="sw-k"></span></span></div><div style="display:flex;gap:10px"><div style="flex:1"><label>홍보시작일(노출일)</label><input id="prog-promo-start" name="홍보시작일" type="date" value="'+v.홍보시작+'"'+(v.판매시작?' max="'+v.판매시작+'"':'')+(_promoOn?'':' disabled')+' style="'+(_promoOn?'':'opacity:0.5;background:#f0f0f0')+'"></div></div></div>';
   // 판매종료일 = 홍보 노출 종료를 겸함(비우면 공연종료일 폴백). 판매시작일 = 사업 분석용(선택).
-  html+='<div style="display:flex;gap:10px"><div style="flex:1"><label>판매시작일 <span style="font-size:10px;color:#888;font-weight:400">(선택·사업분석용)</span></label><input name="판매시작일" type="date" value="'+v.판매시작+'"></div><div style="flex:1"><label>판매종료일 <span style="font-size:10px;color:var(--accent);font-weight:400">(홍보 노출 종료도 여기까지)</span></label><input name="판매종료일" type="date" value="'+v.판매종료+'"></div></div>';
+  html+='<div style="display:flex;gap:10px"><div style="flex:1"><label>판매시작일 <span style="font-size:10px;color:#888;font-weight:400">(선택·사업분석용)</span></label><input id="prog-sale-start" name="판매시작일" type="date" value="'+v.판매시작+'" onchange="_progSyncPromoMax()"></div><div style="flex:1"><label>판매종료일 <span style="font-size:10px;color:var(--accent);font-weight:400">(홍보 노출 종료도 여기까지)</span></label><input name="판매종료일" type="date" value="'+v.판매종료+'"'+(v.판매시작?' min="'+v.판매시작+'"':'')+'></div></div>';
   html+='<div><label>담당자 <span style="font-size:10px;color:#888;font-weight:400">(콘텐츠구분 따라 필터)</span></label><select name="담당자">'+buildManagerOptions(v.구분,v.담당자)+'</select></div>';
   html+='<div><label>장소</label><input name="장소" type="text" value="'+escapeHtml(v.장소)+'"></div>';
   html+='<div><label>URL <span style="font-size:10px;color:var(--dim);font-weight:400">(예매·상세 링크 · 선택)</span></label><input name="URL" type="url" value="'+escapeHtml(v.URL)+'" placeholder="https://www.yeulmaru.org/..."></div>';
@@ -17012,9 +17012,24 @@ function _progPromoToggle(){
   sw.classList.toggle('on',on);
   s.disabled=!on; s.style.opacity=on?'1':'0.5'; s.style.background=on?'':'#f0f0f0';   // 홍보종료일 칸 폐지(판매종료일 통합) → 홍보시작일만 토글
   if(on){
-    if(!s.value){ var d=new Date(); s.value=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+    if(!s.value){
+      var d=new Date(), _today=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+      // [260724 운영자] 홍보시작일 ≤ 판매시작일 규칙 존중: 판매시작일이 이미 지난 값이면 오늘 대신 판매시작일로(min), 없거나 미래면 오늘.
+      var _ssEl=document.getElementById('prog-sale-start'), _ss=_ssEl?_ssEl.value:'';
+      s.value=(_ss&&_ss<_today)?_ss:_today;
+    }
+    _progSyncPromoMax();
     setTimeout(function(){try{s.focus();}catch(_e){}},0);
   }else{ s.value=''; }
+}
+// [260724 운영자] 홍보시작일 ≤ 판매시작일 강제(양방향 유도): 판매시작일이 바뀌면 홍보시작일 max를 거기에 맞추고,
+//   이미 홍보시작일이 그보다 늦으면 판매시작일 당일로 끌어내린다(홍보는 판매 시작 당일이나 그 이전). 저장 게이트(saveProgram)가 최종 하드 차단.
+function _progSyncPromoMax(){
+  var ss=document.getElementById('prog-sale-start'), ps=document.getElementById('prog-promo-start');
+  if(!ss||!ps)return;
+  var v=ss.value||'';
+  if(v){ ps.max=v; if(ps.value && ps.value>v){ ps.value=v; showToast('홍보시작일을 판매시작일('+v+')에 맞췄어요 — 홍보는 판매 시작 당일이나 그 이전','success'); } }
+  else{ ps.removeAttribute('max'); }
 }
 // [폐지] _progSyncPromoEnd — 홍보종료일 칸 제거(판매종료일로 통합)로 불필요해짐(호출부 onchange도 제거).
 
@@ -17036,6 +17051,22 @@ async function saveProgram(rowIndex){
   const form=document.getElementById('prog-form');
   if(!form)return;
   const fd=new FormData(form);
+  // [260724 운영자] 날짜 상식·홍보 게이트 = 저장 전 하드 차단(재발 방지). 홍보 캘린더가 홍보시작일을 노출 게이트로 쓰므로,
+  //   "판매는 하는데 홍보시작일이 없다(=OFF)" 또는 "홍보시작일 > 판매시작일"은 캘린더 누락 모순 → 애초에 저장 불가로 막는다.
+  //   type=date 값은 'YYYY-MM-DD'라 문자열 비교 = 날짜 비교. 홍보 OFF면 입력 disabled→FormData 제외→''(=OFF 판정).
+  {
+    var _pfS=(fd.get('시작일')||'').trim(), _pfE=(fd.get('종료일')||'').trim();
+    var _saS=(fd.get('판매시작일')||'').trim(), _saE=(fd.get('판매종료일')||'').trim();
+    var _prS=(fd.get('홍보시작일')||'').trim();
+    var _expEnd=_saE||_pfE;   // 홍보 노출 종료 = 판매종료일, 없으면 공연종료일(캘린더 게이트 _pe=p.se||p.e와 동일 계승)
+    var _errs=[];
+    if(_pfS&&_pfE&&_pfE<_pfS) _errs.push('공연 종료일이 시작일보다 빨라요');
+    if(_saS&&_saE&&_saE<_saS) _errs.push('판매종료일이 판매시작일보다 빨라요');
+    if(_saS&&!_prS) _errs.push('판매시작일이 있으면 홍보 신청 받기를 켜세요 (홍보시작일 = 판매시작일 당일이나 그 이전)');
+    if(_prS&&_saS&&_prS>_saS) _errs.push('홍보시작일('+_prS+')은 판매시작일('+_saS+') 당일이거나 그 이전이어야 해요');
+    if(_prS&&_expEnd&&_prS>_expEnd) _errs.push('홍보시작일('+_prS+')이 홍보 노출 종료일('+_expEnd+')보다 늦어요');
+    if(_errs.length){ showToast('저장할 수 없어요 · '+_errs.join(' · '),'error'); return; }
+  }
   if(!rowIndex){try{await loadPrograms();}catch(_e){}}   // [검증반영] 신규 저장 직전 프로그램 재조회 → _genProgramId 순번을 최신 캐시로 계산(동시/연속 등록 완화). 완전 차단은 Worker 유일성 몫.
   // ⚠️ 실제 '프로그램' 시트 컬럼: A~M(NO·콘텐츠구분·풀네임·줄임말·판매시작·판매종료·시작·종료·담당자·장소)
   //    · K=URL(폼 입력) · L=프로그램ID(구'공연ID') · M=홍보시작일. (구 N 홍보종료일·O·P 세로막대형 열 = 260710 삭제 → 배열 13개) 프로그램ID는 폼에 필드가 없으니 기존 값 보존.
