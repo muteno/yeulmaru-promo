@@ -7492,19 +7492,21 @@ function _yrDrawChart(first){
   var traces=[],layout,transp='rgba(0,0,0,0)',labelBg='rgba(255,255,255,0.75)';
   if(st.year==='all'){
     var annos=[];
+    function _man(v){return (v/10000).toFixed(1);}   // [260723 운영자] 만명 단위(소수1) — 숫자만 표기 · 단위는 우상단에
     var ordered=selCats.slice().sort(function(a,b){var ra=_yrRow(a,st.metric),rb=_yrRow(b,st.metric);return (rb?Math.max.apply(null,rb.v):0)-(ra?Math.max.apply(null,ra.v):0);});   // [260723 운영자] z-순서: 값 큰 분야 먼저(아래)→작은 분야 나중(위) = 낮은 수치가 안 가려짐
     ordered.forEach(function(c){
       var r=_yrRow(c,st.metric),vv=r?r.v.slice():[],hex=col[c];
+      var pi=0;for(var i2=1;i2<vv.length;i2++)if(vv[i2]>vv[pi])pi=i2;
+      var vi=-1;for(var i3=0;i3<vv.length;i3++)if(vv[i3]>0&&(vi<0||vv[i3]<vv[vi]))vi=i3;
       traces.push({type:'bar',name:c,x:years,y:vv,marker:{color:hex,opacity:.14},hovertemplate:'%{x}년 '+c+'<br>%{y:,}<extra></extra>',showlegend:false});   // [260723 운영자] 막대 = 얇고 옅은 보조(곡선이 주역)
       var _mo=_yrMono(years,vv,16);
       traces.push({type:'scatter',mode:'lines',name:c,x:_mo.x,y:_mo.y,line:{color:hex,width:2.6,shape:'linear'},fill:'tozeroy',fillcolor:_yrHexA(hex,.09),hoverinfo:'skip',showlegend:true});   // [260723 운영자] 곡선(단조 큐빅·왜곡0) + 아래 아주 옅은 area 음영 = 주역
-      traces.push({type:'scatter',mode:'markers',name:c+' 점',x:years,y:vv,marker:{color:hex,size:5,line:{color:paper,width:1}},hovertemplate:'%{x}년 '+c+'<br>%{y:,}<extra></extra>',showlegend:false});   // 실측점 마커
-      var pi=0;for(var i2=1;i2<vv.length;i2++)if(vv[i2]>vv[pi])pi=i2;
-      var vi=-1;for(var i3=0;i3<vv.length;i3++)if(vv[i3]>0&&(vi<0||vv[i3]<vv[vi]))vi=i3;
-      annos.push({x:years[pi],y:vv[pi],text:'최고 '+vv[pi].toLocaleString(),showarrow:true,arrowhead:0,arrowwidth:1,arrowcolor:hex,ax:0,ay:-24,font:{color:hex,size:9.5},bgcolor:paper,bordercolor:hex,borderwidth:1,borderpad:3});   // [260723 운영자·한수] 최고 콜아웃 — 리더선(---)으로 빼내 whitespace에·불투명 칩(+드롭섀도)
-      if(vi>=0&&vi!==pi)annos.push({x:years[vi],y:vv[vi],text:'최저 '+vv[vi].toLocaleString(),showarrow:true,arrowhead:0,arrowwidth:1,arrowcolor:hex,ax:0,ay:28,font:{color:hex,size:9.5},bgcolor:paper,bordercolor:hex,borderwidth:1,borderpad:3});   // 최저 콜아웃
+      traces.push({type:'scatter',mode:'markers+text',name:c+' 점',x:years,y:vv,text:vv.map(function(v,idx){return (v>0&&idx!==pi&&idx!==vi)?_man(v):'';}),textposition:'top center',textfont:{color:hex,size:8.5},marker:{color:hex,size:5,line:{color:paper,width:1}},hovertemplate:'%{x}년 '+c+'<br>%{y:,}<extra></extra>',showlegend:false,cliponaxis:false});   // [260723 운영자] 각 점 위 수치(만명·소수1) · 최고/최저는 콜아웃이 담당(중복 제거)
+      annos.push({x:years[pi],y:vv[pi],text:'최고 '+_man(vv[pi]),showarrow:true,arrowhead:0,arrowwidth:1,arrowcolor:hex,ax:0,ay:-24,font:{color:hex,size:9.5},bgcolor:paper,bordercolor:hex,borderwidth:1,borderpad:3});   // [260723 운영자·한수] 최고 콜아웃(만명) — 리더선으로 빼내 불투명 칩+드롭섀도
+      if(vi>=0&&vi!==pi)annos.push({x:years[vi],y:vv[vi],text:'최저 '+_man(vv[vi]),showarrow:true,arrowhead:0,arrowwidth:1,arrowcolor:hex,ax:0,ay:28,font:{color:hex,size:9.5},bgcolor:paper,bordercolor:hex,borderwidth:1,borderpad:3});   // 최저 콜아웃(만명)
     });
-    layout={barmode:'group',height:410,margin:{t:30,r:16,b:48,l:60},paper_bgcolor:paper,plot_bgcolor:paper,font:{family:'inherit',size:11,color:fc},xaxis:{dtick:1,gridcolor:transp,zeroline:false,tickangle:0},yaxis:{gridcolor:grid,zeroline:false,tickformat:','},showlegend:true,legend:{orientation:'h',y:-0.18,x:0.5,xanchor:'center'},bargap:.5,bargroupgap:.2,annotations:annos};   // 곡선 주역·막대 얇게(bargap .5)·연도 라벨 수평
+    annos.push({x:1,y:1.07,xref:'paper',yref:'paper',text:'(단위: 만명)',showarrow:false,xanchor:'right',yanchor:'bottom',font:{color:fc,size:10.5}});   // [260723 운영자] 우상단 단위 표기
+    layout={barmode:'group',height:410,margin:{t:34,r:22,b:48,l:70},paper_bgcolor:paper,plot_bgcolor:paper,font:{family:'inherit',size:11,color:fc},xaxis:{dtick:1,gridcolor:transp,zeroline:false,tickangle:0},yaxis:{gridcolor:grid,zeroline:false,tickformat:','},showlegend:true,legend:{orientation:'h',y:-0.18,x:0.5,xanchor:'center'},bargap:.5,bargroupgap:.2,annotations:annos};   // 곡선 주역·막대 얇게·연도 라벨 수평 · 좌우 여백 = 양끝 점 라벨(만명) 잘림 방지
   }else{
     var yi=years.indexOf(st.year);
     var ys=selCats.map(function(c){var r=_yrRow(c,st.metric);return r?(r.v[yi]||0):0;});
