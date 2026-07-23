@@ -4782,7 +4782,13 @@ function _mvDelta(dpp){
 }
 // [260723g 운영자 시안] 판매현황 = 개요 표: 일자 · 프로그램 · 장소 · 장르(pill) · 성격(pill) · 최근 7일 추이(일별 판매석 미니 막대 + 7일 누적·어제 델타)
 function _mvPill(txt,bg,fg){ return '<span style="display:inline-block;padding:3px 10px;border-radius:999px;font-size:11.5px;font-weight:700;background:'+bg+';color:'+fg+';white-space:nowrap;line-height:1.4">'+escapeHtml(txt)+'</span>'; }
-function _mvSpecPill(ax){ return (ax==='예술성')?_mvPill('예술성','var(--peach-light)','var(--peach-text)'):_mvPill('사업성','var(--accent-light)','var(--accent)'); }   // 예술성=살몬 틴트 · 사업성=인디고 틴트(팔레트 토큰)
+// [260723h 운영자 한 수] 성격 pill = 클릭 필터(예술성/사업성만 걸러 보기 · 다시 클릭 = 해제) — 활성 pill = 테두리 링
+function _mvFilterSpec(ax){ _bizmState.specFilter=(_bizmState.specFilter===ax)?null:ax; try{_srailRender();}catch(_e){} }
+function _mvSpecPill(ax){
+  var on=(_bizmState.specFilter===ax);
+  var bg=(ax==='예술성')?'var(--peach-light)':'var(--accent-light)', fg=(ax==='예술성')?'var(--peach-text)':'var(--accent)';
+  return '<button type="button" onclick="event.stopPropagation();_mvFilterSpec(\''+ax+'\')" aria-pressed="'+on+'" title="'+ax+'만 보기 / 다시 클릭 = 전체" style="display:inline-block;padding:3px 10px;border-radius:999px;font-size:11.5px;font-weight:700;background:'+bg+';color:'+fg+';white-space:nowrap;line-height:1.4;border:1.5px solid '+(on?fg:'transparent')+';cursor:pointer;font-family:inherit">'+ax+'</button>';
+}
 // 일별 판매석 미니 막대(최근 7일 증분·마지막=어제 강조) + 우측 7일 누적 +N석·어제 델타. days = _salesBuild 최근 7일 {seat 누적}
 function _mvBars(days,diff){
   if(!days||days.length<2)return '<span style="color:var(--muted);font-size:12px">데이터 부족</span>';
@@ -4802,9 +4808,14 @@ function _srailTableHtml(perfs,exs){
   var WD=['일','월','화','수','목','금','토'];
   var sd=function(d){ return (d&&d.getMonth)?((d.getMonth()+1)+'.'+d.getDate()+' '+WD[d.getDay()]):''; };
   var list=perfs.slice().sort(function(a,b){var ad=a.startDate?a.startDate.getTime():9e15,bd=b.startDate?b.startDate.getTime():9e15;if(ad!==bd)return ad-bd;return a.name<b.name?-1:1;});
+  // [260723h 한 수] 성격 pill 클릭 필터 — 예술성/사업성 축으로 공연·전시 동시 필터
+  var sf=_bizmState.specFilter||null;
+  if(sf){ list=list.filter(function(p){return _anaProfitAxis(p['수익성'])===sf;}); exs=(exs||[]).filter(function(e){return e.profit===sf;}); }
   var td='padding:14px 10px;vertical-align:middle;';
   // [260723g] 글자 빼곡한 표 = 솔리드 흰 카드(--surface-solid) 위 — 패널 프레임 블러(.55)는 카드 밖에서 유지
-  var h='<div style="margin:2px 6px 0;background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 2px 10px rgba(74,77,231,.04);overflow:hidden"><table class="ana-tbl mv-tbl" style="font-size:13.5px;padding:0 4px"><thead><tr>'
+  var h='<div style="margin:2px 6px 0;background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 2px 10px rgba(74,77,231,.04);overflow:hidden">';
+  if(sf)h+='<div style="display:flex;align-items:center;gap:8px;padding:9px 14px;border-bottom:1px solid var(--border);font-size:11.5px;color:var(--neutral-text);font-weight:600">성격 필터 <b style="color:var('+(sf==='예술성'?'--peach-text':'--accent')+')">'+sf+'</b>만 표시<button type="button" onclick="_mvFilterSpec(\''+sf+'\')" style="margin-left:auto;padding:3px 10px;border-radius:999px;border:1.5px solid var(--glass-bd);background:var(--glass-surface);color:var(--text);font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">✕ 전체 보기</button></div>';
+  h+='<table class="ana-tbl mv-tbl" style="font-size:13.5px;padding:0 4px"><thead><tr>'
     +'<td style="padding-left:16px">일자</td><td>프로그램</td><td>장소</td><td>장르</td><td>성격</td><td style="text-align:right;padding-right:16px">최근 7일 추이 <span style="font-weight:400;color:var(--muted)">(일별 판매석)</span></td></tr></thead><tbody>';
   if(!list.length&&!(exs&&exs.length))h+='<tr><td colspan="6"><div class="u-empty" style="padding:18px 6px"><div class="ico">🎫</div><div class="msg">판매중 공연이 없어요</div></div></td></tr>';
   list.forEach(function(p){
@@ -6638,6 +6649,7 @@ function _dailyExhibMasters(){
   Object.keys(byId).forEach(function(id){ byId[id].sort(function(a,b){return (_salesNum(a['기준일자'])||0)-(_salesNum(b['기준일자'])||0);}); });
   var _tdy=new Date(); _tdy.setHours(0,0,0,0);
   var out=[];
+  var seen={};
   mrows.forEach(function(m){
     var id=String(m['전시ID']||'').trim(); if(!id)return;
     if(String(m['상태']||'').trim()==='종료')return;
@@ -6649,7 +6661,28 @@ function _dailyExhibMasters(){
       cumTotal:last?(_salesNum(last['누계총인원'])||0):(_salesNum(m['최종총인원'])||0),
       cumMoney:last?(_salesNum(last['누계금액'])||0):(_salesNum(m['최종매출'])||0),
       lastDate:last?String(_salesNum(last['기준일자'])||''):'' });
+    seen[_uName(String(m['전시명']||''))]=1;
   });
+  // [260723h 운영자 "모든 오픈된 프로그램 가능하게"] 전시마스터 미등록이어도 오픈된(판매·전시 기간 중) 프로그램-시트 전시(t='e')를 입력 목록에 포함.
+  //   레일 판매현황에 뜨는 전시와 동일 소스 — 첫 입력 = 전시일일이 프로그램ID를 전시ID로 append(이후 누계 자동 합산). 목표관객 미상 = 0(달성률은 전시마스터 등재 후).
+  try{
+    var todayISO=(typeof _srailTodayISO==='function')?_srailTodayISO():(_tdy.getFullYear()+'-'+('0'+(_tdy.getMonth()+1)).slice(-2)+'-'+('0'+_tdy.getDate()).slice(-2));
+    var pgs=(typeof PERFS!=='undefined'&&PERFS&&PERFS.length)?PERFS:((_dailyState.programs||[]).map(function(p){try{return programToPerf(p);}catch(_e){return null;}}).filter(Boolean));
+    pgs.forEach(function(pg){
+      if(!pg||pg.t!=='e')return;
+      var until=pg.se||pg.e; if(!pg.ss||!until)return;
+      if(!(pg.ss<=todayISO&&todayISO<=until))return;                 // 판매/전시 기간 중(오픈) — 레일 _srailExhibsPre 계승
+      var nm=String(pg.f||pg.n||'').trim(); if(!nm||seen[_uName(nm)])return;
+      seen[_uName(nm)]=1;
+      var pid=String(pg.id||nm), lastP=(byId[pid]&&byId[pid].length)?byId[pid][byId[pid].length-1]:null;
+      out.push({ id:pid, name:nm, goal:0, _fromProgram:true,
+        cumPaid:lastP?(_salesNum(lastP['누계유료'])||0):0,
+        cumFree:lastP?(_salesNum(lastP['누계무료'])||0):0,
+        cumTotal:lastP?(_salesNum(lastP['누계총인원'])||0):0,
+        cumMoney:lastP?(_salesNum(lastP['누계금액'])||0):0,
+        lastDate:lastP?String(_salesNum(lastP['기준일자'])||''):'' });
+    });
+  }catch(_e){ console.warn('[exhibMasters program]',_e); }
   return out;
 }
 // [260723] 운영 마스터 시트 부분 갱신 — 행 단위 쓰기 API 부재(전체 재작성만) → fresh 재조회 후 매칭 행에 patch, 전체 재작성.
@@ -6686,7 +6719,7 @@ function _dailySetKind(k){ if(_dailyKind===k)return; _dailyKind=k; _dailyRenderF
 // ── 전시 입력 본문(공연과 시트·컬럼이 달라 별도 폼) — 그날 증분(유료·무료·금액) 입력 → 전시일일 append + 전시마스터 최종* 갱신. 분모=목표관객(달성률).
 function _dailyExhibBodyHtml(rowsData){
   var opts=_dailyExhibMasters();
-  if(!opts.length)return '<div style="text-align:center;color:var(--dim);padding:34px 20px;font-size:13px;line-height:1.6">📭 진행중인 <b>전시</b>가 없어요.<div style="font-size:12px;color:var(--muted);margin-top:6px">전시마스터 상태가 \'진행중\'·\'예정\'이고 종료일이 지나지 않은 전시만 표시됩니다.</div></div><div style="display:flex;justify-content:flex-end;margin-top:8px;padding-top:14px;border-top:1px solid var(--border)"><button onclick="closeDailyInput()" class="m-btn cancel">닫기</button></div>';
+  if(!opts.length)return '<div style="text-align:center;color:var(--dim);padding:34px 20px;font-size:13px;line-height:1.6">📭 지금 <b>오픈된 전시</b>가 없어요.<div style="font-size:12px;color:var(--muted);margin-top:6px">전시마스터 진행중 전시 + 오픈된(판매·전시 기간 중) 프로그램 시트 전시가 표시됩니다.</div></div><div style="display:flex;justify-content:flex-end;margin-top:8px;padding-top:14px;border-top:1px solid var(--border)"><button onclick="closeDailyInput()" class="m-btn cancel">닫기</button></div>';
   var rows=(rowsData&&rowsData.length)?rowsData:[{}];
   var curDate=(document.getElementById('d-date')||{}).value||_dailyToday();
   var h='';
