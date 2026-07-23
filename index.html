@@ -6253,8 +6253,9 @@ function _dailyMasters(){
       var rsOk=!!(id&&cntById[id]&&filledById[id]===cntById[id]&&(!(tc>1)||tc===cntById[id]));
       var totOpen=_salesNum(m['총오픈석']); var base=_salesNum(m['기준석'])||_SALES_FALLBACK_SEAT;
       var open=rsOk?sumById[id]:(totOpen||(base*rc));
-      // [회차 보정 260723 운영자] 회차 정보(총회차·회차상세·운영대장)가 전무 → 분모가 기간 폴백(대개 ×1)로 떨어지는 공연 = needRc. 폼에서 회차수를 직접 받아 공연마스터 총회차로 확정한다(달 샤베트류 6회차 × 좌석 = 정확 분모).
-      var needRc=!!(id)&&!(rcK>0)&&!totOpen&&!rsOk;
+      // [회차 보정 260723 운영자] 회차 신호(총회차·회차상세·운영대장)가 전무면 needRc — 폼에서 회차수를 직접 받아 총회차+총오픈석(=기준석×회차)을 확정(달 샤베트류 다회차 정확 분모).
+      // [260723 운영자 후속] 구 조건의 !totOpen 제거 — 총오픈석이 단회차 값(예: 926)으로 채워진 다회차 공연은 회차칸이 아예 안 떠 보정 불가였음. 회차 신호만 없으면(rcK===0) 노출해 운영자가 직접 회차수를 넣게.
+      var needRc=!!(id)&&!(rcK>0)&&!rsOk;
       return {name:name, id:id, open:open, cat:(catIdx[_uName(name)]||''), base:base, rc:rc, needRc:needRc, totalOpen:open}; });
   // [운영자 260708] 공연마스터 미등록 신규 오픈 공연 폴백 — 목록에 없으면 집계 자체를 못 넣는다.
   // 프로그램 시트 판매기간(판매시작일≤오늘≤판매종료일, 폴백=공연 종료일)로 판정 — 판매 현황 3차 폴백(_salesBuild)과 동일 원칙.
@@ -6453,8 +6454,8 @@ function _dailyRowHtml(r,regSet){
   s+='</select>';
   function inp(cls,val){return '<input type="number" class="'+cls+'" min="0" value="'+((r&&r[cls]!=null)?r[cls]:'')+'" style="flex:1;min-width:78px;padding:7px 8px;border:1.5px solid #ddd;border-radius:7px;font-size:12px;font-family:inherit">';}
   s+=inp('d-paids',r)+inp('d-paida',r)+inp('d-free',r);
-  // [회차 보정 260723 운영자] 선택 공연이 회차 미설정(분모가 좌석×1로 폴백)이면 회차수 입력칸 노출 — 저장 시 공연마스터 총회차 확정 → 분모 = 좌석×회차(달 샤베트 6회차 문제 해결). 강조 = accent 토큰.
-  if(selO&&selO.needRc){ s+='<input type="number" class="d-rc" min="1" step="1" value="'+((r&&r['d-rc']!=null&&r['d-rc']!=='')?escapeHtml(String(r['d-rc'])):'')+'" placeholder="회차수" title="이 공연 총 회차수 — 지금은 회차 정보가 없어 '+selO.totalOpen+'석(좌석×1)으로 계산 중이에요. 예: 6 입력 → 분모 = '+selO.base+'×6" style="flex:1;min-width:74px;padding:7px 8px;border:1.5px solid var(--accent);border-radius:7px;font-size:12px;font-family:inherit;background:var(--accent-light);color:var(--text);font-weight:700">'; }
+  // [회차 보정 260723 운영자] 선택 공연에 회차 신호(총회차·회차상세·운영대장)가 없으면 회차수 입력칸 노출 — 저장 시 공연마스터 총회차+총오픈석(=기준석×회차) 확정 → 분모 = 오픈석×회차(달 샤베트 다회차 문제 해결). 강조 = accent 토큰.
+  if(selO&&selO.needRc){ s+='<input type="number" class="d-rc" min="1" step="1" value="'+((r&&r['d-rc']!=null&&r['d-rc']!=='')?escapeHtml(String(r['d-rc'])):'')+'" placeholder="회차수" title="다회차면 총 회차수를 넣어줘 — 현재 분모 '+selO.totalOpen.toLocaleString()+'석. 예: 6 입력 → 분모 = 기준석 '+selO.base.toLocaleString()+' × 6 = '+(selO.base*6).toLocaleString()+'석(저장 시 공연마스터에 반영). 단회차면 비워둬." style="flex:1;min-width:74px;padding:7px 8px;border:1.5px solid var(--accent);border-radius:7px;font-size:12px;font-family:inherit;background:var(--accent-light);color:var(--text);font-weight:700">'; }
   s+='<button onclick="_dailyRemoveRow(this)" title="삭제" style="border:0;background:none;color:var(--danger);cursor:pointer;font-size:14px;padding:4px">✕</button>';
   s+='</div>'; return s;
 }
@@ -6530,7 +6531,7 @@ async function _dailySubmit(){
   if(!entries.length && !gEntries.length){if(msg)msg.textContent='공연을 1개 이상 선택하세요';return;}
   // [회차 보정 260723 운영자] needRc 공연에 회차수 입력됨 → 공연마스터 총회차 확정(분모 = 좌석×회차). masters(분모)도 즉시 갱신해 이 저장의 점유율까지 정확하게.
   var rcPatch={}, _mByName={}; _dailyMasters().forEach(function(m){ _mByName[m.name]=m; });
-  entries.forEach(function(r){ var rcv=parseInt(r['d-rc'],10); var mo=_mByName[r.공연]; if(rcv>0&&mo&&mo.needRc&&mo.id){ rcPatch[mo.id]={총회차:rcv}; masters[r.공연]=(mo.base||_SALES_FALLBACK_SEAT)*rcv; } });
+  entries.forEach(function(r){ var rcv=parseInt(r['d-rc'],10); var mo=_mByName[r.공연]; if(rcv>0&&mo&&mo.needRc&&mo.id){ var _op=(mo.base||_SALES_FALLBACK_SEAT)*rcv; rcPatch[mo.id]={총회차:rcv,총오픈석:_op}; masters[r.공연]=_op; } });   // [260723 운영자] 총회차 + 총오픈석(=기준석×회차) 동시 확정 — _salesBuild 분모가 총오픈석을 우선하므로, 단회차 총오픈석이 남아 있어도 이 값으로 확실히 덮어 오픈석×회차 분모 반영
   var rows=entries.map(function(r){
     var paidS=parseFloat(r['d-paids'])||0, paidA=parseFloat(r['d-paida'])||0, free=parseFloat(r['d-free'])||0;
     var totSeat=paidS+free, open=masters[r.공연]||926, occ=open>0?Math.min(totSeat/open*100,100):0;
