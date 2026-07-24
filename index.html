@@ -100,12 +100,12 @@ button{font-family:inherit;cursor:pointer}
 .pin-slot{position:relative;width:42px;height:48px;display:grid;place-items:center}
 .pin-slot::before{content:'';position:absolute;left:50%;top:50%;width:15px;height:15px;box-sizing:border-box;border-radius:50%;border:1px solid var(--muted);background:rgba(255,255,255,.55);opacity:.8;transform:translate(-50%,-50%);transition:background .18s ease,border-color .18s ease,opacity .18s ease,transform .18s ease}  /* [260709] 15px·1px·흰α.55(운영자 선택값) */
 .pin-slot:has(.pin.filled)::before{background:var(--accent);border-color:var(--accent)}
-.pin-slot:has(.pin.lit)::before{opacity:0;transform:translate(-50%,-50%) scale(.4)}
+.pin-slot:has(.pin.lit)::before{background:var(--accent);border-color:var(--accent);animation:pinDotPop .34s cubic-bezier(.34,1.56,.5,1)}   /* [260724 운영자] 입력 순간 = 채운 동그라미가 살짝 '통' 튀는 팝(숫자 노출 없이 촉각 피드백만) — 색은 채운 상태(--accent) 그대로 */
 .pin-slot:has(.pin.err)::before{border-color:var(--danger)}
 .pin{width:100%;height:100%;text-align:center;font-size:19px;font-weight:700;border:none;background:transparent;color:transparent;caret-color:transparent;outline:none;opacity:.8;padding:0;font-family:inherit}
-/* [260708] 입력 순간 숫자 통통 — 색 var(--accent) 계승. [260709] 정점 1.53→1.46(운영자 글래스 선택값) */
-.pin.lit{color:var(--accent);animation:pinDigitIn .3s cubic-bezier(.3,1.5,.5,1)}
-@keyframes pinDigitIn{0%{opacity:0;transform:scale(.5)}55%{transform:scale(1.46)}100%{opacity:1;transform:none}}
+/* [260724 운영자] 입력 순간 = 숫자 노출 폐지(숨김 유지) → 동그라미 팝(pinDotPop, ::before)이 촉각 담당. .lit = 숫자 계속 투명(마스킹) */
+.pin.lit{color:transparent}
+@keyframes pinDotPop{0%{transform:translate(-50%,-50%) scale(.6)}55%{transform:translate(-50%,-50%) scale(1.25)}100%{transform:translate(-50%,-50%) scale(1)}}   /* 살짝 '통' 튀는 팝(과하지 않게 정점 1.25) — 중앙정렬 translate 보존 */
 /* [260708] PIN 일치 = 도트별 시계방향 링 draw(초록) + 살짝 튐 — 색 var(--green) 계승, 순차 delay */
 .dot-ring{position:absolute;left:50%;top:50%;width:26px;height:26px;transform:translate(-50%,-50%);pointer-events:none;overflow:visible;opacity:0}
 .dot-ring circle{fill:none;stroke:var(--green);stroke-width:2.2;stroke-linecap:round;stroke-dasharray:100;stroke-dashoffset:100;transform:rotate(-90deg);transform-origin:50% 50%}
@@ -118,7 +118,7 @@ button{font-family:inherit;cursor:pointer}
 .pin-wrap.hint1 .pin-slot:first-child .dot-ring{opacity:1}
 .pin-wrap.hint1 .pin-slot:first-child .dot-ring circle{stroke:var(--accent);animation:pinHintLap 1.3s cubic-bezier(.5,.1,.4,.9) infinite}
 @keyframes pinHintLap{0%{stroke-dashoffset:100;opacity:1}70%{stroke-dashoffset:0;opacity:1}84%{stroke-dashoffset:0;opacity:0}100%{stroke-dashoffset:100;opacity:0}}
-@media (prefers-reduced-motion:reduce){.pin.lit{animation:none}.pin-wrap.success .dot-ring circle{animation:none;stroke-dashoffset:0}.pin-wrap.success .pin-slot::before{animation:none}.pin-wrap.hint1 .pin-slot:first-child .dot-ring{opacity:0}.pin-wrap.hint1 .pin-slot:first-child .dot-ring circle{animation:none}}
+@media (prefers-reduced-motion:reduce){.pin-slot:has(.pin.lit)::before{animation:none}.pin-wrap.success .dot-ring circle{animation:none;stroke-dashoffset:0}.pin-wrap.success .pin-slot::before{animation:none}.pin-wrap.hint1 .pin-slot:first-child .dot-ring{opacity:0}.pin-wrap.hint1 .pin-slot:first-child .dot-ring circle{animation:none}}
 #login-msg{font-size:13px;height:18px;color:var(--danger);margin-top:10px}
 /* [260708] 메시지 영역 하나로 통합 — 평상시 안내(무채색 var(--muted)), 입력 시작하면 비움, 틀리면 같은 자리 danger 대체 */
 #login-msg.lm-hint{color:var(--accent);font-weight:600;margin-top:36px;animation:lmPulse 1.8s ease-in-out infinite}  /* [260712] 안내문구 = 코어 강조색(--accent) + 핀칸과 간격 2배 + 은은한 펄스 액팅(운영자) · 강조색 계승(기존 muted는 유리 위에서 매몰) */
@@ -2762,13 +2762,13 @@ function _pinFocusFirst(){
   }
 }
 pins.forEach((el,i)=>{
-  // 방금 입력한 칸만 숫자 노출(lit), 0.6초 뒤 채운 동그라미로(filled). 원=.pin-slot::before, 숫자=input → 물리 분리로 겹침 없음.
+  // [260724 운영자] 숫자 노출 없음(항상 마스킹) — 입력 순간 동그라미 팝(.lit 0.3s '통' 튀기) → 채운 동그라미(filled) 정착. 원=.pin-slot::before, 숫자=input(투명) → 물리 분리로 겹침 없음.
   var _fill=function(){el.type='password';el.classList.remove('lit');el.classList.add('filled');};
   el.addEventListener('input',()=>{
     el.classList.remove('err');
     _pinFirstHintStop();   // [260710 운영자] 입력 시작 = 첫 칸 안내 링 중지
     _pinHintUpdate();   // [260708] 입력하면 안내문구 사라짐 / 다 지우면 복귀 · 에러도 재입력 시 해제
-    if(el.value){ el.type='password'; el.classList.remove('lit'); el.classList.add('filled'); clearTimeout(el._at); }  // [260724 운영자] 입력 숫자 노출 폐지 = 즉시 마스킹(아예 안보이게) — 구 0.6초 코발트 숫자 노출 제거, 채운 원(.filled)만 피드백
+    if(el.value){ el.type='password'; el.classList.add('lit'); el.classList.remove('filled'); clearTimeout(el._at); el._at=setTimeout(_fill,300); }  // [260724 운영자] 숫자는 계속 숨김(type=password·색 transparent) + 입력 순간 동그라미가 살짝 '통' 튀는 팝(.lit 0.3s → _fill 정착) = 써지는 촉각 피드백(숫자 노출 없음)
     else { el.type='password'; el.classList.remove('lit','filled'); clearTimeout(el._at); }                                                       // 지우면: 빈 동그라미
     if(el.value.length===1&&i<3)pins[i+1].focus();
     if(i===3&&el.value.length===1)tryLogin();
