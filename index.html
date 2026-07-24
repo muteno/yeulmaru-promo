@@ -7218,6 +7218,8 @@ function _dsxExtract(wb, fname){
   return out;
 }
 function _dsxUname(s){ try{return _uName(s);}catch(_){return String(s||'').replace(/\s+/g,'').toLowerCase();} }
+// [260724 운영자] <…>/「…」/『…』 안의 '핵심 타이틀'만 정규화 추출(없으면 '') — 「뮤지컬 <그날들>」에서 장르 접두어를 건너뛰고 '그날들'로 비교. 마지막 괄호 기준(부제 우선).
+function _dsxTitleKey(s){ var m=String(s||'').match(/[〈<「『]([^〉>」』]+)[〉>」』]/g); if(!m||!m.length)return ''; var last=m[m.length-1].replace(/^[〈<「『]|[〉>」』]$/g,''); var k=_dsxUname(last); return k.length>=2?k:''; }
 // 최장 공통 부분문자열 길이 (mjs 260618_daily_ingest 정본 계승 — 보일러플레이트 붙어도 핵심 겹침으로 매칭)
 function _dsxLcs(a,b){ var best=0,n=b.length,prev=new Array(n+1).fill(0); for(var i=1;i<=a.length;i++){ var cur=new Array(n+1).fill(0); for(var j=1;j<=n;j++){ if(a[i-1]===b[j-1]){ cur[j]=prev[j-1]+1; if(cur[j]>best)best=cur[j]; } } prev=cur; } return best; }
 function _dsxPreview(results, existingData, append, exDailyData){
@@ -7225,8 +7227,9 @@ function _dsxPreview(results, existingData, append, exDailyData){
   // 매칭/선택 후보 = 판매중 프로그램(공연 + 오픈 전시). byName=선택값(이름)→마스터 역참조(kind 포함). nameMap/cands=자동매칭용(정규화명 2자 이상, 오매칭 방지)
   var mlist=_dailyMasters().map(function(x){ return {name:x.name, id:x.id, open:x.open, kind:'공연'}; });
   try{ _dailyExhibMasters().forEach(function(x){ mlist.push({name:x.name, id:x.id, kind:'전시', goal:x.goal||0}); }); }catch(_ex){}   // [260724] 오픈 전시(전시마스터+프로그램시트) 합류 — 업로드도 전시 저장 지원
-  var nameMap={}, cands=[], byName={};
-  mlist.forEach(function(x){ if(!byName[x.name])byName[x.name]=x; var k=_dsxUname(x.name); if(k&&k.length>=2&&!nameMap[k]){nameMap[k]=x;cands.push(k);} });
+  var nameMap={}, cands=[], byName={}, titleMap={};
+  mlist.forEach(function(x){ if(!byName[x.name])byName[x.name]=x; var k=_dsxUname(x.name); if(k&&k.length>=2&&!nameMap[k]){nameMap[k]=x;cands.push(k);}
+    var tk=_dsxTitleKey(x.name); if(tk){ if(titleMap[tk]===undefined)titleMap[tk]=x; else if(titleMap[tk]&&titleMap[tk].name!==x.name)titleMap[tk]=null; } });   // [260724] 타이틀(<…>) 인덱스 — 동일 타이틀 충돌 시 null(=모호, 매칭 제외)
   // 기존 전시일일 (전시ID,날짜) 셋 — 전시 업로드 중복 append 방지(dedup)
   var existingEx={}, exr=(exDailyData&&exDailyData.rows)||[];
   exr.forEach(function(row){ var id=String(row['전시ID']||'').trim(), eymd=String(row['기준일자']||'').replace(/[^0-9]/g,''); if(id&&eymd)existingEx[id+'|'+eymd]=1; });
@@ -7243,6 +7246,7 @@ function _dsxPreview(results, existingData, append, exDailyData){
   var resolve=function(pname){
     var q=_dsxUname(pname); if(q.length<2)return {none:1};
     if(nameMap[q])return {m:nameMap[q]};
+    var ft=_dsxTitleKey(pname); if(ft&&titleMap[ft])return {m:titleMap[ft]};   // [260724] <타이틀>로 매칭(장르명 달라도) — 타이틀 없는 상품명('뮤지컬')엔 영향 없음
     var best=null,bestScore=0,tie=false;
     cands.forEach(function(k){ var score=(q.indexOf(k)>=0||k.indexOf(q)>=0)?Math.min(q.length,k.length)+100:_dsxLcs(q,k); if(score>bestScore){bestScore=score;best=k;tie=false;}else if(score===bestScore&&score>=4)tie=true; });
     if(!best||bestScore<4)return {none:1};
