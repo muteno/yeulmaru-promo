@@ -8124,16 +8124,18 @@ function _yrDrawChart(first,pfx,stO){
       annos.push({x:years[pi],y:vm[pi],text:'최고 '+_man(vv[pi]),showarrow:true,arrowhead:0,arrowwidth:1,arrowcolor:hex,ax:0,ay:-24,font:{color:hex,size:9.5},bgcolor:paper,bordercolor:hex,borderwidth:1,borderpad:3});   // [260723 운영자·한수] 최고 콜아웃(만명) — 리더선으로 빼내 불투명 칩+드롭섀도
       if(vi>=0&&vi!==pi)annos.push({x:years[vi],y:vm[vi],text:'최저 '+_man(vv[vi]),showarrow:true,arrowhead:0,arrowwidth:1,arrowcolor:hex,ax:0,ay:28,font:{color:hex,size:9.5},bgcolor:paper,bordercolor:hex,borderwidth:1,borderpad:3});   // 최저 콜아웃(만명)
     });
-    // [260724 운영자] 근 N개년 관람 추세선 = 누적 연간 이용객(계 합계) 기준 — 시작→종료 연도를 잇는 「직선 · 점선 · 파랑(--accent)」. 공연 전용 아님(공연 비중이 커 그 근처로 보일 뿐). 계값이 개별 분야보다 높아 위쪽에 있는 게 정상. 라벨 박스 위치·%(전체 관람 추이) 그대로(운영자 "박스 설명위치는 좋아")
+    // [260724 운영자 정정] 관람 추세선 = 공연선 실제 꼭짓점 원(2022→2025) 직결(운영자 "너가 준 시안대로 · 계 기준은 잘못된 방향"). 선분 끝점 = 공연 2022·2025(≈7.4→8.3만) · %·라벨은 계(전체 관람) 2021→2025 유지 · 박스 상단(값 라벨 위)
     if(pfx==='yrm'&&typeof _yrmTotRow==='function'){
-      var _tr=_yrmTotRow();   // 계 = 누적 연간 이용객(공연+전시+교육 합)
-      var _t0=years.indexOf(2021),_t1=years.indexOf(2025);
-      if(_tr&&_t0>=0&&_t1>=0&&_tr.v[_t0]>0&&_tr.v[_t1]>0){
-        var _ta=_tr.v[_t0]/10000,_tb=_tr.v[_t1]/10000,_up=_tr.v[_t1]>=_tr.v[_t0];
-        var _tpc=(_tr.v[_t0]>0)?((_tr.v[_t1]-_tr.v[_t0])/_tr.v[_t0]*100):0;
-        var _ac=_yrCss('--accent'),_span=years[_t1]-years[_t0],_lbl='근 '+_span+'개년('+years[_t0]+'→'+years[_t1]+') 관람 추이';
-        traces.push({type:'scatter',mode:'lines+markers',name:_lbl,x:[years[_t0],years[_t1]],y:[_ta,_tb],customdata:[_tr.v[_t0],_tr.v[_t1]],line:{color:_ac,width:2,dash:'dot'},marker:{color:_ac,size:7,symbol:'circle',line:{color:paper,width:1.5}},hovertemplate:'%{x}년 누적 %{customdata:,}명<extra>근 '+_span+'개년 추이</extra>',showlegend:false,cliponaxis:false});   // 직선(끝점 2개만)·점선·파랑 = 시작→종료 순증감을 기울기로 한눈에
-        annos.push({x:(years[_t0]+years[_t1])/2,y:(_ta+_tb)/2,yanchor:'top',yshift:-4,text:_lbl+' '+(_up?'▲':'▼')+' '+(_up?'+':'−')+Math.abs(_tpc).toFixed(1)+'%',showarrow:false,font:{color:_ac,size:10},bgcolor:labelBg,bordercolor:_ac,borderwidth:1,borderpad:3});   // 라벨 = 선분 midpoint(상단 유지)
+      var _tr=_yrmTotRow();   // 계 = %(전체 관람 추이) 산출용
+      var _gr=_yrRow('공연',st.metric);   // 공연 = 선분 끝점 소스(표시된 공연 마커와 동일 metric)
+      var _p0=years.indexOf(2021),_p1=years.indexOf(2025);   // 라벨·% 구간(계 전체 관람)
+      var _g0=years.indexOf(2022),_g1=years.indexOf(2025);   // 선분 = 공연 꼭짓점(2022→2025)
+      if(_tr&&_gr&&_g0>=0&&_g1>=0&&_p0>=0&&_p1>=0&&_gr.v[_g0]>0&&_gr.v[_g1]>0){
+        var _ga=_gr.v[_g0]/10000,_gb=_gr.v[_g1]/10000,_up=_tr.v[_p1]>=_tr.v[_p0];
+        var _tpc=(_tr.v[_p0]>0)?((_tr.v[_p1]-_tr.v[_p0])/_tr.v[_p0]*100):0;
+        var _ac=_yrCss('--accent'),_span=years[_p1]-years[_p0],_lbl='근 '+_span+'개년('+years[_p0]+'→'+years[_p1]+') 관람 추이';
+        traces.push({type:'scatter',mode:'lines+markers',name:_lbl,x:[years[_g0],years[_g1]],y:[_ga,_gb],customdata:[_gr.v[_g0],_gr.v[_g1]],line:{color:_ac,width:2.4,dash:'dot'},marker:{color:_ac,size:7,symbol:'circle',line:{color:paper,width:1.5}},hovertemplate:'%{x}년 공연 %{customdata:,}명<extra>근 '+_span+'개년 추이</extra>',showlegend:false,cliponaxis:false});   // 직선 점선 = 공연 2022→2025 꼭짓점 직결(계 부유값 아님)
+        annos.push({x:(years[_g0]+years[_g1])/2,yref:'paper',y:0.98,yanchor:'top',text:_lbl+' '+(_up?'▲':'▼')+' '+(_up?'+':'−')+Math.abs(_tpc).toFixed(1)+'%',showarrow:false,font:{color:_ac,size:10},bgcolor:labelBg,bordercolor:_ac,borderwidth:1,borderpad:3});   // 라벨 = 상단(값 라벨 위)
       }
     }
     annos.push({x:1,y:1.07,xref:'paper',yref:'paper',text:'(단위: 만명)',showarrow:false,xanchor:'right',yanchor:'bottom',font:{color:fc,size:10.5}});   // [260723 운영자] 우상단 단위 표기
