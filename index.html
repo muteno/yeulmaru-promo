@@ -3463,7 +3463,7 @@ async function _msalHasLiveSession(){try{const inst=await _msalGet();if(!inst)re
 function _zombieToLogin(){try{['pw','role','myApplicant','myUserDept','subAdminPin'].forEach(function(k){sessionStorage.removeItem(k);});}catch(e){}password='';userRole='user';try{document.getElementById('app').style.display='none';var _l=document.getElementById('login');if(_l){_l.style.display='flex';_l.style.opacity='1';_l.style.visibility='visible';_l.classList.remove('login-leave');}var _zc=document.querySelector('.login-card');if(_zc)_zc.classList.remove('lc-lift');}catch(e){}if(typeof initLoginScreen==='function')initLoginScreen();}
 // [분신술 260710 감사2] 자동 loginRedirect 후 브라우저 뒤로가기 → bfcache 복원이면 '이동 중' 스피너로 동결(리로드가 없어 initLoginScreen 미재실행) — 로그인 화면 표시 중 복원 시에만 리로드로 재기동(앱 사용 중 복원은 무간섭)
 window.addEventListener('pageshow',function(e){ try{ if(e.persisted){ var _l=document.getElementById('login'); if(_l&&_l.style.display!=='none')location.reload(); } }catch(_e){} });
-var _idleLockDisabled=false; var IDLE_MS=10*60*1000; /* 260717 원복: 점검용 임시 OFF가 44일 방치 → 보안 자동잠금 복구 */ // hoisted above session-restore IIFE: on F5 _enterAppFromSession→resetIdleTimer runs here, before the original (later) declaration executed; undefined IDLE_MS made setTimeout(lockScreen,undefined)=0ms → instant false lock
+var _idleLockDisabled=false; var IDLE_MS=30*60*1000; /* [260724 운영자] 자동 잠금 기본 = 30분(구 10분) · 관리자 전역설정(cfg:lock_minutes)이 있으면 _loadPetCfg→_applyLockMin이 덮어씀. 260717 원복: 점검용 임시 OFF가 44일 방치 → 보안 자동잠금 복구 */ // hoisted above session-restore IIFE: on F5 _enterAppFromSession→resetIdleTimer runs here, before the original (later) declaration executed; undefined IDLE_MS made setTimeout(lockScreen,undefined)=0ms → instant false lock
 (function(){try{localStorage.removeItem('myApplicant');localStorage.removeItem('myUserDept');}catch(e){}const s=sessionStorage.getItem('pw');if(s){var _lk=null;try{_lk=sessionStorage.getItem('_lockedAt');}catch(e){} if(_lk){try{if(!_loginEmail)_loginEmail=(sessionStorage.getItem('myEmail')||'').trim();}catch(e){} lockScreen();}else{_enterAppFromSession();_msalHasLiveSession();}}else{var _rp=null;try{_rp=localStorage.getItem('_resumePin');}catch(e){} if(_rp){try{localStorage.removeItem('_resumePin');}catch(e){} _loginEmail=_rp; if(typeof startLoginShader==='function'){try{startLoginShader();}catch(e){}} if(typeof goToPinStep==='function'){setTimeout(function(){goToPinStep(true);},0);}else{if(typeof initLoginScreen==='function')initLoginScreen();}}else{if(typeof initLoginScreen==='function')initLoginScreen();}}})();
 
 async function api(method,path,body){
@@ -4175,7 +4175,7 @@ var _idleTimer=null, _idleBound=false, _locked=false;
 function resetIdleTimer(){
   if(_idleTimer)clearTimeout(_idleTimer);
   const app=document.getElementById('app');
-  if(_idleLockDisabled){return;} if(app && app.style.display!=='none' && !_locked){ _idleTimer=setTimeout(lockScreen, IDLE_MS||10*60*1000); }
+  if(_idleLockDisabled){return;} if(app && app.style.display!=='none' && !_locked){ _idleTimer=setTimeout(lockScreen, IDLE_MS||30*60*1000); }
 }
 function _stopIdleTimer(){ if(_idleTimer){clearTimeout(_idleTimer);_idleTimer=null;} }
 function _bindIdleEvents(){
@@ -4193,7 +4193,7 @@ function lockScreen(){
   const a=document.getElementById('account-step'); if(a)a.style.display='none';
   const ps=document.getElementById('pin-step'); if(ps)ps.style.display='';
   const pa=document.getElementById('pin-account'); if(pa)pa.innerHTML='<b style="color:var(--peach-text)">'+escapeHtml(_loginEmail||'')+'</b>';
-  const lm=document.getElementById('login-msg'); if(lm){ lm.textContent=(Math.round((IDLE_MS||600000)/60000))+'분간 입력이 없어 잠금되었습니다'; lm.style.color='#e53935'; lm.style.fontSize='11px'; lm.style.marginTop='6px'; }
+  const lm=document.getElementById('login-msg'); if(lm){ lm.textContent=(Math.round((IDLE_MS||1800000)/60000))+'분간 입력이 없어 잠금되었습니다'; lm.style.color='#e53935'; lm.style.fontSize='11px'; lm.style.marginTop='6px'; }
   const ll=document.getElementById('login-load'); if(ll)ll.textContent='';
   _pinClear(false);
   if(typeof _pinFocusFirst==='function')_pinFocusFirst(); else if(pins[0])pins[0].focus();   // [260714] 잠금 재진입도 견고화 포커스로 통일(경로 일관성)
@@ -4300,7 +4300,11 @@ function openAdminPanel(){
   // 하단 펫 표시 토글 = 관리자(매니저) 노출. Worker POST가 checkAdmin(슈퍼 OR 서브admin PIN)로 정합 · 이 레포는 슈퍼admin 개념 폐기(role==='admin' 통일)라 admin=서브admin(PIN 보유) · openAdminPanel 자체가 admin 전용 · 분신술 재검증 260711(구 슈퍼전용 게이트 = 전원 미노출 오류 교정)
   var _petTogAdmin=(typeof userRole!=='undefined' && userRole==='admin');
   var _petTogHtml=_petTogAdmin?'<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:10px"><div><div style="font-weight:700;font-size:13px">캘린더 하단 펫 표시</div><div style="font-size:11px;color:var(--dim)">공차는 애·크랩·LOVE 3마리 랜덤 등장 · 전역설정</div></div><label style="display:inline-flex;align-items:center;cursor:pointer;flex:0 0 auto"><input type="checkbox" id="pet-vis-toggle" onchange="_petToggle(this.checked)" style="width:18px;height:18px;cursor:pointer;accent-color:var(--accent);margin:0"></label></div>':'';
-  const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeAdminPanel)"><div class="modal admin-modal" style="width:520px;position:relative"><button class="modal-x" onclick="closeAdminPanel()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;float:none;margin:0;z-index:10">✕</button><div style="display:flex;align-items:center;margin-bottom:14px;gap:8px;padding-bottom:14px;padding-right:48px;border-bottom:1px solid #eee"><h3 style="margin:0;flex:1;text-align:left">관리자 패널</h3></div><div style="font-size:12px;color:#888;margin-bottom:14px">관리할 항목을 골라 주세요</div><div class="admin-modal-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+items.map(it=>'<button class="admin-item" data-id="'+it.id+'" style="text-align:left;padding:14px;border:1px solid rgba(0,0,0,0.08);border-radius:12px;background:#fff;cursor:pointer;transition:all .15s"><div style="font-weight:700;font-size:14px;margin-bottom:4px">'+it.label+'</div><div style="font-size:11px;color:#888">'+it.desc+'</div></button>').join('')+'</div>'+_petTogHtml+'</div></div>';
+  // [260724 운영자] 자동 잠금 시간 설정 = 관리자 전역(펫 토글과 동일 전역설정 축 · cfg:lock_minutes). N택1 = 모달 네이티브 select(전역 .modal select 스타일 상속 · 신규 CSS·토큰 0). 현재값이 프리셋에 없으면 포함해 선택 반영.
+  var _lockCurMin=Math.max(1,Math.round((IDLE_MS||1800000)/60000));
+  var _lockOpts=[5,10,20,30,60]; if(_lockOpts.indexOf(_lockCurMin)<0){ _lockOpts.push(_lockCurMin); _lockOpts.sort(function(a,b){return a-b;}); }
+  var _lockCfgHtml=_petTogAdmin?'<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:10px"><div><div style="font-weight:700;font-size:13px">자동 잠금 시간</div><div style="font-size:11px;color:var(--dim)">입력이 없으면 이 시간 뒤 잠금화면으로 · 전역설정</div></div><select id="lock-min-select" onchange="_lockMinChange(this.value)" style="width:auto;flex:0 0 auto;padding:8px 12px;font-size:13px">'+_lockOpts.map(function(m){return '<option value="'+m+'"'+(m===_lockCurMin?' selected':'')+'>'+m+'분</option>';}).join('')+'</select></div>':'';
+  const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeAdminPanel)"><div class="modal admin-modal" style="width:520px;position:relative"><button class="modal-x" onclick="closeAdminPanel()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;float:none;margin:0;z-index:10">✕</button><div style="display:flex;align-items:center;margin-bottom:14px;gap:8px;padding-bottom:14px;padding-right:48px;border-bottom:1px solid #eee"><h3 style="margin:0;flex:1;text-align:left">관리자 패널</h3></div><div style="font-size:12px;color:#888;margin-bottom:14px">관리할 항목을 골라 주세요</div><div class="admin-modal-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+items.map(it=>'<button class="admin-item" data-id="'+it.id+'" style="text-align:left;padding:14px;border:1px solid rgba(0,0,0,0.08);border-radius:12px;background:#fff;cursor:pointer;transition:all .15s"><div style="font-weight:700;font-size:14px;margin-bottom:4px">'+it.label+'</div><div style="font-size:11px;color:#888">'+it.desc+'</div></button>').join('')+'</div>'+_lockCfgHtml+_petTogHtml+'</div></div>';
   let el=document.getElementById('admin-panel');
   if(!el){el=document.createElement('div');el.id='admin-panel';document.body.appendChild(el);}
   el.innerHTML=html;
@@ -4318,6 +4322,12 @@ function _petToggle(on){
   api('POST','/api/config',{pets_visible:_petsOn}).then(function(){ if(typeof showToast==='function')showToast('하단 펫 '+(_petsOn?'표시 켜짐':'숨김')+' (전역 저장)','success'); }).catch(function(e){ if(typeof showToast==='function')showToast('저장 실패 — Worker 배포 필요할 수 있음: '+e.message,'error'); });
   if(_petsOn){ _petEnter(); }   // 켜기 = 사이클 시동
   else { _petGen++; _petCycleOn=false; document.querySelectorAll('.pet,.petcrab,.petlove').forEach(function(e){ e.style.opacity='0'; }); }   // 끄기 = 세대 무효화(in-flight 타이머·rAF의 _petCycle 재개 차단)+루프 종료+즉시 숨김
+}
+// [260724 운영자] 자동 잠금 시간 설정 — 관리자 전역(_petToggle 미러). ① 즉시 IDLE_MS 반영 + 진행 중 유휴 타이머 재무장 ② POST /api/config(cfg:lock_minutes). pets_visible 동봉 = 미배포 구 Worker(POST마다 pets를 b.pets_visible로 덮음)의 pets 클로버 방지.
+function _lockMinChange(v){
+  var m=parseInt(v,10); if(!(m>=1&&m<=240)){ if(typeof showToast==='function')showToast('잠금 시간은 1~240분 범위','error'); return; }
+  IDLE_MS=m*60*1000; if(typeof resetIdleTimer==='function')resetIdleTimer();   // 즉시 반영(진행 중 유휴 타이머 재무장)
+  api('POST','/api/config',{lock_minutes:m,pets_visible:_petsOn}).then(function(){ if(typeof showToast==='function')showToast('자동 잠금 시간 '+m+'분 (전역 저장)','success'); }).catch(function(e){ if(typeof showToast==='function')showToast('저장 실패 — Worker 배포 필요할 수 있음: '+e.message,'error'); });
 }
 // === 연간 일정 — 네이티브 통합 (구 iframe → yc-* 인라인. 캘린더 레포 코드 이식, 이미지만 외부 참조) ===
 let _ycInited=false;
@@ -17171,8 +17181,10 @@ var _petSprites=[
   {sel:'.petcrab', cols:10, frames:82, fps:30, dw:66, dh:60},   // 크랩 정면·컨페티(표시 66×60)
   {sel:'.petlove', cols:2,  frames:2,  fps:6,  dw:38, dh:29}     // LOVE 측면 walk(표시 38×29)
 ];
-// 전역설정(pets_visible) 로드 — initApp서 1회. 실패(Worker 미배포 등)·미설정 = 기본 숨김
-function _loadPetCfg(){ api('GET','/api/config').then(function(c){ _petsOn=!!(c&&c.pets_visible); if(_petsOn)_petEnter(); }).catch(function(){}); }
+// 전역설정(pets_visible·lock_minutes) 로드 — initApp서 1회. 실패(Worker 미배포 등)·미설정 = 기본값(펫 숨김·잠금 30분 유지)
+function _loadPetCfg(){ api('GET','/api/config').then(function(c){ _petsOn=!!(c&&c.pets_visible); if(_petsOn)_petEnter(); _applyLockMin(c&&c.lock_minutes); }).catch(function(){}); }
+// [260724 운영자] 자동 잠금 시간(전역설정 lock_minutes·분) 적용 — 유효(1~240)면 IDLE_MS 갱신 + 진행 중 유휴 타이머 즉시 재무장. 미설정/무효 = 기본값 유지
+function _applyLockMin(m){ var n=parseInt(m,10); if(n>=1&&n<=240){ IDLE_MS=n*60*1000; if(typeof resetIdleTimer==='function')resetIdleTimer(); } }
 function _petEnter(){   // 시동 = 전역설정 ON일 때만(중복 가드)
   if(!_petsOn)return;                                          // 관리자 전역설정 꺼짐 = 미출현(기본)
   if(_petCycleOn)return;
