@@ -3525,7 +3525,7 @@ async function loadPrograms(){
 }
 
 // === 마스터 데이터 캐시 (관리자 모달용) ===
-var CONTENT_TYPES=[],MANAGERS=[],_programsCache=[],_programHeaders=[];   // [260724] _programHeaders = 프로그램 시트 실제 헤더 순서(저장 시 N~Q 운영자 수동열 보존·홍보노출 플래그 안전 배선용)
+var CONTENT_TYPES=[],MANAGERS=[],_programsCache=[];
 var _sheetCache={};
 // === 마스터 데이터 캐시 (작성 화면용 - Phase 3C-2) ===
 var PLATFORMS=[],CONTENT_FORMATS=[],STATUSES=[],PR_MANAGERS=[];
@@ -16928,7 +16928,6 @@ async function renderProgramList(){
   try{
     const d=await api('GET','/api/sheet/program');
     _programsCache=(d.rows||[]).filter(r=>r['NO']!==''&&r['NO']!=null);
-    _programHeaders=(d.headers||[]);   // [260724] 실제 헤더 순서 확보 — saveProgram 헤더 기반 안전 배선(N~Q 보존·홍보노출 플래그)
     document.getElementById('prog-admin-body').innerHTML=buildProgramListHtml(_programsCache);
   }catch(e){
     document.getElementById('prog-admin-body').innerHTML='<div style="color:red;padding:20px">로드 실패: '+escapeHtml(e.message)+'</div>';
@@ -17092,52 +17091,33 @@ async function saveProgram(rowIndex){
     }
     if(_errs.length){ showToast('저장할 수 없어요 · '+_errs.join(' · '),'error'); return; }
   }
-  // [260724 · 평의회] 저장 직전 프로그램 시트 재조회 → existing(N~Q 운영자 수동열 포함)·헤더·ID 순번을 최신화.
-  //   헤더 경로는 N~Q를 existing에서 되쓰므로(위치 저장은 A~M만 써서 물리적 무접촉이었음), 관리자 패널 연 뒤 엑셀서 N~Q를 직접 수정한 경우
-  //   stale 되쓰기로 그 수정이 유실될 수 있어 여기서 fresh로 당겨 최소화(잔여 = 재조회~기록 사이 sub-초 레이스만). 신규는 _genProgramId 순번도 최신화.
-  try{ const _d=await api('GET','/api/sheet/program'); _programsCache=(_d.rows||[]).filter(r=>r['NO']!==''&&r['NO']!=null); _programHeaders=(_d.headers||[]); }catch(_e){}
-  // ⚠️ 실제 '프로그램' 시트: A~M(폼 관리) + N~Q(구분=장르·공동기획·지원사업·GS아트센터협업 = 운영자 엑셀 수동관리 · 폼 미노출).
+  if(!rowIndex){try{await loadPrograms();}catch(_e){}}   // [검증반영] 신규 저장 직전 프로그램 재조회 → _genProgramId 순번을 최신 캐시로 계산(동시/연속 등록 완화).
+  // ⚠️ '프로그램' 시트 = A~M(폼 관리) 위치 저장 → N~Q(구분=장르·공동기획·지원사업·GS아트센터협업 = 운영자 엑셀 수동관리)를 어떤 write 범위에도 넣지 않아 물리적 무접촉 보존(구 동작 그대로).
+  //   홍보 ON/OFF는 body.promoFlag로 별도 전달 → Worker가 '홍보노출' 열 단일 셀로 기록(헤더 자동 보강). fail-soft: 플래그 기록이 실패해도 본 A~M 저장은 성공, 읽기는 _promoOn이 홍보시작일로 폴백.
   const existing=rowIndex?(_programsCache.find(p=>p._rowIndex===rowIndex)||null):null;
-  // [260724 운영자] 홍보 ON/OFF 명시 플래그 승격 — 토글 상태를 '홍보노출'(Y/N) 열에 저장(빈 홍보시작일에서 파생 X). 읽기는 _promoOn(플래그 우선·구값 폴백).
-  const _pid=(existing&&(existing['프로그램ID']||existing['공연ID']))||_genProgramId(fd.get('시작일'));   // L 프로그램ID: 기존 보존, 신규·빈값이면 시작일 기반 생성(YYMMDD_NN)
   const _swEl=document.getElementById('prog-promo-sw');
-  const _promoFlag=(_swEl&&_swEl.classList.contains('on'))?'Y':'N';   // 토글 명시 상태(OFF도 'N'으로 명시 = 애매함 제거)
-  // 폼/계산 값 맵(헤더명 → 값). 헤더에 있으나 폼에 없는 운영자 수동열(구분·공동기획·지원사업·GS아트센터협업)은 existing에서 '그대로 보존'.
-  const _fx={
-    'NO':Number(fd.get('NO'))||'', '콘텐츠구분':fd.get('콘텐츠구분')||'', '풀네임':fd.get('풀네임')||'', '줄임말':fd.get('줄임말')||'',
-    '판매시작일':isoToExcelSerial(fd.get('판매시작일')), '판매종료일':isoToExcelSerial(fd.get('판매종료일')),
-    '시작일':isoToExcelSerial(fd.get('시작일')), '종료일':isoToExcelSerial(fd.get('종료일')),
-    '담당자':fd.get('담당자')||'', '장소':fd.get('장소')||'',
-    '홍보시작일':isoToExcelSerial(fd.get('홍보시작일')), '홍보노출':_promoFlag
-  };
-  // [평의회] URL 헤더명은 시트마다 다를 수 있음(읽기 폴백 = URL|공연 URL|상세 링크|링크). 실제 헤더 키로 매핑 — 안 그러면 헤더 경로에서 'URL' 리터럴이 어느 헤더와도 안 맞아 폼의 URL 수정이 유실되고 옛값이 되쓰기됨.
-  const _urlKey=['URL','공연 URL','상세 링크','링크'].filter(function(k){return _programHeaders.indexOf(k)>=0;})[0]||'URL';
-  _fx[_urlKey]=(fd.get('URL')||'').trim();
-  let values;
-  // [평의회] 헤더 경로는 '홍보노출' 헤더가 실재 + 헤더에 중복/공백(2+) 없음일 때만(handleGetSheet last-wins 오염 방지). 아니면 구 A~M 13열 위치 저장 = N~Q 무접촉·동작 무변.
-  //   (운영자가 시트 맨 끝에 '홍보노출' 헤더 1칸 추가하면 그때부터 플래그 활성 — 예측제외·임시저장과 동일 점진 이행.)
-  const _hdrPath = !!(_programHeaders && _programHeaders.indexOf('홍보노출')>=0 && (new Set(_programHeaders).size===_programHeaders.length));
-  if(_hdrPath){
-    values=_programHeaders.map(function(h){
-      if(h==='프로그램ID'||h==='공연ID') return _pid;
-      if(Object.prototype.hasOwnProperty.call(_fx,h)) return _fx[h];
-      return existing?(existing[h]!=null?existing[h]:''):'';   // 그 외(운영자 수동열 N~Q) = 기존값 보존, 신규는 빈값
-    });
-  }else{
-    values=[
-      Number(fd.get('NO'))||'', fd.get('콘텐츠구분')||'', fd.get('풀네임')||'', fd.get('줄임말')||'',
-      isoToExcelSerial(fd.get('판매시작일')), isoToExcelSerial(fd.get('판매종료일')),
-      isoToExcelSerial(fd.get('시작일')), isoToExcelSerial(fd.get('종료일')),
-      fd.get('담당자')||'', fd.get('장소')||'', (fd.get('URL')||'').trim(), _pid,
-      isoToExcelSerial(fd.get('홍보시작일'))   // M 홍보시작일 — 여기까지 A~M(구 동작, N~Q 보존)
-    ];
-  }
+  const _promoFlag=(_swEl&&_swEl.classList.contains('on'))?'Y':'N';   // [260724] 토글 명시 상태(OFF도 'N') → '홍보노출' Y/N 열. 빈 홍보시작일 파생 폐지.
+  const values=[
+    Number(fd.get('NO'))||'',               // A NO
+    fd.get('콘텐츠구분')||'',                // B 콘텐츠구분
+    fd.get('풀네임')||'',                    // C 풀네임
+    fd.get('줄임말')||'',                    // D 줄임말
+    isoToExcelSerial(fd.get('판매시작일')),  // E 판매시작일
+    isoToExcelSerial(fd.get('판매종료일')),  // F 판매종료일
+    isoToExcelSerial(fd.get('시작일')),      // G 시작일
+    isoToExcelSerial(fd.get('종료일')),      // H 종료일
+    fd.get('담당자')||'',                    // I 담당자
+    fd.get('장소')||'',                      // J 장소
+    (fd.get('URL')||'').trim(),              // K URL
+    (existing&&(existing['프로그램ID']||existing['공연ID']))||_genProgramId(fd.get('시작일')),    // L 프로그램ID: 기존 보존, 신규·빈값이면 시작일 기반 생성
+    isoToExcelSerial(fd.get('홍보시작일'))   // M 홍보시작일(노출일) — 여기까지 A~M 13열(N~Q 무접촉). 홍보 ON/OFF 플래그는 promoFlag로 별도.
+  ];
   showOverlayLoad('\uC800\uC7A5 \uC911\uC785\uB2C8\uB2E4...');
   try{
     if(rowIndex){
-      await api('PATCH','/api/sheet/program/'+rowIndex,{values});
+      await api('PATCH','/api/sheet/program/'+rowIndex,{values, promoFlag:_promoFlag});
     }else{
-      await api('POST','/api/sheet/program',{values});
+      await api('POST','/api/sheet/program',{values, promoFlag:_promoFlag});
     }
     await loadPrograms();
     updatePerfOpen();
