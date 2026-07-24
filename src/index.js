@@ -1653,10 +1653,15 @@ var index_default = {
 
       // 전역 앱 설정 — KV 영구(cfg:<키>). pets_visible = 캘린더 하단 장식 펫(공차는 애·크랩·LOVE 3마리 랜덤) 표시. GET=로그인 사용자 공개·POST=관리자(checkAdmin = 슈퍼 OR 서브admin PIN · 타 관리자 쓰기와 동일 게이트 · 운영자 260711). ⚠ Worker는 별도 Cloudflare 배포 필요
       if (url.pathname === "/api/config") {
-        if (request.method === "GET") {
-          let pets = false;
+        // cfg 값 읽기 헬퍼 — pets_visible(하단 펫) · lock_minutes(자동 잠금 분, 1~240, 기본 30)
+        const _cfgRead = async () => {
+          let pets = false, lockM = 30;
           try { pets = (await env.ops_kv.get("cfg:pets_visible")) === "1"; } catch (e) {}
-          return json({ pets_visible: pets }, env);
+          try { const s = await env.ops_kv.get("cfg:lock_minutes"); const n = parseInt(s, 10); if (n >= 1 && n <= 240) lockM = n; } catch (e) {}
+          return { pets_visible: pets, lock_minutes: lockM };
+        };
+        if (request.method === "GET") {
+          return json(await _cfgRead(), env);
         }
         if (request.method === "POST") {
           // roleOf(비번-only)는 ADMIN_PASSWORD만 admin → 클라는 APP_PASSWORD('0510')+PIN을 보내므로 checkAdmin(토큰·PIN 인지)로 검증(타 관리자 쓰기와 동일 · 슈퍼admin 개념 폐기 반영, 분신술 재검증 260711)
@@ -1665,8 +1670,16 @@ var index_default = {
           if (!_cfgAuth.admin) return json({ error: "Admin only" }, env, 403);
           let b = {};
           try { b = await request.json(); } catch (e) {}
-          try { await env.ops_kv.put("cfg:pets_visible", b.pets_visible ? "1" : "0"); } catch (e) { return json({ error: String(e) }, env, 500); }
-          return json({ ok: true, pets_visible: !!b.pets_visible }, env);
+          // 부분 갱신 — 넘어온 키만 기록(키별 KV 분리 저장이라 다른 키 클로버 없음: lock_minutes만 보내도 pets_visible 보존)
+          try {
+            if ("pets_visible" in b) await env.ops_kv.put("cfg:pets_visible", b.pets_visible ? "1" : "0");
+            if ("lock_minutes" in b) {
+              const lm = parseInt(b.lock_minutes, 10);
+              if (!(lm >= 1 && lm <= 240)) return json({ error: "lock_minutes는 1~240(분) 범위" }, env, 400);
+              await env.ops_kv.put("cfg:lock_minutes", String(lm));
+            }
+          } catch (e) { return json({ error: String(e) }, env, 500); }
+          return json({ ok: true, ...(await _cfgRead()) }, env);   // read-back = 현재 전체 config 반환
         }
       }
 
