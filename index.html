@@ -2263,6 +2263,7 @@ html::-webkit-scrollbar{width:8px}
   </div>
 </div>
 
+<script src="data/edu_institutions.js"></script>
 <script>
 // MSAL config — must be defined before session-check IIFE (~line 1781)
 const _MSAL_CONFIG = {
@@ -8724,7 +8725,8 @@ const _PMAP_KINDS={
   venue:{label:'예울마루',tok:'--accent'},
   did:{label:'협력기관 DID',tok:'--c5'},
   board:{label:'전광판',tok:'--c4'},
-  print:{label:'현수기·입간판',tok:'--c2'}
+  print:{label:'현수기·입간판',tok:'--c2'},
+  edu:{label:'교육기관',tok:'--c1'}
 };
 const _PMAP_CITY={
   '여수':{lat:34.752,lng:127.662,zoom:12},
@@ -8738,12 +8740,17 @@ function _pmapAllSpots(){
     out.push({ id:'did-'+p.id, name:p.name, city:'여수', kind:'did', lat:p.lat, lng:p.lng, units:1,
       status:p.status==='설치완료'?'운영중':'예정', media:[{name:'협력기관 DID 1대',ratio:'16:9'}], didRef:p.id, addr:p.addr||'' });
   }
+  for(const e of (window.EDU_INSTITUTIONS||[])){
+    if(e.src==='approx-city'||e.lat==null||e.lng==null)continue;
+    out.push({ id:'edu-'+e.no, name:e.name, city:e.city, kind:'edu', lat:e.lat, lng:e.lng, units:1, status:'운영중', eduCat:e.cat, addr:e.addr });
+  }
   return out;
 }
 function _pmapVisible(){
   if(!_pmapState)return[];
   return _pmapAllSpots().filter(function(s){
-    return (_pmapState.kind==='all'||s.kind===_pmapState.kind)&&(_pmapState.city==='all'||s.city===_pmapState.city);
+    var km=(_pmapState.kind==='all')?s.kind!=='edu':s.kind===_pmapState.kind;
+    return km&&(_pmapState.city==='all'||s.city===_pmapState.city);
   });
 }
 // 카테고리색 발광 마커(지도·폴백 공용) — 헤일로 글로우 + 흰 링 도트. 색 = 매체 카테고리 토큰.
@@ -9126,6 +9133,12 @@ function _pmapDrawMarkers(){
   _pmapUpdateBadges(true);
 }
 function _pmapCalloutHtml(s){
+  if(s.kind==='edu'){
+    var ek=_PMAP_KINDS.edu;
+    return '<div class="pm-callout"><button class="pm-co-x" onclick="_pmapCloseIw()" aria-label="닫기">✕</button>'
+      +'<div class="pm-co-hd"><span class="pm-co-dot" style="background:var('+ek.tok+')"></span><span>'+escapeHtml(s.name)+'</span>'+(s.eduCat?'<span class="pm-co-st run">'+escapeHtml(s.eduCat)+'</span>':'')+'</div>'
+      +'<div class="pm-co-meta">교육기관 · '+escapeHtml(s.city)+(s.addr?' · '+escapeHtml(s.addr):'')+'</div></div>';
+  }
   const kd=_PMAP_KINDS[s.kind]||_PMAP_KINDS.did;
   const pend=s.status!=='운영중';
   let items='';
