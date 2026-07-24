@@ -1081,9 +1081,33 @@ __name(opsWriteSheet, "opsWriteSheet");
 async function opsAppendRows(token, slug, rows){
   const name = opsSheetName(slug);
   const { driveId, itemId } = await findFile(token);
-  const ur = await graphGet(token, `${sheetPathFor(driveId, itemId, name)}/usedRange`);
-  const vals = ur.values || [];
-  if (!vals.length) throw new Error("sheet empty/missing: " + name);
+  let vals = [];
+  try {
+    const ur = await graphGet(token, `${sheetPathFor(driveId, itemId, name)}/usedRange`);
+    vals = ur.values || [];
+  } catch (e) {
+    // [260724] 시트 자체가 없으면(ItemNotFound/404) 아래에서 신규 생성. 그 외 오류는 전파.
+    if (!/ItemNotFound|Graph GET 404/.test(String((e && e.message) || e))) throw e;
+    vals = [];
+  }
+  // [260724] 미동기화(없거나 빈) 시트 → 넘어온 행들의 키로 시트를 만들고 헤더를 심은 뒤 이어붙인다.
+  //   전시일일 등 최초 저장 시 append 전에 시트가 없어 Graph 404로 저장이 통째로 실패하던 문제 방지.
+  //   (기계산출물 손편집 금지 원칙 유지 — 데이터가 아니라 '생성 코드'가 시트를 만들게 함.)
+  if (!vals.length) {
+    if (!rows.length) return { ok: true, sheet: name, appended: 0, fromRow: 0, created: true };
+    const newHeaders = [];
+    const seenH = {};
+    rows.forEach((r) => Object.keys(r).forEach((k) => { if (!seenH[k]) { seenH[k] = 1; newHeaders.push(k); } }));
+    await ensureSheet(token, name, newHeaders);   // 워크시트 없으면 생성(+A1 헤더)
+    const lc = colLetter(newHeaders.length);
+    await graphPatch(token, `${sheetPathFor(driveId, itemId, name)}/range(address='A1:${lc}1')`, { values: [newHeaders] });   // 기존-빈 시트 대비 헤더 확정
+    const nData = rows.map((r) => newHeaders.map((h) => { const v = r[h]; return (v === null || v === undefined) ? "" : String(v); }));
+    const nSr = 2, nEr = nSr + nData.length - 1;
+    const nAddr = `A${nSr}:${lc}${nEr}`;
+    await graphPatch(token, `${sheetPathFor(driveId, itemId, name)}/range(address='${nAddr}')`, { numberFormat: nData.map(() => newHeaders.map(() => "@")) });
+    await graphPatch(token, `${sheetPathFor(driveId, itemId, name)}/range(address='${nAddr}')`, { values: nData });
+    return { ok: true, sheet: name, appended: nData.length, fromRow: nSr, created: true };
+  }
   const headers = vals[0].map((h) => String(h == null ? "" : h));
   const nextRow = vals.length + 1;
   const lastCol = colLetter(headers.length);
