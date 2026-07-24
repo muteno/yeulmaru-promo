@@ -210,6 +210,24 @@ async function graphPatch(token, path, body) {
 }
 __name(graphPatch, "graphPatch");
 
+// [260724] graphPatch + transient(429/423/5xx) 재시도(graphGet과 동일 백오프). 홍보노출 플래그 single-cell write 견고화용.
+async function graphPatchRetry(token, path, body) {
+  let lastErr;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) await new Promise((res) => setTimeout(res, 200 * attempt));
+    try { return await graphPatch(token, path, body); }
+    catch (e) {
+      lastErr = e;
+      const m = String((e && e.message) || "").match(/PATCH (\d+)/);
+      const st = m ? parseInt(m[1]) : 0;
+      if (st === 429 || st === 423 || st >= 500) continue;   // transient만 재시도, 4xx 등은 즉시 throw
+      throw e;
+    }
+  }
+  throw lastErr;
+}
+__name(graphPatchRetry, "graphPatchRetry");
+
 async function findFile(token) {
   if (fileCache.driveId && Date.now() < fileCache.expires) return { driveId: fileCache.driveId, itemId: fileCache.itemId };
   const site = await graphGet(token, `/sites/${SP.siteHost}:${SP.sitePath}`);
@@ -417,12 +435,14 @@ async function writeProgramPromoFlag(token, driveId, itemId, sheetName, row, fla
   }
   let idx = headers.indexOf("홍보노출");   // '홍보노출' 0-based col index
   if (idx < 0) {
-    idx = headers.length;   // 맨 끝(0-based) — 헤더 보강
+    // [평의회] 보강 위치를 usedRange 폭이 아니라 '스키마 예약 블록 뒤'로 하드 고정 — A~M(폼 13) + N~Q(운영자 수동 4) = A~Q(1~17) 예약.
+    //   맨 오른쪽 수동열(N~Q)이 비어 usedRange가 M~P에서 끊겨도 '홍보노출'이 N~Q(14~17) 안으로 절대 안 들어가게 하한 17(→ colLetter(18)=R열) 적용 = N~Q 무접촉 불변식 보장.
+    idx = Math.max(headers.length, 17);
     const hc = colLetter(idx + 1);
-    await graphPatch(token, `${sheetPathFor(driveId, itemId, sheetName)}/range(address='${hc}1:${hc}1')`, { values: [["홍보노출"]] });
+    await graphPatchRetry(token, `${sheetPathFor(driveId, itemId, sheetName)}/range(address='${hc}1:${hc}1')`, { values: [["홍보노출"]] });
   }
   const fc = colLetter(idx + 1);
-  await graphPatch(token, `${sheetPathFor(driveId, itemId, sheetName)}/range(address='${fc}${row}:${fc}${row}')`, { values: [[flagVal]] });
+  await graphPatchRetry(token, `${sheetPathFor(driveId, itemId, sheetName)}/range(address='${fc}${row}:${fc}${row}')`, { values: [[flagVal]] });
 }
 __name(writeProgramPromoFlag, "writeProgramPromoFlag");
 
