@@ -8725,9 +8725,18 @@ const _PMAP_KINDS={
   venue:{label:'예울마루',tok:'--accent'},
   did:{label:'협력기관 DID',tok:'--c5'},
   board:{label:'전광판',tok:'--c4'},
-  print:{label:'현수기·입간판',tok:'--c2'},
-  edu:{label:'교육기관',tok:'--c1'}
+  print:{label:'현수기·입간판',tok:'--c2'}
 };
+// 교육기관 세부 카테고리(색으로 구분) — '교육기관' 필터 = 전부 함께 표시, 색으로 구별
+const _EDU_META={
+  dc:{label:'어린이집',tok:'--c6'},
+  kg:{label:'유치원',tok:'--c1'},
+  elem:{label:'초등학교',tok:'--c3'},
+  mid:{label:'중학교',tok:'--c5'},
+  high:{label:'고등학교',tok:'--c2'}
+};
+function _isEdu(k){return !!_EDU_META[k];}
+function _eduKindOf(cat){return cat==='유치원'?'kg':cat==='초등학교'?'elem':cat==='중학교'?'mid':cat==='고등학교'?'high':'dc';}
 const _PMAP_CITY={
   '여수':{lat:34.752,lng:127.662,zoom:12},
   '순천':{lat:34.9506,lng:127.4872,zoom:12},
@@ -8742,20 +8751,20 @@ function _pmapAllSpots(){
   }
   for(const e of (window.EDU_INSTITUTIONS||[])){
     if(e.src==='approx-city'||e.lat==null||e.lng==null)continue;
-    out.push({ id:'edu-'+e.no, name:e.name, city:e.city, kind:'edu', lat:e.lat, lng:e.lng, units:1, status:'운영중', eduCat:e.cat, addr:e.addr });
+    out.push({ id:'edu-'+e.no, name:e.name, city:e.city, kind:_eduKindOf(e.cat), lat:e.lat, lng:e.lng, units:1, status:'운영중', eduCat:e.cat, addr:e.addr });
   }
   return out;
 }
 function _pmapVisible(){
   if(!_pmapState)return[];
   return _pmapAllSpots().filter(function(s){
-    var km=(_pmapState.kind==='all')?s.kind!=='edu':s.kind===_pmapState.kind;
+    var km=(_pmapState.kind==='edu')?_isEdu(s.kind):(_pmapState.kind==='all')?!_isEdu(s.kind):s.kind===_pmapState.kind;
     return km&&(_pmapState.city==='all'||s.city===_pmapState.city);
   });
 }
 // 카테고리색 발광 마커(지도·폴백 공용) — 헤일로 글로우 + 흰 링 도트. 색 = 매체 카테고리 토큰.
 function _pmapDotHtml(s,size){
-  const tok=(_PMAP_KINDS[s.kind]||_PMAP_KINDS.did).tok;
+  const tok=(_EDU_META[s.kind]||_PMAP_KINDS[s.kind]||_PMAP_KINDS.did).tok;
   const pend=s.status!=='운영중';
   const halo=Math.round(size*2.3);
   return '<div class="pm-halo" style="width:'+halo+'px;height:'+halo+'px;background:var('+tok+')'+(pend?';opacity:.22':'')+'"></div>'
@@ -9022,6 +9031,16 @@ function _pmapRenderCtrl(){
     const cnt=spots.filter(function(s){return s.kind===k;}).length;
     h+='<button class="pm-fbtn'+(_pmapState.kind===k?' on':'')+'" onclick="_pmapSetKind(\''+k+'\')"><span class="pm-kdot" style="background:var('+_PMAP_KINDS[k].tok+')"></span>'+_PMAP_KINDS[k].label+' '+cnt+'</button>';
   }
+  const eduCnt=spots.filter(function(s){return _isEdu(s.kind);}).length;
+  h+='<button class="pm-fbtn'+(_pmapState.kind==='edu'?' on':'')+'" onclick="_pmapSetKind(\'edu\')"><span class="pm-kdot" style="background:var(--c1)"></span>교육기관 '+eduCnt+'</button>';
+  if(_pmapState.kind==='edu'){
+    h+='<span class="pm-ctrl-sep"></span>';
+    for(const ek in _EDU_META){
+      const ec=spots.filter(function(s){return s.kind===ek;}).length;
+      if(!ec)continue;
+      h+='<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;color:var(--neutral-text);margin-right:4px"><span class="pm-kdot" style="background:var('+_EDU_META[ek].tok+');box-shadow:0 0 6px currentColor;color:var('+_EDU_META[ek].tok+')"></span>'+_EDU_META[ek].label+' '+ec+'</span>';
+    }
+  }
   el.innerHTML=h;
 }
 function _pmapSetCity(c){
@@ -9133,10 +9152,10 @@ function _pmapDrawMarkers(){
   _pmapUpdateBadges(true);
 }
 function _pmapCalloutHtml(s){
-  if(s.kind==='edu'){
-    var ek=_PMAP_KINDS.edu;
+  if(_isEdu(s.kind)){
+    var ek=_EDU_META[s.kind];
     return '<div class="pm-callout"><button class="pm-co-x" onclick="_pmapCloseIw()" aria-label="닫기">✕</button>'
-      +'<div class="pm-co-hd"><span class="pm-co-dot" style="background:var('+ek.tok+')"></span><span>'+escapeHtml(s.name)+'</span>'+(s.eduCat?'<span class="pm-co-st run">'+escapeHtml(s.eduCat)+'</span>':'')+'</div>'
+      +'<div class="pm-co-hd"><span class="pm-co-dot" style="background:var('+ek.tok+')"></span><span>'+escapeHtml(s.name)+'</span><span class="pm-co-st run">'+escapeHtml(ek.label)+'</span></div>'
       +'<div class="pm-co-meta">교육기관 · '+escapeHtml(s.city)+(s.addr?' · '+escapeHtml(s.addr):'')+'</div></div>';
   }
   const kd=_PMAP_KINDS[s.kind]||_PMAP_KINDS.did;
@@ -9366,7 +9385,7 @@ function _pmapFocusSpot(id,mi){
 function _pmapTreeReveal(spotId,mi){
   if(!_platformState)return;
   const s=_pmapAllSpots().find(function(x){return x.id===spotId;});
-  if(!s)return;
+  if(!s||_isEdu(s.kind))return;
   _platformState.treeMode='region';
   _platformState.rExpand.add('c|'+s.city);
   if(s.kind==='did')_platformState.rExpand.add('g|'+s.city+'-did');
@@ -9388,7 +9407,7 @@ function _pmapRegionTreeHtml(){
   };
   let h='';
   ['여수','순천','광양'].forEach(function(city){
-    const cs=spots.filter(function(s){return s.city===city;});
+    const cs=spots.filter(function(s){return s.city===city&&!_isEdu(s.kind);});
     const cid='c|'+city, cOpen=ex.has(cid);
     h+='<div class="pm-rrow'+(sel===cid?' on':'')+'" style="padding-left:8px;font-weight:700" onclick="_pmapRow(\''+cid+'\')">'+arrow(cid,cOpen,true)+'📍 <span class="pm-rlabel">'+city+'</span><span class="pm-rmeta">거점 '+cs.length+'</span></div>';
     if(!cOpen)return;
@@ -9490,7 +9509,7 @@ function _pmapSearchQuery(q){
   });
   _pmapAllSpots().forEach(function(s){
     const hay=(s.name+' '+(s.addr||'')+' '+s.city).toLowerCase();
-    if(hay.indexOf(q)>=0)push(s.name,((_PMAP_KINDS[s.kind]||{}).label||'')+' · '+s.city,function(){_pmapFocusSpot(s.id);_pmapTreeReveal(s.id);});
+    if(hay.indexOf(q)>=0)push(s.name,((_EDU_META[s.kind]||_PMAP_KINDS[s.kind]||{}).label||'')+' · '+s.city,function(){_pmapFocusSpot(s.id);_pmapTreeReveal(s.id);});
     _pmapMediaList(s).forEach(function(ml){
       if(ml.name.toLowerCase().indexOf(q)>=0)push(ml.name,s.name+' · '+s.city,function(){_pmapFocusSpot(s.id,ml.mi);_pmapTreeReveal(s.id,ml.mi);});
       _pmapContents(s,ml.name).forEach(function(it,ci){
