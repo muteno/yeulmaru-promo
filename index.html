@@ -7077,7 +7077,7 @@ function _dailyRenderForm(rowsData, groupData){
   // [운영자 260710] 기준일자별 이미 등록 공연 제외 — 재렌더 시 사용자가 고른 날짜 보존 + 날짜 변경 시 목록 갱신(onchange 재렌더)
   var curDate=(document.getElementById('d-date')||{}).value||_dailyToday();
   var regSet=_dailyRegisteredSet(curDate.replace(/-/g,''));
-  var h='<div id="d-xdrop" ondragover="event.preventDefault();this.style.background=\'rgba(74,77,231,0.06)\'" ondragleave="this.style.background=\'none\'" ondrop="_dsxDrop(event)" onclick="if(event.target.id!==\'d-xfile\')document.getElementById(\'d-xfile\').click()" style="border:1.5px dashed var(--accent);border-radius:var(--r-pop);padding:12px 16px;margin-bottom:14px;cursor:pointer;display:flex;align-items:center;gap:11px;transition:background .15s"><span style="font-size:22px">📄</span><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700;color:var(--accent)">티켓링크 판매현황 올리기</div><div style="font-size:11px;color:var(--dim);margin-top:2px">xls·xlsx 여러 개 가능 · 순판매를 날짜순 누적으로 자동 반영 (공연 자동인식 · 못 잡으면 직접 선택)</div></div><input type="file" id="d-xfile" accept=".xlsx,.xls" multiple style="display:none;width:auto" onchange="_dsxFiles(this)"></div>';
+  var h='<div id="d-xdrop" ondragover="event.preventDefault();this.style.background=\'rgba(74,77,231,0.06)\'" ondragleave="this.style.background=\'none\'" ondrop="_dsxDrop(event)" onclick="if(event.target.id!==\'d-xfile\')document.getElementById(\'d-xfile\').click()" style="border:1.5px dashed var(--accent);border-radius:var(--r-pop);padding:12px 16px;margin-bottom:14px;cursor:pointer;display:flex;align-items:center;gap:11px;transition:background .15s"><span style="font-size:22px">📄</span><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700;color:var(--accent)">티켓링크 판매현황 올리기</div><div style="font-size:11px;color:var(--dim);margin-top:2px">xls·xlsx 여러 개 가능 · 순판매를 날짜순 누적으로 자동 반영 (프로그램 자동인식 · 못 잡으면 직접 선택)</div></div><input type="file" id="d-xfile" accept=".xlsx,.xls" multiple style="display:none;width:auto" onchange="_dsxFiles(this)"></div>';
   h+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px"><span style="font-size:12px;color:#888;font-weight:600">기준일자</span><input type="date" id="d-date" value="'+curDate+'" onchange="_dailyRenderForm(_dailyReadDOM())" style="padding:7px 10px;border:1.5px solid #ddd;border-radius:7px;font-size:13px;font-family:inherit"></div>';
   h+='<div style="display:flex;gap:8px;font-size:11px;color:#999;font-weight:600;margin-bottom:6px;padding:0 4px"><span style="flex:2;min-width:160px">공연</span><span style="flex:1;min-width:78px">유료좌석</span><span style="flex:1;min-width:78px">유료금액</span><span style="flex:1;min-width:78px">무료좌석</span><span style="width:24px"></span></div>';
   h+='<div id="d-rows">'; rows.forEach(function(r){h+=_dailyRowHtml(r,regSet);}); h+='</div>';
@@ -7159,11 +7159,12 @@ function _dsxParse(files, append){
           return _dsxExtract(wb, f.name);   // 배열 반환 — 한 파일에 상품(공연)이 여럿일 수 있음
         }).catch(function(e){ return [{file:f.name, error:(e.message||String(e))}]; });
       })),
-      api('GET','/api/ops?sheet='+encodeURIComponent('일일입력')).catch(function(){return {headers:[],rows:[],_getFailed:1};}) // dedup 대조용 기존 행(실패 시 경고)
+      api('GET','/api/ops?sheet='+encodeURIComponent('일일입력')).catch(function(){return {headers:[],rows:[],_getFailed:1};}), // dedup 대조용 기존 행(실패 시 경고)
+      api('GET','/api/ops?sheet='+encodeURIComponent('전시일일')).catch(function(){return {headers:[],rows:[]};})   // [260724] 전시 프로그램 업로드 dedup 대조용
     ]).then(function(r){
       if(_done())return;   // [260715] 닫힘/재오픈으로 무효화된 파싱 = 폐기(닫힌 폼 위 렌더·stale 병합 방지)
       var flat=[]; r[0].forEach(function(arr){ (Array.isArray(arr)?arr:[arr]).forEach(function(x){flat.push(x);}); });
-      _dsxPreview(flat, r[1], append);
+      _dsxPreview(flat, r[1], append, r[2]);
     }).catch(function(e){ if(_done())return; showToast('읽기 실패: '+(e.message||e),'error'); });
   });
 }
@@ -7219,11 +7220,16 @@ function _dsxExtract(wb, fname){
 function _dsxUname(s){ try{return _uName(s);}catch(_){return String(s||'').replace(/\s+/g,'').toLowerCase();} }
 // 최장 공통 부분문자열 길이 (mjs 260618_daily_ingest 정본 계승 — 보일러플레이트 붙어도 핵심 겹침으로 매칭)
 function _dsxLcs(a,b){ var best=0,n=b.length,prev=new Array(n+1).fill(0); for(var i=1;i<=a.length;i++){ var cur=new Array(n+1).fill(0); for(var j=1;j<=n;j++){ if(a[i-1]===b[j-1]){ cur[j]=prev[j-1]+1; if(cur[j]>best)best=cur[j]; } } prev=cur; } return best; }
-function _dsxPreview(results, existingData, append){
+function _dsxPreview(results, existingData, append, exDailyData){
   var body=document.getElementById('daily-body'); if(!body)return;
-  // 매칭/선택 후보 = 판매중 공연. byName=선택값(공연명)→마스터 역참조. nameMap/cands=자동매칭용(정규화명 2자 이상, 오매칭 방지)
-  var mlist=_dailyMasters(), nameMap={}, cands=[], byName={};
-  mlist.forEach(function(x){ byName[x.name]=x; var k=_dsxUname(x.name); if(k&&k.length>=2&&!nameMap[k]){nameMap[k]=x;cands.push(k);} });
+  // 매칭/선택 후보 = 판매중 프로그램(공연 + 오픈 전시). byName=선택값(이름)→마스터 역참조(kind 포함). nameMap/cands=자동매칭용(정규화명 2자 이상, 오매칭 방지)
+  var mlist=_dailyMasters().map(function(x){ return {name:x.name, id:x.id, open:x.open, kind:'공연'}; });
+  try{ _dailyExhibMasters().forEach(function(x){ mlist.push({name:x.name, id:x.id, kind:'전시', goal:x.goal||0}); }); }catch(_ex){}   // [260724] 오픈 전시(전시마스터+프로그램시트) 합류 — 업로드도 전시 저장 지원
+  var nameMap={}, cands=[], byName={};
+  mlist.forEach(function(x){ if(!byName[x.name])byName[x.name]=x; var k=_dsxUname(x.name); if(k&&k.length>=2&&!nameMap[k]){nameMap[k]=x;cands.push(k);} });
+  // 기존 전시일일 (전시ID,날짜) 셋 — 전시 업로드 중복 append 방지(dedup)
+  var existingEx={}, exr=(exDailyData&&exDailyData.rows)||[];
+  exr.forEach(function(row){ var id=String(row['전시ID']||'').trim(), eymd=String(row['기준일자']||'').replace(/[^0-9]/g,''); if(id&&eymd)existingEx[id+'|'+eymd]=1; });
   // 기존 일일입력 (공연,날짜) 셋 — 중복 append 방지(dedup)
   var eh=(existingData&&existingData.headers)||[], er=(existingData&&existingData.rows)||[], existing={};
   // /api/ops rows = 헤더명 키 객체 배열(row['공연명']) — findCol은 인덱스가 아니라 헤더 '문자열'을 반환해야 한다(정본 mjs findCol 계승)
@@ -7254,7 +7260,7 @@ function _dsxPreview(results, existingData, append){
     results=_merged;
     try{ showToast(((_new?_new+'개 공연 추가':'')+((_new&&_upd)?' · ':'')+(_upd?_upd+'개 갱신':''))||'변경 없음','info'); }catch(_e){}
   }
-  window._dsxState={results:results, byName:byName, nameMap:nameMap, cands:cands, existing:existing, dedupWarn:dedupWarn};
+  window._dsxState={results:results, byName:byName, nameMap:nameMap, cands:cands, mlist:mlist, existing:existing, existingEx:existingEx, dedupWarn:dedupWarn};
   _dsxRender();
 }
 // 미리보기 카드의 공연 드롭다운 선택 → 상태 갱신 후 재렌더(dedup·저장버튼 동적 반영)
@@ -7262,10 +7268,10 @@ function _dsxChoose(idx, name){ var st=window._dsxState; if(!st||!st.results[idx
 function _dsxRender(){
   var st=window._dsxState; if(!st)return;
   var body=document.getElementById('daily-body'); if(!body)return;
-  var byName=st.byName, existing=st.existing, cands=st.cands, nameMap=st.nameMap;
+  var byName=st.byName, existing=st.existing, cands=st.cands, nameMap=st.nameMap, mlist=st.mlist||[], existingEx=st.existingEx||{};
   var pending=[], anyChosen=false, seenPend={};  // seenPend = 이번 업로드 배치 내 (공연|날짜) 상호 dedup(분신술 공통 지적)
   var h='<div style="font-size:15px;font-weight:700;margin-bottom:3px">📄 판매현황 반영 미리보기</div>';
-  h+='<div style="font-size:12px;color:var(--dim);margin-bottom:14px">순판매를 날짜순 <b>누적</b>한 값이에요. 공연이 자동 인식되면 그대로, 못 잡으면 <b>공연을 선택</b>하면 저장·분석돼요. 이미 있는 날짜는 건너뛰어요. 누적이 정확하려면 <b>전체 기간</b> 다운로드본을 올려주세요.</div>';
+  h+='<div style="font-size:12px;color:var(--dim);margin-bottom:14px">순판매를 날짜순 <b>누적</b>한 값이에요. 프로그램이 자동 인식되면 그대로, 못 잡으면 <b>프로그램을 선택</b>하면 저장·분석돼요. 이미 있는 날짜는 건너뛰어요. 누적이 정확하려면 <b>전체 기간</b> 다운로드본을 올려주세요.</div>';
   // [260715] 미리보기에서도 파일 더 붙이기 — 여러 개 이어붙여 한 번에 저장(줄줄이 누적). append=1로 기존 카드 보존.
   h+='<div id="d-xdrop2" role="button" tabindex="0" aria-label="판매현황 파일 더 올리기" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();document.getElementById(\'d-xfile2\').click();}" ondragover="event.preventDefault();this.style.background=\'var(--accent-light)\'" ondragleave="this.style.background=\'none\'" ondrop="_dsxDrop(event,1)" onclick="if(event.target.id!==\'d-xfile2\')document.getElementById(\'d-xfile2\').click()" style="border:1.5px dashed var(--accent);border-radius:var(--r-pop);padding:9px 13px;margin-bottom:12px;cursor:pointer;display:flex;align-items:center;gap:9px;transition:background .15s"><span style="font-size:16px">➕</span><div style="flex:1;min-width:0"><div style="font-size:12.5px;font-weight:700;color:var(--accent)">파일 더 올리기</div><div style="font-size:11px;color:var(--dim);margin-top:1px">여러 개 이어붙여 한 번에 저장 · 같은 파일은 최신본으로 갱신</div></div><input type="file" id="d-xfile2" accept=".xlsx,.xls" multiple style="display:none" onchange="_dsxFiles(this,1)"></div>';
   if(st.dedupWarn)h+='<div style="padding:9px 12px;border-radius:8px;background:var(--accent-light);margin-bottom:12px;font-size:12px;color:var(--danger)">⚠️ 기존 일일입력을 못 읽어 중복 확인을 못 했어요 — 이미 입력한 날짜면 중복될 수 있으니 확인 후 저장하세요</div>';
@@ -7275,46 +7281,70 @@ function _dsxRender(){
     if(chosen)anyChosen=true;
     h+='<div style="border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:12px">';
     h+='<div style="display:flex;align-items:flex-start;gap:8px"><div style="font-weight:700;font-size:13.5px;flex:1;min-width:0">'+escapeHtml(R.pname)+'</div><button onclick="_dsxRemoveCard('+idx+')" title="이 파일 제거" aria-label="이 파일 제거" style="border:0;background:none;color:var(--danger);cursor:pointer;font-size:14px;line-height:1;padding:2px 4px;flex-shrink:0">✕</button></div>';
-    if(m&&R.autoName===chosen&&!R.manual)h+='<div style="font-size:11.5px;color:var(--green);margin:2px 0 6px">→ 공연 「'+escapeHtml(m.name)+'」 자동 인식 · 오픈석 '+(m.open||0).toLocaleString()+' · 최종 누적 '+last.seat.toLocaleString()+'석 / '+last.money.toLocaleString()+'원</div>';
-    else if(m)h+='<div style="font-size:11.5px;color:var(--green);margin:2px 0 6px">→ 공연 「'+escapeHtml(m.name)+'」 선택됨 · 오픈석 '+(m.open||0).toLocaleString()+' · 최종 누적 '+last.seat.toLocaleString()+'석 / '+last.money.toLocaleString()+'원</div>';
-    else if(R.ambiguous)h+='<div style="font-size:11.5px;color:var(--peach-text);margin:2px 0 6px">비슷한 공연이 여럿이라 자동으로 못 정했어요 — 아래에서 공연을 선택하면 저장·분석돼요</div>';
-    else h+='<div style="font-size:11.5px;color:var(--peach-text);margin:2px 0 6px">이 파일에서 공연을 자동으로 못 찾았어요 — 아래에서 공연을 선택하면 저장·분석돼요</div>';
-    // 공연 선택 드롭다운(항상 노출) — 새 raw hex 없이 토큰만
-    h+='<select aria-label="공연 선택" onchange="_dsxChoose('+idx+',this.value)" style="width:100%;margin-bottom:8px;padding:7px 9px;border:1.5px solid var(--border2);border-radius:8px;font-size:12.5px;font-family:inherit;background:var(--surface-solid);color:var(--text)"><option value="">— 공연 선택 —</option>';
-    cands.forEach(function(k){ var o=nameMap[k]; h+='<option value="'+escapeHtml(o.name)+'"'+(o.name===chosen?' selected':'')+'>'+escapeHtml(o.name)+'</option>'; });
+    if(m){
+      var _isEx=(m.kind==='전시'), _lbl=(_isEx?'전시':'공연'), _how=(R.autoName===chosen&&!R.manual)?'자동 인식':'선택됨';
+      var _meta=_isEx?((m.goal>0?'목표관객 '+m.goal.toLocaleString()+' · ':'')+'최종 누적 '+last.seat.toLocaleString()+'명 / '+last.money.toLocaleString()+'원')
+                     :('오픈석 '+(m.open||0).toLocaleString()+' · 최종 누적 '+last.seat.toLocaleString()+'석 / '+last.money.toLocaleString()+'원');
+      h+='<div style="font-size:11.5px;color:var(--green);margin:2px 0 6px">→ '+_lbl+' 「'+escapeHtml(m.name)+'」 '+_how+' · '+_meta+'</div>';
+    }
+    else if(R.ambiguous)h+='<div style="font-size:11.5px;color:var(--peach-text);margin:2px 0 6px">비슷한 프로그램이 여럿이라 자동으로 못 정했어요 — 아래에서 프로그램을 선택하면 저장·분석돼요</div>';
+    else h+='<div style="font-size:11.5px;color:var(--peach-text);margin:2px 0 6px">이 파일에서 프로그램을 자동으로 못 찾았어요 — 아래에서 프로그램을 선택하면 저장·분석돼요</div>';
+    // 프로그램 선택 드롭다운(항상 노출 · 공연/전시 optgroup) — 새 raw hex 없이 토큰만
+    h+='<select aria-label="프로그램 선택" onchange="_dsxChoose('+idx+',this.value)" style="width:100%;margin-bottom:8px;padding:7px 9px;border:1.5px solid var(--border2);border-radius:8px;font-size:12.5px;font-family:inherit;background:var(--surface-solid);color:var(--text)"><option value="">— 프로그램 선택 —</option>';
+    var _mkOpt=function(o){ return '<option value="'+escapeHtml(o.name)+'"'+(o.name===chosen?' selected':'')+'>'+escapeHtml(o.name)+'</option>'; };
+    var _mp=mlist.filter(function(o){return o.kind!=='전시';}), _me=mlist.filter(function(o){return o.kind==='전시';});
+    if(_me.length){ if(_mp.length){ h+='<optgroup label="공연">'; _mp.forEach(function(o){h+=_mkOpt(o);}); h+='</optgroup>'; } h+='<optgroup label="전시">'; _me.forEach(function(o){h+=_mkOpt(o);}); h+='</optgroup>'; }
+    else { mlist.forEach(function(o){h+=_mkOpt(o);}); }
     h+='</select>';
     var newCnt=0, dupCnt=0;
     h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11.5px;min-width:520px"><tr style="color:var(--dim)"><td style="text-align:left;padding:3px 6px">날짜</td><td style="text-align:right;padding:3px 6px">누적좌석</td><td style="text-align:right;padding:3px 6px">전일대비</td><td style="text-align:right;padding:3px 6px">누적금액</td><td style="text-align:right;padding:3px 6px">현금 석/원</td><td style="text-align:right;padding:3px 6px">카드 석/원</td></tr>';
     R.days.forEach(function(x){
       var ymd=x.date.slice(0,4)+'.'+x.date.slice(4,6)+'.'+x.date.slice(6,8);
-      var dup=!!(m&&existing[_dsxUname(m.name)+'|'+x.date]); if(m){ if(dup)dupCnt++; else newCnt++; }
+      var dup=!!(m&&(m.kind==='전시'?existingEx[(m.id||m.name)+'|'+x.date]:existing[_dsxUname(m.name)+'|'+x.date])); if(m){ if(dup)dupCnt++; else newCnt++; }
       var ds=(x.dSeat>0?'+':'')+x.dSeat.toLocaleString();
       h+='<tr style="border-top:1px solid var(--border)'+(dup?';color:var(--muted)':'')+'"><td style="text-align:left;padding:3px 6px">'+ymd+(dup?' <span style="font-size:10px">(기존)</span>':'')+'</td><td style="text-align:right;padding:3px 6px;font-weight:600">'+x.seat.toLocaleString()+'</td><td style="text-align:right;padding:3px 6px;color:var(--dim)">'+ds+'</td><td style="text-align:right;padding:3px 6px;font-weight:600">'+x.money.toLocaleString()+'</td><td style="text-align:right;padding:3px 6px;color:var(--dim)">'+x.cSeat.toLocaleString()+' / '+x.cMoney.toLocaleString()+'</td><td style="text-align:right;padding:3px 6px;color:var(--dim)">'+x.kSeat.toLocaleString()+' / '+x.kMoney.toLocaleString()+'</td></tr>';
     });
     h+='</table></div>';
     if(m)h+='<div style="font-size:11px;color:var(--dim);margin-top:6px">신규 '+newCnt+'건 저장'+(dupCnt?(' · 기존 '+dupCnt+'건 건너뜀'):'')+'</div>';
-    else h+='<div style="font-size:11px;color:var(--peach-text);margin-top:6px">공연을 선택하면 '+R.days.length+'일치를 저장할 수 있어요</div>';
+    else h+='<div style="font-size:11px;color:var(--peach-text);margin-top:6px">프로그램을 선택하면 '+R.days.length+'일치를 저장할 수 있어요</div>';
     h+='</div>';
-    if(m){ R.days.forEach(function(x){ var pk=_dsxUname(m.name)+'|'+x.date; if(existing[pk]||seenPend[pk])return; seenPend[pk]=1; var occ=m.open>0?Math.min(x.seat/m.open*100,100):0; pending.push({기준일자:x.date,공연명:m.name,유료좌석:x.seat,유료금액:x.money,무료좌석:0,합계좌석:x.seat,합계금액:x.money,점유율:occ.toFixed(1),'전일대비(석)':((x.dSeat>0?'+':'')+x.dSeat),공연ID:(m.id||'')}); }); }
+    if(m&&m.kind==='전시'){ var _pm=0; R.days.forEach(function(x){ var pkE=(m.id||m.name)+'|'+x.date; var dM=x.money-_pm; _pm=x.money; if(existingEx[pkE]||seenPend[pkE])return; seenPend[pkE]=1; var occE=(m.goal>0)?(x.seat/m.goal*100):0; pending.push({_kind:'전시',기준일자:x.date,전시ID:(m.id||m.name),전시명:m.name,일일유료:x.dSeat,일일무료:0,일일총인원:x.dSeat,일일금액:dM,누계유료:x.seat,누계무료:0,누계총인원:x.seat,누계금액:x.money,점유율:occE.toFixed(1)}); }); }
+    else if(m){ R.days.forEach(function(x){ var pk=_dsxUname(m.name)+'|'+x.date; if(existing[pk]||seenPend[pk])return; seenPend[pk]=1; var occ=m.open>0?Math.min(x.seat/m.open*100,100):0; pending.push({_kind:'공연',기준일자:x.date,공연명:m.name,유료좌석:x.seat,유료금액:x.money,무료좌석:0,합계좌석:x.seat,합계금액:x.money,점유율:occ.toFixed(1),'전일대비(석)':((x.dSeat>0?'+':'')+x.dSeat),공연ID:(m.id||'')}); }); }
   });
   h+='<div id="d-msg" style="font-size:12px;color:var(--danger);margin-top:6px;min-height:16px"></div>';
-  var btnLabel=pending.length?(pending.length+'건 저장'):(anyChosen?'저장할 신규 없음':'공연을 선택하세요');
+  var btnLabel=pending.length?(pending.length+'건 저장'):(anyChosen?'저장할 신규 없음':'프로그램을 선택하세요');
   h+='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:8px;padding-top:14px;border-top:1px solid var(--border)"><button onclick="_dsxClearAll()" class="m-btn cancel" title="미리보기 전체 비우기">전체 비우기</button><div style="display:flex;gap:8px"><button onclick="_dailyRenderForm()" class="m-btn cancel">← 폼으로</button><button onclick="_dsxSubmit()" class="m-btn save" id="d-xsave"'+((pending.length&&!window._dsxBusy)?'':' disabled')+'>'+btnLabel+'</button></div></div>';
   window._dsxPending=pending; body.innerHTML=h;
 }
+function _dsxStripKind(r){ var o={}; for(var k in r){ if(k!=='_kind')o[k]=r[k]; } return o; }   // 저장 전 내부 태그 제거
 async function _dsxSubmit(){
   if(window._dsxBusy){ showToast('파일 읽는 중이에요 — 잠시 후 저장','info'); return; }   // [260715 분신술] 파싱 중 stale 저장 차단(첨부 무음 유실 방지)
-  var rows=window._dsxPending||[]; var msg=document.getElementById('d-msg');
-  if(!rows.length){if(msg)msg.textContent='저장할 항목이 없어요';return;}
+  var all=window._dsxPending||[]; var msg=document.getElementById('d-msg');
+  if(!all.length){if(msg)msg.textContent='저장할 항목이 없어요';return;}
+  // [260724] 종류별 분기 저장 — 공연 = 일일입력, 전시 = 전시일일(+전시마스터 최종* 갱신). 한 배치에 공연·전시 혼재 OK.
+  var perfRows=all.filter(function(r){return r._kind!=='전시';}).map(_dsxStripKind);
+  var exRows=all.filter(function(r){return r._kind==='전시';}).map(_dsxStripKind);
   var btn=document.getElementById('d-xsave'); _btnBusy(btn,true,'저장 중');
   try{
-    await api('POST','/api/ops',{sheet:'일일입력',mode:'append',rows:rows});
-    showToast(rows.length+'건 반영됐어요');
+    if(perfRows.length) await api('POST','/api/ops',{sheet:'일일입력',mode:'append',rows:perfRows});
+    if(exRows.length){
+      await api('POST','/api/ops',{sheet:'전시일일',mode:'append',rows:exRows});
+      // 전시마스터 최종*(드릴 KPI 소스) 갱신 — 전시별 마지막 기준일자 누계로 patch. 실패해도 전시일일은 이미 반영 → 경고만(수동 _dailyExhibSubmit과 동일 축).
+      try{
+        var lastByEx={};
+        exRows.forEach(function(r){ var id=String(r.전시ID||''); if(!id)return; if(!lastByEx[id]||String(r.기준일자)>String(lastByEx[id].기준일자))lastByEx[id]=r; });
+        var mpatch={}; Object.keys(lastByEx).forEach(function(id){ var r=lastByEx[id]; mpatch[id]={최종유료:r.누계유료,최종무료:r.누계무료,최종총인원:r.누계총인원,최종매출:r.누계금액,최종점유율:r.점유율}; });
+        if(Object.keys(mpatch).length){ var pr=await _opsMasterPatch('전시마스터','전시ID',mpatch); _dailyState.exMaster={sheet:'전시마스터',headers:pr.headers,rows:pr.rows,count:pr.rows.length}; if(typeof _anaState!=='undefined'&&_anaState)_anaState._exMaster=null; }
+      }catch(me){ console.warn('[dsx exhibMasterPatch]',me); showToast('전시일일은 저장됐지만 마스터 최종값 갱신 실패 — 분석 KPI는 잠시 후 반영','error'); }
+      _dailyState.exDaily=null;   // 다음 열람 시 누계 최신 재조회
+      if(typeof _anaState!=='undefined'&&_anaState){_anaState._exDaily=null;_anaState._exMaster=null;}
+    }
+    showToast(all.length+'건 반영됐어요');
     closeDailyInput();
     _salesState.master=null;_salesState.daily=null;_salesState.rounds=null;
     try{_srailInit();}catch(_e){}
     _dailyRestoreOrigin();
-  }catch(e){ var m2=document.getElementById('d-msg')||msg; if(m2)m2.textContent='저장 실패: '+(e.message||e); _btnBusy(document.getElementById('d-xsave')||btn,false,rows.length+'건 저장'); }   // [260715 분신술] await 중 재렌더로 노드 분리 시 오류 표시 유실 방지 — 재취득
+  }catch(e){ var m2=document.getElementById('d-msg')||msg; if(m2)m2.textContent='저장 실패: '+(e.message||e); _btnBusy(document.getElementById('d-xsave')||btn,false,all.length+'건 저장'); }   // [260715 분신술] await 중 재렌더로 노드 분리 시 오류 표시 유실 방지 — 재취득
 }
 function _salesToggleEnded(){ _salesState.showEnded=!_salesState.showEnded; _salesRender(); }
 function _salesDdayColor(d){ if(d===null)return '#555'; if(d<0)return '#999'; if(d<=7)return '#E08600'; if(d<=14)return '#C9A800'; return '#555'; }
