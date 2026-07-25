@@ -15,6 +15,19 @@ import sys
 import pathlib
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
+
+# 훅 자동 활성화(260725) — clone·기기마다 `git config core.hooksPath .githooks`를 손으로 치는 걸
+# 잊으면 게이트가 "조용히 미실행"되고 통과한 줄 착각한다. 실행기가 스스로 켠다(최초 1회).
+if (ROOT / '.githooks').is_dir():
+    try:
+        import subprocess as _sp
+        if not _sp.run(['git', 'config', 'core.hooksPath'], cwd=ROOT,
+                       capture_output=True, text=True).stdout.strip():
+            _sp.run(['git', 'config', 'core.hooksPath', '.githooks'], cwd=ROOT, capture_output=True)
+            print('🔧 core.hooksPath=.githooks 자동 설정(최초 1회 · pre-commit 게이트 활성화)')
+    except Exception:
+        pass
+
 TARGETS = ["CLAUDE.md", "docs/앱지침.md"]
 
 # 비파일 표기 허용 목록 — 레포명·세션 키 나열 등 파일 경로가 아닌 백틱 원문
