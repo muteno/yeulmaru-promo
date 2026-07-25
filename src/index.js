@@ -1210,7 +1210,7 @@ async function geminiText(env, system, userText, maxTokens) {
 __name(geminiText, "geminiText");
 
 async function claudeText(env, system, userText, maxTokens) {
-  const model = env.BLOG_MODEL || "claude-opus-4-8";
+  const model = env.BLOG_MODEL || "claude-opus-5";
   const headers = { "content-type": "application/json", "anthropic-version": "2023-06-01" };
   if (env.ANTHROPIC_API_KEY) {
     headers["x-api-key"] = env.ANTHROPIC_API_KEY;
@@ -1339,7 +1339,7 @@ __name(generateBlogDraft, "generateBlogDraft");
 // === 홍보물 이미지 OCR — Claude 비전으로 포스터/리플릿의 '사실'을 육하원칙 JSON으로 추출 ===
 // img = { mime, data(base64, dataURL 접두사 제거) }. 이미지에 적힌 내용만 추출(추측 금지) → 사람이 검증.
 async function extractPromoInfo(env, img) {
-  const model = env.OCR_MODEL || env.BLOG_MODEL || "claude-opus-4-8";
+  const model = env.OCR_MODEL || env.BLOG_MODEL || "claude-opus-5";
   const headers = { "content-type": "application/json", "anthropic-version": "2023-06-01" };
   if (env.ANTHROPIC_AUTH_TOKEN) {
     headers["authorization"] = "Bearer " + env.ANTHROPIC_AUTH_TOKEN;
