@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>개별 사업 내역 — 시안 플레이그라운드 v1 (260725)</title>
+<style>
+:root{
+  --accent:#4A4DE7;--accent-light:#E8E8FD;--peach-text:#D88455;--green:#1A6B3C;--danger:#E24B4A;
+  --text:#1A1A2E;--dim:#888;--muted:#bbb;--neutral-text:#6B6B7B;--neutral:#EEEDF3;
+  --border:rgba(0,0,0,0.09);--border2:rgba(0,0,0,0.12);--past-bg:rgba(0,0,0,0.02);
+  --surface-solid:#fff;--glass-surface:rgba(255,255,255,.78);--glass-bd:rgba(255,255,255,0.55);
+  --glass-shadow:0 8px 32px rgba(74,77,231,0.08),0 2px 8px rgba(0,0,0,0.04);
+  --radius:16px;--radius-lg:20px;--r-btn:10px;
+  --bg:linear-gradient(135deg,#FDF6F3 0%,#F0EBF5 50%,#EBF0F8 100%);
+  /* ── 조작 변수(기본값 = 지금 머지된 정본) ── */
+  --venue-size:11.5px;--venue-col:var(--dim);--trend-gap:34px;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);background-attachment:fixed;color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;line-height:1.6;-webkit-text-size-adjust:100%}
+header{background:var(--accent);color:#fff;padding:16px 18px}
+header h1{margin:0;font-size:17px;font-weight:800;letter-spacing:-.3px}
+header p{margin:3px 0 0;font-size:12px;opacity:.9}
+.wrap{display:flex;flex-direction:column;gap:0}
+/* 미리보기 = 상단 고정(모바일) / 좌측(PC) */
+#pv{position:sticky;top:0;z-index:5;background:rgba(255,255,255,.82);backdrop-filter:blur(11px);-webkit-backdrop-filter:blur(11px);
+  border-bottom:1px solid var(--border);padding:14px;max-height:56vh;overflow:auto}   /* 모바일 = 상단 고정 미리보기 높이 캡 — 조작판이 항상 손 닿는 곳에 */
+#ctl{padding:14px 14px 60px}
+@media (min-width:900px){
+  .wrap{flex-direction:row;align-items:flex-start}
+  #pv{flex:1 1 58%;position:sticky;top:0;max-height:100vh;overflow:auto;border-bottom:none;border-right:1px solid var(--border)}
+  #ctl{flex:1 1 42%;max-width:520px}
+}
+.bizm-card{border:1px solid var(--border);border-radius:var(--radius);background:var(--surface-solid);box-shadow:0 2px 10px rgba(74,77,231,.04);margin-bottom:14px;overflow:hidden}
+.bizm-card .ct{font-size:13px;font-weight:700;color:var(--text);padding:12px 14px 2px;letter-spacing:-.01em}
+.bizm-card .ct .sub{font-weight:400;color:var(--dim);font-size:11px;margin-left:8px}
+.bizm-yrnav{display:inline-flex;align-items:center;gap:7px;font-size:11px;color:var(--dim);font-weight:600}
+.bizm-yrnav button{width:20px;height:20px;border-radius:6px;border:1px solid var(--border);background:var(--surface-solid);color:var(--text);cursor:pointer;font-family:inherit;line-height:1;padding:0}
+.bizm-ctbl{width:100%;border-collapse:collapse;font-size:13px;white-space:nowrap}
+.bizm-ctbl thead td{padding:12px 10px;color:var(--dim);font-size:11px;font-weight:700;text-align:right}
+.bizm-ctbl thead td:first-child{text-align:left}
+.bizm-ctbl tbody td{padding:18px 10px;text-align:right;font-variant-numeric:tabular-nums;color:var(--text)}
+.bizm-ctbl tbody td.cat{text-align:left;font-weight:800}
+.bizm-ctbl tbody td.tot{font-weight:800}
+.ry-uha-row.on>td{background:var(--accent-light)}
+.ry-uha-row.on>td:first-child{box-shadow:inset 3px 0 0 var(--accent)}
+body[data-hl="bar"] .ry-uha-row.on>td{background:transparent}
+body[data-hl="bar"] .ry-uha-row.on>td:first-child{box-shadow:inset 3px 0 0 var(--accent)}
+.ana-tbl{width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed}
+.ana-tbl thead td{padding:10px;color:var(--dim);font-size:11.5px;font-weight:700;border-bottom:1px solid var(--border);text-align:left}
+.ana-tbl tbody tr{border-bottom:1px solid var(--border)}
+.ana-tbl tbody td{padding:11px 8px;vertical-align:top}
+.nm{font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ry-venue{font-size:var(--venue-size);color:var(--venue-col);font-weight:500;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.trend{text-align:right;white-space:nowrap;padding-right:var(--trend-gap)!important}
+.spec{text-align:center}
+.bars{display:inline-flex;align-items:flex-end;gap:3px;height:28px;vertical-align:middle}
+.bars i{flex:0 0 7px;background:var(--accent-light);border-radius:2px;display:block}
+.bars i:last-child{background:var(--accent)}
+.tnum{display:inline-block;vertical-align:middle;margin-left:10px;text-align:right;min-width:56px}
+.tnum b{display:block;color:var(--accent);font-weight:800;font-size:13px}
+.tnum s{display:block;color:var(--dim);font-size:11px;text-decoration:none;margin-top:2px}
+/* 조작판 */
+.grp{background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:12px;overflow:hidden}
+.grp>h3{margin:0;padding:12px 14px 4px;font-size:13.5px;font-weight:800;color:var(--accent)}
+.grp>p{margin:0;padding:0 14px 10px;font-size:11.5px;color:var(--dim)}
+.opts{display:flex;flex-wrap:wrap;gap:8px;padding:0 14px 14px}
+.opt{flex:1 1 46%;min-width:150px;text-align:left;padding:10px 12px;border-radius:var(--r-btn);border:1.5px solid var(--border2);
+  background:var(--surface-solid);color:var(--text);font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer;line-height:1.45}
+.opt small{display:block;font-weight:500;color:var(--dim);font-size:11px;margin-top:3px}
+.opt[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-light);color:var(--accent)}
+.opt .canon{display:inline-block;margin-left:5px;font-size:10px;font-weight:800;color:var(--green)}
+#warn{position:sticky;bottom:0;margin:0;padding:11px 14px;background:#FDF3F3;border-top:2px solid var(--danger);
+  color:var(--danger);font-size:12px;font-weight:700;display:none}
+#warn.on{display:block}
+#warn ul{margin:6px 0 0;padding-left:18px;font-weight:500}
+.note{font-size:11.5px;color:var(--dim);padding:0 2px 10px}
+</style>
+</head>
+<body data-form="list" data-cols="7" data-hl="pill">
+<header>
+  <h1>개별 사업 내역 — 시안</h1>
+  <p>우하단 「전체 실적표 형태」의 열 구성·강조·장소 톤을 골라보세요 · 260725 · 기본값 = 지금 머지된 정본</p>
+</header>
+
+<div class="wrap">
+  <div id="pv">
+    <div class="note">▼ 위 목록(진행 중인 프로그램)</div>
+    <div class="bizm-card">
+      <div class="ct">진행 중인 프로그램</div>
+      <div style="padding:6px 12px 14px">
+        <table class="ana-tbl">
+          <thead><tr>
+            <td style="padding-left:14px;width:11%">일자</td><td style="width:30%">프로그램</td>
+            <td class="trend" style="width:24%">최근 7일 추이</td>
+            <td class="spec" style="width:20%">사업 성격</td><td style="width:15%;padding-right:14px">장르</td>
+          </tr></thead>
+          <tbody>
+            <tr>
+              <td style="padding-left:14px;color:var(--accent);font-weight:700;white-space:nowrap">9.3 목</td>
+              <td style="overflow:hidden"><div class="nm">브런치 콘서트 III &lt;현 위로 흐르는 계절&gt;</div><div class="ry-venue">GS칼텍스 예울마루 대극장</div></td>
+              <td class="trend"><span class="bars"><i style="height:20%"></i><i style="height:35%"></i><i style="height:30%"></i><i style="height:45%"></i><i style="height:60%"></i><i style="height:55%"></i><i style="height:100%"></i></span><span class="tnum"><b>+31석</b><s>어제 +2</s></span></td>
+              <td class="spec" style="color:var(--accent);font-weight:600">사업성</td>
+              <td style="padding-right:14px;color:var(--neutral-text);font-weight:600">클래식</td>
+            </tr>
+            <tr>
+              <td style="padding-left:14px;color:var(--accent);font-weight:700;white-space:nowrap">10.1 목</td>
+              <td style="overflow:hidden"><div class="nm">뮤지컬 &lt;달 샤베트&gt;</div><div class="ry-venue">장도예술섬 다목적홀 · 야외무대(우천시 실내)</div></td>
+              <td class="trend"><span class="bars"><i style="height:15%"></i><i style="height:40%"></i><i style="height:70%"></i><i style="height:85%"></i><i style="height:100%"></i></span><span class="tnum"><b>+212석</b><s>어제 +2</s></span></td>
+              <td class="spec" style="color:var(--accent);font-weight:600">사업성</td>
+              <td style="padding-right:14px;color:var(--neutral-text);font-weight:600">뮤지컬(어린이)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="note">▼ 아래 「개별 사업 내역」 — 좌 전체 실적표와 같은 부품</div>
+    <div class="bizm-card">
+      <div class="ct" style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px 8px">개별 사업 내역
+        <span class="bizm-yrnav"><button type="button">‹</button>1 / 8<button type="button">›</button><span class="sub" style="margin-left:2px">· 자동 5초</span></span>
+      </div>
+      <div style="padding:0 14px 12px;overflow-x:auto" id="uhaBox"></div>
+    </div>
+  </div>
+
+  <div id="ctl">
+    <div class="grp">
+      <h3>1. 표 형태 <span class="canon">정본 = A</span></h3>
+      <p>「개별 사업 내역」에 무엇을 행으로 담을지 — 이번 지시의 핵심 갈래</p>
+      <div class="opts">
+        <button class="opt" data-k="form" data-v="list" aria-pressed="true">A. 전 사업 나열<small>진행중 8건이 각각 한 행. 자동 5초는 행 강조로 표현</small></button>
+        <button class="opt" data-k="form" data-v="one" aria-pressed="false">B. 한 사업 세로<small>지금 슬라이드 중인 1건의 지표를 세로로. 회전할 때마다 표 내용이 통째로 바뀜</small></button>
+      </div>
+    </div>
+    <div class="grp">
+      <h3>2. 열 구성 <span class="canon">정본 = A</span></h3>
+      <p>A는 좌 전체 실적표(7열)와 열 수가 같다</p>
+      <div class="opts">
+        <button class="opt" data-k="cols" data-v="7" aria-pressed="true">A. 7열<small>사업·일자·누적·오픈석·점유·어제대비·목표대비</small></button>
+        <button class="opt" data-k="cols" data-v="5" aria-pressed="false">B. 5열 압축<small>사업·일자·누적·점유·목표대비 — 폭 여유, 정보량 감소</small></button>
+      </div>
+    </div>
+    <div class="grp">
+      <h3>3. 현재 사업 강조 <span class="canon">정본 = A</span></h3>
+      <p>위 목록의 슬라이드 pill과 같은 색을 쓸지, 좌변 바만 쓸지</p>
+      <div class="opts">
+        <button class="opt" data-k="hl" data-v="pill" aria-pressed="true">A. 배경 + 좌변 바<small>--accent-light 배경 · 목록 pill과 동일</small></button>
+        <button class="opt" data-k="hl" data-v="bar" aria-pressed="false">B. 좌변 바만<small>배경 없이 3px 인디고 바만 — 표가 더 담백</small></button>
+      </div>
+    </div>
+    <div class="grp">
+      <h3>4. 제목 아래 장소 톤 <span class="canon">정본 = A</span></h3>
+      <p>제목(13px/700)보다 작고 연하게가 조건</p>
+      <div class="opts">
+        <button class="opt" data-k="venue" data-v="a" aria-pressed="true">A. 11.5px · --dim<small>#888 — 지금 적용값</small></button>
+        <button class="opt" data-k="venue" data-v="b" aria-pressed="false">B. 12px · --neutral-text<small>#6B6B7B — 조금 더 진하고 큼</small></button>
+      </div>
+    </div>
+    <div class="grp">
+      <h3>5. 추이 ↔ 사업 성격 간격 <span class="canon">정본 = A</span></h3>
+      <p>추이 열의 오른쪽 여백(px)</p>
+      <div class="opts">
+        <button class="opt" data-k="gap" data-v="34" aria-pressed="true">A. 34px<small>지금 적용값</small></button>
+        <button class="opt" data-k="gap" data-v="52" aria-pressed="false">B. 52px<small>더 확실히 떨어뜨림 — 추이가 그만큼 더 좌측</small></button>
+      </div>
+    </div>
+    <div class="note">고른 조합을 <b>「1-B, 3-A …」</b> 처럼 알려주면 그대로 반영합니다. 전부 A = 지금 머지된 상태 그대로.</div>
+  </div>
+</div>
+
+<div id="warn"><span>⚠ 정본(기틀에 등재된 현재 값)에서 벗어난 항목이 있습니다</span><ul id="warnList"></ul></div>
+
+<script>
+var ROWS=[
+ {cat:'공연',nm:'브런치 콘서트 III <현 위로 흐르는 계절>',d:'9.3 목',acc:'3,214석',cap:'4,200석',rate:'76.5%',dlt:'+1.2%p',dc:'--green',gap:'+6.5%p',gc:'--green'},
+ {cat:'공연',nm:'조재혁 피아노 리사이틀',d:'9.12 토',acc:'212석',cap:'400석',rate:'53.0%',dlt:'0.0%p',dc:'--dim',gap:'+3.0%p',gc:'--green'},
+ {cat:'공연',nm:'뮤지컬 <그날들>',d:'9.18 금',acc:'집계 전',cap:'—',rate:'—',dlt:'—',dc:'--dim',gap:'—',gc:'--text'},
+ {cat:'공연',nm:'뮤지컬 <달 샤베트>',d:'10.1 목',acc:'1,497석',cap:'2,000석',rate:'74.9%',dlt:'-0.8%p',dc:'--danger',gap:'-5.1%p',gc:'--danger'},
+ {cat:'전시',nm:'상설전시 <바다를 담은 미술관> 아카이브 특별전',d:'~9.30',acc:'7,620명',cap:'9,840명',rate:'63.4%',dlt:'+0.4%p',dc:'--green',gap:'4,380명 남음',gc:'--danger'}
+];
+var ONE=[
+ ['누적 판매석','3,214석','--accent'],['오픈석 · 회차 6','4,200석','--text'],
+ ['현재 누적 점유율','76.5%','--accent'],['어제대비','▲ +1.2%p','--green'],
+ ['목표 70% 대비','+6.5%p','--green'],['판매 경과','12일차','--text']
+];
+var CANON={form:'list',cols:'7',hl:'pill',venue:'a',gap:'34'};
+var S={form:'list',cols:'7',hl:'pill',venue:'a',gap:'34'};
+var LAB={form:'표 형태',cols:'열 구성',hl:'현재 사업 강조',venue:'장소 톤',gap:'추이 간격'};
+
+function esc(t){return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function render(){
+  var box=document.getElementById('uhaBox'),h='';
+  if(S.form==='one'){
+    h='<table class="bizm-ctbl" style="table-layout:fixed"><thead><tr><td style="width:52%">지표</td><td>값</td></tr></thead><tbody>';
+    ONE.forEach(function(r){ h+='<tr><td class="cat">'+esc(r[0])+'</td><td class="tot" style="color:var('+r[2]+')">'+esc(r[1])+'</td></tr>'; });
+    h+='</tbody></table>';
+  }else{
+    var wide=(S.cols==='7');
+    h='<table class="bizm-ctbl" style="table-layout:fixed"><thead><tr>'
+     +'<td style="width:'+(wide?31:40)+'%">사업</td><td style="width:11%">일자</td><td style="width:14%">누적 판매·유료</td>'
+     +(wide?'<td style="width:14%">오픈석·총인원</td>':'')
+     +'<td style="width:'+(wide?10:17)+'%">점유·달성</td>'
+     +(wide?'<td style="width:10%">어제대비</td>':'')
+     +'<td style="width:'+(wide?10:18)+'%;color:var(--accent)">목표 대비</td></tr></thead><tbody>';
+    ROWS.forEach(function(r,i){
+      var cc=(r.cat==='전시')?'--peach-text':'--accent';
+      h+='<tr class="ry-uha-row'+(i===0?' on':'')+'">'
+       +'<td class="cat" style="overflow:hidden;text-overflow:ellipsis"><span style="color:var('+cc+');font-weight:800">'+r.cat+'</span> <span style="color:var(--text);font-weight:600">'+esc(r.nm)+'</span></td>'
+       +'<td style="color:var(--neutral-text)">'+r.d+'</td>'
+       +'<td style="color:var('+cc+');font-weight:700">'+r.acc+'</td>'
+       +(wide?'<td style="color:var(--neutral-text)">'+r.cap+'</td>':'')
+       +'<td style="font-weight:700">'+r.rate+'</td>'
+       +(wide?'<td style="color:var('+r.dc+')">'+r.dlt+'</td>':'')
+       +'<td class="tot" style="color:var('+r.gc+')">'+r.gap+'</td></tr>';
+    });
+    h+='</tbody></table>';
+  }
+  box.innerHTML=h;
+  document.body.dataset.form=S.form; document.body.dataset.cols=S.cols; document.body.dataset.hl=S.hl;
+  var rs=document.documentElement.style;
+  rs.setProperty('--venue-size',S.venue==='a'?'11.5px':'12px');
+  rs.setProperty('--venue-col',S.venue==='a'?'var(--dim)':'var(--neutral-text)');
+  rs.setProperty('--trend-gap',S.gap+'px');
+  var off=Object.keys(CANON).filter(function(k){return S[k]!==CANON[k];});
+  var w=document.getElementById('warn');
+  w.classList.toggle('on',off.length>0);
+  document.getElementById('warnList').innerHTML=off.map(function(k){return '<li>'+LAB[k]+' — 정본에서 벗어남(현재 선택 = B)</li>';}).join('');
+}
+document.querySelectorAll('.opt').forEach(function(b){
+  b.addEventListener('click',function(){
+    var k=b.dataset.k;
+    S[k]=b.dataset.v;
+    document.querySelectorAll('.opt[data-k="'+k+'"]').forEach(function(x){x.setAttribute('aria-pressed',String(x===b));});
+    render();
+  });
+});
+render();
+</script>
+</body>
+</html>
