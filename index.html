@@ -1927,7 +1927,7 @@ table.promo-board-table thead th:last-child{border-top-right-radius:11px}
 #srail-uha[data-paused="1"] .srail-uha-pd{background:var(--muted);animation:none}
 @keyframes uhaPulse{0%,100%{opacity:1}50%{opacity:.35}}
 /* 하단 슬라이드 토글 = 좌 보드 페이지 넘김(_bizmDots)의 .bizm-pgctl(‹ • • ›) 그대로 계승 = 좌·우 대칭(운영자 "대칭 슬라이드 토글") */
-.srail-uha-bar{flex-shrink:0;display:flex;align-items:center;justify-content:center;padding:8px 10px;border-top:1px solid rgba(0,0,0,.07);background:rgba(255,255,255,.5)}
+.srail-uha-bar{flex-shrink:0;display:flex;align-items:center;justify-content:center;padding:16px 0 2px}   /* [260725 운영자] 좌 보드 토글(_bizmDots)과 통일 — 회색 띠(배경 .5 + 상단 보더) 벗고 여백만(16 0 2 = 좌측 margin과 동치). 알맹이 .bizm-pgctl은 원래 같은 부품 */
 /* [260724 운영자 3차] 우하단 = 좌 연간실적 통 미러 — 글래스 헤더(_bizmHead 톤) + KPI 스트립(.bizm-strip 계승) + 차트 카드(.bizm-card 계승, 1/3 KPI + 2/3 차트 우측정렬) */
 .uha-inner{padding:2px 18px 6px}   /* [260725] 하단 14→6 · 좌 전체 실적표와 세로 폭 맞춤 */
 #srail-uha .uha-inner>.bizm-card:last-child{margin-bottom:0}   /* [260725] 통 안 마지막 카드 = 바깥 여백 제거 */
@@ -4903,28 +4903,36 @@ function _srailAlignTop(){
       var _lch=document.getElementById('yrm-chart'), _lcCard=_lch&&_lch.closest('.bizm-card');
       var _ltb=document.getElementById('yrm-tbl'), _ltCard=_ltb&&_ltb.querySelector('.bizm-card');
       var _rl=document.getElementById('rail-yrm-list'), _rlCard=_rl&&_rl.closest('.bizm-card');
-      var _live=_lcCard&&_rlCard&&_lcCard.offsetParent!==null&&_rlCard.offsetParent!==null;
+      // [260725 운영자] 「개별 사업 내역」 표를 뺐으므로 목록이 그 자리까지 내려온다 — 앵커 = 좌 차트 카드 → 좌 「전체 실적표」 카드 하단
+      var _anchor=_ltCard||_lcCard;
+      var _live=_anchor&&_rlCard&&_anchor.offsetParent!==null&&_rlCard.offsetParent!==null;
       if(_rl&&_live){
         var _ctEl=_rlCard.querySelector('.ct'), _ctH=_ctEl?_ctEl.getBoundingClientRect().height:0;
-        var _want=Math.round(_lcCard.getBoundingClientRect().bottom-_rlCard.getBoundingClientRect().top-_ctH);
+        var _want=Math.round(_anchor.getBoundingClientRect().bottom-_rlCard.getBoundingClientRect().top-_ctH);
         if(_want>120){
           _rl.style.height=_want+'px'; _rl.style.maxHeight=_want+'px';
           // 보더·반올림 잔차 자가 보정(1패스) — 카드 실제 하단과 좌 차트 카드 하단의 차이를 그대로 되돌려준다
-          var _res=Math.round(_lcCard.getBoundingClientRect().bottom-_rlCard.getBoundingClientRect().bottom);
-          if(_res&&Math.abs(_res)<=12){ var _fix=_want+_res; _rl.style.height=_fix+'px'; _rl.style.maxHeight=_fix+'px'; }
+          var _res=Math.round(_anchor.getBoundingClientRect().bottom-_rlCard.getBoundingClientRect().bottom);
+          if(_res&&Math.abs(_res)<=40){ var _fix=_want+_res; _rl.style.height=_fix+'px'; _rl.style.maxHeight=_fix+'px'; }   // [260725] 허용치 12→40 — 앵커가 전체 실적표로 바뀌었으니 여유를 둔다(실측 잔차는 0)
         }
       } else if(_rl){ _rl.style.height=''; _rl.style.maxHeight=''; }
       var _slot=document.getElementById('rail-yrm-uha'), _uhaEl=document.getElementById('srail-uha');
       var _slotOn=_uhaEl&&_uhaEl.getAttribute('data-on')==='1';
-      if(_slot&&_ltCard&&_slotOn&&_live&&_ltCard.offsetParent!==null){
-        var _ltH=Math.round(_ltCard.getBoundingClientRect().height);
-        _slot.style.minHeight=_ltH+'px';
-        // 「개별 사업 내역」 = 행이 많아도 좌 전체 실적표와 같은 세로 폭 — 표 영역만 내부 스크롤로 캡
-        var _sc=document.querySelector('#srail-uha .ry-uha-scroll');
-        var _scCt=document.querySelector('#srail-uha .bizm-card .ct');
-        if(_sc){ var _cap=_ltH-(_scCt?Math.round(_scCt.getBoundingClientRect().height):0)-14; if(_cap>80)_sc.style.maxHeight=_cap+'px'; }
-      }
-      else if(_slot){ _slot.style.minHeight=''; }
+      if(_slot){ _slot.style.minHeight=''; }   // [260725] 상세 슬롯 = 표 비노출 후 점줄만 남음 → 높이 강제 없음
+      // [260725 운영자] 하단 토글 = 좌 보드 토글과 같은 줄에 — 좌 점줄은 유리박스 '밖'(margin 16), 우 점줄은 박스 '안'이라
+      // 그 차이(박스 하단 − 실적표 카드 하단)만큼 우 바의 위 여백을 더한다. 두 카드 하단은 이미 동치라 이 값만 맞추면 같은 y.
+      var _bar=document.querySelector('#srail-uha .srail-uha-bar');
+      var _lbx=document.querySelector('#biz-main [data-bizmbox]');
+      if(_bar&&_lbx&&_ltCard&&_live){
+        var _ex=Math.round(_lbx.getBoundingClientRect().bottom-_ltCard.getBoundingClientRect().bottom);
+        _bar.style.paddingTop=Math.max(0,16+_ex)+'px';
+        // 1패스 자가 보정 — 두 점줄의 실제 y 차이를 그대로 되돌려준다(중간 마진 스택을 계산하지 않아도 맞는다)
+        var _lp=document.querySelector('#biz-main .bizm-pgctl'), _rp=_bar.querySelector('.bizm-pgctl');
+        if(_lp&&_rp){
+          var _dy=Math.round(_lp.getBoundingClientRect().top-_rp.getBoundingClientRect().top);
+          if(_dy&&Math.abs(_dy)<=90){ var _pt=parseFloat(getComputedStyle(_bar).paddingTop)||0; _bar.style.paddingTop=Math.max(0,Math.round(_pt+_dy))+'px'; }
+        }
+      } else if(_bar){ _bar.style.paddingTop=''; }
       try{ _railYrmSyncActive(); }catch(_e2){}   // 높이 바뀌면 슬라이드 하이라이트 위치도 재계산
     }catch(_e){ console.warn('[rail-yrm align]',_e); }
     return;
@@ -6054,7 +6062,14 @@ function _railYrmSync(actives){
 function _uhaFmtN(v,unit){ return (v===null||v===undefined||isNaN(v))?'—':(Math.round(v).toLocaleString()+(unit||'')); }
 function _uhaFmtP(v){ return (v===null||v===undefined||isNaN(v))?'—':(v.toFixed(1)+'%'); }
 function _uhaFmtD(v){ return (v===null||v===undefined||isNaN(v))?'—':((v>0?'+':'')+v.toFixed(1)+'%p'); }
+// [260725 운영자] 「개별 사업 내역」 표 = 비노출(운영자 "저거는 안보여줘도 되고 진행중인 프로그램으로 보여지면 됨").
+// 카드 본문만 비우고 회전 기계는 그대로 둔다 — 자동 5초가 목록의 슬라이드 하이라이트(pill)와 하단 점줄을 계속 구동하기 때문.
+// 표 빌더는 _srailUhaCardTable로 휴면 보존(되살리기 = 아래 _srailUhaCard 본문을 그 호출로 되돌리면 끝).
 function _srailUhaCard(p,n,idx){
+  var e=_srailUhaEls(); if(!e.body)return;
+  e.body.innerHTML='';
+}
+function _srailUhaCardTable(p,n,idx){
   var e=_srailUhaEls(); if(!e.body)return;
   var list=_uhaCar.list||[]; if(!list.length){ e.body.innerHTML=''; return; }
   var WD=['일','월','화','수','목','금','토'];
@@ -24088,6 +24103,7 @@ function _cbLog(kind,query,answer,match){
 
 // === 불편사항 접수(QA) — 예울이 FAB 위 강조 버튼 + 접수 모달 ===
 function _qaMount(){
+  return;   // [260725 운영자] 「불편사항 접수」 FAB 일단 숨김 — 아래 생성 코드·_qaOpen 모달은 그대로 보존(되살리기 = 이 return 한 줄 삭제)
   if(document.getElementById('qa-fab'))return;
   const b=document.createElement('button');
   b.id='qa-fab';b.className='qa-fab';b.title='불편사항 접수';b.setAttribute('aria-label','불편사항 접수');b.onclick=_qaOpen;
