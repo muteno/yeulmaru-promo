@@ -2094,13 +2094,24 @@ table.promo-board-table thead th:last-child{border-top-right-radius:11px}
 #rail-yrm-list tr.clk{cursor:pointer}
 /* [260725 운영자] 액티브 행 = 즉시 점프 → 슬라이드. 문법 100% 계승 = 상단 nav 호버 pill(.nav-hover-bg, L225) — top/left/width/height 전이 + is-instant 첫 등장 제자리 페이드.
    색·모양은 구 tr.on 값 그대로(배경 --accent-light · 좌변 3px --accent). 표는 z-index 1로 pill 위. */
-#rail-yrm-list .ry-hl{position:absolute;left:12px;right:12px;top:0;z-index:0;opacity:0;pointer-events:none;background:var(--accent-light);box-shadow:inset 3px 0 0 var(--accent);transition:top .22s cubic-bezier(.215,.61,.355,1),height .22s cubic-bezier(.215,.61,.355,1),opacity .15s ease}   /* 가로 = 리스트 좌우 패딩(12)과 동치 = 표 좌우변. JS로 재는 순간 타이밍에 따라 짧게 잡히는 사례가 있어 CSS로 고정 */
+#rail-yrm-list .ry-hl{position:absolute;left:0;right:0;top:0;z-index:0;opacity:0;pointer-events:none;background:var(--accent-light);box-shadow:inset 3px 0 0 var(--accent);transition:top .22s cubic-bezier(.215,.61,.355,1),height .22s cubic-bezier(.215,.61,.355,1),opacity .15s ease}   /* 가로 = 리스트 좌우 패딩(12)과 동치 = 표 좌우변. JS로 재는 순간 타이밍에 따라 짧게 잡히는 사례가 있어 CSS로 고정 */
 #rail-yrm-list .ry-hl.is-instant{transition:opacity .15s ease}
 #rail-yrm-list .ry-hl.is-visible{opacity:1}
 #rail-yrm-list .ana-tbl,#rail-yrm-list .bizm-sec{position:relative;z-index:1}
 @media (prefers-reduced-motion:reduce){#rail-yrm-list .ry-hl{transition:opacity .15s ease}}
 /* [260724 운영자] 2단계 — 판매·진행중 공연·전시 블릿 리스트(KPI 4칸 아래) · 넘치면 기틀 오버레이 스크롤(.srail-body/.srail-uha-body 계승: 평소 width:0 콘텐츠 꽉 + 호버 8px 리빌 · 썸 흑알파 .15). 색 = 표 카테고리색(공연 --accent·전시 --peach-text)·중립 토큰만(신규 hex 0). */
-#rail-yrm-list{position:relative;max-height:min(58vh,480px);overflow-y:auto;min-height:0;padding:6px 12px 14px;scrollbar-width:none;-ms-overflow-style:none;scrollbar-color:rgba(0,0,0,0.15) transparent}
+/* [260725 운영자] 분야(공연·전시·교육)를 각각 '투명 네모'로 나누고 그 안에서만 스크롤 — 바깥은 스크롤 없음(높이는 _srailAlignTop이 좌 실적표에 맞춰 고정).
+   네모 = 배경 투명 + 정본 보더·반경만(신규 토큰 0) · 높이는 건수 비례(flex-grow)로 자동 배분 · 정렬은 항상 날짜 가까운순(정렬 UI 없음). */
+#rail-yrm-list{position:relative;overflow:hidden;min-height:0;padding:6px 12px 14px;display:flex;flex-direction:column;gap:12px}
+.ry-grp{flex:0 0 auto;display:flex;flex-direction:column;min-height:0;background:transparent;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.ry-grp-hd{flex-shrink:0;display:flex;align-items:center;gap:8px;font-size:13px;font-weight:800;color:var(--text);padding:10px 12px 8px}
+.ry-grp-hd::before{content:'';width:4px;height:14px;border-radius:2px;background:var(--gtok,var(--accent))}
+.ry-grp-bd{position:relative;flex:1;min-height:0;overflow-y:auto;scrollbar-width:none;-ms-overflow-style:none;scrollbar-color:rgba(0,0,0,0.15) transparent}
+.ry-grp-bd::-webkit-scrollbar{width:0;height:0;background:transparent}
+#rail-yrm:hover .ry-grp-bd{scrollbar-width:thin}
+#rail-yrm:hover .ry-grp-bd::-webkit-scrollbar{width:7px}
+.ry-grp-bd::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.15);border:0;border-radius:999px}
+.ry-grp-bd::-webkit-scrollbar-track{background:transparent;border:none;margin:0}
 #rail-yrm-list::-webkit-scrollbar{width:0;height:0;background:transparent}
 #rail-yrm:hover #rail-yrm-list{scrollbar-width:thin}
 #rail-yrm:hover #rail-yrm-list::-webkit-scrollbar{width:7px}
@@ -4935,6 +4946,38 @@ function _srailAlignTop(){
           if(_dy&&Math.abs(_dy)<=90){ var _pt=parseFloat(getComputedStyle(_bar).paddingTop)||0; _bar.style.paddingTop=Math.max(0,Math.round(_pt+_dy))+'px'; }
         }
       } else if(_bar){ _bar.style.paddingTop=''; }
+      // [260725 운영자] 분야 네모 = 내용만큼만 차지(빈 공간 없음). 다 합쳐 통을 넘길 때만 건수 비례로 몫을 잘라 각자 내부 스크롤.
+      try{
+        var _gl=document.getElementById('rail-yrm-list'), _gs=_gl?_gl.querySelectorAll('.ry-grp'):[];
+        if(_gl&&_gs.length){
+          var _bds=[],_nat=[],_w=[],_tot=0,_ws=0;
+          for(var _i=0;_i<_gs.length;_i++){
+            var _bd=_gs[_i].querySelector('.ry-grp-bd'); if(_bd)_bd.style.maxHeight='';
+            _bds.push(_bd);
+          }
+          for(var _j=0;_j<_gs.length;_j++){
+            var _nh=_gs[_j].getBoundingClientRect().height; _nat.push(_nh); _tot+=_nh;
+            var _n=parseInt(_gs[_j].getAttribute('data-n')||'1',10); _w.push(_n); _ws+=_n;
+          }
+          var _cs=getComputedStyle(_gl);
+          var _gap=(parseFloat(_cs.rowGap)||12)*(_gs.length-1);
+          var _avail=_gl.clientHeight-parseFloat(_cs.paddingTop||0)-parseFloat(_cs.paddingBottom||0)-_gap;
+          if(_tot>_avail+1&&_avail>80){
+            var _fx=[],_freeH=_avail,_freeW=0,_k;
+            for(_k=0;_k<_gs.length;_k++)_fx.push(null);
+            for(_k=0;_k<_gs.length;_k++)_freeW+=_w[_k];
+            for(_k=0;_k<_gs.length;_k++){ var _sh=_freeH*(_w[_k]/(_freeW||1)); if(_nat[_k]<=_sh){ _fx[_k]=_nat[_k]; } }   // 몫보다 작은 그룹 = 자연 높이 고정
+            var _rH=_avail,_rW=0;
+            for(_k=0;_k<_gs.length;_k++){ if(_fx[_k]!==null)_rH-=_fx[_k]; else _rW+=_w[_k]; }
+            for(_k=0;_k<_gs.length;_k++){
+              if(_fx[_k]!==null||!_bds[_k])continue;
+              var _hd=_gs[_k].querySelector('.ry-grp-hd');
+              var _target=_rH*(_w[_k]/(_rW||1))-(_hd?_hd.getBoundingClientRect().height:0)-2;
+              _bds[_k].style.maxHeight=Math.max(72,Math.round(_target))+'px';
+            }
+          }
+        }
+      }catch(_e3){ console.warn('[ry grp fit]',_e3); }
       try{ _railYrmSyncActive(); }catch(_e2){}   // 높이 바뀌면 슬라이드 하이라이트 위치도 재계산
     }catch(_e){ console.warn('[rail-yrm align]',_e); }
     return;
@@ -6028,9 +6071,18 @@ function _railYrmTableHtml(actives){
   if(gf){ perfs=perfs.filter(function(p){return (p.genre||'기타')===gf;}); exs=exs.filter(function(){return gf==='전시';}); }
   perfs.sort(function(a,b){var ad=a.startDate?a.startDate.getTime():9e15,bd=b.startDate?b.startDate.getTime():9e15;if(ad!==bd)return ad-bd;return a.name<b.name?-1:1;});
   if(!perfs.length&&!exs.length)return '<div class="rail-yrm-empty">🎫 지금 판매·진행중인 프로그램이 없어요</div>';
-  var h='';
-  if(perfs.length)h+='<div class="bizm-sec">공연 <span class="rail-yrm-gc">'+perfs.length+'</span></div>'+_railYrmPerfTable(perfs);
-  if(exs.length)h+='<div class="bizm-sec"'+(perfs.length?' style="margin-top:14px"':'')+'>전시 <span class="rail-yrm-gc">'+exs.length+'</span></div>'+_railYrmExTable(exs);
+  // [260725 운영자] 분야별 투명 네모 — 각 네모가 자기 안에서만 스크롤. 높이는 건수 비례로 자동 배분(flex-grow).
+  // 교육(_kind==='edu')은 아직 actives에 흘러들어오는 소스가 없어 평소엔 렌더되지 않는다(데이터가 생기면 자동 노출).
+  var edus=actives.filter(function(x){return x._kind==='edu';});
+  var grp=function(label,tok,arr,tbl){
+    if(!arr.length)return '';
+    return '<section class="ry-grp" data-n="'+arr.length+'" style="--gtok:var('+tok+')" aria-label="'+label+' '+arr.length+'건">'
+      +'<div class="ry-grp-hd">'+label+' <span class="rail-yrm-gc">'+arr.length+'</span></div>'
+      +'<div class="ry-grp-bd">'+tbl(arr)+'</div></section>';
+  };
+  var h=grp('공연','--accent',perfs,_railYrmPerfTable)
+       +grp('전시','--peach-text',exs,_railYrmExTable)
+       +grp('교육','--green',edus,_railYrmPerfTable);
   return h;
 }
 function _railYrmCardTitle(){
@@ -6057,10 +6109,14 @@ function _railYrmMarkRow(want){
 // [260725 운영자] 액티브 행 하이라이트 = 상단 nav 호버 pill(_navHoverBgTo)과 같은 문법 — 자동 5초 슬라이드가 넘어갈 때 행 사이를 미끄러진다.
 // 첫 등장만 제자리 페이드(is-instant), 이후 top/height 전이. 리스트 재렌더(innerHTML) 시엔 _railYrmSyncActive가 다시 불러 pill을 새로 만든다.
 function _railYrmHlTo(tr){
-  var box=document.getElementById('rail-yrm-list'); if(!box)return;
+  var list=document.getElementById('rail-yrm-list'); if(!list)return;
+  // 분야 네모마다 자기 pill을 갖는다 — 다른 네모의 pill은 숨기고, 대상 네모 것만 움직인다(같은 네모 안 이동 = 슬라이드 유지).
+  var box=(tr&&tr.closest)?(tr.closest('.ry-grp-bd')||list):null;
+  var all=list.querySelectorAll('.ry-hl');
+  for(var i=0;i<all.length;i++){ if(!box||all[i].parentNode!==box)all[i].classList.remove('is-visible'); }
+  if(!tr||!box)return;
   var hl=box.querySelector('.ry-hl');
   if(!hl){ hl=document.createElement('div'); hl.className='ry-hl'; hl.setAttribute('aria-hidden','true'); box.insertBefore(hl,box.firstChild); }
-  if(!tr){ hl.classList.remove('is-visible'); return; }
   var vis=hl.classList.contains('is-visible');
   if(!vis)hl.classList.add('is-instant');
   var br=box.getBoundingClientRect(), rr=tr.getBoundingClientRect();
