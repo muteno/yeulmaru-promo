@@ -11,7 +11,7 @@
 | 플랫폼 | 키(이름) | 비밀? | 사는 곳 | 용도 |
 |---|---|---|---|---|
 | **GitHub** | Fine-grained **PAT** | 🔒 | **Cloudflare Worker 시크릿** `GITHUB_PAT` (260701 브라우저→서버 이관) | 블로그 도우미: 초안 생성 트리거 + 결과 폴링 (Worker가 대행) |
-| **GitHub** | `CLAUDE_CODE_OAUTH_TOKEN_*` (5계정: EMS1130G·EMS1130N·MUTENO·MUTENONA·NOMUTEFB) | 🔒 | Repo → Settings → Secrets → **Actions** | 초안 생성 엔진 (`claude -p` opus 4.8) — 활성 계정 쿼터 시 순환 폴오버 |
+| **GitHub** | `CLAUDE_CODE_OAUTH_TOKEN_*` (5계정: EMS1130G·EMS1130N·MUTENO·MUTENONA·NOMUTEFB) | 🔒 | Repo → Settings → Secrets → **Actions** | 초안 생성 엔진 (`claude -p` opus 5) — 활성 계정 쿼터 시 순환 폴오버 |
 | **GitHub** | `GH_VARS_TOKEN` (Fine-grained PAT · Variables RW) | 🔒 | Repo → Settings → Secrets → **Actions** | 활성 계정 자동 승격이 `vars.ACTIVE_ACCOUNT` 를 쓰는 권한 |
 | **Cloudflare** | `APP_PASSWORD` | 🔒 | Worker Variables/Secrets | 일반 사용자 앱 비번 (X-App-Password) |
 | **Cloudflare** | `ADMIN_PASSWORD` | 🔒 | Worker Variables/Secrets | 관리자/슈퍼 비번 = **DB 스크립트 `DB_PW` 값** |
@@ -44,7 +44,7 @@
 
 ### 1-b. Actions Secret `CLAUDE_CODE_OAUTH_TOKEN_*` (5계정) — 초안 생성 엔진 + 순환 폴오버
 - **무엇**: Claude **구독(Max) OAuth 토큰** (`sk-ant-oat…`) 5개. 계정·순서(체인) = `EMS1130G`(활성 기본) → `EMS1130N` → `MUTENO` → `MUTENONA` → `NOMUTEFB`.
-- **용도**: `nb-blog.yml`·`blog-draft.yml`에서 `claude -p --model claude-opus-4-8 --effort max` 실행 = **실제 글쓰기 엔진** (Max 구독이라 초안당 추가비용 0). 활성 계정(`vars.ACTIVE_ACCOUNT`, 없으면 EMS1130G)이 주간 쿼터로 막히면 `shared/claude_failover.js`가 체인의 다음 계정으로 **순환 폴오버**해 결과물을 확보.
+- **용도**: `nb-blog.yml`·`blog-draft.yml`에서 `claude -p --model claude-opus-5 --effort max` 실행 = **실제 글쓰기 엔진** (Max 구독이라 초안당 추가비용 0). 활성 계정(`vars.ACTIVE_ACCOUNT`, 없으면 EMS1130G)이 주간 쿼터로 막히면 `shared/claude_failover.js`가 체인의 다음 계정으로 **순환 폴오버**해 결과물을 확보.
 - **위치**: Repo → Settings → Secrets and variables → **Actions** → `CLAUDE_CODE_OAUTH_TOKEN_<계정명>` (각 계정 1개).
 - **발급/회전**: 각 계정 로컬에서 `claude setup-token` → 출력된 `sk-ant-oat…`를 해당 secret에 갱신.
 - **주의**: 구독 OAuth는 **Actions의 `claude -p`에서만** 동작(원시 Messages API 불가). 만료되면 그 계정만 폴오버로 건너뛰고, 전 계정 만료 시 초안 생성 실패.
