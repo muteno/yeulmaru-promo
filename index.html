@@ -2107,6 +2107,7 @@ table.promo-board-table thead th:last-child{border-top-right-radius:11px}
 #rail-yrm-list::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.15);border:0;border-radius:999px}
 #rail-yrm-list::-webkit-scrollbar-track{background:transparent;border:none;margin:0}
 .rail-yrm-gc{font-weight:700;color:var(--dim);font-size:11px}
+.ry-venue{font-size:11.5px;color:var(--dim);font-weight:500;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}   /* [260725 운영자] 제목 아래 장소 — 제목(13px/700)보다 작고 연하게(--dim) */
 #rail-yrm-list .ana-tbl{margin:2px 0 0}   /* 각 그룹 표 = 기존 판매현황 표(.ana-tbl mv-tbl) 계승 · 리스트 컨테이너가 스크롤·좌우 여백 담당 */
 .rail-yrm-empty{padding:22px 8px;text-align:center;color:var(--dim);font-size:12.5px}
 /* KPI 스트립 = 흰 카드 1장 + 세로 구분선 4칸(시안 — 개별 글래스 카드 폐지) */
@@ -2127,6 +2128,18 @@ table.promo-board-table thead th:last-child{border-top-right-radius:11px}
 .bizm-ctbl tbody td.cat{text-align:left;font-weight:800}
 .bizm-ctbl tbody td.tot{font-weight:800}
 .bizm-ctbl tbody tr.sum td{border-top:2px solid var(--border2);font-weight:800}
+/* [260725 운영자] 우 「개별 사업 내역」 = 좌 전체 실적표(.bizm-ctbl) 그대로 + 현재 슬라이드 행 강조. 색 = 목록 pill과 같은 --accent-light */
+/* 내부 스크롤 = 좌 전체 실적표와 같은 세로 폭 유지(행이 많아도 통이 길어지지 않게) · 문법 = #rail-yrm-list 오버레이 스크롤 계승 */
+.ry-uha-scroll{overflow-y:auto;scrollbar-width:none;-ms-overflow-style:none}
+.ry-uha-scroll::-webkit-scrollbar{width:0;height:0;background:transparent}
+#srail-uha:hover .ry-uha-scroll{scrollbar-width:thin}
+#srail-uha:hover .ry-uha-scroll::-webkit-scrollbar{width:7px}
+.ry-uha-scroll::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.15);border:0;border-radius:999px}
+.ry-uha-scroll::-webkit-scrollbar-track{background:transparent;border:none;margin:0}
+.ry-uha-row{cursor:pointer;transition:background .15s}
+.ry-uha-row:hover>td{background:var(--past-bg)}
+.ry-uha-row.on>td{background:var(--accent-light)}
+.ry-uha-row.on>td:first-child{box-shadow:inset 3px 0 0 var(--accent)}
 /* 우 판매현황 개요 표(시안) — 일자·프로그램·장소·장르·성격·추이 */
 .mv-tbl thead td{padding:10px;color:var(--dim);font-size:11.5px;font-weight:700;border-bottom:1px solid var(--border)}
 .mv-tbl tbody tr{border-bottom:1px solid var(--border)}
@@ -4903,7 +4916,14 @@ function _srailAlignTop(){
       } else if(_rl){ _rl.style.height=''; _rl.style.maxHeight=''; }
       var _slot=document.getElementById('rail-yrm-uha'), _uhaEl=document.getElementById('srail-uha');
       var _slotOn=_uhaEl&&_uhaEl.getAttribute('data-on')==='1';
-      if(_slot&&_ltCard&&_slotOn&&_live&&_ltCard.offsetParent!==null){ _slot.style.minHeight=Math.round(_ltCard.getBoundingClientRect().height)+'px'; }
+      if(_slot&&_ltCard&&_slotOn&&_live&&_ltCard.offsetParent!==null){
+        var _ltH=Math.round(_ltCard.getBoundingClientRect().height);
+        _slot.style.minHeight=_ltH+'px';
+        // 「개별 사업 내역」 = 행이 많아도 좌 전체 실적표와 같은 세로 폭 — 표 영역만 내부 스크롤로 캡
+        var _sc=document.querySelector('#srail-uha .ry-uha-scroll');
+        var _scCt=document.querySelector('#srail-uha .bizm-card .ct');
+        if(_sc){ var _cap=_ltH-(_scCt?Math.round(_scCt.getBoundingClientRect().height):0)-14; if(_cap>80)_sc.style.maxHeight=_cap+'px'; }
+      }
       else if(_slot){ _slot.style.minHeight=''; }
       try{ _railYrmSyncActive(); }catch(_e2){}   // 높이 바뀌면 슬라이드 하이라이트 위치도 재계산
     }catch(_e){ console.warn('[rail-yrm align]',_e); }
@@ -5683,8 +5703,8 @@ function _srailRenderInner(els){
   var pgIdx=_srailPgIdx();
   // [260723 평의회2 MED-1] 실적 표 모드 = 판매 축(운영자 원문 「현재 판매중인 프로그램」 — 판매중이면 홍보창 밖이어도 표에 나옴) · 홍보창 필터는 캘린더 카드 모드 전용 유지
   var _mvBiz=(typeof _mainView!=='undefined'&&_mainView==='biz');
-  perfActives=perfActives.filter(function(p){ var pg=_srailPgOf(pgIdx,p._mid,p.name); p._saleN=_srailSaleDayN(p.saleStart,pg); return _mvBiz?true:(_srailPromoOn(pg)!==false); });
-  exActives=exActives.filter(function(e){ var pg=_srailPgOf(pgIdx,null,e.name); e._saleN=_srailSaleDayN(null,pg); return _mvBiz?true:(_srailPromoOn(pg)!==false); });
+  perfActives=perfActives.filter(function(p){ var pg=_srailPgOf(pgIdx,p._mid,p.name); p._saleN=_srailSaleDayN(p.saleStart,pg); p._venue=(pg&&pg.l)?String(pg.l):''; return _mvBiz?true:(_srailPromoOn(pg)!==false); });   // [260725] _venue = 제목 아래 장소 서브라인 소스(프로그램 시트 l)
+  exActives=exActives.filter(function(e){ var pg=_srailPgOf(pgIdx,null,e.name); e._saleN=_srailSaleDayN(null,pg); e._venue=(pg&&pg.l)?String(pg.l):''; return _mvBiz?true:(_srailPromoOn(pg)!==false); });
   // [운영자 260710] 전시 「집계 전」 카드 합류(전시일일 0건 마스터 전시 + 프로그램 시트 전용 전시 — 프로그램단 커버리지)
   exActives=exActives.concat(_srailExhibsPre(pgIdx,exActives));
   // 정렬 축 통일: 시작일 임박순(진행 중=음수 최상단, 미상은 마지막) · 동률이면 집계 전(noData) 카드는 실적 카드 뒤 · 점유율/달성률 낮은 순(주의 대상 위로)
@@ -5910,27 +5930,27 @@ var _RYNM='font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellip
 function _railYrmPerfTable(perfs){
   var WD=['일','월','화','수','목','금','토'];
   var sd=function(d){ return (d&&d.getMonth)?((d.getMonth()+1)+'.'+d.getDate()+' '+WD[d.getDay()]):''; };
-  var td='padding:11px 8px;vertical-align:middle;';
+  var td='padding:11px 8px;vertical-align:top;';   // [260725 운영자] 제목 위 정렬로 통일 — 제목 아래 장소 서브라인이 붙으므로 행 전체를 위 기준으로
   // [260725 운영자] 프로그램 열이 남는 폭을 다 먹어 추이 차트가 우측 끝까지 밀렸던 것 → table-layout:fixed + 폭 명시로 추이를 좌측으로 당김.
   // 폭 누계 11/45/74/87/100 — 전시표(_railYrmExTable)와 일자·프로그램·값열 우변(74%)을 동일하게 맞춰 두 표가 세로로 오와열 정렬된다.
   var h='<table class="ana-tbl mv-tbl" style="font-size:13px;width:100%;table-layout:fixed"><thead><tr>'
-    +'<td style="padding-left:14px;width:11%">일자</td><td style="width:30%">프로그램</td><td style="text-align:right;width:28%;padding-right:26px">최근 7일 추이</td><td style="width:16%">사업 성격</td><td style="padding-right:14px;width:15%">장르</td></tr></thead><tbody>';
+    +'<td style="padding-left:14px;width:11%">일자</td><td style="width:30%">프로그램</td><td style="text-align:right;width:24%;padding-right:34px">최근 7일 추이</td><td style="text-align:center;width:20%">사업 성격</td><td style="padding-right:14px;width:15%">장르</td></tr></thead><tbody>';
   perfs.forEach(function(p){
     var trend=p.noData?('<span style="color:var(--muted);font-size:12px">'+((p.dday!==null&&p.dday>0)?'오픈 예정':'데이터 부족')+'</span>'):_mvBars(p.days,p.diff);
     h+='<tr class="clk" role="button" tabindex="0" data-uhakey="'+escapeHtml(_srailUhaKey(p))+'" onclick="_railYrmPick(\'perf\',\''+_anaEsc(p.name)+'\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click();}" title="'+escapeHtml(p.name)+' — 클릭 = 아래 상세 보기">'
       +'<td style="'+td+'padding-left:14px;color:var(--accent);font-weight:700;white-space:nowrap;font-variant-numeric:tabular-nums">'+sd(p.startDate)+'</td>'
-      +'<td style="'+td+_RYNM+'" title="'+escapeHtml(p.name)+'">'+escapeHtml(p.name)+'</td>'
-      +'<td style="'+td+'text-align:right;white-space:nowrap;padding-right:26px">'+trend+'</td>'
-      +'<td style="'+td+'">'+_mvSpecPill(_anaProfitAxis(p['수익성']))+'</td>'
+      +'<td style="'+td+'overflow:hidden" title="'+escapeHtml(p.name)+(p._venue?' · '+escapeHtml(p._venue):'')+'"><div style="'+_RYNM+'">'+escapeHtml(p.name)+'</div>'+(p._venue?'<div class="ry-venue">'+escapeHtml(p._venue)+'</div>':'')+'</td>'
+      +'<td style="'+td+'text-align:right;white-space:nowrap;padding-right:34px">'+trend+'</td>'
+      +'<td style="'+td+'text-align:center">'+_mvSpecPill(_anaProfitAxis(p['수익성']))+'</td>'
       +'<td style="'+td+'padding-right:14px">'+_mvGenrePill(p.genre||'기타')+'</td></tr>';
   });
   h+='</tbody></table>';
   return h;
 }
 function _railYrmExTable(exs){
-  var td='padding:11px 8px;vertical-align:middle;';
+  var td='padding:11px 8px;vertical-align:top;';   // [260725] 〃
   var h='<table class="ana-tbl mv-tbl" style="font-size:13px;width:100%;table-layout:fixed"><thead><tr>'
-    +'<td style="padding-left:14px;width:11%">일자</td><td style="width:30%">프로그램</td><td style="text-align:right;width:28%;padding-right:26px">달성률</td><td style="padding-right:14px;width:31%">성격</td></tr></thead><tbody>';
+    +'<td style="padding-left:14px;width:11%">일자</td><td style="width:30%">프로그램</td><td style="text-align:right;width:24%;padding-right:34px">달성률</td><td style="text-align:center;width:20%">성격</td><td style="padding-right:14px;width:15%"></td></tr></thead><tbody>';   // [260725] 마지막 빈 열 = 공연 표 「장르」 자리 — 두 표의 열 경계를 완전히 일치시켜 오와열 유지
   exs.forEach(function(e){
     var dd=(e._endD!==null&&e._endD!==undefined&&e.종료일)?('~'+_srailMD(e.종료일)):(e.시작일?_srailMD(e.시작일):'');
     var ach;
@@ -5939,9 +5959,10 @@ function _railYrmExTable(exs){
     else ach='—';
     var clk=' data-uhakey="'+escapeHtml(_srailUhaKey(e))+'"'+(e.noData?'':(' class="clk" role="button" tabindex="0" onclick="_railYrmPick(\'ex\',\''+_anaEsc(e.id||e.name)+'\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click();}" title="'+escapeHtml(e.name)+' — 클릭 = 아래 상세 보기"'));
     h+='<tr'+clk+'><td style="'+td+'padding-left:14px;color:var(--peach-text);font-weight:700;white-space:nowrap">'+escapeHtml(dd)+'</td>'
-      +'<td style="'+td+_RYNM+'" title="'+escapeHtml(e.name)+'">'+escapeHtml(e.name)+'</td>'
-      +'<td style="'+td+'text-align:right;padding-right:26px">'+ach+'</td>'
-      +'<td style="'+td+'padding-right:14px;color:var(--peach-text);font-weight:600;white-space:nowrap">'+escapeHtml(e.profit||'기획')+'</td></tr>';
+      +'<td style="'+td+'overflow:hidden" title="'+escapeHtml(e.name)+(e._venue?' · '+escapeHtml(e._venue):'')+'"><div style="'+_RYNM+'">'+escapeHtml(e.name)+'</div>'+(e._venue?'<div class="ry-venue">'+escapeHtml(e._venue)+'</div>':'')+'</td>'
+      +'<td style="'+td+'text-align:right;padding-right:34px">'+ach+'</td>'
+      +'<td style="'+td+'text-align:center;color:var(--peach-text);font-weight:600;white-space:nowrap">'+escapeHtml(e.profit||'기획')+'</td>'
+      +'<td style="'+td+'padding-right:14px"></td></tr>';
   });
   h+='</tbody></table>';
   return h;
@@ -6027,30 +6048,46 @@ function _railYrmSync(actives){
   try{ _srailAlignTop(); }catch(_e){}   // [260725] 리스트만 갱신된 경로에서도 좌↔우 데칼코마니 높이 재계산
 }
 // [260724 운영자 3차] 우하단 카드 = 좌 연간실적 통 미러: 글래스 헤더(프로그램명+공연일 D-day) + KPI 스트립(좌 값 복사) + 차트 카드(1/3 지표[누적점유율·어제대비] + 2/3 차트 우측정렬)
+// [260725 운영자] 우하단 = 좌 「전체 실적표」를 그대로 가져온 표 — 그 안에 개별 사업(진행중 프로그램) 내역이 행으로 들어간다.
+// 부품 100% 계승: .bizm-card + .ct(flex 헤더) + .bizm-yrnav(‹ › 넘김) + .bizm-ctbl(구분/숫자열) — _yrmTable 마크업 그대로.
+// 구 형태(글래스 헤더 + KPI 6칸 + 차트)는 이 지시로 대체. _uhaProgCells·.uha-* 부품은 휴면 보존.
+function _uhaFmtN(v,unit){ return (v===null||v===undefined||isNaN(v))?'—':(Math.round(v).toLocaleString()+(unit||'')); }
+function _uhaFmtP(v){ return (v===null||v===undefined||isNaN(v))?'—':(v.toFixed(1)+'%'); }
+function _uhaFmtD(v){ return (v===null||v===undefined||isNaN(v))?'—':((v>0?'+':'')+v.toFixed(1)+'%p'); }
 function _srailUhaCard(p,n,idx){
   var e=_srailUhaEls(); if(!e.body)return;
-  var isEx=(p._kind==='ex');
-  var occ=p.occ, dpp=p.deltaPP, noData=!!p.noData, dStr, dCol;
-  if(dpp===null||dpp===undefined){dStr='수집 전';dCol='var(--dim)';}
-  else if(dpp>0.04){dStr='▲ +'+dpp.toFixed(1)+'%p';dCol='var(--green)';}
-  else if(dpp<-0.04){dStr='▼ '+dpp.toFixed(1)+'%p';dCol='var(--danger)';}
-  else {dStr='보합';dCol='var(--dim)';}
-  var ddTxt=isEx?((p._endD===null||p._endD===undefined)?'-':_salesDdayStr(p._endD)):(_salesDdayStr(p.dday)||'-');
-  var occTxt=noData?'집계 전':((occ!=null&&!isNaN(occ))?occ.toFixed(1)+'%':'-');
-  var occLab=isEx?'현재 달성률':'현재 누적 점유율';
-  var sub=isEx?('전시 · '+(p.profit||'')):((p.genre||'기타')+' · '+_anaProfitAxis(p['수익성']));
-  var chart=isEx?_anaExhibTrend(p.daily):_srailDrillSvg(p);
-  var h='<div class="uha-inner">';
-  h+='<div class="uha-head"><span class="uha-nm" title="'+escapeHtml(p.name)+'">'+escapeHtml(p.name)+'</span><span class="uha-sub">'+escapeHtml(sub)+'</span>'
-    +'<span class="uha-hr">'+(isEx?'종료까지 ':'공연일 ')+'<b>'+escapeHtml(ddTxt)+'</b><span class="uha-auto" aria-hidden="true"><span class="srail-uha-pd"></span>자동 5초 · '+(idx+1)+'/'+n+'</span></span></div>';
-  // [260725 운영자] 구 전폭 KPI 스트립 행 폐지 → 그 4칸(누적 판매석 등)이 차트 좌측 글자영역으로 합류 = 지표 6칸 2열 + 차트 한 통(전체 실적표와 나란한 데칼코마니)
-  var kcells=[{lab:occLab,val:occTxt,tok:'--accent'},{lab:'어제대비',val:dStr,tok:null,raw:dCol}].concat(_uhaProgCells(p));
-  var kh=kcells.map(function(c){
-    return '<div class="uha-kpi" style="--kpitok:'+(c.raw||('var('+c.tok+')'))+'"><div class="lab" title="'+escapeHtml(String(c.lab))+'">'+c.lab+'</div><div class="val" title="'+escapeHtml(String(c.val))+'">'+c.val+'</div></div>';
-  }).join('');
-  h+='<div class="bizm-card"><div class="ct">'+(isEx?'일별 달성률 추이':'일자별 누적 점유율 추이')+' <span class="sub">선=누적 · 점선=목표</span></div>'
-    +'<div class="uha-chartrow"><div class="uha-kpicol">'+kh+'</div><div class="uha-chart">'+chart+'</div></div></div>';
-  h+='</div>';
+  var list=_uhaCar.list||[]; if(!list.length){ e.body.innerHTML=''; return; }
+  var WD=['일','월','화','수','목','금','토'];
+  var sd=function(d){ return (d&&d.getMonth)?((d.getMonth()+1)+'.'+d.getDate()+' '+WD[d.getDay()]):'—'; };
+  var h='<div class="uha-inner"><div class="bizm-card"><div class="ct" style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px 8px">개별 사업 내역'
+    +'<span class="bizm-yrnav"><button type="button" aria-label="이전 사업" onclick="_srailUhaTo('+((idx-1+n)%n)+')">‹</button>'+(idx+1)+' / '+n
+    +'<button type="button" aria-label="다음 사업" onclick="_srailUhaTo('+((idx+1)%n)+')">›</button><span class="sub" style="margin-left:2px">· 자동 5초</span></span></div>';
+  // 열 폭 명시(table-layout:fixed) = 「사업」이 남는 폭을 못 먹어 잘리던 것 해소 · 문법은 위 목록 표(_railYrmPerfTable)와 동일
+  h+='<div class="ry-uha-scroll" style="padding:0 14px 12px;overflow-x:auto"><table class="bizm-ctbl" style="table-layout:fixed"><thead><tr>'
+    +'<td style="width:31%">사업</td><td style="width:11%">일자</td><td style="width:14%">누적 판매·유료</td><td style="width:14%">오픈석·총인원</td><td style="width:10%">점유·달성</td><td style="width:10%">어제대비</td><td style="width:10%;color:var(--accent)">목표 대비</td>'
+    +'</tr></thead><tbody>';
+  list.forEach(function(x,i){
+    var isEx=(x._kind==='ex'), cur=(i===idx);
+    var cat=isEx?'전시':'공연', ccol=isEx?'--peach-text':'--accent';
+    var date=isEx?((x.종료일)?('~'+_srailMD(x.종료일)):(x.시작일?_srailMD(x.시작일):'—')):sd(x.startDate);
+    var acc=isEx?(x.noData?'집계 전':_uhaFmtN(x._paid,'명')):(x.noData?'집계 전':_uhaFmtN(x.seats,'석'));
+    var cap=isEx?_uhaFmtN(x._total,'명'):_uhaFmtN(x.totalOpen,'석');
+    var rate=x.noData?'—':_uhaFmtP(x.occ);
+    var dlt=_uhaFmtD(x.deltaPP);
+    var gap='—', gcol='--text';
+    if(isEx){ if(x._goal!=null&&x._paid!=null){ var rv=x._goal-x._paid; gap=(rv>0?_uhaFmtN(rv,'명 남음'):'달성 +'+_uhaFmtN(Math.abs(rv),'명')); gcol=(rv>0?'--danger':'--green'); } }
+    else if(!x.noData&&x.occ!=null){ var g=x.occ-(x.목표||50); gap=_uhaFmtD(g); gcol=(g<0?'--danger':'--green'); }
+    h+='<tr class="ry-uha-row'+(cur?' on':'')+'" data-uhakey="'+escapeHtml(_srailUhaKey(x))+'" role="button" tabindex="0" title="'+escapeHtml(x.name)+' — 클릭 = 이 사업 보기"'
+      +' onclick="_srailUhaTo('+i+')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click();}">'
+      +'<td class="cat" style="overflow:hidden;text-overflow:ellipsis"><span style="color:var('+ccol+');font-weight:800">'+escapeHtml(cat)+'</span> <span style="color:var(--text);font-weight:600">'+escapeHtml(x.name)+'</span></td>'
+      +'<td style="color:var(--neutral-text)">'+escapeHtml(date)+'</td>'
+      +'<td style="color:var('+ccol+');font-weight:700">'+acc+'</td>'
+      +'<td style="color:var(--neutral-text)">'+cap+'</td>'
+      +'<td style="font-weight:700">'+rate+'</td>'
+      +'<td style="color:var('+((x.deltaPP!=null&&x.deltaPP<0)?'--danger':(x.deltaPP!=null&&x.deltaPP>0)?'--green':'--dim')+')">'+dlt+'</td>'
+      +'<td class="tot" style="color:var('+gcol+')">'+gap+'</td></tr>';
+  });
+  h+='</tbody></table></div></div></div>';
   e.body.innerHTML=h;
 }
 function _srailUhaShow(i){
