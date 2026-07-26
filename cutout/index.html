@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<script>if(location.protocol==='http:'&&location.hostname!=='localhost'&&location.hostname!=='127.0.0.1')location.replace('https://'+location.host+location.pathname+location.search+location.hash);</script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, viewport-fit=cover">
+<title>누끼따기 — 예울마루 콘텐츠 제작</title>
+<meta name="description" content="예울마루 콘텐츠 제작 도구 — 사진 첨부하면 배경을 지워 투명 PNG로 만들어준다 (브라우저 내 처리·서버 전송 0)">
+<link rel="icon" type="image/svg+xml" href="../image/favicon.svg">
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
+<link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.min.css" rel="stylesheet">
+<style>
+/* ── 토큰 = 루트 index.html :root 이식 스냅샷(사용분만 · 정본 = 루트, 값 불일치 시 루트가 이김 · 신규 hex 0) ── */
+:root{
+  --accent:#4A4DE7;--accent-light:#E8E8FD;--accent-glow:rgba(74,77,231,0.15);
+  --peach:#F0C4B8;--peach-light:#FBF0EC;--peach-bg:#FDF6F3;--peach-text:#D88455;
+  --bg:linear-gradient(135deg,#FDF6F3 0%,#F0EBF5 50%,#EBF0F8 100%);
+  --surface-solid:#fff;
+  --glass:rgba(255,255,255,0.55);
+  --glass-shadow:0 8px 32px rgba(74,77,231,0.08),0 2px 8px rgba(0,0,0,0.04);
+  --border:rgba(0,0,0,0.09);
+  --text:#1A1A2E;--dim:#888;--muted:#bbb;
+  --green:#1A6B3C;--danger-btn:#E24B4A;
+  --radius:16px;--radius-lg:20px;
+  --neutral:#EEEDF3;--neutral-d:#E1DFEC;--neutral-text:#6B6B7B;
+  --r-btn:10px;--r-modal:20px;
+  --elev:0 20px 56px rgba(74,77,231,.16), 0 6px 18px rgba(26,26,46,.07);
+  --glass-surface:rgba(255,255,255,.78);
+  --glass-bd:var(--glass);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{min-height:100%}
+body{background:var(--bg);color:var(--text);font-family:'Pretendard',-apple-system,sans-serif;min-height:100vh}
+/* 앱 배경 메시 — 루트 index.html body::before 계승(동일 토큰 alpha 변주) */
+body::before{content:'';position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.44;filter:saturate(2.15);background:
+ radial-gradient(50% 64% at 14% 18%, rgba(74,77,231,.20) 0%, transparent 70%),
+ radial-gradient(44% 56% at 86% 16%, rgba(240,196,184,.72) 0%, transparent 72%),
+ radial-gradient(46% 58% at 76% 86%, rgba(216,132,85,.28) 0%, transparent 70%),
+ radial-gradient(40% 52% at 18% 88%, rgba(74,77,231,.26) 0%, transparent 72%),
+ radial-gradient(36% 48% at 55% 45%, rgba(240,196,184,.36) 0%, transparent 70%),
+ var(--bg)}
+button{font-family:inherit;cursor:pointer}
+
+.wrap{max-width:720px;margin:0 auto;padding:28px 16px 48px}
+.hd{text-align:center;padding:8px 0 20px}
+.hd h1{font-size:26px;font-weight:900;letter-spacing:-.5px}
+.hd .sub{margin-top:6px;font-size:13px;color:var(--dim)}
+.hd .steps{margin-top:12px;display:flex;justify-content:center;gap:6px;flex-wrap:wrap;font-size:12px;color:var(--neutral-text)}
+.hd .steps b{color:var(--accent);font-weight:700}
+
+/* 카드 = .u-surface 계승(글래스 서피스 + blur + elev) */
+.card{background:var(--glass-surface);border:1px solid var(--glass-bd);
+  -webkit-backdrop-filter:blur(32px) saturate(170%);backdrop-filter:blur(32px) saturate(170%);
+  border-radius:var(--r-modal);box-shadow:var(--elev);padding:20px;margin:0 auto}
+
+/* 드롭존 — 점선 프레임(--accent 25% = .btn--ghost 보더 알파 계승) */
+.drop{border:2px dashed rgba(74,77,231,.25);border-radius:var(--radius);background:var(--glass);
+  min-height:240px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;
+  cursor:pointer;text-align:center;padding:24px;transition:border-color .15s,background .15s}
+.drop.hover{border-color:var(--accent);background:var(--accent-light)}
+.drop .d1{font-size:15px;font-weight:700}
+.drop .d2{font-size:12px;color:var(--dim)}
+.drop .d3{font-size:11px;color:var(--muted)}
+
+/* 미리보기 스테이지 — 체커보드(투명 확인용 · --neutral 사다리) */
+.stage{display:none;border-radius:var(--radius);overflow:hidden;border:1px solid var(--border);
+  background:repeating-conic-gradient(var(--neutral) 0% 25%, var(--surface-solid) 0% 50%) 0 0/20px 20px;
+  position:relative;min-height:160px}
+.stage img{display:block;max-width:100%;max-height:60vh;margin:0 auto}
+.stage .tag{position:absolute;top:10px;left:10px;font-size:11px;font-weight:700;color:var(--accent);
+  background:var(--glass-surface);border:1px solid var(--glass-bd);border-radius:var(--r-btn);
+  padding:4px 8px;box-shadow:var(--glass-shadow);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+
+/* 버튼 = 루트 .btn 정본 발췌 */
+.btn{font-family:inherit;font-weight:700;border:1px solid transparent;
+  border-radius:var(--r-btn);cursor:pointer;line-height:1;
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  white-space:nowrap;transition:transform .15s,box-shadow .15s,background .15s}
+.btn:hover{transform:translateY(-1px)}
+.btn:active{transform:translateY(0) scale(.98)}
+.btn--lg{padding:13px 26px;font-size:14.5px}
+.btn--primary{background:var(--accent);color:#fff;box-shadow:0 2px 8px rgba(74,77,231,.16)}
+.btn--primary:hover{background:#3d40d4;box-shadow:0 3px 11px rgba(74,77,231,.2)}
+.btn[disabled]{opacity:.55;cursor:default;transform:none!important}
+
+/* 글래스 버튼 = .pm-fbtn 정본 발췌(+선택 상태 .on = accent 채움) */
+.pm-fbtn{padding:6px 12px;border:1px solid var(--glass-bd);background:var(--glass-surface);
+  -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);color:var(--text);box-shadow:var(--glass-shadow);
+  border-radius:var(--r-btn);cursor:pointer;font-size:12px;font-weight:600;font-family:inherit;
+  transition:all .15s;display:inline-flex;align-items:center;gap:6px}
+.pm-fbtn.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+/* 로더 dots = 루트 .ol-dots/olDots 정본 발췌(로딩 = dots + 「~중」 · 말줄임 점 금지) */
+.ol-dots{display:inline-flex;align-items:center;gap:4px;line-height:0;vertical-align:-2px;margin-right:8px}
+.ol-dots i{display:block;width:4px;height:4px;border-radius:50%;background:currentColor;
+  animation:olDots .8s cubic-bezier(0.4,0,0.2,1) infinite}
+.ol-dots i:nth-child(2){animation-delay:.128s}
+.ol-dots i:nth-child(3){animation-delay:.256s}
+@keyframes olDots{0%,100%{transform:translateY(0);opacity:.5}50%{transform:translateY(-5px);opacity:1}}
+@media (prefers-reduced-motion:reduce){.ol-dots i{animation:none;opacity:.85}}
+
+.acts{display:none;margin-top:14px;flex-direction:column;gap:12px;align-items:center}
+.acts .row{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center}
+.bglab{font-size:12px;color:var(--neutral-text);font-weight:600;margin-right:2px}
+.status{display:none;margin-top:12px;text-align:center;font-size:12.5px;color:var(--neutral-text)}
+.status.err{color:var(--danger-btn);font-weight:600}
+.note{margin-top:16px;text-align:center;font-size:11.5px;color:var(--muted);line-height:1.6}
+.note b{color:var(--dim);font-weight:600}
+@media(max-width:480px){
+  .wrap{padding:20px 12px 40px}
+  .hd h1{font-size:22px}
+  .card{padding:14px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hd">
+    <h1>누끼따기</h1>
+    <div class="sub">콘텐츠 제작 도구 — 사진 배경을 지워 투명 PNG로</div>
+    <div class="steps"><b>1</b> 사진 첨부 <span>→</span> <b>2</b> 제작 <span>→</span> <b>3</b> PNG 저장</div>
+  </div>
+
+  <div class="card">
+    <div class="drop" id="drop" role="button" tabindex="0" aria-label="사진 선택">
+      <div class="d1">사진을 끌어다 놓거나 눌러서 선택</div>
+      <div class="d2">붙여넣기(Ctrl+V)도 된다 — JPG·PNG·WEBP, 30MB까지</div>
+      <div class="d3">처리는 전부 이 브라우저 안 — 사진이 서버로 나가지 않는다</div>
+    </div>
+    <input type="file" id="file" accept="image/*" hidden>
+
+    <div class="stage" id="stage">
+      <span class="tag" id="stageTag">원본</span>
+      <img id="view" alt="작업 이미지">
+    </div>
+
+    <div class="acts" id="acts">
+      <div class="row" id="bgRow" style="display:none">
+        <span class="bglab">배경</span>
+        <button class="pm-fbtn on" data-bg="" id="bgT">투명</button>
+        <button class="pm-fbtn" data-bg="#fff">흰색</button>
+        <button class="pm-fbtn" data-bg="#FBF0EC">피치</button>
+        <button class="pm-fbtn" data-bg="#E8E8FD">라벤더</button>
+      </div>
+      <div class="row">
+        <button class="btn btn--lg btn--primary" id="go">제작</button>
+        <button class="pm-fbtn" id="save" style="display:none">PNG 저장</button>
+        <button class="pm-fbtn" id="reset">다른 사진</button>
+      </div>
+    </div>
+
+    <div class="status" id="status" aria-live="polite"></div>
+  </div>
+
+  <div class="note">
+    첫 실행은 모델(약 4.5MB)을 받느라 몇 초 걸릴 수 있다 · 긴 변 2400px 초과 사진은 2400px로 축소 처리<br>
+    엔진 = U²-Net(p) 온디바이스 추론 <b>(자동 누끼 v1 — 복잡한 배경은 경계가 거칠 수 있음)</b>
+  </div>
+</div>
+
+<script src="vendor/ort.wasm.min.js"></script><!-- onnxruntime-web 1.27.0 wasm 전용 번들 동봉(MIT · vendor/NOTICE.md) — CDN 무의존 = 자기완결 -->
+<script>
+'use strict';
+/* 누끼따기 v1 — u2netp(320×320) 온디바이스 추론. 서버 전송 0·과금 0.
+   모델 = ./u2netp.onnx (Apache-2.0 · danielgatis/rembg 배포본 동봉). */
+var MAX_SIDE = 2400, MAX_MB = 30, NET_IN = 320;
+var $ = function(id){ return document.getElementById(id); };
+var drop=$('drop'), fileIn=$('file'), stage=$('stage'), view=$('view'),
+    acts=$('acts'), goBtn=$('go'), saveBtn=$('save'), resetBtn=$('reset'),
+    bgRow=$('bgRow'), statusEl=$('status'), stageTag=$('stageTag');
+var srcCanvas=null, outCanvas=null, session=null, bgColor='';
+
+function setStatus(msg, err){
+  statusEl.className = 'status' + (err ? ' err' : '');
+  statusEl.style.display = msg ? 'block' : 'none';
+  statusEl.innerHTML = msg || '';
+}
+function dots(){ return '<span class="ol-dots" aria-hidden="true"><i></i><i></i><i></i></span>'; }
+function busy(on, label){
+  goBtn.disabled = on;
+  goBtn.innerHTML = on ? dots() + label : '제작';
+}
+
+/* ── 입력 ── */
+function pickFile(f){
+  if(!f) return;
+  if(!/^image\//.test(f.type)){ setStatus('이미지 파일만 넣을 수 있어', true); return; }
+  if(f.size > MAX_MB*1024*1024){ setStatus('사진은 ' + MAX_MB + 'MB까지', true); return; }
+  var url = URL.createObjectURL(f);
+  var img = new Image();
+  img.onload = function(){
+    URL.revokeObjectURL(url);
+    var w=img.naturalWidth, h=img.naturalHeight;
+    if(!w || !h){ setStatus('사진을 읽지 못했어 — 다른 파일로 해줘', true); return; }
+    var sc = Math.min(1, MAX_SIDE/Math.max(w,h));
+    srcCanvas = document.createElement('canvas');
+    srcCanvas.width = Math.round(w*sc); srcCanvas.height = Math.round(h*sc);
+    srcCanvas.getContext('2d').drawImage(img, 0, 0, srcCanvas.width, srcCanvas.height);
+    outCanvas = null; bgColor='';
+    syncBgChips();
+    view.src = srcCanvas.toDataURL('image/png');
+    stageTag.textContent = '원본';
+    drop.style.display='none'; stage.style.display='block';
+    acts.style.display='flex'; bgRow.style.display='none';
+    goBtn.style.display='inline-flex'; saveBtn.style.display='none';
+    setStatus('');
+  };
+  img.onerror = function(){ URL.revokeObjectURL(url); setStatus('사진을 읽지 못했어 — 다른 파일로 해줘', true); };
+  img.src = url;
+}
+drop.addEventListener('click', function(){ fileIn.click(); });
+drop.addEventListener('keydown', function(e){ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); fileIn.click(); } });
+fileIn.addEventListener('change', function(){ pickFile(fileIn.files[0]); fileIn.value=''; });
+['dragover','dragenter'].forEach(function(t){ drop.addEventListener(t, function(e){ e.preventDefault(); drop.classList.add('hover'); }); });
+['dragleave','drop'].forEach(function(t){ drop.addEventListener(t, function(e){ e.preventDefault(); drop.classList.remove('hover'); }); });
+drop.addEventListener('drop', function(e){ pickFile(e.dataTransfer.files[0]); });
+document.addEventListener('paste', function(e){
+  var items = (e.clipboardData||{}).items || [];
+  for(var i=0;i<items.length;i++){ if(/^image\//.test(items[i].type)){ pickFile(items[i].getAsFile()); break; } }
+});
+
+/* ── 모델 ── */
+function loadModel(){
+  if(session) return Promise.resolve(session);
+  ort.env.wasm.wasmPaths = new URL('vendor/', location.href).href;   /* 동봉 런타임(vendor/NOTICE.md) — 절대 URL 필수(상대값 = bare 모듈 지정자로 오인) */
+  ort.env.wasm.numThreads = 1;   /* COOP/COEP 없는 정적 호스팅 = 단일 스레드 고정(교차출처격리 불필요) */
+  ort.env.wasm.proxy = false;
+  return ort.InferenceSession.create('u2netp.onnx', {executionProviders:['wasm']})
+    .then(function(s){ session = s; return s; });
+}
+
+/* ── 추론 ── */
+function makeCutout(){
+  if(!srcCanvas) return;
+  busy(true, session ? '누끼 만드는 중' : '모델 준비 중');
+  setStatus('');
+  loadModel().then(function(s){
+    busy(true, '누끼 만드는 중');
+    /* 전처리 = rembg u2netp 동수: 320×320 스트레치 → /255 → mean(0.485,0.456,0.406)/std(0.229,0.224,0.225) */
+    var c = document.createElement('canvas'); c.width=NET_IN; c.height=NET_IN;
+    var cx = c.getContext('2d');
+    cx.drawImage(srcCanvas, 0, 0, NET_IN, NET_IN);
+    var px = cx.getImageData(0,0,NET_IN,NET_IN).data;
+    var n = NET_IN*NET_IN, data = new Float32Array(3*n);
+    var mean=[0.485,0.456,0.406], std=[0.229,0.224,0.225];
+    for(var i=0;i<n;i++){
+      data[i]       = (px[i*4]  /255 - mean[0]) / std[0];
+      data[n+i]     = (px[i*4+1]/255 - mean[1]) / std[1];
+      data[2*n+i]   = (px[i*4+2]/255 - mean[2]) / std[2];
+    }
+    var input = {};
+    input[s.inputNames[0]] = new ort.Tensor('float32', data, [1,3,NET_IN,NET_IN]);
+    return s.run(input).then(function(out){
+      var m = out[s.outputNames[0]].data;   /* d0 = 최종 마스크 */
+      var lo=Infinity, hi=-Infinity, j;
+      for(j=0;j<n;j++){ if(m[j]<lo)lo=m[j]; if(m[j]>hi)hi=m[j]; }
+      var rng = (hi-lo)||1;
+      /* 마스크 → 320 그레이 캔버스 → 원본 크기 확대(바이리니어 = 경계 페더 겸함) */
+      var mc = document.createElement('canvas'); mc.width=NET_IN; mc.height=NET_IN;
+      var mi = mc.getContext('2d').createImageData(NET_IN, NET_IN);
+      for(j=0;j<n;j++){ var v=Math.round((m[j]-lo)/rng*255); mi.data[j*4]=v; mi.data[j*4+1]=v; mi.data[j*4+2]=v; mi.data[j*4+3]=255; }
+      mc.getContext('2d').putImageData(mi,0,0);
+      var W=srcCanvas.width, H=srcCanvas.height;
+      var mu = document.createElement('canvas'); mu.width=W; mu.height=H;
+      var mux = mu.getContext('2d');
+      mux.imageSmoothingEnabled = true; mux.imageSmoothingQuality = 'high';
+      mux.drawImage(mc, 0, 0, W, H);
+      var mask = mux.getImageData(0,0,W,H).data;
+      /* 합성: 원본 RGB + 알파 = 마스크 */
+      outCanvas = document.createElement('canvas'); outCanvas.width=W; outCanvas.height=H;
+      var ox = outCanvas.getContext('2d');
+      ox.drawImage(srcCanvas, 0, 0);
+      var od = ox.getImageData(0,0,W,H);
+      for(j=0;j<W*H;j++){ od.data[j*4+3] = mask[j*4]; }
+      ox.putImageData(od, 0, 0);
+      renderResult();
+      busy(false); goBtn.style.display='none';
+      saveBtn.style.display='inline-flex'; bgRow.style.display='flex';
+      stageTag.textContent = '누끼 결과';
+      setStatus('완성 — 배경을 고르고 PNG 저장을 눌러');
+    });
+  }).catch(function(e){
+    busy(false);
+    setStatus('실패했어 — ' + (navigator.onLine ? '잠시 후 다시 해줘 (' + (e && e.message ? String(e.message).slice(0,120) : '알 수 없는 오류') + ')' : '인터넷 연결을 확인해줘(첫 실행은 엔진 다운로드 필요)'), true);
+  });
+}
+goBtn.addEventListener('click', makeCutout);
+
+/* ── 배경 선택·결과 표시 ── */
+function composed(){
+  if(!outCanvas) return null;
+  if(!bgColor) return outCanvas;
+  var c = document.createElement('canvas'); c.width=outCanvas.width; c.height=outCanvas.height;
+  var cx = c.getContext('2d');
+  cx.fillStyle = bgColor; cx.fillRect(0,0,c.width,c.height);
+  cx.drawImage(outCanvas, 0, 0);
+  return c;
+}
+function renderResult(){ var c = composed(); if(c) view.src = c.toDataURL('image/png'); }
+function syncBgChips(){
+  var chips = bgRow.querySelectorAll('.pm-fbtn');
+  for(var i=0;i<chips.length;i++) chips[i].classList.toggle('on', chips[i].getAttribute('data-bg')===bgColor);
+}
+bgRow.addEventListener('click', function(e){
+  var b = e.target.closest('.pm-fbtn'); if(!b) return;
+  bgColor = b.getAttribute('data-bg') || '';
+  syncBgChips(); renderResult();
+});
+
+/* ── 저장·리셋 ── */
+saveBtn.addEventListener('click', function(){
+  var c = composed(); if(!c) return;
+  /* 파일명 시각 = KST 고정(D4) */
+  var p = new Intl.DateTimeFormat('ko-KR',{timeZone:'Asia/Seoul',year:'2-digit',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).formatToParts(new Date());
+  var g = {}; p.forEach(function(x){ g[x.type]=x.value; });
+  var a = document.createElement('a');
+  a.download = '누끼_' + g.year + g.month + g.day + '_' + g.hour + g.minute + '.png';
+  a.href = c.toDataURL('image/png');
+  a.click();
+});
+resetBtn.addEventListener('click', function(){
+  srcCanvas=null; outCanvas=null; bgColor='';
+  stage.style.display='none'; acts.style.display='none'; bgRow.style.display='none';
+  goBtn.style.display='inline-flex'; busy(false); saveBtn.style.display='none';
+  drop.style.display='flex'; view.removeAttribute('src');
+  setStatus('');
+});
+</script>
+</body>
+</html>
