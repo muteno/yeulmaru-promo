@@ -3698,7 +3698,10 @@ function programToPerf(p){
     l:p['장소']||'',
     u:p['URL']||p['공연 URL']||p['상세 링크']||p['링크']||'',
     id:String(p['프로그램ID']||p['공연ID']||'').trim(),   // [정규화] 프로그램 시트 공유키(헤더='프로그램ID', 구'공연ID' 폴백) — records 저장 시 동반
-    g:String(p['구분']||'').trim()   // [260710 운영자] N열 구분(장르 — 클래식·뮤지컬(대형)·연극…) = 판매현황 장르 폴백 소스. O~Q(공동기획·지원사업·GS아트센터협업)는 앱 미사용·엑셀 관리
+    g:String(p['구분']||'').trim(),   // [260710 운영자] N열 구분(장르 — 클래식·뮤지컬(대형)·연극…) = 판매현황 장르 폴백 소스. O~Q(공동기획·지원사업·GS아트센터협업)는 앱 미사용·엑셀 관리
+    // [260729 운영자] 프로그램 관리에서 지정하는 부가열(R열 이후 · 홍보노출과 같은 단일셀 라인). 빈값 = 미지정 → 종전 추정 경로 그대로(회귀 0).
+    rc:(function(v){var n=parseInt(String(v==null?'':v).replace(/[^0-9]/g,''),10);return (n>0&&n<=999)?n:0;})(p['회차']),   // 공연 회차 수(몇 회차인지) — 판매현황 분모(가용석×회차)의 명시 신호
+    pr:String(p['수익성']||'').trim()   // 사업 성격 = 공공성(예술성)/상업성(사업성) — 시트 표기는 공연마스터 '수익성'과 동일 어휘
   };
 }
 // SharePoint에서 프로그램 시트 fetch → PERFS 채우기
@@ -4673,15 +4676,17 @@ function _salesFmtDates(dates){
 }
 // [260710 운영자] 「예측 제외」 행 판정 — 일일입력 '예측제외' 컬럼(실적 수정 모달이 'Y' 기록). 그 날 증분을 예측 평균에서 뺀다(단체 150명·2차 오픈 등 이벤트 변수).
 function _fcExcl(r){ var v=String((r&&r['예측제외'])||'').trim().toUpperCase(); return v!==''&&v!=='N'&&v!=='FALSE'&&v!=='0'; }
-// 프로그램 시트 N열 「구분」 조회 — 판매현황 장르 폴백(운영대장 장르1 빈 공연의 '기타' 소멸, 운영자 260710).
-// 매칭 = 프로그램ID 우선 → 풀네임/줄임말 _uName(마스터-프로그램 조인 pgf 전례 계승).
-function _pgGenre(rid,name){
+// 프로그램 시트 행 조회 — 매칭 = 프로그램ID 우선 → 풀네임/줄임말 _uName(마스터-프로그램 조인 pgf 전례 계승).
+// [260729] 구 _pgGenre 안에만 있던 이 탐색을 꺼내 공용화 — 장르(g)뿐 아니라 회차(rc)·성격(pr)도 같은 매칭으로 읽는다.
+function _pgFind(rid,name){
   var list=(typeof PERFS!=='undefined'&&PERFS)||[];
   var un=_uName(name||'');
   var hit=null;
   list.some(function(pg){ if((rid&&pg.id&&pg.id===rid)||(pg.f&&_uName(pg.f)===un)||(pg.n&&_uName(pg.n)===un)){hit=pg;return true;} return false; });
-  return (hit&&hit.g)||'';
+  return hit;
 }
+// 프로그램 시트 N열 「구분」 조회 — 판매현황 장르 폴백(운영대장 장르1 빈 공연의 '기타' 소멸, 운영자 260710).
+function _pgGenre(rid,name){ var h=_pgFind(rid,name); return (h&&h.g)||''; }
 function _salesBuild(){
   var master={},masterById={},masterByU={};   // masterByU = _uName 정규화 폴백(단체 조인 강화 전례 계승) — 일일입력 공연명↔마스터 사업명 표기 차이(꺾쇠·공백 등)로 조인이 끊기면 기준석×1(926) 분모로 떨어지던 갭 방어
   ((_salesState.master&&_salesState.master.rows)||[]).map(_salesNorm).forEach(function(m){
@@ -4741,8 +4746,14 @@ function _salesBuild(){
     var base=m?m.기본석:(ops&&ops.base?ops.base:_SALES_FALLBACK_SEAT);
     // [수정] 장르 = 마스터 공연도 운영대장에서 조인 — 공연마스터엔 장르 컬럼이 없어, 옛 코드(마스터면 ops=null → genre='')는 마스터 등록 공연을 판매현황에서 무조건 '기타'로 표시했음(opsForDates와 동일 조회 계승).
     var _gOps=ops||(rid?_opsLookupById(rid):null)||_opsLookup(name,salesYear);
+    // [260729 운영자] 프로그램 시트 행(회차·성격·장르 소스) — 한 번만 찾아 아래에서 공용. 구 _pgGenre 호출과 매칭 규칙 동일(회귀 0).
+    var _pgRow=_pgFind(rid,name);
     // [260710 운영자] 운영대장 장르1이 비면 프로그램 시트 N열 「구분」 폴백('기타' 소멸) — 기존 장르1 값은 그대로 우선(회귀 0)
-    var genre=(_gOps&&_gOps.genre)?_gOps.genre:_pgGenre(rid,name);
+    var genre=(_gOps&&_gOps.genre)?_gOps.genre:((_pgRow&&_pgRow.g)||'');
+    // [260729 운영자] 성격(예술성=공공성 / 사업성=상업성) 소스 사다리 = 프로그램 관리에서 지정한 값(_pgRow.pr) > 공연마스터 '수익성' > 이름·장르 추정(_profitType).
+    //   프로그램 관리 폼이 「사업 성격」을 지정하는 유일한 입력구라, 여기서 고른 값이 안 먹히면 입력구가 아니다 → 명시 지정을 최우선.
+    //   미지정(빈값)이면 종전 순위(마스터 → 추정) 그대로 = 회귀 0. _specSrc는 판매현황 연필(_mvSpecPill)이 '안 먹히는 버튼'을 숨기는 데 쓴다.
+    var _pgPr=(_pgRow&&_pgRow.pr)||'';
     // 공연 기간(회차 추정의 소스) — 분모 계산보다 먼저 확정한다(260729 순서 교정 · 종전엔 분모 뒤에 있어 회차 추정에 못 쓰였다).
     var startDate=m?m.시작:(ops&&ops.first?ops.first:null);
     var endDate=m?m.종료:(ops&&ops.last?ops.last:null);
@@ -4757,7 +4768,8 @@ function _salesBuild(){
     // [다회차 분모] 회차수 = max(총회차, 회차상세 행수, 운영대장 행수) — 셋 다 공란이면 공연 기간 일수 폴백(_salesSpanDays 260721 · 하루 1회 가정 · 명시 신호가 하나라도 있으면 추정 미사용)
     // [260729 운영자] 종전 `m?…:0` / `m?span:1` 게이트 제거 — 마스터에 없는 공연(그날들·달 샤베트류)은 m이 없다는 이유로 회차가 무조건 1로 낙하해
     //   1회차 가용석(926)이 그대로 분모가 됐다(921/926=99% · 938/926=100% 부풀림). 이제 마스터 유무와 무관하게 위 startDate~endDate로 회차를 추정한다.
-    var _rcK=Math.max((m&&m.회차입력)||0,((m&&m.ID&&rounds[m.ID])?rounds[m.ID].length:0),(_gOps&&_gOps.count)||0);
+    // [260729 운영자] 프로그램 관리에서 지정한 회차(_pgRow.rc)도 명시 신호로 max에 합류 — 마스터·회차상세·운영대장이 다 비어도 폼 값 하나로 분모가 잡힌다.
+    var _rcK=Math.max((m&&m.회차입력)||0,((m&&m.ID&&rounds[m.ID])?rounds[m.ID].length:0),(_gOps&&_gOps.count)||0,(_pgRow&&_pgRow.rc)||0);
     var _rc=_rcK>0?_rcK:_salesSpanDays(startDate,endDate);
     var _rcSrc=_rcK>0?'data':(_rc>1?'span':'');
     // [회차 합산 260716 운영자] 회차상세에 전 회차 오픈객석이 입력되면 합산 = 최종 가용좌석(회차별 상이 반영). 마스터 총회차 기입 시 행수 일치까지 검증 — 불일치·미충족은 기존 추정 유지.
@@ -4806,7 +4818,7 @@ function _salesBuild(){
       fcRate=_den>0?(_num/_den):0;   // 전 구간 제외 = 0석/일(이벤트 빼면 무판매 = 평탄 예측 — null이면 구식 폴백이 제외를 무시하게 되므로 0)
     }
     var source=m?'master':(ops?'fallback':'none');
-    perfs.push({name:name,seats:seats,money:money,diff:diff,occ:occ,totalOpen:totalOpen,dday:dday,dateStr:dateStr,수익성:(m&&m.수익성)?m.수익성:_profitType(name,genre),목표:(m?m.목표:50),_tgtSrc:((m&&m.목표입력)?'sheet':'def'),startDate:startDate,endDate:endDate,status:status,genre:genre,gubun:(ops?ops.gubun:''),enriched:(!m&&!!ops),spark:spark,days:days,daysTotal:rows.length,deltaPP:deltaPP,source:source,saleStart:((m&&m.티켓오픈)||(pgf&&pgf.ss?_salesDate(pgf.ss):null)||null),fcRate:fcRate,_mid:((m&&m.ID)||rid||''),groupSeats:gSeat,groupMoney:gMoney,groupCnt:gCnt,_openSrc:(_rsOk?'sum':(_xN?'xN':((m&&m.총오픈석)?'fixed':'est'))),_roundsN:((m&&m.ID&&rounds[m.ID])?rounds[m.ID].length:0),_rcEst:_rc,_rcSrc:_rcSrc,_daysN:((m&&m.ID&&rounds[m.ID])?_salesDayN(rounds[m.ID]):((_gOps&&_gOps.dayN)||0))});   // daysTotal = 실측 총 행수(차트 T/O 표기 판정 — 창이 전체를 담을 때만)   // [260710 버그수정] days 탑재 누락 — A1(PR 171)이 로컬 생성만 하고 안 실어 카드 추이가 실데이터에서 상시 '수집 전'이었음 · [260710 운영자] endDate(판매 종료일) 탑재 — 카드/드릴 차트 종료 예상점용 · saleStart(티켓오픈) = 「판매 N일차」 소스(레일이 프로그램 시트 ss 폴백)
+    perfs.push({name:name,seats:seats,money:money,diff:diff,occ:occ,totalOpen:totalOpen,dday:dday,dateStr:dateStr,수익성:(_pgPr||((m&&m.수익성)?m.수익성:_profitType(name,genre))),_specSrc:(_pgPr?'pg':((m&&m.수익성)?'master':'est')),목표:(m?m.목표:50),_tgtSrc:((m&&m.목표입력)?'sheet':'def'),startDate:startDate,endDate:endDate,status:status,genre:genre,gubun:(ops?ops.gubun:''),enriched:(!m&&!!ops),spark:spark,days:days,daysTotal:rows.length,deltaPP:deltaPP,source:source,saleStart:((m&&m.티켓오픈)||(pgf&&pgf.ss?_salesDate(pgf.ss):null)||null),fcRate:fcRate,_mid:((m&&m.ID)||rid||''),groupSeats:gSeat,groupMoney:gMoney,groupCnt:gCnt,_openSrc:(_rsOk?'sum':(_xN?'xN':((m&&m.총오픈석)?'fixed':'est'))),_roundsN:((m&&m.ID&&rounds[m.ID])?rounds[m.ID].length:0),_rcEst:_rc,_rcSrc:_rcSrc,_daysN:((m&&m.ID&&rounds[m.ID])?_salesDayN(rounds[m.ID]):((_gOps&&_gOps.dayN)||0))});   // daysTotal = 실측 총 행수(차트 T/O 표기 판정 — 창이 전체를 담을 때만)   // [260710 버그수정] days 탑재 누락 — A1(PR 171)이 로컬 생성만 하고 안 실어 카드 추이가 실데이터에서 상시 '수집 전'이었음 · [260710 운영자] endDate(판매 종료일) 탑재 — 카드/드릴 차트 종료 예상점용 · saleStart(티켓오픈) = 「판매 N일차」 소스(레일이 프로그램 시트 ss 폴백)
   });
   // [판매중 노출] 일일입력 실적이 아직 없어도, 공연마스터 '상태=판매중'(또는 티켓오픈~종료 기간)인 공연은
   // 레일·판매보드에 "집계 전(0석)" 카드로 노출 — 티켓 오픈 직후 데이터 공백기에도 홍보계획과 함께 판매현황이 읽히게(운영자 260707).
@@ -4830,7 +4842,9 @@ function _salesBuild(){
     var _rs2=(mm.ID&&rseat[mm.ID])?rseat[mm.ID]:null;   // [회차 합산 260716] 집계 전 카드도 동일 규칙
     var _rs2Ok=!!(_rs2&&_rs2.n>0&&_rs2.filled===_rs2.n&&(!(mm.총회차>1)||mm.총회차===_rs2.n));
     // [회차 폴백 260721] 본 카드 루프와 동일 max(총회차·회차상세·운영대장) — 종전 opsF 우선(총회차 무시)의 루프 간 분모 불일치도 정렬 · 신호 전무 시 기간 일수
-    var _rcK2=Math.max(mm.회차입력||0,((mm.ID&&rounds[mm.ID])?rounds[mm.ID].length:0),(opsF&&opsF.count)||0);
+    // [260729 운영자] 프로그램 관리 지정 회차·성격도 위 루프와 동일하게 합류(쌍둥이 규칙 — 동시 수정 의무)
+    var _pgRow2=_pgFind(mm.ID||'',nm), _pgPr2=(_pgRow2&&_pgRow2.pr)||'';
+    var _rcK2=Math.max(mm.회차입력||0,((mm.ID&&rounds[mm.ID])?rounds[mm.ID].length:0),(opsF&&opsF.count)||0,(_pgRow2&&_pgRow2.rc)||0);
     var _rc2=_rcK2>0?_rcK2:_salesSpanDays(mm.시작,mm.종료);
     var totalOpen2=_rs2Ok?_rs2.sum:(mm.총오픈석||base2*_rc2);
     // [260724 운영자] 다회차 분모 보정 — 본 카드 루프와 쌍둥이(동시 수정 의무) · [260729] 게이트 _rcK2≥2 → _rc2≥2(기간 추정 회차도 보정 대상)
@@ -4843,7 +4857,7 @@ function _salesBuild(){
     else if(start2){var ws2=['일','월','화','수','목','금','토'];dateStr2=(start2.getMonth()+1)+'.'+start2.getDate()+'('+ws2[start2.getDay()]+')';}
     var genre2=opsF?opsF.genre:'';
     var _g2=_takeGroup(nm, (mm&&mm.ID)||''); var gs2=(_g2&&_g2.seat)||0, gm2=(_g2&&_g2.money)||0, gc2=(_g2&&_g2.cnt)||0;   // [단체] 개인 0인 판매중 공연에도 단체 유입 반영 → noData(집계 전) 해제
-    perfs.push({name:nm,seats:gs2,money:gm2,diff:null,occ:(totalOpen2>0?Math.max(0,Math.min(gs2/totalOpen2*100,100)):0),totalOpen:totalOpen2,dday:dday2,dateStr:dateStr2,수익성:mm.수익성||_profitType(nm,genre2),목표:mm.목표||50,_tgtSrc:(mm.목표입력?'sheet':'def'),startDate:start2,endDate:mm.종료||null,status:'active',genre:genre2,gubun:(opsF?opsF.gubun:''),enriched:false,spark:[],deltaPP:null,source:'master',saleStart:(mm.티켓오픈||null),noData:(gs2>0?false:true),groupSeats:gs2,groupMoney:gm2,groupCnt:gc2,_mid:(mm.ID||''),_openSrc:(_rs2Ok?'sum':(_xN2?'xN':(mm.총오픈석?'fixed':'est'))),_roundsN:((mm.ID&&rounds[mm.ID])?rounds[mm.ID].length:0),_rcEst:_rc2,_rcSrc:(_rcK2>0?'data':(_rc2>1?'span':'')),_daysN:((mm.ID&&rounds[mm.ID])?_salesDayN(rounds[mm.ID]):((opsF&&opsF.dayN)||0))});
+    perfs.push({name:nm,seats:gs2,money:gm2,diff:null,occ:(totalOpen2>0?Math.max(0,Math.min(gs2/totalOpen2*100,100)):0),totalOpen:totalOpen2,dday:dday2,dateStr:dateStr2,수익성:(_pgPr2||mm.수익성||_profitType(nm,genre2)),_specSrc:(_pgPr2?'pg':(mm.수익성?'master':'est')),목표:mm.목표||50,_tgtSrc:(mm.목표입력?'sheet':'def'),startDate:start2,endDate:mm.종료||null,status:'active',genre:genre2,gubun:(opsF?opsF.gubun:''),enriched:false,spark:[],deltaPP:null,source:'master',saleStart:(mm.티켓오픈||null),noData:(gs2>0?false:true),groupSeats:gs2,groupMoney:gm2,groupCnt:gc2,_mid:(mm.ID||''),_openSrc:(_rs2Ok?'sum':(_xN2?'xN':(mm.총오픈석?'fixed':'est'))),_roundsN:((mm.ID&&rounds[mm.ID])?rounds[mm.ID].length:0),_rcEst:_rc2,_rcSrc:(_rcK2>0?'data':(_rc2>1?'span':'')),_daysN:((mm.ID&&rounds[mm.ID])?_salesDayN(rounds[mm.ID]):((opsF&&opsF.dayN)||0))});
   });
   // [판매중 노출 2차] 공연마스터·일일입력에 아예 없는 신규 오픈 공연(하반기 라인업 등)은 프로그램 시트(PERFS)
   // 판매기간(판매시작일≤오늘≤판매종료일, 종료 폴백=공연 종료일)으로 잡아 "집계 전(0석)" 카드로 노출(운영자 260708 — 마스터 미등록 공연이 판매 현황에 안 뜸).
@@ -4863,8 +4877,9 @@ function _salesBuild(){
     var end3=_salesDate(pg.e)||null;   // [260729] 공연 종료일 = 회차·일수 추정 소스. until(=판매종료일)과 분리 — 섞으면 「113일 1회」 같은 판매기간 일수가 회차 자리에 찍힌다.
     var opsP=(pg.id?_opsLookupById(pg.id):null)||_opsLookup(nm3,start3?start3.getFullYear():today.getFullYear());
     var base3=(opsP&&opsP.base)?opsP.base:_SALES_FALLBACK_SEAT;
-    // [260729 운영자] 위 두 루프와 동일 규칙 — 회차 = 운영대장 행수, 없으면 공연 기간 일수(하루 1회 가정) · 분모 = 가용석 × 회차. 종전엔 운영대장 미매칭 시 ×1로 낙하했다.
-    var _rc3=(opsP&&opsP.count)?opsP.count:_salesSpanDays(start3,end3);
+    // [260729 운영자] 위 두 루프와 동일 규칙 — 회차 = 프로그램 관리 지정값·운영대장 행수 중 큰 값, 둘 다 없으면 공연 기간 일수(하루 1회 가정) · 분모 = 가용석 × 회차. 종전엔 운영대장 미매칭 시 ×1로 낙하했다.
+    var _rcK3=Math.max((pg&&pg.rc)||0,(opsP&&opsP.count)||0);
+    var _rc3=_rcK3>0?_rcK3:_salesSpanDays(start3,end3);
     var totalOpen3=base3*_rc3;
     var dday3=start3?Math.round((start3-today)/86400000):null;
     var dateStr3='';
@@ -4872,7 +4887,7 @@ function _salesBuild(){
     var genre3=opsP?opsP.genre:'';
     seenNames[_uName(nm3)]=1;   // 프로그램 시트 안 동명 중복 방어
     var _g3=_takeGroup(nm3, (pg&&pg.id)||''); var gs3=(_g3&&_g3.seat)||0, gm3=(_g3&&_g3.money)||0, gc3=(_g3&&_g3.cnt)||0;   // [단체] 개인 0인 신규오픈 공연에도 단체 유입 반영
-    perfs.push({name:nm3,seats:gs3,money:gm3,diff:null,occ:(totalOpen3>0?Math.max(0,Math.min(gs3/totalOpen3*100,100)):0),totalOpen:totalOpen3,dday:dday3,dateStr:dateStr3,수익성:_profitType(nm3,genre3),목표:50,_tgtSrc:'def',startDate:start3,endDate:_salesDate(until)||null,status:'active',genre:genre3,gubun:(opsP?opsP.gubun:''),enriched:false,spark:[],deltaPP:null,source:'program',saleStart:(_salesDate(pg.ss)||null),noData:(gs3>0?false:true),groupSeats:gs3,groupMoney:gm3,groupCnt:gc3,_roundsN:0,_rcEst:_rc3,_rcSrc:((opsP&&opsP.count)?'data':(_rc3>1?'span':'')),_daysN:((opsP&&opsP.dayN)||_salesSpanDays(start3,end3))});   // [260725] 회차·일수 축 = 위 두 루프와 동일 탑재(「N일 N회」 표기가 프로그램 시트 폴백 카드에서만 비던 갭) · [260729] 일수도 공연기간(end3)에서 — 종전엔 endDate(판매종료일) 폴백이라 「113일」이 찍혔다
+    perfs.push({name:nm3,seats:gs3,money:gm3,diff:null,occ:(totalOpen3>0?Math.max(0,Math.min(gs3/totalOpen3*100,100)):0),totalOpen:totalOpen3,dday:dday3,dateStr:dateStr3,수익성:((pg&&pg.pr)||_profitType(nm3,genre3)),_specSrc:((pg&&pg.pr)?'pg':'est'),목표:50,_tgtSrc:'def',startDate:start3,endDate:_salesDate(until)||null,status:'active',genre:genre3,gubun:(opsP?opsP.gubun:''),enriched:false,spark:[],deltaPP:null,source:'program',saleStart:(_salesDate(pg.ss)||null),noData:(gs3>0?false:true),groupSeats:gs3,groupMoney:gm3,groupCnt:gc3,_roundsN:0,_rcEst:_rc3,_rcSrc:(_rcK3>0?'data':(_rc3>1?'span':'')),_daysN:((opsP&&opsP.dayN)||_salesSpanDays(start3,end3))});   // [260725] 회차·일수 축 = 위 두 루프와 동일 탑재(「N일 N회」 표기가 프로그램 시트 폴백 카드에서만 비던 갭) · [260729] 일수도 공연기간(end3)에서 — 종전엔 endDate(판매종료일) 폴백이라 「113일」이 찍혔다
   });
   // [단체 유입 고아] 개인 일일입력·마스터·프로그램 어디에도 없고 운영_단체에만 있는 공연(과거 종료 공연에 개인 데이터 없이 단체만 소급 등) — 누락 방지.
   // 운영대장(_opsLookup)으로 오픈석·장르·기간 보강, 없으면 최소 카드(총량·건수만). 정보 전무 시 status='active'가 되나 정보 부재 한계(운영대장 등록 시 정상 판정).
@@ -5290,6 +5305,9 @@ function _mvSpecPill(ax,p){   // [260724 운영자] 칩 폐지 → 글자만 · 
   //   행 호버 때만 드러남(.ry-spec-edit) = 표의 시각 소음 0. 클릭 삼킴(stopPropagation)으로 필터·행 클릭과 안 겹친다.
   if(!p||p._kind==='ex')return pill;
   if(typeof userRole==='undefined'||userRole!=='admin')return pill;
+  // [260729 운영자] 프로그램 관리에서 성격을 명시 지정한 건(_specSrc='pg')은 그 값이 마스터보다 우선 → 여기서 마스터를 고쳐도 화면이 안 바뀐다.
+  //   '안 먹히는 버튼'을 두지 않는다 = 연필을 숨기고, 어디서 고치는지만 알려준다(프로그램 관리 > 그 프로그램 > 사업 성격).
+  if(p._specSrc==='pg')return pill+'<span class="ry-spec-edit" title="이 성격은 [프로그램 관리]에서 지정된 값이에요 — 바꾸려면 프로그램 관리 &gt; '+escapeHtml(p.name)+' &gt; 사업 성격에서 고쳐줘" style="cursor:default">🔒</span>';
   if(!p._mid)return pill;
   var nx=(ax==='예술성')?'사업성':'예술성';
   return pill+'<span class="ry-spec-edit" role="button" tabindex="0" title="'+escapeHtml(p.name)+' 성격을 '+nx+'으로 바꾸기 (마스터 반영)"'
@@ -17794,17 +17812,42 @@ async function renderProgramList(){
   }
 }
 
+// ── [260729 운영자] 프로그램 관리 「일·회」·「성격」 표기 헬퍼 ─────────────────────────────
+// 일수 = 진행 기간(시작일~종료일)에 종속되는 파생값 — 따로 입력받지 않는다(운영자 지시: "몇일은 기간으로 종속되면 됨").
+//   계산식은 판매현황 _salesSpanDays와 동일(양끝 포함 · 1~366일 가드) — 두 화면이 같은 숫자를 말하게 계승.
+function _progSpanDays(sIso,eIso){
+  if(!sIso||!eIso)return 0;
+  var a=new Date(sIso+'T00:00:00Z'), b=new Date(eIso+'T00:00:00Z');
+  if(isNaN(a.getTime())||isNaN(b.getTime()))return 0;
+  var d=Math.round((b-a)/86400000)+1;
+  return (d>=1&&d<=366)?d:0;
+}
+// 회차 원시값 → 양의 정수(0 = 미지정). programToPerf의 rc 파서와 같은 규칙.
+function _progRounds(v){ var n=parseInt(String(v==null?'':v).replace(/[^0-9]/g,''),10); return (n>0&&n<=999)?n:0; }
+// 시트 표기(공공성/상업성) → 화면 축 어휘(예술성/사업성). 판매현황 _anaProfitAxis와 동일 매핑을 프로그램 관리에서도 계승.
+function _progSpecAxis(v){ return (String(v||'').trim()==='상업성')?'사업성':'예술성'; }
+// 목록 셀 「N일 N회」 — 회차 미지정이면 기간 일수를 '하루 1회' 관례로 추정(판매현황 _ryRunTxt 문법 100% 계승: 추정엔 '추정' 꼬리표).
+function _progRunTxt(p){
+  var d=_progSpanDays(excelDateInputValue(p['시작일']),excelDateInputValue(p['종료일']));
+  var rc=_progRounds(p['회차']);
+  if(!d&&!rc)return '<span style="color:var(--muted)">-</span>';
+  var r=rc||d;
+  return escapeHtml(d+'일 '+r+'회')+(rc?'':'<span style="color:var(--muted)"> 추정</span>');
+}
 function buildProgramListHtml(programs){
   let html='<div style="display:flex;align-items:center;margin-bottom:10px;gap:8px;padding-bottom:14px;padding-right:48px;border-bottom:1px solid #eee">';
   html+='<h3 style="margin:0;flex:1;text-align:left">프로그램 관리</h3>';
   html+='';
   html+='<button onclick="openProgramForm(null)" style="padding:7px 16px;background:var(--accent);color:#fff;border:0;border-radius:10px;cursor:pointer;font-weight:600;font-size:13px">등록</button>';
   html+='</div>';
-  html+='<table class="adm-tbl"><thead><tr><th>NO</th><th>구분</th><th>풀네임</th><th>줄임말</th><th>홍보</th><th>판매</th><th>진행</th><th>담당</th><th>장소</th><th></th></tr></thead><tbody>';
+  html+='<table class="adm-tbl"><thead><tr><th>NO</th><th>구분</th><th>성격</th><th>풀네임</th><th>줄임말</th><th>홍보</th><th>판매</th><th>진행</th><th>일·회</th><th>담당</th><th>장소</th><th></th></tr></thead><tbody>';
   programs.forEach(p=>{
     html+='<tr>';
     html+='<td>'+escapeHtml(p['NO']||'')+'</td>';
     html+='<td>'+escapeHtml(p['콘텐츠구분']||'')+'</td>';
+    // [260729 운영자] 성격(예술성/사업성) — 시트 표기 공공성/상업성을 축 어휘로 환산해 보여준다(_anaProfitAxis 계승). 미지정은 '-'(추정으로 굴러가는 상태 = 한눈에 보임).
+    var _spRaw=String(p['수익성']||'').trim();
+    html+='<td style="font-size:11px;white-space:nowrap">'+(_spRaw?('<span style="color:'+(_progSpecAxis(_spRaw)==='예술성'?'var(--peach-text)':'var(--accent)')+';font-weight:600">'+escapeHtml(_progSpecAxis(_spRaw))+'</span>'):'<span style="color:var(--muted)">-</span>')+'</td>';
     html+='<td style="font-weight:600">'+escapeHtml(p['풀네임']||'')+'</td>';
     html+='<td style="color:#888">'+escapeHtml(p['줄임말']||'')+'</td>';
     var _promoStart=excelDateDisplay(p['홍보시작일']);
@@ -17814,6 +17857,8 @@ function buildProgramListHtml(programs){
     html+='<td style="font-size:11px;white-space:nowrap">'+_promoCell+'</td>';
     html+='<td style="font-size:11px;white-space:nowrap">'+excelDateDisplay(p['판매시작일'])+'<br>'+excelDateDisplay(p['판매종료일'])+'</td>';
     html+='<td style="font-size:11px;white-space:nowrap">'+excelDateDisplay(p['시작일'])+'<br>'+excelDateDisplay(p['종료일'])+'</td>';
+    // [260729 운영자] 「N일 N회」 — 일수는 진행 기간(시작~종료)에서 자동 파생(종속), 회차는 폼에서 지정한 값. 회차 미지정이면 '하루 1회' 관례로 일수를 회차 추정치로 쓴다(_salesBuild와 동일 규칙)라 '추정' 표기.
+    html+='<td style="font-size:11px;white-space:nowrap">'+_progRunTxt(p)+'</td>';
     html+='<td>'+escapeHtml(p['담당자']||'')+'</td>';
     html+='<td>'+escapeHtml(p['장소']||'')+'</td>';
     html+='<td style="text-align:right;white-space:nowrap">';
@@ -17841,7 +17886,9 @@ function openProgramForm(rowIndex){
     홍보시작:existing?excelDateInputValue(existing['홍보시작일']):'',   // 노출일(opt-in) — 비우면 홍보 대상에서 제외. 홍보 노출 종료 = 판매종료일(별도 칸)
     담당자:existing?existing['담당자']:'',
     장소:existing?existing['장소']:'대극장',
-    URL:existing?(existing['URL']||existing['공연 URL']||existing['상세 링크']||existing['링크']||''):''
+    URL:existing?(existing['URL']||existing['공연 URL']||existing['상세 링크']||existing['링크']||''):'',
+    회차:existing?_progRounds(existing['회차']):0,          // [260729] 0 = 미지정(기간 일수로 추정)
+    수익성:existing?String(existing['수익성']||'').trim():''  // [260729] '' = 미지정 · 공공성(예술성)/상업성(사업성)
   };
   let html='<div class="modal-bg show" style="z-index:9500" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeProgramForm)"><div class="modal" style="width:96vw;max-width:480px;max-height:88vh;overflow:auto;padding:24px;position:relative">';
   html+='<button class="modal-x" onclick="closeProgramForm()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;float:none;margin:0;z-index:10">✕</button>';
@@ -17850,7 +17897,21 @@ function openProgramForm(rowIndex){
   html+='<div style="display:flex;gap:10px"><div style="flex:0 0 80px"><label>NO</label><input name="NO" type="number" value="'+v.NO+'" readonly></div><div style="flex:1"><label>콘텐츠구분<span class="req">*</span></label><select name="콘텐츠구분" required onchange="refreshManagerOptions(this.value)">'+CONTENT_TYPES.map(t=>'<option value="'+escapeHtml(t)+'" '+(t===v.구분?'selected':'')+'>'+escapeHtml(t)+'</option>').join('')+'</select></div></div>';
   html+='<div><label>풀네임<span class="req">*</span></label><input name="풀네임" type="text" value="'+escapeHtml(v.풀네임)+'" required></div>';
   html+='<div><label>줄임말<span class="req">*</span></label><input name="줄임말" type="text" value="'+escapeHtml(v.줄임말)+'" required></div>';
-  html+='<div style="display:flex;gap:10px"><div style="flex:1"><label>시작일<span class="req">*</span></label><input name="시작일" type="date" value="'+v.시작+'" required></div><div style="flex:1"><label>종료일<span class="req">*</span></label><input id="prog-end" name="종료일" type="date" value="'+v.종료+'" required></div></div>';
+  // [260729 운영자] 사업 성격 = 예술성(공공성)·사업성(상업성). 종전엔 판매현황 표 행 호버 연필(마스터 등재분·admin만)이 유일한 입력구라
+  //   마스터에 없는 프로그램은 아예 지정할 방법이 없었다 → 프로그램 관리에 정식 입력구를 둔다. 미지정이면 종전대로 이름·장르 추정(_profitType).
+  html+='<div><label>사업 성격 <span style="font-size:10px;color:var(--dim);font-weight:400">(분석·판매현황 「성격」 축 · 비우면 이름·장르로 자동 추정)</span></label><select name="수익성">'
+    +'<option value=""'+(v.수익성?'':' selected')+'>미지정 (자동 추정)</option>'
+    +'<option value="공공성"'+(v.수익성==='공공성'?' selected':'')+'>예술성 (공공성)</option>'
+    +'<option value="상업성"'+(v.수익성==='상업성'?' selected':'')+'>사업성 (상업성)</option>'
+    +'</select></div>';
+  html+='<div style="display:flex;gap:10px"><div style="flex:1"><label>시작일<span class="req">*</span></label><input id="prog-start" name="시작일" type="date" value="'+v.시작+'" required onchange="_progSyncSpan()"></div><div style="flex:1"><label>종료일<span class="req">*</span></label><input id="prog-end" name="종료일" type="date" value="'+v.종료+'" required onchange="_progSyncSpan()"></div></div>';
+  // [260729 운영자] 「몇일 몇회차」 — 일수는 위 진행 기간에 종속되는 파생값이라 입력칸을 안 준다(읽기 전용 표시 · 날짜 바꾸면 즉시 갱신).
+  //   회차만 직접 지정 = 판매현황 분모(가용석×회차)의 명시 신호. 비우면 종전대로 '하루 1회' 관례로 기간 일수를 회차로 추정한다.
+  html+='<div style="display:flex;gap:10px;align-items:flex-end"><div style="flex:1"><label>기간(일수) <span style="font-size:10px;color:var(--dim);font-weight:400">(시작~종료 자동)</span></label>'
+    +'<input id="prog-span" type="text" value="'+escapeHtml(_progSpanDays(v.시작,v.종료)?(_progSpanDays(v.시작,v.종료)+'일'):'-')+'" readonly style="background:var(--neutral);color:var(--neutral-text);cursor:default"></div>'
+    +'<div style="flex:1"><label>공연 회차 <span style="font-size:10px;color:var(--dim);font-weight:400">(선택 · 비우면 기간으로 추정)</span></label>'
+    +'<input id="prog-rounds" name="회차" type="number" min="1" max="999" step="1" value="'+(v.회차||'')+'" placeholder="예: 5" oninput="_progSyncSpan()"></div></div>';
+  html+='<div id="prog-run-hint" style="margin-top:-6px;font-size:11px;color:var(--dim)"></div>';
   // 홍보 신청 받기 ON/OFF — 전 콘텐츠(공연·전시·예술교육·대관) 공통 opt-in. ON이면 홍보시작일=오늘 자동 채움(수정 가능),
   // OFF면 홍보시작일 비활성(disabled → FormData 제외 → 빈값 저장 = 홍보 대상 아님). 홍보 노출 종료 = 판매종료일(없으면 공연종료일)로 통합.
   // [260724] 초기 토글 상태 = 명시 플래그('홍보노출' Y/N) 우선, 값 없으면(미마이그레이션) 홍보시작일 유무 폴백.
@@ -17869,6 +17930,22 @@ function openProgramForm(rowIndex){
   let el=document.getElementById('program-form-modal');
   if(!el){el=document.createElement('div');el.id='program-form-modal';document.body.appendChild(el);}
   el.innerHTML=html;
+  _progSyncSpan();   // [260729] 「N일 N회」 안내줄 초기 채움(기존 값 프리필 상태 그대로 보여준다)
+}
+// [260729 운영자] 기간(일수) 자동 갱신 + 「N일 N회」 안내 — 일수는 시작~종료에 종속(입력칸 없음), 회차만 사람이 넣는다.
+//   표기 문법 = 목록 셀 _progRunTxt·판매현황 _ryRunTxt와 동일(회차 미지정 = '추정').
+function _progSyncSpan(){
+  var s=document.getElementById('prog-start'), e=document.getElementById('prog-end'),
+      sp=document.getElementById('prog-span'), rc=document.getElementById('prog-rounds'), hint=document.getElementById('prog-run-hint');
+  if(!sp)return;
+  var d=_progSpanDays(s?s.value:'', e?e.value:'');
+  sp.value=d?(d+'일'):'-';
+  if(!hint)return;
+  var n=_progRounds(rc?rc.value:'');
+  if(!d&&!n){ hint.innerHTML=''; return; }
+  var r=n||d;
+  hint.innerHTML=(n?('이 프로그램은 <b>'+d+'일 '+r+'회</b> 공연으로 저장돼요 — 판매현황 분모(가용석 × 회차)에 그대로 쓰여요.')
+                  :('회차를 비우면 <b>'+d+'일 '+r+'회</b>로 <b>추정</b>돼요(하루 1회 관례). 실제 회차가 다르면 위에 적어줘.'));
 }
 
 function closeProgramForm(){
@@ -17957,6 +18034,10 @@ async function saveProgram(rowIndex){
   const existing=rowIndex?(_programsCache.find(p=>p._rowIndex===rowIndex)||null):null;
   const _swEl=document.getElementById('prog-promo-sw');
   const _promoFlag=(_swEl&&_swEl.classList.contains('on'))?'Y':'N';   // [260724] 토글 명시 상태(OFF도 'N') → '홍보노출' Y/N 열. 빈 홍보시작일 파생 폐지.
+  // [260729 운영자] 회차·수익성 = 홍보노출과 같은 부가열 단일셀 라인(sideCells) — A~M 본 저장과 분리 → N~Q 운영자 수동열 무접촉 그대로.
+  //   빈값도 그대로 보낸다('' = 지움 = 미지정) — 지정했다 되돌리는 조작이 시트에 반영돼야 하니까.
+  //   일수는 안 보낸다: 시작일·종료일(G·H)에서 파생하는 값이라 시트에 또 적으면 두 소스가 어긋난다(운영자 지시 "몇일은 기간으로 종속").
+  const _sideCells={'회차':String(_progRounds(fd.get('회차'))||''),'수익성':String(fd.get('수익성')||'').trim()};
   const values=[
     Number(fd.get('NO'))||'',               // A NO
     fd.get('콘텐츠구분')||'',                // B 콘텐츠구분
@@ -17975,9 +18056,9 @@ async function saveProgram(rowIndex){
   showOverlayLoad('\uC800\uC7A5 \uC911\uC785\uB2C8\uB2E4...');
   try{
     if(rowIndex){
-      await api('PATCH','/api/sheet/program/'+rowIndex,{values, promoFlag:_promoFlag});
+      await api('PATCH','/api/sheet/program/'+rowIndex,{values, promoFlag:_promoFlag, sideCells:_sideCells});
     }else{
-      await api('POST','/api/sheet/program',{values, promoFlag:_promoFlag});
+      await api('POST','/api/sheet/program',{values, promoFlag:_promoFlag, sideCells:_sideCells});
     }
     await loadPrograms();
     updatePerfOpen();
