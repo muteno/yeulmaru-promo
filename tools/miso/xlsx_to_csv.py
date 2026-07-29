@@ -17,8 +17,11 @@ def main():
     out_dir = sys.argv[2] if len(sys.argv) > 2 else os.path.join(os.path.dirname(__file__), '..', '..', 'data', 'db_export')
     os.makedirs(out_dir, exist_ok=True)
     wb = openpyxl.load_workbook(src, data_only=True, read_only=True)
+    # 원본 파일명에 '회원'이 있으면 시트 CSV에도 마커를 전파 — build_db.mjs가
+    # 파일명 기준으로 회원 데이터를 차단(구조만 설계 등재)하므로 마커 유실 = PII 반입 사고.
+    prefix = '회원_' if '회원' in os.path.basename(src) else ''
     for ws in wb.worksheets:
-        path = os.path.join(out_dir, f"{ws.title}.csv")
+        path = os.path.join(out_dir, f"{prefix}{ws.title}.csv")
         with open(path, 'w', newline='', encoding='utf-8-sig') as f:
             w = csv.writer(f)
             for row in ws.iter_rows(values_only=True):

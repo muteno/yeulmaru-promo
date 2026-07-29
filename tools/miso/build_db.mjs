@@ -83,11 +83,12 @@ function toCsv(headers, rows) {
   return '﻿' + [headers.map(esc).join(','), ...rows.map(r => headers.map(h => esc(r[h])).join(','))].join('\r\n') + '\r\n';
 }
 
-const datasets = {}; const report = { missing: [], warnings: [], maskedColumns: {}, memberSchema: null };
+const datasets = {}; const report = { missing: [], warnings: [], maskedColumns: {}, memberSchema: [] };
 
 function addDataset(name, headers, rawRows, source) {
   if (datasets[name]) { report.warnings.push(`${name}: 중복 원본(${source}) — 먼저 읽은 ${datasets[name].source} 유지`); return; }
   const objRows = rawRows.map(r => Object.fromEntries(headers.map((h, i) => [h, r[i] ?? ''])));
+  headers = headers.filter(h => h !== ''); // 빈 헤더(시트 우측 여백 컬럼) 제거
   const dropped = headers.filter(h => (isSecretCol(h) && !INCLUDE_SECRETS) || (isEmailCol(h) && !INCLUDE_EMAILS));
   const kept = headers.filter(h => !dropped.includes(h));
   if (dropped.length) report.maskedColumns[name] = dropped;
@@ -103,8 +104,8 @@ function ingestCsvFile(path, source) {
   const base = basename(path).replace(/\.csv$/i, '');
   if (MEMBER_PAT.test(base) && !INCLUDE_MEMBERS) { // 회원 DB = 구조 설계만 (데이터 미반입)
     const grid = parseCsv(readFileSync(path, 'utf8'));
-    report.memberSchema = { source, headers: grid[0]?.map(h => h.trim()) ?? [], dataRows: Math.max(0, grid.length - 1),
-      note: '설계 전용 — 데이터 미반입(공개 레포 PII 차단). 반입은 --include-members(커밋 금지, MISO 직행만)' };
+    report.memberSchema.push({ source, headers: grid[0]?.map(h => h.trim()) ?? [], dataRows: Math.max(0, grid.length - 1),
+      note: '설계 전용 — 데이터 미반입(공개 레포 PII 차단). 반입은 --include-members(커밋 금지, MISO 직행만)' });
     return;
   }
   const name = SHEET_ALIASES[base] || SHEET_ALIASES[base.toLowerCase()]
@@ -129,8 +130,8 @@ for (const f of readdirSync(ROOT)) {
       const base = basename(f).replace(/\.json$/i, '');
       if (MEMBER_PAT.test(base) && !INCLUDE_MEMBERS) {
         const rows = Array.isArray(j) ? j : (j.rows || []);
-        report.memberSchema = { source: f, headers: j.headers || [...new Set(rows.flatMap(o => Object.keys(o)))], dataRows: rows.length,
-          note: '설계 전용 — 데이터 미반입(공개 레포 PII 차단). 반입은 --include-members(커밋 금지, MISO 직행만)' };
+        report.memberSchema.push({ source: f, headers: j.headers || [...new Set(rows.flatMap(o => Object.keys(o)))], dataRows: rows.length,
+          note: '설계 전용 — 데이터 미반입(공개 레포 PII 차단). 반입은 --include-members(커밋 금지, MISO 직행만)' });
         continue;
       }
       const name = SHEET_ALIASES[base] || SHEET_ALIASES[base.toLowerCase()] || base.replace(/[^\w가-힣]/g, '_');
@@ -144,13 +145,17 @@ for (const f of readdirSync(ROOT)) {
 }
 for (const s of EXPECTED_SHEETS) if (!datasets[s]) report.missing.push(s);
 
-// ── ③ 전시 DB 스냅샷(docs) — ①②에 없을 때만 (SharePoint/운영자 반입분이 최신 정본)
+// ── ③ 전시 DB 스냅샷(docs) — ①②에 없을 때만 (SharePoint/운영자 반입분이 최신 정본).
+//     단 반입분 행수 < 스냅샷 행수면 유실 가드: 스냅샷을 <이름>_snap260620으로 병존시키고 경고.
 for (const [name, file] of [['exhib_master', 'docs/260620_전시마스터.json'], ['exhib_daily', 'docs/260620_전시일일.json']]) {
-  if (datasets[name]) continue;
   const p = join(ROOT, file);
-  if (!existsSync(p)) { report.missing.push(name); continue; }
+  if (!existsSync(p)) { if (!datasets[name]) report.missing.push(name); continue; }
   const j = JSON.parse(readFileSync(p, 'utf8'));
-  datasets[name] = { source: file, headers: j.headers, rows: j.rows };
+  if (!datasets[name]) { datasets[name] = { source: file, headers: j.headers, rows: j.rows }; continue; }
+  if (datasets[name].rows.length < j.rows.length) {
+    datasets[`${name}_snap260620`] = { source: file, headers: j.headers, rows: j.rows };
+    report.warnings.push(`${name}: 정본 반입분(${datasets[name].rows.length}행) < 스냅샷(${j.rows.length}행) — 반입 원본이 구버전일 수 있음, 운영자 확인 필요(스냅샷은 ${name}_snap260620으로 병존)`);
+  }
 }
 
 // ── ④ 교육기관 (지도 마커 + 원천 명단)
@@ -192,7 +197,7 @@ for (const [name, d] of Object.entries(datasets)) writeFileSync(join(KB_DIR, `${
 
 console.log(`✅ data/miso_db.json — 데이터셋 ${Object.keys(datasets).length}개, 행 ${Object.values(datasets).reduce((a, d) => a + d.rows.length, 0)}개`);
 console.log(`✅ data/miso_kb/ — CSV ${Object.keys(datasets).length}개`);
-if (report.memberSchema) console.log(`📐 회원 DB 구조 설계 등재(데이터 미반입): ${report.memberSchema.source} — ${report.memberSchema.headers.length}열 × ${report.memberSchema.dataRows}행`);
+for (const ms of report.memberSchema) console.log(`📐 회원 구조 설계 등재(데이터 미반입): ${ms.source} — ${ms.headers.length}열 × ${ms.dataRows}행`);
 if (Object.keys(report.maskedColumns).length) console.log('🔒 마스킹:', JSON.stringify(report.maskedColumns));
 if (report.missing.length) console.log('⬜ 미반입(원본 없음):', report.missing.join(', '));
 for (const w of report.warnings) console.log('⚠️ ', w);
