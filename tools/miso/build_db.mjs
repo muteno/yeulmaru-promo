@@ -13,7 +13,7 @@
    ⚠️ 산출물 = 기계산출물(손편집 금지). 값 수정은 원본을 고치고 재실행.
    ⚠️ 회원(운영_회원) 데이터는 기본 미반입 — 구조(헤더·행수)만 meta.memberSchema로 설계 보고.
       --include-members로 반입해도 이름·연락처류 컬럼은 공개 레포 커밋 금지. */
-import { readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync, rmSync } from 'node:fs';
 import { join, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -185,6 +185,9 @@ const meta = {
 };
 writeFileSync(OUT_JSON, JSON.stringify({ meta, datasets }, null, 1), 'utf8');
 mkdirSync(KB_DIR, { recursive: true });
+for (const stale of readdirSync(KB_DIR).filter(f => f.endsWith('.csv') && !datasets[f.replace(/\.csv$/, '')])) {
+  rmSync(join(KB_DIR, stale)); console.log(`🧹 스테일 제거: miso_kb/${stale} (이번 병합에 없는 데이터셋)`);
+}
 for (const [name, d] of Object.entries(datasets)) writeFileSync(join(KB_DIR, `${name}.csv`), toCsv(d.headers, d.rows), 'utf8');
 
 console.log(`✅ data/miso_db.json — 데이터셋 ${Object.keys(datasets).length}개, 행 ${Object.values(datasets).reduce((a, d) => a + d.rows.length, 0)}개`);
