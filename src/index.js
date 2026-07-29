@@ -400,9 +400,10 @@ async function handleAddSheetRow(token, sheetName, body, role, slug) {
   const lastCol = colLetter(body.values.length);
   await graphPatch(token, `${sheetPathFor(driveId, itemId, sheetName)}/range(address='A${nextRow}:${lastCol}${nextRow}')`, { values: [body.values] });
   // [260724] 프로그램 홍보 ON/OFF 플래그 = '홍보노출' 열 단일 셀로 별도 기록(본 A~M 저장과 분리 → N~Q 운영자 수동열 무접촉). best-effort: 실패해도 본 저장 유지.
-  if (slug === "program" && body.promoFlag != null) {
-    try { await writeProgramPromoFlag(token, driveId, itemId, sheetName, nextRow, body.promoFlag, headers); }
-    catch (e) { console.error("promo flag write (add)", e); }
+  //   [260729] sideCells(회차·수익성)도 같은 라인 — 프로그램 폼이 보낸 부가열을 한 번에 기록.
+  if (slug === "program" && (body.promoFlag != null || body.sideCells)) {
+    try { await writeProgramSideCells(token, driveId, itemId, sheetName, nextRow, Object.assign({}, body.sideCells || {}, body.promoFlag != null ? { "홍보노출": body.promoFlag } : {}), headers); }
+    catch (e) { console.error("program side cells write (add)", e); }
   }
   if (slug !== "log") await logToSheet(token, role, "CREATE", sheetName, nextRow, summarize(body.values));
   invalidateSheetCache(slug);
@@ -415,9 +416,10 @@ async function handleUpdateSheetRow(token, sheetName, row, body, role, slug) {
   const lastCol = colLetter(body.values.length);
   await graphPatch(token, `${sheetPathFor(driveId, itemId, sheetName)}/range(address='A${row}:${lastCol}${row}')`, { values: [body.values] });
   // [260724] 홍보 ON/OFF 플래그 = '홍보노출' 열 단일 셀 별도 기록(N~Q 무접촉). best-effort: 실패해도 본 A~M 저장은 이미 성공.
-  if (slug === "program" && body.promoFlag != null) {
-    try { await writeProgramPromoFlag(token, driveId, itemId, sheetName, row, body.promoFlag); }
-    catch (e) { console.error("promo flag write (update)", e); }
+  //   [260729] sideCells(회차·수익성)도 동승 — add 경로와 쌍둥이(동시 수정 의무).
+  if (slug === "program" && (body.promoFlag != null || body.sideCells)) {
+    try { await writeProgramSideCells(token, driveId, itemId, sheetName, row, Object.assign({}, body.sideCells || {}, body.promoFlag != null ? { "홍보노출": body.promoFlag } : {})); }
+    catch (e) { console.error("program side cells write (update)", e); }
   }
   if (slug !== "log") await logToSheet(token, role, "UPDATE", sheetName, row, summarize(body.values));
   invalidateSheetCache(slug);
@@ -425,26 +427,35 @@ async function handleUpdateSheetRow(token, sheetName, row, body, role, slug) {
 }
 __name(handleUpdateSheetRow, "handleUpdateSheetRow");
 
-// [260724] 프로그램 '홍보노출'(Y/N) 명시 플래그를 그 열 단일 셀에만 기록 — 본 A~M 위치 저장과 분리해 N~Q(구분=장르 등 운영자 수동열)를 어떤 write 범위에도 넣지 않음(물리적 무접촉).
-//   '홍보노출' 헤더가 없으면 맨 끝(1행)에 자동 보강(예측제외·임시저장과 동일 이행 → 배포만으로 활성, 운영자 수동 스텝 0). 호출부가 try/catch(best-effort).
-async function writeProgramPromoFlag(token, driveId, itemId, sheetName, row, flagVal, knownHeaders) {
+// [260724] 프로그램 부가열(홍보노출·회차·수익성)을 그 열 단일 셀에만 기록 — 본 A~M 위치 저장과 분리해 N~Q(구분=장르 등 운영자 수동열)를 어떤 write 범위에도 넣지 않음(물리적 무접촉).
+//   헤더가 없으면 맨 끝(1행)에 자동 보강(예측제외·임시저장과 동일 이행 → 배포만으로 활성, 운영자 수동 스텝 0). 호출부가 try/catch(best-effort).
+//   [260729] 구 writeProgramPromoFlag를 열 이름 목록으로 범용화 — '회차'(프로그램별 공연 횟수)·'수익성'(예술성=공공성/사업성=상업성)이 같은 라인을 그대로 탄다.
+//   pairs = { 홍보노출:'Y', 회차:'3', 수익성:'공공성' } — 값이 undefined/null인 키는 건너뛴다(빈 문자열은 '지움'이라 기록한다).
+async function writeProgramSideCells(token, driveId, itemId, sheetName, row, pairs, knownHeaders) {
+  const names = Object.keys(pairs || {}).filter((k) => pairs[k] !== undefined && pairs[k] !== null);
+  if (!names.length) return;
   let headers = knownHeaders;
   if (!headers) {
     const hdr = await graphGet(token, `${sheetPathFor(driveId, itemId, sheetName)}/usedRange?$select=values`);
     headers = (hdr.values && hdr.values[0]) ? hdr.values[0] : [];
   }
-  let idx = headers.indexOf("홍보노출");   // '홍보노출' 0-based col index
-  if (idx < 0) {
-    // [평의회] 보강 위치를 usedRange 폭이 아니라 '스키마 예약 블록 뒤'로 하드 고정 — A~M(폼 13) + N~Q(운영자 수동 4) = A~Q(1~17) 예약.
-    //   맨 오른쪽 수동열(N~Q)이 비어 usedRange가 M~P에서 끊겨도 '홍보노출'이 N~Q(14~17) 안으로 절대 안 들어가게 하한 17(→ colLetter(18)=R열) 적용 = N~Q 무접촉 불변식 보장.
-    idx = Math.max(headers.length, 17);
-    const hc = colLetter(idx + 1);
-    await graphPatchRetry(token, `${sheetPathFor(driveId, itemId, sheetName)}/range(address='${hc}1:${hc}1')`, { values: [["홍보노출"]] });
+  headers = headers.slice();   // 헤더 보강분을 지역 사본에만 반영(호출부 배열 오염 방지)
+  for (const name of names) {
+    let idx = headers.indexOf(name);   // 0-based col index
+    if (idx < 0) {
+      // [평의회] 보강 위치를 usedRange 폭이 아니라 '스키마 예약 블록 뒤'로 하드 고정 — A~M(폼 13) + N~Q(운영자 수동 4) = A~Q(1~17) 예약.
+      //   맨 오른쪽 수동열(N~Q)이 비어 usedRange가 M~P에서 끊겨도 새 열이 N~Q(14~17) 안으로 절대 안 들어가게 하한 17(→ colLetter(18)=R열) 적용 = N~Q 무접촉 불변식 보장.
+      idx = Math.max(headers.length, 17);
+      const hc = colLetter(idx + 1);
+      await graphPatchRetry(token, `${sheetPathFor(driveId, itemId, sheetName)}/range(address='${hc}1:${hc}1')`, { values: [[name]] });
+      while (headers.length < idx) headers.push("");   // 사본 폭 맞추기 — 같은 호출에서 2개째 열이 같은 자리에 겹쳐 쓰이는 것 차단
+      headers[idx] = name;
+    }
+    const fc = colLetter(idx + 1);
+    await graphPatchRetry(token, `${sheetPathFor(driveId, itemId, sheetName)}/range(address='${fc}${row}:${fc}${row}')`, { values: [[pairs[name]]] });
   }
-  const fc = colLetter(idx + 1);
-  await graphPatchRetry(token, `${sheetPathFor(driveId, itemId, sheetName)}/range(address='${fc}${row}:${fc}${row}')`, { values: [[flagVal]] });
 }
-__name(writeProgramPromoFlag, "writeProgramPromoFlag");
+__name(writeProgramSideCells, "writeProgramSideCells");
 
 async function handleDeleteSheetRow(token, sheetName, row, role, slug) {
   const { driveId, itemId } = await findFile(token);
