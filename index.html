@@ -5824,6 +5824,13 @@ function _srailCard(p){
     +'</div>';
 }
 function _srailMD(v){ var d=_salesDate(v); return d?((d.getMonth()+1)+'.'+d.getDate()):''; }
+// [260729 운영자] 전시 달성률 = 누계유료/목표관객. 목표관객(분모)이 없으면 계산이 아예 불가라 '—'로 적는다.
+//   0.0%로 찍으면 「실적 0」으로 읽힌다 — 마스터 미등재 전시(전시일일에만 있는 건)가 대표 사례. 분모가 생기면 자동으로 %로 돌아온다.
+function _exOccTxt(e){
+  var g=(e&&e.목표관객!=null)?_salesNum(e.목표관객):null;
+  var o=(e&&e.occ!=null&&!isNaN(e.occ))?e.occ:null;
+  return ((g>0)||(o>0))?(o.toFixed(1)+'%'):'—';
+}
 function _srailNumTxt(v){ return (v===null||v===undefined||isNaN(v))?'—':Math.round(v).toLocaleString(); }
 // 전시 카드 — 분석 보드 전시 목록(달성률·어제대비·누적유료) 계승. ⚠️ 달성률 = 누계유료/목표관객(좌석 점유 아님, 100%↑=초과달성)
 function _srailCardEx(e){
@@ -5848,7 +5855,7 @@ function _srailCardEx(e){
   return '<div class="srail-card" role="button" tabindex="0" onclick="_srailDrill(\'ex\',\''+_anaEsc(e.id)+'\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click();}" title="'+escapeHtml(e.name)+' — 개별 분석 (레일 안에서 열려요)">'
     +'<div class="srail-r1"><span class="srail-name">'+escapeHtml(e.name)+'</span>'+(dd?'<span class="srail-dday" style="color:'+_srailDdayColor(e._endD)+'">'+dd+'</span>':'')+'</div>'
     +'<div class="srail-meta">'+escapeHtml(meta)+'</div>'
-    +'<div class="srail-r2"><span class="srail-occcap">달성률</span><span class="srail-occ">'+e.occ.toFixed(1)+'%</span><span class="srail-delta '+dCls+'">'+dStr+'</span><span class="srail-seatsub"><b style="color:var(--accent);font-weight:400">'+_srailNumTxt(e._total)+'</b>명 총 관객</span></div>'
+    +'<div class="srail-r2"><span class="srail-occcap">달성률</span><span class="srail-occ">'+_exOccTxt(e)+'</span><span class="srail-delta '+dCls+'">'+dStr+'</span><span class="srail-seatsub"><b style="color:var(--accent);font-weight:400">'+_srailNumTxt(e._total)+'</b>명 총 관객</span></div>'
     +'<div class="srail-spark">'+_srailSpark(e.spark)+'</div>'
     +'<div class="srail-bar"><i style="width:'+Math.min(e.occ,100).toFixed(1)+'%"></i></div>'
     +'<div class="srail-r3"><span>유료 '+_srailNumTxt(e._paid)+' / 목표 '+_srailNumTxt(e._goal)+'명</span><span>총 '+_srailNumTxt(e._total)+'명</span></div>'
@@ -6073,7 +6080,7 @@ function _srailRenderDrillEx(els,e,activeCount,opts){   // [260724] opts.noNav =
     +'<span style="display:inline-flex;gap:6px;flex-shrink:0;margin-left:auto"><button class="ana-chip" onclick="_srailOpenBoardEx(\''+_anaEsc(e.id)+'\')" title="분석 보드 전시 탭에서 자세히 보기">자세히 보기</button></span></div>';
   h+='<div class="srail-meta" style="margin-bottom:8px">'+escapeHtml('전시 · '+e.profit+' · '+_srailMD(e.시작일)+'~'+_srailMD(e.종료일)+' · 진행중')+'</div>';
   h+='<div class="ana-kpis">';
-  h+='<div class="ana-kpi"><div class="lab">달성률 (유료/목표관객)</div><div class="val">'+e.occ.toFixed(1)+'%</div></div>';
+  h+='<div class="ana-kpi"><div class="lab">달성률 (유료/목표관객)</div><div class="val">'+_exOccTxt(e)+'</div></div>';
   h+='<div class="ana-kpi"><div class="lab">어제대비</div><div class="val" style="color:'+dCol+'">'+dStr+'</div></div>';
   h+='<div class="ana-kpi"><div class="lab">누적 유료 / 목표</div><div class="val" style="font-size:15px">'+_srailNumTxt(e._paid)+'</div><div class="sub2" style="color:var(--dim)">목표 '+_srailNumTxt(e._goal)+'명 · 총 '+_srailNumTxt(e._total)+'명</div></div>';
   h+='<div class="ana-kpi"><div class="lab">종료까지</div><div class="val">'+endTxt+'</div></div>';
@@ -7187,7 +7194,7 @@ function _anaExhibBuild(){
   var byId={};
   daily.forEach(function(r){var id=String(r['전시ID']||'').trim();if(!id)return;(byId[id]=byId[id]||[]).push(r);});
   Object.keys(byId).forEach(function(id){byId[id].sort(function(a,b){return String(a['기준일자']).localeCompare(String(b['기준일자']));});});
-  return master.map(function(m){
+  var out=master.map(function(m){
     var id=String(m['전시ID']||'').trim(), ds=byId[id]||[];
     var occClean=ds.map(function(r){var v=parseFloat(r['점유율']);return isNaN(v)?null:v;}).filter(function(v){return v!=null;});
     var occ=occClean.length?occClean[occClean.length-1]:(parseFloat(m['최종점유율'])||0);
@@ -7201,6 +7208,41 @@ function _anaExhibBuild(){
       목표관객:m['목표관객'],목표금액:m['목표금액'],최종유료:m['최종유료'],최종무료:m['최종무료'],
       최종총인원:m['최종총인원'],최종매출:m['최종매출'],시작일:m['시작일'],종료일:m['종료일'],운영일수:m['운영일수'],daily:ds};
   });
+  // [260729 운영자] 전시일일에만 있고 전시마스터엔 없는 전시(=고아)를 합류시킨다.
+  //   왜 = 마스터 미등재 전시의 첫 입력은 「프로그램ID를 전시ID로」 전시일일에 append 된다(_dailyExhibList 260723h).
+  //   그런데 이 함수가 master.map이라 그 전시는 목록에 아예 안 생겼다 → 일일 입력은 쌓이는데 분석 보드는 「조건에 맞는 전시가 없어요」,
+  //   진행중 표는 「집계 전(—·데이터 부족)」. 여기 한 곳만 메우면 세 화면(분석 보드·레일 카드·진행중 표·드릴)이 같이 산다.
+  //   값은 전부 실값 계승(창작 0): 이름·누계 = 전시일일 마지막 행 · 성격·기간 = 프로그램 시트 · 목표관객은 미상이면 null(달성률은 마스터 등재 후).
+  try{
+    var have={}; out.forEach(function(e){ if(e.id)have[e.id]=1; });
+    var pgAll=((typeof PERFS!=='undefined'&&PERFS)||[]);
+    var tISO=_srailTodayISO();
+    Object.keys(byId).forEach(function(id){
+      if(have[id])return;
+      var ds2=byId[id]; if(!ds2||!ds2.length)return;
+      var last=ds2[ds2.length-1], first=ds2[0];
+      var nm=String(last['전시명']||first['전시명']||'').trim();
+      var pg=null;
+      for(var i=0;i<pgAll.length;i++){ var p=pgAll[i];
+        if(!p)continue;
+        if(String(p.id||'')===id){ pg=p; break; }
+        if(nm&&(_uName(p.f||'')===_uName(nm)||_uName(p.n||'')===_uName(nm))){ pg=p; break; } }
+      if(!nm)nm=String((pg&&(pg.f||pg.n))||id).trim();
+      var oc2=ds2.map(function(r){var v=parseFloat(r['점유율']);return isNaN(v)?null:v;}).filter(function(v){return v!=null;});
+      var _d8=function(v){ var s=String(v||'').replace(/[^0-9]/g,''); return (s.length===8)?(s.slice(0,4)+'-'+s.slice(4,6)+'-'+s.slice(6,8)):''; };
+      var sIso=(pg&&pg.s)||_d8(first['기준일자']), eIso=(pg&&pg.e)||'';
+      // 성격 = 프로그램 시트 지정값 → 미상이면 예술성(운영자 260729 「전시는 무조건 예술성」)
+      var pr=String((pg&&pg.pr)||'').trim();
+      var profit2=(pr==='상업성'||pr==='상업')?'사업성':'예술성';
+      var st2=eIso?((tISO>eIso)?'ended':((sIso&&tISO<sIso)?'notyet':'active')):'active';
+      out.push({id:id,name:nm,year:parseInt(String(last['기준일자']||'').replace(/[^0-9]/g,'').slice(0,4),10)||null,
+        occ:(oc2.length?oc2[oc2.length-1]:0),deltaPP:((oc2.length>1)?(oc2[oc2.length-1]-oc2[oc2.length-2]):null),
+        spark:oc2.slice(-7),profit:profit2,status:st2,_orphan:true,
+        목표관객:null,목표금액:null,최종유료:last['누계유료'],최종무료:last['누계무료'],
+        최종총인원:last['누계총인원'],최종매출:last['누계금액'],시작일:sIso,종료일:eIso,운영일수:null,daily:ds2});
+    });
+  }catch(_e){ console.warn('[exhib orphan]',_e); }
+  return out;
 }
 function _anaNum(v){ var n=parseFloat(v); return isNaN(n)?'—':Math.round(n).toLocaleString(); }
 // 전시 섹션(스택용 — 탭 없음 · 필터 = 공연과 독립: exProfit/exYear)
@@ -7233,7 +7275,7 @@ function _anaExhibSecHtml(){
     h+='<tr class="clk" onclick="_anaExhibDrill(\''+_anaEsc(e.id)+'\')">';
     h+='<td><div class="ana-row-name">'+escapeHtml(e.name)+'<sub>'+e.profit+' · '+e.year+'</sub></div></td>';
     h+='<td>'+_anaSpark(e.spark)+'</td>';
-    h+='<td style="text-align:right;color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums">'+e.occ.toFixed(1)+'%</td>';
+    h+='<td style="text-align:right;color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums">'+_exOccTxt(e)+'</td>';
     h+='<td style="text-align:right;color:'+dCol+';font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap">'+dStr+'</td>';
     h+='<td style="text-align:right;font-variant-numeric:tabular-nums;color:#555">'+_anaNum(e.최종유료)+'</td>';
     h+='<td style="text-align:center;font-size:11.5px;font-weight:700;color:'+stCol+'">'+stTxt+'</td>';
@@ -7254,7 +7296,7 @@ function _anaExhibDrillRender(sc,headTabs){
   h+='<button onclick="_anaExhibBack()" style="margin-bottom:12px;padding:6px 12px;border:1px solid #e0e0e8;background:#fafafe;border-radius:8px;font-size:12px;font-weight:600;color:#666;cursor:pointer;font-family:inherit">← 전시 목록</button>';
   h+='<div style="font-size:18px;font-weight:800;margin-bottom:2px">'+escapeHtml(e.name)+'</div>';
   h+='<div style="font-size:12px;color:#999;margin-bottom:14px">'+e.profit+' · '+e.year+'년 · '+escapeHtml(String(e.시작일||''))+' ~ '+escapeHtml(String(e.종료일||''))+' · '+(e.status==='active'?'진행중':'종료')+'</div>';
-  var kpi=[['달성률',e.occ.toFixed(1)+'%'],['목표관객',_anaNum(e.목표관객)],['누적유료',_anaNum(e.최종유료)],['누적무료',_anaNum(e.최종무료)],['누적매출',_anaNum(e.최종매출)+'원'],['운영일수',_anaNum(e.운영일수)+'일']];
+  var kpi=[['달성률',_exOccTxt(e)],['목표관객',_anaNum(e.목표관객)],['누적유료',_anaNum(e.최종유료)],['누적무료',_anaNum(e.최종무료)],['누적매출',_anaNum(e.최종매출)+'원'],['운영일수',_anaNum(e.운영일수)+'일']];
   h+='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">';
   kpi.forEach(function(k){h+='<div style="flex:1;min-width:96px;background:#fafafe;border:1px solid #eef;border-radius:10px;padding:10px 12px"><div style="font-size:10.5px;color:#999;font-weight:600;margin-bottom:3px">'+k[0]+'</div><div style="font-size:15px;font-weight:800;color:#333;font-variant-numeric:tabular-nums">'+k[1]+'</div></div>';});
   h+='</div>';
