@@ -2196,6 +2196,11 @@ table.promo-board-table thead th:last-child{border-top-right-radius:11px}
 #rail-yrm-list .ry-rz::before{content:"";position:absolute;left:4px;top:0;bottom:0;width:1px;background:transparent;transition:background .12s}
 #rail-yrm-list .ry-rz:hover::before,#rail-yrm-list .ry-rz.on::before{background:var(--accent)}
 body.ry-rzing,body.ry-rzing *{cursor:col-resize !important;user-select:none}
+/* [260729 운영자] 행 클릭 → 박스가 통째로 그 프로그램 상세로 넘어간 화면(책장 넘김 = .mv-swipe 계승). 색·라운드 전부 기존 토큰 */
+#rail-yrm-list .ry-detail{padding:2px 0 4px}
+#rail-yrm-list .ry-back{display:inline-flex;align-items:center;gap:4px;margin:2px 2px 6px;padding:6px 12px;border:1px solid var(--border);border-radius:var(--r-btn);background:var(--surface-solid);color:var(--neutral-text);font-size:12px;font-weight:700;cursor:pointer;transition:background .15s,color .15s}
+#rail-yrm-list .ry-back:hover{background:var(--neutral);color:var(--text)}
+#rail-yrm-list .ry-detail .srail-card{border-bottom:none;cursor:default}
 .mv-tbl tbody tr{border-bottom:1px solid var(--border)}
 .mv-tbl tbody tr:last-child{border-bottom:none}
 /* ===== 전앱 커스텀 스크롤바 (운영자 260711 개정: 구획 없는 오버레이 통일 — 판매레일 오버레이 패턴 PR 246 전역화) =====
@@ -6344,10 +6349,10 @@ function _railYrmPick(kind,key){
   try{
     var list=_uhaCar.list||[]; var want=(kind||'')+':'+(key||'');
     var idx=-1; for(var i=0;i<list.length;i++){ if(_srailUhaKey(list[i])===want){idx=i;break;} }
-    if(idx<0)return;
+    // [260729] 회전 목록에 없더라도(두 목록이 어긋난 순간) 상세는 연다 — 표에 보이는 행이 안 눌리는 일이 없게
     _srailUhaKick();       // 자동 전환 잠깐 멈춤(읽는 중) — 유휴 뒤 재개
-    _srailUhaShow(idx);
-    _railYrmMarkRow(want);
+    if(idx>=0)_srailUhaShow(idx);
+    _ryDrillOpen(want);    // [260729 운영자] 박스가 통째로 그 프로그램 상세로 넘어간다(책장 넘김) — 목록 복귀 = [‹ 목록]
   }catch(_e){ console.warn('[rail-yrm pick]',_e); }
 }
 // 선택 행 액티브 동기 — 2×2에 떠 있는 프로그램의 행만 .on(자동 전환 때도 따라 움직임)
@@ -6378,68 +6383,57 @@ function _railYrmHlTo(tr){
 function _railYrmSyncActive(){
   try{ var p=(_uhaCar.list||[])[_uhaCar.idx]; if(p)_railYrmMarkRow(_srailUhaKey(p)); }catch(_e){}
 }
-// ── [260725 운영자] 행 호버 → 그 프로그램 세부내역 팝오버 ──────────────────────────────
-// 지시 = "호버링 하면 메뉴 호버링 하는 그 로직 참고해서, 세부내역이 이 위에 떠서 글래스 결 따르되 잘 보이게 · 그 창에서 마우스 이탈하면 다시 없어지도록".
-// 호버 문법 100% 계승 = 상단 nav(buildNav 4433: 스침 오발 방지 120ms 가드 · 같은 대상 재호버 = 유지 · _ddOpen 4280: 창 이탈 160ms 지연 닫기).
-// 데이터·부품도 전부 계승 = _uhaCar.list(자동 순환이 쓰는 그 목록) + _uhaProgCells(휴면 KPI 4칸) + .bizm-strip. 새 소스·색·치수 0.
-var _ryPop={el:null,key:'',showT:null,hideT:null,bound:false};
-function _ryPopFind(key){ var l=_uhaCar.list||[]; for(var i=0;i<l.length;i++){ if(_srailUhaKey(l[i])===key)return l[i]; } return null; }
-// 이름 아래 한 줄 = 일자 · 장르(전시는 '전시') · 성격 · N일 N회 · 장소 — 표 본문과 같은 포맷 함수들(_srailMD·_ryRunTxt·_ryExRunTxt·_anaProfitAxis) 재사용
-function _ryPopSub(p){
-  var WD=['일','월','화','수','목','금','토'], out=[];
-  if(p._kind==='ex'){
-    out.push(p.종료일?('~'+_srailMD(p.종료일)):(p.시작일?_srailMD(p.시작일):''));
-    out.push('전시'); out.push(p.profit||'기획'); out.push(_ryExRunTxt(p));
-  }else{
-    var d=p.startDate;
-    out.push((d&&d.getMonth)?((d.getMonth()+1)+'.'+d.getDate()+' '+WD[d.getDay()]):'');
-    out.push(p.genre||'기타'); out.push(_anaProfitAxis(p['수익성'])); out.push(_ryRunTxt(p));
-  }
-  out.push(p._venue||'');
-  return out.filter(Boolean).join(' · ');
+// ── [260729 운영자] 행 클릭 → 「진행 중인 프로그램」 박스가 통째로 그 프로그램 상세로 넘어간다 ──────────
+// 지시 = "각 프로그램 클릭하면 캘린더 우측에 나오는 개별 내용이 나오게 · 호버링은 그냥 없애줘 · 이 안에 국한해서 바뀌는거임"
+//        + "누르면 촤르륵 하면서 화면이 책넘기듯이 대체되면됨. 풀로".
+//   구 260725 호버 팝오버(_ryPop*)는 지시대로 **폐지**.
+//   레퍼런스 100% 계승(창작 0) = 상세 카드는 캘린더 모드 우측 레일 카드 그대로(_srailCard / _srailCardEx),
+//                                넘김 효과는 좌 보드 페이지 전환 그대로(.mv-swipe = bizPageR/L · _mvSlideLeft 문법).
+//   전환은 #rail-yrm-list 안에서만 일어난다(박스 밖 화면 이동 0) · [← 목록]으로 되돌아오면 좌→중앙 역방향.
+var _ryDrill={key:''};
+function _ryFlip(el,dir){   // dir 1 = 우→중앙(들어감) · -1 = 좌→중앙(돌아옴)
+  if(!el)return;
+  el.classList.remove('mv-swipe','rev'); void el.offsetWidth;
+  el.classList.add('mv-swipe'); if(dir<0)el.classList.add('rev');
 }
-function _ryPopHtml(p){
-  var cells=_uhaProgCells(p).map(function(c){
-    return '<div class="cell"><div class="lab">'+escapeHtml(c.lab)+'</div><div class="val" style="color:var('+c.tok+')">'+escapeHtml(String(c.val))+'</div></div>';
-  }).join('');
-  return '<div class="ry-pop-nm">'+escapeHtml(p.name||'')+'</div>'
-    +'<div class="ry-venue">'+escapeHtml(_ryPopSub(p))+'</div>'
-    +(cells?'<div class="bizm-strip">'+cells+'</div>':'');
+// 표는 window._railYrmActives로 그리고 회전 목록은 _uhaCar.list다 — 둘이 어긋난 순간에도 클릭이 죽지 않게 양쪽을 본다.
+function _ryDrillItem(want){
+  var srcs=[(_uhaCar&&_uhaCar.list)||[],((typeof window!=='undefined'&&window._railYrmActives)||[])];
+  for(var s=0;s<srcs.length;s++){ var l=srcs[s];
+    for(var k=0;k<l.length;k++){ if(l[k]&&_srailUhaKey(l[k])===want)return l[k]; } }
+  return null;
 }
-function _ryPopShow(tr){
-  if(!tr||!tr.isConnected)return;
-  var key=tr.getAttribute('data-uhakey')||'', p=_ryPopFind(key); if(!p)return;
-  var el=_ryPop.el;
-  if(!el){
-    el=document.createElement('div'); el.className='ry-pop'; el.setAttribute('aria-hidden','true'); el.style.display='none';
-    document.body.appendChild(el); _ryPop.el=el;   // 창은 pointer-events:none(통과형) — 그래서 창 자체 mouseenter/leave 배선이 없다(CSS 주석의 사유)
-  }
-  el.innerHTML=_ryPopHtml(p); _ryPop.key=key;
-  // 폭·좌변 = 호버한 행 실측(새 치수 0) · 위치 = 그 행 바로 아래(갭 0 = 마우스가 표↔창을 끊김 없이 건너감) · 아래로 넘치면 행 위로 뒤집기
-  var r=tr.getBoundingClientRect();
-  el.style.width=Math.round(r.width)+'px'; el.style.left=Math.round(r.left)+'px'; el.style.top='0px';
-  el.style.visibility='hidden'; el.style.display='block';
-  var h=el.offsetHeight, top=r.bottom;
-  if(top+h>window.innerHeight-8)top=Math.max(8,r.top-h);
-  el.style.top=Math.round(top)+'px'; el.style.visibility='';
-  try{ _srailUhaKick(); }catch(_e){}   // 읽는 중 = 자동 5초 전환 잠깐 멈춤(수동 조작과 동일 취급 · 유휴 뒤 재개)
+// 상세 화면 = 헤더(← 목록) + 레일 카드 하나. 카드의 「레일 개별 분석으로 이동」 클릭은 떼어낸다(운영자 "이 안에 국한").
+function _ryDrillHtml(p){
+  var card='';
+  try{ card=(p._kind==='ex')?_srailCardEx(p):_srailCard(p); }catch(_e){ console.warn('[ry drill card]',_e); return ''; }
+  return '<div class="ry-detail">'
+    +'<button type="button" class="ry-back" onclick="_ryDrillClose(1)">‹ 목록</button>'
+    +'<div class="ry-detail-body">'+card+'</div></div>';
 }
-function _ryPopHide(){ clearTimeout(_ryPop.showT); clearTimeout(_ryPop.hideT); _ryPop.key=''; if(_ryPop.el)_ryPop.el.style.display='none'; }
-function _ryPopLater(){ clearTimeout(_ryPop.showT); clearTimeout(_ryPop.hideT); _ryPop.hideT=setTimeout(_ryPopHide,160); }
-// 위임 배선 1회 — 리스트는 innerHTML 재렌더로 행이 매번 교체되므로 document에 건다(행마다 리스너 = 재렌더 때 유실).
-function _ryPopBind(){
-  if(_ryPop.bound)return; _ryPop.bound=true;
-  document.addEventListener('mouseover',function(e){
-    var t=e.target; if(!t||!t.closest)return;
-    var tr=t.closest('#rail-yrm-list tr[data-uhakey]');
-    if(!tr){ if(_ryPop.key)_ryPopLater(); return; }
-    clearTimeout(_ryPop.hideT);
-    if((tr.getAttribute('data-uhakey')||'')===_ryPop.key)return;   // 같은 행 재진입 = 유지(깜빡 방지)
-    clearTimeout(_ryPop.showT);
-    _ryPop.showT=setTimeout(function(){ _ryPopShow(tr); },120);
-  });
-  document.addEventListener('scroll',function(){ if(_ryPop.key)_ryPopHide(); },true);   // 스크롤 = 기준 행이 움직임 → 즉시 닫기(어긋난 창 방지)
-  window.addEventListener('resize',function(){ if(_ryPop.key)_ryPopHide(); });
+function _ryDrillPaint(want,dir){
+  var box=document.getElementById('rail-yrm-list'); if(!box)return false;
+  var p=_ryDrillItem(want); if(!p)return false;
+  var h=_ryDrillHtml(p); if(!h)return false;
+  box.innerHTML=h;
+  var card=box.querySelector('.srail-card');
+  if(card){ card.removeAttribute('onclick'); card.removeAttribute('onkeydown'); card.removeAttribute('role'); card.removeAttribute('tabindex'); card.style.cursor='default'; }
+  _ryFlip(box.querySelector('.ry-detail'),dir===undefined?1:dir);
+  _ryDrill.key=want;
+  return true;
+}
+function _ryDrillOpen(want,silent){
+  if(_ryDrill.key===want&&!silent){ _ryDrillClose(); return; }   // 같은 행 다시 클릭 = 목록으로
+  if(!_ryDrillPaint(want,1))_ryDrillClose(0);
+}
+function _ryDrillClose(anim){
+  _ryDrill.key='';
+  var box=document.getElementById('rail-yrm-list'); if(!box)return;
+  var acts=(typeof window!=='undefined')?window._railYrmActives:null;
+  box.innerHTML=_railYrmTableHtml(acts);
+  if(anim)_ryFlip(box.querySelector('.ry-grp')||box,-1);
+  try{ _railYrmSyncActive(); }catch(_e){}
+  try{ _srailAlignTop(); }catch(_e){}
 }
 function _railYrmFrame(){
   // [260725 운영자] 우 틀 = 「판매 현황」(구 '연간 실적' 개명 · 이름 정본 = .srail 헤더 srail-ttltext와 동일어) · 연간 축 표기(누적 N명·2012~2026.1Q)와 상수 KPI 4칸(_uhaLeftStrip)은 제거 → 그 자리만큼 아래 리스트가 위로 올라옴
@@ -6458,7 +6452,6 @@ function _railYrmRender(){
   try{ if(uha&&rail&&el.contains(uha))rail.appendChild(uha); }catch(_e){}
   try{ el.innerHTML=_railYrmFrame(); }catch(_e){ console.warn('[rail-yrm]',_e); }
   try{ var slot=document.getElementById('rail-yrm-uha'); if(uha&&slot)slot.appendChild(uha); }catch(_e){}
-  try{ _ryPopBind(); }catch(_e){}   // [260725] 행 호버 세부내역 팝오버 위임 배선(1회)
 }
 // 판매중 목록(actives) 도착·갱신마다 리스트만 in-place 갱신(틀·KPI 재생성 없음). 틀 미구축이면 통째 렌더.
 function _railYrmSync(actives){
@@ -6467,8 +6460,7 @@ function _railYrmSync(actives){
   var list=document.getElementById('rail-yrm-list');
   if(!list){ _railYrmRender(); return; }
   list.innerHTML=_railYrmTableHtml(actives);
-  try{ _ryPopBind(); }catch(_e){}   // [260725] 〃 (리스트만 갱신되는 경로에서도)
-  if(_ryPop.key&&!document.querySelector('#rail-yrm-list tr[data-uhakey="'+_ryPop.key.replace(/"/g,'&quot;')+'"]'))_ryPopHide();   // 재렌더로 그 행이 사라졌으면 떠 있는 창도 정리
+  if(_ryDrill.key&&!_ryDrillPaint(_ryDrill.key,0))_ryDrill.key='';   // 상세를 보던 중 데이터가 갱신되면 상세를 다시 그린다(그 프로그램이 사라졌으면 목록 유지)
   var ct=el.querySelector('.bizm-card .ct'); if(ct)ct.innerHTML=_railYrmCardTitle();
   _railYrmSyncActive();   // [260724 한 수] 재렌더 후에도 2×2에 떠 있는 프로그램의 행 액티브 유지
   try{ _srailAlignTop(); }catch(_e){}   // [260725] 리스트만 갱신된 경로에서도 좌↔우 데칼코마니 높이 재계산
