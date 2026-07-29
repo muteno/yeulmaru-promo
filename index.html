@@ -5627,7 +5627,17 @@ function _srailExhibsPre(pgIdx,exActives){
 // 스파크라인(최근 7일 점유율) — _anaSpark 계승·레일용 가변폭(viewBox 스케일) + 면 채움. 색 = accent 토큰·alpha 변주만.
 function _srailSpark(arr){
   arr=(arr||[]).filter(function(v){return v!==null&&v!==undefined&&!isNaN(v);});
-  if(arr.length<2)return '<span style="font-size:10px;color:var(--muted)">추이 수집 전 (일일입력 2회부터)</span>';
+  // [260729 운영자] 실측 0~1건 = 「추이 수집 전」 텍스트 폐지 → 집계 골격 상시 — 미상 슬롯 = 속빈 원 + 회색 점선(공연 카드 _srailTrend 예측점 노테이션 계승), 실측 1건 = 첫 슬롯만 채운 원
+  if(arr.length<2){
+    var Wp=Math.max(180,_srailChartW||132),Hp=30,pp=3,yp=Hp/2,sk='<svg viewBox="0 0 '+Wp+' '+Hp+'" preserveAspectRatio="none" aria-hidden="true">';
+    var xp=function(i){return pp+(Wp-2*pp)*i/6;};
+    sk+='<path d="M'+xp(0).toFixed(1)+' '+yp+' L'+xp(6).toFixed(1)+' '+yp+'" fill="none" stroke="var(--muted)" stroke-width="1.8" stroke-dasharray="3 3" stroke-linecap="round" vector-effect="non-scaling-stroke" stroke-opacity=".55"/>';
+    for(var si=0;si<7;si++){
+      if(si===0&&arr.length===1)sk+='<circle cx="'+xp(si).toFixed(1)+'" cy="'+yp+'" r="2.2" fill="var(--accent)"/>';
+      else sk+='<circle cx="'+xp(si).toFixed(1)+'" cy="'+yp+'" r="2.2" fill="var(--surface-solid)" stroke="var(--muted)" stroke-width="1.6"/>';
+    }
+    return sk+'</svg>';
+  }
   var W=Math.max(180,_srailChartW||132),H=30,pad=3;   // [260710 운영자 "차트 늘어짐"] 실측 폭 — 전시 카드 스파크도 비례 확대(원→타원 왜곡) 제거
   var mn=Math.min.apply(null,arr)-2,mx=Math.max.apply(null,arr)+2; if(mx-mn<1)mx=mn+1;
   var pts=arr.map(function(v,i){ var x=pad+(W-2*pad)*i/(arr.length-1); var y=H-pad-(H-2*pad)*(v-mn)/(mx-mn); return [x,y]; });
@@ -5811,14 +5821,19 @@ function _srailNumTxt(v){ return (v===null||v===undefined||isNaN(v))?'—':Math.
 function _srailCardEx(e){
   var _d=_srailDelta(e.deltaPP), dCls=_d.c, dStr=_d.s;
   var meta='전시'+(e.profit?' · '+e.profit:'')+((e.시작일||e.종료일)?(' · '+_srailMD(e.시작일)+'~'+_srailMD(e.종료일)):'')+((!e.noData&&e._saleN)?' · 판매 '+e._saleN+'일차':'');   // [260710 운영자] 판매 N일차 = 전 프로그램 공통. noData는 「집계 전입니다.」 옆 1곳만(분신술 N일차 감사 MED — 이중 표기 방지)
-  // [260710 운영자] 전시 「집계 전」 카드 — 공연 noData 카드와 동형(시작 D-day·집계 전입니다.·판매 N일차). 드릴 미연결(전시일일 0건 = 열 내용 없음)
+  // [260729 운영자] 전시 「집계 전」 카드 = 오버레이 폐지 → 실적 카드와 동형 집계 골격 상시(1일차·0건도 집계가 보여야) —
+  //   미상 수치 = '—'(_srailNumTxt 기존 미상 표기) · 차트 = 속빈 원 골격(_srailSpark 0건 분기) · 진행바 = 0.
+  //   드릴은 계속 미연결(전시일일 0건 = 열 내용 없음) · 「집계 전」 표기는 메타 줄로 이동(판매 N일차 동반).
   if(e.noData){
     var ddPre=(e._dday===null||e._dday===undefined)?'':_salesDdayStr(e._dday);
-    return '<div class="srail-card ro" style="cursor:default" title="'+escapeHtml(e.name)+'">'
+    var _dn=_srailDelta(null);
+    return '<div class="srail-card" style="cursor:default" title="'+escapeHtml(e.name)+'">'
       +'<div class="srail-r1"><span class="srail-name">'+escapeHtml(e.name)+'</span>'+(ddPre?'<span class="srail-dday" style="color:'+_srailDdayColor(e._dday)+'">'+ddPre+'</span>':'')+'</div>'
-      +'<div class="srail-meta">'+escapeHtml(meta)+'</div>'
-      +(e._goal!=null?'<div class="srail-r3"><span>목표 '+_srailNumTxt(e._goal)+'명</span></div>':'')
-      +'<div class="srail-ro">집계 전입니다.'+(e._saleN?' · 판매 '+e._saleN+'일차':'')+'</div>'
+      +'<div class="srail-meta">'+escapeHtml(meta+' · 집계 전'+(e._saleN?' · 판매 '+e._saleN+'일차':''))+'</div>'
+      +'<div class="srail-r2"><span class="srail-occcap">달성률</span><span class="srail-occ" style="color:var(--muted)">—</span><span class="srail-delta '+_dn.c+'">'+_dn.s+'</span><span class="srail-seatsub"><b style="color:var(--accent);font-weight:400">'+_srailNumTxt(e._total)+'</b>명 총 관객</span></div>'
+      +'<div class="srail-spark">'+_srailSpark(e.spark)+'</div>'
+      +'<div class="srail-bar"><i style="width:0%"></i></div>'
+      +'<div class="srail-r3"><span>유료 '+_srailNumTxt(e._paid)+' / 목표 '+_srailNumTxt(e._goal)+'명</span><span>총 '+_srailNumTxt(e._total)+'명</span></div>'
       +'</div>';
   }
   var dd=(e._endD===null||e._endD===undefined)?'':('종료 '+_salesDdayStr(e._endD));
@@ -7180,7 +7195,23 @@ function _anaExhibDrillRender(sc,headTabs){
 }
 function _anaExhibTrend(daily){
   var pts=(daily||[]).map(function(r){return {d:String(r['기준일자']||''),o:parseFloat(r['점유율'])};}).filter(function(q){return !isNaN(q.o);});
-  if(pts.length<2)return '<div style="color:#bbb;padding:20px;font-size:13px">추이 데이터 부족</div>';
+  // [260729 운영자] 실측 0~1건 = 「추이 데이터 부족」 텍스트 폐지 → 집계 골격 상시 — 실측 1건 = 첫 점만 채운 원(+값·날짜), 미상 슬롯 = 속빈 원 + 회색 점선(레일 카드 _srailTrend 예측점 노테이션 계승)
+  if(pts.length<2){
+    var Wq=720,Hq=190,pLq=40,pRq=14,pTq=14,pBq=26,yq=(pTq+Hq-pBq)/2;
+    var Xq=function(i){return pLq+(Wq-pLq-pRq)*i/6;};
+    var sk='<svg viewBox="0 0 '+Wq+' '+Hq+'" style="width:100%;height:auto;max-width:'+Wq+'px">';
+    sk+='<line x1="'+Xq(0).toFixed(1)+'" y1="'+yq+'" x2="'+Xq(6).toFixed(1)+'" y2="'+yq+'" stroke="var(--muted)" stroke-width="2" stroke-dasharray="3 3" stroke-linecap="round" stroke-opacity=".55"/>';
+    for(var qi=0;qi<7;qi++){
+      if(qi===0&&pts.length===1)sk+='<circle cx="'+Xq(qi).toFixed(1)+'" cy="'+yq+'" r="3.5" fill="var(--accent)"/>';
+      else sk+='<circle cx="'+Xq(qi).toFixed(1)+'" cy="'+yq+'" r="3.5" fill="var(--surface-solid)" stroke="var(--muted)" stroke-width="1.6"/>';
+    }
+    if(pts.length===1){
+      var d1=pts[0].d, dTxt=(d1.length===8)?(d1.slice(4,6)+'/'+d1.slice(6,8)):d1;
+      sk+='<text x="'+Xq(0).toFixed(1)+'" y="'+(yq-10).toFixed(1)+'" text-anchor="middle" font-size="10" fill="var(--accent)">'+pts[0].o.toFixed(1)+'%</text>';
+      sk+='<text x="'+pLq+'" y="'+(Hq-8)+'" font-size="9" fill="var(--dim)">'+dTxt+'</text>';
+    }
+    return sk+'</svg>';
+  }
   var W=720,H=190,padL=40,padR=14,padT=14,padB=26;
   var ys=pts.map(function(q){return q.o;}); var mn=Math.min.apply(null,ys),mx=Math.max.apply(null,ys); if(mx-mn<1)mx=mn+1; mn=Math.max(0,mn-2);mx=mx+2;
   var X=function(i){return padL+(W-padL-padR)*i/(pts.length-1);};
@@ -7203,7 +7234,17 @@ function _anaSetYear(y){ _anaState.year=parseInt(y,10); _anaState.genre='전체'
 // 7일 스파크라인 SVG (perf.spark = 최근 7일 점유율%). 상승=accent / 하락=#9A9CE0, 끝 점.
 function _anaSpark(arr,Wopt){   // [260723] Wopt = 가변 폭(판매현황 컴팩트 표 100) — 미지정 = 기존 132(분석 보드 호출부 불변)
   arr=(arr||[]).filter(function(v){return v!==null&&v!==undefined&&!isNaN(v);});
-  if(arr.length<2)return '<span style="color:#ccc;font-size:11px">데이터 부족</span>';
+  // [260729 운영자] 실측 0~1건 = 「데이터 부족」 텍스트 폐지 → 집계 골격 상시 — 미상 슬롯 = 속빈 원 + 회색 점선(레일 카드 _srailTrend 예측점 노테이션 계승), 실측 1건 = 첫 슬롯만 채운 원
+  if(arr.length<2){
+    var Wp=Wopt||132,Hp=30,pp=3,yp=Hp/2,sk='<svg width="'+Wp+'" height="'+Hp+'" viewBox="0 0 '+Wp+' '+Hp+'" style="vertical-align:middle">';
+    var xp=function(i){return pp+(Wp-2*pp)*i/6;};
+    sk+='<path d="M'+xp(0).toFixed(1)+' '+yp+' L'+xp(6).toFixed(1)+' '+yp+'" fill="none" stroke="var(--muted)" stroke-width="1.6" stroke-dasharray="3 3" stroke-linecap="round" stroke-opacity=".55"/>';
+    for(var si=0;si<7;si++){
+      if(si===0&&arr.length===1)sk+='<circle cx="'+xp(si).toFixed(1)+'" cy="'+yp+'" r="2.6" fill="var(--accent)"/>';
+      else sk+='<circle cx="'+xp(si).toFixed(1)+'" cy="'+yp+'" r="2.6" fill="var(--surface-solid)" stroke="var(--muted)" stroke-width="1.4"/>';
+    }
+    return sk+'</svg>';
+  }
   var W=Wopt||132,H=30,pad=3;
   var mn=Math.min.apply(null,arr)-2, mx=Math.max.apply(null,arr)+2; if(mx-mn<1)mx=mn+1;
   var up=arr[arr.length-1]>=arr[0];
