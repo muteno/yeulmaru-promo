@@ -5292,9 +5292,11 @@ function _mvPill(txt,bg,fg){ return '<span style="display:inline-block;padding:3
 function _mvFilterSpec(ax){ _bizmState.specFilter=(_bizmState.specFilter===ax)?null:ax; try{_srailRender();}catch(_e){} }
 // [260723i 운영자] 장르 pill도 클릭 필터 — 성격과 조합(예: 뮤지컬 + 예술성). 활성 pill = 테두리 링.
 function _mvFilterGenre(g){ _bizmState.genreFilter=(_bizmState.genreFilter===g)?null:g; try{_srailRender();}catch(_e){} }
+// [260729 운영자] 장르 표기 = 괄호가 있으면 괄호 안만(예: 「뮤지컬(어린이)」 → 「어린이」). 필터·툴팁은 원래 값 그대로라 기능·인덱싱 무변.
+function _mvGenreLabel(g){ var m=String(g||'').match(/\(([^)]+)\)\s*$/); return (m&&m[1].trim())?m[1].trim():String(g||''); }
 function _mvGenrePill(g){   // [260724 운영자] 칩 폐지 → 글자만(오와열 정렬) · 클릭 필터·활성 밑줄은 유지(기능 보존)
   var on=(_bizmState.genreFilter===g);
-  return '<span role="button" tabindex="0" onclick="event.stopPropagation();_mvFilterGenre(\''+_anaEsc(g)+'\')" title="'+escapeHtml(g)+'만 보기 / 다시 클릭 = 전체" style="color:var(--neutral-text);font-weight:600;white-space:nowrap;cursor:pointer'+(on?';text-decoration:underline':'')+'">'+escapeHtml(g)+'</span>';
+  return '<span role="button" tabindex="0" onclick="event.stopPropagation();_mvFilterGenre(\''+_anaEsc(g)+'\')" title="'+escapeHtml(g)+'만 보기 / 다시 클릭 = 전체" style="color:var(--neutral-text);font-weight:600;white-space:nowrap;cursor:pointer'+(on?';text-decoration:underline':'')+'">'+escapeHtml(_mvGenreLabel(g))+'</span>';
 }
 function _mvSpecPill(ax,p){   // [260724 운영자] 칩 폐지 → 글자만 · 색 = 예술성 살몬(--peach-text)·그 외 인디고(--accent) 팔레트 계승 · 클릭 필터 유지
   var on=(_bizmState.specFilter===ax);
@@ -6171,25 +6173,34 @@ function _rySubLine(run,venue){
   var t=[run,venue].filter(Boolean).join(' | ');
   return t?'<div class="ry-venue">'+escapeHtml(t)+'</div>':'';
 }
+// [260729 운영자] 누적 관객수 셀(전시 3열) — 「달성률 아니라 누적 관객수, 숫자 누계만」. 표기 = 판매율과 같은 문법(강조색 --accent 볼드 + 회색 단위) · 좌측 정렬.
+function _ryAccCell(n){
+  if(n===null||n===undefined||isNaN(n))return '<span style="color:var(--muted);font-size:12px">—</span>';
+  return '<b style="color:var(--accent);font-weight:800;font-variant-numeric:tabular-nums">'+Math.round(n).toLocaleString()+'</b>'
+    +'<span style="color:var(--dim);font-size:11.5px">명</span>';
+}
 // [260729 운영자] 공연·전시·교육 공용 표 = 이 함수 하나(구 전시 전용 _railYrmExTable 폐지 — 전시만 다른 열·색·문구가 사라진다).
-//   머리글·열·부품·색 전부 동일 — 전시도 「판매율」(누적 기준 = 누계유료/목표관객) · 「최근 7일 추이」(누계의 일일 증분).
-function _railYrmPerfTable(perfs){
+//   rateLab = 3열 머리글만 분야 용어로(공연·교육 「판매율」 · 전시 「누적 관객수」). 나머지 열·부품·색·정렬은 100% 동일.
+//   [260729 운영자] 머리글(인덱싱) 6칸 = 전부 가운데 정렬 · 값은 3열(판매율·누적 관객수) 좌측 · 성격 가운데.
+function _railYrmPerfTable(perfs,rateLab){
   var WD=['일','월','화','수','목','금','토'];
   var sd=function(d){ return (d&&d.getMonth)?((d.getMonth()+1)+'.'+d.getDate()+' '+WD[d.getDay()]):''; };
   var td='padding:11px 8px;vertical-align:top;';   // [260725 운영자] 제목 위 정렬로 통일 — 제목 아래 장소 서브라인이 붙으므로 행 전체를 위 기준으로
   // [260725 운영자] 프로그램 열이 남는 폭을 다 먹어 추이 차트가 우측 끝까지 밀렸던 것 → table-layout:fixed + 폭 명시로 추이를 좌측으로 당김.
   // 폭 누계 11/45/74/87/100 — 분야 표가 전부 이 한 함수라 열 경계가 자동으로 같다(세로 오와열 정렬).
   var h='<table class="ana-tbl mv-tbl" style="font-size:13px;width:100%;table-layout:fixed"><thead><tr>'
-    +'<td style="padding-left:14px;width:10%">일자</td><td style="width:24%">프로그램</td><td style="text-align:right;width:18%">판매율</td><td style="text-align:right;width:24%;padding-right:34px">최근 7일 추이</td><td style="text-align:center;width:13%">사업 성격</td><td style="padding-right:14px;width:11%">장르</td></tr></thead><tbody>';   // [260725 운영자] 「판매율」열 신설(추이 좌측) — 기존 5열에서 폭만 재배분(일자 11→10 · 프로그램 30→24 · 성격 20→13 · 장르 15→11) · 추이 24%·우패딩 34는 불변
+    +'<td style="text-align:center;width:10%">일자</td><td style="text-align:center;width:24%">프로그램</td><td style="text-align:center;width:18%">'+(rateLab||'판매율')+'</td><td style="text-align:center;width:24%">최근 7일 추이</td><td style="text-align:center;width:13%">사업 성격</td><td style="text-align:center;width:11%">장르</td></tr></thead><tbody>';   // [260725 운영자] 「판매율」열 신설(추이 좌측) — 기존 5열에서 폭만 재배분(일자 11→10 · 프로그램 30→24 · 성격 20→13 · 장르 15→11) · 추이 24%는 불변 · [260729 운영자] 머리글 6칸 = 전부 가운데(좌우 패딩 제거 = 열 정중앙)
   perfs.forEach(function(p){
     var trend=p.noData?('<span style="color:var(--muted);font-size:12px">'+((p.dday!==null&&p.dday>0)?'오픈 예정':'데이터 부족')+'</span>'):_mvBars(p.days,p.diff,p._unit);
-    var rate=p.noData?'<span style="color:var(--muted);font-size:12px">—</span>':_ryRateCell(p.seats,p.totalOpen,p.occ,'--accent');
+    // 3열 = 공연·교육 「판매율」(N% (분자/분모)) · 전시 「누적 관객수」(누계 숫자) — 둘 다 강조색 볼드·좌측 정렬로 같은 문법
+    var rate=p.noData?'<span style="color:var(--muted);font-size:12px">—</span>'
+      :((p._kind==='ex')?_ryAccCell(p._acc):_ryRateCell(p.seats,p.totalOpen,p.occ,'--accent'));
     var sub=_rySubLine((p._ryRun!==undefined&&p._ryRun!==null)?p._ryRun:_ryRunTxt(p),p._venue);
     var kind=(p._kind==='ex')?'ex':'perf', pkey=(p._kind==='ex')?(p.id||p.name):p.name;   // 드릴 키 = _srailUhaKey와 같은 축(전시 = ID 우선)
     h+='<tr class="clk" role="button" tabindex="0" data-uhakey="'+escapeHtml(_srailUhaKey(p))+'" onclick="_railYrmPick(\''+kind+'\',\''+_anaEsc(pkey)+'\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click();}" title="'+escapeHtml(p.name)+' — 클릭 = 아래 상세 보기">'
-      +'<td style="'+td+'padding-left:14px;color:var(--accent);font-weight:700;white-space:nowrap;font-variant-numeric:tabular-nums">'+sd(p.startDate)+'</td>'
+      +'<td style="'+td+'padding-left:14px;color:var(--accent);font-weight:700;white-space:nowrap;font-variant-numeric:tabular-nums">'+sd(p._ryDate||p.startDate)+'</td>'
       +'<td style="'+td+'overflow:hidden" title="'+escapeHtml(p.name)+(p._venue?' · '+escapeHtml(p._venue):'')+'"><div style="'+_RYNM+'">'+escapeHtml(p.name)+'</div>'+sub+'</td>'
-      +'<td style="'+td+'text-align:right;white-space:nowrap">'+rate+'</td>'
+      +'<td style="'+td+'text-align:left;white-space:nowrap">'+rate+'</td>'
       +'<td style="'+td+'text-align:right;white-space:nowrap;padding-right:34px">'+trend+'</td>'
       +'<td style="'+td+'text-align:center">'+_mvSpecPill(_anaProfitAxis(p['수익성']),p)+'</td>'   // [260725] 2번째 인자 = 그 자리 성격 갱신 연필(admin·마스터 등재분)
       +'<td style="'+td+'padding-right:14px">'+_mvGenrePill(p.genre||'기타')+'</td></tr>';
@@ -6200,30 +6211,32 @@ function _railYrmPerfTable(perfs){
 // [260729 운영자] 전시 행 → 공연 행 모양으로 정규화. 전시 전용 표(구 _railYrmExTable)를 없애고 _railYrmPerfTable 한 곳에서만 그린다
 //   = 전시만 있던 출력(살구색 일자·게이지 바·「집계 전」·빈 장르열·plain 「기획」)이 전부 사라지고, 열·부품·색·클릭 드릴이 공연과 같아진다.
 // 매핑은 전부 정본 계승(값 창작 0):
-//   · 판매율 = 누적만 — seats↔누계유료(_paid) · totalOpen↔목표관객(_goal) · occ = 그 둘의 비(_srailCardEx 달성률 정의 그대로)
-//   · 최근 7일 추이 = 전시일일 「누계유료」 시계열 → _mvBars가 공연과 같은 문법으로 일일 증분을 뽑는다(하루치만 있어도 그날치로 표시) · 단위만 석→명
-//   · 사업 성격 = 입력한 값 그대로, 소스 사다리도 공연과 동일(프로그램 관리 지정 pg.pr > 전시마스터 수익성 > 미지정) — 구 '기획' 하드코딩 폐지
-//   · 장르 = '전시'(장르 필터 축 그대로) · 일자 = 시작일(공연과 같은 「M.D 요일」) · 기간(N일)은 제목 아래 서브라인
-function _ryExRow(e,pgIdx){
+//   · 3열 = 「누적 관객수」(달성률 아님, 운영자 260729) — 누계총인원(없으면 누계유료) 그대로. 강조색 볼드·좌측 = 공연 판매율과 같은 문법
+//   · 최근 7일 추이 = 전시일일 「누계유료」 시계열(기준일자 오름차순 · **오늘까지**만) → _mvBars가 공연과 같은 문법으로 일일 증분을 뽑는다 · 단위만 석→명
+//   · 사업 성격 = **전시는 무조건 예술성**(운영자 260729 확정 — 시트 표기 '공공성' 고정 · 성격 필터도 같은 축을 탄다)
+//   · 장르 = '전시'(장르 필터 축 그대로) · 일자 = **종료일** + 요일(공연과 같은 「M.D 요일」 문법 · 정렬 축은 공연과 같은 시작일순)
+//   · 기간(N일)은 제목 아래 서브라인
+function _ryExRow(e){
   var sd=(e.시작일&&e.시작일.getMonth)?e.시작일:_salesDate(e.시작일);
-  var pg=pgIdx?_srailPgOf(pgIdx,e.id,e.name):null;
-  var pr=(pg&&pg.pr)||'';                                   // 프로그램 관리에서 지정한 사업 성격(시트 표기 = 공공성/상업성)
-  var spec=pr||(e.profit?_anaAxisProfit(e.profit):'');      // 폴백 = 전시마스터 수익성(사업성/예술성 축 → 시트 표기로 되돌림)
-  var days=((e.daily)||[]).map(function(r){ var v=_salesNum(r['누계유료']); return {seat:(v===null?0:v)}; });
+  var ed=(e.종료일&&e.종료일.getMonth)?e.종료일:_salesDate(e.종료일);
+  var tISO=_srailTodayISO().replace(/-/g,'');                // 오늘 기준(YYYYMMDD) — 미래 기준일자 행은 추이에서 뺀다
+  var ds=((e.daily)||[]).slice().sort(function(a,b){ return String(a['기준일자']||'').localeCompare(String(b['기준일자']||'')); })
+    .filter(function(r){ var d=String(r['기준일자']||'').replace(/[^0-9]/g,''); return !d||d<=tISO; });
+  var days=ds.map(function(r){ var v=_salesNum(r['누계유료']); return {bd:_salesNum(r['기준일자']),seat:(v===null?0:v)}; });
+  var acc=(e._total!==null&&e._total!==undefined)?e._total:e._paid;   // 누적 관객수 = 누계총인원 → 없으면 누계유료
   return {_kind:'ex',id:(e.id||''),name:e.name,_src:e,
-    startDate:sd,endDate:((e.종료일&&e.종료일.getMonth)?e.종료일:_salesDate(e.종료일)),
+    startDate:sd,endDate:ed,_ryDate:(ed||sd),
     dday:((e._dday===null||e._dday===undefined)?null:e._dday),
-    noData:!!e.noData,seats:e._paid,totalOpen:e._goal,occ:((e.occ===null||e.occ===undefined)?null:e.occ),
+    noData:!!e.noData,seats:e._paid,totalOpen:e._goal,occ:((e.occ===null||e.occ===undefined)?null:e.occ),_acc:acc,
     days:days,diff:null,_unit:'명',deltaPP:e.deltaPP,
-    '수익성':spec,_specSrc:(pr?'pg':(e.profit?'master':'est')),genre:'전시',
+    '수익성':'공공성',_specSrc:'fixed',genre:'전시',
     _venue:(e._venue||''),_ryRun:_ryExRunTxt(e)};
 }
 function _railYrmTableHtml(actives){
   if(!actives)return '<div class="rail-yrm-empty">'+_ldHtml(14)+'불러오는 중</div>';
   var perfs=actives.filter(function(x){return x._kind!=='ex';});
   // [260729 운영자] 전시 = 공연 행 모양으로 정규화(_ryExRow) → 이 아래 필터·정렬·표 렌더가 공연과 완전히 같은 코드를 탄다(인덱싱 동일).
-  var _pgIdx=_srailPgIdx();   // 사업 성격 「입력한 값」 소스(프로그램 관리 pg.pr) — 공연 _salesBuild와 같은 사다리
-  var exs=actives.filter(function(x){return x._kind==='ex';}).map(function(e){return _ryExRow(e,_pgIdx);});
+  var exs=actives.filter(function(x){return x._kind==='ex';}).map(_ryExRow);
   var sf=_bizmState.specFilter||null, gf=_bizmState.genreFilter||null;   // 성격·장르 필터 계승(기존 판매현황 표)
   var keep=function(x){   // 필터 판정도 한 함수 — 공연·전시가 같은 축(성격 = _anaProfitAxis · 장르 = genre)으로 걸러진다
     if(sf&&_anaProfitAxis(x['수익성'])!==sf)return false;
@@ -6244,7 +6257,7 @@ function _railYrmTableHtml(actives){
       +'<div class="ry-grp-bd">'+tbl(arr)+'</div></section>';
   };
   var h=grp('공연','--accent',perfs,_railYrmPerfTable)
-       +grp('전시','--peach-text',exs,_railYrmPerfTable)
+       +grp('전시','--peach-text',exs,function(a){return _railYrmPerfTable(a,'누적 관객수');})
        +grp('교육','--green',edus,_railYrmPerfTable);
   return h;
 }
