@@ -1988,7 +1988,7 @@ table.promo-board-table thead th:last-child{border-top-right-radius:11px}
 .srail-seatsub{font-size:11.5px;color:var(--dim);font-weight:600}   /* [260710 운영자] 카드 숫자 폰트 통일 — 기준 = 어제대비(.srail-delta) 11.5px */
 .srail-occcap{font-size:11.5px;color:var(--dim);font-weight:400}   /* [260710 운영자] 〃 (점유율/달성률 캡션) */
 .srail-fc{font-size:11.5px;color:var(--text);font-weight:400;margin-top:7px;background:rgba(74,77,231,.03);border:1px solid rgba(74,77,231,.04);border-radius:9px;padding:10px 11px;line-height:1.5}   /* [260710 운영자 선택값] bg .04→.03 · bd .10→.04 · pad 5/9→10/11 · [260711] 기본 글자=--text(검정), 강조만 --accent(.srail-fc b) */
-.srail-fc b{color:var(--accent);font-weight:700;margin-right:3px}   /* [260714 운영자] AI 예상 라벨 = 볼드(700) 복귀 + 우측 내용과 간격 2배(공백+margin-right 3px ≈ 6px) · 구 260711 「볼드 해제」 되돌림 */
+.srail-fc b{color:var(--fc,var(--accent));font-weight:700;margin-right:3px}   /* [260729 운영자] 라벨·픽토 색 = 그 프로그램 분야의 시그니처 색(판매현황 구분자 --gtok와 같은 축) · 미지정이면 종전 --accent */   /* [260714 운영자] AI 예상 라벨 = 볼드(700) 복귀 + 우측 내용과 간격 2배(공백+margin-right 3px ≈ 6px) · 구 260711 「볼드 해제」 되돌림 */
 .srail-ai-ico{animation:srailAiGlow 1.9s ease-in-out infinite}   /* [260714 운영자] AI 예상 픽토그램 = 계속 빛나는 반짝임(강조색 글로우 펄스) */
 @keyframes srailAiGlow{0%,100%{opacity:.62;filter:drop-shadow(0 0 0 var(--accent))}50%{opacity:1;filter:drop-shadow(0 0 2.6px var(--accent))}}
 @media (prefers-reduced-motion:reduce){.srail-ai-ico{animation:none;opacity:1}}   /* [260714] 감속선호 = 글로우 정지(정의 뒤에 둬야 오버라이드 승) */
@@ -5812,6 +5812,22 @@ function _srailDelta(dpp){
 }
 // 레일 D-day 색(운영자 260710: 기본 강조 = --peach-text · 임박 ≤14일·경과는 기존 _salesDdayColor 규칙 유지)
 function _srailDdayColor(d){ return (d!==null&&d!==undefined&&(d<0||d<=14))?_salesDdayColor(d):'var(--peach-text)'; }
+// [260729 운영자] AI 요약 = 모든 프로그램(공연·전시)에 붙는다 · 라벨 색 = 그 분야의 시그니처 색(공연 --accent · 전시 --peach-text · 교육 --green = 판매현황 구분자 --gtok와 같은 축).
+//   문구 규칙은 전부 기존 계승(추세 기울기 외삽) — 새 지표 창작 0. 추세를 못 믿는 구간(실측 _SRAIL_FC_MIN 미만)은 빈칸 대신 「데이터가 부족합니다」.
+var _SRAIL_AI_ICO='<svg class="srail-ai-ico" width="12.5" height="12.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1.5px;margin-right:3px"><path d="M12 3l1.7 5.4L19 10l-5.3 1.6L12 17l-1.7-5.4L5 10l5.3-1.6z"/><path d="M18.5 14.5l.8 2.4 2.4.8-2.4.8-.8 2.4-.8-2.4-2.4-.8 2.4-.8z"/></svg>';
+function _srailFcBox(html,tok){ return '<div class="srail-fc" style="--fc:var('+(tok||'--accent')+')"><b>'+_SRAIL_AI_ICO+'AI 예상</b> '+html+'</div>'; }
+function _srailFcNoData(tok){ return _srailFcBox('AI 요약하기에 데이터가 부족합니다',tok); }
+// 전시 AI 예상 — 공연과 같은 문법(최근 기울기 외삽 · 7일/2주 두 지점). 시계열 = 누계총인원(없으면 누계유료) = 카드 「총 관객」과 같은 축. 단위만 석→명.
+function _srailFcEx(e){
+  var v=((e&&e.daily)||[]).map(function(r){ var x=_salesNum(r['누계총인원']); if(x===null)x=_salesNum(r['누계유료']); return x; })
+                          .filter(function(x){ return x!==null&&!isNaN(x); });
+  if(v.length<_SRAIL_FC_MIN)return _srailFcNoData('--peach-text');
+  var n=v.length, last=v[n-1];
+  var g=(n>=3)?((v[n-1]-v[n-3])/2):(v[n-1]-v[n-2]);   // 공연 폴백 기울기 문법 그대로
+  var at=function(d){ var s=Math.max(0,Math.round(last+g*d)); return {s:s,cum:s-last}; };
+  var f7=at(7), f14=at(14);
+  return _srailFcBox('이 추세면, 7일 뒤 예상 누적 '+f7.s.toLocaleString()+'명 ( '+(f7.cum>=0?'+':'')+f7.cum+' ), 2주 뒤 예상 누적 '+f14.s.toLocaleString()+'명 ( '+(f14.cum>=0?'+':'')+f14.cum+' )','--peach-text');
+}
 function _srailCard(p){
   var _d=_srailDelta(p.deltaPP), dCls=_d.c, dStr=_d.s;
   var tgt=p.목표||50, gap=p.occ-tgt;
@@ -5827,9 +5843,9 @@ function _srailCard(p){
     // [260711 운영자] 7일·2주 두 지점 예상. 기본 글자=검정(--text), 강조(기간·석수·증분·라벨)만 --accent(.srail-fc b). 앞 픽토=AI 반짝임(currentColor→강조색 상속).
     var _last=_o[_o.length-1], _fcAt=function(_dy){var _pf=Math.max(0,Math.min(100,_last+_g*_dy)),_s=Math.round((p.totalOpen||926)*_pf/100);return {s:_s,cum:_s-p.seats};};
     var _f7=_fcAt(7), _f14=_fcAt(14);
-    var _aiIco='<svg class="srail-ai-ico" width="12.5" height="12.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1.5px;margin-right:3px"><path d="M12 3l1.7 5.4L19 10l-5.3 1.6L12 17l-1.7-5.4L5 10l5.3-1.6z"/><path d="M18.5 14.5l.8 2.4 2.4.8-2.4.8-.8 2.4-.8-2.4-2.4-.8 2.4-.8z"/></svg>';
-    fc='<div class="srail-fc"><b>'+_aiIco+'AI 예상</b> 이 추세면, 7일 뒤 예상 누적 '+_f7.s.toLocaleString()+'석 ( '+(_f7.cum>=0?'+':'')+_f7.cum+' ), 2주 뒤 예상 누적 '+_f14.s.toLocaleString()+'석 ( '+(_f14.cum>=0?'+':'')+_f14.cum+' )</div>';   // [260711 운영자] AI 예상 = 라벨+픽토(_aiIco)만 강조(.srail-fc b), 나머지 수치·기간은 검정(--text) · 대괄호 삭제
+    fc=_srailFcBox('이 추세면, 7일 뒤 예상 누적 '+_f7.s.toLocaleString()+'석 ( '+(_f7.cum>=0?'+':'')+_f7.cum+' ), 2주 뒤 예상 누적 '+_f14.s.toLocaleString()+'석 ( '+(_f14.cum>=0?'+':'')+_f14.cum+' )','--accent');   // [260711 운영자] AI 예상 = 라벨+픽토(_aiIco)만 강조(.srail-fc b), 나머지 수치·기간은 검정(--text) · 대괄호 삭제
   }
+  else fc=_srailFcNoData('--accent');   // [260729 운영자] 「모든 프로그램마다 AI 요약」 — 추세를 못 믿는 구간(실측 7건 미만)은 빈칸 대신 부족 문구
   return '<div class="srail-card'+(p.noData?' ro':'')+'" role="button" tabindex="0" onclick="_srailDrill(\'perf\',\''+_anaEsc(p.name)+'\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click();}" title="'+escapeHtml(p.name)+' — 개별 분석 (레일 안에서 열려요)">'
     +'<div class="srail-r1"><div class="srail-name">'+escapeHtml(p.name)+'</div>'+(dd?'<span class="srail-dday" style="color:'+_srailDdayColor(p.dday)+'">'+dd+'</span>':'')+'</div>'
     +'<div class="srail-meta">'+escapeHtml(meta)+'</div>'
@@ -5869,6 +5885,7 @@ function _srailCardEx(e){
       +'<div class="srail-spark">'+_srailSpark(e.spark)+'</div>'
       +'<div class="srail-bar"><i style="width:0%"></i></div>'
       +'<div class="srail-r3"><span>유료 '+_srailNumTxt(e._paid)+' / 목표 '+_srailNumTxt(e._goal)+'명</span><span>총 '+_srailNumTxt(e._total)+'명</span></div>'
+      +_srailFcNoData('--peach-text')
       +'</div>';
   }
   var dd=(e._endD===null||e._endD===undefined)?'':('종료 '+_salesDdayStr(e._endD));
@@ -5879,6 +5896,7 @@ function _srailCardEx(e){
     +'<div class="srail-spark">'+_srailSpark(e.spark)+'</div>'
     +'<div class="srail-bar"><i style="width:'+Math.min(e.occ,100).toFixed(1)+'%"></i></div>'
     +'<div class="srail-r3"><span>유료 '+_srailNumTxt(e._paid)+' / 목표 '+_srailNumTxt(e._goal)+'명</span><span>총 '+_srailNumTxt(e._total)+'명</span></div>'
+    +_srailFcEx(e)
     +'</div>';
 }
 // ── 레일 캐러셀 (판매중 공연 1장씩 · 버튼/점/드래그 넘김 + 유휴 자동넘김) ──
