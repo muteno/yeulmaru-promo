@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-/* MISO 이식용 DB 통합 빌더 — 유관 DB를 하나로 합쳐 data/miso_db.json(단일 번들)과
-   data/miso_kb/*.csv(MISO 지식베이스 업로드용)를 생성한다.
+/* MISO 이식용 DB 통합 빌더 — 유관 DB를 하나로 합쳐 이관본/miso_db.json(단일 번들)과
+   이관본/data/*.csv(MISO 첨부·지식베이스 업로드용)를 생성한다. (이관본/ = 운영자 전달물 단일 홈)
 
    입력(있는 것만 합침 — 전부 선택적):
      ① data/db_export/*.csv        — SharePoint 시트 내보내기 (파일명 규칙 = data/db_export/README.md)
@@ -19,8 +19,8 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const EXPORT_DIR = join(ROOT, 'data', 'db_export');
-const OUT_JSON = join(ROOT, 'data', 'miso_db.json');
-const KB_DIR = join(ROOT, 'data', 'miso_kb');
+const OUT_JSON = join(ROOT, '이관본', 'miso_db.json');
+const KB_DIR = join(ROOT, '이관본', 'data');
 
 const INCLUDE_EMAILS = process.argv.includes('--include-emails');
 const INCLUDE_SECRETS = process.argv.includes('--include-secrets');
@@ -145,17 +145,14 @@ for (const f of readdirSync(ROOT)) {
 }
 for (const s of EXPECTED_SHEETS) if (!datasets[s]) report.missing.push(s);
 
-// ── ③ 전시 DB 스냅샷(docs) — ①②에 없을 때만 (SharePoint/운영자 반입분이 최신 정본).
-//     단 반입분 행수 < 스냅샷 행수면 유실 가드: 스냅샷을 <이름>_snap260620으로 병존시키고 경고.
+// ── ③ 전시 DB 스냅샷(docs) — ①②에 없을 때만. 운영자 확정(260730): 전시는 "최근 것만" =
+//     정본 반입분이 있으면 그것만 쓴다(스냅샷 병존·유실 경고 폐지 — 과거 이력 불필요 판정).
 for (const [name, file] of [['exhib_master', 'docs/260620_전시마스터.json'], ['exhib_daily', 'docs/260620_전시일일.json']]) {
+  if (datasets[name]) continue;
   const p = join(ROOT, file);
-  if (!existsSync(p)) { if (!datasets[name]) report.missing.push(name); continue; }
+  if (!existsSync(p)) { report.missing.push(name); continue; }
   const j = JSON.parse(readFileSync(p, 'utf8'));
-  if (!datasets[name]) { datasets[name] = { source: file, headers: j.headers, rows: j.rows }; continue; }
-  if (datasets[name].rows.length < j.rows.length) {
-    datasets[`${name}_snap260620`] = { source: file, headers: j.headers, rows: j.rows };
-    report.warnings.push(`${name}: 정본 반입분(${datasets[name].rows.length}행) < 스냅샷(${j.rows.length}행) — 반입 원본이 구버전일 수 있음, 운영자 확인 필요(스냅샷은 ${name}_snap260620으로 병존)`);
-  }
+  datasets[name] = { source: file, headers: j.headers, rows: j.rows };
 }
 
 // ── ④ 교육기관 (지도 마커 + 원천 명단)
@@ -195,8 +192,8 @@ for (const stale of readdirSync(KB_DIR).filter(f => f.endsWith('.csv') && !datas
 }
 for (const [name, d] of Object.entries(datasets)) writeFileSync(join(KB_DIR, `${name}.csv`), toCsv(d.headers, d.rows), 'utf8');
 
-console.log(`✅ data/miso_db.json — 데이터셋 ${Object.keys(datasets).length}개, 행 ${Object.values(datasets).reduce((a, d) => a + d.rows.length, 0)}개`);
-console.log(`✅ data/miso_kb/ — CSV ${Object.keys(datasets).length}개`);
+console.log(`✅ 이관본/miso_db.json — 데이터셋 ${Object.keys(datasets).length}개, 행 ${Object.values(datasets).reduce((a, d) => a + d.rows.length, 0)}개`);
+console.log(`✅ 이관본/data/ — CSV ${Object.keys(datasets).length}개`);
 for (const ms of report.memberSchema) console.log(`📐 회원 구조 설계 등재(데이터 미반입): ${ms.source} — ${ms.headers.length}열 × ${ms.dataRows}행`);
 if (Object.keys(report.maskedColumns).length) console.log('🔒 마스킹:', JSON.stringify(report.maskedColumns));
 if (report.missing.length) console.log('⬜ 미반입(원본 없음):', report.missing.join(', '));
