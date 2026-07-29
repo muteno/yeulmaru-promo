@@ -2185,7 +2185,13 @@ table.promo-board-table thead th:last-child{border-top-right-radius:11px}
 .ry-uha-row.on>td{background:var(--accent-light)}
 .ry-uha-row.on>td:first-child{box-shadow:inset 3px 0 0 var(--accent)}
 /* 우 판매현황 개요 표(시안) — 일자·프로그램·장소·장르·성격·추이 */
-.mv-tbl thead td{padding:10px;color:var(--dim);font-size:11.5px;font-weight:700;border-bottom:1px solid var(--border)}
+.mv-tbl thead td{padding:10px;color:var(--neutral-text);font-size:11.5px;font-weight:700;border-bottom:1px solid var(--border)}   /* [260729 운영자] 머리글 「약간 더 불투명하게」 = --dim → --neutral-text 토큰 계승(둘 다 기존 토큰 · 신규 색 0) */
+/* [260729 운영자] 머리글 열 크기 조절 — 칸 경계에 드래그 핸들. #rail-yrm-list 안의 모든 표(공연·전시·교육)를 같이 움직여 오와열 유지 · 색 = --accent 계승 */
+#rail-yrm-list .mv-tbl thead td{position:relative}
+#rail-yrm-list .ry-rz{position:absolute;top:5px;bottom:5px;right:-4px;width:9px;cursor:col-resize;z-index:3}
+#rail-yrm-list .ry-rz::before{content:"";position:absolute;left:4px;top:0;bottom:0;width:1px;background:transparent;transition:background .12s}
+#rail-yrm-list .ry-rz:hover::before,#rail-yrm-list .ry-rz.on::before{background:var(--accent)}
+body.ry-rzing,body.ry-rzing *{cursor:col-resize !important;user-select:none}
 .mv-tbl tbody tr{border-bottom:1px solid var(--border)}
 .mv-tbl tbody tr:last-child{border-bottom:none}
 /* ===== 전앱 커스텀 스크롤바 (운영자 260711 개정: 구획 없는 오버레이 통일 — 판매레일 오버레이 패턴 PR 246 전역화) =====
@@ -6179,17 +6185,66 @@ function _ryAccCell(n){
   return '<b style="color:var(--accent);font-weight:800;font-variant-numeric:tabular-nums">'+Math.round(n).toLocaleString()+'</b>'
     +'<span style="color:var(--dim);font-size:11.5px">명</span>';
 }
+// [260729 운영자] 머리글 열 크기 조절 — 기본 폭(합 100) · 조절값은 기기 단위 기억(localStorage). 계정 축은 【바인딩】상 미배선이라 기기 저장이 상한.
+var _RY_COLS_DEF=[10,24,18,24,13,11];
+function _ryColW(){
+  try{ var v=JSON.parse(localStorage.getItem('ryColW')||'null');
+    if(v&&v.length===_RY_COLS_DEF.length&&v.every(function(n){return typeof n==='number'&&isFinite(n)&&n>=4;}))return v;
+  }catch(_e){}
+  return _RY_COLS_DEF.slice();
+}
+function _ryColSave(w){ try{ localStorage.setItem('ryColW',JSON.stringify(w.map(function(n){return Math.round(n*1000)/1000;}))); }catch(_e){} }
+// 리스트 안의 모든 표를 한 번에 — 공연·전시가 같은 폭을 써야 세로 오와열(B2)이 유지된다
+function _ryColApply(w,box){
+  box=box||document.getElementById('rail-yrm-list'); if(!box)return;
+  var cgs=box.querySelectorAll('table.mv-tbl>colgroup');
+  for(var g=0;g<cgs.length;g++){ var cs=cgs[g].children;
+    for(var i=0;i<cs.length&&i<w.length;i++)cs[i].style.width=w[i].toFixed(3)+'%'; }
+}
+function _ryColGroup(w){
+  var h='<colgroup>'; for(var i=0;i<w.length;i++)h+='<col style="width:'+w[i].toFixed(3)+'%">';
+  return h+'</colgroup>';
+}
+// 경계 드래그 = 맞닿은 두 열끼리만 폭을 주고받는다(총합 100 보존 · 최소 5%) → 표 전체 폭·다른 열은 안 흔들린다. pointer 이벤트 = 마우스·터치 공용
+function _ryRzDown(ev,ci){
+  try{
+    ev.preventDefault(); ev.stopPropagation();
+    var hd=ev.target, tb=hd.closest?hd.closest('table'):null; if(!tb)return;
+    var box=(hd.closest&&hd.closest('#rail-yrm-list'))||document.getElementById('rail-yrm-list'); if(!box)return;   // 끌고 있는 표가 든 컨테이너 기준(같은 id가 둘일 때도 대상이 안 엇갈린다)
+    var tw=tb.getBoundingClientRect().width; if(!(tw>0))return;
+    var w=_ryColW(), x0=ev.clientX, a0=w[ci], b0=w[ci+1], MIN=5;
+    document.body.classList.add('ry-rzing'); hd.classList.add('on');
+    var mv=function(e){
+      var d=(e.clientX-x0)/tw*100;
+      d=Math.max(MIN-a0,Math.min(b0-MIN,d));
+      w[ci]=a0+d; w[ci+1]=b0-d; _ryColApply(w,box);
+    };
+    var up=function(){
+      document.removeEventListener('pointermove',mv); document.removeEventListener('pointerup',up); document.removeEventListener('pointercancel',up);
+      document.body.classList.remove('ry-rzing'); hd.classList.remove('on');
+      _ryColSave(w);
+    };
+    document.addEventListener('pointermove',mv); document.addEventListener('pointerup',up); document.addEventListener('pointercancel',up);
+  }catch(_e){ console.warn('[ry colresize]',_e); }
+}
 // [260729 운영자] 공연·전시·교육 공용 표 = 이 함수 하나(구 전시 전용 _railYrmExTable 폐지 — 전시만 다른 열·색·문구가 사라진다).
 //   rateLab = 3열 머리글만 분야 용어로(공연·교육 「판매율」 · 전시 「누적 관객수」). 나머지 열·부품·색·정렬은 100% 동일.
-//   [260729 운영자] 머리글(인덱싱) 6칸 = 전부 가운데 정렬 · 값은 3열(판매율·누적 관객수) 좌측 · 성격 가운데.
+//   [260729 운영자] 머리글 정렬 = 일자·최근 7일 추이만 가운데, 프로그램·판매율·사업 성격·장르는 좌측(운영자 지목 4칸).
 function _railYrmPerfTable(perfs,rateLab){
   var WD=['일','월','화','수','목','금','토'];
   var sd=function(d){ return (d&&d.getMonth)?((d.getMonth()+1)+'.'+d.getDate()+' '+WD[d.getDay()]):''; };
   var td='padding:11px 8px;vertical-align:top;';   // [260725 운영자] 제목 위 정렬로 통일 — 제목 아래 장소 서브라인이 붙으므로 행 전체를 위 기준으로
   // [260725 운영자] 프로그램 열이 남는 폭을 다 먹어 추이 차트가 우측 끝까지 밀렸던 것 → table-layout:fixed + 폭 명시로 추이를 좌측으로 당김.
   // 폭 누계 11/45/74/87/100 — 분야 표가 전부 이 한 함수라 열 경계가 자동으로 같다(세로 오와열 정렬).
-  var h='<table class="ana-tbl mv-tbl" style="font-size:13px;width:100%;table-layout:fixed"><thead><tr>'
-    +'<td style="text-align:center;width:10%">일자</td><td style="text-align:center;width:24%">프로그램</td><td style="text-align:center;width:18%">'+(rateLab||'판매율')+'</td><td style="text-align:center;width:24%">최근 7일 추이</td><td style="text-align:center;width:13%">사업 성격</td><td style="text-align:center;width:11%">장르</td></tr></thead><tbody>';   // [260725 운영자] 「판매율」열 신설(추이 좌측) — 기존 5열에서 폭만 재배분(일자 11→10 · 프로그램 30→24 · 성격 20→13 · 장르 15→11) · 추이 24%는 불변 · [260729 운영자] 머리글 6칸 = 전부 가운데(좌우 패딩 제거 = 열 정중앙)
+  // [260729 운영자] 폭은 colgroup이 단독 소유(머리글 td의 width 제거) → 드래그 조절값이 두 표에 동시 반영된다
+  var CW=_ryColW();
+  var HL=['일자','프로그램',(rateLab||'판매율'),'최근 7일 추이','사업 성격','장르'];
+  var HA=['center','left','left','center','left','left'];   // 운영자 지목 = 프로그램·판매율·사업 성격·장르 좌측 · 일자·추이는 가운데 유지
+  var h='<table class="ana-tbl mv-tbl" style="font-size:13px;width:100%;table-layout:fixed">'+_ryColGroup(CW)+'<thead><tr>';
+  HL.forEach(function(lab,i){
+    h+='<td style="text-align:'+HA[i]+'">'+lab+(i<HL.length-1?('<i class="ry-rz" role="separator" aria-label="'+lab+' 열 너비 조절" onpointerdown="_ryRzDown(event,'+i+')"></i>'):'')+'</td>';
+  });
+  h+='</tr></thead><tbody>';   // [260725 운영자] 「판매율」열 신설(추이 좌측) — 기본 폭 10/24/18/24/13/11 · [260729 운영자] 폭 = colgroup + 경계 드래그 조절
   perfs.forEach(function(p){
     var trend=p.noData?('<span style="color:var(--muted);font-size:12px">'+((p.dday!==null&&p.dday>0)?'오픈 예정':'데이터 부족')+'</span>'):_mvBars(p.days,p.diff,p._unit);
     // 3열 = 공연·교육 「판매율」(N% (분자/분모)) · 전시 「누적 관객수」(누계 숫자) — 둘 다 강조색 볼드·좌측 정렬로 같은 문법
@@ -6203,7 +6258,7 @@ function _railYrmPerfTable(perfs,rateLab){
       +'<td style="'+td+'text-align:left;white-space:nowrap">'+rate+'</td>'
       +'<td style="'+td+'text-align:right;white-space:nowrap;padding-right:34px">'+trend+'</td>'
       +'<td style="'+td+'text-align:center">'+_mvSpecPill(_anaProfitAxis(p['수익성']),p)+'</td>'   // [260725] 2번째 인자 = 그 자리 성격 갱신 연필(admin·마스터 등재분)
-      +'<td style="'+td+'padding-right:14px">'+_mvGenrePill(p.genre||'기타')+'</td></tr>';
+      +'<td style="'+td+'padding-right:14px">'+((p._kind==='ex')?'':_mvGenrePill(p.genre||'기타'))+'</td></tr>';   // [260729 운영자] 전시 장르 「전시」 = 표기만 삭제(genre 값·필터 축은 그대로)
   });
   h+='</tbody></table>';
   return h;
@@ -6222,7 +6277,8 @@ function _ryExRow(e){
   var tISO=_srailTodayISO().replace(/-/g,'');                // 오늘 기준(YYYYMMDD) — 미래 기준일자 행은 추이에서 뺀다
   var ds=((e.daily)||[]).slice().sort(function(a,b){ return String(a['기준일자']||'').localeCompare(String(b['기준일자']||'')); })
     .filter(function(r){ var d=String(r['기준일자']||'').replace(/[^0-9]/g,''); return !d||d<=tISO; });
-  var days=ds.map(function(r){ var v=_salesNum(r['누계유료']); return {bd:_salesNum(r['기준일자']),seat:(v===null?0:v)}; });
+  // 추이 = 3열 「누적 관객수」와 같은 축(누계총인원 → 없으면 누계유료)이라 막대 증분과 위 숫자가 같은 것을 센다
+  var days=ds.map(function(r){ var v=_salesNum(r['누계총인원']); if(v===null)v=_salesNum(r['누계유료']); return {bd:_salesNum(r['기준일자']),seat:(v===null?0:v)}; });
   var acc=(e._total!==null&&e._total!==undefined)?e._total:e._paid;   // 누적 관객수 = 누계총인원 → 없으면 누계유료
   return {_kind:'ex',id:(e.id||''),name:e.name,_src:e,
     startDate:sd,endDate:ed,_ryDate:(ed||sd),
