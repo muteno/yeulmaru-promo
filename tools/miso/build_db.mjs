@@ -56,6 +56,18 @@ const POSITIONAL_SSOT = {
 
 function isSecretCol(h) { return /PIN|비밀번호|password/i.test(h); }
 function isEmailCol(h) { return /이메일|e-?mail/i.test(h); }
+// 연락처류 — 앱 표시에 미사용(index.html 참조 0)이라 공개 반입본에서 제거(PII). --include-contacts로 유지.
+function isContactCol(h) { return /전화|휴대폰|내선|연락처|tel|phone|mobile/i.test(h); }
+const INCLUDE_CONTACTS = process.argv.includes('--include-contacts');
+
+// Worker(src/index.js) 빈 행 필터를 그대로 미러 — 안 하면 온라인(Worker)/오프라인(번들) 행수가 달라짐
+// (실측: 홍보기록 998→137, PromoSpecial 999→34, 일일입력 2702→1477). name = 데이터셋 이름.
+function isBlankRow(name, r) {
+  const b = i => { const v = r[i]; return v === undefined || v === null || String(v).trim() === ''; };
+  if (name === 'records') return b(0) && b(2) && b(11);          // 홍보기록: A·C·L (src/index.js:313)
+  if (name === 'programs') return b(0);                           // 프로그램: A=NO (handleGetPrograms)
+  return r.every((_, i) => b(i));                                 // 그 외: 전체 공백 (handleGetSheet:385)
+}
 
 function parseCsv(text) {
   if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
@@ -87,9 +99,12 @@ const datasets = {}; const report = { missing: [], warnings: [], maskedColumns: 
 
 function addDataset(name, headers, rawRows, source) {
   if (datasets[name]) { report.warnings.push(`${name}: 중복 원본(${source}) — 먼저 읽은 ${datasets[name].source} 유지`); return; }
+  const before = rawRows.length;
+  rawRows = rawRows.filter(r => !isBlankRow(name, r));            // Worker 미러 빈 행 제거
+  if (before - rawRows.length > 0) report.blankRowsDropped = { ...(report.blankRowsDropped || {}), [name]: before - rawRows.length };
   const objRows = rawRows.map(r => Object.fromEntries(headers.map((h, i) => [h, r[i] ?? ''])));
   headers = headers.filter(h => h !== ''); // 빈 헤더(시트 우측 여백 컬럼) 제거
-  const dropped = headers.filter(h => (isSecretCol(h) && !INCLUDE_SECRETS) || (isEmailCol(h) && !INCLUDE_EMAILS));
+  const dropped = headers.filter(h => (isSecretCol(h) && !INCLUDE_SECRETS) || (isEmailCol(h) && !INCLUDE_EMAILS) || (isContactCol(h) && !INCLUDE_CONTACTS));
   const kept = headers.filter(h => !dropped.includes(h));
   if (dropped.length) report.maskedColumns[name] = dropped;
   if (POSITIONAL_SSOT[name]) {
@@ -180,8 +195,10 @@ const meta = {
   maskPolicy: {
     secrets: INCLUDE_SECRETS ? '⚠️ 포함(커밋 금지)' : '제외(PIN·비밀번호)',
     emails: INCLUDE_EMAILS ? '포함' : '제외',
+    contacts: INCLUDE_CONTACTS ? '⚠️ 포함' : '제외(전화·내선·휴대폰 — 앱 미표시 PII)',
     members: INCLUDE_MEMBERS ? '⚠️ 반입(커밋 금지)' : '미반입(구조 설계만 → meta.memberSchema)',
   },
+  note_names: '담당자·신청자 등 실명 컬럼은 앱 표시에 필수라 유지됨 — 공개 서빙 시 노출 주의(운영자 판단)',
   counts: Object.fromEntries(Object.entries(datasets).map(([k, v]) => [k, v.rows.length])),
   ...report,
 };
@@ -196,5 +213,6 @@ console.log(`✅ 이관본/miso_db.json — 데이터셋 ${Object.keys(datasets)
 console.log(`✅ 이관본/data/ — CSV ${Object.keys(datasets).length}개`);
 for (const ms of report.memberSchema) console.log(`📐 회원 구조 설계 등재(데이터 미반입): ${ms.source} — ${ms.headers.length}열 × ${ms.dataRows}행`);
 if (Object.keys(report.maskedColumns).length) console.log('🔒 마스킹:', JSON.stringify(report.maskedColumns));
+if (report.blankRowsDropped) console.log('🧹 빈 행 제거(Worker 미러):', JSON.stringify(report.blankRowsDropped));
 if (report.missing.length) console.log('⬜ 미반입(원본 없음):', report.missing.join(', '));
 for (const w of report.warnings) console.log('⚠️ ', w);
