@@ -2200,8 +2200,12 @@ body.ry-rzing,body.ry-rzing *{cursor:col-resize !important;user-select:none}
 /* [260729 운영자] 뒤로가기 = 좌측 「‹ 목록」 폐지 → **우상단 원형 버튼**(기틀 §2 컴포넌트 7 정본 `.modal-x` 그대로 · 첨부 모달 X와 같은 자리·같은 부품).
    위치 오버라이드 문법 = 기존 `.pw-modal .modal-x` 전례 계승(float 해제 + absolute) · 마진 0 = 리스트 컨테이너 패딩(6/12)이 곧 정본 여백.
    좌측 버튼이 쓰던 세로 자리(약 34px)를 회수해 상세가 그만큼 위로 올라온다. */
-#rail-yrm-list .ry-detail{position:relative;padding:0 0 4px}
-#rail-yrm-list .ry-detail .modal-x{margin:0;z-index:4}                        /* 나머지(sticky·float:right·32원형·색)는 정본 .modal-x 그대로 — 오버라이드는 마진뿐 */
+#rail-yrm-list .ry-detail{padding:0 0 4px}
+/* [260729 운영자] 「창마다 X가 항상 있는 그 자리」에 맞춘다 — 모달 X 정본 위치 실측 = 창 우변 15px · 상변 7px(32×32).
+   버튼은 **카드 제목줄(.ct) 기준**으로 붙인다 — 리스트(#rail-yrm-list)는 overflow:hidden이라 그 안에 두면 위쪽이 잘린다(실측 확인).
+   14/6 = 카드 테두리 1px 보정 → 창 모서리 기준 정확히 15/7. */
+.bizm-card>.ct{position:relative}
+.ct>.modal-x.ry-back-x{position:absolute;top:6px;right:14px;float:none;margin:0;z-index:6}
 #rail-yrm-list .ry-detail .srail-r1{padding-right:38px}   /* 제목이 우상단 버튼(32) 밑으로 파고들지 않게 */
 #rail-yrm-list .ry-detail .srail-card{border-bottom:none;cursor:default;padding-top:0}
 .mv-tbl tbody tr{border-bottom:1px solid var(--border)}
@@ -6410,17 +6414,35 @@ function _ryDrillItem(want){
 function _ryDrillHtml(p){
   var card='';
   try{ card=(p._kind==='ex')?_srailCardEx(p):_srailCard(p); }catch(_e){ console.warn('[ry drill card]',_e); return ''; }
-  return '<div class="ry-detail">'
-    +'<button type="button" class="modal-x" onclick="_ryDrillClose(1)" title="목록으로" aria-label="목록으로">‹</button>'
-    +'<div class="ry-detail-body">'+card+'</div></div>';
+  return '<div class="ry-detail"><div class="ry-detail-body">'+card+'</div></div>';
+}
+// 카드 클릭(레일 개별 분석으로 이동)은 떼어낸다 — 상세는 이 박스 안에서만 바뀐다
+function _ryDrillStrip(box){
+  var card=box.querySelector('.srail-card'); if(!card)return;
+  card.removeAttribute('onclick'); card.removeAttribute('onkeydown'); card.removeAttribute('role'); card.removeAttribute('tabindex');
+  card.style.cursor='default';
 }
 function _ryDrillPaint(want,dir){
   var box=document.getElementById('rail-yrm-list'); if(!box)return false;
   var p=_ryDrillItem(want); if(!p)return false;
   var h=_ryDrillHtml(p); if(!h)return false;
   box.innerHTML=h;
-  var card=box.querySelector('.srail-card');
-  if(card){ card.removeAttribute('onclick'); card.removeAttribute('onkeydown'); card.removeAttribute('role'); card.removeAttribute('tabindex'); card.style.cursor='default'; }
+  _ryDrillStrip(box);
+  // [260729 운영자 「차트가 뭉개진다」] 추이 SVG는 preserveAspectRatio="none" — **viewBox 폭 = 실제 픽셀 폭**일 때만 왜곡이 없다
+  //   (260710 "차트 늘어짐" 수정의 전제 그대로). _srailChartW는 레일 폭 기준이라 이 상세 박스에선 어긋나 글자가 가로로 늘어났다.
+  //   → 그린 뒤 차트 자리의 실측 폭으로 _srailChartW를 맞추고 카드만 다시 그린다 · 다시 그리며 스크롤바가 붙어 폭이 또 변할 수 있어 최대 2회 수렴 · 값은 즉시 원복(레일 카드 무영향).
+  try{
+    for(var pass=0;pass<2;pass++){
+      var sp=box.querySelector('.srail-spark'), body=box.querySelector('.ry-detail-body');
+      var w=sp?Math.round(sp.clientWidth):0;
+      if(!body||!(w>0)||Math.abs(w-(_srailChartW||0))<=2)break;
+      var prev=_srailChartW;
+      _srailChartW=Math.max(240,w);
+      try{ body.innerHTML=(p._kind==='ex')?_srailCardEx(p):_srailCard(p); _ryDrillStrip(box); }
+      finally{ _srailChartW=prev; }
+    }
+  }catch(_e){ console.warn('[ry drill chart w]',_e); }
+  _ryBackBtn(box,1);
   _ryFlip(box.querySelector('.ry-detail'),dir===undefined?1:dir);
   _ryDrill.key=want;
   return true;
@@ -6429,9 +6451,22 @@ function _ryDrillOpen(want,silent){
   if(_ryDrill.key===want&&!silent){ _ryDrillClose(); return; }   // 같은 행 다시 클릭 = 목록으로
   if(!_ryDrillPaint(want,1))_ryDrillClose(0);
 }
+// 뒤로가기 버튼(‹) 붙였다 뗐다 — 자리 = 카드 제목줄 우상단 = 모달 X와 같은 좌표
+function _ryBackBtn(box,on){
+  try{
+    var ct=box&&box.parentNode&&box.parentNode.querySelector(':scope > .ct'); if(!ct)return;
+    var old=ct.querySelector('.modal-x'); if(old)old.parentNode.removeChild(old);
+    if(!on)return;
+    var b=document.createElement('button');
+    b.type='button'; b.className='modal-x ry-back-x'; b.title='목록으로'; b.setAttribute('aria-label','목록으로');
+    b.textContent='‹'; b.onclick=function(){ _ryDrillClose(1); };
+    ct.appendChild(b);
+  }catch(_e){ console.warn('[ry back btn]',_e); }
+}
 function _ryDrillClose(anim){
   _ryDrill.key='';
   var box=document.getElementById('rail-yrm-list'); if(!box)return;
+  _ryBackBtn(box,0);
   var acts=(typeof window!=='undefined')?window._railYrmActives:null;
   box.innerHTML=_railYrmTableHtml(acts);
   if(anim)_ryFlip(box.querySelector('.ry-grp')||box,-1);
