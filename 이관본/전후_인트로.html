@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>인트로 PIN — 전후 비교 (MISO 현재 → 원본 정본)</title>
+<link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.min.css" rel="stylesheet">
+<style>
+/* ══════════════════════════════════════════════════════════════
+   전후 비교 셸 — 좌: MISO 현재(스크린샷 기반 재현) / 우: 원본 정본(index.html CSS 원문)
+   ※ 우측 패널 CSS는 index.html L82~L128에서 그대로 가져온 것(토큰만 실색으로 풀어씀)
+   ══════════════════════════════════════════════════════════════ */
+*{margin:0;padding:0;box-sizing:border-box;font-family:'Pretendard',-apple-system,sans-serif}
+body{background:#F4F5F9;color:#1A1A2E;padding:26px 22px 60px}
+h1{font-size:21px;font-weight:800;letter-spacing:-.2px}
+.sub{font-size:13px;color:#6B6B7B;margin-top:6px;line-height:1.6}
+.ctl{display:flex;gap:8px;flex-wrap:wrap;margin:20px 0 18px}
+.ctl button{padding:9px 15px;border:1px solid rgba(0,0,0,.12);border-radius:10px;background:#fff;font-size:13px;font-weight:600;color:#1A1A2E;cursor:pointer;transition:all .18s}
+.ctl button:hover{border-color:#4A4DE7;color:#4A4DE7}
+.ctl button.on{background:#4A4DE7;border-color:#4A4DE7;color:#fff}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media (max-width:900px){.grid{grid-template-columns:1fr}}
+.pane{border-radius:18px;overflow:hidden;border:1px solid rgba(0,0,0,.09);background:#fff;box-shadow:0 8px 32px rgba(74,77,231,.06),0 2px 8px rgba(0,0,0,.03)}
+.pane-hd{padding:13px 16px;font-size:13px;font-weight:800;display:flex;align-items:center;gap:8px;border-bottom:1px solid rgba(0,0,0,.07)}
+.pane-hd .tag{font-size:11px;font-weight:700;padding:3px 8px;border-radius:99px}
+.bad .pane-hd{background:#FFF3F3;color:#B03A39}
+.bad .tag{background:#E24B4A;color:#fff}
+.good .pane-hd{background:#F1F7F3;color:#12512C}
+.good .tag{background:#1A6B3C;color:#fff}
+.stage{height:430px;position:relative;overflow:hidden}
+.zoom{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:18px}
+@media (max-width:900px){.zoom{grid-template-columns:1fr}}
+.zbox{background:#fff;border:1px solid rgba(0,0,0,.09);border-radius:14px;padding:18px}
+.zbox h3{font-size:12px;font-weight:800;color:#6B6B7B;margin-bottom:14px;letter-spacing:.3px}
+.zstage{display:flex;justify-content:center;align-items:center;height:190px;overflow:hidden;background:repeating-conic-gradient(#F7F7FA 0% 25%,#fff 0% 50%) 50%/16px 16px;border-radius:10px}
+.z4{transform:scale(3);transform-origin:center}
+table.diff{width:100%;border-collapse:collapse;margin-top:22px;background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.04)}
+table.diff th,table.diff td{padding:11px 13px;font-size:13px;text-align:left;border-bottom:1px solid rgba(0,0,0,.06);vertical-align:top}
+table.diff th{background:#F4F5F9;font-weight:800;font-size:12px;color:#6B6B7B}
+table.diff td:first-child{font-weight:700;white-space:nowrap}
+table.diff .x{color:#B03A39}
+table.diff .o{color:#12512C;font-weight:600}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;background:rgba(0,0,0,.05);padding:1px 5px;border-radius:5px}
+
+/* ─────────────────────────────────────────────────────────────
+   ① MISO 현재 (재현) — 네모 박스 안 작은 점 + 확인 버튼
+   ───────────────────────────────────────────────────────────── */
+.m-login{height:100%;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#FDF6F3 0%,#F0EBF5 50%,#EBF0F8 100%)}
+.m-card{background:#fff;border:1px solid rgba(0,0,0,.09);border-radius:16px;padding:38px 34px;text-align:center;box-shadow:0 4px 16px rgba(0,0,0,.06)}
+.m-logo{font-size:22px;font-weight:800;color:#1A1A2E;margin-bottom:8px}
+.m-logo span{color:#4A4DE7}
+.m-sub{font-size:12px;color:#888;margin-bottom:24px}
+.m-row{display:flex;gap:10px;justify-content:center}
+.m-slot{width:46px;height:54px;border:1px solid rgba(0,0,0,.18);border-radius:10px;background:#fff;display:grid;place-items:center}
+.m-slot i{width:9px;height:9px;border-radius:50%;background:transparent;display:block;transition:background .15s}
+.m-slot.f i{background:#4A4DE7}
+.m-msg{font-size:12px;color:#888;margin-top:16px;height:16px}
+.m-msg.err{color:#E24B4A}
+.m-ok{margin-top:18px;padding:10px 30px;border:0;border-radius:10px;background:#4A4DE7;color:#fff;font-size:13px;font-weight:700;cursor:pointer;width:100%}
+.m-back{margin-top:12px;background:none;border:0;color:#bbb;font-size:12px;font-weight:600;cursor:pointer}
+
+/* ─────────────────────────────────────────────────────────────
+   ② 원본 정본 — index.html L82~L128 원문 (토큰만 실색으로 풀어씀)
+   ───────────────────────────────────────────────────────────── */
+.o-login{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:32px;background:#fff;position:relative;overflow:hidden}
+.o-login canvas{position:absolute;inset:0;width:100%;height:100%;z-index:0;display:block;opacity:.41}
+.login-card{background:rgba(255,255,255,.22);-webkit-backdrop-filter:blur(32px) saturate(1.35);backdrop-filter:blur(32px) saturate(1.35);border:0;border-radius:24px;padding:44px 40px;text-align:center;animation:loginUp .55s ease;position:relative;z-index:1;box-shadow:0 38px 120px rgba(74,77,231,.04),0 24px 48px rgba(26,26,46,.07)}
+@keyframes loginUp{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}
+.login-tilt{position:relative;z-index:1;perspective:900px}
+.login-welcome{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:23px;font-weight:800;color:#1A1A2E;opacity:.71;letter-spacing:.4px;margin-bottom:22px;line-height:1.3;white-space:nowrap}
+.login-welcome .lw-thin{font-weight:400}
+.login-welcome .lw-ac{color:#4A4DE7}
+.pin-wrap{display:flex;flex-direction:column;align-items:center;gap:11px;padding:13px 13px 9px;background:rgba(255,255,255,0);border:1px solid rgba(255,255,255,0);border-radius:18px;box-shadow:0 8px 32px rgba(74,77,231,.07),0 2px 8px rgba(0,0,0,.03)}
+.pin-row{display:flex;gap:7px;justify-content:center}
+#pin-account{font-size:12px;text-align:center}
+.pin-slot{position:relative;width:42px;height:48px;display:grid;place-items:center}
+.pin-slot::before{content:'';position:absolute;left:50%;top:50%;width:15px;height:15px;box-sizing:border-box;border-radius:50%;border:1px solid #bbb;background:rgba(255,255,255,.55);opacity:.8;transform:translate(-50%,-50%);transition:background .18s ease,border-color .18s ease,opacity .18s ease,transform .18s ease}
+.pin-slot:has(.pin.filled)::before{background:#4A4DE7;border-color:#4A4DE7}
+.pin-slot:has(.pin.lit)::before{background:#4A4DE7;border-color:#4A4DE7;animation:pinDotPop .34s cubic-bezier(.34,1.56,.5,1)}
+.pin-slot:has(.pin.err)::before{border-color:#E24B4A}
+.pin{width:100%;height:100%;text-align:center;font-size:19px;font-weight:700;border:none;background:transparent;color:transparent;caret-color:transparent;outline:none;opacity:.8;padding:0;font-family:inherit}
+.pin.lit{color:transparent}
+@keyframes pinDotPop{0%{transform:translate(-50%,-50%) scale(.6)}55%{transform:translate(-50%,-50%) scale(1.25)}100%{transform:translate(-50%,-50%) scale(1)}}
+.dot-ring{position:absolute;left:50%;top:50%;width:26px;height:26px;transform:translate(-50%,-50%);pointer-events:none;overflow:visible;opacity:0}
+.dot-ring circle{fill:none;stroke:#1A6B3C;stroke-width:2.2;stroke-linecap:round;stroke-dasharray:100;stroke-dashoffset:100;transform:rotate(-90deg);transform-origin:50% 50%}
+.pin-wrap.success .dot-ring{opacity:1}
+.pin-wrap.success .dot-ring circle{animation:pinRingDraw .9s cubic-bezier(.5,0,.3,1) forwards;animation-delay:calc(var(--i,0)*.1s)}
+@keyframes pinRingDraw{to{stroke-dashoffset:0}}
+.pin-wrap.success .pin-slot::before{animation:pinWin .5s ease calc(var(--i,0)*.1s)}
+@keyframes pinWin{0%,100%{transform:translate(-50%,-50%) scale(1)}45%{transform:translate(-50%,-50%) scale(1.2)}}
+.pin-wrap.hint1 .pin-slot:first-child .dot-ring{opacity:1}
+.pin-wrap.hint1 .pin-slot:first-child .dot-ring circle{stroke:#4A4DE7;animation:pinHintLap 1.3s cubic-bezier(.5,.1,.4,.9) infinite}
+@keyframes pinHintLap{0%{stroke-dashoffset:100;opacity:1}70%{stroke-dashoffset:0;opacity:1}84%{stroke-dashoffset:0;opacity:0}100%{stroke-dashoffset:100;opacity:0}}
+#login-msg{font-size:13px;height:18px;color:#E24B4A;margin-top:10px}
+#login-msg.lm-hint{color:#4A4DE7;font-weight:600;margin-top:36px;animation:lmPulse 1.8s ease-in-out infinite}
+@keyframes lmPulse{0%,100%{opacity:.72;transform:scale(1)}50%{opacity:1;transform:scale(1.04)}}
+.o-back{margin-top:36px;background:none;border:0;color:#bbb;font-weight:600;font-size:12px;cursor:pointer}
+@media (prefers-reduced-motion:reduce){
+  .pin-slot:has(.pin.lit)::before{animation:none}
+  .pin-wrap.success .dot-ring circle{animation:none;stroke-dashoffset:0}
+  .pin-wrap.success .pin-slot::before{animation:none}
+  .pin-wrap.hint1 .pin-slot:first-child .dot-ring{opacity:0}
+  .pin-wrap.hint1 .pin-slot:first-child .dot-ring circle{animation:none}
+  #login-msg.lm-hint{animation:none}
+}
+</style>
+</head>
+<body>
+
+<h1>인트로 PIN 화면 — 전후 비교</h1>
+<p class="sub">
+  왼쪽 = <b>MISO 현재</b>(스크린샷 기반 재현) · 오른쪽 = <b>원본 정본</b>(<code>index.html</code> L82~L128 CSS 원문).<br>
+  아래 버튼으로 두 화면의 같은 상태를 동시에 비교한다. 오른쪽 칸을 직접 클릭해 숫자를 눌러봐도 된다(<code>0510</code> = 성공).
+</p>
+
+<div class="ctl">
+  <button data-s="empty" class="on">빈칸 (입력 전)</button>
+  <button data-s="three">3자리 입력</button>
+  <button data-s="four">4자리 입력</button>
+  <button data-s="success">성공 연출 ▶</button>
+  <button data-s="error">PIN 불일치</button>
+</div>
+
+<div class="grid">
+  <!-- ① MISO 현재 -->
+  <section class="pane bad">
+    <div class="pane-hd"><span class="tag">BEFORE</span> MISO 현재 — 네모 박스 + 확인 버튼</div>
+    <div class="stage">
+      <div class="m-login">
+        <div class="m-card">
+          <div class="m-logo">GS Caltex <span>YEULMARU</span></div>
+          <div class="m-sub">MISO 이식판</div>
+          <div class="m-row" id="mRow">
+            <div class="m-slot"><i></i></div><div class="m-slot"><i></i></div>
+            <div class="m-slot"><i></i></div><div class="m-slot"><i></i></div>
+          </div>
+          <div class="m-msg" id="mMsg">PIN 4자리를 입력하세요</div>
+          <button class="m-ok">확인</button>
+          <button class="m-back">계정 다시 선택</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ② 원본 정본 -->
+  <section class="pane good">
+    <div class="pane-hd"><span class="tag">AFTER = 정본</span> 원본 — 동그라미만 · 자동 제출</div>
+    <div class="stage">
+      <div class="o-login" id="oLogin">
+        <canvas id="oShader" aria-hidden="true"></canvas>
+        <div class="login-tilt"><div class="login-card">
+          <div class="login-welcome"><b>GS</b> <span class="lw-thin">Caltex</span> <b class="lw-ac">YEULMARU</b></div>
+          <div class="pin-wrap hint1" id="oWrap">
+            <div id="pin-account"><b style="color:#D88455">MISO 이식판</b></div>
+            <div class="pin-row" id="oRow">
+              <div class="pin-slot" style="--i:0"><input class="pin" type="password" maxlength="1" inputmode="numeric" autocomplete="off"><svg class="dot-ring" viewBox="0 0 26 26" aria-hidden="true"><circle cx="13" cy="13" r="11" pathLength="100"></circle></svg></div>
+              <div class="pin-slot" style="--i:1"><input class="pin" type="password" maxlength="1" inputmode="numeric" autocomplete="off"><svg class="dot-ring" viewBox="0 0 26 26" aria-hidden="true"><circle cx="13" cy="13" r="11" pathLength="100"></circle></svg></div>
+              <div class="pin-slot" style="--i:2"><input class="pin" type="password" maxlength="1" inputmode="numeric" autocomplete="off"><svg class="dot-ring" viewBox="0 0 26 26" aria-hidden="true"><circle cx="13" cy="13" r="11" pathLength="100"></circle></svg></div>
+              <div class="pin-slot" style="--i:3"><input class="pin" type="password" maxlength="1" inputmode="numeric" autocomplete="off"><svg class="dot-ring" viewBox="0 0 26 26" aria-hidden="true"><circle cx="13" cy="13" r="11" pathLength="100"></circle></svg></div>
+            </div>
+          </div>
+          <div id="login-msg" class="lm-hint">PIN 번호를 입력해주세요</div>
+          <button class="o-back" type="button">계정 다시 선택</button>
+        </div></div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- 확대 대조 -->
+<div class="zoom">
+  <div class="zbox">
+    <h3>MISO 현재 — 슬롯 1개 (3배 확대)</h3>
+    <div class="zstage"><div class="z4"><div class="m-slot f" style="margin:0"><i></i></div></div></div>
+  </div>
+  <div class="zbox">
+    <h3>원본 정본 — 슬롯 1개 (3배 확대) · 42×48 투명 영역 + 15px 동그라미</h3>
+    <div class="zstage"><div class="z4">
+      <div class="pin-wrap" style="box-shadow:none;padding:0">
+        <div class="pin-row"><div class="pin-slot" style="--i:0"><input class="pin filled" type="password" value="1" readonly><svg class="dot-ring" viewBox="0 0 26 26"><circle cx="13" cy="13" r="11" pathLength="100"></circle></svg></div></div>
+      </div>
+    </div></div>
+  </div>
+</div>
+
+<table class="diff">
+  <thead><tr><th>항목</th><th>MISO 현재 (BEFORE)</th><th>원본 정본 (AFTER)</th></tr></thead>
+  <tbody>
+    <tr><td>슬롯 모양</td><td class="x">둥근 사각 박스 46×54 (테두리+흰 배경) 안에 9px 점</td><td class="o">박스 없음 — 42×48 투명 영역 중앙에 <code>15×15px</code> 동그라미 1개</td></tr>
+    <tr><td>빈 상태</td><td class="x">테두리만 보이고 점은 투명</td><td class="o">테두리 <code>1px solid #bbb</code> · 배경 <code>rgba(255,255,255,.55)</code> · <code>opacity .8</code></td></tr>
+    <tr><td>채운 상태</td><td class="x">박스 안 점만 인디고</td><td class="o">동그라미 자체가 <code>#4A4DE7</code>로 채워짐(테두리도 같은 색)</td></tr>
+    <tr><td>입력 모션</td><td class="x">없음</td><td class="o"><code>pinDotPop</code> 0.34s — <code>scale .6→1.25→1</code> "통" 튐</td></tr>
+    <tr><td>칸 간격</td><td class="x">10px</td><td class="o"><code>gap 7px</code></td></tr>
+    <tr><td>확인 버튼</td><td class="x">있음 (한 번 더 눌러야 진입)</td><td class="o">없음 — 4번째 숫자 입력 순간 자동 제출</td></tr>
+    <tr><td>안내 문구</td><td class="x">"PIN 4자리를 입력하세요" (회색)</td><td class="o">"PIN 번호를 입력해주세요" (인디고 굵게 + <code>lmPulse</code> 숨쉬는 펄스)</td></tr>
+    <tr><td>첫 칸 안내</td><td class="x">없음</td><td class="o">첫 칸 둘레에 인디고 링이 시계방향 한 바퀴 → 0.3초 쉬고 무한 반복(<code>pinHintLap</code> 1.3s)</td></tr>
+    <tr><td>성공 연출</td><td class="x">없음</td><td class="o">초록 링(<code>#1A6B3C</code>, 2.2px) 4칸 <b>0.1초씩 순차</b> draw + 동그라미 튐 → 0.78초 후 진입</td></tr>
+    <tr><td>카드</td><td class="x">불투명 흰 카드 · radius 16 · 테두리 있음</td><td class="o">유리 <code>rgba(255,255,255,.22)</code> + <code>blur(32px) saturate(1.35)</code> · radius 24 · 테두리 0 · padding 44/40</td></tr>
+    <tr><td>배경</td><td class="x">정적 그라데이션</td><td class="o">움직이는 mesh 그라데이션(WebGL) · <code>opacity .41</code> + 흰 배경 합성</td></tr>
+    <tr><td>계정 표시</td><td class="x">"MISO 이식판" 회색 서브텍스트</td><td class="o">PIN 박스 <b>안쪽 상단</b>에 살몬색(<code>#D88455</code>) 굵게 12px</td></tr>
+    <tr><td>숫자 노출</td><td class="x">— (점 표시)</td><td class="o"><code>type=password</code> + <code>color/caret transparent</code> 이중 마스킹 — input에서는 아무것도 안 보인다</td></tr>
+  </tbody>
+</table>
+
+<script>
+/* ══ 원본 패널 = index.html 입력 로직 이식 ══ */
+const oPins = [...document.querySelectorAll('#oRow .pin')];
+const oWrap = document.getElementById('oWrap');
+const oMsg  = document.getElementById('login-msg');
+const mSlots = [...document.querySelectorAll('#mRow .m-slot')];
+const mMsg = document.getElementById('mMsg');
+
+function oHintUpdate(){
+  const any = oPins.some(p=>p.value);
+  if(any){ oMsg.textContent=''; oMsg.classList.remove('lm-hint'); }
+  else { oMsg.textContent='PIN 번호를 입력해주세요'; oMsg.classList.add('lm-hint'); }
+}
+function oClear(err){
+  oWrap.classList.remove('success');
+  oPins.forEach(p=>{ p.value=''; clearTimeout(p._at); p.classList.remove('lit','filled','err'); if(err)p.classList.add('err'); });
+}
+function oSuccess(){
+  oPins.forEach(p=>{ clearTimeout(p._at); p.classList.remove('lit','err'); p.classList.add('filled'); });
+  oWrap.classList.remove('hint1');
+  oWrap.classList.remove('success');            // 재생 위해 리플로우 강제
+  void oWrap.offsetWidth;
+  oWrap.classList.add('success');
+  oMsg.textContent=''; oMsg.classList.remove('lm-hint');
+}
+oPins.forEach((el,i)=>{
+  const fill = ()=>{ el.classList.remove('lit'); el.classList.add('filled'); };
+  el.addEventListener('input',()=>{
+    el.classList.remove('err'); oWrap.classList.remove('hint1'); oHintUpdate();
+    if(el.value){ el.classList.add('lit'); el.classList.remove('filled'); clearTimeout(el._at); el._at=setTimeout(fill,300); }
+    else { el.classList.remove('lit','filled'); clearTimeout(el._at); }
+    if(el.value.length===1 && i<3) oPins[i+1].focus();
+    if(i===3 && el.value.length===1){                       // ★ 자동 제출
+      const pin = oPins.map(p=>p.value).join('');
+      if(pin==='0510'){ setTimeout(oSuccess,60); }
+      else { oMsg.classList.remove('lm-hint'); oMsg.textContent='PIN이 일치하지 않습니다'; oClear(true); oPins[0].focus(); }
+    }
+  });
+  el.addEventListener('keydown',e=>{ if(e.key==='Backspace' && !el.value && i>0) oPins[i-1].focus(); });
+  el.addEventListener('focus',()=>{ const k=oPins.findIndex(p=>!p.value); if(k>-1&&k<i) oPins[k].focus(); });
+});
+
+/* ══ 상태 동시 전환 ══ */
+function setState(s){
+  document.querySelectorAll('.ctl button').forEach(b=>b.classList.toggle('on', b.dataset.s===s));
+  // BEFORE
+  const nMap={empty:0,three:3,four:4,success:4,error:0};
+  const n=nMap[s];
+  mSlots.forEach((el,i)=>el.classList.toggle('f', i<n));
+  mMsg.textContent = s==='error' ? 'PIN이 올바르지 않습니다' : 'PIN 4자리를 입력하세요';
+  mMsg.classList.toggle('err', s==='error');
+  // AFTER
+  oClear(s==='error');
+  oWrap.classList.toggle('hint1', s==='empty');
+  if(s==='error'){ oMsg.classList.remove('lm-hint'); oMsg.textContent='PIN이 일치하지 않습니다'; }
+  else oHintUpdate();
+  if(s==='three'||s==='four'){
+    const v='0510'.slice(0,s==='three'?3:4).split('');
+    v.forEach((c,i)=>{ oPins[i].value=c; oPins[i].classList.add('filled'); });
+    oMsg.textContent=''; oMsg.classList.remove('lm-hint');
+  }
+  if(s==='success'){ '0510'.split('').forEach((c,i)=>{oPins[i].value=c;}); oSuccess(); }
+}
+document.querySelectorAll('.ctl button').forEach(b=>b.addEventListener('click',()=>setState(b.dataset.s)));
+
+/* ══ 원본 배경 셰이더(mesh gradient) — index.html startLoginShader 이식 ══ */
+(function(){
+  const cv=document.getElementById('oShader'); if(!cv) return;
+  const gl=cv.getContext('webgl2');
+  const hex=h=>{h=h.replace('#','');return [parseInt(h.slice(0,2),16)/255,parseInt(h.slice(2,4),16)/255,parseInt(h.slice(4,6),16)/255,1];};
+  if(!gl){ cv.style.background='linear-gradient(135deg,#FDF6F3 0%,#F0EBF5 50%,#EBF0F8 100%)'; return; }
+  const VERT='#version 300 es\nin vec2 p;out vec2 v_objectUV;uniform vec2 u_res;void main(){gl_Position=vec4(p,0.,1.);vec2 uv=p*0.5;uv.x*=u_res.x/max(1.,u_res.y);v_objectUV=uv;}';
+  const FRAG='#version 300 es\nprecision mediump float;\nuniform float u_time;uniform highp vec2 u_res;\nuniform vec4 u_colors[10];uniform float u_colorsCount;\nuniform float u_distortion;uniform float u_swirl;\nin vec2 v_objectUV;out vec4 fragColor;\nvec2 rotate(vec2 uv,float th){return mat2(cos(th),sin(th),-sin(th),cos(th))*uv;}\nvec2 getPosition(int i,float t){float a=float(i)*.37;float b=.6+fract(float(i)/3.)*.9;float c=.8+fract(float(i+1)/4.);return .5+.5*vec2(sin(t*b+a),cos(t*c+a*1.5));}\nvoid main(){\n vec2 uv=v_objectUV+.5;float t=.5*(u_time+41.5);\n float radius=smoothstep(0.,1.,length(uv-.5));float center=1.-radius;\n for(float i=1.;i<=2.;i++){uv.x+=u_distortion*center/i*sin(t+i*.4*smoothstep(.0,1.,uv.y))*cos(.2*t+i*2.4*smoothstep(.0,1.,uv.y));uv.y+=u_distortion*center/i*cos(t+i*2.*smoothstep(.0,1.,uv.x));}\n vec2 uvR=uv-.5;uvR=rotate(uvR,-3.*u_swirl*radius);uvR+=.5;\n vec3 color=vec3(0.);float tw=0.;\n for(int i=0;i<10;i++){if(i>=int(u_colorsCount))break;vec2 pos=getPosition(i,t);vec3 cf=u_colors[i].rgb*u_colors[i].a;float dist=pow(length(uvR-pos),3.5);float w=1./(dist+1e-3);color+=cf*w;tw+=w;}\n fragColor=vec4(color/max(1e-4,tw),1.0);\n}';
+  const mk=(ty,s)=>{const sh=gl.createShader(ty);gl.shaderSource(sh,s);gl.compileShader(sh);if(!gl.getShaderParameter(sh,gl.COMPILE_STATUS))console.warn(gl.getShaderInfoLog(sh));return sh;};
+  const prog=gl.createProgram();gl.attachShader(prog,mk(gl.VERTEX_SHADER,VERT));gl.attachShader(prog,mk(gl.FRAGMENT_SHADER,FRAG));gl.linkProgram(prog);
+  if(!gl.getProgramParameter(prog,gl.LINK_STATUS)){console.warn(gl.getProgramInfoLog(prog));return;}
+  gl.useProgram(prog);
+  const b=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,b);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
+  const lp=gl.getAttribLocation(prog,'p');gl.enableVertexAttribArray(lp);gl.vertexAttribPointer(lp,2,gl.FLOAT,false,0,0);
+  // 색 = index.html의 "피치 웜" 세트 그대로
+  ['#F0C4B8','#FBF0EC','#D88455','#E8E8FD','#F0C4B8'].forEach((h,i)=>gl.uniform4fv(gl.getUniformLocation(prog,'u_colors['+i+']'),hex(h)));
+  gl.uniform1f(gl.getUniformLocation(prog,'u_colorsCount'),5);
+  gl.uniform1f(gl.getUniformLocation(prog,'u_distortion'),0.07);
+  gl.uniform1f(gl.getUniformLocation(prog,'u_swirl'),0.06);
+  const uRes=gl.getUniformLocation(prog,'u_res'), uTime=gl.getUniformLocation(prog,'u_time');
+  const t0=performance.now();
+  (function frame(){
+    const dpr=Math.min(2,devicePixelRatio||1);
+    const w=Math.round(cv.clientWidth*dpr), h=Math.round(cv.clientHeight*dpr);
+    if(cv.width!==w||cv.height!==h){cv.width=w;cv.height=h;}
+    gl.viewport(0,0,w,h);gl.uniform2f(uRes,w,h);gl.uniform1f(uTime,(performance.now()-t0)/1000);
+    gl.drawArrays(gl.TRIANGLES,0,3);
+    requestAnimationFrame(frame);
+  })();
+})();
+
+setState('empty');
+</script>
+</body>
+</html>
