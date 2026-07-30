@@ -90,6 +90,20 @@ if (Array.isArray(out.applySettings)) {
   counts.applySettings = Object.keys(obj).length;
 }
 
+// ── 연간 실적(annual) — index.html의 _YR 상수에서 추출. 메인 대시보드 「연간 실적」 원천이며
+//    시트가 아니라 코드 상수라 CSV 경로로는 절대 안 잡힌다(누락 사고 방지 — 260730j).
+{
+  const src = readFileSync(join(ROOT, 'index.html'), 'utf8');
+  const i = src.indexOf('var _YR={');
+  const j = i < 0 ? -1 : src.indexOf('\n};', i);
+  if (i < 0 || j < 0) { warnings.push('index.html의 _YR 상수를 찾지 못함 — 연간 실적 누락'); }
+  else {
+    const body = src.slice(i + 'var _YR='.length, j + 2);
+    try { out.annual = new Function('return ' + body)(); }
+    catch (e) { warnings.push(`_YR 파싱 실패: ${e.message}`); }
+  }
+}
+
 const statusDist = {};
 for (const r of out.records || []) { const s = r['진행 상태'] || '(빈값)'; statusDist[s] = (statusDist[s] || 0) + 1; }
 
@@ -117,6 +131,7 @@ const bundle = {
       platforms: '홍보 플랫폼 3단 분류(라벨용).',
       contents: '콘텐츠구분·형식·진행상태 값 목록(필터용).',
       applySettings: '홍보 접수 설정(키-값).',
+      annual: '연간 실적(2012~2025) — 메인 대시보드 좌측 「연간 실적」 원천. years[14] + cats{공연·전시·교육}.rows[{sub,key,v[14],sum}] (key = 인원·횟수·일수·나눔) + total[동일 구조] + jangdo(장도 방문객) + grand(누적 3,690,031명). 기본 표시 지표 = 인원.',
     },
     warnings,
   },
