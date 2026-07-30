@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SRC = join(ROOT, '이관본', 'data');
 const OUT = join(ROOT, '이관본', '첨부', '예울마루_데이터.json');
+const OUT_EXT = join(ROOT, '이관본', '첨부', '예울마루_데이터_확장.json');
 
 // 데이터셋 → {파일, JSON 키, 날짜열, 숫자열}
 const SETS = [
@@ -24,6 +25,19 @@ const SETS = [
   { file: 'platforms', key: 'platforms', dates: [], nums: [] },
   { file: 'contents', key: 'contents', dates: [], nums: [] },
   { file: 'applysettings', key: 'applySettings', dates: [], nums: [] },
+];
+
+// 확장 세트(P2) — 핵심 3화면 밖의 추가 화면용. 별도 파일로 빼서 P1 실패 위험을 격리한다.
+const EXT_SETS = [
+  { file: 'rules', key: 'rules', dates: [], nums: [], note: '규정 전문 — 규정 검색 화면' },
+  { file: 'ops_세부운영관리대장정리', key: 'perfHistory', dates: [], nums: ['전체순번','기본좌석','발권유료','년도','월','일'], note: '공연 이력 2012~2026 전수 — 이력 조회·장르 분석 화면' },
+  { file: 'edu_institutions', key: 'eduInstitutions', dates: [], nums: ['no','lat','lng'], note: '교육기관(유치원·어린이집) — 단체영업 대상 목록·지도' },
+  { file: 'messages', key: 'messages', dates: [], nums: [], note: '알림 메시지 — 알림함 조회 화면' },
+  { file: 'managers', key: 'managers', dates: [], nums: [], note: '담당자(개인정보 마스킹) — 담당자 목록' },
+  { file: 'ops_장도', key: 'jangdoDaily', dates: [], nums: [], note: '장도 방문객 일별' },
+  { file: 'ops_카페일정', key: 'cafeSchedule', dates: [], nums: [], note: '장도 아트카페 일정' },
+  { file: 'ops_회차상세', key: 'roundDetail', dates: [], nums: [], note: '공연 회차 상세' },
+  { file: 'chatbot_faq', key: 'faq', dates: [], nums: [], note: 'FAQ' },
 ];
 
 function parseCsv(text) {
@@ -139,6 +153,40 @@ const bundle = {
 };
 
 writeFileSync(OUT, JSON.stringify(bundle, null, 1), 'utf8');
+
+// ── 확장 세트(P2) 별도 산출
+const extOut = {}, extCounts = {}, extNotes = {};
+for (const { file, key, dates, nums, note } of EXT_SETS) {
+  const p = join(SRC, `${file}.csv`);
+  if (!existsSync(p)) { warnings.push(`확장 ${file}.csv 없음`); continue; }
+  const grid = parseCsv(readFileSync(p, 'utf8'));
+  const hdr = grid[0].map(h => h.trim()).filter(h => h !== '');
+  extOut[key] = grid.slice(1).map(r => {
+    const o = {};
+    hdr.forEach((h, i) => {
+      let v = r[i] ?? '';
+      if (dates.includes(h)) v = normDate(v);
+      else if (nums.includes(h)) v = normNum(v);
+      else v = String(v).trim();
+      o[h] = v;
+    });
+    return o;
+  });
+  extCounts[key] = extOut[key].length; extNotes[key] = note;
+}
+const extBundle = {
+  meta: {
+    name: 'GS칼텍스 예울마루 확장 데이터 (P2 — 추가 화면용)',
+    generator: 'tools/miso/build_single_json.mjs — 기계산출물(손편집 금지)',
+    generatedAt: new Date().toISOString(),
+    note: '핵심 3화면(P1)은 예울마루_데이터.json에 있다. 이 파일은 추가 화면용이며, P1을 완성·검증한 뒤에만 쓴다.',
+    normalized: ['날짜 = YYYY-MM-DD', '수량·금액 = number(빈칸 null)', '개인정보(PIN·비번·이메일·전화·내선) 열 없음', '빈 행 제거 완료'],
+    expectedCounts: extCounts,
+    fieldNotes: extNotes,
+  },
+  ...extOut,
+};
+writeFileSync(OUT_EXT, JSON.stringify(extBundle, null, 1), 'utf8');
 const kb = (Buffer.byteLength(JSON.stringify(bundle, null, 1)) / 1024).toFixed(0);
 console.log(`✅ 이관본/첨부/예울마루_데이터.json — ${kb}KB`);
 console.log('   행수:', JSON.stringify(counts, null, 0));

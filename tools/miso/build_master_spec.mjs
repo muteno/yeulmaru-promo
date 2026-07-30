@@ -14,12 +14,15 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const FUNC = join(ROOT, '이관본', 'MISO_전달_통합본.md');
 const FID = join(ROOT, '이관본', '완전동일_명세.md');
 const DB = join(ROOT, '이관본', '첨부', '예울마루_데이터.json');
+const DBX = join(ROOT, '이관본', '첨부', '예울마루_데이터_확장.json');
 const OUT = join(ROOT, '이관본', '첨부', '마스터명세.md');
 
 for (const p of [FUNC, FID, DB]) if (!existsSync(p)) { console.error(`없음: ${p}`); process.exit(1); }
 const func = readFileSync(FUNC, 'utf8');
 const fid = readFileSync(FID, 'utf8');
 const db = JSON.parse(readFileSync(DB, 'utf8'));
+const dbx = existsSync(DBX) ? JSON.parse(readFileSync(DBX, 'utf8')) : null;
+const kb = f => existsSync(f) ? (readFileSync(f).length / 1024).toFixed(0) + 'KB' : '없음';
 const counts = db.meta.expectedCounts, sd = db.meta.recordsStatusDistribution;
 const annual = db.annual || {};
 const totInwon = (annual.total || []).find(r => r.key === '인원') || {};
@@ -34,9 +37,38 @@ const fidBody = body(fid, '## 1. 화면 골격');
 
 const md = `# 예울마루 대시보드 — 완전판 마스터 명세 (이 문서 하나가 전부)
 
-> **첨부는 2개다**: 이 문서(\`마스터명세.md\`) + 데이터(\`예울마루_데이터.json\`).
-> 다른 문서는 없다. 이 문서 안에 기능 명세·실측 스타일·빌드 순서·검증 방법이 전부 들어 있다.
 > 생성: \`tools/miso/build_master_spec.mjs\` (기계산출물 — 손편집 금지)
+
+## 📎 같이 첨부된 파일 (이게 전부다 — 다른 파일은 없다)
+
+| # | 파일 | 크기 | 필수 | 용도 |
+|---|---|---|---|---|
+| 1 | \`마스터명세.md\` (이 문서) | — | ✅ | 만들 것의 전체 명세 |
+| 2 | \`예울마루_데이터.json\` | ${kb(DB)} | ✅ | **P1 핵심 데이터** — 메인화면·모달·캘린더·프로그램 |
+| 3 | \`예울마루_데이터_확장.json\` | ${kb(DBX)} | ⬜ | **P2 확장 데이터** — 규정·공연이력·교육기관·알림 등 추가 화면 |
+
+⛔ **두 JSON 모두 읽기 도구로 열지 마라.** 합쳐서 약 60만 토큰이다. 구조는 이 문서에 전부 적혀 있다.
+파일은 \`cp\`로 \`src/data/\`에 복사하고 \`import\`로만 쓴다.
+
+## ⚠️ 이 작업은 "한 번에" 끝내야 한다 (재발행에 승인이 필요함)
+
+발행할 때마다 플랫폼 관리자 승인이 필요하다. 그래서 **여러 번 고쳐 발행하는 방식이 불가능**하다.
+따라서:
+
+1. **P1을 먼저 완성하고, 아래 D부 검증을 실제로 실행해 스스로 고친 뒤**에 P2로 넘어가라.
+2. 중간에 "일단 이 정도만" 하고 멈추지 마라. P1은 반드시 끝까지 완성해라.
+3. 컨텍스트·시간이 부족하면 **P2를 버리고 P1을 완성**해라(P1만으로도 발행 가치가 있다).
+4. 발행 전에 D부 체크리스트를 **직접 실행**하고, 실패 항목은 **스스로 수정**한 뒤 다시 확인해라.
+
+## 우선순위 (P1이 절대 우선)
+
+| 등급 | 범위 | 데이터 |
+|---|---|---|
+| **P1 (필수)** | ① 사업 실적(기본 화면) + **거기서 열리는 드릴·모달** ② 홍보 캘린더 ③ 프로그램 | \`예울마루_데이터.json\` |
+| P2 (여유 있으면) | ④ 규정 검색 ⑤ 공연 이력 조회 ⑥ 교육기관 목록 ⑦ 알림함 ⑧ 담당자 | \`예울마루_데이터_확장.json\` |
+
+**P1 안에서도 「메인화면 + 메인화면에서 열리는 모달」이 가장 중요하다**(운영자 최우선 지시).
+B부 §2-9에 그 모달들의 실측 내용이 있다 — 그대로 재현해라.
 
 ---
 
@@ -124,6 +156,15 @@ ${Object.entries(counts).map(([k, v]) => `   | \`${k}\` | ${v} |`).join('\n')}
 1. \`programs\` 카드 목록 + 콘텐츠구분 필터 칩 + 판매중 배지.
 2. 전 화면을 1920×1080에서 확인하고, D부 검증을 실행한다.
 
+### 8단계 — P2 확장 (P1 완성·검증 후에만)
+
+\`예울마루_데이터_확장.json\`을 \`src/data/yeulmaru_ext.json\`으로 복사하고 아래 화면을 추가한다.
+${dbx ? Object.entries(dbx.meta.expectedCounts).map(([k, v]) => `- \`${k}\` (${v}건) — ${dbx.meta.fieldNotes[k] || ''}`).join('\n') : '(확장 파일 없음)'}
+
+권장 화면: ④ 규정 검색(\`rules\` 키워드 검색 — 901건이라 전체 나열 금지) ⑤ 공연 이력 조회(\`perfHistory\` 2012~2026 표+장르·연도 필터)
+⑥ 교육기관 목록(\`eduInstitutions\` 시·구분 필터) ⑦ 알림함(\`messages\` 목록) ⑧ 담당자(\`managers\` 표).
+전부 **조회 전용**이다.
+
 ---
 
 # D부 — 자가검증 프로토콜 (다 만든 뒤 실제로 실행하고 보고)
@@ -188,6 +229,6 @@ D-2 체크리스트: ○/10 통과 (미통과 항목: …)
 `;
 
 writeFileSync(OUT, md, 'utf8');
-const kb = (Buffer.byteLength(md) / 1024).toFixed(0);
-console.log(`✅ 이관본/첨부/마스터명세.md — ${kb}KB (A부 기능 + B부 실측 + C부 7단계 + D부 검증)`);
+const outKb = (Buffer.byteLength(md) / 1024).toFixed(0);
+console.log(`✅ 이관본/첨부/마스터명세.md — ${outKb}KB (A부 기능 + B부 실측 + C부 7단계 + D부 검증)`);
 console.log(`   검증 기준: records ${counts.records} · KPI ${(totInwon.sum || 0).toLocaleString()} · 누적 ${(annual.grand || 0).toLocaleString()}`);

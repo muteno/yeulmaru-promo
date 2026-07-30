@@ -110,6 +110,39 @@ const dump = await page.evaluate(() => {
     viewport: `${innerWidth}×${innerHeight}`,
   };
 });
+
+// ── 메인화면에서 열리는 모달·드릴 캡처 (운영자 최우선 요구: "메인화면에 띄워지는 모달들")
+const MODALS = [
+  { name: '공연 개별 드릴 (판매현황 행 클릭)', click: async p => { const r = await p.$('#rail-yrm-list tbody tr'); if (r) { await r.click(); return true; } return false; }, back: '_srailBack' },
+  { name: '전체 실적표 연도창 이동 (‹ ›)', click: async p => { const b = await p.$('[onclick*="_yrmWin"]'); if (b) { await b.click(); return true; } return false; } },
+  { name: '좌측 보드 페이지 넘김 (도트)', click: async p => { const b = await p.$('[onclick*="_bizmGo(1)"]'); if (b) { await b.click(); return true; } return false; } },
+];
+const modalDumps = [];
+for (const m of MODALS) {
+  try {
+    const ok = await m.click(page);
+    if (!ok) { modalDumps.push({ name: m.name, note: '트리거 없음(현 화면 상태에서 미노출)' }); continue; }
+    await page.waitForTimeout(2200);
+    const d = await page.evaluate(() => {
+      // 화면 최상위에 새로 뜬 영역 추정: 가장 큰 z-index 가진 보이는 컨테이너 + 본문 전체 텍스트
+      const vis = Array.from(document.querySelectorAll('body *')).filter(e => {
+        const c = getComputedStyle(e); const r = e.getBoundingClientRect();
+        return e instanceof HTMLElement && c.display !== 'none' && c.visibility !== 'hidden' && r.width > 300 && r.height > 200 && +c.zIndex > 0;
+      }).sort((a, b) => +getComputedStyle(b).zIndex - +getComputedStyle(a).zIndex);
+      const top = vis[0] || null;
+      return {
+        topSel: top ? (top.tagName.toLowerCase() + (top.id ? '#' + top.id : '') + (top.className ? '.' + String(top.className).trim().split(/\s+/).slice(0, 3).join('.') : '')) : null,
+        topZ: top ? getComputedStyle(top).zIndex : null,
+        topText: top ? String(top.innerText || top.textContent || '').slice(0, 900) : '',
+        railText: String((document.querySelector('#sales-rail') || {}).innerText || '').slice(0, 900),
+        bizText: String((document.querySelector('#biz-main') || {}).innerText || '').slice(0, 900),
+        tables: document.querySelectorAll('table').length,
+      };
+    });
+    modalDumps.push({ name: m.name, ...d });
+    if (m.back) { try { await page.evaluate(fn => { if (typeof window[fn] === 'function') window[fn](); }, m.back); await page.waitForTimeout(1200); } catch {} }
+  } catch (e) { modalDumps.push({ name: m.name, note: '캡처 실패: ' + e.message }); }
+}
 await browser.close(); srv.close();
 
 // 원본 CSS 블록 발췌
@@ -202,6 +235,10 @@ ${treeText(dump.bizTree).trimEnd()}
 \`\`\`
 ${treeText(dump.railTree).trimEnd()}
 \`\`\`
+
+## 2-9. 메인화면에서 열리는 모달·드릴 실측 (⭐ 최우선 재현 대상)
+
+${modalDumps.map(m => `### ${m.name}\n\n${m.note ? '> ' + m.note : `최상위 컨테이너: \`${m.topSel}\` (z-index ${m.topZ}) · 표 ${m.tables}개\n\n**표시 내용**\n\`\`\`\n${(m.topText || m.railText || '').trim().slice(0, 700)}\n\`\`\``}`).join('\n\n')}
 
 ## 3. 핵심 요소 computed style 실측 (이 값을 그대로 쓸 것)
 ${styleTable(dump.styles)}
