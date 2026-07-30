@@ -40,6 +40,12 @@
 | **`전달순서.md`** | ⭐ **여기서 시작** — 4단계 절차·복붙 대사·검증 숫자·증상별 보정표 |
 | **`MISO_전달_통합본.md`** | ⭐ 첨부 1/2 — 빌드 명세(8KB) |
 | **`첨부/예울마루_데이터.json`** | ⭐ 첨부 2/2 — 전 데이터 691KB(날짜·숫자 정규화, 파싱 함정 없음) |
+| **`첨부/정본_스타일.css`** | ⭐ **CSS 정본 전량**(133KB · 690규칙 + @keyframes 28) — index.html `<style>`에서 기계 추출, 원문 무변. 「눈으로 보고 다시 만들다 빠지는」 문제를 원천 차단 |
+| **`첨부/CSS_정본_지시.md`** | ⭐ 위 CSS 사용법 — import 순서·shadcn 금지·글꼴·자산·네임스페이스 체크리스트·자기검증 |
+| **`첨부/보강_지시_인트로.md`** | 인트로 PIN 「동그라미」 교정 지시 — 원본 정본 CSS/JS/타이밍 전량 + 20항 검증표 |
+| `전후_인트로.html` | 인트로 PIN **전후 비교**(좌 MISO 현재 재현 ↔ 우 원본 정본) — 상태 5종 동시 전환·3배 확대 대조 |
+| `첨부/보강_지시_2차.md` | 2차 보강(판매현황 필터·판매율 산식·차트 시리즈·증감률) |
+| `첨부/진단스니펫.md` | 발행 비용 0 상태 진단 — preview 콘솔 한 줄 |
 | `첨부/*.csv` (10종) | JSON을 못 읽거나 특정 데이터셋만 줄 때의 폴백 |
 | `standalone.html` | 정적 호스팅 자리가 생겼을 때만 (통짜 이식판) |
 | `빌드명세.md` | 구 명세(폴백) — `MISO_전달_통합본.md`가 대체 |
@@ -55,6 +61,8 @@
 - 데이터: 새 CSV를 `data/db_export/`나 레포 루트에 넣고 `npm run build:misodb`
 - **MISO 첨부용 JSON**: `node tools/miso/build_single_json.mjs` → `첨부/예울마루_데이터.json`(이것만 다시 첨부하면 됨)
 - 이식판: `node tools/miso/build_standalone.mjs` (원본 index.html 변경도 이 명령으로 반영)
+- **CSS 정본**: `node tools/miso/build_css_spec.mjs` → `첨부/정본_스타일.css` + `첨부/CSS_정본_지시.md`
+  (standalone을 실렌더해 「화면에 실제로 있는 선택자」만 골라 원문 그대로 추출 · 작은 자산은 data:URI 인라인)
 - 회원 패키지: `node tools/miso/build_members.mjs` → `비공개/` (커밋 안 됨)
 - 검증: `node tools/miso/smoke_standalone.mjs` (격리 서빙 자동 · playwright 필요)
 - **이 폴더 파일을 손으로 고치지 말 것** — 원본(index.html·CSV·문서 원문)을 고치고 재생성.
