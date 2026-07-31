@@ -5395,21 +5395,29 @@ function _srailAlignTop(){
     // [260725 운영자] 우 2카드를 좌 2카드의 데칼코마니로 —
     //   ① 「진행 중인 프로그램」 흰 도형 하단 = 좌 「연도별 관람·수강 추이」 카드 하단(같은 라인까지 내림)
     //   ② 개별 공연 상세(#rail-yrm-uha) 높이 = 좌 「전체 실적표」 카드 높이(나란히 = 상·하단선 동시 일치)
+    // [260731 운영자] 앵커 승격: 좌 「전체 실적표」 **카드** 하단 → 좌 **유리박스**(data-bizmbox) 하단.
+    //   우 박스는 목록 카드 뒤에 카드 바깥여백(14) + 상세 슬롯(#rail-yrm-uha)이 더 붙어 있어, 카드끼리만 맞추면
+    //   정작 눈에 보이는 블러 도형(유리박스)이 좌보다 아래로 튀어나왔다(실측 18px = 여백14+슬롯4). L2089 「두 박스 하단선 Δ0」 계약 위반.
+    //   → 목록 카드 아래로 박스가 더 먹는 몫(_tail = 여백+슬롯+패딩+보더)을 먼저 빼고 목록 높이를 잡는다 = 슬롯 내용과 무관하게 두 블러 도형의 높이·하단선 일치.
     // 좌 보드 렌더 후 _bizInlineRender의 rAF가 이 함수를 다시 불러 재계산한다.
     try{
       var _lch=document.getElementById('yrm-chart'), _lcCard=_lch&&_lch.closest('.bizm-card');
       var _ltb=document.getElementById('yrm-tbl'), _ltCard=_ltb&&_ltb.querySelector('.bizm-card');
       var _rl=document.getElementById('rail-yrm-list'), _rlCard=_rl&&_rl.closest('.bizm-card');
-      // [260725 운영자] 「개별 사업 내역」 표를 뺐으므로 목록이 그 자리까지 내려온다 — 앵커 = 좌 차트 카드 → 좌 「전체 실적표」 카드 하단
-      var _anchor=_ltCard||_lcCard;
+      // [260725 운영자] 「개별 사업 내역」 표를 뺐으므로 목록이 그 자리까지 내려온다 — 앵커 = 좌 차트 카드 → 좌 「전체 실적표」 카드 → [260731] 좌 유리박스 하단
+      var _lbox=document.querySelector('#biz-main [data-bizmbox]'), _rbox=document.querySelector('#rail-yrm [data-bizmbox]');
+      var _anchor=(_lbox&&_lbox.offsetParent!==null)?_lbox:(_ltCard||_lcCard);
+      var _boxed=(_anchor===_lbox&&_rbox&&_rbox.offsetParent!==null);   // 박스↔박스 정렬 가능 여부(불가 = 종전 카드↔카드 폴백)
       var _live=_anchor&&_rlCard&&_anchor.offsetParent!==null&&_rlCard.offsetParent!==null;
       if(_rl&&_live){
         var _ctEl=_rlCard.querySelector('.ct'), _ctH=_ctEl?_ctEl.getBoundingClientRect().height:0;
-        var _want=Math.round((_anchor.getBoundingClientRect().bottom-_rlCard.getBoundingClientRect().top-_ctH)/_z);
+        var _tgt=_boxed?_rbox:_rlCard;   // 하단선을 좌 앵커에 붙일 우측 대상
+        var _tail=_boxed?(_rbox.getBoundingClientRect().bottom-_rlCard.getBoundingClientRect().bottom):0;   // 목록 카드 아래로 박스가 더 먹는 몫(카드 여백 + 상세 슬롯 + 박스 패딩·보더)
+        var _want=Math.round((_anchor.getBoundingClientRect().bottom-_tail-_rlCard.getBoundingClientRect().top-_ctH)/_z);
         if(_want>120){
           _rl.style.height=_want+'px'; _rl.style.maxHeight=_want+'px';
-          // 보더·반올림 잔차 자가 보정(1패스) — 카드 실제 하단과 좌 차트 카드 하단의 차이를 그대로 되돌려준다
-          var _res=Math.round((_anchor.getBoundingClientRect().bottom-_rlCard.getBoundingClientRect().bottom)/_z);
+          // 보더·반올림 잔차 자가 보정(1패스) — 우측 대상(박스/카드) 실제 하단과 좌 앵커 하단의 차이를 그대로 되돌려준다
+          var _res=Math.round((_anchor.getBoundingClientRect().bottom-_tgt.getBoundingClientRect().bottom)/_z);
           if(_res&&Math.abs(_res)<=40){ var _fix=_want+_res; _rl.style.height=_fix+'px'; _rl.style.maxHeight=_fix+'px'; }   // [260725] 허용치 12→40 — 앵커가 전체 실적표로 바뀌었으니 여유를 둔다(실측 잔차는 0)
         }
       } else if(_rl){ _rl.style.height=''; _rl.style.maxHeight=''; }
