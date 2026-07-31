@@ -2129,7 +2129,7 @@ table.promo-board-table thead th:last-child{border-top-right-radius:11px}
 /* [260729 운영자] 분야 표식 = 세로 막대 → 원형 블릿(운영자 지목 = 공연·전시 머리글 앞 표식 · "색상은 유지"). 카드 제목 블릿(.ct-bul 막대)과 모양이 갈려 대분류(카드)↔중분류(분야) 위계가 보인다.
    값 100% 계승 = 정본 컴포넌트 6번 칩의 점 부품 .chip-dot(L658 — 8×8 · r50%) · flex-shrink:0은 .ct-bul 계승(flex 헤더에서 찌그러짐 방지) · 색 = 종전 --gtok 그대로(공연 --accent · 전시 --peach-text). 신규 hex·px 0 */
 .ry-grp-hd::before{content:'';width:8px;height:8px;border-radius:50%;background:var(--gtok,var(--accent));flex-shrink:0}
-.ry-grp-bd{position:relative;flex:1;min-height:0;overflow-y:auto;scrollbar-width:thin;-ms-overflow-style:none;scrollbar-color:transparent transparent}
+.ry-grp-bd{position:relative;flex:1;min-height:0;overflow-y:auto;scrollbar-width:thin;-ms-overflow-style:none;scrollbar-color:transparent transparent;scrollbar-gutter:stable}   /* [260731 운영자 4차 · 픽셀실측] gutter 상시 확보 — 스크롤 생긴 그룹만 표 폭이 7px 깎여 공연↔전시 열 세로선이 어긋나던 것(실측 Δ≈7px) 해소. 전 그룹 동일 폭 = 열 경계 Δ0 */
 .ry-grp-bd::-webkit-scrollbar{width:7px;height:0;background:transparent}
 #rail-yrm:hover .ry-grp-bd{scrollbar-color:rgba(0,0,0,0.075) transparent}   /* [260729 운영자] 호버 리빌 투명도 50% — 진행 중인 프로그램 표 가로 스크롤바가 분야 사이를 가로지르며 도드라져 절반으로(0.15→0.075 · 흑알파 변주) */
 #rail-yrm:hover .ry-grp-bd::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.075)}
@@ -5417,24 +5417,21 @@ function _srailAlignTop(){
       var _slot=document.getElementById('rail-yrm-uha'), _uhaEl=document.getElementById('srail-uha');
       var _slotOn=_uhaEl&&_uhaEl.getAttribute('data-on')==='1';
       if(_slot){ _slot.style.minHeight=''; }   // [260725] 상세 슬롯 = 표 비노출 후 점줄만 남음 → 높이 강제 없음
-      // [260725 운영자] 하단 토글 = 좌 보드 토글과 같은 줄에 — 좌 점줄은 유리박스 '밖'(margin 16), 우 점줄은 박스 '안'이라
-      // 그 차이(박스 하단 − 실적표 카드 하단)만큼 우 바의 위 여백을 더한다. 두 카드 하단은 이미 동치라 이 값만 맞추면 같은 y.
+      // [260731 4차] 구 「우 프로그램 바 ↔ 좌 점줄 y 동기」(paddingTop 2패스) 폐지 — 프로그램 바는 이제 레일 유리박스 '안'(#rail-yrm-uha 슬롯 이주)이라 자기 자리에서 흐르고, 박스 밖 하단 바는 책 넘김 1개뿐. 인라인 잔존값만 리셋.
       var _bar=document.querySelector('#srail-uha .srail-uha-bar');
-      var _lbx=document.querySelector('#biz-main [data-bizmbox]');
-      if(_bar&&_lbx&&_ltCard&&_live){
-        var _ex=Math.round((_lbx.getBoundingClientRect().bottom-_ltCard.getBoundingClientRect().bottom)/_z);
-        _bar.style.paddingTop=Math.max(0,16+_ex)+'px';
-        // 1패스 자가 보정 — 두 점줄의 실제 y 차이를 그대로 되돌려준다(중간 마진 스택을 계산하지 않아도 맞는다)
-        var _lp=document.querySelector('#biz-main .bizm-pgctl'), _rp=_bar.querySelector('.bizm-pgctl');
-        if(_lp&&_rp){
-          for(var _it=0;_it<2;_it++){   // 2패스 — 1패스만 하면 보정 뒤 레이아웃이 다시 미세 이동해 2px가 남는다
-            var _dy=Math.round((_lp.getBoundingClientRect().top-_rp.getBoundingClientRect().top)/_z);
-            if(!_dy||Math.abs(_dy)>90)break;
-            var _pt=parseFloat(getComputedStyle(_bar).paddingTop)||0;
-            _bar.style.paddingTop=Math.max(0,Math.round(_pt+_dy))+'px';
-          }
+      if(_bar)_bar.style.paddingTop='';
+      // [260731 4차 운영자] 책 넘김 바 = 넓은 화면(펼침)에선 두 열 전체의 가운데 — #biz-main 안 바를 (좌 열 좌변~우 열 우변) 중앙으로 translateX 보정. 좁은 화면·레일 숨김 = 보정 0(좌 보드 가운데).
+      try{
+        var _dr=document.getElementById('bizm-dots-row');
+        if(_dr){
+          var _ryB=document.getElementById('rail-yrm');
+          if(_ryB&&_ryB.offsetParent!==null&&bmB&&bmB.offsetParent!==null){
+            var _bmR=bmB.getBoundingClientRect(), _ryR=_ryB.getBoundingClientRect();
+            var _mid=Math.round(((_ryR.right-_bmR.left)/2-_bmR.width/2)/_z);
+            _dr.style.transform=_mid?('translateX('+_mid+'px)'):'';
+          } else _dr.style.transform='';
         }
-      } else if(_bar){ _bar.style.paddingTop=''; }
+      }catch(_e4){}
       // [260725 운영자] 분야 네모 = 내용만큼만 차지(빈 공간 없음). 다 합쳐 통을 넘길 때만 건수 비례로 몫을 잘라 각자 내부 스크롤.
       try{
         var _gl=document.getElementById('rail-yrm-list'), _gs=_gl?_gl.querySelectorAll('.ry-grp'):[];
@@ -5491,12 +5488,13 @@ function _srailAlignTop(){
 }
 var _srailExErr=false;   // 전시 시트 로드 실패 표시(공연은 살리고 전시만 생략 — 목록 하단 정직 표기)
 var _srailChartW=0;      // [260710 운영자 "차트 늘어짐"] 카드/드릴 SVG를 실측 픽셀 폭으로 생성(비례 확대·글자 왜곡 제거) — 렌더 시 갱신, resize 시 재렌더
-function _srailInit(force,_fetchGate){
+function _srailInit(force,_fetchGate,allowNarrow){
   if(typeof _salesState==='undefined'||!_salesState)return;   // 부트 파싱중 방어(분신술 4호 HIGH — initApp의 setTimeout과 이중 안전)
   var els=_srailEls(); if(!els.body)return;
   _srailArmResize();
   // 레일이 숨는 폭(≤1200px)에선 데이터도 안 당긴다(모바일 낭비 방지, 분신술 1호 LOW) — 넓어지면 resize에서 1회 재시도
-  if(window.innerWidth<=1200)return;
+  // [260731 4차] 예외 = allowNarrow(책 2면 「판매 실적」이 좁은 화면에서 좌 보드로 나올 때) — 6시트 파이프라인은 이 한 곳만 쓴다(제2 fetch 경로 금지 · 페이블 검수 4)
+  if(window.innerWidth<=1200&&!allowNarrow)return;
   _srailAlignTop();
   // 전시 캐시 = 분석 보드와 공유(_anaState._exDaily/_exMaster) — 레일이 선채우면 분석 보드 전시 탭도 즉시 열림
   _anaState=_anaState||{screen:1,cat:'공연',profit:{'예술성':true,'사업성':true},genre:'전체',year:null,drillName:null,xstep:3,cmp:{tray:[],bars:false}};
@@ -5541,7 +5539,7 @@ function _srailInit(force,_fetchGate){
     if(els2.sum)els2.sum.style.display='none';   // [분신술 260710 감사4] 성공 렌더 후 재시도 실패 시 이전 요약 잔존 방지
     b.innerHTML='<div class="u-empty" style="padding:26px 8px"><div class="ico">📡</div><div class="msg">판매 데이터를 못 불러왔어요</div><button class="ana-chip" onclick="_srailInit(true)">다시 시도</button></div>';
     // [260723 평의회1·2·4 공통] 실적 모드 = 좌 인라인 보드도 레일 6시트에 기대므로, 실패를 미러(무한 「불러오는 중」 방치 차단) — 재시도 = 동일 _srailInit(true)로 양쪽 복구
-    if(typeof _mainView!=='undefined'&&_mainView==='biz'&&!_bizState.raw&&(_bizmState.page||1)===2){ var bm=document.getElementById('biz-main'); if(bm)bm.innerHTML='<div style="position:relative">'+_bizmHead('')+_BIZM_BOX+'<div style="text-align:center;padding:50px;color:var(--danger);font-size:13px">운영 데이터를 못 불러왔어요 <button class="ana-chip" onclick="_srailInit(true)" style="margin-left:8px">다시 시도</button></div>'+'</div>'+_bizmDots()+_bizmPageNav()+'</div>'; }
+    if(typeof _mainView!=='undefined'&&_mainView==='biz'&&_bizLeftPage()>=2&&_bizLeftPage()<=3&&!(_bizLeftPage()===3&&_bizState.raw)){ var bm=document.getElementById('biz-main'); if(bm)bm.innerHTML='<div style="position:relative">'+_bizmHead('')+_BIZM_BOX+'<div style="text-align:center;padding:50px;color:var(--danger);font-size:13px">운영 데이터를 못 불러왔어요 <button class="ana-chip" onclick="_srailInit(true)" style="margin-left:8px">다시 시도</button></div>'+'</div>'+_bizmDots()+_bizmPageNav()+'</div>'; }   // [260731 4차] 6시트 의존 면 = 2(판매 실적, 좁은 화면)·3(사업 결과 비교) — 좌 열이 그 면일 때만 실패 미러
   });
   };
   if(_fetchGate&&_fetchGate.finally)_fetchGate.finally(_fire); else _fire();   // 캘린더 로드 완료 뒤 6시트 fetch(게이트 없으면 즉시 = force 재시도·resize 경로)
@@ -5569,6 +5567,8 @@ function _srailArmResize(){
     _srailAlignTop();
     if(window.innerWidth<=1200)_srailCarStop();   // 레일 CSS 숨김되면 캐러셀 전역 리스너·타이머 철거(감사2 LOW — 숨은 레일 유휴 리스너 잔존 방지)
     if(window.innerWidth>1200&&_salesState&&!_salesState.daily&&!_srailBusy)_srailInit();
+    // [260731 4차] 1200 경계 넘나듦 = 책 판형 전환(펼침 2면 ↔ 한 면) — 좌·우 열 재렌더(면 매핑·점줄 개수·바 중앙이 판형에 묶여 있다)
+    try{ var _bw=_bizBookWide(); if(window._bookWideLast===undefined)window._bookWideLast=_bw; if(_bw!==window._bookWideLast){ window._bookWideLast=_bw; if(typeof _mainView!=='undefined'&&_mainView==='biz')_bizBookRender(); } }catch(_e){}
     if(typeof panelOpen!=='undefined'&&panelOpen)_panelRailReflow();   // 1200px 경계 리사이즈 시 열린 패널 폭 stale 방지(분신술 1호 LOW)
     // [260710] 차트 = 실측 폭 렌더 → 폭이 24px 이상 변하면 디바운스 재렌더(글자 왜곡 없는 1:1 유지)
     clearTimeout(window._srailRzT);
@@ -5753,7 +5753,10 @@ async function _specToggle(mid){
 //     머리글 중심 = 막대 중심이 되게 한다. 열 폭을 드래그로 바꿔도 식이 성립(둘 다 같은 여유폭의 절반을 쓴다).
 //   두 값을 상수로 묶어 _mvBars와 머리글이 따로 놀지 않게 한다.
 var _RY_TREND_NUMW=56, _RY_TREND_GAP=10;
-function _mvBars(days,diff,unit){
+// [260731 운영자 4차] tok = 분야 시그니처 색(마지막 막대·+N 누계) · tokDim = 과거 막대 옅은 톤 — 「전시도 전시색으로」.
+//   미지정 = 종전 --accent/--accent-light 그대로(공연 호출부 거동 무변). 전시 = --peach-text/--peach-light(같은 사다리 위치 = 틴트 계승, 신규 색 0).
+function _mvBars(days,diff,unit,tok,tokDim){
+  tok=tok||'--accent'; tokDim=tokDim||'--accent-light';
   // [260725 운영자] 하루치만 들어와도 값이 나오게 — 구 `length<2` 컷은 첫날 입력분을 통째로 '데이터 부족'으로 버렸다.
   // 막대는 종전대로 우측 정렬(justify-content:flex-end) = 날이 쌓일수록 옛날 막대가 왼쪽으로 밀리고 최신 막대가 항상 맨 우측·강조색(--accent).
   if(!days||!days.length)return '<span style="color:var(--muted);font-size:12px">데이터 부족</span>';
@@ -5770,13 +5773,13 @@ function _mvBars(days,diff,unit){
   var SLOT=7, blank='<span style="flex:0 0 7px" aria-hidden="true"></span>';   // 막대 폭 = 7*7 + 6*3 = 67px 고정(_RY_TREND_BARW)
   var bars='';
   for(var _b=d.length;_b<SLOT;_b++)bars+=blank;
-  bars+=d.map(function(v,i){var last=(i===d.length-1);var hp=Math.max(12,Math.round(v/mx*100));return '<span style="flex:0 0 7px;height:'+hp+'%;background:var('+(last?'--accent':'--accent-light')+');border-radius:2px"></span>';}).join('');
+  bars+=d.map(function(v,i){var last=(i===d.length-1);var hp=Math.max(12,Math.round(v/mx*100));return '<span style="flex:0 0 7px;height:'+hp+'%;background:var('+(last?tok:tokDim)+');border-radius:2px"></span>';}).join('');
   // [260731 운영자] 「차트는 아예 세로 기준선이 틀어져있는데 이 부분 맞춰주면 좋을듯」
   //   원인 = 우측 숫자 블록이 min-width(가변)라 행마다 전체 폭이 달랐고, 셀이 가운데 정렬이라 그 차이만큼 막대가 좌우로 흔들렸다.
   //   → 숫자 블록을 **고정폭**으로 못박아 모든 행의 내용 폭이 같아진다(막대 7칸은 이미 고정 = 7*7+6*3 = 67px).
   return '<span style="display:inline-flex;align-items:flex-end;justify-content:flex-end;gap:3px;height:28px;vertical-align:middle">'+bars+'</span>'
     +'<span style="display:inline-block;vertical-align:middle;margin-left:'+_RY_TREND_GAP+'px;text-align:right;width:'+_RY_TREND_NUMW+'px">'
-    +'<span style="display:block;color:var(--accent);font-weight:800;font-size:13px;font-variant-numeric:tabular-nums">+'+sum7.toLocaleString()+(unit||'석')+'</span>'
+    +'<span style="display:block;color:var('+tok+');font-weight:800;font-size:13px;font-variant-numeric:tabular-nums">+'+sum7.toLocaleString()+(unit||'석')+'</span>'
     +'<span style="display:block;color:var(--dim);font-size:11px;font-variant-numeric:tabular-nums;margin-top:2px">어제 '+(yest>=0?'+':'')+yest.toLocaleString()+'</span></span>';
 }
 function _srailTableHtml(perfs,exs){
@@ -5889,12 +5892,45 @@ function _yrmTable(){
   h+='</tbody></table></div></div>';
   wrap.innerHTML=h;
 }
-// 좌측 페이지([260723c 운영자] "내가 요청한게 좌측 1면, 너가 꺼내온게 넘기면 2면"): 1 = 연간 실적(2012~2026 누적 · openYearBoard 재사용 pfx='yrm') · 2 = 운영대장 현황
-function _bizmGo(d){var p=(_bizmState.page||1)+d; if(p<1)p=2; if(p>2)p=1; _bizmState.dir=d; _bizmState.page=p; _bizInlineRender(); _bizmAnimate();}   // [260723f] dir = 촤르륵 슬라이드 방향
-function _bizmTo(p){var cur=_bizmState.page||1; if(cur===p)return; _bizmState.dir=(p>cur)?1:-1; _bizmState.page=p; _bizInlineRender(); _bizmAnimate();}
-function _bizmAnimate(){ var el=document.getElementById('biz-main'); if(!el)return; var w=el.firstElementChild; if(!w)return; w.classList.remove('bizm-page','rev'); void w.offsetWidth; w.classList.add('bizm-page'); if((_bizmState.dir||1)<0)w.classList.add('rev'); }   // 재렌더 후 fresh 래퍼에 방향 슬라이드 재장전
+// ── [260731 운영자 4차] 대시보드 = 「책 4면」 ────────────────────────────────────────────
+// 면 = 1 연간 실적 · 2 판매 실적(구 우측 레일 '판매 현황' 개명) · 3 사업 결과 비교(구 좌 2면 '사업 현황') · 4 고객 분석(구 '회원 분포' 인라인化 · admin 전용 — 비admin은 3면 책).
+// 넓은 화면(>1200, 레일 노출) = 펼침 2면씩: 펼침1=[1|2](현행 배치 그대로), 펼침2=[3|4] — 좌 #biz-main=홀수면 · 우 #rail-yrm=짝수면, 넘김은 두 열이 같이(책넘김).
+// 좁은 화면(≤1200, 레일 숨김) = 1→2→3→4 한 면씩.
+// 하단 바 = 1개(#bizm-dots-row · 점 4개) — 넓을 땐 펼침 전체(두 열)의 가운데(_srailAlignTop이 translateX 보정), 좁을 땐 좌 보드 가운데.
+//   넓은 화면 점 = 현재 펼침의 두 면이 같이 켜짐(pair) · 우 레일 프로그램 넘김 바(.srail-uha-bar)는 레일 유리박스 '안'으로 이동해 유지(별도 축).
+function _bizBookN(){ return (typeof userRole!=='undefined'&&userRole==='admin')?4:3; }
+function _bizLeftPage(){ var p=_bizmState.page||1; return _bizBookWide()?((p<=2)?1:3):p; }   // 좌 열이 실제로 그리는 면 번호
+function _bizBookWide(){ return window.innerWidth>1200; }
+function _bizBookRender(){ _bizInlineRender(); if(_bizBookWide()){ try{_railYrmRender();}catch(_e){console.warn('[book right]',_e);} } _bizmAnimate(); }
+function _bizmGo(d){
+  var N=_bizBookN(), p=_bizmState.page||1;
+  if(_bizBookWide()){ var s=(p<=2)?0:1; s=(s+d)%2; if(s<0)s+=2; p=s*2+1; }   // 펼침 단위 넘김(홀수면으로 착지) — 4면 책 = 펼침 2개 순환(비admin 펼침2 우측은 안내 카드)
+  else { p+=d; if(p<1)p=N; if(p>N)p=1; }
+  _bizmState.dir=d; _bizmState.page=p; _bizBookRender();
+}
+function _bizmTo(p){ var N=_bizBookN(); if(p<1||p>N)return; var cur=_bizmState.page||1; if(cur===p)return; _bizmState.dir=(p>cur)?1:-1; _bizmState.page=p; _bizBookRender(); }
+// 세부메뉴 → 해당 면으로(biz 모드 진입 포함). 넓은 화면은 그 면이 속한 펼침이 열린다.
+function _bizBookGo(p){
+  var cur=_bizmState.page||1; if(cur!==p){ _bizmState.dir=(p>cur)?1:-1; _bizmState.page=p; }
+  if(typeof _mainView!=='undefined'&&_mainView!=='biz'&&typeof setMainView==='function'){ setMainView('biz'); return; }   // 면을 먼저 세팅 → 모드 전환 렌더(_mvApply)가 그 면을 바로 그린다(이중 렌더·애니 중복 방지 — 페이블 검수 7)
+  _bizBookRender();
+}
+function _bizmAnimate(){
+  ['biz-main','rail-yrm'].forEach(function(id){   // [260731 4차] 책넘김 = 두 열 동시 슬라이드(우 열은 넓은 화면에서만 존재)
+    var el=document.getElementById(id); if(!el||el.offsetParent===null)return; var w=el.firstElementChild; if(!w)return;
+    w.classList.remove('bizm-page','rev'); void w.offsetWidth; w.classList.add('bizm-page'); if((_bizmState.dir||1)<0)w.classList.add('rev');
+  });
+}
 function _bizmPageNav(){ return ''; }   // [260723f] 절대배치 ‹›(구 srail-cbtn) 폐지 — 페이지 컨트롤은 헤더 우측 _bizmDots로 통합(‹ • • ›)
-function _bizmDots(){ var p=_bizmState.page||1; return '<div style="display:flex;justify-content:center;margin:16px 0 2px"><span class="bizm-pgctl" role="group" aria-label="좌 보드 페이지 넘김"><button class="nav" type="button" aria-label="이전 면" onclick="_bizmGo(-1)">‹</button><span class="dots">'+[1,2].map(function(i){return '<button class="dot'+(p===i?' on':'')+'" type="button" aria-label="'+i+'페이지" aria-pressed="'+(p===i)+'" onclick="_bizmTo('+i+')"></button>';}).join('')+'</span><button class="nav" type="button" aria-label="다음 면" onclick="_bizmGo(1)">›</button></span></div>'; }
+function _bizmDots(){
+  var p=_bizmState.page||1, N=_bizBookN(), wide=_bizBookWide();
+  var LBL=['연간 실적','판매 실적','사업 결과 비교','고객 분석'];
+  var dots=''; for(var i=1;i<=N;i++){
+    var on=wide?(((p<=2)?(i<=2):(i>=3))):(i===p);   // 넓은 화면 = 현재 펼침의 두 면 pair 점등
+    dots+='<button class="dot'+(on?' on':'')+'" type="button" aria-label="'+i+'면 '+LBL[i-1]+'" aria-pressed="'+on+'" onclick="_bizmTo('+i+')"></button>';
+  }
+  return '<div id="bizm-dots-row" style="display:flex;justify-content:center;margin:16px 0 2px;transition:transform .3s ease"><span class="bizm-pgctl" role="group" aria-label="대시보드 책 넘김"><button class="nav" type="button" aria-label="이전 면" onclick="_bizmGo(-1)">‹</button><span class="dots">'+dots+'</span><button class="nav" type="button" aria-label="다음 면" onclick="_bizmGo(1)">›</button></span></div>';
+}
 function _bizmHead(right,title,sub){
   return '<div style="display:flex;align-items:center;gap:10px;min-height:47px;padding:1px 18px 0;background:rgba(255,255,255,.9);backdrop-filter:blur(11px);-webkit-backdrop-filter:blur(11px);border:1px solid var(--glass-border);border-bottom:1px solid rgba(0,0,0,.07);border-radius:var(--radius-lg) var(--radius-lg) 0 0;box-shadow:inset 0 1px 0 rgba(255,255,255,.6);overflow:hidden">'   // [260723f Opus] 상단 흰 하이라이트(유리 입체감)
     +'<span style="font-size:14.5px;font-weight:800;color:var(--accent);white-space:nowrap;letter-spacing:-.01em">'+(title||'사업 현황')+'</span>'
@@ -5907,8 +5943,23 @@ function _bizInlineRender(){
   if(typeof _mainView==='undefined'||_mainView!=='biz')return;
   if(typeof requestAnimationFrame==='function')requestAnimationFrame(function(){try{_srailAlignTop();}catch(_e){}});   // [260723 운영자] 좌 보드 렌더(innerHTML 반영) 후 우 판매현황 레일 높이 재캡 = 세로변 동일
   try{if(window.Plotly)['bizm-chart','bizm-genre','bizm-season','yrm-chart'].forEach(function(id){if(document.getElementById(id))Plotly.purge(id);});}catch(_e){}   // [260723 평의회4] innerHTML 파기 전 purge — 리스너·옵저버 누수 차단
+  // [260731 4차] 책 4면 — 좌 열이 그리는 면: 넓은 화면 = 홀수면(1·3, 짝수면은 우 #rail-yrm 담당) · 좁은 화면 = 현재 면 그대로(1~4)
   var page=_bizmState.page||1;
+  if(_bizBookWide())page=(page<=2)?1:3;
   var _pgTag='';   // [260723 운영자] 페이지 인디케이터 알약(1/2) 제거 — 하단 _bizmDots(‹ • • ›)로 일원화(헤더 우측 오버플로·중복 표기 해소). page 변수는 아래 분기에서 계속 사용
+  if(page===2){   // [260731 4차] 좁은 화면 전용 — 판매 실적 면(우 레일 틀을 좌 보드가 대신 그림 · 데이터 = 레일 6시트 공유)
+    try{ var _uhaN=document.getElementById('srail-uha'), _railN=document.getElementById('sales-rail'); if(_uhaN&&_railN&&!_railN.contains(_uhaN))_railN.appendChild(_uhaN); }catch(_e){}
+    try{ var _ryN=document.getElementById('rail-yrm'); if(_ryN)_ryN.innerHTML=''; }catch(_e){}   // #rail-yrm-list ID 유일성 — 숨은 레일 쪽 잔존 DOM 비움(uha는 위에서 대피)
+    el.innerHTML=_railYrmFrame()+_bizmDots()+_bizmPageNav();
+    if(!(_salesState&&_salesState.daily&&_salesState.master&&_salesState.ops)){ if(typeof _srailInit==='function')_srailInit(false,null,true); }   // allowNarrow = 좁은 화면 6시트 확보(§_srailInit)
+    else if(typeof _srailRender==='function'){ try{_srailRender();}catch(_e){console.warn('[book p2]',_e);} }
+    return;
+  }
+  if(page===4){   // [260731 4차] 좁은 화면 전용 — 고객 분석 면(admin, 비admin은 _bizBookN=3이라 진입 불가)
+    el.innerHTML='<div style="position:relative">'+_bizPageMemberHtml()+_bizmDots()+_bizmPageNav()+'</div>';
+    _bizMemberEnsure();
+    return;
+  }
   if(page===1){
     // [260723g 운영자 시안] 누적 총 = 헤더 우측(히어로 박스 폐지) · 부제 = 기간 · 본문 = 컴팩트(_yrmRender)
     var _grand='<span style="font-size:11.5px;color:var(--neutral-text);font-weight:600;white-space:nowrap">누적 <b style="color:var(--accent);font-size:14px;font-weight:800;font-variant-numeric:tabular-nums">'+_YR.grand.toLocaleString()+'명</b></span>';   // [260723 운영자] 「누적 3,690,031명」 — 실수치 + 숫자·명까지 강조색('총' 삭제)
@@ -5920,7 +5971,7 @@ function _bizInlineRender(){
     return;
   }
   if(!_bizState.raw){
-    el.innerHTML='<div style="position:relative">'+_bizmHead(_pgTag)+_BIZM_BOX+'<div style="position:relative;min-height:300px"><div class="sk-sweep" aria-hidden="true"></div><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--accent);opacity:.75;font-size:14px;font-weight:600">'+_ldHtml(16)+'운영 데이터 불러오는 중</div></div>'+'</div>'+_bizmDots()+_bizmPageNav()+'</div>';   // [PR 357 타 세션] 빔 스윕 로딩 통일 채택(양쪽 보존)
+    el.innerHTML='<div style="position:relative">'+_bizmHead(_pgTag,'사업 결과 비교',' · 연간 누적 실적 (운영대장)')+_BIZM_BOX+'<div style="position:relative;min-height:300px"><div class="sk-sweep" aria-hidden="true"></div><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--accent);opacity:.75;font-size:14px;font-weight:600">'+_ldHtml(16)+'운영 데이터 불러오는 중</div></div>'+'</div>'+_bizmDots()+_bizmPageNav()+'</div>';   // [PR 357 타 세션] 빔 스윕 로딩 통일 채택(양쪽 보존)
     // 레일이 숨는 폭(≤1200) = 레일 6시트 fetch가 없어 자체 확보 — 넓은 화면은 레일 플로우(res[3]→_bizState.raw)가 채움(중복 fetch 방지)
     if(window.innerWidth<=1200&&!window._bizmBusy){
       window._bizmBusy=1;
@@ -5930,13 +5981,13 @@ function _bizInlineRender(){
         _bizInlineRender();
       }).catch(function(e){
         window._bizmBusy=0;var b=document.getElementById('biz-main');
-        if(b&&_mainView==='biz'&&(_bizmState.page||1)===2)b.innerHTML='<div style="position:relative">'+_bizmHead(_pgTag)+_BIZM_BOX+'<div style="text-align:center;padding:50px;color:var(--danger);font-size:13px">데이터 로드 실패: '+escapeHtml(e.message||String(e))+' <button class="ana-chip" onclick="_bizInlineRender()" style="margin-left:8px">다시 시도</button></div>'+'</div>'+_bizmDots()+_bizmPageNav()+'</div>';
+        if(b&&_mainView==='biz'&&_bizLeftPage()===3)b.innerHTML='<div style="position:relative">'+_bizmHead(_pgTag,'사업 결과 비교',' · 연간 누적 실적 (운영대장)')+_BIZM_BOX+'<div style="text-align:center;padding:50px;color:var(--danger);font-size:13px">데이터 로드 실패: '+escapeHtml(e.message||String(e))+' <button class="ana-chip" onclick="_bizInlineRender()" style="margin-left:8px">다시 시도</button></div>'+'</div>'+_bizmDots()+_bizmPageNav()+'</div>';
       });
     }
     return;
   }
   var all=_bizClean();
-  if(!all.length){ el.innerHTML='<div style="position:relative">'+_bizmHead(_pgTag)+_BIZM_BOX+'<div style="text-align:center;padding:50px;color:var(--dim)">📭 표시할 운영 데이터가 없습니다</div>'+'</div>'+_bizmDots()+_bizmPageNav()+'</div>'; return; }
+  if(!all.length){ el.innerHTML='<div style="position:relative">'+_bizmHead(_pgTag,'사업 결과 비교',' · 연간 누적 실적 (운영대장)')+_BIZM_BOX+'<div style="text-align:center;padding:50px;color:var(--dim)">📭 표시할 운영 데이터가 없습니다</div>'+'</div>'+_bizmDots()+_bizmPageNav()+'</div>'; return; }
   var years=Array.from(new Set(all.map(function(r){return r._year;}))).sort(function(a,b){return b-a;});
   var thisY=(new Date()).getFullYear();
   if(_bizmState.year===null||years.indexOf(_bizmState.year)<0)_bizmState.year=(years.indexOf(thisY)>=0)?thisY:years[0];
@@ -5953,13 +6004,14 @@ function _bizInlineRender(){
   var list=Object.keys(gmap).map(function(k){var g=gmap[k];g.avg=g.occs.reduce(function(a,b){return a+b;},0)/g.occs.length;return g;}).sort(function(a,b){return a.end-b.end;});
   var right='<select class="ana-sel" onchange="_bizmSetYear(this.value)">'+years.map(function(y){return '<option value="'+y+'"'+(y===_bizmState.year?' selected':'')+'>'+y+'년</option>';}).join('')+'</select>';
   types.forEach(function(t){ var on=!!_bizmState.types[t]; var only=selTypes.length===1&&on; right+='<label class="fbar-chip'+(on?' on':'')+(only?' lock':'')+'" style="padding:5px 11px"><input type="checkbox" '+(on?'checked':'')+(only?' disabled':'')+' onchange="_bizmToggleType(\''+_anaEsc(t)+'\')">'+escapeHtml(t)+'</label>'; });   // [260723 평의회4] onchange 이스케이프 = 정본 _anaEsc(따옴표만 치환하던 약식 관례 경화)
+  right+='<button class="ana-chip" onclick="openBusinessBoard()" title="장르 벤치마크·시즌 추세까지 — 사업 결과 비교 크게 보기">자세히 보기</button>';   // [260731 4차] 세부메뉴가 인라인 면 이동으로 바뀌며 잃은 전체 모달 진입로 보전(기존 .ana-chip 부품)
   right+=_pgTag;
-  var h='<div style="position:relative">'+_bizmHead(right)+_BIZM_BOX;
+  var h='<div style="position:relative">'+_bizmHead(right,'사업 결과 비교',' · 연간 누적 실적 (운영대장)')+_BIZM_BOX;   // [260731 4차] 3면 이름 = 세부메뉴와 동일어(구 기본값 '사업 현황')
   if(!list.length){ h+='<div style="text-align:center;padding:40px;color:var(--dim)">해당 연도/분류 데이터가 없습니다</div>'+'</div>'+_bizmDots()+_bizmPageNav()+'</div>'; el.innerHTML=h; return; }
   var total=list.length,avgAll=list.reduce(function(a,g){return a+g.avg;},0)/list.length,maxAll=Math.max.apply(null,list.map(function(g){return g.avg;}));
   var kc=function(lab,val,tk){return '<div class="bizm-kpi" style="--kpitok:var('+(tk||'--accent')+')"><div class="lab">'+lab+'</div><div class="val">'+val+'</div></div>';};   // [260723f Opus] 글래스 KPI 통일(1·2면 동일 시각언어)
   h+='<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px">'+kc('총 공연',total+'건','--accent')+kc('평균 점유율',avgAll.toFixed(1)+'%','--peach-text')+kc('최고 점유율',maxAll.toFixed(1)+'%','--green')+'</div>';   // [260723f] 역할색 3톤(총·평균·최고)
-  h+='<div class="bizm-card"><div class="ct">월 × 점유율 분포 <span class="sub">— 점 = 공연(장르색) · 파선 = 장르 평균 · 상세 분석 = 대시보드 ▸ 사업 결과 비교</span></div><div id="bizm-chart" style="height:430px;margin:0 4px 2px"></div></div>';   // [260723c 선택값] 산점도 430 · [260723f] 카드 통일
+  h+='<div class="bizm-card"><div class="ct">월 × 점유율 분포 <span class="sub">— 점 = 공연(장르색) · 파선 = 장르 평균 · 상세 분석 = 우상단 [자세히 보기]</span></div><div id="bizm-chart" style="height:430px;margin:0 4px 2px"></div></div>';   // [260723c 선택값] 산점도 430 · [260723f] 카드 통일
   // [260723c 선택값] 장르 벤치마크·시즌 추세 = 표시(현행 계승) — 필터(수익성·회차·진행일) 인라인 상태(_bizmState)로 구동, 모달 무접촉
   h+='<div class="bizm-card"><div class="ct">장르 벤치마크 <span class="sub">— ◆장르 평균 · ⭐'+_bizmState.year+'년 공연 · 점=전체 기간 (선택 분류 기준)</span></div>'
     +'<div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin:6px 12px 8px">'+_chipRow('수익성',['전체','공공성','상업성'],_bizmState.profit,'_bizmSetProfit')+_chipRow('회차',['전체','1회','2~4회','5회+'],_bizmState.rounds,'_bizmSetRounds')+_chipRow('진행일',['전체','단일','2~3일','4일+'],_bizmState.rundays,'_bizmSetRunDays')+'</div>'
@@ -6375,7 +6427,7 @@ function _srailRenderInner(els){
   _srailChartW=Math.max(240,((els.body&&els.body.clientWidth)||0)-56); if(_srailChartW<=240&&!((els.body&&els.body.clientWidth)||0))_srailChartW=280;
   // [260723] 실적 모드 = 좌 인라인 보드 동기 갱신(레일 6시트 fetch가 _bizState.raw를 채우는 수렴점 — 어느 렌더 경로로 와도 좌측이 로딩에 안 갇히게)
   // 드릴 이동은 우측만 바뀌므로 스킵([260723 평의회4]) · 1면(연간 실적)은 정적 데이터라 재렌더 불요(카운트업 리셋 방지) — 2면일 때만 갱신(260723c)
-  if(typeof _mainView!=='undefined'&&_mainView==='biz'&&_srailView.mode!=='drill'&&(_bizmState.page||1)===2){ try{_bizInlineRender();}catch(_e){console.warn('[bizm]',_e);} }
+  if(typeof _mainView!=='undefined'&&_mainView==='biz'&&_srailView.mode!=='drill'&&_bizLeftPage()===3){ try{_bizInlineRender();}catch(_e){console.warn('[bizm]',_e);} }   // [260731 4차] 좌 열 3면(사업 결과 비교)일 때만 — 2면(판매 실적, 좁은 화면)은 아래 _railYrmSync가 리스트를 직접 갱신(여기서 재진입하면 _srailRender 순환)
   var perfs; try{ perfs=_salesBuild(); }catch(e){ console.warn('[srail build]',e); perfs=[]; }
   // 판매중 공연 + 진행중 전시(종류 무관 "진행중인 건 다" — 운영자 260707). 교육은 시트 생기면 여기 합류(확장점).
   var perfActives=perfs.filter(function(p){return p.status==='active';});
@@ -6758,7 +6810,8 @@ function _railYrmPerfTable(perfs,rateLab){
   });
   h+='</tr></thead><tbody>';   // [260725 운영자] 「판매율」열 신설(추이 좌측) — 기본 폭 10/24/18/24/13/11 · [260729 운영자] 폭 = colgroup + 경계 드래그 조절
   perfs.forEach(function(p){
-    var trend=p.noData?('<span style="color:var(--muted);font-size:12px">'+((p.dday!==null&&p.dday>0)?'오픈 예정':'데이터 부족')+'</span>'):_mvBars(p.days,p.diff,p._unit);
+    var trend=p.noData?('<span style="color:var(--muted);font-size:12px">'+((p.dday!==null&&p.dday>0)?'오픈 예정':'데이터 부족')+'</span>')
+      :_mvBars(p.days,p.diff,p._unit,(p._kind==='ex')?'--peach-text':null,(p._kind==='ex')?'--peach-light':null);   // [260731 운영자 4차] 전시 추이 = 전시색(--peach-text 사다리) — 3열 누적 관객수·그룹 블릿과 같은 축
     // 3열 = 공연·교육 「판매율」(N% (분자/분모)) · 전시 「누적 관객수」(누계 숫자) — 둘 다 강조색 볼드·좌측 정렬로 같은 문법
     var rate=p.noData?'<span style="color:var(--muted);font-size:12px">—</span>'
       :((p._kind==='ex')?_ryAccCell(p._acc):_ryRateCell(p.seats,p.totalOpen,p.occ,'--accent'));
@@ -6997,29 +7050,56 @@ function _ryDrillClose(anim){
   try{ _srailAlignTop(); }catch(_e){}
 }
 function _railYrmFrame(){
-  // [260725 운영자] 우 틀 = 「판매 현황」(구 '연간 실적' 개명 · 이름 정본 = .srail 헤더 srail-ttltext와 동일어) · 연간 축 표기(누적 N명·2012~2026.1Q)와 상수 KPI 4칸(_uhaLeftStrip)은 제거 → 그 자리만큼 아래 리스트가 위로 올라옴
+  // [260725 운영자] 우 틀 = 「판매 실적」(구 '판매 현황' — 260731 4차 책 4면 개명 · 2면 이름 = 세부메뉴와 동일어) · 연간 축 표기(누적 N명·2012~2026.1Q)와 상수 KPI 4칸(_uhaLeftStrip)은 제거 → 그 자리만큼 아래 리스트가 위로 올라옴
   var acts=(typeof window!=='undefined')?window._railYrmActives:null;
-  var h='<div style="position:relative">'+_bizmHead('','판매 현황',' ')+_BIZM_BOX;
+  var h='<div style="position:relative">'+_bizmHead('','판매 실적',' ')+_BIZM_BOX;
   h+='<div class="bizm-card"><div class="ct">'+_railYrmCardTitle()+'</div><div id="rail-yrm-list">'+_railYrmTableHtml(acts)+'</div></div>';
-  h+='</div>';   // [260725 운영자] 유리박스 닫기 — 점줄 슬롯은 박스 '밖'으로(좌 보드의 _bizmDots가 박스 밖인 것과 같은 구조) = 좌우 유리박스 하단이 같은 라인
-  h+='<div id="rail-yrm-uha"></div>';   // [260724 운영자] 상세(#srail-uha) 이주 슬롯 — 이제 박스 아래 점줄 자리
+  h+='<div id="rail-yrm-uha"></div>';   // [260731 4차 운영자] 상세(#srail-uha) 슬롯 = 유리박스 '안'으로 이주 — 프로그램 넘김 바(.srail-uha-bar)가 레일 카드 안에 남고, 박스 밖 하단 바는 책 넘김(#bizm-dots-row) 하나만
+  h+='</div>';   // 유리박스 닫기
   h+='</div>';
   return h;
+}
+// [260731 4차] 4면 = 고객 분석(구 '회원 분포' 인라인化) — 본문 = _memOvRender 재사용(모달과 같은 집계·부품), admin 전용.
+//   비admin = 좁은 화면에선 면 자체가 없고(_bizBookN=3), 넓은 화면 펼침2 우측만 안내 카드(레이아웃 유지 · 데이터 0).
+function _bizPageMemberHtml(){
+  var inner=(typeof userRole!=='undefined'&&userRole==='admin')
+    ?('<div id="mem-ov-inline" style="position:relative;min-height:260px"><div class="sk-sweep" aria-hidden="true"></div><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--accent);opacity:.75;font-size:14px;font-weight:600">'+_ldHtml(16)+'회원 데이터 불러오는 중</div></div>')
+    :('<div style="text-align:center;padding:60px 20px;color:var(--dim);font-size:13px">🔒 고객 분석은 관리자 전용이에요<br><span style="font-size:11.5px;color:var(--muted)">개인정보 집계라 관리자 계정에서만 열려요</span></div>');
+  return _bizmHead('','고객 분석',' · 운영_회원 · 개인 식별 없음(집계 전용)')+_BIZM_BOX+inner+'</div>';
+}
+function _bizMemberEnsure(){
+  var tgt=document.getElementById('mem-ov-inline'); if(!tgt)return;
+  if(typeof userRole==='undefined'||userRole!=='admin')return;   // 비admin은 애초에 안내 카드(위)라 여기 안 온다 — 이중 안전
+  var ready=_memState&&_memState.rows&&_memState.rows.length&&_memState.rows[0]['연령대']!==undefined;
+  if(ready){ _memOvRender('mem-ov-inline'); return; }
+  if(_memLoading){ setTimeout(_bizMemberEnsure,600); return; }   // [페이블 검수 MED] _memLoad는 비행 중이면 콜백 없이 return — 폴링으로 합류(_memWarm 선로딩과 공존)
+  if(window._bizMemBusy)return;
+  window._bizMemBusy=1;
+  Promise.resolve()
+    .then(function(){ return (_memState&&_memState.rows&&_memState.rows.length)?null:_memLoad(false); })
+    .then(function(){ if(_memState&&_memState.rows&&_memState.rows.length&&_memState.rows[0]['연령대']===undefined)return _memLoad(true); })   // 옛 캐시(연령대 없음) = 1회 신선 재로드(openMemberOverview와 동일 규칙)
+    .then(function(){ window._bizMemBusy=0; if(document.getElementById('mem-ov-inline'))_memOvRender('mem-ov-inline'); })
+    .catch(function(e){ window._bizMemBusy=0; var t=document.getElementById('mem-ov-inline'); if(t)t.innerHTML='<div style="text-align:center;padding:50px;color:var(--danger);font-size:13px">회원 데이터를 못 불러왔어요 <button class="ana-chip" onclick="_bizMemberEnsure()" style="margin-left:8px">다시 시도</button></div>'; console.warn('[book p4]',e); });
 }
 function _railYrmRender(){
   var el=document.getElementById('rail-yrm'); if(!el)return;
   // [260724 운영자] 레이아웃 합침 — 상세(#srail-uha)를 틀 안 슬롯으로 이주. innerHTML 파기 전 밖으로 대피(엘리먼트·타이머·리스너 보존) 후 재장착.
   var uha=document.getElementById('srail-uha'), rail=document.getElementById('sales-rail');
   try{ if(uha&&rail&&el.contains(uha))rail.appendChild(uha); }catch(_e){}
-  try{ el.innerHTML=_railYrmFrame(); }catch(_e){ console.warn('[rail-yrm]',_e); }
-  try{ var slot=document.getElementById('rail-yrm-uha'); if(uha&&slot)slot.appendChild(uha); }catch(_e){}
+  // [260731 4차] 우 열 = 짝수면: 펼침1 → 2면 판매 실적(종전) · 펼침2 → 4면 고객 분석(admin) / 비admin 안내 카드
+  var rp=((_bizmState.page||1)<=2)?2:4;
+  try{ el.innerHTML=(rp===2)?_railYrmFrame():('<div style="position:relative">'+_bizPageMemberHtml()+'<div id="rail-yrm-uha" style="display:none"></div></div>'); }catch(_e){ console.warn('[rail-yrm]',_e); }
+  try{ var slot=document.getElementById('rail-yrm-uha'); if(uha&&slot)slot.appendChild(uha); }catch(_e){}   // 4면에서도 슬롯(숨김)에 주차 — 타이머·리스너 보존, 화면 노출 0
+  if(rp===4){ _bizMemberEnsure(); }
+  else { try{ if(window._railYrmActives)_srailUhaSync(window._railYrmActives); }catch(_e){} try{ if(_ryDrill.key)_ryDrillPaint(_ryDrill.key,0); }catch(_e){} try{ _railYrmSyncActive(); }catch(_e){} }   // [260731 4차 · 페이블 검수 MED] 펼침1 복귀 = 회전 기계·상세·액티브 pill 재점화(4면 휴식의 짝)
 }
 // 판매중 목록(actives) 도착·갱신마다 리스트만 in-place 갱신(틀·KPI 재생성 없음). 틀 미구축이면 통째 렌더.
 function _railYrmSync(actives){
   try{ if(typeof window!=='undefined')window._railYrmActives=actives; }catch(_e){}
   var el=document.getElementById('rail-yrm'); if(!el)return;
+  if(_bizBookWide()&&(_bizmState.page||1)>2){ return; }   // [260731 4차] 펼침2(우=고객 분석) = 목록 DOM이 없다 — actives만 저장하고 4면 화면은 안 건드린다(재렌더가 고객 분석 본문을 지우는 사고 방지)
   var list=document.getElementById('rail-yrm-list');
-  if(!list){ _railYrmRender(); return; }
+  if(!list){ if(el.childNodes.length)return; _railYrmRender(); return; }   // [260731 4차] 틀이 있는데 목록만 없다 = 다른 면 — 통째 재렌더 금지(빈 틀일 때만 최초 구축)
   list.innerHTML=_railYrmTableHtml(actives);
   if(_ryDrill.key&&!_ryDrillPaint(_ryDrill.key,0))_ryDrill.key='';   // 상세를 보던 중 데이터가 갱신되면 상세를 다시 그린다(그 프로그램이 사라졌으면 목록 유지)
   var ct=el.querySelector('.bizm-card .ct'); if(ct)ct.innerHTML=_railYrmCardTitle();
@@ -7105,7 +7185,8 @@ function _srailUhaResume(){ _uhaCar.paused=false; var b=document.getElementById(
 function _srailUhaSync(actives){
   var box=document.getElementById('srail-uha'); if(!box)return;
   var biz=(typeof _mainView!=='undefined'&&_mainView==='biz');
-  if(!biz||!actives||!actives.length){ box.style.display='none'; box.setAttribute('data-on','0'); _srailUhaStop(); _uhaCar.list=[]; _uhaCar.sig=''; return; }
+  var p4=(typeof _bizBookWide==='function'&&_bizBookWide()&&(_bizmState.page||1)>2);   // [260731 4차 · 페이블 검수 HIGH] 펼침2(우=고객 분석) = 회전 기계 완전 휴식 — 숨은 슬롯에서 재점화(data-on=1·타이머 재예약) 차단. 복귀 재점화 = _railYrmRender(2면)의 재동기 호출
+  if(!biz||p4||!actives||!actives.length){ box.style.display='none'; box.setAttribute('data-on','0'); _srailUhaStop(); _uhaCar.list=[]; _uhaCar.sig=''; return; }
   box.style.display='flex'; box.setAttribute('data-on','1');   // 데이터 있을 때만 노출(JS 구동 = 빈 박스 깜빡임 방지)
   var sig=actives.map(_srailUhaKey).join('|');
   var bodyEl=document.getElementById('srail-uha-body');
@@ -20986,20 +21067,21 @@ function _calMenuBuild(menu){
   menu.innerHTML='<div style="padding:8px 14px 6px;font-size:11px;color:var(--dim);font-weight:700">캘린더</div>'
     +'<button type="button" onclick="_ddCloseAll();openBatchWizard()" style="'+itemCss+';background:rgba(74,77,231,0.06)" onmouseenter="this.style.background=\'rgba(74,77,231,0.12)\'" onmouseleave="this.style.background=\'rgba(74,77,231,0.06)\'"><span style="flex:1">홍보 신청</span><span style="font-size:10px;color:var(--accent);font-weight:700">기본</span></button>'
     +'<button type="button" onclick="_ddCloseAll();openPromoBoard()" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'">온라인 홍보 현황</button>'
-    +'<button type="button" onclick="_ddCloseAll();openPlatformBoard()" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'">오프라인 홍보 현황</button>';   // [260714 운영자] 온라인 홍보 현황(openPromoBoard)·오프라인 홍보 현황(openPlatformBoard)
+    +'<button type="button" onclick="_ddCloseAll();openPlatformBoard()" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'">오프라인 홍보 현황</button>'   // [260714 운영자] 온라인 홍보 현황(openPromoBoard)·오프라인 홍보 현황(openPlatformBoard)
+    +'<button type="button" onclick="_ddCloseAll();openAnnualCalendar()" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'">연간 일정</button>';   // [260731 운영자 4차] 연간 일정 = 대시보드 세부에서 캘린더 세부 맨 마지막으로 이사(대시보드는 책 4면 전용)
 }
 // 대시보드 세부 — 연간 실적(openYearBoard, 구 '사업 현황' 대메뉴) + 사업 결과 비교(openBusinessBoard) + 연간 일정 + 회원 분포(admin, 구 '회원 관리' 대메뉴).
 //   [260731 운영자] '사업 현황'과 '연간 실적'은 같은 보드였음 → 표 내용(2012~2026 연간 실적)에 맞는 「연간 실적」만 남김.
 //   판매 현황·실적 입력은 여기 두지 않음 = 판매 현황 대메뉴와 같은 화면(한 화면 = 한 자리).
 function _bizMenuBuild(menu){
   var itemCss='display:flex;align-items:center;gap:10px;width:100%;padding:11px 14px;border:0;text-align:left;font-size:13px;font-weight:600;color:var(--text);border-radius:9px;cursor:pointer;font-family:inherit;transition:background .12s';
+  // [260731 운영자 4차] 세부메뉴 = 책 4면과 1:1(같은 순서·같은 이름) — 클릭 = 그 면으로 책 넘김(_bizBookGo · 인라인).
+  //   연간 일정은 캘린더 세부 맨 마지막으로 이사(운영자 "캘린더 맨 마지막 메뉴로") · 「회원 분포」→「고객 분석」 개명(운영자).
   menu.innerHTML='<div style="padding:8px 14px 6px;font-size:11px;color:var(--dim);font-weight:700">대시보드</div>'
-    +'<button type="button" onclick="_ddCloseAll();openYearBoard()" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'">연간 실적</button>'
-    +'<button type="button" onclick="_ddCloseAll();openBusinessBoard()" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'">사업 결과 비교</button>'   // [260731 운영자 3차] 구 판매 현황 ▸ '실적 분석'(openBusinessBoard) — 개명 + 대시보드로 이동. 실적 성격이라 연간 실적 바로 다음
-    +'<button type="button" onclick="_ddCloseAll();openAnnualCalendar()" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'">연간 일정</button>'   // [260731 운영자] 연간 일정 = 구 '사업 실적'서 대시보드로 이동
-    // [260731 운영자 2차] 회원 관리 대메뉴 폐지 → 「회원 분포」(openMemberOverview — 거주지 TOP·연령대·전국 분포 맵)를 대시보드 세부 마지막 항목으로.
-    //   개인정보 집계라 관리자에게만 노출(구 대메뉴 admin 게이트 계승 · 함수 자체 게이트도 유지). 항목 문법 = 위 두 항목과 동일(신규 값 0).
-    +(userRole==='admin'?'<button type="button" onclick="_ddCloseAll();openMemberOverview()" title="거주지·연령·전국 분포 요약 (회원 조회는 여기서 진입)" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\';_memWarm()" onmouseleave="this.style.background=\'none\'">회원 분포</button>':'');   // onmouseenter의 _memWarm = 선로딩(클릭 전에 적재 시작 → 열면 바로 보임)
+    +'<button type="button" onclick="_ddCloseAll();_bizBookGo(1)" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'">연간 실적</button>'
+    +'<button type="button" onclick="_ddCloseAll();_bizBookGo(2)" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'">판매 실적</button>'
+    +'<button type="button" onclick="_ddCloseAll();_bizBookGo(3)" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'">사업 결과 비교</button>'
+    +(userRole==='admin'?'<button type="button" onclick="_ddCloseAll();_bizBookGo(4)" title="거주지·연령·전국 분포 요약 (회원 조회는 여기서 진입)" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\';_memWarm()" onmouseleave="this.style.background=\'none\'">고객 분석</button>':'');   // onmouseenter의 _memWarm = 선로딩(클릭 전에 적재 시작 → 열면 바로 보임)
 }
 function _contentMenuBuild(menu){
   // [260711 운영자] 영상 편집기 3분류 신설 — 1 영상 편집 · 2 자막 삽입 · 3 영상 프롬프팅 (한 도구, 탭 진입점 3개)
@@ -22795,7 +22877,7 @@ var _memState=null,_memLoading=false,_memEscH=null,_memQT=null,_memEpoch=0;
 // [260731 운영자 "바로 안 열려요"] PII 재적재 가드를 「#member-lookup 존재」 → 「purge 에포크」로 교체.
 //   구 가드는 회원 조회 모달이 DOM에 없으면(= 회원 분포로 곧장 들어온 경우) 응답을 통째로 버려서 개요가 항상 "못 불러왔어요"였다.
 //   에포크 = _memPurge(로그아웃·유휴잠금)가 증가 → await 중 purge된 응답만 정확히 폐기(보안 의도 동일, 진입 경로 무관).
-function _memPurge(){_memState=null;_memLoading=false;_memEpoch++;var bg=document.getElementById('member-lookup');if(bg){if(_memEscH){document.removeEventListener('keydown',_memEscH);_memEscH=null;}bg.remove();}var ov=document.getElementById('member-ov');if(ov)ov.remove();}
+function _memPurge(){_memState=null;_memLoading=false;_memEpoch++;var bg=document.getElementById('member-lookup');if(bg){if(_memEscH){document.removeEventListener('keydown',_memEscH);_memEscH=null;}bg.remove();}var ov=document.getElementById('member-ov');if(ov)ov.remove();var inl=document.getElementById('mem-ov-inline');if(inl)inl.innerHTML='<div style="text-align:center;padding:40px;color:var(--dim);font-size:13px">세션 종료로 집계를 비웠어요</div>';}   // [260731 4차 · 페이블 검수 HIGH] 인라인 4면(고객 분석)에 그려진 회원 집계 DOM도 소거 — 로그아웃·유휴잠금 PII 위생 동일 적용
 // 선로딩(운영자 260731 "항상 바로 나오게") — 대시보드 ▸ 회원 분포 항목에 마우스만 올려도 백그라운드 적재 시작.
 //   클릭 시점엔 이미 캐시라 즉시 그려진다. 중복 발사는 _memLoading·_memState 가드로 차단(추가 API 호출 0).
 function _memWarm(){ if(userRole!=='admin'||_memState||_memLoading)return; try{_memLoad(false);}catch(e){} }
@@ -22816,7 +22898,7 @@ async function openMemberLookup(){
       +'<select id="mem-f1" onchange="_memFillSel(2);_memRender()" style="width:auto;max-width:190px;padding:9px 10px;border:1px solid var(--border2);border-radius:var(--r-btn);font-size:12.5px;font-family:inherit;background:var(--surface-solid);color:var(--text)"><option value="">시도 전체</option></select>'
       +'<select id="mem-f2" onchange="_memFillSel(3);_memRender()" style="width:auto;max-width:160px;padding:9px 10px;border:1px solid var(--border2);border-radius:var(--r-btn);font-size:12.5px;font-family:inherit;background:var(--surface-solid);color:var(--text)"><option value="">시군구 전체</option></select>'
       +'<select id="mem-f3" onchange="_memRender()" style="width:auto;max-width:150px;padding:9px 10px;border:1px solid var(--border2);border-radius:var(--r-btn);font-size:12.5px;font-family:inherit;background:var(--surface-solid);color:var(--text)"><option value="">동·읍면 전체</option></select>'
-      +'<button type="button" onclick="closeMemberLookup();openMemberOverview()" title="거주지·연령·전국 분포 요약" style="padding:9px 13px;border:1.5px solid var(--accent);background:var(--accent);color:var(--surface-solid);border-radius:var(--r-btn);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:6px"><svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M2 12V7M7 12V2M12 12V5"/></svg>회원 분포</button>'   /* [260731 2차] 이름 통일 = 대시보드 세부메뉴 「회원 분포」(구 '기본 개요' — 한 화면 = 한 이름) */
+      +'<button type="button" onclick="closeMemberLookup();openMemberOverview()" title="거주지·연령·전국 분포 요약" style="padding:9px 13px;border:1.5px solid var(--accent);background:var(--accent);color:var(--surface-solid);border-radius:var(--r-btn);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:6px"><svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M2 12V7M7 12V2M12 12V5"/></svg>고객 분석</button>'   /* [260731 4차] 이름 통일 = 대시보드 세부메뉴·책 4면 「고객 분석」(구 '회원 분포' — 한 화면 = 한 이름) */
       +'<button type="button" id="mem-refresh" onclick="_memLoad(true)" title="시트에서 다시 불러오기" style="padding:9px 13px;border:1.5px solid var(--accent);background:var(--accent-glow);color:var(--accent);border-radius:var(--r-btn);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">새로고침</button>'
       +'</div>'
       +'<div id="mem-body" style="max-height:56vh;overflow:auto;border:1px solid var(--border);border-radius:var(--r-btn)"></div>'
@@ -22930,7 +23012,7 @@ function _memGeoKey(sido,sgg){
 function _memXY(lonlat){return [(lonlat[0]-124.5)*65,(39-lonlat[1])*80];}   // lon124.5~131.5·lat33~39 → 455×480 (위도/경도 km비 보정)
 function closeMemberOverview(){var el=document.getElementById('member-ov');if(el)el.remove();}
 async function openMemberOverview(){
-  if(userRole!=='admin'){showToast('회원 분포는 관리자 전용이에요','error');return;}
+  if(userRole!=='admin'){showToast('고객 분석은 관리자 전용이에요','error');return;}
   closeMemberOverview();
   var el=document.createElement('div');el.id='member-ov';
   el.innerHTML='<div class="modal-bg show" style="z-index:var(--z-modal)" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeMemberOverview)">'
@@ -22946,8 +23028,8 @@ async function openMemberOverview(){
   if(_memState&&_memState.rows.length&&_memState.rows[0]['연령대']===undefined){await _memLoad(true);}
   _memOvRender();
 }
-function _memOvRender(){
-  var body=document.getElementById('mem-ov-body');
+function _memOvRender(targetId){   // [260731 4차] targetId = 인라인 4면(mem-ov-inline) 재사용 — 미지정 = 종전 모달(#mem-ov-body). 모달·인라인이 같은 id를 쓰면 getElementById 충돌(페이블 검수 HIGH)이라 컨테이너를 분리
+  var body=document.getElementById(targetId||'mem-ov-body');
   if(!body)return;
   if(!_memState||!_memState.rows.length){body.innerHTML='<div style="padding:40px;font-size:13px;color:var(--danger)">회원 데이터를 못 불러왔어요 — 통합문서 「운영_회원」 시트를 확인해 주세요</div>';return;}
   var rows=_memState.rows,n=rows.length;
@@ -22997,7 +23079,7 @@ function _memOvRender(){
   var ageHtml='<div style="font-size:14px;font-weight:800;margin:18px 0 6px;text-align:left">연령대 분포 <span style="font-size:10.5px;color:var(--dim);font-weight:500">(생년월일 기준 · 만나이 근사)</span></div>'
     +ages.map(function(a){return bar(a[0],a[1],maxA,pct(a[1])+'%',!!ageTop2[a[0]]);}).join('');   // 연령대는 나이순 정렬이라 '많은 순 1·2위'를 따로 계산(ageTop2)
   body.style.textAlign='left';body.style.color='var(--text)';
-  body.innerHTML='<div style="font-size:16px;font-weight:800;margin-bottom:2px">회원 분포</div>'
+  body.innerHTML='<div style="font-size:16px;font-weight:800;margin-bottom:2px">고객 분석</div>'
     +'<div style="font-size:12px;color:var(--dim);margin-bottom:14px">운영_회원 시트 · 주소 미상 '+unloc.toLocaleString()+'명 제외 집계 · 개인 식별 없음(집계 전용)</div>'
     +kpi
     +'<div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start">'
@@ -23033,7 +23115,7 @@ function _memOvMap(geo){
       +(showLb?'<text x="'+lx.toFixed(1)+'" y="'+ly.toFixed(1)+'" text-anchor="'+anchor+'" font-size="12" font-weight="700" fill="var(--text)">'+_memEsc(label)+'</text>'
       +'<text x="'+lx.toFixed(1)+'" y="'+(ly+14).toFixed(1)+'" text-anchor="'+anchor+'" font-size="12" fill="var(--dim)">'+geo[k].toLocaleString()+'명</text>':'');
   }).join('');
-  return '<svg viewBox="0 0 455 480" style="width:100%;height:auto;display:block" role="img" aria-label="전국 회원 분포 버블맵">'
+  return '<svg viewBox="0 0 455 480" style="width:100%;height:auto;display:block" role="img" aria-label="전국 고객 분포 버블맵">'
     +'<path d="'+d+'" fill="var(--accent)" opacity="0.08" stroke="var(--border2)" stroke-width="1"/>'
     +'<ellipse cx="'+jj[0].toFixed(1)+'" cy="'+jj[1].toFixed(1)+'" rx="26" ry="10" fill="var(--accent)" opacity="0.08" stroke="var(--border2)" stroke-width="1"/>'
     +bubbles+'</svg>';
