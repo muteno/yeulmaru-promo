@@ -1418,6 +1418,137 @@ async function gcalDays(env, from, to, force, ctx) {
 }
 __name(gcalDays, "gcalDays");
 
+// ═══ [260801 운영자] 대관 DB 통합 — 구글 캘린더 대관 일정을 SharePoint 「프로그램」 시트에 편입 ═══
+//   운영자 결정 = ① 시트에 실제 기록(그전엔 구글 피드가 어느 시트에도 안 남고 브라우저 메모리에서만 살았다)
+//                ② 표시 전용 = 홍보 신청·판매 집계 대상에서 제외.
+//   · 소유 표식 = 프로그램ID `R<yymmdd>_<해시4>` — 사람 채번(YYMMDD_NN)과 패턴이 갈려 서로 순번을 잠식하지 않는다.
+//     **이 접두를 가진 행만** 이 동기화가 건드린다(다른 행 물리적 무접촉 불변식).
+//   · 홍보노출='N' + 홍보시작일·판매기간 공백 = 홍보 게이트·판매 집계 밖.
+//   · 앱 화면은 종전대로 구글 라이브 오버레이가 그린다(셋업 「셋」 표기가 제목 파싱에만 있어 시트 열로 못 옮긴다)
+//     → 프런트는 이 행들을 PERFS에 안 싣는다(index.html loadPrograms의 GCAL_SYNC_RE 분리). 화면 회귀 0.
+//   · 창 = 오늘 −30일 ~ +180일. 그 창 안에서만 추가·수정·삭제하고 창 밖(지난 기록)은 보존한다.
+//   · 안전장치: cron 자동 실행은 env.GCAL_SYNC === '1'일 때만. 수동 = POST /api/gcal/sync (admin · ?dry=1 = 미리보기).
+var GCAL_SYNC_RE = /^R\d{6}_[0-9a-z]{4}$/;
+var GCAL_SYNC_BACK = 30, GCAL_SYNC_FWD = 180;
+var GCAL_PLACE = { "대": "대극장", "소": "소극장", "장": "장도", "7층": "7층", "야외": "야외", "리1": "리허설실1", "리1,2": "리허설실1·2" };
+var GCAL_DROP = /^(공사|점검|휴관|휴무)$/;
+
+function gcalHash4(s) {   // UID → 4자리 base36 안정 키(같은 일정 = 같은 행)
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0;
+  return h.toString(36).slice(-4).padStart(4, "0");
+}
+__name(gcalHash4, "gcalHash4");
+
+function isoToSerial(iso) {   // 'YYYY-MM-DD' → 엑셀 날짜 일련번호(1899-12-30 기준) · 프런트 isoToExcelSerial과 동일 규격
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(iso || ""))) return "";
+  return Math.round(Date.parse(iso + "T00:00:00Z") / 864e5) + 25569;
+}
+__name(isoToSerial, "isoToSerial");
+
+// 제목 → {name, kind, place, drop} — 프런트 _gcParse의 '행 정보'용 축약본.
+// ⚠ 쌍둥이: 태그 규격([공간][구분])·공간 표기·제외 규칙·이름 절단 경계는 index.html의 _gcParse/_GC_PLACE/_GC_DROP과 같은 규격이다
+//   (한쪽만 고치면 시트 이름과 캘린더 이름이 갈린다 = 중복 판정 실패). 셋업 판정은 담을 열이 없어 여기선 안 한다.
+function gcalParseRow(title) {
+  let raw = String(title || "").replace(/^['"\s]+/, ""), tags = [], rest = raw, m;
+  while ((m = rest.match(/^\s*\[([^\]]*)\]/))) { tags.push(m[1].trim()); rest = rest.slice(m[0].length); }
+  rest = rest.trim();
+  let kindTag = "", placeTag = "";
+  tags.forEach((t) => { if (t === "대관" || t === "기획") { if (!kindTag) kindTag = t; } else if (!placeTag) placeTag = t; });
+  const masked = rest.replace(/\d{1,2}:\d{2}/g, (x) => "§".repeat(x.length));   // 시간은 같은 길이로 덮는다(문자 위치 보존)
+  let cut = masked.length;
+  const marks = [/\d{1,2}\/\d{1,2}/, /\d{1,2}(?:\s*[~,]\s*\d{1,2})*\s*일/, /§/];
+  marks.forEach((re) => { const g = masked.match(re); if (g && g.index >= 0 && g.index < cut) cut = g.index; });
+  // 키워드 경계 = 프런트 _gcParse의 KWRE 그대로: 셋업·철수·공연은 앞 경계 요구(한글 뒤 「송년공연」은 키워드 아님) ·
+  //   연습·리허설은 이름에 그대로 붙어 오는 실데이터(「오케스트라더여수연습 9/11」)가 있어 경계를 요구하지 않는다([260731 4차]).
+  const kw = masked.match(/(?:^|[\s\]0-9일])(셋업|철수|공연)|(연습|리허설)/);
+  if (kw) { const w = kw[1] || kw[2]; const at = kw.index + kw[0].length - w.length; if (at < cut) cut = at; }
+  const name = (rest.slice(0, cut).replace(/[\s,·\-~]+$/, "").replace(/^[\s,·\-~]+/, "") || rest).trim();
+  return { name, kind: kindTag || "대관", place: GCAL_PLACE[placeTag] || placeTag || "", drop: GCAL_DROP.test(name) };
+}
+__name(gcalParseRow, "gcalParseRow");
+
+// 구글 대관 일정 ↔ 「프로그램」 시트 대조 후 추가·수정·삭제. dry=true면 계획만 돌려주고 시트는 안 건드린다.
+async function gcalSyncPrograms(env, token, opts) {
+  const dry = !!(opts && opts.dry);
+  const nowKst = new Date(Date.now() + 9 * 3600 * 1e3);
+  const day = (n) => { const d = new Date(nowKst); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+  const from = day(-GCAL_SYNC_BACK), to = day(GCAL_SYNC_FWD);
+  const feed = await gcalDays(env, from, to, false, null);
+  // 날짜별로 펼쳐 온 것을 일정(uid) 단위로 다시 묶는다 — 시트 한 행 = 일정 하나(시작~종료)
+  const grp = {}, order = [];
+  ((feed && feed.days) || []).forEach((x) => {
+    if (!x || !x.d) return;
+    const uid = String(x.id || "").replace(/^gc:/, "").replace(/:[^:]*$/, "") || String(x.title || "");
+    if (!grp[uid]) { grp[uid] = { title: x.title || "", place: x.place || "", days: [] }; order.push(uid); }
+    grp[uid].days.push(x.d);
+  });
+  const want = {};
+  for (const uid of order) {
+    const g = grp[uid];
+    g.days.sort();
+    const s = g.days[0], e = g.days[g.days.length - 1];
+    const p = gcalParseRow(g.title);
+    if (p.drop || !p.name) continue;          // 공사·점검류 = 공연 아님
+    if (p.kind !== "대관") continue;          // [기획] = 사람이 정본에 등록하는 몫(운영자 「기획은 이미 등록된 게 우선」)
+    want["R" + s.slice(2).replace(/-/g, "") + "_" + gcalHash4(uid)] = { name: p.name, place: p.place || g.place || "", s, e };
+  }
+  // 시트 현황 — 우리 소유(R 접두) 행만 집계
+  const { headers, rows } = await handleGetSheet(token, SP.programSheetName);
+  const idOf = (r) => String(r["프로그램ID"] != null ? r["프로그램ID"] : (r["공연ID"] || "")).trim();
+  const have = {};
+  let maxNo = 0;
+  rows.forEach((r) => {
+    const n = parseInt(String(r["NO"] || "").replace(/[^0-9]/g, ""), 10); if (n > maxNo) maxNo = n;
+    const id = idOf(r); if (GCAL_SYNC_RE.test(id)) have[id] = r;
+  });
+  const serialToIso = (v) => {
+    if (v === "" || v == null) return "";
+    if (typeof v === "number") return new Date((v - 25569) * 864e5).toISOString().slice(0, 10);
+    return String(v).slice(0, 10);
+  };
+  const rowValues = (no, id, w) => [no, "대관", w.name, w.name, "", "", isoToSerial(w.s), isoToSerial(w.e), "", w.place || "", "", id, ""];
+  const plan = { added: [], updated: [], removed: [], kept: 0, window: [from, to], dry };
+  for (const id of Object.keys(want)) {
+    const w = want[id], cur = have[id];
+    if (!cur) { plan.added.push({ id, name: w.name, s: w.s, e: w.e, place: w.place }); continue; }
+    const same = String(cur["풀네임"] || "") === w.name && String(cur["장소"] || "") === (w.place || "")
+      && serialToIso(cur["시작일"]) === w.s && serialToIso(cur["종료일"]) === w.e;
+    if (same) plan.kept++; else plan.updated.push({ id, row: cur._rowIndex, name: w.name, s: w.s, e: w.e, place: w.place });
+  }
+  for (const id of Object.keys(have)) {
+    if (want[id]) continue;
+    const st = serialToIso(have[id]["시작일"]);
+    if (!st || st < from || st > to) continue;   // 창 밖(지난 기록) = 보존
+    plan.removed.push({ id, row: have[id]._rowIndex, name: String(have[id]["풀네임"] || "") });
+  }
+  if (dry || (!plan.added.length && !plan.updated.length && !plan.removed.length)) return plan;
+  const { driveId, itemId } = await findFile(token);
+  const sheet = sheetPathFor(driveId, itemId, SP.programSheetName);
+  let nextRow = rows.length ? Math.max(...rows.map((r) => r._rowIndex)) + 1 : 2;
+  let no = maxNo;
+  for (const a of plan.added) {
+    const vals = rowValues(++no, a.id, want[a.id]);
+    await graphPatchRetry(token, `${sheet}/range(address='A${nextRow}:${colLetter(vals.length)}${nextRow}')`, { values: [vals] });
+    try { await writeProgramSideCells(token, driveId, itemId, SP.programSheetName, nextRow, { "홍보노출": "N" }, headers); } catch (e) { console.error("gcal sync side cells", e); }
+    a.row = nextRow++;
+  }
+  for (const u of plan.updated) {
+    const cur = have[u.id];
+    const vals = rowValues(cur["NO"] || "", u.id, want[u.id]);
+    await graphPatchRetry(token, `${sheet}/range(address='A${u.row}:${colLetter(vals.length)}${u.row}')`, { values: [vals] });
+  }
+  for (const rm of plan.removed) {
+    const width = Math.max(13, (headers && headers.length) || 13);
+    await graphPatchRetry(token, `${sheet}/range(address='A${rm.row}:${colLetter(width)}${rm.row}')`, { values: [Array(width).fill("")] });
+  }
+  invalidateSheetCache("program");
+  try { await logToSheet(token, "system", "SYNC", SP.programSheetName, 0, `대관 동기화 +${plan.added.length} ~${plan.updated.length} -${plan.removed.length}`); } catch (e) {}
+  return plan;
+}
+__name(gcalSyncPrograms, "gcalSyncPrograms");
+
+
 // === LLM 공용 호출 — Gemini(무료, 우선) 또는 Claude(API키/OAuth) ===
 // GEMINI_API_KEY 있으면 Gemini, 없으면 Claude. (구독 OAuth는 앱 백엔드에서 403이라 사실상 Claude는 API키 필요)
 async function geminiText(env, system, userText, maxTokens) {
@@ -1796,6 +1927,14 @@ var index_default = {
     // 홍보 담당자 알림 스캔 — 매 틱 (무음 없음). 인앱 메시지는 밤에 소리내지 않으므로(푸시 없음) 야간 게이팅이
     // 실효 없고, 스캔 자체를 끄면 lead/overdue 윈도우·회차 계산이 오염됨(감사1 HIGH-3/4). 무음은 향후 이메일/푸시 발송에만.
     ctx.waitUntil(promoNotifyScan(env));
+    // [260801 운영자] 대관 DB 통합 — 구글 대관 일정 → 「프로그램」 시트 편입. 매시 첫 틱 1회(*/15 크론에서 시간당 1회).
+    //   자동 실행은 env.GCAL_SYNC === '1'일 때만 = 운영자가 켜기 전엔 시트에 아무것도 안 쓴다(수동 = POST /api/gcal/sync).
+    if (env.GCAL_SYNC === "1" && env.GCAL_ICS_URL && kst.getUTCMinutes() < 15) {
+      ctx.waitUntil((async () => {
+        try { const t = await getToken(env); await gcalSyncPrograms(env, t, {}); }
+        catch (e) { console.error("gcal sync (cron)", e); }
+      })());
+    }
   },
   async fetch(request, env, ctx) {   // [260801] ctx = /api/gcal의 stale-while-revalidate(응답 뒤 갱신)에 필요
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders(env) });
@@ -2310,6 +2449,21 @@ var index_default = {
           return json(await gcalDays(env, dFrom, dTo, url.searchParams.get("refresh") === "1", ctx), env);
         } catch (e) {
           return json({ ok: false, error: String(e && e.message || e), days: [] }, env);
+        }
+      }
+
+      // [260801 운영자] 대관 DB 통합 — 구글 대관 일정을 「프로그램」 시트에 편입(수동 실행). admin 전용.
+      //   POST /api/gcal/sync        = 실제 반영(추가·수정·창 안 삭제)
+      //   POST /api/gcal/sync?dry=1  = 미리보기(시트 무접촉) — 켜기 전에 무엇이 들어갈지 먼저 확인하는 용도
+      if (url.pathname === "/api/gcal/sync") {
+        const _a = await checkAdmin(request, env, token);
+        if (!_a.admin) return json({ ok: false, error: "Admin only (gcal sync)" }, env, 403);
+        if (!env.GCAL_ICS_URL) return json({ ok: false, error: "GCAL_ICS_URL 미설정" }, env);
+        try {
+          const plan = await gcalSyncPrograms(env, token, { dry: url.searchParams.get("dry") === "1" });
+          return json(Object.assign({ ok: true }, plan), env);
+        } catch (e) {
+          return json({ ok: false, error: String(e && e.message || e) }, env, 500);
         }
       }
 
