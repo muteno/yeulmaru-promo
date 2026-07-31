@@ -20046,7 +20046,7 @@ function setupCellOverlays(){
   });
 }
 
-function clickDate(key){const[y,m,d]=key.split('-').map(Number);const dateObj=new Date(y,m-1,d);if(dateObj.getMonth()+1!==currentMonth)return;if(selected!==key)_panelProgramsOpen=true;/* 셀 클릭 시 프로그램 일정 자동 펼침 (기존 false 리셋이 기본 펼침을 무효화했음) */selected=key;openPanel(dateObj,getRecsForDate(dateObj));render();}
+function clickDate(key){const[y,m,d]=key.split('-').map(Number);const dateObj=new Date(y,m-1,d);if(dateObj.getMonth()+1!==currentMonth)return;if(selected!==key){_panelProgramsOpen=true;_panelRentOpen=true;}/* 셀 클릭 시 프로그램 일정(기획·대관) 자동 펼침 (기존 false 리셋이 기본 펼침을 무효화했음) */selected=key;openPanel(dateObj,getRecsForDate(dateObj));render();}
 
 // === 오늘 셀 일정 전광판 자동 스크롤 ===
 let _todayMarqueeInterval=null;
@@ -20324,7 +20324,7 @@ function openPanel(dateObj,recs){
     var ta=recTimeStr(a)||'99:99',tb=recTimeStr(b)||'99:99';
     return ta.localeCompare(tb);
   });
-  if(sortedRecs.length===0){h+='<div class="panel-empty"><div style="font-size:32px;margin-bottom:8px">📭</div><div>등록된 콘텐츠가 없습니다</div></div>';}
+  if(sortedRecs.length===0){h+='<div class="panel-empty"><div style="font-size:32px;margin-bottom:8px">📭</div><div>등록된 홍보 이벤트가 없습니다</div></div>';}
   else{sortedRecs.forEach(function(r,idx){
     var p1=r['플랫폼 1']||'',p2=r['플랫폼 2']||'',col=platColor(p1);
     var title=r['콘텐츠 제목']||'',cat=r['콘텐츠 구분']||'',st=r['진행 상태']||'';
@@ -20370,17 +20370,18 @@ function openPanel(dateObj,recs){
   var openEdu=PERFS.filter(function(p){if(p.o!==1||p.t!=='a')return false;var pe=new Date(p.e);pe.setHours(0,0,0,0);return pe>=ref;});
   var openRent=PERFS.filter(function(p){if(p.o!==1||p.t!=='r')return false;var pe=new Date(p.e);pe.setHours(0,0,0,0);return pe>=ref;});
   var progTotal=openPerfs.length+openExh.length+openEdu.length+openRent.length;
+  // [260731 운영자] 프로그램 일정 = 「기획 / 대관」 2개 섹션으로 갈라 본다(둘 다 기본 펼침).
+  //   기획 = 공연·전시·예술교육(t c/e/a) · 대관 = t==='r'. 프로그램 관리 화면의 기획/대관 구분(_pgKind)과 같은 축.
+  //   행 마크업·색은 기존 그대로 계승 — 섹션 껍데기(.panel-prog-*)만 2벌로 늘렸다(신규 디자인 0).
   if(progTotal>0){
-    var open=_panelProgramsOpen;
     // 차르르 효과: 자동 펼침이어도 접힌 채 렌더 → 패널 슬라이드 인 후 open 클래스 추가로 전환 재생.
     // 같은 날짜 재렌더(데이터 새로고침 등)에선 반복 재생 안 함 (날짜 키 기준 1회)
     var _pAnimKey=dk(dateObj);
-    var _pAnimate=open&&_pAnimKey!==_panelProgLastAnimKey;
-    if(open)_panelProgLastAnimKey=_pAnimKey;
-    var _pCls=(open&&!_pAnimate)?' open':'';
-    h+='<div class="panel-prog-wrap">';
-    h+='<div class="panel-prog-head" onclick="togglePanelPrograms()"><span class="panel-prog-arrow'+_pCls+'" id="panel-prog-arrow">▶</span><span class="panel-prog-title">프로그램 일정</span><span class="panel-prog-cnt">'+progTotal+'</span></div>';
-    h+='<div class="panel-prog-body'+_pCls+'" id="panel-prog-body">';
+    var _pAnimate=(_panelProgramsOpen||_panelRentOpen)&&_pAnimKey!==_panelProgLastAnimKey;
+    if(_panelProgramsOpen||_panelRentOpen)_panelProgLastAnimKey=_pAnimKey;
+    var _pClsP=(_panelProgramsOpen&&!_pAnimate)?' open':'';
+    var _pClsR=(_panelRentOpen&&!_pAnimate)?' open':'';
+    var hPlan='',hRent='',h0=h;h='';   // h0 = 섹션 앞까지 확정분 / h = 행 임시 버퍼
     openPerfs.forEach(function(perf){
       var sd=new Date(perf.s);sd.setHours(0,0,0,0);
       var ed=new Date(perf.e);ed.setHours(0,0,0,0);
@@ -20417,8 +20418,11 @@ function openPanel(dateObj,recs){
       h+='<span style="font-size:11px;font-weight:600;color:#C08070;white-space:nowrap;flex-shrink:0">'+dayNum+'일차</span>';
       h+='</div>';
     });
+    hPlan+=h;h='';   // 여기까지 = 공연·전시 row (기획 섹션 확정분)
     // 예술교육(교)·대관(대) — 공연 row와 동일 구조, 마크/색만 다름
-    [[openEdu,'교','#2E9E5B','rgba(46,158,91,0.13)'],[openRent,'대','#8a8f9c','rgba(140,143,156,0.13)']].forEach(function(cfg){
+    //   교육 row는 기획 섹션에, 대관 row는 대관 섹션에 담긴다(cfg[4] = 목적지 버퍼 키).
+    [[openEdu,'교','#2E9E5B','rgba(46,158,91,0.13)','p'],[openRent,'대','#8a8f9c','rgba(140,143,156,0.13)','r']].forEach(function(cfg){
+      h='';
       cfg[0].forEach(function(perf){
         var sd=new Date(perf.s);sd.setHours(0,0,0,0);
         var ed=new Date(perf.e);ed.setHours(0,0,0,0);
@@ -20435,30 +20439,45 @@ function openPanel(dateObj,recs){
         h+='<span style="font-size:11px;font-weight:600;color:'+cfg[2]+';white-space:nowrap;flex-shrink:0">'+ddText+'</span>';
         h+='</div>';
       });
+      if(cfg[4]==='p')hPlan+=h;else hRent+=h;
     });
-    h+='</div></div>';
+    h=h0;
+    var planCnt=openPerfs.length+openExh.length+openEdu.length;
+    if(planCnt>0){
+      h+='<div class="panel-prog-wrap">';
+      h+='<div class="panel-prog-head" onclick="togglePanelPrograms(\'p\')"><span class="panel-prog-arrow'+_pClsP+'" id="panel-prog-arrow">▶</span><span class="panel-prog-title">기획 프로그램 일정</span><span class="panel-prog-cnt">'+planCnt+'</span></div>';
+      h+='<div class="panel-prog-body'+_pClsP+'" id="panel-prog-body">'+hPlan+'</div></div>';
+    }
+    if(openRent.length>0){
+      h+='<div class="panel-prog-wrap">';
+      h+='<div class="panel-prog-head" onclick="togglePanelPrograms(\'r\')"><span class="panel-prog-arrow'+_pClsR+'" id="panel-prog-arrow-r">▶</span><span class="panel-prog-title">대관 프로그램 일정</span><span class="panel-prog-cnt">'+openRent.length+'</span></div>';
+      h+='<div class="panel-prog-body'+_pClsR+'" id="panel-prog-body-r">'+hRent+'</div></div>';
+    }
   }
   h+='</div>';
   p.classList.remove('pn-out');p.classList.add('pn-in');p.innerHTML=h;p.style.display='flex';
   // 자동 펼침 애니메이션 — 사이드바 슬라이드 인(.35s) 직후 재생
   if(typeof _pAnimate!=='undefined'&&_pAnimate){
     setTimeout(function(){
-      var b=document.getElementById('panel-prog-body');
-      var a=document.getElementById('panel-prog-arrow');
-      if(b)b.classList.add('open');
-      if(a)a.classList.add('open');
+      if(_panelProgramsOpen)_panelProgSetOpen('p',true);
+      if(_panelRentOpen)_panelProgSetOpen('r',true);
     },300);
   }
 }
-let _panelProgramsOpen=true;   // 셀 클릭으로 패널 열릴 때 프로그램 일정 자동 펼침 (요청: 클릭 없이 바로 보이게)
+let _panelProgramsOpen=true;   // 기획 섹션 — 셀 클릭으로 패널 열릴 때 자동 펼침 (요청: 클릭 없이 바로 보이게)
+let _panelRentOpen=true;       // 대관 섹션 — 동일하게 기본 펼침
 let _panelProgLastAnimKey=null; // 차르르 재생한 날짜 키 (같은 날짜 재렌더 반복 방지)
-function togglePanelPrograms(){
-  _panelProgramsOpen=!_panelProgramsOpen;
-  const body=document.getElementById('panel-prog-body');
-  const arrow=document.getElementById('panel-prog-arrow');
-  if(!body||!arrow)return;
-  body.classList.toggle('open',_panelProgramsOpen);
-  arrow.classList.toggle('open',_panelProgramsOpen);
+// kind: 'p'=기획 / 'r'=대관 — 섹션 2벌의 body·arrow를 한 곳에서 다룬다
+function _panelProgSetOpen(kind,on){
+  const sfx=(kind==='r')?'-r':'';
+  const body=document.getElementById('panel-prog-body'+sfx);
+  const arrow=document.getElementById('panel-prog-arrow'+sfx);
+  if(body)body.classList.toggle('open',on);
+  if(arrow)arrow.classList.toggle('open',on);
+}
+function togglePanelPrograms(kind){
+  if(kind==='r'){_panelRentOpen=!_panelRentOpen;_panelProgSetOpen('r',_panelRentOpen);}
+  else{_panelProgramsOpen=!_panelProgramsOpen;_panelProgSetOpen('p',_panelProgramsOpen);}
 }
 // === 프로그램 우클릭 — 빠른 정보 박스 ===
 function onPerfContextMenu(event, target){
@@ -20625,13 +20644,11 @@ function openPanelWithPerfHighlight(perfName, dateKey){
   });
   selected=dateObj;
   openPanel(dateObj, recs);
-  // 프로그램 일정 섹션 강제 펼침
-  _panelProgramsOpen=true;
+  // 프로그램 일정 섹션(기획·대관) 강제 펼침
+  _panelProgramsOpen=true;_panelRentOpen=true;
   setTimeout(function(){
-    const body=document.getElementById('panel-prog-body');
-    const arrow=document.getElementById('panel-prog-arrow');
-    if(body)body.classList.add('open');
-    if(arrow)arrow.classList.add('open');
+    _panelProgSetOpen('p',true);
+    _panelProgSetOpen('r',true);
     // 해당 row 찾고 깜빡 강조
     const rows=document.querySelectorAll('[data-perf-name]');
     for(const row of rows){
