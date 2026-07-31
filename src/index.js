@@ -1330,16 +1330,11 @@ function icsExpand(startMs, rrule, exSet, fromMs, toMs) {
 }
 __name(icsExpand, "icsExpand");
 
-// .ics 원문 — KV 10분 캐시. 실패 시 마지막 성공본으로 폴백(구글 장애에도 화면 안 비게).
-async function gcalRaw(env, force) {
-  const url = env.GCAL_ICS_URL;
-  if (!url) throw new Error("GCAL_ICS_URL 미설정");
-  if (!force) {
-    try { const c = await env.ops_kv.get("gcal:ics"); if (c) return c; } catch (e) {}
-  }
+// 구글 .ics 재다운로드 + KV 갱신 — 성공분만 캐시에 쓴다. 반환 = 원문(실패 시 "").
+async function gcalRefresh(env) {
   let txt = "";
   try {
-    const r = await fetch(url, { headers: { "User-Agent": "yeulmaru-promo-worker" } });
+    const r = await fetch(env.GCAL_ICS_URL, { headers: { "User-Agent": "yeulmaru-promo-worker" } });
     if (r.ok) txt = await r.text();
   } catch (e) {}
   if (txt && txt.indexOf("BEGIN:VCALENDAR") >= 0) {
@@ -1347,6 +1342,26 @@ async function gcalRaw(env, force) {
     try { await env.ops_kv.put("gcal:ics:last", txt); } catch (e) {}
     return txt;
   }
+  return "";
+}
+__name(gcalRefresh, "gcalRefresh");
+
+// .ics 원문 — KV 10분 캐시. 실패 시 마지막 성공본으로 폴백(구글 장애에도 화면 안 비게).
+// [260801 운영자] stale-while-revalidate — 10분 캐시가 식었어도 「마지막 성공본」이 있으면 그걸 즉시 돌려주고
+//   구글 재다운로드는 ctx.waitUntil로 응답 뒤에 돌린다. 10분마다 한 명이 구글 왕복을 통째로 뒤집어쓰던 몫 제거
+//   (= 「대관만 늦게 뜬다」의 서버측 지분). refresh=1(force)은 종전대로 동기 갱신.
+async function gcalRaw(env, force, ctx) {
+  const url = env.GCAL_ICS_URL;
+  if (!url) throw new Error("GCAL_ICS_URL 미설정");
+  if (!force) {
+    try { const c = await env.ops_kv.get("gcal:ics"); if (c) return c; } catch (e) {}
+    try {
+      const stale = await env.ops_kv.get("gcal:ics:last");
+      if (stale && ctx && typeof ctx.waitUntil === "function") { ctx.waitUntil(gcalRefresh(env)); return stale; }
+    } catch (e) {}
+  }
+  const txt = await gcalRefresh(env);
+  if (txt) return txt;
   const last = await env.ops_kv.get("gcal:ics:last");
   if (last) return last;
   throw new Error("구글 캘린더 응답 없음");
@@ -1354,8 +1369,8 @@ async function gcalRaw(env, force) {
 __name(gcalRaw, "gcalRaw");
 
 // [from, to] (KST 날짜키) 창의 대관 일정을 날짜별로 펼쳐 돌려준다.
-async function gcalDays(env, from, to, force) {
-  const txt = await gcalRaw(env, force);
+async function gcalDays(env, from, to, force, ctx) {
+  const txt = await gcalRaw(env, force, ctx);
   const fromMs = Date.parse(from + "T00:00:00Z") - _KST;
   const toMs = Date.parse(to + "T23:59:59Z") - _KST;
   const days = [];
@@ -1782,7 +1797,7 @@ var index_default = {
     // 실효 없고, 스캔 자체를 끄면 lead/overdue 윈도우·회차 계산이 오염됨(감사1 HIGH-3/4). 무음은 향후 이메일/푸시 발송에만.
     ctx.waitUntil(promoNotifyScan(env));
   },
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {   // [260801] ctx = /api/gcal의 stale-while-revalidate(응답 뒤 갱신)에 필요
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders(env) });
     const url = new URL(request.url);
     try {
@@ -2292,7 +2307,7 @@ var index_default = {
         const dTo = url.searchParams.get("to") || new Date(Date.UTC(y, mo + 2, 0)).toISOString().slice(0, 10);
         if (!/^\d{4}-\d{2}-\d{2}$/.test(dFrom) || !/^\d{4}-\d{2}-\d{2}$/.test(dTo)) return json({ ok: false, error: "bad range", days: [] }, env, 400);
         try {
-          return json(await gcalDays(env, dFrom, dTo, url.searchParams.get("refresh") === "1"), env);
+          return json(await gcalDays(env, dFrom, dTo, url.searchParams.get("refresh") === "1", ctx), env);
         } catch (e) {
           return json({ ok: false, error: String(e && e.message || e), days: [] }, env);
         }

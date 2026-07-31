@@ -4148,6 +4148,7 @@ async function initApp(){
   // [로딩 정렬 260711] 레일 정렬·로딩표시는 즉시(캘린더 스켈레톤 높이로 .srail 높이 캡 → 로딩 중 flex 확대 방지) · 6시트 fetch만 캘린더(_calP) 로드 뒤로 게이트(cfbd4ed 네트워크 우선권 유지).
   //   setTimeout(0) = F5 세션복원 TDZ 방어(뒤쪽 var _salesState 등 할당 완료 후 실행) · loadData() 동기부가 이미 캘린더 스켈레톤을 그려 _srailAlignTop이 그 높이를 참조.
   setTimeout(function(){
+    try{_gcalHydrate();loadRentals(currentYear,currentMonth);}catch(_e){console.warn('[initApp gcal]',_e);}   // [260801 운영자] 대관(구글 캘린더) = records와 동시 출발 + 캐시 즉시 반영. 구: loadData 완료 → render() 안에서야 출발이라 대관만 한 박자 늦게 떴다(정본 시트가 아니라 별도 피드라 이 경로뿐)
     try{_mvApply(true);}catch(_e){console.warn('[initApp mv]',_e);}   // [260723] 메인 기본 = 사업 실적 — setTimeout(0) = F5 세션복원 TDZ 방어(_mainView 등 뒤쪽 var 할당 후) · noRail=레일 fetch는 아래 기존 게이트가 담당
     try{_srailInit(false,_calP);}catch(_e){console.warn('[initApp srail]',_e);}
   },0);
@@ -19431,7 +19432,32 @@ function loadHolidays(year){
    ⚠ 셋업 정보가 제목 텍스트에만 있어 파싱이 유일한 경로다. 실데이터 60건(393칸)으로 실측 — 셋업 명시 12건 전건 일치.
      제목에 공연일이 안 적힌 일정은 판정 불가 → 전부 본 일정으로 둔다(임의 추측 금지).
    시안·검증 = docs/reports/260731_대관캘린더표기_플레이그라운드.html */
-var GCAL_RENTALS=[],GCAL_EXHIBS=[],_gcalLoaded={},_gcalBusy=false;
+var GCAL_RENTALS=[],GCAL_EXHIBS=[],_gcalLoaded={},_gcalBusy=false,_gcalQ=[],_gcalHyd=false;
+// [260801 운영자] 「대관만 늦게 뜬다」 3종 수정 — ① 대기열(요청 중 달 넘김 = 그냥 버려져 그 달이 영영 안 뜨던 구멍)
+//   ② 부팅 동시 출발(initApp — 구: loadData 완료 뒤 render 안에서야 출발 = 직렬 한 겹) ③ localStorage 캐시(F5마다 처음부터 받던 것)
+//   대관은 정본(PERFS·프로그램 시트)에 없는 외부 피드라 캐시도 여기 따로 둔다 — 정본 캐시와 섞지 않는다.
+var GCAL_LS='_gcal_v1';
+function _gcalWin(year,month){ var f=new Date(Date.UTC(year,month-2,1)),t=new Date(Date.UTC(year,month+1,0)); return [f.toISOString().slice(0,10),t.toISOString().slice(0,10)]; }   // 요청 창 = 그 달 ±1달(월 넘김 프리페치)
+function _gcalPersist(){
+  try{
+    var lo=_gcDayAdd(_gcToday(),-100),hi=_gcDayAdd(_gcToday(),160);   // ±3~5달만 보관(무한 증식 방지)
+    localStorage.setItem(GCAL_LS,JSON.stringify({t:Date.now(),
+      r:GCAL_RENTALS.filter(function(x){return x.s>=lo&&x.s<=hi;}),
+      x:GCAL_EXHIBS.filter(function(x){return x.e>=lo&&x.s<=hi;})}));
+  }catch(_e){}
+}
+function _gcalHydrate(){   // 캐시 즉시 그리기 → 네트워크는 뒤에서 갱신(SWR). _gcalLoaded는 안 채운다 = 이번 세션 갱신은 그대로 돈다
+  if(_gcalHyd)return; _gcalHyd=true;
+  try{
+    var c=JSON.parse(localStorage.getItem(GCAL_LS)||'null'); if(!c||!c.r)return;
+    if(Date.now()-(c.t||0)>7*86400000){ localStorage.removeItem(GCAL_LS); return; }   // 일주일 넘은 캐시는 버린다(유령 일정 방지)
+    var seen={}; GCAL_RENTALS.forEach(function(r){seen[r.id]=1;});
+    (c.r||[]).forEach(function(r){ if(!seen[r.id]){seen[r.id]=1;GCAL_RENTALS.push(r);} });
+    var seenX={}; GCAL_EXHIBS.forEach(function(r){seenX[r.id]=1;});
+    (c.x||[]).forEach(function(r){ if(!seenX[r.id]){seenX[r.id]=1;GCAL_EXHIBS.push(r);} });
+  }catch(_e){}
+}
+function _gcToday(){ var d=new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
 var _GC_PLACE={'대':'대극장','소':'소극장','장':'장도','7층':'7층','야외':'야외','리1':'리허설실1','리1,2':'리허설실1·2'};
 var _GC_DROP=/^(공사|점검|휴관|휴무)$/;
 function _gcDayAdd(k,n){var d=new Date(k+'T00:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10);}
@@ -19552,14 +19578,16 @@ function _gcDupSet(){
   _gcDupCache=set;_gcDupPerfs=pf;_gcDupN=n;
   return set;
 }
+function _gcalDrain(){ if(_gcalBusy||!_gcalQ.length)return; var ym=_gcalQ.shift(),p=ym.split('-'); loadRentals(+p[0],+p[1]); }   // 대기열 소진 — 앞 요청이 끝나면 밀린 달을 이어서 받는다
 function loadRentals(year,month){
   var ym=year+'-'+('0'+month).slice(-2);
-  if(_gcalLoaded[ym]||_gcalBusy)return;
+  if(_gcalLoaded[ym])return;
+  if(_gcalBusy){ if(_gcalQ.indexOf(ym)<0)_gcalQ.push(ym); return; }   // [260801] 구: 그냥 return = 그 달은 재시도 예약 없이 버려졌다(월 빨리 넘기면 대관만 안 뜸)
+  _gcalHydrate();
   _gcalLoaded[ym]=true;_gcalBusy=true;
-  // 요청 창 = 그 달 ±1달(월 넘김 프리페치 — 이전/다음 달로 넘겨도 즉시 보인다)
-  var f=new Date(Date.UTC(year,month-2,1)),t=new Date(Date.UTC(year,month+1,0));
-  api('GET','/api/gcal?from='+f.toISOString().slice(0,10)+'&to='+t.toISOString().slice(0,10)).then(function(d){
-    _gcalBusy=false;
+  var w=_gcalWin(year,month),fk=w[0],tk=w[1];
+  api('GET','/api/gcal?from='+fk+'&to='+tk).then(function(d){
+    _gcalBusy=false;_gcalDrain();
     if(!d||!d.days)return;
     // Worker는 날짜별로 펼쳐 준다(하루 = 한 행). 셋업 판정은 일정 「전체 기간」이 있어야 하므로 uid로 다시 묶는다.
     // id 규격 = 'gc:'+UID+':'+날짜키  →  뒤 날짜키만 떼면 UID.
@@ -19570,9 +19598,12 @@ function loadRentals(year,month){
       if(!grp[uid]){grp[uid]={title:x.title||'',place:x.place||'',rows:[]};order.push(uid);}
       grp[uid].rows.push(x);
     });
+    // [260801] 이번 응답 = 그 창(fk~tk)의 정본 — 창 안 기존 항목(캐시 하이드레이트분 포함)은 걷어내고 새로 채운다(구글에서 지운 일정·유령 잔재 제거)
+    GCAL_RENTALS=GCAL_RENTALS.filter(function(r){return !(r.s>=fk&&r.s<=tk);});
+    GCAL_EXHIBS=GCAL_EXHIBS.filter(function(r){return !(r.s>=fk&&r.e<=tk);});
     var seen={};GCAL_RENTALS.forEach(function(r){seen[r.id]=1;});
     var seenX={};GCAL_EXHIBS.forEach(function(r){seenX[r.id]=1;});
-    var ch=false;
+    var ch=true;
     order.forEach(function(uid){
       var g=grp[uid];
       g.rows.sort(function(a,b){return a.d.localeCompare(b.d);});
@@ -19592,8 +19623,9 @@ function loadRentals(year,month){
         ch=true;
       });
     });
+    _gcalPersist();   // [260801] 다음 방문(F5)엔 이 캐시가 첫 페인트부터 대관을 채운다
     if(ch&&typeof renderCal==='function')renderCal();
-  }).catch(function(){_gcalBusy=false;_gcalLoaded[ym]=false;});
+  }).catch(function(){_gcalBusy=false;_gcalLoaded[ym]=false;_gcalDrain();});
 }
 // 그 날짜의 대관 일정 — getPerfs가 합류시킬 PERFS 모양 목록(dday는 대관에 의미 없어 null)
 function getRentals(key){
