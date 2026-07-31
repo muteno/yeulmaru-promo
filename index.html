@@ -22524,18 +22524,21 @@ function _memOvRender(){
     .map(function(s){return '<div style="flex:1 1 145px;background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--r-btn);padding:16px 19px;text-align:left"><div style="font-size:12px;color:var(--dim);font-weight:600">'+s[0]+'</div><div style="font-size:22px;font-weight:800;color:var(--accent);font-variant-numeric:tabular-nums">'+_memEsc(s[1])+'</div>'+(s[2]?'<div style="font-size:12px;color:var(--dim)">'+_memEsc(s[2])+'</div>':'')+'</div>';}).join('')
     +'</div>';
   // 바 헬퍼 (분석보드 결 계승 — 토큰 알파 변주)
-  var bar=function(label,cnt,max,sub){var w=max?Math.max(2,cnt/max*100):0;
+  //   [260731 운영자] 순위 강조: 1~2위 = 주 강조색 인디고(--accent .79) · 3위부터 = 2강조색 살몬(--peach-text .5).
+  //   기틀 §0②(살몬 = 유일 웜 서브코어) · §0③("주색과 겹치는 비교 시리즈는 c2부터") 계승 — 신규 색 0.
+  var bar=function(label,cnt,max,sub,hi){var w=max?Math.max(2,cnt/max*100):0;
     return '<div style="display:flex;align-items:center;gap:9px;margin:9px 0"><div style="flex:0 0 78px;font-size:12px;font-weight:600;color:var(--text);text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+_memEsc(label)+'</div>'
-      +'<div style="flex:1;height:18px;background:var(--past-bg);border-radius:3.5px;overflow:hidden"><div style="width:'+w+'%;height:100%;background:var(--accent);opacity:.79;border-radius:3.5px"></div></div>'
+      +'<div style="flex:1;height:18px;background:var(--past-bg);border-radius:3.5px;overflow:hidden"><div style="width:'+w+'%;height:100%;background:'+(hi?'var(--accent);opacity:.79':'var(--peach-text);opacity:.5')+';border-radius:3.5px"></div></div>'
       +'<div style="flex:0 0 86px;font-size:11px;color:var(--dim);text-align:left;font-variant-numeric:tabular-nums">'+cnt.toLocaleString()+'명'+(sub?' · '+sub:'')+'</div></div>';};
   var maxT=top5.length?top5[0][1]:0;
   var topHtml='<div style="font-size:14px;font-weight:800;margin-bottom:6px;text-align:left">거주지 TOP '+top5.length+' <span style="font-size:10.5px;color:var(--dim);font-weight:500">(시군구 기준 · 전국)</span></div>'
     // [260731 운영자] 관내 3시 합계 한 줄 — 검색·필터 없이 열자마자 보이게 고정(KPI 자리는 안 뺏음 = 관내가 메인 지표는 아님)
     +'<div style="font-size:11.5px;color:var(--dim);font-weight:600;margin:0 0 8px;line-height:1.5">관내(여수·순천·광양) <b style="color:var(--accent);font-variant-numeric:tabular-nums">'+pct(gn)+'%</b> · '+gn.toLocaleString()+'명 <span style="color:var(--muted)">|</span> 여수 '+gn3[0].toLocaleString()+' · 순천 '+gn3[1].toLocaleString()+' · 광양 '+gn3[2].toLocaleString()+'</div>'
-    +top5.map(function(t){var p=t[0].split('|');return bar(p[1],t[1],maxT,pct(t[1])+'%');}).join('');
+    +top5.map(function(t,i){var p=t[0].split('|');return bar(p[1],t[1],maxT,pct(t[1])+'%',i<2);}).join('');   // top5는 이미 내림차순 = 앞 2개가 1·2위
   var maxA=ages.length?Math.max.apply(null,ages.map(function(a){return a[1];})):0;
+  var ageTop2={};ages.filter(function(x){return x[0]!=='미상';}).slice().sort(function(a,b){return b[1]-a[1];}).slice(0,2).forEach(function(a){ageTop2[a[0]]=1;});   // '미상'은 의미 구간이 아니라 강조 대상에서 제외(최다 연령대 KPI 기준과 동일)
   var ageHtml='<div style="font-size:14px;font-weight:800;margin:18px 0 6px;text-align:left">연령대 분포 <span style="font-size:10.5px;color:var(--dim);font-weight:500">(생년월일 기준 · 만나이 근사)</span></div>'
-    +ages.map(function(a){return bar(a[0],a[1],maxA,pct(a[1])+'%');}).join('');
+    +ages.map(function(a){return bar(a[0],a[1],maxA,pct(a[1])+'%',!!ageTop2[a[0]]);}).join('');   // 연령대는 나이순 정렬이라 '많은 순 1·2위'를 따로 계산(ageTop2)
   body.style.textAlign='left';body.style.color='var(--text)';
   body.innerHTML='<div style="font-size:16px;font-weight:800;margin-bottom:2px">회원 분포</div>'
     +'<div style="font-size:12px;color:var(--dim);margin-bottom:14px">운영_회원 시트 · 주소 미상 '+unloc.toLocaleString()+'명 제외 집계 · 개인 식별 없음(집계 전용)</div>'
@@ -22563,8 +22566,10 @@ function _memOvMap(geo){
     if(dir==='n'){ly=xy[1]-r-15;}else if(dir==='s'){ly=xy[1]+r+8;}
     else if(dir==='e'){lx=xy[0]+r+5;ly=xy[1]-6;anchor='start';}
     else{lx=xy[0]-r-5;ly=xy[1]-6;anchor='end';}
-    return '<circle cx="'+xy[0].toFixed(1)+'" cy="'+xy[1].toFixed(1)+'" r="'+r.toFixed(1)+'" fill="var(--accent)" opacity="0.13"/>'
-      +'<circle cx="'+xy[0].toFixed(1)+'" cy="'+xy[1].toFixed(1)+'" r="'+r.toFixed(1)+'" fill="none" stroke="var(--accent)" opacity="0.58" stroke-width="0.9"/>'
+    // [260731 운영자] 바 차트와 같은 순위 강조 — 1·2위 = 인디고(면 .13/선 .58) · 3위부터 = 살몬 50%(면 .065/선 .29). 라벨 색은 가독성 위해 그대로.
+    var hi=i<2,bc=hi?'var(--accent)':'var(--peach-text)',fo=hi?'0.13':'0.065',so=hi?'0.58':'0.29';
+    return '<circle cx="'+xy[0].toFixed(1)+'" cy="'+xy[1].toFixed(1)+'" r="'+r.toFixed(1)+'" fill="'+bc+'" opacity="'+fo+'"/>'
+      +'<circle cx="'+xy[0].toFixed(1)+'" cy="'+xy[1].toFixed(1)+'" r="'+r.toFixed(1)+'" fill="none" stroke="'+bc+'" opacity="'+so+'" stroke-width="0.9"/>'
       +(showLb?'<text x="'+lx.toFixed(1)+'" y="'+ly.toFixed(1)+'" text-anchor="'+anchor+'" font-size="12" font-weight="700" fill="var(--text)">'+_memEsc(label)+'</text>'
       +'<text x="'+lx.toFixed(1)+'" y="'+(ly+14).toFixed(1)+'" text-anchor="'+anchor+'" font-size="12" fill="var(--dim)">'+geo[k].toLocaleString()+'명</text>':'');
   }).join('');
