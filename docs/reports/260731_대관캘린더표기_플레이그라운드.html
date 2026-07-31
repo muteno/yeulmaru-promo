@@ -1,0 +1,626 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>대관 캘린더 표기 — 플레이그라운드 (260731)</title>
+<!-- 폰트 = 시스템 스택 폴백. 외부 요청 0 = 오프라인·첨부 전달에서도 동일 렌더(자기완결 원칙) -->
+<style>
+/* 토큰 = index.html :root 계승 (신규 색 창작 0) */
+:root{
+  --accent:#4A4DE7; --accent-light:#E8E8FD; --accent-glow:rgba(74,77,231,0.15);
+  --peach:#F0C4B8; --peach-light:#FBF0EC; --peach-bg:#FDF6F3; --peach-text:#D88455;
+  --bg:linear-gradient(135deg,#FDF6F3 0%,#F0EBF5 50%,#EBF0F8 100%);
+  --surface-solid:#fff; --glass:rgba(255,255,255,0.55);
+  --glass-shadow:0 8px 32px rgba(74,77,231,0.08),0 2px 8px rgba(0,0,0,0.04);
+  --border:rgba(0,0,0,0.09); --border2:rgba(0,0,0,0.12);
+  --text:#1A1A2E; --dim:#888; --muted:#bbb;
+  --past-bg:rgba(0,0,0,0.02); --past-text:var(--muted); --today-bg:rgba(230,240,255,0.8);
+  --green:#1A6B3C; --danger-btn:#E24B4A;
+  --neutral:#EEEDF3; --neutral-d:#E1DFEC; --neutral-text:#6B6B7B;
+  --r-btn:10px; --r-pop:16px; --radius:16px; --radius-lg:20px;
+  --c1:#4A4DE7; --c2:#D88455; --c3:#1A6B3C; --c4:#C02872; --c5:#2D8AB3; --c6:#F5B400;
+  --cell-pad-y:10px; --cell-pad-x:12px; --cell-fs:13px;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);font-family:'Noto Sans KR','Malgun Gothic','Apple SD Gothic Neo',-apple-system,BlinkMacSystemFont,sans-serif;color:var(--text);min-height:100vh}
+.hd{padding:18px 22px 10px}
+.hd h1{margin:0 0 4px;font-size:17px;font-weight:900;letter-spacing:-.3px}
+.hd p{margin:0;font-size:12px;color:var(--dim);line-height:1.6}
+.wrap{display:flex;flex-wrap:wrap;gap:16px;padding:8px 22px 40px;align-items:flex-start}
+.stagewrap{flex:1 1 620px;min-width:340px;position:sticky;top:12px}
+.frame{background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--glass-shadow);overflow:hidden}
+.stagecap{margin-top:8px;font-size:11.5px;color:var(--dim);line-height:1.6}
+.console{flex:0 1 430px;min-width:300px;display:flex;flex-direction:column;gap:10px}
+.csec{background:var(--glass);backdrop-filter:blur(8px);border:1px solid var(--border);border-radius:var(--r-pop);padding:12px 14px}
+.csec h3{margin:0 0 9px;font-size:12px;font-weight:900;letter-spacing:-.2px;display:flex;align-items:center;gap:6px}
+.csec h3 .cnt{font-size:10px;font-weight:600;color:var(--dim)}
+
+/* ── 미리보기 = index.html 캘린더 계승 ── */
+.calbar{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border)}
+.calbar b{font-size:14px;font-weight:900}
+.mbtn{border:1px solid var(--border2);background:var(--surface-solid);border-radius:var(--r-btn);padding:4px 9px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;color:var(--text)}
+.mbtn.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.wk{display:grid;grid-template-columns:repeat(7,1fr);border-bottom:1px solid var(--border);background:rgba(255,255,255,.5)}
+.wk div{padding:6px 0;text-align:center;font-size:11px;font-weight:700;color:var(--dim)}
+.wk div:nth-child(1){color:#D64545}.wk div:nth-child(7){color:#3B7DD8}
+.grid{display:grid;grid-template-columns:repeat(7,1fr)}
+.app .c.cell{position:relative;min-height:var(--t-cellh);padding:var(--cell-pad-y) var(--cell-pad-x) 12px;border-right:1px solid rgba(0,0,0,.07);border-bottom:1px solid rgba(0,0,0,.07);background:var(--surface-solid);overflow:hidden}
+.app .c.cell:nth-child(7n){border-right:none}
+.app .c.cell.nm{background:var(--past-bg)}
+.app .c.cell.past{background:var(--past-bg)}
+.app .c.cell.today{background:var(--today-bg)}
+.app .dn{font-size:var(--cell-fs);font-weight:600;margin-bottom:2px;color:var(--text);display:flex;align-items:center;flex-wrap:var(--t-wrap);min-width:0;gap:var(--t-rowgap)}
+.app .dn.nm{color:rgba(0,0,0,0.1)}
+.app .dn.sat{color:#3B7DD8}.app .dn.sun{color:#D64545}
+.app .pf{}
+/* 배지 = renderPerfsHtml 계승 + 튜닝축만 var(--t-*) 치환 */
+.app .perf-badge{display:inline-flex;align-items:center;margin-left:var(--t-bml);max-width:100%;min-width:0}
+.app .bdot{display:inline-flex;align-items:center;justify-content:center;min-width:var(--t-bsz);height:var(--t-bsz);border-radius:var(--t-brd);font-size:var(--t-bfs);font-weight:var(--t-bfw);color:#fff;flex-shrink:0;line-height:1}
+.app .pname{margin-left:var(--t-bgap);font-size:var(--t-nfs);font-weight:var(--t-nfw);color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.app .pchip{font-size:var(--t-cfs);color:var(--dim);font-weight:600;margin-left:4px;flex-shrink:0}
+.app .pspan{margin-left:6px;font-size:var(--t-nfs);color:var(--dim);white-space:nowrap;flex-shrink:0}
+.app .setup .pname{color:var(--t-sname);opacity:var(--t-sopa)}
+.app .exline{position:absolute;bottom:var(--t-exb);left:var(--t-exi);right:var(--t-exi);display:flex;flex-direction:column;gap:var(--t-exg);padding:0}
+.app .exline i{display:block;height:0;border-top:var(--t-exh) var(--t-exs) currentColor;border-radius:var(--t-exr)}
+.baseline{border-top:2px dashed var(--border2);padding:8px 14px;font-size:11px;color:var(--dim);background:rgba(0,0,0,.015)}
+
+/* ── 콘솔 위젯 ── */
+.row{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+.row label{flex:0 0 128px;font-size:11px;font-weight:600;color:var(--text);line-height:1.35}
+.row label small{display:block;font-weight:400;color:var(--muted);font-size:9.5px}
+.row input[type=range]{flex:1;min-width:0;-webkit-appearance:none;height:4px;border-radius:2px;background:linear-gradient(to right,var(--accent) var(--p,50%),var(--neutral-d) var(--p,50%));outline:none}
+.row input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;border-radius:50%;background:var(--surface-solid);border:2px solid var(--accent);cursor:pointer}
+.row select{flex:1;min-width:0;font-family:inherit;font-size:11px;padding:4px 6px;border:1px solid var(--border2);border-radius:7px;background:var(--surface-solid);color:var(--text)}
+.row .v{flex:0 0 52px;text-align:right;font-size:10.5px;font-variant-numeric:tabular-nums;color:var(--dim)}
+.row.warn label{color:var(--danger-btn)}
+.row .wmk{color:var(--danger-btn);font-weight:900}
+.grp{margin:12px 0 7px;font-size:10px;font-weight:900;color:var(--accent);letter-spacing:.4px;text-transform:uppercase;border-bottom:1px solid var(--border);padding-bottom:3px}
+.grp:first-child{margin-top:0}
+.pills{display:flex;flex-wrap:wrap;gap:6px}
+.pill{border:1.5px solid var(--border2);background:var(--surface-solid);border-radius:20px;padding:5px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;color:var(--text);transition:all .15s}
+.pill:hover{border-color:var(--accent)}
+.pill.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.pill.cust{border-style:dashed;color:var(--dim)}
+pre#out{margin:0;font-size:10.5px;line-height:1.65;white-space:pre-wrap;word-break:break-all;max-height:260px;overflow:auto;background:var(--surface-solid);border:1px solid var(--border);border-radius:9px;padding:9px 10px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.btn{border:none;border-radius:var(--r-btn);padding:8px 14px;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;background:var(--accent);color:#fff;margin-top:8px}
+.btn.gh{background:var(--surface-solid);color:var(--text);border:1.5px solid var(--border2)}
+.note{font-size:10.5px;color:var(--dim);line-height:1.7}
+.note b{color:var(--text)}
+.dev{font-size:10.5px;color:var(--danger-btn);font-weight:700;margin-top:6px}
+.mask{position:fixed;inset:0;background:rgba(26,26,46,.42);display:none;align-items:center;justify-content:center;z-index:2000;padding:20px}
+.mask.on{display:flex}
+.dlg{background:var(--surface-solid);border-radius:var(--radius-lg);padding:20px 22px;max-width:460px;width:100%;box-shadow:0 20px 56px rgba(74,77,231,.16)}
+.dlg h4{margin:0 0 8px;font-size:14px;font-weight:900}
+.dlg p{margin:0 0 10px;font-size:12px;line-height:1.7;color:var(--dim)}
+.dlg ul{margin:0 0 12px;padding-left:18px;font-size:11.5px;line-height:1.8;color:var(--danger-btn);font-weight:700}
+.dlg .bts{display:flex;gap:8px;flex-wrap:wrap}
+@media(max-width:900px){.stagewrap{position:static}}
+</style></head><body>
+
+<div class="hd">
+  <h1>대관 캘린더 표기 — 플레이그라운드</h1>
+  <p>구글 캘린더 실데이터 <b>60건(393칸)</b> 그대로 렌더. 좌측이 실제 캘린더 셀(index.html CSS 계승), 우측에서 <b>56축</b> 조절.<br>
+     기본값 = <b>현행 배포본 실측값</b> — 프리셋 「현행」과 「운영자 지시안 ★」을 번갈아 눌러 전/후를 비교하세요.</p>
+</div>
+
+<div class="wrap">
+  <div class="stagewrap">
+    <div class="frame">
+      <div class="calbar">
+        <b id="mlabel">2026년 9월</b>
+        <span style="flex:1"></span>
+        <button class="mbtn" data-mo="7">7월</button><button class="mbtn" data-mo="8">8월</button>
+        <button class="mbtn on" data-mo="9">9월</button><button class="mbtn" data-mo="10">10월</button>
+        <button class="mbtn" data-mo="11">11월</button><button class="mbtn" data-mo="12">12월</button>
+      </div>
+      <div class="wk"><div>일</div><div>월</div><div>화</div><div>수</div><div>목</div><div>금</div><div>토</div></div>
+      <div class="app" id="app"><div class="grid" id="grid"></div></div>
+      <div class="baseline" id="bl"></div>
+    </div>
+    <div class="stagecap">셀 위에 마우스를 올리면 원문 제목·판정 근거가 툴팁으로 뜹니다. 전시 라인은 셀 하단 가로줄.</div>
+  </div>
+
+  <aside class="console">
+    <div class="csec">
+      <h3>프리셋</h3>
+      <div class="pills" id="presets"></div>
+    </div>
+    <div class="csec">
+      <h3>축 <span class="cnt" id="axcnt"></span> <span class="cnt" id="devcnt"></span></h3>
+      <div id="sliders"></div>
+    </div>
+    <div class="csec">
+      <h3>선택값</h3>
+      <pre id="out"></pre>
+      <button class="btn" id="copy">선택값 복사</button>
+      <button class="btn gh" id="reset">현행으로 되돌리기</button>
+    </div>
+    <div class="csec note">
+      <b>재현 한계</b> — ① 실앱의 주차 접힘·홍보 이벤트 줄·특별일정 슬라이드는 생략(대관 표기 축만 남김).
+      ② 전시 라인 색 <code>#006B3C</code>·<code>#E84393</code>는 팔레트 밖 <b>기존 raw(동결 부채)</b>라 그대로 계승 — 새로 만든 색 아님.
+      ③ 「셋업」 판정은 <b>구글 제목 텍스트 파싱</b> 결과다. 제목에 공연일이 안 적힌 6건(예경 춘자씨·국립현대무용단·LG피아노·헬로!오페라·러커스 더 스쿨·그때도오늘)은
+      <b>판정 불가 → 전부 본일정</b>으로 뒀다. 셋업을 표시하려면 구글 제목에 공연일을 적어야 한다.
+    </div>
+  </aside>
+</div>
+
+<div class="mask" id="mask"><div class="dlg">
+  <h4>⚠ 기틀 이탈 축이 있습니다</h4>
+  <p>아래 축은 현행 기틀(토큰·확립값) 밖의 값입니다. 이대로 복사하면 출력에 <b>「🔁 기틀 갱신 역제안」</b> 블록이 포함되고,
+     회신 = 그 값으로 <b>전 앱 동일 축을 일괄 변경</b>하는 승인 경로가 됩니다.</p>
+  <ul id="devlist"></ul>
+  <div class="bts">
+    <button class="btn" id="copyDev">역제안 포함 복사</button>
+    <button class="btn gh" id="copyKeep">계승분만 복사</button>
+    <button class="btn gh" id="copyCancel">취소</button>
+  </div>
+</div></div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   1. 실데이터 — 구글 캘린더 60건 (제목 원문, 시작, 종료)
+   ═══════════════════════════════════════════════════════════════ */
+const DATA=[
+["[장][대관]배병우 사진전  10:00~18:00","2026-07-01","2026-07-15"],
+["[대][대관]베베핀뮤지컬 두근두근새친구 7/3 셋업 09:00~22:00 7/4~7/5 공연 11:00/14:00/16:30 철수~22:00","2026-07-03","2026-07-05"],
+["[대]공사","2026-07-06","2026-08-28"],
+["[7층][대관] 섬섬아트페어 10:00~18:00","2026-07-09","2026-07-12"],
+["[소][대관]류가연가야금독주회 17:00","2026-07-11","2026-07-11"],
+["[소][대관]정화용 현의 떨림, 관의 숨결_젊은 울림의 순간 15:00","2026-07-12","2026-07-12"],
+["[7층][기획]숨:쉬는 SUM 10:00~18:00","2026-07-21","2026-11-22"],
+["[장][대관]김효지 개인전 10:00~18:00","2026-08-07","2026-08-13"],
+["[장][대관]김시재 개인전 10:00~18:00","2026-08-15","2026-08-23"],
+["[소][대관]타악앙상블메타 17:00","2026-08-22","2026-08-22"],
+["'[야외][기획]입주작가전 '안민환'","2026-08-25","2026-10-25"],
+["[대][대관]여수음악제 29일,30일 17:00","2026-08-29","2026-08-30"],
+["[소][대관]여수음악제 임산부를위한음악회 14:00","2026-08-30","2026-08-30"],
+["[대][기획]브런치콘서트 2일 셋업 3일 공연 11:00","2026-09-02","2026-09-03"],
+["[대][대관]여수음악제 19:30","2026-09-04","2026-09-04"],
+["[대][대관]여수음악제 13:30/17:00","2026-09-05","2026-09-05"],
+["[리1][대관]영재오케스트라 연습 13:00~17:00","2026-09-06","2026-09-06"],
+["[대][대관]에코국제음악제 영재원오케스트라 공연 19:30","2026-09-08","2026-09-08"],
+["[대][기획]섬박람회콘서트 19:30","2026-09-10","2026-09-10"],
+["[리1][대관]오케스트라더여수연습 9/11 09:00~13:00, 9/12 18:00~22:00","2026-09-11","2026-09-12"],
+["[소][대관]앙상블보니 19:30","2026-09-11","2026-09-11"],
+["[대][기획]조재혁피아노 17:00","2026-09-12","2026-09-12"],
+["[대][대관]오케스트라더여수 정기연주회 17:00","2026-09-13","2026-09-13"],
+["[대][기획]뮤지컬그날들 셋업 9/14~17 09:00~22:00 공연  9/18(금) 19:30 9/19(토) 14:00, 19:00 9/20(일) 14:00 철수 9/21 09:00~22:00","2026-09-14","2026-09-21"],
+["[소][대관]예나엔터테인먼트 Hearth to Heart 19:00","2026-09-30","2026-09-30"],
+["[대][기획]뮤지컬 달샤베트 셋업 9/30 09:00~22:00 공연 10/1(목) 11:00 10/2(금) 11:00 10/3(토) 11:00, 14:00 10/4(일) 11:00, 14:00","2026-09-30","2026-10-04"],
+["[대][기획]예경 춘자씨","2026-10-07","2026-10-10"],
+["[대][기획]국립현대무용단","2026-10-12","2026-10-14"],
+["[대][대관]여순사건창작오페라 침묵 15~17일 셋업 09:00~22:00 18일 19:00, 19일 19:00","2026-10-15","2026-10-19"],
+["[대][대관]여수예총 여수음악제 19:00","2026-10-20","2026-10-20"],
+["[소][기획]실내악소극장","2026-10-22","2026-10-22"],
+["[리1,2][대관]전남합창제 대기실","2026-10-24","2026-10-24"],
+["[대][대관]전남합창제 14:00","2026-10-24","2026-10-24"],
+["[소][대관]담아앙상블 17:00","2026-10-25","2026-10-25"],
+["[대][기획]LG피아노","2026-10-26","2026-10-28"],
+["[리1,2][대관]여수학생오케스트라페스티벌 대기실","2026-10-29","2026-10-30"],
+["[대][대관]여수학생오케스트라 28일 셋업 29~30일 14:00","2026-10-28","2026-10-30"],
+["[소][대관]가을밤의세레나데 19:30","2026-11-03","2026-11-03"],
+["[소][기획]그때도오늘","2026-11-04","2026-11-07"],
+["[리1][대관]조이오브퍼커션 연습 18:00~22:00","2026-11-07","2026-11-07"],
+["[대][대관]전남학생교육페스티벌_오케스트라 8일셋업 10~12일 14:00","2026-11-08","2026-11-12"],
+["[소][대관]조이오브퍼커션 17:00","2026-11-08","2026-11-08"],
+["[리1,2][대관] 전남학생예술교육페스티벌 대기실","2026-11-10","2026-11-12"],
+["[소][대관]전남학생교육페스티벌_복합 14:00","2026-11-12","2026-11-13"],
+["[대][대관]여수영재원오케스트라 정기연주회 17:00","2026-11-14","2026-11-14"],
+["[대][대관]유진청소년오케스트라 정기연주회 17:30","2026-11-15","2026-11-15"],
+["[대][대관]여수필하모닉오케스트라 정기연주회 19:00","2026-11-17","2026-11-17"],
+["[대][기획]헬로!오페라","2026-11-18","2026-11-21"],
+["[대][기획]러커스 더 스쿨","2026-11-24","2026-11-28"],
+["[소][대관]정화용플룻 16:00","2026-11-29","2026-11-29"],
+["[대][기획]브런치콘서트 2일 셋업 3일 공연 11:00","2026-12-02","2026-12-03"],
+["[대][대관]가족뮤지컬 인싸가족 4일 셋업09:00~22:00 5,6일 11:00,14:00,16:30","2026-12-04","2026-12-06"],
+["[소][대관]주현주판소리완창 17:00","2026-12-04","2026-12-04"],
+["[대][대관]여수시립합창단 정기연주회 9일 셋업 09:00~22:00 10일 공연 19:30","2026-12-09","2026-12-10"],
+["[대][대관]여수전남교원오케스트라 19:00","2026-12-11","2026-12-11"],
+["[소][대관]애양청소년오케스트라 17:00","2026-12-12","2026-12-12"],
+["[소][대관]신혜미가야금앙상블 16:00","2026-12-13","2026-12-13"],
+["[소][대관]연극 쉬어매드니스","2026-12-14","2026-12-20"],
+["[대][대관]송년음악회 14~15일 셋업 16일 19:00","2026-12-14","2026-12-16"],
+["[대][기획]발레 호두까기인형 24,25일 공연","2026-12-21","2026-12-25"],
+["[대][대관]여수음악제 특별공연 19:30","2026-12-26","2026-12-26"]];
+// 앱 정본(프로그램 시트)에 이미 등록된 것 — 중복 판정용. 운영자 확인: 「숨:쉬는 SUM」은 우리가 이미 올린 전시.
+const OWNED=['숨:쉬는 SUM','입주작가전'];
+
+/* ═══════════════════════════════════════════════════════════════
+   2. 파서 — 60건 실측 검증 완료(셋업 12건 전건 일치)
+   ═══════════════════════════════════════════════════════════════ */
+const PLACE={'대':'대극장','소':'소극장','장':'장도','7층':'7층','야외':'야외','리1':'리허설실1','리1,2':'리허설실1·2'};
+const EXPLACE={'장':1,'7층':0,'야외':2};                 // 전시 공간 → 레인 인덱스(기본 순서)
+const DROPRE=/^(공사|점검|휴관|휴무)$/;
+const dkAdd=(k,n)=>{const d=new Date(k+'T00:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10);};
+function parse(title,s,e){
+  const raw=String(title||'').replace(/^['"\s]+/,'');
+  const tags=[];let rest=raw,m;
+  while((m=rest.match(/^\s*\[([^\]]*)\]/))){tags.push(m[1].trim());rest=rest.slice(m[0].length);}
+  rest=rest.trim();
+  const kindTag=tags.find(t=>t==='대관'||t==='기획')||'';
+  const placeTag=tags.find(t=>t!=='대관'&&t!=='기획')||'';
+  const masked=rest.replace(/\d{1,2}:\d{2}/g,x=>'§'.repeat(x.length));
+  const groups=[];
+  for(const re of [/\d{1,2}\/\d{1,2}(?:\s*[~-]\s*\d{1,2}(?:\/\d{1,2})?)?/g,/\d{1,2}(?:\s*[~,]\s*\d{1,2})*\s*일/g]){
+    let g;while((g=re.exec(masked))){
+      if(groups.some(x=>g.index<x.end&&g.index+g[0].length>x.start))continue;
+      groups.push({text:g[0],start:g.index,end:g.index+g[0].length});}}
+  groups.sort((a,b)=>a.start-b.start);
+  // 키워드는 1회만 소비 — 「28일 셋업 29~30일」에서 셋업이 뒷 날짜까지 먹는 것을 막는다.
+  // 앞 경계에 '일'·숫자 허용 = 「8일셋업」 포착 / 한글 뒤(「특별공연」)는 배제.
+  const KWRE=/(?:^|[\s\]0-9일])(셋업|철수|공연)/g;const kws=[];
+  {let k;while((k=KWRE.exec(masked)))kws.push({pos:k.index+k[0].length-k[1].length,w:k[1],used:false});}
+  const near=t=>!/[0-9§]/.test(t);
+  for(let i=0;i<groups.length;i++){const g=groups[i],lim=i+1<groups.length?groups[i+1].start:masked.length;
+    const c=kws.find(k=>!k.used&&k.pos>=g.end&&k.pos<lim&&near(masked.slice(g.end,k.pos)));
+    if(c){c.used=true;g.kw=c.w;}}
+  for(let i=0;i<groups.length;i++){const g=groups[i];if(g.kw)continue;
+    const lo=i>0?groups[i-1].end:0;
+    const c=[...kws].reverse().find(k=>!k.used&&k.pos>=lo&&k.pos<g.start&&near(masked.slice(k.pos+k.w.length,g.start)));
+    if(c){c.used=true;g.kw=c.w;}}
+  groups.forEach(g=>{g.kw=g.kw||'공연';});
+  let cut=masked.length;
+  if(groups.length)cut=Math.min(cut,groups[0].start);
+  const si=masked.indexOf('§');if(si>=0)cut=Math.min(cut,si);
+  if(kws.length)cut=Math.min(cut,kws[0].pos);
+  const name=(rest.slice(0,cut).replace(/[\s,·\-~]+$/,'').trim())||rest.trim();
+  const Y=+s.slice(0,4),M=+s.slice(5,7),D0=+s.slice(8,10);
+  function toKeys(text){const t=text.replace(/\s/g,'').replace(/일$/,'');const out=[];
+    if(t.includes('/')){const p=t.split(/[~-]/),a=p[0].split('/').map(Number);
+      let mo=a[0],d1=a[1],mo2=mo,d2=d1;
+      if(p[1]){const b=p[1].split('/').map(Number);if(b.length>1){mo2=b[0];d2=b[1];}else d2=b[0];}
+      let k=`${Y}-${String(mo).padStart(2,'0')}-${String(d1).padStart(2,'0')}`;
+      const kE=`${Y}-${String(mo2).padStart(2,'0')}-${String(d2).padStart(2,'0')}`;
+      for(let i=0;i<60&&k<=kE;i++,k=dkAdd(k,1))out.push(k);
+    }else{const push=d=>{let mo=M,y=Y;if(d<D0){mo+=1;if(mo>12){mo=1;y+=1;}}
+        out.push(`${y}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`);};
+      if(t.includes('~')){const[a,b]=t.split('~').map(Number);for(let d=a;d<=b;d++)push(d);}
+      else t.split(',').map(Number).filter(n=>n>0&&n<32).forEach(push);}
+    return out;}
+  const showSet=new Set(),setupSet=new Set();
+  groups.forEach(g=>{const set=(g.kw==='공연')?showSet:setupSet;toKeys(g.text).forEach(k=>set.add(k));});
+  const all=[];for(let k=s;k<=e&&all.length<400;k=dkAdd(k,1))all.push(k);
+  const hasShow=all.some(k=>showSet.has(k));
+  const setup=new Set();
+  if(hasShow)all.forEach(k=>{if(!showSet.has(k))setup.add(k);});
+  else all.forEach(k=>{if(setupSet.has(k))setup.add(k);});
+  const isEx=(placeTag in EXPLACE);
+  return{raw,name,kindTag,placeTag,place:PLACE[placeTag]||placeTag,
+    drop:DROPRE.test(name),setup,days:all,isEx,lane:EXPLACE[placeTag],
+    owned:OWNED.some(o=>name.indexOf(o)>-1),
+    why:groups.map(g=>g.text+'→'+g.kw).join(' ')||'(날짜 표기 없음 = 전부 본일정)'};
+}
+const ITEMS=DATA.map(([t,s,e])=>parse(t,s,e));
+
+/* ═══════════════════════════════════════════════════════════════
+   3. 축 정의 — 56축. warn:1 = 기틀 이탈 감시축
+   ═══════════════════════════════════════════════════════════════ */
+const PAL=[['var(--accent)','인디고 --accent'],['var(--peach-text)','살몬 --peach-text'],['var(--green)','딥그린 --green'],
+  ['var(--c4)','마젠타 --c4'],['var(--c5)','시안블루 --c5'],['var(--c6)','옐로 --c6'],
+  ['var(--neutral-text)','중립 --neutral-text'],['var(--dim)','회색 --dim'],['var(--muted)','연회색 --muted'],
+  ['var(--neutral-d)','뉴트럴딥 --neutral-d'],['#8a8f9c','⚠ #8a8f9c (_BATCH_CAT 대관)'],
+  ['#E0876F','⚠ #E0876F (_BATCH_CAT 전시)'],['#2E9E5B','⚠ #2E9E5B (_BATCH_CAT 교육)'],
+  ['#006B3C','⚠ #006B3C (현행 7층 라인)'],['#E84393','⚠ #E84393 (현행 장도 라인)']];
+const SEL=(o)=>({type:'sel',opts:o});
+const AX=[
+ // ── 배지 · 라벨 ─────────────────────────────
+ {g:'배지 · 라벨'},
+ {k:'kindSplit',nm:'대관/기획 구분',d:'끄면 전부 대관 취급 = 현행', ...SEL([['0','끄기 = 전부 「대」 (현행)'],['1','켜기 = [대관]/[기획] 태그로 갈림']]), dv:'0'},
+ {k:'lbR',   nm:'대관 라벨',      d:'t=대관 원 안 글자', ...SEL([['대','대'],['貸','貸'],['R','R'],['·','·']]), dv:'대'},
+ {k:'lbC',   nm:'기획 공연 라벨',  d:'정본 등록 공연',   ...SEL([['공','공'],['기','기'],['P','P']]), dv:'공'},
+ {k:'lbE',   nm:'전시 라벨',      d:'전시 배지(라인 아님)', ...SEL([['전','전'],['展','展'],['E','E']]), dv:'전'},
+ {k:'lbA',   nm:'교육 라벨',      d:'예술교육',        ...SEL([['교','교'],['敎','敎'],['A','A']]), dv:'교'},
+ {k:'lbS',   nm:'셋업 라벨',      d:'셋업·철수일 원 안 글자', ...SEL([['셋','셋'],['準','準'],['S','S'],['◦','◦'],['~','~']]), dv:'셋'},
+ {k:'lbW',   nm:'철수 별도 라벨',  d:'철수일을 따로 표기', ...SEL([['0','끄기 = 철수도 「셋」'],['1','켜기 = 「철」']]), dv:'0'},
+ {k:'bsz',   nm:'배지 지름',      d:'.bdot min-width/height', min:12,max:24,step:1,dv:16,unit:'px'},
+ {k:'bfs',   nm:'배지 글자 크기',  d:'.bdot font-size', min:6,max:13,step:.5,dv:8,unit:'px'},
+ {k:'bfw',   nm:'배지 글자 굵기',  d:'.bdot font-weight', min:400,max:900,step:100,dv:600},
+ {k:'brd',   nm:'배지 라운드',    d:'.bdot border-radius', min:3,max:50,step:1,dv:50,unit:'%'},
+ {k:'bml',   nm:'배지 좌측 여백',  d:'.perf-badge margin-left', min:0,max:14,step:1,dv:6,unit:'px'},
+ {k:'bgap',  nm:'배지→이름 간격',  d:'.pname margin-left', min:0,max:12,step:1,dv:5,unit:'px'},
+ // ── 배지 · 색 (팔레트 폐쇄) ──────────────────
+ {g:'배지 · 색 (팔레트 폐쇄)'},
+ {k:'cR',    nm:'대관 배지색',     d:'대관 공연·전시·교육 공통', ...SEL(PAL), dv:'var(--neutral-text)',warn:1},
+ {k:'cC',    nm:'기획 공연색',     d:'정본 공연 배지', ...SEL(PAL), dv:'var(--accent)',warn:1},
+ {k:'cE',    nm:'기획 전시색',     d:'정본 전시 배지', ...SEL(PAL), dv:'#E0876F',warn:1},
+ {k:'cA',    nm:'기획 교육색',     d:'정본 교육 배지', ...SEL(PAL), dv:'#2E9E5B',warn:1},
+ {k:'sMode', nm:'셋업 배지 방식',  d:'셋업일 원 색 결정', ...SEL([['inherit','본색 그대로'],['alpha','본색 + 투명도'],['neutral','무채색 고정'],['hollow','속 빈 테두리']]), dv:'inherit'},
+ {k:'sAlpha',nm:'셋업 배지 투명도', d:'방식=투명도일 때', min:.2,max:1,step:.05,dv:.55},
+ {k:'sBd',   nm:'셋업 테두리 굵기', d:'방식=속 빈 테두리', min:1,max:3,step:.5,dv:1.5,unit:'px'},
+ {k:'sname', nm:'셋업 이름 색',    d:'.setup .pname', ...SEL([['var(--text)','본문 --text'],['var(--dim)','회색 --dim'],['var(--muted)','연회색 --muted'],['var(--neutral-text)','중립 --neutral-text']]), dv:'var(--dim)'},
+ {k:'sopa',  nm:'셋업 이름 투명도', d:'.setup .pname opacity', min:.3,max:1,step:.05,dv:.85},
+ // ── 제목 정제 ──────────────────────────────
+ {g:'제목 정제'},
+ {k:'strip', nm:'[태그] 제거',     d:'[장][대관] 잘라내기', ...SEL([['1','켜기 = 공연명만'],['0','끄기 = 원문 그대로']]), dv:'0'},
+ {k:'striptime',nm:'시간·설명 제거',d:'10:00~18:00 / 셋업 설명문', ...SEL([['1','켜기'],['0','끄기']]), dv:'0'},
+ {k:'chip',  nm:'공간 표기',       d:'대극장·소극장 어디에', ...SEL([['none','숨김 (툴팁에만)'],['after','이름 뒤 회색 글씨'],['short','이름 뒤 약어(대·소)'],['front','이름 앞 약어']]), dv:'none'},
+ {k:'cfs',   nm:'공간 글자 크기',   d:'.pchip font-size', min:7,max:12,step:.5,dv:8.5,unit:'px'},
+ {k:'span',  nm:'다일 기간 표기',   d:'첫날에 9/14~21 병기', ...SEL([['none','안 함'],['first','첫날만'],['all','매일']]), dv:'none'},
+ {k:'nfs',   nm:'이름 글자 크기',   d:'.pname font-size', min:7,max:14,step:.5,dv:9,unit:'px'},
+ {k:'nfw',   nm:'이름 글자 굵기',   d:'.pname font-weight', min:400,max:900,step:100,dv:700},
+ // ── 필터 · 중복 ────────────────────────────
+ {g:'필터 · 중복'},
+ {k:'dropc', nm:'공사류 제외',     d:'공사·점검·휴관', ...SEL([['1','켜기 = 캘린더에서 뺌'],['0','끄기']]), dv:'0'},
+ {k:'dedup', nm:'정본 중복 제거',   d:'이미 등록된 기획은 구글 쪽 숨김', ...SEL([['1','켜기 = 정본 우선'],['0','끄기 = 둘 다']]), dv:'0'},
+ {k:'hideWait',nm:'대기실 등 부속', d:'「대기실」 포함 일정', ...SEL([['0','표시'],['1','숨김'],['2','흐리게']]), dv:'0'},
+ {k:'setupShow',nm:'셋업일 표시',  d:'셋업 칸을 어떻게', ...SEL([['none','구분 안 함 (현행)'],['badge','「셋」 배지'],['dim','흐리게만'],['hide','아예 숨김']]), dv:'none'},
+ {k:'exBadge',nm:'전시 배지 병기',  d:'전시를 라인 + 배지 둘 다', ...SEL([['0','라인만 (현행)'],['1','라인 + 배지']]), dv:'0'},
+ // ── 전시 라인 ──────────────────────────────
+ {g:'전시 라인 (셀 하단)'},
+ {k:'exN',   nm:'레인 수',        d:'가로줄 개수', min:2,max:4,step:1,dv:2},
+ {k:'exOrd', nm:'레인 순서',      d:'위→아래', ...SEL([['0','7층 · 장도 · 야외'],['1','장도 · 7층 · 야외'],['2','야외 · 7층 · 장도']]), dv:'0'},
+ {k:'ex0',   nm:'레인1 색 (7층)',  d:'현행 #006B3C', ...SEL(PAL), dv:'#006B3C',warn:1},
+ {k:'ex1',   nm:'레인2 색 (장도)', d:'현행 #E84393', ...SEL(PAL), dv:'#E84393',warn:1},
+ {k:'ex2',   nm:'레인3 색 (야외)', d:'신설 — 운영자 「강조색 1번」', ...SEL(PAL), dv:'var(--accent)',warn:1},
+ {k:'ex3',   nm:'레인4 색 (예비)', d:'레인 수=4일 때', ...SEL(PAL), dv:'var(--c5)',warn:1},
+ {k:'exh',   nm:'라인 두께',      d:'border-top', min:1,max:6,step:.5,dv:2,unit:'px'},
+ {k:'exg',   nm:'라인 간격',      d:'flex gap', min:0,max:8,step:.5,dv:3,unit:'px'},
+ {k:'exb',   nm:'라인 바닥 여백',  d:'bottom', min:0,max:10,step:.5,dv:2,unit:'px'},
+ {k:'exi',   nm:'라인 좌우 인셋',  d:'left/right', min:0,max:16,step:1,dv:0,unit:'px'},
+ {k:'exr',   nm:'라인 라운드',    d:'border-radius', min:0,max:4,step:.5,dv:0,unit:'px'},
+ {k:'exs',   nm:'라인 스타일',    d:'border-style', ...SEL([['solid','실선'],['dashed','파선'],['dotted','점선']]), dv:'solid'},
+ {k:'exdim', nm:'없는 날 라인 농도',d:'--EX_DIM alpha', min:0,max:.16,step:.005,dv:.04},
+ {k:'expast',nm:'지난날 투명도',   d:'진행중 전시의 지난 칸', min:.15,max:1,step:.01,dv:.38},
+ // ── 셀 레이아웃 ────────────────────────────
+ {g:'셀 레이아웃'},
+ {k:'cellh', nm:'셀 최소 높이',    d:'.c.cell min-height', min:64,max:160,step:4,dv:96,unit:'px'},
+ {k:'wrap',  nm:'배지 줄바꿈',     d:'.dn flex-wrap', ...SEL([['nowrap','한 줄 (현행)'],['wrap','넘치면 줄바꿈']]), dv:'nowrap'},
+ {k:'rowgap',nm:'배지 사이 간격',  d:'.dn gap', min:0,max:10,step:1,dv:5,unit:'px'},
+ {k:'maxrow',nm:'셀당 최대 배지 수',d:'초과분은 +N', min:1,max:8,step:1,dv:8},
+ {k:'ellip', nm:'이름 최대 폭',    d:'.pname max-width', min:40,max:200,step:5,dv:200,unit:'px'}
+];
+const KEYS=AX.filter(a=>a.k);
+document.getElementById('axcnt').textContent='총 '+KEYS.length+'축';
+
+/* ═══════════════════════════════════════════════════════════════
+   4. 프리셋
+   ═══════════════════════════════════════════════════════════════ */
+const D={};KEYS.forEach(a=>D[a.k]=a.dv);
+const PRESETS=[
+ {id:'p0',nm:'현행 (지금 배포본)',st:{...D}},
+ // 지시안 공통 = 태그 제거 · 공사 제외 · 정본 우선 · 대관/기획 구분 · 전시 3레인
+ {id:'p1',nm:'운영자 지시안',star:'★',st:{...D,
+    strip:'1',striptime:'1',dropc:'1',dedup:'1',setupShow:'badge',kindSplit:'1',
+    exN:3,ex2:'var(--accent)',cR:'var(--neutral-text)',cC:'var(--accent)',
+    // 공간은 툴팁에만 — 이름 뒤 약어 「대」는 대관 배지 「대」와 헷갈린다(실측 확인)
+    // 기간 병기(9/14~9/21)도 기본 끔 — 좁은 셀에서 공연명을 밀어낸다(실측). 필요하면 축에서 켜기
+    sMode:'inherit',sname:'var(--dim)',sopa:.85,span:'none',chip:'none'}},
+ {id:'p2',nm:'셋업 흐림형',st:{...D,strip:'1',striptime:'1',dropc:'1',dedup:'1',exN:3,kindSplit:'1',
+    setupShow:'dim',sMode:'alpha',sAlpha:.45,sopa:.5,sname:'var(--muted)'}},
+ {id:'p3',nm:'셋업 속빈원',st:{...D,strip:'1',striptime:'1',dropc:'1',dedup:'1',exN:3,kindSplit:'1',
+    setupShow:'badge',sMode:'hollow',sBd:1.5,sname:'var(--dim)',span:'first'}},
+ {id:'p4',nm:'공간 강조형',st:{...D,strip:'1',striptime:'1',dropc:'1',dedup:'1',exN:3,kindSplit:'1',
+    setupShow:'badge',chip:'after',cfs:9,nfs:9.5,cellh:112,wrap:'wrap',span:'first'}},
+ {id:'p5',nm:'컴팩트 (많은 달용)',st:{...D,strip:'1',striptime:'1',dropc:'1',dedup:'1',exN:3,kindSplit:'1',
+    setupShow:'badge',bsz:13,bfs:7,nfs:8,bml:4,bgap:3,rowgap:3,cellh:80,maxrow:3,ellip:70}}
+];
+
+/* ═══════════════════════════════════════════════════════════════
+   5. 렌더
+   ═══════════════════════════════════════════════════════════════ */
+let state={...D},curMo=9;
+const app=document.getElementById('app'),grid=document.getElementById('grid'),out=document.getElementById('out');
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function laneOrder(){ // 레인 순서 축 → [레인색 배열]
+  const cols=[state.ex0,state.ex1,state.ex2,state.ex3];
+  const maps={'0':[0,1,2,3],'1':[1,0,2,3],'2':[2,0,1,3]};
+  const idx=maps[state.exOrd]||maps['0'];
+  return idx.slice(0,+state.exN).map(i=>({src:i,col:cols[i]}));
+}
+const asRental=it=>(state.kindSplit==='0')||it.kindTag==='대관';   // 구분 끄면 = 현행(전부 대관 취급)
+function labelOf(it,isSetup,isWithdraw){
+  if(isSetup) return (state.lbW==='1'&&isWithdraw)?'철':state.lbS;
+  if(asRental(it)) return state.lbR;                 // 운영자: 대관 관련 공연·전시·교육 모두 「대」
+  return it.isEx?state.lbE:state.lbC;                // 기획은 기존 표기 계승
+}
+function colorOf(it,isSetup){
+  const base=asRental(it)?state.cR:(it.isEx?state.cE:state.cC);
+  if(!isSetup) return {bg:base,bd:'none',fg:'#fff'};
+  if(state.sMode==='neutral') return {bg:'var(--neutral-text)',bd:'none',fg:'#fff'};
+  if(state.sMode==='hollow')  return {bg:'transparent',bd:state.sBd+'px solid '+base,fg:base};
+  if(state.sMode==='alpha')   return {bg:base,bd:'none',fg:'#fff',op:state.sAlpha};
+  return {bg:base,bd:'none',fg:'#fff'};
+}
+function nameOf(it){
+  let n=(state.strip==='1')?it.name:it.raw;
+  if(state.strip==='1'&&state.striptime==='0')n=it.raw.replace(/^\s*(\[[^\]]*\]\s*)+/,'');
+  if(state.chip==='front'&&it.placeTag)n='('+it.placeTag+') '+n;
+  return n;
+}
+function spanText(it){
+  if(state.span==='none'||it.days.length<2)return'';
+  const f=it.days[0],l=it.days[it.days.length-1];
+  return f.slice(5).replace('-','/').replace(/^0/,'')+'~'+l.slice(5).replace('-','/').replace(/^0/,'');
+}
+function render(){
+  for(const k in state){
+    let v=state[k];const ax=KEYS.find(a=>a.k===k);
+    if(ax&&ax.unit)v=v+ax.unit;
+    app.style.setProperty('--t-'+k,v);
+  }
+  app.style.setProperty('--t-exdim','rgba(0,0,0,'+state.exdim+')');
+  const y=2026,mo=curMo;
+  document.getElementById('mlabel').textContent=y+'년 '+mo+'월';
+  const first=new Date(Date.UTC(y,mo-1,1)),start=new Date(first);
+  start.setUTCDate(1-first.getUTCDay());
+  const lanes=laneOrder();
+  let h='',shown=0,setupN=0,dropped=0;
+  for(let i=0;i<42;i++){
+    const d=new Date(start);d.setUTCDate(start.getUTCDate()+i);
+    const key=d.toISOString().slice(0,10),dow=d.getUTCDay(),nm=(d.getUTCMonth()+1)!==mo;
+    let cls='c cell'+(nm?' nm':'');
+    let inner='<div class="dn'+(nm?' nm':'')+(dow===0?' sun':'')+(dow===6?' sat':'')+'">'+d.getUTCDate();
+    // ① 전시 라인
+    const on=lanes.map(()=>null);
+    // ⚠ 중복 제거는 「배지」에만 적용한다 — 전시 라인은 정본(PERFS t='e')이 어차피 같은 줄을 긋는다.
+    //   여기서까지 빼면 라인이 통째로 사라져 재현이 왜곡된다(정본 소스가 이 시안에 없기 때문).
+    ITEMS.forEach(it=>{
+      if(!it.isEx||it.drop)return;
+      if(key<it.days[0]||key>it.days[it.days.length-1])return;
+      const li=lanes.findIndex(l=>l.src===it.lane);
+      if(li>=0)on[li]=it;
+    });
+    let ex='<div class="exline">';
+    for(let li=0;li<lanes.length;li++){
+      const it=on[li];
+      const col=it?lanes[li].col:'var(--t-exdim)';
+      ex+='<i style="color:'+col+(it?'':'')+'"'+(it?' title="'+esc(it.name)+'"':'')+'></i>';
+    }
+    ex+='</div>';
+    // ② 배지
+    let badges='',n=0,more=0;
+    ITEMS.forEach(it=>{
+      if(nm)return;
+      if(it.drop&&state.dropc==='1'){return;}
+      if(it.isEx&&state.exBadge==='0')return;
+      if(key<it.days[0]||key>it.days[it.days.length-1])return;
+      if(state.dedup==='1'&&it.owned)return;
+      const isWait=/대기실/.test(it.name);
+      if(isWait&&state.hideWait==='1')return;
+      const isSetup=(state.setupShow!=='none')&&it.setup.has(key);
+      if(isSetup&&state.setupShow==='hide')return;
+      if(n>=+state.maxrow){more++;return;}
+      n++;shown++;if(isSetup)setupN++;
+      const isW=isSetup&&key===it.days[it.days.length-1];
+      const c=colorOf(it,isSetup);
+      const lb=labelOf(it,isSetup,isW);
+      const dimAll=(isSetup&&state.setupShow==='dim')||(isWait&&state.hideWait==='2');
+      const tip=esc(it.raw)+'  ⟨'+esc(it.why)+'⟩';
+      const sp=spanText(it);
+      const spOn=(state.span==='all')||(state.span==='first'&&key===it.days[0]);
+      badges+='<span class="perf-badge'+(isSetup?' setup':'')+'" title="'+tip+'"'
+        +(dimAll?' style="opacity:.45"':'')+'>'
+        +'<span class="bdot" style="background:'+c.bg+';border:'+(c.bd||'none')+';color:'+(c.fg||'#fff')
+        +(c.op?';opacity:'+c.op:'')+'">'+lb+'</span>'
+        +'<span class="pname" style="max-width:var(--t-ellip)">'+esc(nameOf(it))+'</span>'
+        +((state.chip==='after'&&it.place)?'<span class="pchip">'+esc(it.place)+'</span>':'')
+        +((state.chip==='short'&&it.placeTag)?'<span class="pchip">'+esc(it.placeTag)+'</span>':'')
+        +((spOn&&sp)?'<span class="pspan">'+sp+'</span>':'')
+        +'</span>';
+    });
+    if(more)badges+='<span class="pspan">+'+more+'</span>';
+    inner+=badges+'</div>';
+    h+='<div class="'+cls+'">'+inner+ex+'</div>';
+  }
+  grid.innerHTML=h;
+  ITEMS.forEach(it=>{if(it.drop&&state.dropc==='1')dropped++;});
+  document.getElementById('bl').innerHTML=
+    '이 달 표시 배지 <b>'+shown+'</b>개 (셋업 <b>'+setupN+'</b>) · 전시 레인 <b>'+state.exN+'</b>줄'
+    +(state.dropc==='1'?' · 공사류 제외 켬':'')+(state.dedup==='1'?' · 정본 중복 제거 켬':'');
+  buildOut();
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   6. 콘솔 UI
+   ═══════════════════════════════════════════════════════════════ */
+const sl=document.getElementById('sliders');
+let html='';
+AX.forEach(a=>{
+  if(a.g){html+='<div class="grp">'+a.g+'</div>';return;}
+  const w=a.warn?' warn':'';
+  html+='<div class="row'+w+'" data-k="'+a.k+'"><label>'+(a.warn?'<span class="wmk">⚠</span> ':'')+a.nm+'<small>'+a.d+'</small></label>';
+  if(a.type==='sel'){
+    html+='<select data-k="'+a.k+'">'+a.opts.map(o=>'<option value="'+o[0]+'">'+o[1]+'</option>').join('')+'</select><span class="v" data-v="'+a.k+'"></span>';
+  }else{
+    html+='<input type="range" data-k="'+a.k+'" min="'+a.min+'" max="'+a.max+'" step="'+a.step+'"><span class="v" data-v="'+a.k+'"></span>';
+  }
+  html+='</div>';
+});
+sl.innerHTML=html;
+document.getElementById('presets').innerHTML=
+  PRESETS.map(p=>'<button class="pill" data-p="'+p.id+'">'+(p.star||'')+p.nm+'</button>').join('')
+  +'<button class="pill cust" id="custpill" style="display:none">직접 조절</button>';
+
+function syncUI(){
+  KEYS.forEach(a=>{
+    const el=sl.querySelector('[data-k="'+a.k+'"]');if(!el)return;
+    el.value=state[a.k];
+    const v=sl.querySelector('[data-v="'+a.k+'"]');
+    if(a.type==='sel'){const o=a.opts.find(x=>x[0]==state[a.k]);if(v)v.textContent='';}
+    else{
+      if(v)v.textContent=state[a.k]+(a.unit||'');
+      el.style.setProperty('--p',((state[a.k]-a.min)/(a.max-a.min)*100)+'%');
+    }
+  });
+  // 이탈 카운터
+  const dev=deviations();
+  document.getElementById('devcnt').textContent=dev.length?('· ⚠ 기틀 이탈 '+dev.length+'축'):'';
+  document.getElementById('devcnt').style.color=dev.length?'var(--danger-btn)':'';
+}
+function deviations(){
+  const out=[];
+  KEYS.forEach(a=>{
+    if(!a.warn)return;
+    if(String(state[a.k])!==String(a.dv))out.push({k:a.k,nm:a.nm,from:a.dv,to:state[a.k]});
+  });
+  return out;
+}
+sl.addEventListener('input',e=>{
+  const k=e.target.dataset.k;if(!k)return;
+  const a=KEYS.find(x=>x.k===k);
+  state[k]=(a.type==='sel')?e.target.value:(+e.target.value);
+  document.querySelectorAll('.pill[data-p]').forEach(b=>b.classList.remove('on'));
+  document.getElementById('custpill').style.display='';
+  document.getElementById('custpill').classList.add('on');
+  syncUI();render();
+});
+document.getElementById('presets').addEventListener('click',e=>{
+  const id=e.target.dataset.p;if(!id)return;
+  const p=PRESETS.find(x=>x.id===id);state={...p.st};
+  document.querySelectorAll('.pill').forEach(b=>b.classList.remove('on'));
+  e.target.classList.add('on');
+  document.getElementById('custpill').style.display='none';
+  syncUI();render();
+});
+document.querySelectorAll('.mbtn').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('.mbtn').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on');curMo=+b.dataset.mo;render();
+}));
+document.getElementById('reset').addEventListener('click',()=>{
+  state={...D};document.querySelectorAll('.pill').forEach(b=>b.classList.remove('on'));
+  document.querySelector('.pill[data-p="p0"]').classList.add('on');
+  document.getElementById('custpill').style.display='none';syncUI();render();
+});
+
+/* ── 출력 ── */
+function labelFor(k,v){const a=KEYS.find(x=>x.k===k);if(a&&a.type==='sel'){const o=a.opts.find(x=>x[0]==v);return o?o[1]:v;}return v+(a&&a.unit?a.unit:'');}
+function buildOut(withDev){
+  const dev=deviations();
+  let s='[대관 캘린더 표기 — 선택값]\n';
+  AX.forEach(a=>{
+    if(a.g){s+='\n■ '+a.g+'\n';return;}
+    const chg=String(state[a.k])!==String(a.dv);
+    s+='  '+(chg?'▸ ':'  ')+a.nm.padEnd(14,' ')+' : '+labelFor(a.k,state[a.k])+(chg?('   [현행 '+labelFor(a.k,a.dv)+']'):'   = 현행 유지')+'\n';
+  });
+  s+='\n■ 파서 판정 (실데이터 60건)\n';
+  s+='  셋업 검출 : '+ITEMS.filter(i=>i.setup.size).length+'건 / 판정불가(공연일 미기재) : '
+    +ITEMS.filter(i=>!i.setup.size&&i.days.length>2&&!i.isEx&&!i.drop).length+'건\n';
+  if(withDev&&dev.length){
+    s+='\n🔁 기틀 갱신 역제안 ('+dev.length+'축) — 적용 범위 = 전 앱 동일 축 일괄\n';
+    dev.forEach(d=>{s+='  · '+d.nm+' : '+labelFor(d.k,d.from)+' → '+labelFor(d.k,d.to)+'\n';});
+  }
+  out.textContent=s;
+  return s;
+}
+/* ── 복사 (이탈 시 알림창 → 역제안 포함 여부 선택) ── */
+const mask=document.getElementById('mask');
+function doCopy(withDev){
+  const t=buildOut(withDev);
+  (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject())
+    .catch(()=>{const r=document.createRange();r.selectNode(out);getSelection().removeAllRanges();getSelection().addRange(r);document.execCommand('copy');})
+    .finally(()=>{buildOut(false);const b=document.getElementById('copy');b.textContent='복사됨 ✓';setTimeout(()=>b.textContent='선택값 복사',1400);});
+  mask.classList.remove('on');
+}
+document.getElementById('copy').addEventListener('click',()=>{
+  const dev=deviations();
+  if(!dev.length){doCopy(false);return;}
+  document.getElementById('devlist').innerHTML=dev.map(d=>'<li>'+d.nm+' : '+labelFor(d.k,d.from)+' → '+labelFor(d.k,d.to)+'</li>').join('');
+  mask.classList.add('on');
+});
+document.getElementById('copyDev').addEventListener('click',()=>doCopy(true));
+document.getElementById('copyKeep').addEventListener('click',()=>doCopy(false));
+document.getElementById('copyCancel').addEventListener('click',()=>mask.classList.remove('on'));
+
+document.querySelector('.pill[data-p="p0"]').classList.add('on');
+syncUI();render();
+</script>
+</body></html>
