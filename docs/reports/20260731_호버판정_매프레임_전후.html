@@ -1,0 +1,118 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>호버 판정 = 매 프레임(rAF) — 전후 (260731)</title>
+<style>*{box-sizing:border-box}
+:root{--accent:#4A4DE7;--accent-light:#E8E8FD;--peach-light:#FBF0EC;--peach-text:#D88455;
+--bg:linear-gradient(135deg,#FDF6F3 0%,#F0EBF5 50%,#EBF0F8 100%);--surface-solid:#fff;
+--glass:rgba(255,255,255,0.55);--glass-surface:rgba(255,255,255,.78);--glass-menu:rgba(255,255,255,.45);
+--glass-bd:var(--glass);--glass-shadow:0 8px 32px rgba(74,77,231,0.08),0 2px 8px rgba(0,0,0,0.04);
+--border:rgba(0,0,0,0.09);--border2:rgba(0,0,0,0.12);--text:#1A1A2E;--dim:#888;--muted:#bbb;
+--neutral:#EEEDF3;--neutral-text:#6B6B7B;--green:#1A6B3C;--danger-btn:#E24B4A;
+--radius:16px;--radius-lg:20px}
+body{margin:0;background:var(--bg);color:var(--text);font-family:'Pretendard',-apple-system,BlinkMacSystemFont,system-ui,sans-serif;line-height:1.6}
+.wrap{max-width:1000px;margin:0 auto;padding:30px 20px 70px}
+h1{font-size:22px;margin:0 0 6px;letter-spacing:-.3px}
+.lead{color:var(--neutral-text);font-size:13px;margin:0 0 20px}
+section{background:var(--glass-surface);border:1px solid var(--glass-bd);border-radius:var(--radius-lg);box-shadow:var(--glass-shadow);padding:18px 20px 22px;margin:0 0 18px}
+section>h2{margin:0 0 4px;font-size:14px;font-weight:800;color:var(--accent);display:flex;align-items:center;gap:8px}
+section>h2::before{content:"";width:4px;height:14px;border-radius:2px;background:var(--accent)}
+.demo{position:relative;background:#2C2C3E;border-radius:var(--radius);min-height:215px;overflow:hidden}
+.dnav{display:flex;align-items:center;gap:4px;height:56px;padding:0 16px}
+.dbtn{position:relative;border:0;background:none;color:#fff;font-size:13.5px;font-weight:600;padding:9px 14px;border-radius:10px;cursor:default;font-family:inherit;z-index:1}
+/* 260723 navigation-01 정본 계승 — 호버 배경 pill 슬라이드 */
+.hbg{position:absolute;top:0;left:0;z-index:0;opacity:0;pointer-events:none;border-radius:20px;background:rgba(255,255,255,.12);transition:left .2s cubic-bezier(.215,.61,.355,1),top .2s cubic-bezier(.215,.61,.355,1),width .2s cubic-bezier(.215,.61,.355,1),height .2s cubic-bezier(.215,.61,.355,1),opacity .15s ease}
+.hbg.is-instant{transition:opacity .15s ease}
+.hbg.is-visible{opacity:1}
+.dnavwrap{position:relative}
+.dd{position:absolute;top:64px;background:var(--glass-menu);backdrop-filter:blur(9px) saturate(150%);-webkit-backdrop-filter:blur(9px) saturate(150%);border:1px solid rgba(0,0,0,0.06);border-radius:14px;box-shadow:0 16px 48px rgba(74,77,231,0.18),0 4px 14px rgba(0,0,0,0.08);padding:7px;min-width:190px;transform-origin:top left;display:none}
+.dd.on{display:block;animation:acctDrop .22s cubic-bezier(.26,1.2,.5,1)}
+@keyframes acctDrop{from{opacity:0;transform:translateY(-6px) scaleY(.92)}to{opacity:1;transform:none}}
+.dd .hd{padding:8px 14px 6px;font-size:11px;color:var(--dim);font-weight:700}
+.dd .it{display:block;width:100%;padding:11px 14px;font-size:13px;font-weight:600;color:var(--text);border-radius:9px}
+.badge{position:absolute;right:14px;top:14px;font-size:11px;font-weight:800;padding:4px 11px;border-radius:999px;z-index:2}
+.badge.b{background:rgba(226,75,74,.16);color:#FFB4B3}
+.badge.a{background:rgba(26,107,60,.22);color:#8FE3B2}
+.spd{position:absolute;left:16px;bottom:14px;font-size:11.5px;font-weight:700;color:rgba(255,255,255,.62);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;z-index:2}
+.spd b{color:#fff}
+.spd .lat{margin-left:10px;padding:2px 9px;border-radius:999px;font-weight:800;background:rgba(255,255,255,.1)}
+.cap{font-size:12px;color:var(--neutral-text);margin:8px 0 20px}
+.cap b{color:var(--text)}
+.hint{font-size:12px;color:var(--peach-text);background:var(--peach-light);border-radius:10px;padding:9px 13px;margin:0 0 14px;font-weight:600}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th,td{padding:8px 10px;border-bottom:1px solid var(--border);text-align:left}
+th{font-size:11px;color:var(--neutral-text);font-weight:800;background:var(--neutral)}
+td.old{color:var(--danger-btn)}td.new{color:var(--green);font-weight:700}
+ul.notes{margin:0;padding-left:18px;font-size:12.5px;color:var(--neutral-text)}
+ul.notes li{margin:0 0 5px}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;background:var(--neutral);padding:1px 5px;border-radius:5px}</style></head><body><div class="wrap">
+<h1>호버 판정을 매 프레임으로 — 전후</h1>
+<p class="lead">260731 운영자 「자연스럽게만 움직이게 해줘 프레임 높게 · 일주일 전에 수정한 그거 그대로 따라가면 됨」<br>
+따라간 정본 = <b>260723 navigation-01 이식</b>(<code>index.html</code> L228 <code>.nav-hover-bg</code> — <code>.2s cubic-bezier(.215,.61,.355,1)</code> 슬라이드 + <code>is-instant</code> 첫 등장 제자리 페이드, <code>.dd-menu/.dd-panel</code> <code>linear()</code> 스프링).
+<b>모션 자체는 한 글자도 안 건드렸고</b>, 그 모션을 <b>언제 시작할지 재는 판정</b>만 고정 타이머(60ms) → <b>매 프레임(requestAnimationFrame)</b>으로 바꿨어.</p>
+
+<section><h2>1. 직접 만져보는 전후</h2>
+<p class="hint">👆 네비 위를 <b>쓱 지나가다 아무 메뉴에서 딱 멈춰봐</b>. 좌하단 「멈춤→열림」 숫자가 반응 지연이야 — 위는 들쭉날쭉(최대 60ms), 아래는 한 프레임(≈8~16ms)으로 붙어.</p>
+<div class="demo" id="demo-tick" data-mode="tick"><span class="badge b">전 — 60ms 고정 타이머로 재판정</span><div class="dnavwrap"><div class="hbg"></div><div class="dnav"><button class="dbtn" data-i="0">판매 현황</button><button class="dbtn" data-i="1">대시보드</button><button class="dbtn" data-i="2">캘린더</button><button class="dbtn" data-i="3">콘텐츠 제작</button><button class="dbtn" data-i="4">회원 관리</button></div></div><div class="dd" data-i="0"><div class="hd">판매 현황</div><div class="it">상품 등록·변경</div><div class="it">실적 조회</div><div class="it">실적 입력</div><div class="it">실적 분석</div></div><div class="dd" data-i="1"><div class="hd">대시보드</div><div class="it">연간 실적</div><div class="it">연간 일정</div></div><div class="dd" data-i="2"><div class="hd">캘린더</div><div class="it">홍보 신청</div><div class="it">온라인 홍보 현황</div><div class="it">오프라인 홍보 현황</div></div><div class="dd" data-i="3"><div class="hd">콘텐츠 제작</div><div class="it">네이버 블로그</div><div class="it">링크 자료수집</div><div class="it">누끼따기</div><div class="it">…</div></div><div class="dd" data-i="4"><div class="hd">회원 관리</div><div class="it">회원 조회</div></div><div class="spd">속도 <b class="v">0</b> px/s<span class="lat">멈춤→열림 <b class="l">–</b></span></div></div>
+<p class="cap"><b>전</b> — 멈춰도 다음 타이머가 올 때까지 최대 60ms 기다림. 매번 지연이 달라서 시작이 살짝 늦고 들쭉날쭉.</p>
+<div class="demo" id="demo-raf" data-mode="raf"><span class="badge a">후 — 매 프레임(rAF) 재판정</span><div class="dnavwrap"><div class="hbg"></div><div class="dnav"><button class="dbtn" data-i="0">판매 현황</button><button class="dbtn" data-i="1">대시보드</button><button class="dbtn" data-i="2">캘린더</button><button class="dbtn" data-i="3">콘텐츠 제작</button><button class="dbtn" data-i="4">회원 관리</button></div></div><div class="dd" data-i="0"><div class="hd">판매 현황</div><div class="it">상품 등록·변경</div><div class="it">실적 조회</div><div class="it">실적 입력</div><div class="it">실적 분석</div></div><div class="dd" data-i="1"><div class="hd">대시보드</div><div class="it">연간 실적</div><div class="it">연간 일정</div></div><div class="dd" data-i="2"><div class="hd">캘린더</div><div class="it">홍보 신청</div><div class="it">온라인 홍보 현황</div><div class="it">오프라인 홍보 현황</div></div><div class="dd" data-i="3"><div class="hd">콘텐츠 제작</div><div class="it">네이버 블로그</div><div class="it">링크 자료수집</div><div class="it">누끼따기</div><div class="it">…</div></div><div class="dd" data-i="4"><div class="hd">회원 관리</div><div class="it">회원 조회</div></div><div class="spd">속도 <b class="v">0</b> px/s<span class="lat">멈춤→열림 <b class="l">–</b></span></div></div>
+<p class="cap"><b>후</b> — 화면 주사율에 그대로 얹혀서(60Hz≈16ms · 120Hz≈8ms) 멈춘 그 프레임에 바로 시작. 지연이 일정해 움직임이 붙어 있는 느낌.</p>
+</section>
+
+<section><h2>2. 실측 (?qa=admin · 실제 앱 · 연속 마우스 스트림)</h2>
+<div class="scroll"><table>
+<tr><th>상황</th><th>결과</th></tr>
+<tr><td>네비를 끊김 없이 쓱 가로질러 통과</td><td class="new">열린 메뉴 없음 ✅</td></tr>
+<tr><td>캘린더를 겨냥해 다가감</td><td class="new">캘린더 세부 열림 ✅</td></tr>
+<tr><td>통과하다 캘린더에서 급정지</td><td class="new">정지 <b>2ms</b> 후 열림 ✅ <span style="color:var(--dim)">(전: 최대 60ms 대기)</span></td></tr>
+<tr><td>보류 중 rAF 루프 생존 → 멈추면 열림</td><td class="new">핸들 유지 확인 · 정지 시 열림 ✅</td></tr>
+<tr><td>스쳐 나감 / 클릭</td><td class="new">rAF 취소 — 뒤늦게 안 열림 ✅</td></tr>
+</table></div>
+<p class="cap">속도 판정 자체는 그대로: 겨냥 0.18~0.37px/ms · 통과 1.56~3.66px/ms · 경계 0.55px/ms.</p>
+</section>
+
+<section><h2>3. 무엇을 고쳤나</h2>
+<ul class="notes">
+<li><b>모션 정본 무접촉</b> — 260723 navigation-01 이식분(<code>.nav-hover-bg</code> · <code>.dd-menu.dd-morphing</code> · <code>.dd-panel</code> · <code>.dd-pill</code>)의 커브·시간 그대로. CSS 한 줄도 안 바꿈.</li>
+<li>보류 재판정: <code>setTimeout(…,60)</code> → <code>requestAnimationFrame</code>. 주사율을 그대로 타서 <b>느려지는 그 프레임에 열림</b>.</li>
+<li>속도값에 EMA 평활(<code>_NAV_HOV_SMOOTH=0.4</code>) 추가 — 매 프레임 재판정이라 이벤트 병합·손떨림 한 샘플의 튐으로 오판하지 않게.</li>
+<li>취소 경로 일원화: <code>_navHovStop(btn)</code> — <code>mouseleave</code> · 클릭 · 재진입 모두 같은 함수로 <code>cancelAnimationFrame</code>.</li>
+<li>신규 CSS·색 0 · <code>check_design.py</code> 통과(raw hex 1605/1605 동결) · JS 에러 0.</li>
+</ul></section>
+</div><script>
+var SLOW=550, TICK=60, IDLE=70, SMOOTH=.4;
+var P={x:0,y:0,t:0,v:0};
+document.addEventListener('mousemove',function(e){
+  var n=performance.now(),dt=n-P.t;
+  if(dt>0&&P.t){var dx=e.clientX-P.x,dy=e.clientY-P.y,iv=Math.sqrt(dx*dx+dy*dy)/dt;P.v+=(iv-P.v)*SMOOTH;}
+  P.x=e.clientX;P.y=e.clientY;P.t=n;
+},{passive:true});
+function V(){var n=performance.now();return(!P.t||n-P.t>IDLE)?0:P.v*1000;}
+document.querySelectorAll('.demo').forEach(function(d){
+  var mode=d.dataset.mode,timer=null,raf=0,cur=-1,slowAt=0;
+  var vEl=d.querySelector('.v'),lEl=d.querySelector('.l'),hbg=d.querySelector('.hbg');
+  setInterval(function(){var v=V();vEl.textContent=Math.round(v);if(v>SLOW)slowAt=0;
+    else if(!slowAt)slowAt=performance.now();},40);
+  function pill(b){ var vis=hbg.classList.contains('is-visible');
+    if(!vis)hbg.classList.add('is-instant');
+    hbg.style.left=b.offsetLeft+'px';hbg.style.top=b.offsetTop+'px';hbg.style.width=b.offsetWidth+'px';hbg.style.height=b.offsetHeight+'px';
+    if(!vis){void hbg.offsetWidth;hbg.classList.add('is-visible');requestAnimationFrame(function(){hbg.classList.remove('is-instant');});} }
+  function open(i){ if(cur===i)return; cur=i;
+    if(slowAt)lEl.textContent=Math.round(performance.now()-slowAt)+'ms';
+    d.querySelectorAll('.dd').forEach(function(x){x.classList.remove('on');});
+    var dd=d.querySelector('.dd[data-i="'+i+'"]'),b=d.querySelector('.dbtn[data-i="'+i+'"]');
+    dd.style.left=b.offsetLeft+16+'px'; void dd.offsetWidth; dd.classList.add('on'); }
+  function stop(){ if(timer){clearTimeout(timer);timer=null;} if(raf){cancelAnimationFrame(raf);raf=0;} }
+  d.querySelectorAll('.dbtn').forEach(function(b){
+    b.addEventListener('mouseenter',function(){
+      stop(); pill(b); var i=+b.dataset.i;
+      if(V()<=SLOW){open(i);return;}
+      if(mode==='tick'){ (function poll(){timer=setTimeout(function(){
+        if(!b.matches(':hover'))return; if(V()<=SLOW){open(i);return;} poll();},TICK);})(); }
+      else { (function frame(){raf=requestAnimationFrame(function(){
+        if(!b.matches(':hover')){raf=0;return;} if(V()<=SLOW){raf=0;open(i);return;} frame();});})(); }
+    });
+    b.addEventListener('mouseleave',stop);
+  });
+  d.addEventListener('mouseleave',function(){stop();cur=-1;hbg.classList.remove('is-visible');
+    d.querySelectorAll('.dd').forEach(function(x){x.classList.remove('on');});});
+});</script></body></html>
