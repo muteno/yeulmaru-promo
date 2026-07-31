@@ -1,0 +1,74 @@
+<!doctype html><html lang=ko><meta charset=utf-8><title>260731 모바일 스와이프 월 이동 · 캘린더 중복 접기 · 프로그램 관리 기획/대관 구분 · 전후</title>
+<style>body{font-family:Pretendard,-apple-system,sans-serif;background:#FDF6F3;color:#1A1A2E;margin:0;padding:28px}
+h1{font-size:19px;margin:0 0 6px}h2{font-size:15px;margin:26px 0 8px}
+.c{background:#fff;border:1px solid rgba(0,0,0,.09);border-radius:16px;padding:14px 16px;box-shadow:0 8px 32px rgba(74,77,231,.08);margin-bottom:18px}
+img{max-width:100%;border:1px solid rgba(0,0,0,.12);border-radius:8px;background:#FDFCFB;display:block}
+.step{font-size:12px;color:#6B6B7B;margin:0 0 6px;font-weight:700}
+.two{display:flex;gap:14px;flex-wrap:wrap}.two>div{flex:1;min-width:280px}
+table{border-collapse:collapse;font-size:13px;margin-top:8px}td,th{border:1px solid rgba(0,0,0,.12);padding:6px 10px;text-align:right}th{background:#EEEDF3}td:first-child,th:first-child{text-align:left}
+.ok{color:#1A6B3C;font-weight:700}.bad{color:#E24B4A;font-weight:700}small{color:#6B6B7B}
+p,li{font-size:13.5px;line-height:1.7;max-width:900px}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px}</style>
+
+<h1>260731 — ① 모바일 스와이프 월 이동 · ② 캘린더 중복 일정 접기 · ③④ 프로그램 관리 기획/대관 구분</h1>
+<small>실렌더 실측(playwright + /opt/pw-browsers chromium · <code>file://index.html</code> 부팅 후 실제 <code>TouchEvent</code> 발생 / 프로그램 관리는 시트·구글캘린더 응답을 고정 표본으로 주입)</small>
+
+<h2>① 모바일 스와이프 — 좌우로 밀어 월 이동 (Pixel 5 · 393×851)</h2>
+<table>
+<tr><th>조작(캘린더 위)</th><th>전</th><th>후</th></tr>
+<tr><td>시작</td><td>2026년 7월</td><td>2026년 7월</td></tr>
+<tr><td>← 왼쪽으로 밀기</td><td class=bad>2026년 7월 (변화 없음)</td><td class=ok>2026년 8월 (다음 달)</td></tr>
+<tr><td>→ 오른쪽으로 2번</td><td class=bad>2026년 7월 (변화 없음)</td><td class=ok>2026년 6월 (이전 달)</td></tr>
+<tr><td>20px 짧은 스와이프</td><td>변화 없음</td><td class=ok>변화 없음 (48px 미만 무시)</td></tr>
+<tr><td>세로가 우세한 제스처</td><td>페이지 스크롤</td><td class=ok>페이지 스크롤 (월 안 바뀜)</td></tr>
+</table>
+<div class=two>
+  <div class=c><p class=step>전 — ① 시작</p><img src="260731_모바일스와이프_전_1시작.png" alt="전 시작">
+    <p class=step>전 — ② ← 스와이프 (그대로 7월)</p><img src="260731_모바일스와이프_전_2왼쪽스와이프.png" alt="전 왼쪽">
+    <p class=step>전 — ③ → 2번 (그대로 7월)</p><img src="260731_모바일스와이프_전_3오른쪽2번.png" alt="전 오른쪽"></div>
+  <div class=c><p class=step>후 — ① 시작</p><img src="260731_모바일스와이프_후_1시작.png" alt="후 시작">
+    <p class=step>후 — ② ← 스와이프 → 8월</p><img src="260731_모바일스와이프_후_2왼쪽스와이프.png" alt="후 왼쪽">
+    <p class=step>후 — ③ → 2번 → 6월</p><img src="260731_모바일스와이프_후_3오른쪽2번.png" alt="후 오른쪽"></div>
+</div>
+<p><b>왜 세로가 아니라 가로인가</b> — 모바일에서 세로 스와이프는 페이지 스크롤(하단 시트·긴 셀)이라 뺏으면 안 된다.
+가로로만 받고, 세로 이동이 12px 앞서면 그 제스처는 즉시 포기해 스크롤에 양보한다.
+기존 롱프레스(<code>_initLongPress</code>)는 10px 이동에서 스스로 취소되므로 충돌 없음. 데스크톱 휠과 같은 <code>changeMonth</code> 축을 쓴다.</p>
+
+<h2>② 캘린더 — 같은 칸에 같은 일정이 두 번 찍히던 것 하나로</h2>
+<p>한 날짜 셀 안에서 <b>이름·장소·구분이 정규화 후 전부 같은</b> 일정만 접는다(<code>_perfDedupDay</code>, <code>getPerfs</code> 마지막 단계).
+정본(PERFS)이 같은 공연을 여러 행으로 들고 있거나, 같은 일정이 구글 캘린더 두 곳에 등록돼 id가 갈린 경우가 여기 걸린다.</p>
+<table>
+<tr><th>2026-08-22 셀에 넣은 표본</th><th>전</th><th>후</th></tr>
+<tr><td>「여수학생 오케스트라 정기연주회」 완전 동일 2행</td><td class=bad>2건 표시</td><td class=ok>1건</td></tr>
+<tr><td>「뮤지컬 &lt;그날들&gt;」 / 「뮤지컬그날들」 (괄호만 다름)</td><td class=bad>2건 표시</td><td class=ok>1건</td></tr>
+<tr><td>이름 같고 <b>장소가 다름</b>(대극장 / 소극장)</td><td>2건</td><td class=ok>2건 유지 (남남)</td></tr>
+<tr><td>이름 같고 <b>구분이 다름</b>(기획 / 대관)</td><td>2건</td><td class=ok>2건 유지 (남남)</td></tr>
+</table>
+<p><small>이름이나 장소가 조금이라도 다르면 접지 않는다 = 오제거 0. 먼저 온 쪽(정본 PERFS)이 남는다 — 기존 <code>_gcDupSet</code>의 「정본 우선」 계약과 같은 방향.</small></p>
+
+<h2>③④ 프로그램 관리 — 캘린더의 대관 일정 합류 + 상단 기획/대관 구분</h2>
+<div class=two>
+  <div><p class=step>전 — 프로그램 시트 3건만 (대관 구분 없음)</p><img src="260731_프로그램관리_기획대관_전.png" alt="프로그램 관리 전"></div>
+  <div><p class=step>후 — 상단 「구분」 세그먼트 + 구글 캘린더 대관 합류</p><img src="260731_프로그램관리_기획대관_후.png" alt="프로그램 관리 후"></div>
+</div>
+<div class=two>
+  <div><p class=step>후 — 기획 탭</p><img src="260731_프로그램관리_기획대관_후_기획탭.png" alt="기획 탭"></div>
+  <div><p class=step>후 — 대관 탭</p><img src="260731_프로그램관리_기획대관_후_대관탭.png" alt="대관 탭"></div>
+</div>
+<table>
+<tr><th>고정 표본(프로그램 시트 3건 + 구글캘린더 7행)</th><th>전</th><th>후</th></tr>
+<tr><td>표에 보이는 행</td><td class=bad>3건 (시트만)</td><td class=ok>5건 (시트 3 + 대관 2)</td></tr>
+<tr><td>상단 구분</td><td class=bad>없음</td><td class=ok>전체 5 / 기획 2 / 대관 3</td></tr>
+<tr><td>2일짜리 대관(캘린더 2행)</td><td>—</td><td class=ok>1건으로 묶임 (10-01~10-02)</td></tr>
+<tr><td>같은 대관이 캘린더 두 곳에 등록(uid 2개)</td><td>—</td><td class=ok>1건만</td></tr>
+<tr><td>정본에 이미 있는 「여수학생 오케스트라 정기연주회」 대관 행</td><td>—</td><td class=ok>제외 (정본 우선)</td></tr>
+<tr><td>[기획] 태그 일정 / 「공사」</td><td>—</td><td class=ok>제외</td></tr>
+</table>
+<ul>
+<li><b>구분 축</b> — 기획 = 프로그램 시트 중 콘텐츠구분 ≠ 대관 · 대관 = 시트의 대관 행 + 구글 캘린더 대관 일정. 상단 세그먼트는 판매현황·분석이 쓰는 정본 컴포넌트 <code>.fbar-seg</code>를 그대로 계승(신규 형태·신규 색 0).</li>
+<li><b>파싱 규칙 이원화 0</b> — 캘린더가 쓰는 <code>_gcParse</code>·uid 그룹핑·<code>_gcNorm</code>을 그대로 재사용한다. 캘린더와 프로그램 관리가 같은 규칙으로 같은 목록을 말한다.</li>
+<li><b>구글 캘린더 행 = 읽기 전용</b> — 원본이 구글이라 여기서 고치면 다음 동기화에 덮인다(기계산출물 손편집 금지 계약과 같은 축). 변경·삭제 버튼 대신 「구글 캘린더」 출처만 표시.</li>
+<li><b>로딩 순서</b> — 프로그램 시트가 먼저 뜨고, 대관은 뒤에 붙는다(느린 쪽이 빠른 쪽을 기다리게 하지 않음). 대관 조회 실패 시 세그먼트 옆에 사유를 적고 시트 목록은 그대로 살아 있다.</li>
+</ul>
+<p><small>대관 조회 범위 = 현재 보고 있는 연도 1년치(<code>/api/gcal?from=YYYY-01-01&amp;to=YYYY-12-31</code>).</small></p>
+</html>
