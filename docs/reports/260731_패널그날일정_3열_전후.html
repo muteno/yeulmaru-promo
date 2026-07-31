@@ -1,0 +1,40 @@
+<!doctype html><html lang=ko><meta charset=utf-8><title>260731 날짜 패널 「그날 일정」 3열 격자(구분 풀어쓰기 + 장소) — 전후</title>
+<style>body{font-family:Pretendard,-apple-system,sans-serif;background:#FDF6F3;color:#1A1A2E;margin:0;padding:28px}
+h1{font-size:19px;margin:0 0 6px}h2{font-size:15px;margin:26px 0 8px}
+.c{background:#fff;border:1px solid rgba(0,0,0,.09);border-radius:16px;padding:14px 16px;box-shadow:0 8px 32px rgba(74,77,231,.08);margin-bottom:18px}
+.row{display:flex;gap:18px;flex-wrap:wrap}
+img{max-width:100%;border:1px solid rgba(0,0,0,.12);border-radius:8px;background:#FDFCFB;display:block}
+table{border-collapse:collapse;font-size:13px;margin-top:8px}td,th{border:1px solid rgba(0,0,0,.12);padding:6px 10px;text-align:left}th{background:#EEEDF3}
+small{color:#6B6B7B}code{background:#EEEDF3;border-radius:4px;padding:1px 4px}</style>
+<h1>260731 — 날짜 상세 패널 「그날 일정」: 3열 격자(구분 풀어쓰기 · 제목 말줄임 · 장소 열)</h1>
+<small>운영자 2차 지시: <b>"각각 우측에 테두리 빈 표 있는 것처럼 해서 좌측 정렬로 위치 나오게. 표기는 대극장·소극장·7층 전시실·장도 전시실 /
+공 교 대 셋은 여기선 풀어쓰기(공연·교육·대관·셋업) / n행 3열 표처럼 함께 움직이되 <u>테두리 없음</u>, div 배분 / 제목 잘리면 …"</b> ·
+실렌더 캡처(playwright-core · 패널 360px · 2x)</small>
+
+<h2>전후</h2>
+<div class=row>
+  <div class=c><div style="font-size:13px;font-weight:700;margin-bottom:8px">전 — 1열(원형 1자 배지 + 제목), 장소 없음</div>
+    <img src="260731_패널그날일정_3열_전.png" alt="전"></div>
+  <div class=c><div style="font-size:13px;font-weight:700;margin-bottom:8px">후 — 구분 | 제목 | 장소 3열이 행마다 같은 x에서 시작</div>
+    <img src="260731_패널그날일정_3열_후.png" alt="후"></div>
+</div>
+
+<h2>조치 — 표 없이 열 맞추기</h2>
+<table>
+<tr><th>구간</th><th>내용</th></tr>
+<tr><td><code>.panel-hdr-labels</code></td><td><code>display:grid</code> · <code>grid-template-columns:auto minmax(0,1fr) auto</code> — 테이블·테두리 0</td></tr>
+<tr><td><code>.panel-hdr-prog</code> (행)</td><td><code>display:contents</code> — 행 래퍼는 사라지고 자식 3개가 바깥 격자의 열에 직접 앉는다 = 마크업은 div/span 그대로인데 열은 n행이 공유</td></tr>
+<tr><td>1열 <code>.panel-hdr-kind</code></td><td>공연·교육·대관·셋업 풀어쓰기. 색 규칙은 캘린더 셀과 공유(<code>perfBadgeBg()</code>) — 기획 <code>--accent</code> / 대관·셋업 <code>--neutral-text</code>. 원(50%) → 알약(<code>var(--r-btn)</code>)으로 <b>넓히기만</b> 함</td></tr>
+<tr><td>2열 <code>.panel-hdr-nm</code></td><td><code>minmax(0,1fr)</code> + <code>text-overflow:ellipsis</code> = 넘치면 <b>…</b>(전체 이름은 <code>title</code> 툴팁)</td></tr>
+<tr><td>3열 <code>.panel-hdr-place</code></td><td><code>auto</code> = 가장 긴 장소명 폭. 모든 행이 같은 x에서 <b>좌측 정렬</b>로 시작 = 빈 표의 한 열처럼 읽힌다. 색 <code>--dim</code></td></tr>
+<tr><td><code>perfBadgeKind()</code> (신설)</td><td>같은 구분의 풀어쓴 이름 — 셀은 폭이 좁아 1자(<code>perfBadgeLb</code>), 패널은 2자. 색은 두 곳이 <code>perfBadgeBg()</code> 하나를 공유</td></tr>
+<tr><td><code>perfPlaceLabel()</code> (신설)</td><td>장소 표기 정본화 — 구글 캘린더 공간 태그가 <code>7층</code>·<code>장도</code>로 짧게 들어와 시트 표기와 어긋나던 것을 <b>7층 전시실·장도 전시실</b>로 맞춤. 대극장·소극장은 시트 값 그대로</td></tr>
+</table>
+<p><small>장소 표기 4종은 프로그램 시트(<code>이관본/data/programs.csv</code>) 실측값과 일치 — 대극장 25 · 7층 전시실 2 · 소극장 2 · 장도 전시실 1.</small></p>
+
+<h2>검증</h2>
+<p style="font-size:13.5px;line-height:1.7">
+· <code>python3 tools/check_design.py</code> → 통과, raw hex <b>1605/1605 무증가</b>(신규 색 0 · 새 값은 기존 토큰 <code>--r-btn</code>·<code>--dim</code>·<code>--surface-solid</code> 계승)<br>
+· <code>node tools/scratch/smoke_boot.mjs</code> → 부팅 에러 0<br>
+· 캡처 재현: <code>node tools/scratch/shot_panel_hdr.mjs &lt;index.html&gt; &lt;out.png&gt;</code>(표본 = 공연 2 · 교육 1 · 대관 1 · 셋업 1, 긴 제목 1건으로 말줄임 확인)
+</p>
