@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>줌 배율 규격 고정 — 전후 (260731)</title>
+<style>
+  :root{--accent:#4A4DE7;--text:#1A1A2E;--dim:#888;--border:rgba(0,0,0,0.09);--green:#1A6B3C;--danger:#E24B4A;--surface:#fff;--radius:16px}
+  body{margin:0;font-family:'Pretendard','Noto Sans KR',system-ui,sans-serif;background:linear-gradient(135deg,#FDF6F3 0%,#F0EBF5 50%,#EBF0F8 100%);color:var(--text);padding:28px 4vw 60px}
+  h1{font-size:22px;margin:0 0 6px}
+  .sub{color:var(--dim);font-size:13px;margin-bottom:26px}
+  h2{font-size:16px;margin:34px 0 10px;color:var(--accent)}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px;box-shadow:0 8px 32px rgba(74,77,231,0.08)}
+  .card .cap{font-size:12.5px;font-weight:700;margin-bottom:8px}
+  .card .cap .bad{color:var(--danger)} .card .cap .good{color:var(--green)}
+  .card img{width:100%;display:block;border-radius:8px;border:1px solid var(--border)}
+  table{border-collapse:collapse;font-size:12.5px;background:var(--surface);border-radius:12px;overflow:hidden;box-shadow:0 8px 32px rgba(74,77,231,0.08)}
+  th,td{padding:7px 12px;border-bottom:1px solid var(--border);text-align:right}
+  th:first-child,td:first-child{text-align:left}
+  th{background:rgba(74,77,231,0.06);font-weight:700}
+  .ok{color:var(--green);font-weight:700} .ng{color:var(--danger);font-weight:700}
+  .note{font-size:12.5px;color:var(--dim);line-height:1.6;max-width:900px}
+  code{background:rgba(74,77,231,0.07);border-radius:5px;padding:1px 5px;font-size:11.5px}
+</style>
+</head>
+<body>
+<h1>대시보드 줌 배율 규격 고정 — 전후</h1>
+<div class="sub">260731 · 운영자 지시 "확대 방향 따라 레이아웃 규격이 따로 논다 — 일관되게" · 실측 = 헤드리스 크로미움(Chrome 141) 1920×1080(100%) vs 2400×1350(80% 상당) · QA 목데이터</div>
+
+<h2>무엇이 문제였나 (전)</h2>
+<div class="grid">
+  <div class="card"><div class="cap">전 — 100% (1920×1080): 기준 화면. 차트가 fit 로직으로 383px까지 줄어 딱 맞음</div><img src="260731_줌배율규격고정_전_100.png" alt="전 100%"></div>
+  <div class="card"><div class="cap bad">전 — 80% 상당 (2400×1350): 차트 상한 560px 정지 + 보드 아래 죽은 여백 163px · 구도 붕괴</div><img src="260731_줌배율규격고정_전_80.png" alt="전 80%"></div>
+</div>
+<p class="note">핵심 역전: 물리 픽셀로 차트가 <b>80%에서 448px &gt; 100%에서 383px</b> — "확대(80→100%)하면 오히려 작아지는" 현상의 실체.
+고정 px 규격(폰트·표 높이)과 뷰포트 비례 컨테이너(50% 폭)가 섞여 배율마다 구도가 달라졌다.</p>
+
+<h2>무엇을 했나</h2>
+<p class="note">대시보드(biz 모드·레일 표시 폭)에서 <code>#body-wrap</code>에 <code>CSS zoom = 뷰포트폭 ÷ 1920</code>(클램프 .75~2.2)을 걸어
+<b>항상 1920 기준 디자인 공간에서 레이아웃</b>하게 함(<code>_bizZoomApply</code>). 100% 화면 = z1 → 종전과 완전 동일(무변).
+좌표계 실측(Chrome 141) 기반 보정 3종: ① gBCR(시각좌표)로 잰 값을 style px에 쓰는 정렬식 전부 <code>_bizZ()</code> 나눗셈(<code>_bizFitViewport</code>·<code>_srailAlignTop</code> biz 분기·행 하이라이트)
+② <code>min-height:calc(100vh−56px)</code>는 zoom에 이중 스케일 → px 보정 ③ Plotly 포인터 좌표 줌 보정 심(<code>_bizPlotlyZoomShim</code> — z1.25에서 2019 지점 호버가 「2021년」으로 어긋나던 것 실측·수정).</p>
+
+<h2>결과 (후) — 두 배율이 같은 그림</h2>
+<div class="grid">
+  <div class="card"><div class="cap good">후 — 100% (1920×1080): 종전과 동일(z=1 무변)</div><img src="260731_줌배율규격고정_후_100.png" alt="후 100%"></div>
+  <div class="card"><div class="cap good">후 — 80% 상당 (2400×1350): z=1.25 → 100%와 동일 구도·죽은 여백 0</div><img src="260731_줌배율규격고정_후_80.png" alt="후 80%"></div>
+</div>
+
+<h2>실측표 — 디자인 공간 환산(80% 측정값 ÷1.25) 대 100%</h2>
+<table>
+<tr><th>요소</th><th>100% (w×h)</th><th>80% 환산 (w×h)</th><th>Δw</th><th>Δh</th><th>판정</th></tr>
+<tr><td>연간 실적 보드 (#biz-main)</td><td>925×978</td><td>925.0×989.0</td><td class="ok">0.0</td><td>+11.0*</td><td class="ok">일치</td></tr>
+<tr><td>유리박스 (data-bizmbox)</td><td>925×889</td><td>925.0×900.0</td><td class="ok">0.0</td><td>+11.0*</td><td class="ok">일치</td></tr>
+<tr><td>차트 카드</td><td>887×423</td><td>887.4×438.2</td><td class="ok">+0.4</td><td>+15.2*</td><td class="ok">일치</td></tr>
+<tr><td>차트 (#yrm-chart)</td><td>873×383</td><td>873.8×399.0</td><td class="ok">+0.8</td><td>+16.0*</td><td class="ok">일치</td></tr>
+<tr><td>전체 실적표 카드</td><td>887×313</td><td>887.4×310.0</td><td class="ok">+0.4</td><td>−3.0</td><td class="ok">일치</td></tr>
+<tr><td>판매 현황 레일 박스</td><td>940×889</td><td>940.0×900.0</td><td class="ok">0.0</td><td>+11.0*</td><td class="ok">일치</td></tr>
+<tr><td>진행 목록 (#rail-yrm-list)</td><td>900×804</td><td>900.8×816.0</td><td class="ok">+0.8</td><td>+12.0*</td><td class="ok">일치</td></tr>
+</table>
+<p class="note">* Δh 11~16px = 줌 밖 고정 nav(56px)가 배율마다 차지하는 디자인 공간이 달라져 생기는 구조적 몫(그만큼 차트가 흡수) — 폭·x축 기준선은 전 요소 Δ≤0.8px.
+픽셀 상이율(80%를 1920으로 환산해 100%와 diff, Δ&gt;30 기준): <b>전 11.96% → 후 4.65%</b>(잔여 = 세로 11px 시프트·리샘플 노이즈).
+Plotly 호버 실측: 두 배율 모두 같은 지점에서 <b>「2019년 전시 76,734명」 동일 표시</b>(보정 전 80%는 「2021년」 오표시).</p>
+
+<h2>게이트</h2>
+<p class="note">check_design ✓(hex 1605 무변·신규 토큰 0) · check_refs ✓ · smoke 로그인 ✓ · smoke:align(분야 표 틀 통일) ✓</p>
+</body>
+</html>
