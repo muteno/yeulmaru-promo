@@ -3875,10 +3875,18 @@ function programToPerf(p){
   };
 }
 // SharePoint에서 프로그램 시트 fetch → PERFS 채우기
+// [260801 운영자] 대관 DB 통합 — 구글 캘린더에서 시트로 편입된 대관 행(프로그램ID 'R<yymmdd>_<해시4>')은 PERFS에 안 싣는다.
+//   ① 표시 전용 결정 = 홍보 신청·판매 집계 대상 밖 → PERFS에 안 넣는 게 가장 확실한 이행(드롭다운·게이트·집계 전부가 PERFS를 읽는다).
+//   ② 화면은 종전대로 구글 라이브 오버레이(GCAL_RENTALS)가 그린다 — 셋업 「셋」 표기가 제목 파싱에만 있어 시트 열로 못 옮기기 때문.
+//      시트 행을 PERFS에 실으면 이름이 겹쳐 _gcDupSet이 라이브 배지를 숨기고 셋업 표기가 사라진다(회귀).
+//   ③ 편입분은 PERFS_GC에 따로 보관 — 앞으로 집계·조회가 필요하면 여기서 꺼내 쓴다(정본 PERFS 오염 0).
+var PERFS_GC=[],GCAL_SYNC_RE=/^R\d{6}_[0-9a-z]{4}$/;
 async function loadPrograms(){
   try{
     const data=await api('GET','/api/programs');
-    PERFS=(data.programs||[]).map(programToPerf);
+    const all=(data.programs||[]).map(programToPerf);
+    PERFS=all.filter(function(p){return !GCAL_SYNC_RE.test(p.id||'');});
+    PERFS_GC=all.filter(function(p){return GCAL_SYNC_RE.test(p.id||'');});
   }catch(e){
     console.error('[loadPrograms]',e);
   }
@@ -18772,6 +18780,10 @@ async function openProgramAdmin(){
 var _pgKind='전체';                                  // 전체 | 기획 | 대관
 var _pgRentals=[],_pgRentalYear=0,_pgRentalErr='';
 function _pgIsRentalRow(p){ return String(p&&p['콘텐츠구분']||'').trim()==='대관'; }
+// [260801 운영자] 구글 캘린더에서 시트로 편입된 대관 행(프로그램ID 'R<yymmdd>_<해시4>') 판정 — 이 행들은 앱 화면 어디에도 안 낸다.
+//   원본이 구글이라 화면은 라이브 오버레이(_pgRentals·캘린더 배지)가 담당하고, 시트 행은 「데이터가 남는다」는 몫만 진다.
+//   여기서 안 걸러내면 프로그램 관리 대관 탭에 같은 일정이 두 번(시트 행 + 구글 행) 뜨고, 시트 행은 편집 가능해 보여 다음 동기화 때 되돌려진다.
+function _pgIsSyncRow(p){ return GCAL_SYNC_RE.test(String((p&&(p['프로그램ID']||p['공연ID']))||'').trim()); }
 // 구글 캘린더 대관 일정 → 프로그램 표 행 모양. loadRentals의 uid 그룹핑·_gcParse를 그대로 재사용(파싱 규칙 이원화 0).
 async function _pgLoadRentals(year){
   if(_pgRentalYear===year)return _pgRentals;
@@ -18860,7 +18872,7 @@ function buildProgramListHtml(programs){
   // [260731 운영자] 상위 구분 = 기획 / 대관. 기획 = 프로그램 시트(콘텐츠구분 ≠ 대관) · 대관 = 프로그램 시트 대관 행 + 구글 캘린더 대관 일정.
   var _sheet=(programs||[]);
   var _plan=_sheet.filter(function(p){return !_pgIsRentalRow(p);});
-  var _rent=_sheet.filter(_pgIsRentalRow).concat(_pgRentals||[]);
+  var _rent=_sheet.filter(function(p){return _pgIsRentalRow(p)&&!_pgIsSyncRow(p);}).concat(_pgRentals||[]);   // [260801] 편입 행 제외 = 구글 라이브 행과 이중 노출 방지(§_pgIsSyncRow)
   var _rows=(_pgKind==='기획')?_plan:((_pgKind==='대관')?_rent:_plan.concat(_rent));
   let html='<div style="display:flex;align-items:center;margin-bottom:10px;gap:8px;padding-bottom:14px;padding-right:48px;border-bottom:1px solid #eee">';
   html+='<h3 style="margin:0;flex:1;text-align:left">프로그램 관리</h3>';
