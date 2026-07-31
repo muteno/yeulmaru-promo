@@ -51,7 +51,14 @@ const after = await p.evaluate(() => ({
   badges: document.querySelectorAll('#grid .perf-badge').length,
 }));
 ok('지시안 = 태그 제거됨(공연명만)', !after.txt.some(t => t.includes('[')));
-ok(`지시안 = 전시 레인 3줄 (${after.lanes})`, after.lanes === 3);
+// auto 모드 = 진행 중 전시 수만큼만. 9/18 셀은 숨:쉬는 SUM(7층) + 입주작가전(야외) = 2줄이 정답(빈 레인 없음)
+ok(`지시안 = 빈 레인 없음, 진행 전시 수만큼 (${after.lanes}줄)`, after.lanes === 2);
+// 전시 0인 날(7월 중순 = 배병우 종료~숨:쉬는 SUM 시작 사이)은 바닥선 1줄만
+await p.click('.mbtn[data-mo="7"]');
+const cnts = await p.$$eval('#grid .cell', els => els.map(e => e.querySelectorAll('.exline i').length));
+ok(`지시안 = 전시 0인 날 바닥선 1줄 (최소 ${Math.min(...cnts)}·최대 ${Math.max(...cnts)})`,
+   Math.min(...cnts) === 1 && Math.max(...cnts) <= 3);
+await p.click('.mbtn[data-mo="9"]');
 ok(`지시안 = 「셋」 배지 ${after.setup}개`, after.setup > 0 && after.dots.every(d => d === '셋'));
 await p.screenshot({ path: SHOT + '260731_대관캘린더표기_후.png', clip: { x: 20, y: 120, width: 1000, height: 760 } });
 
