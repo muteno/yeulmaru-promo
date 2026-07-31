@@ -5909,7 +5909,8 @@ function _bizmGo(d){
   _bizmState.dir=d; _bizmState.page=p; _bizBookRender();
 }
 function _bizmTo(p){ var N=_bizBookN(); if(p<1||p>N)return; var cur=_bizmState.page||1; if(cur===p)return; _bizmState.dir=(p>cur)?1:-1; _bizmState.page=p; _bizBookRender(); }
-// 세부메뉴 → 해당 면으로(biz 모드 진입 포함). 넓은 화면은 그 면이 속한 펼침이 열린다.
+// 특정 면으로 책 넘김(biz 모드 진입 포함). 넓은 화면은 그 면이 속한 펼침이 열린다.
+// [260731 5차] 세부메뉴는 팝업(모달) 진입으로 되돌아가 여기를 부르지 않음 — 딥링크·롤백용으로 남겨둠(_bizMenuBuild 주석 참조).
 function _bizBookGo(p){
   var cur=_bizmState.page||1; if(cur!==p){ _bizmState.dir=(p>cur)?1:-1; _bizmState.page=p; }
   if(typeof _mainView!=='undefined'&&_mainView!=='biz'&&typeof setMainView==='function'){ setMainView('biz'); return; }   // 면을 먼저 세팅 → 모드 전환 렌더(_mvApply)가 그 면을 바로 그린다(이중 렌더·애니 중복 방지 — 페이블 검수 7)
@@ -21075,13 +21076,15 @@ function _calMenuBuild(menu){
 //   판매 현황·실적 입력은 여기 두지 않음 = 판매 현황 대메뉴와 같은 화면(한 화면 = 한 자리).
 function _bizMenuBuild(menu){
   var itemCss='display:flex;align-items:center;gap:10px;width:100%;padding:11px 14px;border:0;text-align:left;font-size:13px;font-weight:600;color:var(--text);border-radius:9px;cursor:pointer;font-family:inherit;transition:background .12s';
-  // [260731 운영자 4차] 세부메뉴 = 책 4면과 1:1(같은 순서·같은 이름) — 클릭 = 그 면으로 책 넘김(_bizBookGo · 인라인).
+  // [260731 운영자 5차] 세부메뉴 클릭 = 그 화면의 「팝업(모달)」 — 책 4면 인라인 이동(_bizBookGo)으로 바뀌며 사라졌던 원래 동작 복구(운영자 "각 메뉴는 누르면 팝업으로 따로 나오는 거임").
+  //   이름·순서는 책 4면과 1:1 유지 · 각 항목 = 그 면의 원본 모달(1 연간 실적=openYearBoard · 2 판매 실적=openSalesBoard · 3 사업 결과 비교=openBusinessBoard · 4 고객 분석=openMemberOverview).
+  //   책 4면 인라인(_bizBookGo·하단 점 바)은 그대로 살아있음 = 대시보드 메인 화면. 롤백 = 아래 4줄 onclick을 _bizBookGo(1~4)로 되돌리기.
   //   연간 일정은 캘린더 세부 맨 마지막으로 이사(운영자 "캘린더 맨 마지막 메뉴로") · 「회원 분포」→「고객 분석」 개명(운영자).
   menu.innerHTML='<div style="padding:8px 14px 6px;font-size:11px;color:var(--dim);font-weight:700">대시보드</div>'
-    +'<button type="button" onclick="_ddCloseAll();_bizBookGo(1)" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'">연간 실적</button>'
-    +'<button type="button" onclick="_ddCloseAll();_bizBookGo(2)" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'">판매 실적</button>'
-    +'<button type="button" onclick="_ddCloseAll();_bizBookGo(3)" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'">사업 결과 비교</button>'
-    +(userRole==='admin'?'<button type="button" onclick="_ddCloseAll();_bizBookGo(4)" title="거주지·연령·전국 분포 요약 (회원 조회는 여기서 진입)" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\';_memWarm()" onmouseleave="this.style.background=\'none\'">고객 분석</button>':'');   // onmouseenter의 _memWarm = 선로딩(클릭 전에 적재 시작 → 열면 바로 보임)
+    +'<button type="button" onclick="_ddCloseAll();openYearBoard()" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'">연간 실적</button>'
+    +'<button type="button" onclick="_ddCloseAll();openSalesBoard()" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'">판매 실적</button>'   // 우 열 2면(판매 실적)의 원본 = 실시간 판매 표 모달(_salesBuild 공용)
+    +'<button type="button" onclick="_ddCloseAll();openBusinessBoard()" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'">사업 결과 비교</button>'
+    +(userRole==='admin'?'<button type="button" onclick="_ddCloseAll();openMemberOverview()" title="거주지·연령·전국 분포 요약 (회원 조회는 여기서 진입)" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\';_memWarm()" onmouseleave="this.style.background=\'none\'">고객 분석</button>':'');   // onmouseenter의 _memWarm = 선로딩(클릭 전에 적재 시작 → 열면 바로 보임)
 }
 function _contentMenuBuild(menu){
   // [260711 운영자] 영상 편집기 3분류 신설 — 1 영상 편집 · 2 자막 삽입 · 3 영상 프롬프팅 (한 도구, 탭 진입점 3개)
