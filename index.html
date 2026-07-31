@@ -2077,6 +2077,7 @@ table.promo-board-table thead th:last-child{border-top-right-radius:11px}
 .bizm-hero .brk{font-size:11px;color:var(--dim);margin-left:auto;white-space:nowrap;line-height:1.5}
 /* 차트/표 구획 = 흰 서피스 카드 통일(라운드·보더·여백 균일) */
 .bizm-card{border:1px solid var(--border);border-radius:var(--radius);background:var(--surface-solid);box-shadow:0 2px 10px rgba(74,77,231,.04);margin-bottom:14px;overflow:hidden}
+[data-bizmbox] .bizm-card:last-child{margin-bottom:0}   /* [260731 평의회 구역1 M2] 유리박스 안 마지막 카드 바깥 여백 제거 — 박스 내부 상 18 vs 하 33 비대칭 해소 · 좌(#biz-main)·우(#rail-yrm) 공통 적용해야 두 박스 하단선 계약(Δ0)이 유지된다(#srail-uha L1936 동형 규칙의 일반화) */
 .bizm-card .ct{font-size:13px;font-weight:700;color:var(--text);padding:12px 14px 2px;letter-spacing:-.01em}
 .bizm-card .ct .sub{font-weight:400;color:var(--dim);font-size:11px;margin-left:8px}   /* [260724 운영자] 제목↔설명 간격 확대(연도별 관람추이 옆 설명글) */
 /* [260729 운영자] 카드 제목 블릿 — 지목 3곳(연도별 관람·수강 추이 · 전체 실적표 · 프로그램 별 판매 추이)에만 붙는 부품.
@@ -2172,7 +2173,8 @@ table.promo-board-table thead th:last-child{border-top-right-radius:11px}
 #app.biz-fit .bizm-card,#app.biz-fit .bizm-strip{margin-bottom:10px}
 #app.biz-fit .bizm-card .ct{padding:9px 14px 2px}
 #app.biz-fit [data-bizmbox]{padding:12px}
-#app.biz-fit #main-area{padding:12px 20px 14px 20px !important}   /* 바깥 상·하 패딩 축소 — #main-area는 인라인 style이라 !important 없이는 안 먹는다(.qa-fab 미디어쿼리와 같은 사유) */
+#app.biz-fit #main-area{padding:12px 15px 14px 20px !important}   /* 바깥 상·하 패딩 축소 — #main-area는 인라인 style이라 !important 없이는 안 먹는다(.qa-fab 미디어쿼리와 같은 사유) · 우 15 = 평상시 media(L1894)와 동일(20이면 표 min-content가 못 줄어 가로 5px 넘침 — 평의회 구역1 H2) */
+#app.biz-fit #sales-rail{padding-top:12px}   /* 좌 #main-area 상단 18→12와 동기 — 좌우 유리박스 상단선 6px 어긋남 방지(평의회 구역2 B2-1) */
 /* [260725 운영자] 우 「개별 사업 내역」 = 좌 전체 실적표(.bizm-ctbl) 그대로 + 현재 슬라이드 행 강조. 색 = 목록 pill과 같은 --accent-light */
 /* 내부 스크롤 = 좌 전체 실적표와 같은 세로 폭 유지(행이 많아도 통이 길어지지 않게) · 문법 = #rail-yrm-list 오버레이 스크롤 계승 */
 .ry-uha-scroll{overflow-y:auto;scrollbar-width:thin;-ms-overflow-style:none;scrollbar-color:transparent transparent}
@@ -5045,7 +5047,7 @@ function _bizZoomApply(){
     z=Math.round(z*1000)/1000; if(Math.abs(z-1)<.003)z=1;
     if(z===1){ if(bw.style.zoom){ bw.style.zoom=''; bw.style.minHeight='calc(100vh - 56px)'; } return; }
     bw.style.zoom=String(z);
-    bw.style.minHeight=Math.round((window.innerHeight-56)/z)+'px';   // 인라인 calc(100vh-56px)는 zoom에 다시 곱해져 뷰포트 초과 → px 보정(probe 실측)
+    bw.style.minHeight=Math.floor((window.innerHeight-56)/z)+'px';   // 인라인 calc(100vh-56px)는 zoom에 다시 곱해져 뷰포트 초과 → px 보정(probe 실측) · floor 필수 = round 올림이면 ×z 복원 시 +1px 유령 넘침 → biz-fit 오발동(평의회 구역3 F1: 60샘플 중 9배율 재현·floor로 9/9 정상화)
     _bizPlotlyZoomShim();
   }catch(_e){ console.warn('[biz zoom]',_e); }
 }
@@ -5059,7 +5061,7 @@ function _bizPlotlyZoomShim(){
       if(e._zfix)return;
       var z=_bizZ(); if(Math.abs(z-1)<.003)return;
       var gd=(e.target&&e.target.closest)?e.target.closest('.js-plotly-plot'):null; if(!gd)return;
-      var r=gd.getBoundingClientRect();
+      var r=(e.target.getBoundingClientRect?e.target:gd).getBoundingClientRect();   // 기준 rect = event.target(.nsewdrag 등) — Plotly 2.27 hover가 target rect 기준이라 gd 기준이면 margin.l(56×(z−1))만큼 잔차(평의회 구역3 F2: z1.5부터 −1년 오표시 실측·target rect로 4/4 정확)
       e.stopImmediatePropagation();
       var ne=new MouseEvent(tp,{bubbles:true,cancelable:true,view:window,
         clientX:r.left+(e.clientX-r.left)/z, clientY:r.top+(e.clientY-r.top)/z,
@@ -5073,9 +5075,10 @@ var _BIZ_CHART_MIN=180, _BIZ_CHART_MAX=560;
 function _bizFitViewport(){
   try{
     if(typeof _mainView==='undefined'||_mainView!=='biz')return;
-    var rail=document.getElementById('sales-rail'); if(!rail||rail.offsetParent===null)return;
-    var ch=document.getElementById('yrm-chart'); if(!ch||ch.offsetParent===null)return;
     var app=document.getElementById('app');
+    var rail=document.getElementById('sales-rail'); if(!rail||rail.offsetParent===null)return;
+    var ch=document.getElementById('yrm-chart');
+    if(!ch||ch.offsetParent===null){ if(app)app.classList.remove('biz-fit'); return; }   // 차트 없는 화면(2면 운영대장)엔 압축 잔존 금지 — 1면에서 켜진 biz-fit이 2면에 반쪽 압축으로 남던 버그(평의회 구역1 M4)
     var over=function(){ return Math.round(document.documentElement.scrollHeight-window.innerHeight); };
     var setH=function(px){
       var cur=Math.round(ch.getBoundingClientRect().height/_bizZ());   // gBCR 시각좌표 → 디자인(레이아웃) 단위로 환산해 style px와 동단위 비교
@@ -5095,7 +5098,7 @@ function _bizFitViewport(){
     };
     if(app)app.classList.remove('biz-fit');       // ① 컴팩트 해제 + 차트 최대에서 출발(창을 키우면 원래대로 돌아온다)
     setH(_BIZ_CHART_MAX);
-    if(shrink()<=0)return;                        // ② 차트만 줄여서 들어오면 끝
+    if(shrink()<=2)return;                        // ② 차트만 줄여서 들어오면 끝 · 허용치 2px = setH 데드밴드·모드 왕복 잔차(평의회 구역1 H1·구역3 F6)가 여백 압축(biz-fit)을 오발동하지 않게
     if(app){ app.classList.add('biz-fit'); setH(_BIZ_CHART_MAX); shrink(); }   // ③ 그래도 넘치면 여백 압축 단계 + 재축소
   }catch(_e){ console.warn('[biz fit]',_e); }
 }
@@ -5176,7 +5179,8 @@ function _srailAlignTop(){
             var _n=parseInt(_gs[_j].getAttribute('data-n')||'1',10); _w.push(_n); _ws+=_n;
           }
           var _cs=getComputedStyle(_gl);
-          var _gap=(parseFloat(_cs.rowGap)||12)*(_gs.length-1);
+          var _rgv=parseFloat(_cs.rowGap);
+          var _gap=(isFinite(_rgv)?_rgv:0)*(_gs.length-1);   // 실측 rowGap 0을 ||12 폴백이 12로 오인 → 몫이 12px 작아져 카드 하단 16px 죽고 행이 숨던 버그(평의회 구역2 B2-4)
           var _avail=_gl.clientHeight-parseFloat(_cs.paddingTop||0)-parseFloat(_cs.paddingBottom||0)-_gap;
           if(_tot>_avail+1&&_avail>80){
             var _fx=[],_freeH=_avail,_freeW=0,_k;
