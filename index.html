@@ -1271,6 +1271,8 @@ table.promo-board-table th:last-child .col-resize-handle{display:none}
   .yc-t-bl{color:#BE185D}
   .yc-ev-venue{font-size:11px;font-weight:700;letter-spacing:.3px}
   .yc-ev-venue::before{content:'·';margin:0 6px;color:#c8c8c8;font-weight:400}
+  /* [260731e] 구분점은 「장르 · 장소」 사이에만 — 장르 태그가 없는 공연(시트 구분 미기입)에서 앞에 홀로 남던 점 제거 */
+  .yc-ev-tags .yc-ev-venue:first-child::before{content:none}
   .yc-venue-big{background:var(--black);color:#fff}
   .yc-venue-sm{background:var(--charcoal);color:#fff}
   .yc-ev-link{display:inline-block;margin-top:5px;font-size:10px;font-weight:500;color:var(--accent);border-bottom:1px solid rgba(232,90,58,.25);padding-bottom:1px}
@@ -4079,6 +4081,7 @@ async function initApp(){
   },0);
   var _pPrograms=loadPrograms().then(function(){ updatePerfOpen(); _perfReady=true;
     try{_exLineRefresh();}catch(_e){}   // [260731] 프로그램 시트 도착 = 캘린더 전시 라인·공연 배지 소스 갱신 → 그리드 재렌더
+    try{_ycSync();}catch(_e){}          // [260731e] 프로그램 시트 도착 = 연간 일정 타임라인 자동 재생성(스냅샷 → 실데이터)
     // 판매 레일이 PERFS보다 먼저 그려졌으면 재렌더 — 프로그램 시트 폴백 카드(마스터 미등록 판매중 공연) 누락 방지
     if(typeof _salesState!=='undefined'&&_salesState&&_salesState.daily&&_salesState.master&&!_srailBusy){try{_srailRender();}catch(_e){}}
   }).catch(function(e){console.warn('[initApp loadPrograms]',e);});
@@ -4671,17 +4674,150 @@ function _lockMinChange(v){
   api('POST','/api/config',{lock_minutes:m,pets_visible:_petsOn}).then(function(){ if(typeof showToast==='function')showToast('자동 잠금 시간 '+m+'분 (전역 저장)','success'); }).catch(function(e){ if(typeof showToast==='function')showToast('저장 실패 — Worker 배포 필요할 수 있음: '+e.message,'error'); });
 }
 // === 연간 일정 — 네이티브 통합 (구 iframe → yc-* 인라인. 캘린더 레포 코드 이식, 이미지만 외부 참조) ===
-let _ycInited=false;
-const _YC_MONTH_MAP={1:'yc-m1',2:'yc-m2',3:'yc-m2',4:'yc-m4',5:'yc-m5',6:'yc-m6',7:'yc-m7',8:'yc-m7',9:'yc-m9',10:'yc-m10',11:'yc-m11',12:'yc-m12'};
+// ═══ [260731 운영자] 타임라인 = 프로그램 시트 자동 반영 (서식 유지) ═══
+// 구판은 타임라인 25건이 전부 손 마크업 → 시트에 새 공연·전시를 등록해도 여기엔 영영 안 들어왔다(전시 3건째를 손으로 넣은 게 260731d).
+// 서식(마크업 문법·클래스·좌우 교대·유지보수 블록)은 100% 그대로 두고 **내용만** 데이터에서 만든다.
+//   · 로그인 = 프로그램 시트(PERFS) 도착 시 `_ycSync`가 타임라인을 다시 그린다 → 시트에 등록하면 그날로 반영.
+//   · 비로그인(?annual 공유 링크)·저장본 = API 호출이 불가(`api()`가 앱 비번 헤더 필요) → 마크업의
+//     `<!-- YC-AUTO -->` 스냅샷이 그대로 보인다. 스냅샷은 `tools/build_annual.mjs`가 **같은 `_ycBuild`로** 다시 찍는다
+//     (렌더러 1벌 = 서식 드리프트 0 · 스냅샷 손편집 금지 — 값은 시트를 고치고 빌더를 돌린다).
+// YC-BUILD-START  ← 이 구간은 tools/build_annual.mjs가 통째로 eval해 재사용한다. DOM 접근 금지(순수 문자열 조립).
+var _YC_YEAR=2026;
+var _YC_MAINT=[{ms:[2,3],t:'대·소극장<br>유지보수'},{ms:[7,8],t:'대·소극장<br>유지보수'}];   // 공연 없는 정비 구간(편집 상수 — 시트에 없는 편집 정보)
+var _YC_MON=['JANUARY','FEBRUARY','MARCH','APRIL','MAY','JUNE','JULY','AUGUST','SEPTEMBER','OCTOBER','NOVEMBER','DECEMBER'];
+var _YC_DOW='일월화수목금토';
+// 장르 태그 = 프로그램 시트 「구분」 → 연간 일정 태그(기존 8종 클래스 그대로 · 매칭 없으면 태그 생략)
+var _YC_TAG={'클래식':['클래식','yc-t-cl'],'뮤지컬':['뮤지컬','yc-t-mu'],'뮤지컬(대형)':['뮤지컬','yc-t-mu'],
+  '뮤지컬(어린이)':['어린이뮤지컬','yc-t-kid'],'어린이뮤지컬':['어린이뮤지컬','yc-t-kid'],
+  '뮤지컬(청소년)':['청소년뮤지컬','yc-t-yo'],'청소년뮤지컬':['청소년뮤지컬','yc-t-yo'],
+  '연극':['연극','yc-t-dr'],'오페라':['오페라','yc-t-op'],'무용':['무용','yc-t-dn'],'발레':['발레','yc-t-bl']};
+// 시트 「구분」 오기·미기입 임시 보정 = 지금 화면 태그를 그대로 지키는 장치(운영자 점검목록 260731d ⑥⑦).
+// ⚠ 시트를 고치면 그 줄을 지운다 — 여기 남아 있으면 시트 수정이 화면에 안 먹는다.
+var _YC_TAG_FIX={'발레 <호두까기 인형>':['발레','yc-t-bl'],'국립현대무용단 <트리플 빌>':['발레','yc-t-bl'],
+  '2026 헬로!오페라 <마술피리>':['오페라','yc-t-op'],'뮤지컬 <러커스 더 스쿨>':['청소년뮤지컬','yc-t-yo'],
+  '여수세계섬박람회 기념 음악회':['클래식','yc-t-cl']};
+function _ycEsc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function _ycYMD(s){var m=/^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(String(s||''));return m?[+m[1],+m[2],+m[3]]:null;}
+function _ycDow(a){return _YC_DOW.charAt(new Date(a[0],a[1]-1,a[2]).getDay());}
+// 날짜 라벨 — 하루: `1.9 (금)` · 같은 달: `1.24 (토) — 25 (일)` · 다른 달: `7.21 (화) — 11.1 (일)` (구 손 마크업 표기 그대로)
+function _ycRange(s,e){
+  var a=_ycYMD(s);if(!a)return'';
+  var b=_ycYMD(e)||a;
+  var one=a[1]+'.'+a[2]+' ('+_ycDow(a)+')';
+  if(a[1]===b[1]&&a[2]===b[2])return one;
+  return one+' — '+(a[1]===b[1]?'':b[1]+'.')+b[2]+' ('+_ycDow(b)+')';
+}
+// 프로그램 시트(PERFS 모양 {s,e,f,n,t,l,u,g}) → 타임라인 항목. 공연(t='c')·전시(t='e')만, 올해분만.
+function _ycItems(perfs){
+  var out=[];
+  (perfs||[]).forEach(function(p){
+    if(!p||!p.s)return;
+    var a=_ycYMD(p.s);if(!a||a[0]!==_YC_YEAR)return;
+    var e=p.e||p.s,b=_ycYMD(e)||a;
+    var f=String(p.f||p.n||'').trim();if(!f)return;
+    var place=String(p.l||'');
+    if(p.t==='e'){
+      // 전시명 = 「분류 <작품명>」 → 윗줄(분류)·아랫줄(작품명)로 분해. 장도 전시는 분류 앞에 '장도'(구 마크업 표기 계승).
+      var head=f,sub='',m=/^(.*?)\s*[<〈'‘“"]([^>〉'’”"]+)[>〉'’”"]\s*$/.exec(f);
+      if(m){head=m[1].trim();sub=m[2].trim();}
+      head=head.replace(/^GS칼텍스\s*예울마루\s*/,'').trim()||f;
+      if(place.indexOf('장도')>-1&&head.indexOf('장도')<0)head='장도 '+head;
+      out.push({k:'ex',s:p.s,e:e,sm:a[1],em:b[1],title:head,sub:sub,venue:place,url:p.u||''});
+    }else if(p.t==='c'){
+      out.push({k:'ev',s:p.s,e:e,sm:a[1],title:f,tag:_YC_TAG_FIX[f]||_YC_TAG[String(p.g||'').trim()]||null,
+        venue:place,big:place.indexOf('소극장')<0,url:p.u||'',br:f.indexOf('브런치')>-1});
+    }
+  });
+  return out;
+}
+function _ycEvHtml(x){
+  var tag=x.tag?'<span class="yc-ev-tag '+x.tag[1]+'">'+_ycEsc(x.tag[0])+'</span>':'';
+  var ven=x.venue?'<span class="yc-ev-venue '+(x.big?'yc-venue-big':'yc-venue-sm')+'">'+_ycEsc(x.venue)+'</span>':'';
+  return '<div class="yc-ev '+x.side+(x.br?' yc-brunch':'')+'">\n'
+    +'  <div class="yc-ev-dot"></div>\n  <div class="yc-ev-v"></div>\n  <div class="yc-ev-i">\n'
+    +'    <div class="yc-ev-date">'+_ycRange(x.s,x.e)+'</div>\n'
+    +'    <div class="yc-ev-title">'+_ycEsc(x.title)+'</div>\n'
+    +((tag||ven)?'    <div class="yc-ev-tags">'+tag+ven+'</div>\n':'')
+    +(x.url?'    <a href="'+_ycEsc(x.url)+'" target="_blank" class="yc-ev-link">공연 상세 →</a>\n':'')
+    +'  </div>\n</div>';
+}
+function _ycExHtml(x){
+  return '<div class="yc-ex '+x.side+'">\n'
+    +'  <div class="yc-ex-bar"></div>\n  <div class="yc-ex-v"></div>\n  <div class="yc-ex-i">\n'
+    +'    <div class="yc-ex-date">'+_ycRange(x.s,x.e)+'</div>\n'
+    +'    <div class="yc-ex-title">'+_ycEsc(x.title)+'</div>\n'
+    +(x.sub?'    <div class="yc-ex-sub">'+_ycEsc(x.sub)+'</div>\n':'')
+    +'    <div class="yc-ex-tags"><span class="yc-ex-tag">🎨 전시</span>'+(x.venue?'<span class="yc-ex-venue">'+_ycEsc(x.venue)+'</span>':'')+'</div>\n'
+    +(x.url?'    <a href="'+_ycEsc(x.url)+'" target="_blank" class="yc-ev-link">전시 상세 →</a>\n':'')
+    +'  </div>\n</div>';
+}
+function _ycExEndHtml(x){
+  return '<div class="yc-ex-end '+x.side+'">\n'
+    +'  <div class="yc-ex-end-dot"></div>\n  <div class="yc-ex-end-v"></div>\n  <div class="yc-ex-end-i">\n'
+    +'    <div class="yc-ex-end-date">'+_ycRange(x.e,x.e)+'</div>\n'
+    +'    <div class="yc-ex-end-label">전시 종료</div>\n'
+    +'    <div class="yc-ex-end-title">'+_ycEsc(x.title)+'</div>\n'
+    +(x.sub?'    <div class="yc-ex-end-sub">〈'+_ycEsc(x.sub)+'〉</div>\n':'')
+    +(x.url?'    <a href="'+_ycEsc(x.url)+'" target="_blank" class="yc-ev-link">전시 상세 →</a>\n':'')
+    +'  </div>\n</div>';
+}
+// 타임라인 마크업 조립 — 좌우(L/R)는 종류별 교대(공연끼리·전시끼리), 전시 종료점은 자기 띠와 같은 쪽(구 마크업 규칙 그대로).
+function _ycBuild(items){
+  var evs=[],exs=[],by=function(a,b){return a.s<b.s?-1:a.s>b.s?1:0;};
+  (items||[]).forEach(function(x){(x.k==='ex'?exs:evs).push(x);});
+  evs.sort(by);exs.sort(by);
+  evs.forEach(function(x,i){x.side=(i%2)?'yc-R':'yc-L';});
+  exs.forEach(function(x,i){x.side=(i%2)?'yc-R':'yc-L';});
+  var slot={},put=function(m,d,h){(slot[m]=slot[m]||[]).push({d:d,h:h});};
+  evs.forEach(function(x){put(x.sm,x.s,_ycEvHtml(x));});
+  exs.forEach(function(x){put(x.sm,x.s,_ycExHtml(x));put(x.em,x.e,_ycExEndHtml(x));});
+  var headOf={},maintOf={},group={};
+  _YC_MAINT.forEach(function(z){var h=z.ms[0];maintOf[h]=z.t;group[h]=z.ms.slice();z.ms.forEach(function(m){headOf[m]=h;});});
+  var heads=[];
+  for(var m=1;m<=12;m++){
+    var h=headOf[m]||m;
+    if(!(slot[m]&&slot[m].length)&&!maintOf[h])continue;
+    if(heads.indexOf(h)<0)heads.push(h);
+  }
+  heads.sort(function(a,b){return a-b;});
+  var out=[];
+  heads.forEach(function(h){
+    var ms=group[h]||[h],last=ms[ms.length-1];
+    var n=(ms.length>1)?(h+'–'+last):String(h);                                  // 병합 표기 = EN DASH(구 마크업 `2–3`·`7–8`)
+    var l=(ms.length>1)?(_YC_MON[h-1].slice(0,3)+'-'+_YC_MON[last-1].slice(0,3)):_YC_MON[h-1];
+    out.push('<div class="yc-mo" id="yc-m'+h+'" data-month="'+h+'"><div class="yc-mo-n">'+n+'</div><div class="yc-mo-l">'+l+'</div></div>');
+    if(maintOf[h])out.push('<div class="yc-mt">\n  <div class="yc-mt-t">'+maintOf[h]+'</div>\n</div>');
+    var body=[];
+    ms.forEach(function(mm){(slot[mm]||[]).forEach(function(o){body.push(o);});});
+    body.sort(function(a,b){return a.d<b.d?-1:a.d>b.d?1:0;});
+    body.forEach(function(o){out.push(o.h);});
+  });
+  return out.join('\n\n');
+}
+// YC-BUILD-END
+var _ycInited=false,_ycNavBound=false,_ycObs=[],_ycLastHtml='';
+var _YC_MONTH_MAP={};
+(function(){for(var m=1;m<=12;m++)_YC_MONTH_MAP[m]='yc-m'+m;_YC_MAINT.forEach(function(z){z.ms.forEach(function(m){_YC_MONTH_MAP[m]='yc-m'+z.ms[0];});});})();
 function _ycInit(){
   if(_ycInited)return;_ycInited=true;
+  _ycBind();
+}
+// 관찰자 배선 — 타임라인이 다시 그려지면(_ycSync) 옛 관찰자를 끊고 새 노드에 다시 건다.
+function _ycBind(){
+  _ycObs.forEach(function(o){try{o.disconnect();}catch(_e){}});_ycObs=[];
   const fadeObs=new IntersectionObserver(function(es){es.forEach(function(x){if(x.isIntersecting){x.target.classList.add('yc-visible');fadeObs.unobserve(x.target);}});},{threshold:.1,rootMargin:'0px 0px -20px 0px'});
   document.querySelectorAll('#yc-wrap .yc-ev').forEach(function(el){fadeObs.observe(el);});
-  document.querySelectorAll('#yc-mnav a').forEach(function(a){
-    a.addEventListener('click',function(){const t=document.getElementById(_YC_MONTH_MAP[a.dataset.m]);if(t)t.scrollIntoView({behavior:'smooth'});});
-  });
-  const ranges={1:[1],2:[2,3],4:[4],5:[5],6:[6],7:[7,8],9:[9],10:[10],11:[11],12:[12]};
+  _ycObs.push(fadeObs);
   const navLinks=document.querySelectorAll('#yc-mnav a');
+  if(!_ycNavBound){
+    _ycNavBound=true;
+    navLinks.forEach(function(a){
+      a.addEventListener('click',function(){const t=document.getElementById(_YC_MONTH_MAP[a.dataset.m]);if(t)t.scrollIntoView({behavior:'smooth'});});
+    });
+  }
+  const ranges={};   // 월 섹션 → 그 섹션이 대표하는 달들(유지보수 병합 구간 = 2개월). _YC_MAINT에서 파생 = 마크업과 항상 동기.
+  for(let m=1;m<=12;m++)ranges[m]=[m];
+  _YC_MAINT.forEach(function(z){ranges[z.ms[0]]=z.ms.slice();});
   let cur=null;
   const moObs=new IntersectionObserver(function(entries){
     entries.forEach(function(e){
@@ -4692,8 +4828,22 @@ function _ycInit(){
     });
   },{threshold:0,rootMargin:'-10% 0px -70% 0px'});
   document.querySelectorAll('#yc-wrap .yc-mo[data-month]').forEach(function(el){moObs.observe(el);});
+  _ycObs.push(moObs);
   const now=new Date().getMonth()+1;
   navLinks.forEach(function(a){a.classList.toggle('yc-active',parseInt(a.dataset.m)===now);});
+}
+// 프로그램 시트 도착 → 타임라인 재생성. 시트가 비었거나(비로그인) 결과가 같으면 스냅샷을 그대로 둔다(깜빡임 0).
+function _ycSync(){
+  try{
+    var tl=document.getElementById('yc-tl');if(!tl)return;
+    var items=_ycItems(typeof PERFS!=='undefined'?PERFS:null);
+    if(!items.length)return;
+    var html=_ycBuild(items);
+    if(!html||html===_ycLastHtml)return;
+    _ycLastHtml=html;
+    tl.innerHTML=html;
+    if(_ycInited)_ycBind();
+  }catch(e){console.warn('[ycSync]',e);}
 }
 function _ycScrollTop(){const sc=window._ycScrollEl||document.getElementById('yc-scroll');if(sc)sc.scrollTo({top:0,behavior:'smooth'});}
 // === [260731 운영자] 연간 일정 「내려받기」 — 공유(↗) 좌측 버튼. 지금 화면 그대로 1파일 HTML 저장 ===
@@ -26148,12 +26298,11 @@ document.getElementById('confirm-modal').addEventListener('click',e=>{if(e.targe
   <div class="yc-top-label">TOP</div>
 </div>
 
-<div class="yc-tl">
-
-<!-- ═══ 1월 ═══ -->
+<div class="yc-tl" id="yc-tl">
+<!-- YC-AUTO-START — 기계 생성(tools/build_annual.mjs · 프로그램 시트 거울 → _ycBuild). 손편집 금지:
+     값을 바꾸려면 프로그램 시트를 고치고 빌더를 다시 돌린다. 로그인 화면은 _ycSync가 같은 렌더러로 실시간 재생성한다. -->
 <div class="yc-mo" id="yc-m1" data-month="1"><div class="yc-mo-n">1</div><div class="yc-mo-l">JANUARY</div></div>
 
-<!-- 01 신년음악회 -->
 <div class="yc-ev yc-L">
   <div class="yc-ev-dot"></div>
   <div class="yc-ev-v"></div>
@@ -26165,25 +26314,23 @@ document.getElementById('confirm-modal').addEventListener('click',e=>{if(e.targe
   </div>
 </div>
 
-<!-- 02 미세스 다웃파이어 -->
 <div class="yc-ev yc-R">
   <div class="yc-ev-dot"></div>
   <div class="yc-ev-v"></div>
   <div class="yc-ev-i">
-    <div class="yc-ev-date">1.24 (금) — 25 (토)</div>
+    <div class="yc-ev-date">1.24 (토) — 25 (일)</div>
     <div class="yc-ev-title">뮤지컬 &lt;미세스 다웃파이어&gt;</div>
     <div class="yc-ev-tags"><span class="yc-ev-tag yc-t-mu">뮤지컬</span><span class="yc-ev-venue yc-venue-big">대극장</span></div>
     <a href="https://www.yeulmaru.org/performance/v/?u=1238" target="_blank" class="yc-ev-link">공연 상세 →</a>
   </div>
 </div>
 
-<!-- ═══ 2–3 유지보수 ═══ -->
 <div class="yc-mo" id="yc-m2" data-month="2"><div class="yc-mo-n">2–3</div><div class="yc-mo-l">FEB-MAR</div></div>
+
 <div class="yc-mt">
   <div class="yc-mt-t">대·소극장<br>유지보수</div>
 </div>
 
-<!-- 🎨 전시 1: 어린이미술전 (7층 전시실) -->
 <div class="yc-ex yc-L">
   <div class="yc-ex-bar"></div>
   <div class="yc-ex-v"></div>
@@ -26196,12 +26343,11 @@ document.getElementById('confirm-modal').addEventListener('click',e=>{if(e.targe
   </div>
 </div>
 
-<!-- 🎨 전시 2: 장도 기획전시 (장도 전시실) -->
 <div class="yc-ex yc-R">
   <div class="yc-ex-bar"></div>
   <div class="yc-ex-v"></div>
   <div class="yc-ex-i">
-    <div class="yc-ex-date">2.27 (금) — 6.21 (일)</div>
+    <div class="yc-ex-date">3.27 (금) — 6.21 (일)</div>
     <div class="yc-ex-title">장도 기획전시</div>
     <div class="yc-ex-sub">섬냥이 in 장도</div>
     <div class="yc-ex-tags"><span class="yc-ex-tag">🎨 전시</span><span class="yc-ex-venue">장도 전시실</span></div>
@@ -26209,10 +26355,8 @@ document.getElementById('confirm-modal').addEventListener('click',e=>{if(e.targe
   </div>
 </div>
 
-<!-- ═══ 4월 ═══ -->
 <div class="yc-mo" id="yc-m4" data-month="4"><div class="yc-mo-n">4</div><div class="yc-mo-l">APRIL</div></div>
 
-<!-- 브런치Ⅰ -->
 <div class="yc-ev yc-L yc-brunch">
   <div class="yc-ev-dot"></div>
   <div class="yc-ev-v"></div>
@@ -26224,12 +26368,9 @@ document.getElementById('confirm-modal').addEventListener('click',e=>{if(e.targe
   </div>
 </div>
 
-<!-- 03 실내악페스티벌 -->
 <div class="yc-ev yc-R">
   <div class="yc-ev-dot"></div>
-  <div class="yc-ev-v">
-    
-  </div>
+  <div class="yc-ev-v"></div>
   <div class="yc-ev-i">
     <div class="yc-ev-date">4.16 (목) — 19 (일)</div>
     <div class="yc-ev-title">2026 실내악페스티벌 &lt;실내악, 그 이상의 세계&gt;</div>
@@ -26238,10 +26379,8 @@ document.getElementById('confirm-modal').addEventListener('click',e=>{if(e.targe
   </div>
 </div>
 
-<!-- ═══ 5월 ═══ -->
 <div class="yc-mo" id="yc-m5" data-month="5"><div class="yc-mo-n">5</div><div class="yc-mo-l">MAY</div></div>
 
-<!-- 04 김영욱 -->
 <div class="yc-ev yc-L">
   <div class="yc-ev-dot"></div>
   <div class="yc-ev-v"></div>
@@ -26249,10 +26388,10 @@ document.getElementById('confirm-modal').addEventListener('click',e=>{if(e.targe
     <div class="yc-ev-date">5.7 (목)</div>
     <div class="yc-ev-title">김영욱×콜레기움 무지쿰 서울 &lt;8 Seasons&gt;</div>
     <div class="yc-ev-tags"><span class="yc-ev-tag yc-t-cl">클래식</span><span class="yc-ev-venue yc-venue-big">대극장</span></div>
+    <a href="https://www.yeulmaru.org/performance/v/?u=1257" target="_blank" class="yc-ev-link">공연 상세 →</a>
   </div>
 </div>
 
-<!-- 05 100층짜리 집 -->
 <div class="yc-ev yc-R">
   <div class="yc-ev-dot"></div>
   <div class="yc-ev-v"></div>
@@ -26264,7 +26403,6 @@ document.getElementById('confirm-modal').addEventListener('click',e=>{if(e.targe
   </div>
 </div>
 
-<!-- 06 한국페스티발앙상블 -->
 <div class="yc-ev yc-L">
   <div class="yc-ev-dot"></div>
   <div class="yc-ev-v"></div>
@@ -26276,22 +26414,19 @@ document.getElementById('confirm-modal').addEventListener('click',e=>{if(e.targe
   </div>
 </div>
 
-<!-- 07 국립심포니오케스트라 -->
 <div class="yc-ev yc-R">
   <div class="yc-ev-dot"></div>
   <div class="yc-ev-v"></div>
   <div class="yc-ev-i">
     <div class="yc-ev-date">5.30 (토)</div>
-    <div class="yc-ev-title">국립심포니오케스트라 &lt;피터와 늑대 & 어미 거위&gt;</div>
+    <div class="yc-ev-title">국립심포니오케스트라 &lt;피터와 늑대 &amp; 어미 거위&gt;</div>
     <div class="yc-ev-tags"><span class="yc-ev-tag yc-t-cl">클래식</span><span class="yc-ev-venue yc-venue-big">대극장</span></div>
     <a href="https://www.yeulmaru.org/performance/v/?u=1254" target="_blank" class="yc-ev-link">공연 상세 →</a>
   </div>
 </div>
 
-<!-- ═══ 6월 ═══ -->
 <div class="yc-mo" id="yc-m6" data-month="6"><div class="yc-mo-n">6</div><div class="yc-mo-l">JUNE</div></div>
 
-<!-- 브런치Ⅱ -->
 <div class="yc-ev yc-L yc-brunch">
   <div class="yc-ev-dot"></div>
   <div class="yc-ev-v"></div>
@@ -26303,7 +26438,6 @@ document.getElementById('confirm-modal').addEventListener('click',e=>{if(e.targe
   </div>
 </div>
 
-<!-- 08 노인의 꿈 -->
 <div class="yc-ev yc-R">
   <div class="yc-ev-dot"></div>
   <div class="yc-ev-v"></div>
@@ -26315,12 +26449,9 @@ document.getElementById('confirm-modal').addEventListener('click',e=>{if(e.targe
   </div>
 </div>
 
-<!-- 09 세비야의 이발사 -->
 <div class="yc-ev yc-L">
   <div class="yc-ev-dot"></div>
-  <div class="yc-ev-v">
-    
-  </div>
+  <div class="yc-ev-v"></div>
   <div class="yc-ev-i">
     <div class="yc-ev-date">6.19 (금) — 20 (토)</div>
     <div class="yc-ev-title">2026 헬로!오페라 &lt;세비야의 이발사&gt;</div>
@@ -26329,7 +26460,6 @@ document.getElementById('confirm-modal').addEventListener('click',e=>{if(e.targe
   </div>
 </div>
 
-<!-- 🎨 전시 종료점 1: 장도 기획전시 (6.21) — 좌측 = R -->
 <div class="yc-ex-end yc-R">
   <div class="yc-ex-end-dot"></div>
   <div class="yc-ex-end-v"></div>
@@ -26342,7 +26472,6 @@ document.getElementById('confirm-modal').addEventListener('click',e=>{if(e.targe
   </div>
 </div>
 
-<!-- 🎨 전시 종료점 2: 어린이미술전 (6.28) — 우측 = L -->
 <div class="yc-ex-end yc-L">
   <div class="yc-ex-end-dot"></div>
   <div class="yc-ex-end-v"></div>
@@ -26355,13 +26484,12 @@ document.getElementById('confirm-modal').addEventListener('click',e=>{if(e.targe
   </div>
 </div>
 
-<!-- ═══ 7–8 유지보수 ═══ -->
 <div class="yc-mo" id="yc-m7" data-month="7"><div class="yc-mo-n">7–8</div><div class="yc-mo-l">JUL-AUG</div></div>
+
 <div class="yc-mt">
   <div class="yc-mt-t">대·소극장<br>유지보수</div>
 </div>
 
-<!-- 🎨 전시 3: 기획전시 (7층 전시실) — 어린이미술전(같은 7층) 자리 계승 = L -->
 <div class="yc-ex yc-L">
   <div class="yc-ex-bar"></div>
   <div class="yc-ex-v"></div>
@@ -26374,22 +26502,19 @@ document.getElementById('confirm-modal').addEventListener('click',e=>{if(e.targe
   </div>
 </div>
 
-<!-- ═══ 9월 ═══ -->
 <div class="yc-mo" id="yc-m9" data-month="9"><div class="yc-mo-n">9</div><div class="yc-mo-l">SEPTEMBER</div></div>
 
-<!-- 브런치Ⅲ -->
 <div class="yc-ev yc-R yc-brunch">
   <div class="yc-ev-dot"></div>
   <div class="yc-ev-v"></div>
   <div class="yc-ev-i">
     <div class="yc-ev-date">9.3 (목)</div>
     <div class="yc-ev-title">브런치 콘서트 Ⅲ &lt;현 위로 흐르는 계절&gt;</div>
-    <a href="https://www.yeulmaru.org/performance/v/?u=1281" target="_blank" class="yc-ev-link">공연 상세 →</a>
-  <div class="yc-ev-tags"><span class="yc-ev-tag yc-t-cl">클래식</span><span class="yc-ev-venue yc-venue-big">대극장</span></div>
+    <div class="yc-ev-tags"><span class="yc-ev-tag yc-t-cl">클래식</span><span class="yc-ev-venue yc-venue-big">대극장</span></div>
+    <a href="https://www.yeulmaru.org/performance/v/?u=1284" target="_blank" class="yc-ev-link">공연 상세 →</a>
   </div>
 </div>
 
-<!-- 10 여수세계섬박람회 -->
 <div class="yc-ev yc-L">
   <div class="yc-ev-dot"></div>
   <div class="yc-ev-v"></div>
@@ -26400,7 +26525,6 @@ document.getElementById('confirm-modal').addEventListener('click',e=>{if(e.targe
   </div>
 </div>
 
-<!-- 11 조재혁 -->
 <div class="yc-ev yc-R">
   <div class="yc-ev-dot"></div>
   <div class="yc-ev-v"></div>
@@ -26408,10 +26532,10 @@ document.getElementById('confirm-modal').addEventListener('click',e=>{if(e.targe
     <div class="yc-ev-date">9.12 (토)</div>
     <div class="yc-ev-title">조재혁 피아노 리사이틀</div>
     <div class="yc-ev-tags"><span class="yc-ev-tag yc-t-cl">클래식</span><span class="yc-ev-venue yc-venue-big">대극장</span></div>
+    <a href="https://www.yeulmaru.org/performance/v/?u=1278" target="_blank" class="yc-ev-link">공연 상세 →</a>
   </div>
 </div>
 
-<!-- 12 그날들 -->
 <div class="yc-ev yc-L">
   <div class="yc-ev-dot"></div>
   <div class="yc-ev-v"></div>
@@ -26422,10 +26546,8 @@ document.getElementById('confirm-modal').addEventListener('click',e=>{if(e.targe
   </div>
 </div>
 
-<!-- ═══ 10월 ═══ -->
 <div class="yc-mo" id="yc-m10" data-month="10"><div class="yc-mo-n">10</div><div class="yc-mo-l">OCTOBER</div></div>
 
-<!-- 13 달샤베트 -->
 <div class="yc-ev yc-R">
   <div class="yc-ev-dot"></div>
   <div class="yc-ev-v"></div>
@@ -26433,10 +26555,10 @@ document.getElementById('confirm-modal').addEventListener('click',e=>{if(e.targe
     <div class="yc-ev-date">10.1 (목) — 3 (토)</div>
     <div class="yc-ev-title">뮤지컬 &lt;달 샤베트&gt;</div>
     <div class="yc-ev-tags"><span class="yc-ev-tag yc-t-kid">어린이뮤지컬</span><span class="yc-ev-venue yc-venue-big">대극장</span></div>
+    <a href="https://www.yeulmaru.org/performance/v/?u=1286" target="_blank" class="yc-ev-link">공연 상세 →</a>
   </div>
 </div>
 
-<!-- 14 이상한 나라의 춘자씨 -->
 <div class="yc-ev yc-L">
   <div class="yc-ev-dot"></div>
   <div class="yc-ev-v"></div>
@@ -26447,7 +26569,6 @@ document.getElementById('confirm-modal').addEventListener('click',e=>{if(e.targe
   </div>
 </div>
 
-<!-- 15 국립현대무용단 -->
 <div class="yc-ev yc-R">
   <div class="yc-ev-dot"></div>
   <div class="yc-ev-v"></div>
@@ -26455,24 +26576,33 @@ document.getElementById('confirm-modal').addEventListener('click',e=>{if(e.targe
     <div class="yc-ev-date">10.14 (수)</div>
     <div class="yc-ev-title">국립현대무용단 &lt;트리플 빌&gt;</div>
     <div class="yc-ev-tags"><span class="yc-ev-tag yc-t-bl">발레</span><span class="yc-ev-venue yc-venue-big">대극장</span></div>
+    <a href="https://www.yeulmaru.org/performance/v/?u=1289" target="_blank" class="yc-ev-link">공연 상세 →</a>
   </div>
 </div>
 
-<!-- 16 다비드 바뱅 -->
 <div class="yc-ev yc-L">
   <div class="yc-ev-dot"></div>
   <div class="yc-ev-v"></div>
   <div class="yc-ev-i">
-    <div class="yc-ev-date">10.27 (화)</div>
-    <div class="yc-ev-title">다비드 바뱅 & 아드리앙 몽도 &lt;피아노 & 피아노&gt;</div>
-    <div class="yc-ev-tags"><span class="yc-ev-tag yc-t-cl">클래식</span><span class="yc-ev-venue yc-venue-big">대극장</span></div>
+    <div class="yc-ev-date">10.22 (목)</div>
+    <div class="yc-ev-title">18세기, 시대악기로 만나는 바로크의 정점과 고전의 새벽</div>
+    <div class="yc-ev-tags"><span class="yc-ev-venue yc-venue-big">대극장</span></div>
   </div>
 </div>
 
-<!-- ═══ 11월 ═══ -->
+<div class="yc-ev yc-R">
+  <div class="yc-ev-dot"></div>
+  <div class="yc-ev-v"></div>
+  <div class="yc-ev-i">
+    <div class="yc-ev-date">10.27 (화)</div>
+    <div class="yc-ev-title">다비드 바뱅 &amp; 아드리앙 몽도 &lt;피아노 &amp; 피아노&gt;</div>
+    <div class="yc-ev-tags"><span class="yc-ev-tag yc-t-cl">클래식</span><span class="yc-ev-venue yc-venue-big">대극장</span></div>
+    <a href="https://www.yeulmaru.org/performance/v/?u=1288" target="_blank" class="yc-ev-link">공연 상세 →</a>
+  </div>
+</div>
+
 <div class="yc-mo" id="yc-m11" data-month="11"><div class="yc-mo-n">11</div><div class="yc-mo-l">NOVEMBER</div></div>
 
-<!-- 🎨 전시 종료점 3: 기획전시 (11.1) — 띠와 같은 쪽 = L -->
 <div class="yc-ex-end yc-L">
   <div class="yc-ex-end-dot"></div>
   <div class="yc-ex-end-v"></div>
@@ -26485,7 +26615,6 @@ document.getElementById('confirm-modal').addEventListener('click',e=>{if(e.targe
   </div>
 </div>
 
-<!-- 17 그때도 오늘 -->
 <div class="yc-ev yc-L">
   <div class="yc-ev-dot"></div>
   <div class="yc-ev-v"></div>
@@ -26496,12 +26625,9 @@ document.getElementById('confirm-modal').addEventListener('click',e=>{if(e.targe
   </div>
 </div>
 
-<!-- 18 마술피리 -->
 <div class="yc-ev yc-R">
   <div class="yc-ev-dot"></div>
-  <div class="yc-ev-v">
-    
-  </div>
+  <div class="yc-ev-v"></div>
   <div class="yc-ev-i">
     <div class="yc-ev-date">11.20 (금) — 21 (토)</div>
     <div class="yc-ev-title">2026 헬로!오페라 &lt;마술피리&gt;</div>
@@ -26509,7 +26635,6 @@ document.getElementById('confirm-modal').addEventListener('click',e=>{if(e.targe
   </div>
 </div>
 
-<!-- 19 러커스더스쿨 -->
 <div class="yc-ev yc-L">
   <div class="yc-ev-dot"></div>
   <div class="yc-ev-v"></div>
@@ -26517,13 +26642,12 @@ document.getElementById('confirm-modal').addEventListener('click',e=>{if(e.targe
     <div class="yc-ev-date">11.26 (목) — 28 (토)</div>
     <div class="yc-ev-title">뮤지컬 &lt;러커스 더 스쿨&gt;</div>
     <div class="yc-ev-tags"><span class="yc-ev-tag yc-t-yo">청소년뮤지컬</span><span class="yc-ev-venue yc-venue-big">대극장</span></div>
+    <a href="https://www.yeulmaru.org/performance/v/?u=1280" target="_blank" class="yc-ev-link">공연 상세 →</a>
   </div>
 </div>
 
-<!-- ═══ 12월 ═══ -->
 <div class="yc-mo" id="yc-m12" data-month="12"><div class="yc-mo-n">12</div><div class="yc-mo-l">DECEMBER</div></div>
 
-<!-- 브런치Ⅳ -->
 <div class="yc-ev yc-R yc-brunch">
   <div class="yc-ev-dot"></div>
   <div class="yc-ev-v"></div>
@@ -26534,7 +26658,6 @@ document.getElementById('confirm-modal').addEventListener('click',e=>{if(e.targe
   </div>
 </div>
 
-<!-- 20 쉬어매드니스 -->
 <div class="yc-ev yc-L">
   <div class="yc-ev-dot"></div>
   <div class="yc-ev-v"></div>
@@ -26545,19 +26668,16 @@ document.getElementById('confirm-modal').addEventListener('click',e=>{if(e.targe
   </div>
 </div>
 
-<!-- 21 호두까기인형 -->
 <div class="yc-ev yc-R">
   <div class="yc-ev-dot"></div>
-  <div class="yc-ev-v">
-    
-  </div>
+  <div class="yc-ev-v"></div>
   <div class="yc-ev-i">
     <div class="yc-ev-date">12.24 (목) — 25 (금)</div>
     <div class="yc-ev-title">발레 &lt;호두까기 인형&gt;</div>
     <div class="yc-ev-tags"><span class="yc-ev-tag yc-t-bl">발레</span><span class="yc-ev-venue yc-venue-big">대극장</span></div>
   </div>
 </div>
-
+<!-- YC-AUTO-END -->
 </div>
 
 <div class="yc-ft">
