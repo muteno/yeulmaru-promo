@@ -2712,20 +2712,31 @@ function getPerfs(d){var k=dk(d),now=new Date();now.setHours(0,0,0,0);var _p=PER
 // 구판은 상반기 2건(7층 2/27~6/28 · 장도 3/27~6/21)을 함수 안에 박아 둬서, 그 전시가 끝나자 라인이 영영 안 그려졌다.
 // 소스 = ① 프로그램 시트(PERFS t='e' — 캘린더가 이미 로드) ② 전시마스터 캐시(_anaState._exMaster — 판매 레일이 받아 둔 것 재활용, 추가 fetch 0).
 //   두 소스는 겹쳐도 무해(같은 레인에 OR로 얹힘) → dedup 불필요. 마스터 전용 전시·프로그램 시트 전용 전시 양쪽 다 잡힌다.
-// 레인(줄 2개·색·위치)은 종전 100% 계승 = 0:7층(초록) · 1:장도(분홍). 귀속 = 장소/전시명에 '장도'가 들어가면 장도, 아니면 7층.
-var _EX_LANE=[{id:'7층',c:'#006B3C'},{id:'장도',c:'#E84393'}];
+// [260731 운영자] 공간 = 3종(7층·장도·야외)이되 「줄 위치는 장소 고정 인덱스가 아니라 먼저 시작한 전시부터 위에서 채운다」.
+//   구판은 레인을 장소에 못박아서, 장도 전시가 없으면 가운데 줄이 빈 회색으로 남아 여백처럼 보였다.
+//   색은 공간 고유로 유지 = 줄 위치가 바뀌어도 어느 공간 전시인지 식별된다. 야외 = var(--accent)(운영자 「강조색 1번」·신규 hex 0).
+var _EX_SPACE=[{id:'7층',c:'#006B3C'},{id:'장도',c:'#E84393'},{id:'야외',c:'var(--accent)'}];
+var _EX_MAXLANE=3;
 var _EX_DIM='rgba(0,0,0,0.04)';
-function _exLaneOf(name,place){ return (String(place||'')+' '+String(name||'')).indexOf('장도')>-1?1:0; }
+function _exLaneOf(name,place){
+  var s=String(place||'')+' '+String(name||'');
+  if(s.indexOf('장도')>-1)return 1;
+  if(s.indexOf('야외')>-1)return 2;
+  return 0;
+}
 // 전시 기간 목록 [{lane,s,e}] — 소스 배열/객체 참조가 그대로면 캐시 재사용(한 번 렌더에 42셀 × 재계산 방지)
-var _exSpanCache=null,_exSpanPerfs=null,_exSpanMaster=null;
+var _exSpanCache=null,_exSpanPerfs=null,_exSpanMaster=null,_exSpanGcN=-1;
 function _exSpans(){
   var mo=null; try{ mo=(typeof _anaState!=='undefined'&&_anaState)?_anaState._exMaster:null; }catch(_e){}
   var pf=(typeof PERFS!=='undefined'&&PERFS)?PERFS:null;
-  if(_exSpanCache&&_exSpanPerfs===pf&&_exSpanMaster===mo)return _exSpanCache;
+  var gx=(typeof GCAL_EXHIBS!=='undefined'&&GCAL_EXHIBS)?GCAL_EXHIBS:[];   // ⚠ var 호이스팅 구간 방어(부팅 중 선언줄 전에 탄다)
+  if(_exSpanCache&&_exSpanPerfs===pf&&_exSpanMaster===mo&&_exSpanGcN===gx.length)return _exSpanCache;
   var out=[];
   try{ (pf||[]).forEach(function(p){ if(p&&p.t==='e'&&p.s&&p.e)out.push({lane:_exLaneOf(p.f||p.n,p.l),s:p.s,e:p.e}); }); }catch(_e){}
   try{ ((mo&&mo.rows)||[]).forEach(function(r){ var s=excelSerialToISO(r['시작일']),e=excelSerialToISO(r['종료일']); if(s&&e)out.push({lane:_exLaneOf(r['전시명'],''),s:s,e:e}); }); }catch(_e){}
-  _exSpanCache=out;_exSpanPerfs=pf;_exSpanMaster=mo;
+  // 구글 캘린더 전시(전시 공간 태그) — 정본과 중복된 건 제외(정본 우선)
+  try{ var dup=(typeof _gcDupSet==='function')?_gcDupSet():{}; gx.forEach(function(r){ if(!dup[r.id])out.push({lane:r.lane,s:r.s,e:r.e}); }); }catch(_e){}
+  _exSpanCache=out;_exSpanPerfs=pf;_exSpanMaster=mo;_exSpanGcN=gx.length;
   return out;
 }
 // 소스가 늦게 도착(프로그램 시트·전시마스터는 캘린더 첫 렌더 뒤에 채워짐)하면 그리드만 다시 그린다 — 라인 누락 방지
@@ -2737,27 +2748,33 @@ function _exLineRefresh(){
     if(_exSpanPerfs!==beforeP||_exSpanMaster!==beforeM||(_exSpanCache?_exSpanCache.length:-1)!==before)renderCal();
   }catch(_e){}
 }
+// 그 날 진행 중인 전시를 「먼저 시작한 순」으로 돌려준다 — 이 순서가 곧 줄 순서(위→아래).
+// 같은 공간이 겹쳐 들어오면 한 줄로 접는다(같은 색 두 줄 = 의미 없음).
 function getExhibitStatus(d){
-var k=dk(d),today=dk(new Date());
-var st=_EX_LANE.map(function(x){return{id:x.id,on:false,live:false};});
+var k=dk(d),today=dk(new Date()),on=[],seen={};
 _exSpans().forEach(function(x){
   if(k<x.s||k>x.e)return;
-  st[x.lane].on=true;
-  if(x.e>=today)st[x.lane].live=true;   // 아직 안 끝난 전시 = 진행중(지난 날짜는 흐리게 = 진행률 표시)
+  on.push({lane:x.lane,s:x.s,live:x.e>=today});   // 아직 안 끝난 전시 = 진행중(지난 날짜는 흐리게 = 진행률 표시)
 });
-return st;
+on.sort(function(a,b){ return a.s===b.s?(a.lane-b.lane):a.s.localeCompare(b.s); });
+var out=[];
+on.forEach(function(x){ if(seen[x.lane])return; seen[x.lane]=1; out.push(x); });
+return out.slice(0,_EX_MAXLANE);
 }
 function renderExhibitBadge(d,nm,past){
 if(nm)return'';
 var st=getExhibitStatus(d);
 var h='<div style="position:absolute;bottom:2px;left:0;right:0;display:flex;flex-direction:column;gap:3px;padding:0">';
-for(var i=0;i<st.length;i++){
-// 전시 없는 날 = 종전 그대로 거의 안 보이는 회색 실선(칸 바닥선 역할).
-// 전시 있는 날 = 그 레인 색으로 「쭉」 그어진다(운영자 260731 — 구판은 진행중 전시의 지난 날짜를 회색으로 덮어
+// [260731 운영자] 진행 중인 전시 수만큼만 긋는다 — 장소별 빈 레인을 남기면 여백처럼 보인다.
+// 전시 0인 날은 종전의 「칸 바닥선」 역할만 1줄 남긴다(거의 안 보이는 회색).
+if(!st.length){
+  h+='<div style="height:0;border-top:2px solid '+_EX_DIM+'"></div>';
+}else for(var i=0;i<st.length;i++){
+// 전시 있는 날 = 그 공간 색으로 「쭉」 그어진다(운영자 260731 — 구판은 진행중 전시의 지난 날짜를 회색으로 덮어
 //   장기 전시 후반엔 줄이 사실상 사라졌다). 지난 날짜는 색을 지우는 대신 opacity로만 죽여 진행률 느낌을 남긴다.
 // 이미 끝난 전시는 지난 기록이라 그대로 진하게 — 예전 달로 넘겨 봐도 그때 그은 줄이 보인다.
-var op=(st[i].on&&past&&st[i].live)?';opacity:.38':'';
-h+='<div style="height:0;border-top:2px solid '+(st[i].on?_EX_LANE[i].c:_EX_DIM)+op+'"></div>';
+var op=(past&&st[i].live)?';opacity:.38':'';
+h+='<div style="height:0;border-top:2px solid '+_EX_SPACE[st[i].lane].c+op+'"></div>';
 }
 return h+'</div>';
 }
@@ -2893,19 +2910,26 @@ if(!perfs||!perfs.length)return'';
 var cperfs=perfs.filter(function(p){return p.t!=='e';});
 if(!cperfs.length)return'';
 var out='';
-for(var i=0;i<cperfs.length;i++){var perf=cperfs[i],fn=perf.f||perf.n,sn=perf.n,dd=perf.dday,lb=perf.t==='e'?'전':perf.t==='a'?'교':perf.t==='r'?'대':'공';
+for(var i=0;i<cperfs.length;i++){var perf=cperfs[i],fn=perf.f||perf.n,sn=perf.n,dd=perf.dday,
+// [260731 운영자] 셋업일 = 「셋」. 대관은 「대」, 기획은 기존 표기(공·전·교) 계승 — 「기」 신설 안 함.
+lb=perf._setup?'셋':(perf.t==='e'?'전':perf.t==='a'?'교':perf.t==='r'?'대':'공');
 var nameHtml='<span class="pf">'+escapeHtml(fn)+'</span><span class="ps">'+escapeHtml(sn)+'</span>';
 // 좌클릭: 홍보 현황 모달  /  우클릭: 정보 박스 — data-perf-name + this 패턴으로 사이드바와 통일 (escape 안전)
 var safeFn=escapeHtml(fn);
 var dataAttr=' data-perf-name="'+safeFn+'"';
 // [260731] 구글 캘린더 대관(_gc)은 PERFS 정본에 없어 openProgramView가 못 찾는다 → 클릭·우클릭 없이 시간·장소 툴팁만.
 var _gc=perf._gc;
-var _gcTip=_gc?(safeFn+(perf._allday?' · 종일':(perf._st?(' · '+perf._st+(perf._et?'~'+perf._et:'')):''))+(perf.l?' · '+escapeHtml(perf.l):'')+' (대관)'):'';
+var _gcTip=_gc?(safeFn+(perf._setup?' · 셋업':'')
+  +(perf._allday?' · 종일':(perf._st?(' · '+perf._st+(perf._et?'~'+perf._et:'')):''))
+  +(perf.l?' · '+escapeHtml(perf.l):'')
+  +((perf._s&&perf._e&&perf._s!==perf._e)?' · '+perf._s.slice(5).replace('-','/')+'~'+perf._e.slice(5).replace('-','/'):'')
+  +' ('+escapeHtml(perf._kind||'대관')+')'):'';
 var clickAttr=_gc?(dataAttr+' title="'+_gcTip+'"'):(!past?dataAttr+' onclick="event.stopPropagation();openProgramView(this.dataset.perfName)" title="클릭: 조회 / 우클릭: 빠른 정보"':dataAttr);
 var ctxAttr=(!past&&!_gc)?' oncontextmenu="event.stopPropagation();event.preventDefault();onPerfContextMenu(event,this);return false;"':'';
 var cursorStyle=(!past&&!_gc)?'cursor:pointer;':'';
 // [260731] 대관 원형 배지 = 무채색 토큰(--neutral-text) — 기획(accent 인디고)과 한눈에 갈린다. 팔레트 계승(신규 hex 0)
-var lbBg=_gc?'var(--neutral-text)':'var(--accent)';
+//   운영자 2차: 셋업(「셋」)은 대관·기획 가리지 않고 전부 무채색 — 기획 셋업에도 강조색을 쓰지 않는다.
+var lbBg=(perf._setup||perf.t==='r')?'var(--neutral-text)':'var(--accent)';
 if(past)out+='<span style="display:inline-flex;align-items:center;margin-left:6px"><span style="display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;border-radius:50%;font-size:8px;background:rgba(0,0,0,0.05);color:rgba(0,0,0,0.22);flex-shrink:0">'+lb+'</span><span class="pname" style="margin-left:4px;font-size:9px;color:rgba(0,0,0,0.18)">'+nameHtml+'</span></span>';
 else if(td)out+='<span class="perf-badge"'+clickAttr+ctxAttr+' style="'+cursorStyle+'display:inline-flex;align-items:center;margin-left:6px"><span style="display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;border-radius:50%;font-size:8px;font-weight:600;background:rgba(255,255,255,0.85);color:#111;flex-shrink:0">'+lb+'</span><span class="pname" style="margin-left:5px;font-size:9px;font-weight:700;color:#111">'+nameHtml+'</span></span>';
 else out+='<span class="perf-badge"'+clickAttr+ctxAttr+' style="'+cursorStyle+'display:inline-flex;align-items:center;margin-left:6px"><span style="display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;border-radius:50%;font-size:8px;font-weight:600;background:'+lbBg+';color:#fff;flex-shrink:0">'+lb+'</span><span class="pname" style="margin-left:5px;font-size:9px;font-weight:700;color:var(--text)">'+nameHtml+'</span>'+(dd!==null&&dd!==0?'<span class="pday" style="margin-left:8px;font-size:9px;color:var(--dim);white-space:nowrap">'+getDdayText(dd)+'</span>':'')+'</span>';
@@ -19183,11 +19207,121 @@ function loadHolidays(year){
 }
 /* ═══ 대관 일정 (구글 캘린더 비공개 iCal 피드 → Worker /api/gcal) ═══
    운영자 260731: 「구글 스케줄 하나 붙이고 싶다 · 받아오면 대관 공연이 들어온다 · [대]로 캘린더에 명시」
-   · 캘린더 자체가 대관 전용 → 여기서 온 일정은 전부 t='r'(대관). 「대」 배지는 renderPerfsHtml이 이미 t='r'에 그린다(신규 표기 창작 0).
    · PERFS(SharePoint 프로그램 시트 = 정본)에는 절대 안 섞는다 — 별도 배열에 두고 getPerfs 출력에서만 합류.
      이유: PERFS는 홍보 신청·판매 집계·일괄 위저드가 함께 읽는 정본이라 외부 일정이 들어가면 그쪽이 오염된다.
-   · 미설정(GCAL_ICS_URL 없음)·오류면 조용히 0건 — 기존 화면 무영향. */
-var GCAL_RENTALS=[],_gcalLoaded={},_gcalBusy=false;
+   · 미설정(GCAL_ICS_URL 없음)·오류면 조용히 0건 — 기존 화면 무영향.
+
+   [260731 2차 — 운영자 지시 반영] 구판 전제(「이 캘린더는 대관 전용」)가 실데이터와 어긋났다.
+   실제 제목 규격 = 「[공간][구분]공연명 (셋업·공연일·시간 설명)」이고 [기획]이 절반, [대]공사 같은 시설 상태까지 섞여 있다.
+   그래서 제목을 파싱해 아래를 가른다:
+     ① [태그] 제거 → 캘린더엔 공연명만          ② [대관] = 「대」 무채색 / [기획] = 기존 표기(공·전·교) 계승(「기」 신설 안 함)
+     ③ 공연일 외의 날 = 셋업 → 「셋」 무채색      ④ 전시 공간([장][7층][야외])은 배지 대신 셀 하단 전시 라인
+     ⑤ 정본에 이미 있는 프로그램은 구글 쪽 숨김   ⑥ 공사·점검류 제외
+   ⚠ 셋업 정보가 제목 텍스트에만 있어 파싱이 유일한 경로다. 실데이터 60건(393칸)으로 실측 — 셋업 명시 12건 전건 일치.
+     제목에 공연일이 안 적힌 일정은 판정 불가 → 전부 본 일정으로 둔다(임의 추측 금지).
+   시안·검증 = docs/reports/260731_대관캘린더표기_플레이그라운드.html */
+var GCAL_RENTALS=[],GCAL_EXHIBS=[],_gcalLoaded={},_gcalBusy=false;
+var _GC_PLACE={'대':'대극장','소':'소극장','장':'장도','7층':'7층','야외':'야외','리1':'리허설실1','리1,2':'리허설실1·2'};
+var _GC_DROP=/^(공사|점검|휴관|휴무)$/;
+function _gcDayAdd(k,n){var d=new Date(k+'T00:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10);}
+// 제목 → {name, kind, place, isEx, lane, t, setup{날짜키:1}, drop}
+function _gcParse(title,s,e){
+  var raw=String(title||'').replace(/^['"\s]+/,''),tags=[],rest=raw,m;
+  while((m=rest.match(/^\s*\[([^\]]*)\]/))){tags.push(m[1].trim());rest=rest.slice(m[0].length);}
+  rest=rest.trim();
+  var kindTag='',placeTag='';
+  tags.forEach(function(t){ if(t==='대관'||t==='기획'){if(!kindTag)kindTag=t;} else if(!placeTag)placeTag=t; });
+  // 시간(09:00)을 같은 길이 마스크로 덮는다 — 날짜 오인을 막으면서 문자 위치는 보존해야 키워드 인접 판정이 성립
+  var masked=rest.replace(/\d{1,2}:\d{2}/g,function(x){return new Array(x.length+1).join('§');});
+  var groups=[];
+  [/\d{1,2}\/\d{1,2}(?:\s*[~-]\s*\d{1,2}(?:\/\d{1,2})?)?/g,/\d{1,2}(?:\s*[~,]\s*\d{1,2})*\s*일/g].forEach(function(re){
+    var g;
+    while((g=re.exec(masked))){
+      var st=g.index,en=st+g[0].length,hit=false;
+      for(var i=0;i<groups.length;i++){ if(st<groups[i].end&&en>groups[i].start){hit=true;break;} }
+      if(!hit)groups.push({text:g[0],start:st,end:en,kw:''});
+    }
+  });
+  groups.sort(function(a,b){return a.start-b.start;});
+  // 키워드는 1회만 소비한다 — 안 그러면 「28일 셋업 29~30일」에서 셋업이 뒷 날짜까지 먹어 공연일이 통째로 셋업이 된다.
+  // 앞 경계에 '일'·숫자를 허용 = 「8일셋업」(띄어쓰기 없음) 포착 / 한글 뒤(「특별공연」)는 키워드로 안 본다.
+  var kws=[],KWRE=/(?:^|[\s\]0-9일])(셋업|철수|공연)/g,kk;
+  while((kk=KWRE.exec(masked)))kws.push({pos:kk.index+kk[0].length-kk[1].length,w:kk[1],used:false});
+  function _near(t){ return !/[0-9§]/.test(t); }   // 사이에 숫자·시간이 끼면 그 키워드는 남의 것
+  groups.forEach(function(g,i){    // 1차 = 「날짜 셋업」 한국어 어순(뒤에 붙은 키워드) 우선
+    var lim=(i+1<groups.length)?groups[i+1].start:masked.length;
+    for(var j=0;j<kws.length;j++){
+      var c=kws[j];
+      if(!c.used&&c.pos>=g.end&&c.pos<lim&&_near(masked.slice(g.end,c.pos))){c.used=true;g.kw=c.w;break;}
+    }
+  });
+  groups.forEach(function(g,i){    // 2차 = 「셋업 날짜」 어순 — 1차에서 안 쓰인 키워드만
+    if(g.kw)return;
+    var lo=i>0?groups[i-1].end:0;
+    for(var j=kws.length-1;j>=0;j--){
+      var c=kws[j];
+      if(!c.used&&c.pos>=lo&&c.pos<g.start&&_near(masked.slice(c.pos+c.w.length,g.start))){c.used=true;g.kw=c.w;break;}
+    }
+  });
+  groups.forEach(function(g){ if(!g.kw)g.kw='공연'; });   // 미분류 = 본 일정
+  // 이름 = 첫 (날짜군 | 시간 | 키워드) 앞까지
+  var cut=masked.length;
+  if(groups.length)cut=Math.min(cut,groups[0].start);
+  var si=masked.indexOf('§'); if(si>=0)cut=Math.min(cut,si);
+  if(kws.length)cut=Math.min(cut,kws[0].pos);
+  var name=rest.slice(0,cut).replace(/[\s,·\-~]+$/,'').replace(/^[\s,·\-~]+/,'')||rest;
+  // 날짜군 → 실제 날짜키. 기준 연·월 = 일정 시작일(제목의 「5,6일」은 그 달 기준, 시작일보다 작으면 다음 달)
+  var Y=+s.slice(0,4),M=+s.slice(5,7),D0=+s.slice(8,10);
+  function toKeys(text){
+    var t=text.replace(/\s/g,'').replace(/일$/,''),out=[];
+    if(t.indexOf('/')>-1){
+      var p=t.split(/[~-]/),a=p[0].split('/'),mo=+a[0],d1=+a[1],mo2=mo,d2=d1;
+      if(p[1]){ var b=p[1].split('/'); if(b.length>1){mo2=+b[0];d2=+b[1];} else d2=+b[0]; }
+      var k=Y+'-'+('0'+mo).slice(-2)+'-'+('0'+d1).slice(-2),kE=Y+'-'+('0'+mo2).slice(-2)+'-'+('0'+d2).slice(-2);
+      for(var i=0;i<60&&k<=kE;i++,k=_gcDayAdd(k,1))out.push(k);
+    }else{
+      var push=function(d){ var mo=M,y=Y; if(d<D0){mo+=1;if(mo>12){mo=1;y+=1;}} out.push(y+'-'+('0'+mo).slice(-2)+'-'+('0'+d).slice(-2)); };
+      if(t.indexOf('~')>-1){ var r=t.split('~'); for(var d=+r[0];d<=+r[1];d++)push(d); }
+      else t.split(',').forEach(function(x){ var n=+x; if(n>0&&n<32)push(n); });
+    }
+    return out;
+  }
+  var showSet={},setupSet={};
+  groups.forEach(function(g){ var set=(g.kw==='공연')?showSet:setupSet; toKeys(g.text).forEach(function(k){set[k]=1;}); });
+  var all=[];for(var k2=s;k2<=e&&all.length<400;k2=_gcDayAdd(k2,1))all.push(k2);
+  var hasShow=all.some(function(k){return showSet[k];});
+  var setup={};
+  // 운영자 규칙 = 「공연 기간을 제외한 일자는 셋업」. 공연일을 하나도 못 읽었으면 셋업 판정을 포기한다(오판보다 무표기).
+  if(hasShow)all.forEach(function(k){ if(!showSet[k])setup[k]=1; });
+  else all.forEach(function(k){ if(setupSet[k])setup[k]=1; });
+  var isEx=(placeTag==='장'||placeTag==='7층'||placeTag==='야외');
+  // ⚠ 레인 판정엔 「풀어쓴 공간명」을 넘긴다 — _exLaneOf는 '장도'를 찾는데 태그는 '장'이라 그대로 주면 7층으로 떨어진다.
+  return {name:name,kind:kindTag||'대관',placeTag:placeTag,place:_GC_PLACE[placeTag]||placeTag,
+          isEx:isEx,lane:_exLaneOf(name,_GC_PLACE[placeTag]||placeTag),t:(kindTag==='기획')?'c':'r',
+          setup:setup,drop:_GC_DROP.test(name)};
+}
+// 정본(PERFS)에 이미 있는 프로그램은 구글 쪽을 숨긴다 — 「기획 이미 등록되어 있는 게 우선」(운영자 260731).
+// PERFS는 캘린더보다 늦게 도착할 수 있어 로드 시점이 아니라 렌더 시점에 판정한다(참조·건수 그대로면 캐시 재사용).
+var _gcDupCache=null,_gcDupPerfs=null,_gcDupN=-1;
+function _gcNorm(s){ return String(s||'').replace(/[\s·\-_~,.'"()\[\]:]/g,'').toLowerCase(); }
+function _gcDupSet(){
+  var pf=(typeof PERFS!=='undefined'&&PERFS)?PERFS:null;
+  var gr=(typeof GCAL_RENTALS!=='undefined'&&GCAL_RENTALS)?GCAL_RENTALS:[];
+  var gx=(typeof GCAL_EXHIBS!=='undefined'&&GCAL_EXHIBS)?GCAL_EXHIBS:[];
+  var n=gr.length+gx.length;
+  if(_gcDupCache&&_gcDupPerfs===pf&&_gcDupN===n)return _gcDupCache;
+  var names=[];
+  try{ (pf||[]).forEach(function(p){ var k=_gcNorm(p&&(p.f||p.n)); if(k.length>=3)names.push(k); }); }catch(_e){}
+  var set={};
+  // 3자 미만 이름은 포함 판정이 위험해 제외(오제거 방지) — 정본에 없는 대관은 그대로 보여야 한다.
+  gr.concat(gx).forEach(function(r){
+    var k=_gcNorm(r.n);
+    if(k.length<3)return;
+    for(var i=0;i<names.length;i++){ if(names[i]===k||names[i].indexOf(k)>-1||k.indexOf(names[i])>-1){set[r.id]=1;return;} }
+  });
+  _gcDupCache=set;_gcDupPerfs=pf;_gcDupN=n;
+  return set;
+}
 function loadRentals(year,month){
   var ym=year+'-'+('0'+month).slice(-2);
   if(_gcalLoaded[ym]||_gcalBusy)return;
@@ -19197,14 +19331,36 @@ function loadRentals(year,month){
   api('GET','/api/gcal?from='+f.toISOString().slice(0,10)+'&to='+t.toISOString().slice(0,10)).then(function(d){
     _gcalBusy=false;
     if(!d||!d.days)return;
-    var seen={};GCAL_RENTALS.forEach(function(r){seen[r.id]=1;});
-    var ch=false;
+    // Worker는 날짜별로 펼쳐 준다(하루 = 한 행). 셋업 판정은 일정 「전체 기간」이 있어야 하므로 uid로 다시 묶는다.
+    // id 규격 = 'gc:'+UID+':'+날짜키  →  뒤 날짜키만 떼면 UID.
+    var grp={},order=[];
     d.days.forEach(function(x){
-      if(!x||!x.d||seen[x.id])return;
-      var tt=(x.title||'대관').toString();
-      GCAL_RENTALS.push({id:x.id,f:tt,n:tt,l:(x.place||''),t:'r',g:'대관',s:x.d,e:x.d,o:0,
-        _gc:1,_allday:!!x.allday,_st:x.st||'',_et:x.et||''});
-      ch=true;
+      if(!x||!x.d)return;
+      var uid=String(x.id||'').replace(/^gc:/,'').replace(/:[^:]*$/,'')||String(x.title||'');
+      if(!grp[uid]){grp[uid]={title:x.title||'',place:x.place||'',rows:[]};order.push(uid);}
+      grp[uid].rows.push(x);
+    });
+    var seen={};GCAL_RENTALS.forEach(function(r){seen[r.id]=1;});
+    var seenX={};GCAL_EXHIBS.forEach(function(r){seenX[r.id]=1;});
+    var ch=false;
+    order.forEach(function(uid){
+      var g=grp[uid];
+      g.rows.sort(function(a,b){return a.d.localeCompare(b.d);});
+      var s=g.rows[0].d,e=g.rows[g.rows.length-1].d;
+      var p=_gcParse(g.title,s,e);
+      if(p.drop)return;                                    // 공사·점검류 = 공연 아님(운영자 「공사는 지워도 돼」)
+      if(p.isEx){                                          // 전시 공간 = 배지 아니라 셀 하단 라인
+        var xid='gx:'+uid;
+        if(!seenX[xid]){seenX[xid]=1;GCAL_EXHIBS.push({id:xid,n:p.name,lane:p.lane,s:s,e:e});ch=true;}
+        return;
+      }
+      g.rows.forEach(function(x){
+        if(seen[x.id])return;seen[x.id]=1;
+        GCAL_RENTALS.push({id:x.id,f:p.name,n:p.name,l:p.place||x.place||'',t:p.t,g:p.kind,s:x.d,e:x.d,o:0,
+          _gc:1,_allday:!!x.allday,_st:x.st||'',_et:x.et||'',
+          _setup:p.setup[x.d]?1:0,_kind:p.kind,_raw:g.title,_s:s,_e:e});
+        ch=true;
+      });
     });
     if(ch&&typeof renderCal==='function')renderCal();
   }).catch(function(){_gcalBusy=false;_gcalLoaded[ym]=false;});
@@ -19213,7 +19369,8 @@ function loadRentals(year,month){
 function getRentals(key){
   // ⚠ var 호이스팅 구간 방어 — 부팅 중 setMainView→_mvApply 경로가 이 선언줄보다 먼저 getPerfs를 탄다(그땐 GCAL_RENTALS === undefined).
   if(!GCAL_RENTALS||!GCAL_RENTALS.length)return [];
-  return GCAL_RENTALS.filter(function(r){return r.s===key;}).map(function(r){return Object.assign({},r,{dday:null});});
+  var dup=_gcDupSet();   // 정본에 이미 있는 건 여기서 뺀다(정본 우선)
+  return GCAL_RENTALS.filter(function(r){return r.s===key&&!dup[r.id];}).map(function(r){return Object.assign({},r,{dday:null});});
 }
 
 // === 카페/장도 운영시간 (DB 운영_카페일정 / 운영_장도) — 날짜 패널 서비스 안내용 ===

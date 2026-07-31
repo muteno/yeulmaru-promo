@@ -346,7 +346,7 @@ const AX=[
  // ── 전시 라인 ──────────────────────────────
  {g:'전시 라인 (셀 하단)'},
  {k:'exN',   nm:'레인 수',        d:'가로줄 개수', min:2,max:4,step:1,dv:2},
- {k:'exOrd', nm:'레인 순서',      d:'위→아래', ...SEL([['0','7층 · 장도 · 야외'],['1','장도 · 7층 · 야외'],['2','야외 · 7층 · 장도']]), dv:'0'},
+ {k:'exOrd', nm:'레인 순서',      d:'위→아래', ...SEL([['0','7층 · 장도 · 야외 (장소 고정)'],['1','장도 · 7층 · 야외'],['2','야외 · 7층 · 장도'],['auto','★ 먼저 시작한 전시부터 채움']]), dv:'0'},
  {k:'ex0',   nm:'레인1 색 (7층)',  d:'현행 #006B3C', ...SEL(PAL), dv:'#006B3C',warn:1},
  {k:'ex1',   nm:'레인2 색 (장도)', d:'현행 #E84393', ...SEL(PAL), dv:'#E84393',warn:1},
  {k:'ex2',   nm:'레인3 색 (야외)', d:'신설 — 운영자 「강조색 1번」', ...SEL(PAL), dv:'var(--accent)',warn:1},
@@ -379,10 +379,11 @@ const PRESETS=[
  // 지시안 공통 = 태그 제거 · 공사 제외 · 정본 우선 · 대관/기획 구분 · 전시 3레인
  {id:'p1',nm:'운영자 지시안',star:'★',st:{...D,
     strip:'1',striptime:'1',dropc:'1',dedup:'1',setupShow:'badge',kindSplit:'1',
-    exN:3,ex2:'var(--accent)',cR:'var(--neutral-text)',cC:'var(--accent)',
+    exN:3,exOrd:'auto',ex2:'var(--accent)',cR:'var(--neutral-text)',cC:'var(--accent)',
     // 공간은 툴팁에만 — 이름 뒤 약어 「대」는 대관 배지 「대」와 헷갈린다(실측 확인)
     // 기간 병기(9/14~9/21)도 기본 끔 — 좁은 셀에서 공연명을 밀어낸다(실측). 필요하면 축에서 켜기
-    sMode:'inherit',sname:'var(--dim)',sopa:.85,span:'none',chip:'none'}},
+    // 셋업 = 무채색 고정(운영자 260731 확정) — 기획 셋업도 카테고리색 아닌 회색
+    sMode:'neutral',sname:'var(--dim)',sopa:.85,span:'none',chip:'none'}},
  {id:'p2',nm:'셋업 흐림형',st:{...D,strip:'1',striptime:'1',dropc:'1',dedup:'1',exN:3,kindSplit:'1',
     setupShow:'dim',sMode:'alpha',sAlpha:.45,sopa:.5,sname:'var(--muted)'}},
  {id:'p3',nm:'셋업 속빈원',st:{...D,strip:'1',striptime:'1',dropc:'1',dedup:'1',exN:3,kindSplit:'1',
@@ -460,10 +461,21 @@ function render(){
       if(li>=0)on[li]=it;
     });
     let ex='<div class="exline">';
-    for(let li=0;li<lanes.length;li++){
-      const it=on[li];
-      const col=it?lanes[li].col:'var(--t-exdim)';
-      ex+='<i style="color:'+col+(it?'':'')+'"'+(it?' title="'+esc(it.name)+'"':'')+'></i>';
+    if(state.exOrd==='auto'){
+      // 장소 고정 인덱스 폐지 — 그 날 진행 중인 전시를 「먼저 시작한 순」으로 위에서부터 채운다.
+      // 빈 레인을 남기지 않으므로 장도 전시가 없어도 가운데가 여백으로 비지 않는다(운영자 260731).
+      const cols=[state.ex0,state.ex1,state.ex2,state.ex3],seenL={},pick=[];
+      ITEMS.filter(it=>it.isEx&&!it.drop&&key>=it.days[0]&&key<=it.days[it.days.length-1])
+        .sort((a,b)=>a.days[0]===b.days[0]?a.lane-b.lane:a.days[0].localeCompare(b.days[0]))
+        .forEach(it=>{ if(seenL[it.lane])return; seenL[it.lane]=1; pick.push(it); });
+      if(!pick.length) ex+='<i style="color:var(--t-exdim)"></i>';   // 전시 0 = 칸 바닥선 1줄만
+      else pick.slice(0,+state.exN).forEach(it=>{ ex+='<i style="color:'+cols[it.lane]+'" title="'+esc(it.name)+'"></i>'; });
+    }else{
+      for(let li=0;li<lanes.length;li++){
+        const it=on[li];
+        const col=it?lanes[li].col:'var(--t-exdim)';
+        ex+='<i style="color:'+col+(it?'':'')+'"'+(it?' title="'+esc(it.name)+'"':'')+'></i>';
+      }
     }
     ex+='</div>';
     // ② 배지
