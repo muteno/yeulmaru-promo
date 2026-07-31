@@ -5390,7 +5390,13 @@ function _mvBars(days,diff,unit){
   var mx=Math.max.apply(null,d.concat([1]));
   var sum7=d.reduce(function(a,b){return a+b;},0);
   var yest=(diff!==null&&diff!==undefined&&!isNaN(diff))?diff:d[d.length-1];
-  var bars=d.map(function(v,i){var last=(i===d.length-1);var hp=Math.max(12,Math.round(v/mx*100));return '<span style="flex:0 0 7px;height:'+hp+'%;background:var('+(last?'--accent':'--accent-light')+');border-radius:2px"></span>';}).join('');
+  // [260731 운영자] 「트리플빌처럼 기존에 없던 프로그램은 7일치 전꺼는 없는 것처럼 쭉, 가장 우측에만」
+  //   = 막대 칸은 항상 7칸 고정. 데이터가 없던 날(신규 프로그램의 이전 6일)은 **빈칸**(배경 없음 = 없던 것처럼)으로 자리만 잡고,
+  //     실제 값은 우측부터 채운다 → 첫날 프로그램은 맨 우측 한 칸만 뜬다. 칸 수가 고정이라 모든 행의 막대·숫자 세로줄도 함께 맞는다.
+  var SLOT=7, blank='<span style="flex:0 0 7px" aria-hidden="true"></span>';
+  var bars='';
+  for(var _b=d.length;_b<SLOT;_b++)bars+=blank;
+  bars+=d.map(function(v,i){var last=(i===d.length-1);var hp=Math.max(12,Math.round(v/mx*100));return '<span style="flex:0 0 7px;height:'+hp+'%;background:var('+(last?'--accent':'--accent-light')+');border-radius:2px"></span>';}).join('');
   return '<span style="display:inline-flex;align-items:flex-end;justify-content:flex-end;gap:3px;height:28px;vertical-align:middle">'+bars+'</span>'
     +'<span style="display:inline-block;vertical-align:middle;margin-left:10px;text-align:right;min-width:56px">'
     +'<span style="display:block;color:var(--accent);font-weight:800;font-size:13px;font-variant-numeric:tabular-nums">+'+sum7.toLocaleString()+(unit||'석')+'</span>'
@@ -6241,7 +6247,9 @@ function _ryAccCell(n){
     +'<span style="color:var(--dim);font-size:11.5px">명</span>';
 }
 // [260729 운영자] 머리글 열 크기 조절 — 기본 폭(합 100) · 조절값은 기기 단위 기억(localStorage). 계정 축은 【바인딩】상 미배선이라 기기 저장이 상한.
-var _RY_COLS_DEF=[10,24,18,24,13,11];
+// [260731 운영자] 「사업 성격」 열 폐지 → 그 자리를 「장르」가 차지(6칸 → 5칸). 성격 폭 13은 장르(11)에 합산 = 24(총합 100 보존).
+//   구 6칸 저장값(localStorage ryColW)은 길이 검사에서 자동 탈락 → 기본 폭으로 리셋(마이그레이션 코드 불필요).
+var _RY_COLS_DEF=[10,24,18,24,24];
 function _ryColW(){
   try{ var v=JSON.parse(localStorage.getItem('ryColW')||'null');
     if(v&&v.length===_RY_COLS_DEF.length&&v.every(function(n){return typeof n==='number'&&isFinite(n)&&n>=4;}))return v;
@@ -6293,8 +6301,10 @@ function _railYrmPerfTable(perfs,rateLab){
   // 폭 누계 11/45/74/87/100 — 분야 표가 전부 이 한 함수라 열 경계가 자동으로 같다(세로 오와열 정렬).
   // [260729 운영자] 폭은 colgroup이 단독 소유(머리글 td의 width 제거) → 드래그 조절값이 두 표에 동시 반영된다
   var CW=_ryColW();
-  var HL=['일자','프로그램',(rateLab||'판매율'),'최근 7일 추이','사업 성격','장르'];
-  var HA=['left','left','left','left','left','left'];   // [260729 운영자 개정2] 머리글 6칸 전부 좌측 — 남아 있던 사업 성격·장르 가운데도 좌측으로(본문 값은 이미 전부 좌측이라 머리글↔값 축이 완전히 맞는다)
+  // [260731 운영자] 「사업 성격」 열 삭제 · 그 자리에 「장르」 — 5칸(일자·프로그램·판매율·최근 7일 추이·장르).
+  //   성격 값 자체는 데이터·필터(_bizmState.specFilter)·프로그램 관리 폼에 그대로 살아 있다(표에서만 안 보인다).
+  var HL=['일자','프로그램',(rateLab||'판매율'),'최근 7일 추이','장르'];
+  var HA=['left','left','left','left','left'];   // [260729 운영자 개정2] 머리글 전 칸 좌측 — 본문 값도 전부 좌측이라 머리글↔값 축이 완전히 맞는다
   var h='<table class="ana-tbl mv-tbl" style="font-size:13px;width:100%;table-layout:fixed">'+_ryColGroup(CW)+'<thead><tr>';
   HL.forEach(function(lab,i){
     h+='<td style="text-align:'+HA[i]+'">'+lab+(i<HL.length-1?('<i class="ry-rz" role="separator" aria-label="'+lab+' 열 너비 조절" onpointerdown="_ryRzDown(event,'+i+')"></i>'):'')+'</td>';
@@ -6312,7 +6322,7 @@ function _railYrmPerfTable(perfs,rateLab){
       +'<td style="'+td+'overflow:hidden" title="'+escapeHtml(p.name)+(p._venue?' · '+escapeHtml(p._venue):'')+'"><div style="'+_RYNM+'">'+escapeHtml(p.name)+'</div>'+sub+'</td>'
       +'<td style="'+td+'text-align:left;white-space:nowrap">'+rate+'</td>'
       +'<td style="'+td+'text-align:left;white-space:nowrap">'+trend+'</td>'   // [260729 운영자] 추이 = 우측→좌측 정렬(머리글과 같은 축) · 우측정렬용 여백 padding-right:34 제거
-      +'<td style="'+td+'text-align:left">'+_mvSpecPill(_anaProfitAxis(p['수익성']),p)+'</td>'   // [260725] 2번째 인자 = 그 자리 성격 갱신 연필(admin·마스터 등재분) · [260729 운영자] 값(예술성/사업성) = 좌측 정렬(머리글만 가운데)
+      // [260731 운영자] 구 「사업 성격」 셀(_mvSpecPill) 삭제 — 장르가 그 자리로 올라온다. 성격 갱신 입력구는 프로그램 관리 > 사업 성격(정본).
       +'<td style="'+td+'padding-right:14px">'+_mvGenrePill(p.genre||'기타')+'</td></tr>';   // [260729 운영자] 전시도 장르 pill 표시 — 전시 genre = 프로그램 관리 지정값 또는 '시즌'(_ryExRow)
   });
   h+='</tbody></table>';
