@@ -5420,6 +5420,13 @@ async function _specToggle(mid){
 }
 // 일별 판매석 미니 막대(최근 7일 증분·마지막=어제 강조) + 우측 7일 누적 +N석·어제 델타. days = _salesBuild 최근 7일 {seat 누적}
 // [260729 운영자] unit = 누계 단위만 갈아끼우는 인자(기본 '석' = 종전 그대로). 전시는 좌석이 아니라 사람이라 '명' — 막대·색·형태는 전부 동일(전시 전용 부품 0).
+// [260731 운영자] 「특히 차트는 아예 세로 기준선이 틀어져있는데 이 부분 맞춰주면 좋을듯」
+//   원인 = 추이 셀 내용은 [막대 67px][간격 10][숫자 블록 56] 인데 셀 전체를 가운데 정렬해서
+//          **머리글 중심은 셀 중심**, **막대 중심은 그보다 33px 왼쪽**으로 늘 어긋나 있었다(실측 33px).
+//   → 머리글 td에 숫자 블록 몫(_RY_TREND_NUMW + _RY_TREND_GAP = 66px)만큼 오른쪽 여백을 줘서
+//     머리글 중심 = 막대 중심이 되게 한다. 열 폭을 드래그로 바꿔도 식이 성립(둘 다 같은 여유폭의 절반을 쓴다).
+//   두 값을 상수로 묶어 _mvBars와 머리글이 따로 놀지 않게 한다.
+var _RY_TREND_NUMW=56, _RY_TREND_GAP=10;
 function _mvBars(days,diff,unit){
   // [260725 운영자] 하루치만 들어와도 값이 나오게 — 구 `length<2` 컷은 첫날 입력분을 통째로 '데이터 부족'으로 버렸다.
   // 막대는 종전대로 우측 정렬(justify-content:flex-end) = 날이 쌓일수록 옛날 막대가 왼쪽으로 밀리고 최신 막대가 항상 맨 우측·강조색(--accent).
@@ -5434,12 +5441,15 @@ function _mvBars(days,diff,unit){
   // [260731 운영자] 「트리플빌처럼 기존에 없던 프로그램은 7일치 전꺼는 없는 것처럼 쭉, 가장 우측에만」
   //   = 막대 칸은 항상 7칸 고정. 데이터가 없던 날(신규 프로그램의 이전 6일)은 **빈칸**(배경 없음 = 없던 것처럼)으로 자리만 잡고,
   //     실제 값은 우측부터 채운다 → 첫날 프로그램은 맨 우측 한 칸만 뜬다. 칸 수가 고정이라 모든 행의 막대·숫자 세로줄도 함께 맞는다.
-  var SLOT=7, blank='<span style="flex:0 0 7px" aria-hidden="true"></span>';
+  var SLOT=7, blank='<span style="flex:0 0 7px" aria-hidden="true"></span>';   // 막대 폭 = 7*7 + 6*3 = 67px 고정(_RY_TREND_BARW)
   var bars='';
   for(var _b=d.length;_b<SLOT;_b++)bars+=blank;
   bars+=d.map(function(v,i){var last=(i===d.length-1);var hp=Math.max(12,Math.round(v/mx*100));return '<span style="flex:0 0 7px;height:'+hp+'%;background:var('+(last?'--accent':'--accent-light')+');border-radius:2px"></span>';}).join('');
+  // [260731 운영자] 「차트는 아예 세로 기준선이 틀어져있는데 이 부분 맞춰주면 좋을듯」
+  //   원인 = 우측 숫자 블록이 min-width(가변)라 행마다 전체 폭이 달랐고, 셀이 가운데 정렬이라 그 차이만큼 막대가 좌우로 흔들렸다.
+  //   → 숫자 블록을 **고정폭**으로 못박아 모든 행의 내용 폭이 같아진다(막대 7칸은 이미 고정 = 7*7+6*3 = 67px).
   return '<span style="display:inline-flex;align-items:flex-end;justify-content:flex-end;gap:3px;height:28px;vertical-align:middle">'+bars+'</span>'
-    +'<span style="display:inline-block;vertical-align:middle;margin-left:10px;text-align:right;min-width:56px">'
+    +'<span style="display:inline-block;vertical-align:middle;margin-left:'+_RY_TREND_GAP+'px;text-align:right;width:'+_RY_TREND_NUMW+'px">'
     +'<span style="display:block;color:var(--accent);font-weight:800;font-size:13px;font-variant-numeric:tabular-nums">+'+sum7.toLocaleString()+(unit||'석')+'</span>'
     +'<span style="display:block;color:var(--dim);font-size:11px;font-variant-numeric:tabular-nums;margin-top:2px">어제 '+(yest>=0?'+':'')+yest.toLocaleString()+'</span></span>';
 }
@@ -6251,12 +6261,21 @@ var _RYNM='font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellip
 // 괄호 = 그 %를 만든 분자/분모 그대로(공연 = 누적 판매석/총오픈석 · 전시 = 누계유료/목표관객 — _srailCardEx 주석의 달성률 정의).
 // 다회차 분모 보정(총오픈석이 1회차분이면 ×회차)이 이미 totalOpen에 반영돼 있어, 괄호 분모가 곧 「다회차인지」의 증거가 된다.
 // [260729 운영자] 분모(오픈석·목표관객) 미기입 = 괄호 없이 % 만 — 구 전시 표에만 있던 규칙을 공용 셀로 올렸다(값 창작 금지 · 있는 %를 버리지도 않는다).
+// [260731 운영자] 「17%랑 5% 항상 일의 자리수는 세로선분으로 수직으로 일치 · % 뒤 (000/0000)도 같은 세로선」
+//   + 「155 명 이런것도 위에 판매율 개별 값에 세로선 맞추도록」
+//   → 3열(판매율 / 전시 누적 관객수)은 **공용 숫자 슬롯 1종**을 쓴다:
+//     [ 우측정렬 고정폭 숫자 ][ 단위 %·명 ][ 부가 (분자/분모) ]
+//     숫자를 고정폭 박스에 우측정렬 → 자릿수가 달라도 일의 자리가 같은 세로선. 단위·괄호도 자동으로 같은 x에서 시작.
+//     폭은 최대값 기준(판매율 3자리 '100' · 전시 누적 6자 '12,345') — 실측으로 맞춘 값.
+var _RY_NUMW='3.7em';   // 6자리 전시 누계('123,456')까지 슬롯 안에 들어가는 실측값 — 넘치면 그 행만 기준선이 어긋난다
+function _ryNumSlot(txt,colVar){   // 숫자 = 고정폭 우측정렬(tabular-nums로 자릿폭 균일)
+  return '<b style="display:inline-block;min-width:'+_RY_NUMW+';text-align:right;color:var('+colVar+');font-weight:800;font-variant-numeric:tabular-nums">'+txt+'</b>';
+}
 function _ryRateCell(cur,tot,pct,col){
   if(pct===null||pct===undefined||isNaN(pct))return '<span style="color:var(--muted);font-size:12px">—</span>';
-  if(cur===null||cur===undefined||tot===null||tot===undefined||!(tot>0))
-    return '<b style="color:var('+col+');font-weight:800;font-variant-numeric:tabular-nums">'+Math.round(pct)+'%</b>';
-  return '<b style="color:var('+col+');font-weight:800;font-variant-numeric:tabular-nums">'+Math.round(pct)+'%</b>'
-    +' <span style="color:var(--dim);font-size:11.5px;font-variant-numeric:tabular-nums">('+Math.round(cur).toLocaleString()+'/'+Math.round(tot).toLocaleString()+')</span>';
+  var head=_ryNumSlot(Math.round(pct),col)+'<span style="color:var('+col+');font-weight:800">%</span>';
+  if(cur===null||cur===undefined||tot===null||tot===undefined||!(tot>0))return head;
+  return head+' <span style="color:var(--dim);font-size:11.5px;font-variant-numeric:tabular-nums">('+Math.round(cur).toLocaleString()+'/'+Math.round(tot).toLocaleString()+')</span>';
 }
 // [260725 운영자] 제목 아래 서브라인 = 「N일 N회 | 장소」. 일 = 공연 일수(같은 날 2회차 = 1일) · 회 = 회차 수 = 다회차 판별 축.
 // 회차가 미입력이라 기간 일수로 추정한 건(_rcSrc≠'data')엔 「추정」을 붙여 실측과 구분(드릴 헤더 '회차 N 추정(기간·미입력)' 문법 계승).
@@ -6282,20 +6301,26 @@ function _rySubLine(run,venue){
   return t?'<div class="ry-venue">'+escapeHtml(t)+'</div>':'';
 }
 // [260729 운영자] 누적 관객수 셀(전시 3열) — 「달성률 아니라 누적 관객수, 숫자 누계만」. 표기 = 판매율과 같은 문법(강조색 --accent 볼드 + 회색 단위) · 좌측 정렬.
+// [260731 운영자] 「전시 같은경우에는 전시 강조색을 써서 수치를 써줘」 — 색 = 전시 그룹 머리글과 같은 --peach-text(팔레트 계승, 신규 색 0).
+//   숫자는 판매율과 **같은 공용 슬롯**(_ryNumSlot) → 공연 표의 % 자릿수와 전시 표의 관객수 자릿수가 같은 세로선에서 끝난다.
 function _ryAccCell(n){
   if(n===null||n===undefined||isNaN(n))return '<span style="color:var(--muted);font-size:12px">—</span>';
-  return '<b style="color:var(--accent);font-weight:800;font-variant-numeric:tabular-nums">'+Math.round(n).toLocaleString()+'</b>'
-    +'<span style="color:var(--dim);font-size:11.5px">명</span>';
+  return _ryNumSlot(Math.round(n).toLocaleString(),'--peach-text')
+    +'<span style="color:var(--peach-text);font-weight:800">명</span>';
 }
 // [260729 운영자] 머리글 열 크기 조절 — 기본 폭(합 100) · 조절값은 기기 단위 기억(localStorage). 계정 축은 【바인딩】상 미배선이라 기기 저장이 상한.
 // [260731 운영자] 「사업 성격」 열 폐지 → 그 자리를 「장르」가 차지(6칸 → 5칸). 성격 폭 13은 장르(11)에 합산 = 24(총합 100 보존).
 //   구 6칸 저장값(localStorage ryColW)은 길이 검사에서 자동 탈락 → 기본 폭으로 리셋(마이그레이션 코드 불필요).
 // [260731 운영자 개정] "최근 7일 추이 훨씬 우측으로 와도됨" — 여백(padding)으론 셀 안에서 최대 20px대라 「훨씬」이 안 된다.
-//   → **열 폭 재배분**으로 추이 칸 자체를 오른쪽으로 민다: 판매율 18 → 26 · 장르 24 → 16(총합 100 보존).
-//   결과 = 추이 칸 시작이 52% → 60%, 장르 칸 시작이 76% → 84%. 장르는 짧은 낱말뿐이라 16%로 줄여도 안 잘린다.
-var _RY_COLS_DEF=[10,24,26,24,16];
-// 저장 키에 세대 표시(ryColW2) — 구 키(ryColW)에 남은 드래그 값이 이 새 기본 폭을 덮어써 "안 바뀌네"가 되는 걸 막는다. 이후 드래그는 새 키에 정상 기억.
-var _RY_COLS_KEY='ryColW2';
+//   → **열 폭 재배분**으로 추이 칸 자체를 민다: 당시 판매율 18 → 26 · 장르 24 → 16(총합 100 보존).
+// [260731 운영자 3차] "최근 7일 추이 이거 좌측으로 좀 더 옮겨줘. 인덱싱하고 수치 둘다"
+//   → 다시 왼쪽으로: 프로그램 24 → 21 · 판매율 26 → 25 · 장르 16 → 20(추이 폭 24는 유지 = 머리글·막대가 같은 양만큼 함께 이동).
+//   결과 = 추이 칸 시작 60% → 56%(≈25px 좌). 판매율 25%는 실측 최악값 「100% (2,345/2,345)」 = 내용 128.1 + 좌여백 26 = 154.1px(24.2%)보다 여유.
+//   프로그램 21%(≈134px)는 이름이 말줄임(_RYNM)이라 잘림 사고 없음.
+//   추이 25%(장르 19%) = 머리글 보정(HPR 76) 후 남는 내용폭 73px이 라벨 「최근 7일 추이」 70.3px보다 커야 글자가 실제로 막대 중심에 온다(24%면 66.6px라 3.7px 넘쳐 우측으로 밀림).
+var _RY_COLS_DEF=[10,21,25,25,19];
+// 저장 키에 세대 표시 — 이전 키에 남은 드래그 값이 새 기본 폭을 덮어써 "안 바뀌네"가 되는 걸 막는다. 이후 드래그는 새 키에 정상 기억.
+var _RY_COLS_KEY='ryColW3';
 function _ryColW(){
   try{ var v=JSON.parse(localStorage.getItem(_RY_COLS_KEY)||'null');
     if(v&&v.length===_RY_COLS_DEF.length&&v.every(function(n){return typeof n==='number'&&isFinite(n)&&n>=4;}))return v;
@@ -6357,9 +6382,15 @@ function _railYrmPerfTable(perfs,rateLab){
   //   머리글·본문에 같은 값을 먹여 머리글↔값 세로축이 안 어긋나게 한다. 3열은 판매율·누적 관객수 공용 셀이라 둘 다 같이 벌어진다.
   var HP=[0,0,18,0,18];
   var pl=function(i){ return HP[i]?('padding-left:'+(8+HP[i])+'px;'):''; };
+  // [260731 운영자] 머리글 「최근 7일 추이」의 중심을 막대 중심에 맞춘다.
+  //   식: 머리글 중심 = L+PLh+(W-PLh-PRh)/2 · 막대 중심 = L+PLb+(W-PLb-8-133)/2+33.5
+  //       (머리글 padding-left 10 · 본문 8 · 본문 padding-right 8 · 내용 133 = 막대 67 + 간격 10 + 숫자 56 · 막대 절반 33.5)
+  //       두 식을 같게 풀면 PRh = 76 — 열 폭 W와 무관하므로 드래그로 폭을 바꿔도 계속 맞는다(실측 확인).
+  //   .ry-rz(열 너비 조절 손잡이)는 padding box 기준 right:-4px라 이 여백에 영향받지 않는다(경계에 그대로).
+  var HPR=[0,0,0,(_RY_TREND_NUMW+_RY_TREND_GAP+10),0];
   var h='<table class="ana-tbl mv-tbl" style="font-size:13px;width:100%;table-layout:fixed">'+_ryColGroup(CW)+'<thead><tr>';
   HL.forEach(function(lab,i){
-    h+='<td style="text-align:'+HA[i]+';'+(HP[i]?('padding-left:'+(10+HP[i])+'px;'):'')+'">'+lab+(i<HL.length-1?('<i class="ry-rz" role="separator" aria-label="'+lab+' 열 너비 조절" onpointerdown="_ryRzDown(event,'+i+')"></i>'):'')+'</td>';
+    h+='<td style="text-align:'+HA[i]+';'+(HP[i]?('padding-left:'+(10+HP[i])+'px;'):'')+(HPR[i]?('padding-right:'+HPR[i]+'px;'):'')+'">'+lab+(i<HL.length-1?('<i class="ry-rz" role="separator" aria-label="'+lab+' 열 너비 조절" onpointerdown="_ryRzDown(event,'+i+')"></i>'):'')+'</td>';
   });
   h+='</tr></thead><tbody>';   // [260725 운영자] 「판매율」열 신설(추이 좌측) — 기본 폭 10/24/18/24/13/11 · [260729 운영자] 폭 = colgroup + 경계 드래그 조절
   perfs.forEach(function(p){
