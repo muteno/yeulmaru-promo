@@ -19303,21 +19303,40 @@ function _gcParse(title,s,e){
 // 정본(PERFS)에 이미 있는 프로그램은 구글 쪽을 숨긴다 — 「기획 이미 등록되어 있는 게 우선」(운영자 260731).
 // PERFS는 캘린더보다 늦게 도착할 수 있어 로드 시점이 아니라 렌더 시점에 판정한다(참조·건수 그대로면 캐시 재사용).
 var _gcDupCache=null,_gcDupPerfs=null,_gcDupN=-1;
-function _gcNorm(s){ return String(s||'').replace(/[\s·\-_~,.'"()\[\]:]/g,'').toLowerCase(); }
+// 꺾쇠·홑화살(〈…〉·<…>)도 지운다 — 정본 「뮤지컬 <그날들>」과 캘린더 「뮤지컬그날들」이 괄호 하나 때문에 남남이 되던 누락 차단.
+function _gcNorm(s){ return String(s||'').replace(/[\s·\-_~,.'"()\[\]:<>〈〉《》「」『』【】]/g,'').toLowerCase(); }
 function _gcDupSet(){
   var pf=(typeof PERFS!=='undefined'&&PERFS)?PERFS:null;
   var gr=(typeof GCAL_RENTALS!=='undefined'&&GCAL_RENTALS)?GCAL_RENTALS:[];
   var gx=(typeof GCAL_EXHIBS!=='undefined'&&GCAL_EXHIBS)?GCAL_EXHIBS:[];
   var n=gr.length+gx.length;
   if(_gcDupCache&&_gcDupPerfs===pf&&_gcDupN===n)return _gcDupCache;
-  var names=[];
-  try{ (pf||[]).forEach(function(p){ var k=_gcNorm(p&&(p.f||p.n)); if(k.length>=3)names.push(k); }); }catch(_e){}
+  var names=[],spans=[];
+  try{ (pf||[]).forEach(function(p){
+    var k=_gcNorm(p&&(p.f||p.n)); if(k.length>=3)names.push(k);
+    // 이름이 아예 다른 표기(캘린더 「섬박람회콘서트」 = 정본 「여수세계섬박람회 기념 음악회」)까지 잡는 2차 기준 = 같은 공간·같은 기간.
+    if(p&&p.t==='c'&&p.s&&p.e){ var pl=_gcNorm(p.l); if(pl)spans.push({s:p.s,e:p.e,pl:pl}); }
+  }); }catch(_e){}
   var set={};
+  // 같은 공간에 같은 날짜로 두 자체기획이 설 수는 없다 → 겹치면 정본이 이긴다. 순수 대관(t='r')은 정본에 없으므로 무접촉.
+  function _dupSpan(r){
+    if(!r||r.t!=='c')return false;
+    var rs=r._s||r.s,re=r._e||r.e,rl=_gcNorm(r.l);
+    if(!rs||!re||!rl)return false;
+    for(var i=0;i<spans.length;i++){
+      var sp=spans[i];
+      if(sp.pl!==rl&&sp.pl.indexOf(rl)<0&&rl.indexOf(sp.pl)<0)continue;   // 공간이 다르면 남의 일정
+      if(rs<=sp.e&&re>=sp.s)return true;                                   // 기간이 하루라도 겹치면 같은 일정(셋업·철수일 포함해 통째로 숨김)
+    }
+    return false;
+  }
   // 3자 미만 이름은 포함 판정이 위험해 제외(오제거 방지) — 정본에 없는 대관은 그대로 보여야 한다.
   gr.concat(gx).forEach(function(r){
     var k=_gcNorm(r.n);
-    if(k.length<3)return;
-    for(var i=0;i<names.length;i++){ if(names[i]===k||names[i].indexOf(k)>-1||k.indexOf(names[i])>-1){set[r.id]=1;return;} }
+    if(k.length>=3){
+      for(var i=0;i<names.length;i++){ if(names[i]===k||names[i].indexOf(k)>-1||k.indexOf(names[i])>-1){set[r.id]=1;return;} }
+    }
+    if(_dupSpan(r))set[r.id]=1;
   });
   _gcDupCache=set;_gcDupPerfs=pf;_gcDupN=n;
   return set;
