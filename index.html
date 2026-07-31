@@ -1191,8 +1191,10 @@ table.promo-board-table th:last-child .col-resize-handle{display:none}
 .yc-wrap a{text-decoration:none;color:inherit}
 /* 전시 종료점 상세 링크 (백로그: 종료 항목에도 링크) */
 .yc-ex-end-i .yc-ev-link{color:#D88455;border-bottom-color:rgba(216,132,85,0.3)}
-/* 닫기(X) 자리 확보 — X가 12월 칸 아래 깔려 잘 안 보이고 클릭이 12월로 가던 버그 */
-.yc-mnav{padding-right:100px !important}
+/* 우상단 버튼 자리 확보 — 버튼이 12월 칸 위에 깔려 잘 안 보이고 클릭이 12월로 가던 버그.
+   [260731 운영자] 「내려받기(↓)」 합류로 버튼 3개 → 예약폭 = 실측 버튼 밴드 그대로 22+32+28+32+28+32=174px(헤드리스 실측: 12월 칸 우변과 2.0px 이격, 데스크탑·390px 모두 무겹침).
+   모달 스코프로 한정 = 버튼이 없는 ?annual 단독 페이지·저장본 HTML은 월 네비가 제자리(가운데) — 구 전역 100px의 빈 우측 여백도 동반 해소. */
+#annual-calendar .yc-mnav{padding-right:174px !important}
 .yc-wrap a{text-decoration:none;color:inherit}
 
   
@@ -4693,6 +4695,63 @@ function _ycInit(){
   navLinks.forEach(function(a){a.classList.toggle('yc-active',parseInt(a.dataset.m)===now);});
 }
 function _ycScrollTop(){const sc=window._ycScrollEl||document.getElementById('yc-scroll');if(sc)sc.scrollTo({top:0,behavior:'smooth'});}
+// === [260731 운영자] 연간 일정 「내려받기」 — 공유(↗) 좌측 버튼. 지금 화면 그대로 1파일 HTML 저장 ===
+//   CSS·마크업을 문서에서 실시간 수집 = 사본 창작 0(기틀을 고치면 다음 저장본에 자동 반영 · 신규 hex 0).
+//   파일명 끝 = 오늘 날짜 _YYMMDD (운영자 지시 예: _260811).
+function _ycCssDump(){
+  const walk=function(rules){
+    const buf=[];
+    for(let i=0;i<rules.length;i++){
+      const r=rules[i];
+      try{
+        if(r.type===1){const s=r.selectorText||'';if(s.indexOf('.yc-')>-1||s.indexOf(':root')>-1)buf.push(r.cssText);}
+        else if(r.type===4){const inner=walk(r.cssRules);if(inner)buf.push('@media '+r.conditionText+'{'+inner+'}');}
+      }catch(_e){}
+    }
+    return buf.join('\n');
+  };
+  const out=[];
+  for(let i=0;i<document.styleSheets.length;i++){
+    try{const rs=document.styleSheets[i].cssRules;if(rs){const t=walk(rs);if(t)out.push(t);}}catch(_e){}
+  }
+  return out.join('\n');
+}
+function _ycDownload(){
+  const wrap=document.getElementById('yc-wrap');
+  if(!wrap){showToast('연간 일정 내용을 찾지 못했어요','error');return;}
+  const d=new Date(),p=function(n){return ('0'+n).slice(-2);};
+  const stamp=String(d.getFullYear()).slice(2)+p(d.getMonth()+1)+p(d.getDate());
+  const title='2026 GS칼텍스 예울마루 연간 일정';
+  // 저장본 전용 보정 2줄 = 문서 여백 해제 + 래퍼가 화면 전체를 채움(?annual 단독 모드의 holder inset:0과 동형). 색·수치 창작 0.
+  const css=_ycCssDump()+'\nbody{margin:0}\n.yc-wrap{min-height:100vh}';
+  // 동작 = _ycInit 축약 이식(등장 페이드·월 네비 점프·현재 월 표시·TOP). 스크롤 주체만 모달 컨테이너 → window.
+  const js="var M={1:'yc-m1',2:'yc-m2',3:'yc-m2',4:'yc-m4',5:'yc-m5',6:'yc-m6',7:'yc-m7',8:'yc-m7',9:'yc-m9',10:'yc-m10',11:'yc-m11',12:'yc-m12'};"
+    +"function _ycScrollTop(){window.scrollTo({top:0,behavior:'smooth'});}"
+    +"var fo=new IntersectionObserver(function(es){es.forEach(function(x){if(x.isIntersecting){x.target.classList.add('yc-visible');fo.unobserve(x.target);}});},{threshold:.1,rootMargin:'0px 0px -20px 0px'});"
+    +"document.querySelectorAll('.yc-ev').forEach(function(el){fo.observe(el);});"
+    +"var nav=document.querySelectorAll('#yc-mnav a');"
+    +"nav.forEach(function(a){a.addEventListener('click',function(){var t=document.getElementById(M[a.dataset.m]);if(t)t.scrollIntoView({behavior:'smooth'});});});"
+    +"var ranges={1:[1],2:[2,3],4:[4],5:[5],6:[6],7:[7,8],9:[9],10:[10],11:[11],12:[12]},cur=null;"
+    +"var mo=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){var m=parseInt(e.target.dataset.month);if(m!==cur){cur=m;var act=ranges[m]||[m];nav.forEach(function(a){a.classList.toggle('yc-active',act.indexOf(parseInt(a.dataset.m))>-1);});}}});},{threshold:0,rootMargin:'-10% 0px -70% 0px'});"
+    +"document.querySelectorAll('.yc-mo[data-month]').forEach(function(el){mo.observe(el);});"
+    +"var now=new Date().getMonth()+1;nav.forEach(function(a){a.classList.toggle('yc-active',parseInt(a.dataset.m)===now);});"
+    +"var tb=document.getElementById('yc-topBtn');"
+    +"if(tb)window.addEventListener('scroll',function(){tb.classList.toggle('yc-show',(window.scrollY||document.documentElement.scrollTop)>400);});";
+  const html='<!DOCTYPE html>\n<html lang="ko">\n<head>\n<meta charset="utf-8">\n'
+    +'<meta name="viewport" content="width=device-width,initial-scale=1">\n<title>'+title+'</title>\n'
+    +'<link rel="preconnect" href="https://fonts.googleapis.com">\n'
+    +'<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=DM+Serif+Display&display=swap" rel="stylesheet">\n'
+    +'<style>\n'+css+'\n</style>\n</head>\n<body>\n'+wrap.outerHTML+'\n<script>'+js+'<\/script>\n</body>\n</html>';
+  const name='2026_GS칼텍스_예울마루_연간일정_'+stamp+'.html';
+  try{
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(new Blob([html],{type:'text/html;charset=utf-8'}));
+    a.download=name;
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
+    setTimeout(function(){URL.revokeObjectURL(a.href);},1000);
+    showToast('연간 일정 저장 완료 — '+name);
+  }catch(e){showToast('저장 실패: '+e.message,'error');}
+}
 // === 연간일정 단독 페이지 모드 (?annual) — 로그인 없이 연간일정만 풀스크린. 외부 공유 링크용 ===
 // 사용: https://promo.yeulmaru.org/?annual  (데이터는 이미 공개 마크업이라 보안 변화 없음)
 function _ycStandalone(){
@@ -4721,7 +4780,9 @@ function openAnnualCalendar(){
     el.id='annual-calendar';
     document.body.appendChild(el);
   }
-  el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeAnnualCalendar)"><div class="modal annual-modal" style="width:96vw;max-width:1400px;height:92vh;max-height:92vh;padding:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:#FDFCFB"><button class="modal-x" onclick="window.open(location.pathname+\'?annual\',\'_blank\',\'noopener\')" title="새 창에서 열기" aria-label="새 창에서 열기" style="position:absolute;top:9px;right:82px;float:none;margin:0;z-index:30;background:rgba(255,255,255,0.95);color:var(--accent);box-shadow:0 2px 10px rgba(74,77,231,0.25)">↗</button><button class="modal-x" onclick="closeAnnualCalendar()" title="닫기" aria-label="닫기" style="position:absolute;top:9px;right:22px;float:none;margin:0;z-index:30;background:var(--accent);color:#fff;box-shadow:0 4px 14px rgba(74,77,231,0.4)">✕</button><div id="yc-scroll" style="flex:1;overflow-y:auto;overscroll-behavior:contain"></div></div></div>';
+  // [260731] 우상단 버튼 3종 = 같은 .modal-x 부품·같은 60px 피치(right 22/82/142 — 버튼 간 간격 28px 균등 실측).
+  //   ↓ 글리프만 잉크중심이 기하중심보다 2.31px 아래 → 형제(↗ −0.75 · ✕ −0.40)와 3.06px 어긋나 보여 글리프만 translateY(-3px) 광학보정(원·배경은 무이동).
+  el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeAnnualCalendar)"><div class="modal annual-modal" style="width:96vw;max-width:1400px;height:92vh;max-height:92vh;padding:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:#FDFCFB"><button class="modal-x" onclick="_ycDownload()" title="HTML 파일로 저장" aria-label="HTML 파일로 저장" style="position:absolute;top:9px;right:142px;float:none;margin:0;z-index:30;background:rgba(255,255,255,0.95);color:var(--accent);box-shadow:0 2px 10px rgba(74,77,231,0.25)"><span style="display:block;transform:translateY(-3px)">↓</span></button><button class="modal-x" onclick="window.open(location.pathname+\'?annual\',\'_blank\',\'noopener\')" title="새 창에서 열기" aria-label="새 창에서 열기" style="position:absolute;top:9px;right:82px;float:none;margin:0;z-index:30;background:rgba(255,255,255,0.95);color:var(--accent);box-shadow:0 2px 10px rgba(74,77,231,0.25)">↗</button><button class="modal-x" onclick="closeAnnualCalendar()" title="닫기" aria-label="닫기" style="position:absolute;top:9px;right:22px;float:none;margin:0;z-index:30;background:var(--accent);color:#fff;box-shadow:0 4px 14px rgba(74,77,231,0.4)">✕</button><div id="yc-scroll" style="flex:1;overflow-y:auto;overscroll-behavior:contain"></div></div></div>';
   const wrap=document.getElementById('yc-wrap');
   const sc=document.getElementById('yc-scroll');
   if(wrap&&sc)sc.appendChild(wrap);
@@ -26280,6 +26341,19 @@ document.getElementById('confirm-modal').addEventListener('click',e=>{if(e.targe
   <div class="yc-mt-t">대·소극장<br>유지보수</div>
 </div>
 
+<!-- 🎨 전시 3: 기획전시 (7층 전시실) — 어린이미술전(같은 7층) 자리 계승 = L -->
+<div class="yc-ex yc-L">
+  <div class="yc-ex-bar"></div>
+  <div class="yc-ex-v"></div>
+  <div class="yc-ex-i">
+    <div class="yc-ex-date">7.21 (화) — 11.1 (일)</div>
+    <div class="yc-ex-title">기획전시</div>
+    <div class="yc-ex-sub">숨: 쉬는 SUM</div>
+    <div class="yc-ex-tags"><span class="yc-ex-tag">🎨 전시</span><span class="yc-ex-venue">7층 전시실</span></div>
+    <a href="https://www.yeulmaru.org/exhibition/v/?u=236" target="_blank" class="yc-ev-link">전시 상세 →</a>
+  </div>
+</div>
+
 <!-- ═══ 9월 ═══ -->
 <div class="yc-mo" id="yc-m9" data-month="9"><div class="yc-mo-n">9</div><div class="yc-mo-l">SEPTEMBER</div></div>
 
@@ -26377,6 +26451,19 @@ document.getElementById('confirm-modal').addEventListener('click',e=>{if(e.targe
 
 <!-- ═══ 11월 ═══ -->
 <div class="yc-mo" id="yc-m11" data-month="11"><div class="yc-mo-n">11</div><div class="yc-mo-l">NOVEMBER</div></div>
+
+<!-- 🎨 전시 종료점 3: 기획전시 (11.1) — 띠와 같은 쪽 = L -->
+<div class="yc-ex-end yc-L">
+  <div class="yc-ex-end-dot"></div>
+  <div class="yc-ex-end-v"></div>
+  <div class="yc-ex-end-i">
+    <div class="yc-ex-end-date">11.1 (일)</div>
+    <div class="yc-ex-end-label">전시 종료</div>
+    <div class="yc-ex-end-title">기획전시</div>
+    <div class="yc-ex-end-sub">〈숨: 쉬는 SUM〉</div>
+    <a href="https://www.yeulmaru.org/exhibition/v/?u=236" target="_blank" class="yc-ev-link">전시 상세 →</a>
+  </div>
+</div>
 
 <!-- 17 그때도 오늘 -->
 <div class="yc-ev yc-L">
