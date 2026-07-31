@@ -20582,9 +20582,9 @@ function _bizMenuBuild(menu){
     +'<button type="button" onclick="_ddCloseAll();openYearBoard()" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'">연간 실적</button>'
     +'<button type="button" onclick="_ddCloseAll();openBusinessBoard()" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'">사업 결과 비교</button>'   // [260731 운영자 3차] 구 판매 현황 ▸ '실적 분석'(openBusinessBoard) — 개명 + 대시보드로 이동. 실적 성격이라 연간 실적 바로 다음
     +'<button type="button" onclick="_ddCloseAll();openAnnualCalendar()" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'">연간 일정</button>'   // [260731 운영자] 연간 일정 = 구 '사업 실적'서 대시보드로 이동
-    // [260731 운영자 2차] 회원 관리 대메뉴 폐지 → 「회원 분포」(openMemberOverview — 거주지 TOP·연령대·전국 분포 맵)를 대시보드 세부 3번으로.
+    // [260731 운영자 2차] 회원 관리 대메뉴 폐지 → 「회원 분포」(openMemberOverview — 거주지 TOP·연령대·전국 분포 맵)를 대시보드 세부 마지막 항목으로.
     //   개인정보 집계라 관리자에게만 노출(구 대메뉴 admin 게이트 계승 · 함수 자체 게이트도 유지). 항목 문법 = 위 두 항목과 동일(신규 값 0).
-    +(userRole==='admin'?'<button type="button" onclick="_ddCloseAll();openMemberOverview()" title="거주지·연령·전국 분포 요약 (회원 조회는 여기서 진입)" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'">회원 분포</button>':'');
+    +(userRole==='admin'?'<button type="button" onclick="_ddCloseAll();openMemberOverview()" title="거주지·연령·전국 분포 요약 (회원 조회는 여기서 진입)" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\';_memWarm()" onmouseleave="this.style.background=\'none\'">회원 분포</button>':'');   // onmouseenter의 _memWarm = 선로딩(클릭 전에 적재 시작 → 열면 바로 보임)
 }
 function _contentMenuBuild(menu){
   // [260711 운영자] 영상 편집기 3분류 신설 — 1 영상 편집 · 2 자막 삽입 · 3 영상 프롬프팅 (한 도구, 탭 진입점 3개)
@@ -22376,8 +22376,14 @@ function _salesMenuBuild(menu){
 // 데이터 = 회원DB 주소정제 v2(주소1 시도·주소2 시군구·주소3 동/읍면·주소4 상세·우편번호·휴대폰정규화).
 // 로드 = /api/ops?sheet=회원 1회 → 메모리 캐시(_memState) · 새로고침 버튼만 재요청. 쓰기 없음(원천 = 홈페이지 회원 DB).
 // PII 위생(분신술 보안 MED-4): 로그아웃(_fullLogout)·유휴잠금(lockScreen)이 _memPurge()로 캐시+모달 소거.
-var _memState=null,_memLoading=false,_memEscH=null,_memQT=null;
-function _memPurge(){_memState=null;_memLoading=false;var bg=document.getElementById('member-lookup');if(bg){if(_memEscH){document.removeEventListener('keydown',_memEscH);_memEscH=null;}bg.remove();}}
+var _memState=null,_memLoading=false,_memEscH=null,_memQT=null,_memEpoch=0;
+// [260731 운영자 "바로 안 열려요"] PII 재적재 가드를 「#member-lookup 존재」 → 「purge 에포크」로 교체.
+//   구 가드는 회원 조회 모달이 DOM에 없으면(= 회원 분포로 곧장 들어온 경우) 응답을 통째로 버려서 개요가 항상 "못 불러왔어요"였다.
+//   에포크 = _memPurge(로그아웃·유휴잠금)가 증가 → await 중 purge된 응답만 정확히 폐기(보안 의도 동일, 진입 경로 무관).
+function _memPurge(){_memState=null;_memLoading=false;_memEpoch++;var bg=document.getElementById('member-lookup');if(bg){if(_memEscH){document.removeEventListener('keydown',_memEscH);_memEscH=null;}bg.remove();}var ov=document.getElementById('member-ov');if(ov)ov.remove();}
+// 선로딩(운영자 260731 "항상 바로 나오게") — 대시보드 ▸ 회원 분포 항목에 마우스만 올려도 백그라운드 적재 시작.
+//   클릭 시점엔 이미 캐시라 즉시 그려진다. 중복 발사는 _memLoading·_memState 가드로 차단(추가 API 호출 0).
+function _memWarm(){ if(userRole!=='admin'||_memState||_memLoading)return; try{_memLoad(false);}catch(e){} }
 function closeMemberLookup(){var bg=document.getElementById('member-lookup');if(bg)bg.classList.remove('show');if(_memEscH){document.removeEventListener('keydown',_memEscH);_memEscH=null;}}
 async function openMemberLookup(){
   if(userRole!=='admin'){showToast('회원 조회는 관리자 전용이에요','error');return;}
@@ -22410,13 +22416,14 @@ async function openMemberLookup(){
 async function _memLoad(force){
   if(_memLoading)return;   // 이중 fetch 가드(분신술 UX MED-2 — 첫 로드 중 재클릭·새로고침 연타가 30k Graph 호출을 중복 발사하는 것 차단)
   _memLoading=true;
+  var ep=_memEpoch;   // 이 요청의 세대 — 응답 도착 시 purge가 있었으면(ep 불일치) 결과 폐기
   var sub=document.getElementById('mem-sub'),body=document.getElementById('mem-body'),rf=document.getElementById('mem-refresh');
   if(sub)sub.textContent='불러오는 중… (첫 로드는 수 초 걸릴 수 있어요)';
   if(body)body.innerHTML='';
   if(rf){rf.disabled=true;rf.style.opacity='.5';}
   try{
     var d=await api('GET','/api/ops?sheet='+encodeURIComponent('회원')+(force?'&fresh=1':''));
-    if(!document.getElementById('member-lookup'))return;   // await 중 _memPurge(로그아웃·유휴잠금) = PII 재적재 금지(보안 재심사 잔여 LOW)
+    if(ep!==_memEpoch)return;   // await 중 _memPurge(로그아웃·유휴잠금) = PII 재적재 금지(보안 재심사 잔여 LOW)
     if(!d||!d.rows||!d.rows.length){
       if(sub)sub.innerHTML='<span style="color:var(--danger)">시트가 비어 있거나 없어요 — 통합문서에 시트 이름을 정확히 「운영_회원」으로(복사 시 뒤에 「 (2)」 같은 접미사 없이) 두었는지 확인해 주세요'+(d&&d.note?' · '+_memEsc(d.note):'')+'</span>';
       _memState={rows:[]};return;
@@ -22530,11 +22537,16 @@ function _memOvRender(){
   });
   var top5=Object.keys(sgg).map(function(k){return [k,sgg[k]];}).sort(function(a,b){return b[1]-a[1];}).slice(0,6);
   var jgj=sido['전남광주통합특별시']||0;
+  // [260731 운영자] 관내 = 여수·순천·광양 3시(홍보 거점 _PROMO_GEO와 동일 기준) — 검색·필터 없이 열자마자 보이게 KPI 고정.
+  //   집계 = 시군구(주소2) 기준 합산(시도 표기 흔들려도 잡히게 · 동명 시군구 없음).
+  var GN3=['여수시','순천시','광양시'];
+  var gn3=GN3.map(function(nm){var t=0;Object.keys(sgg).forEach(function(kk){if(kk.split('|')[1]===nm)t+=sgg[kk];});return t;});
+  var gn=gn3[0]+gn3[1]+gn3[2];
   var AGE_ORDER=['10세 미만','10대','20대','30대','40대','50대','60대','70대','80대','미상'];
   var ages=AGE_ORDER.filter(function(a){return age[a];}).map(function(a){return [a,age[a]];});
   var topAge=ages.filter(function(x){return x[0]!=='미상';}).sort(function(a,b){return b[1]-a[1];})[0];
   var pct=function(c){return (c/n*100).toFixed(1);};
-  // KPI 4
+  // KPI 4 (구성 불변 — 관내 3시 요약은 아래 「거주지 TOP」 부제로, 메인 지표 자리는 안 건드림)
   var kpi='<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px">'
     +[['총 회원',n.toLocaleString()+'명',''],
       ['전남광주통합특별시',pct(jgj)+'%',jgj.toLocaleString()+'명'],
@@ -22543,16 +22555,21 @@ function _memOvRender(){
     .map(function(s){return '<div style="flex:1 1 145px;background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--r-btn);padding:16px 19px;text-align:left"><div style="font-size:12px;color:var(--dim);font-weight:600">'+s[0]+'</div><div style="font-size:22px;font-weight:800;color:var(--accent);font-variant-numeric:tabular-nums">'+_memEsc(s[1])+'</div>'+(s[2]?'<div style="font-size:12px;color:var(--dim)">'+_memEsc(s[2])+'</div>':'')+'</div>';}).join('')
     +'</div>';
   // 바 헬퍼 (분석보드 결 계승 — 토큰 알파 변주)
-  var bar=function(label,cnt,max,sub){var w=max?Math.max(2,cnt/max*100):0;
+  //   [260731 운영자] 순위 강조: 1~2위 = 주 강조색 인디고(--accent .79) · 3위부터 = 2강조색 살몬(--peach-text .5).
+  //   기틀 §0②(살몬 = 유일 웜 서브코어) · §0③("주색과 겹치는 비교 시리즈는 c2부터") 계승 — 신규 색 0.
+  var bar=function(label,cnt,max,sub,hi){var w=max?Math.max(2,cnt/max*100):0;
     return '<div style="display:flex;align-items:center;gap:9px;margin:9px 0"><div style="flex:0 0 78px;font-size:12px;font-weight:600;color:var(--text);text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+_memEsc(label)+'</div>'
-      +'<div style="flex:1;height:18px;background:var(--past-bg);border-radius:3.5px;overflow:hidden"><div style="width:'+w+'%;height:100%;background:var(--accent);opacity:.79;border-radius:3.5px"></div></div>'
+      +'<div style="flex:1;height:18px;background:var(--past-bg);border-radius:3.5px;overflow:hidden"><div style="width:'+w+'%;height:100%;background:'+(hi?'var(--accent);opacity:.79':'var(--peach-text);opacity:.5')+';border-radius:3.5px"></div></div>'
       +'<div style="flex:0 0 86px;font-size:11px;color:var(--dim);text-align:left;font-variant-numeric:tabular-nums">'+cnt.toLocaleString()+'명'+(sub?' · '+sub:'')+'</div></div>';};
   var maxT=top5.length?top5[0][1]:0;
   var topHtml='<div style="font-size:14px;font-weight:800;margin-bottom:6px;text-align:left">거주지 TOP '+top5.length+' <span style="font-size:10.5px;color:var(--dim);font-weight:500">(시군구 기준 · 전국)</span></div>'
-    +top5.map(function(t){var p=t[0].split('|');return bar(p[1],t[1],maxT,pct(t[1])+'%');}).join('');
+    // [260731 운영자] 관내 3시 합계 한 줄 — 검색·필터 없이 열자마자 보이게 고정(KPI 자리는 안 뺏음 = 관내가 메인 지표는 아님)
+    +'<div style="font-size:11.5px;color:var(--dim);font-weight:600;margin:0 0 8px;line-height:1.5">관내(여수·순천·광양) <b style="color:var(--accent);font-variant-numeric:tabular-nums">'+pct(gn)+'%</b> · '+gn.toLocaleString()+'명 <span style="color:var(--muted)">|</span> 여수 '+gn3[0].toLocaleString()+' · 순천 '+gn3[1].toLocaleString()+' · 광양 '+gn3[2].toLocaleString()+'</div>'
+    +top5.map(function(t,i){var p=t[0].split('|');return bar(p[1],t[1],maxT,pct(t[1])+'%',i<2);}).join('');   // top5는 이미 내림차순 = 앞 2개가 1·2위
   var maxA=ages.length?Math.max.apply(null,ages.map(function(a){return a[1];})):0;
+  var ageTop2={};ages.filter(function(x){return x[0]!=='미상';}).slice().sort(function(a,b){return b[1]-a[1];}).slice(0,2).forEach(function(a){ageTop2[a[0]]=1;});   // '미상'은 의미 구간이 아니라 강조 대상에서 제외(최다 연령대 KPI 기준과 동일)
   var ageHtml='<div style="font-size:14px;font-weight:800;margin:18px 0 6px;text-align:left">연령대 분포 <span style="font-size:10.5px;color:var(--dim);font-weight:500">(생년월일 기준 · 만나이 근사)</span></div>'
-    +ages.map(function(a){return bar(a[0],a[1],maxA,pct(a[1])+'%');}).join('');
+    +ages.map(function(a){return bar(a[0],a[1],maxA,pct(a[1])+'%',!!ageTop2[a[0]]);}).join('');   // 연령대는 나이순 정렬이라 '많은 순 1·2위'를 따로 계산(ageTop2)
   body.style.textAlign='left';body.style.color='var(--text)';
   body.innerHTML='<div style="font-size:16px;font-weight:800;margin-bottom:2px">회원 분포</div>'
     +'<div style="font-size:12px;color:var(--dim);margin-bottom:14px">운영_회원 시트 · 주소 미상 '+unloc.toLocaleString()+'명 제외 집계 · 개인 식별 없음(집계 전용)</div>'
@@ -22580,8 +22597,13 @@ function _memOvMap(geo){
     if(dir==='n'){ly=xy[1]-r-15;}else if(dir==='s'){ly=xy[1]+r+8;}
     else if(dir==='e'){lx=xy[0]+r+5;ly=xy[1]-6;anchor='start';}
     else{lx=xy[0]-r-5;ly=xy[1]-6;anchor='end';}
-    return '<circle cx="'+xy[0].toFixed(1)+'" cy="'+xy[1].toFixed(1)+'" r="'+r.toFixed(1)+'" fill="var(--accent)" opacity="0.13"/>'
-      +'<circle cx="'+xy[0].toFixed(1)+'" cy="'+xy[1].toFixed(1)+'" r="'+r.toFixed(1)+'" fill="none" stroke="var(--accent)" opacity="0.58" stroke-width="0.9"/>'
+    // [260731 운영자] 지도 원 = 강조색 1색 통일(살몬 순위 강조 폐지) · 「비율만큼 진하게」 = 회원수 비율(c/max)에 비례한 알파 변주.
+    //   색은 var(--accent) 그대로 = 신규 색 0(§3.5② 같은 토큰 알파 변주).
+    //   「비율만큼 진하게」 + 「너무 옅어 안 보이면 안 되니 70% 하한」 = 알파를 최대치의 70~100% 구간에서만 램프.
+    //   면 .21→.30 · 선 .406→.58(최대 = 기존 .13/.58 축 계승). 하한 0.7을 낮추면 대비↑·가독성↓(운영자 확정 0.7).
+    var ra=0.7+0.3*(c/max),fo=(0.30*ra).toFixed(3),so=(0.58*ra).toFixed(3);
+    return '<circle cx="'+xy[0].toFixed(1)+'" cy="'+xy[1].toFixed(1)+'" r="'+r.toFixed(1)+'" fill="var(--accent)" opacity="'+fo+'"/>'
+      +'<circle cx="'+xy[0].toFixed(1)+'" cy="'+xy[1].toFixed(1)+'" r="'+r.toFixed(1)+'" fill="none" stroke="var(--accent)" opacity="'+so+'" stroke-width="0.9"/>'
       +(showLb?'<text x="'+lx.toFixed(1)+'" y="'+ly.toFixed(1)+'" text-anchor="'+anchor+'" font-size="12" font-weight="700" fill="var(--text)">'+_memEsc(label)+'</text>'
       +'<text x="'+lx.toFixed(1)+'" y="'+(ly+14).toFixed(1)+'" text-anchor="'+anchor+'" font-size="12" fill="var(--dim)">'+geo[k].toLocaleString()+'명</text>':'');
   }).join('');
