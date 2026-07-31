@@ -882,6 +882,7 @@ button{font-family:inherit;cursor:pointer}
 .panel-svc-val.svc-tbd{color:#b0b0b0;font-weight:400}
 .panel-close{width:32px;height:32px;border-radius:50%;border:1px solid rgba(0,0,0,0.06);background:var(--glass);font-size:14px;color:var(--dim);display:flex;align-items:center;justify-content:center;transition:all .2s}
 .panel-close:hover{background:var(--accent-light);color:var(--accent)}
+@media(min-width:769px){#app:not(.biz-mode) .panel-close{display:none}}   /* [260731 운영자] 「사이드바 항상 펼쳐지게」 — 상주 패널엔 닫기 ✕가 없다(구 하단 drawer의 .panel-close 숨김 규칙과 동일 계약). biz 모드 오버레이 패널은 ✕ 유지 · ≤768 하단시트는 화면 절반을 먹어 닫을 수 있어야 하므로 ✕ 유지 */
 .panel-body{flex:1;padding:16px 24px;overflow-y:auto}
 .panel-empty{text-align:center;padding:40px 0;color:var(--dim);font-size:14px}
 .panel-hol{display:flex;align-items:center;gap:8px;padding:14px 10px 0;margin-top:18px;border-top:1px solid var(--border)}
@@ -5517,6 +5518,9 @@ function _mvApply(noRail){
   app.classList.toggle('biz-mode',_mainView==='biz');
   try{_bizZoomApply();}catch(_e){}   // [260731] 모드 전환 즉시 줌 규격 동기(biz=1920 기준 고정 · cal=해제) — 이후 정렬식이 새 좌표계로 계산
   _mvSync();
+  // [260731] 모드별 날짜 패널 — 캘린더 = 상주(자동 펼침) · biz = 그 자리가 판매현황 레일이라 접는다(캘린더에서 열려 있던 패널이 따라오지 않게).
+  try{ if(_mainView==='biz'){ if(typeof panelOpen!=='undefined'&&panelOpen&&typeof closePanel==='function')closePanel(); }
+       else if(typeof _panelAutoOpen==='function')_panelAutoOpen(); }catch(_e){}
   try{if(typeof panelOpen!=='undefined'&&panelOpen)_panelRailReflow();}catch(_e){}   // [260731] 모드 전환 = 레일 노출이 바뀜 → 열린 날짜 패널의 right·캘린더 밀림값 재계산(캘린더=우측 사이드바 / biz=오버레이)
   try{_srailAlignTop();}catch(_e){}
   if(_mainView==='biz'){ try{_bizInlineRender();}catch(_e){console.warn('[bizm]',_e);} try{_railYrmRender();}catch(_e){} }
@@ -18716,7 +18720,7 @@ document.addEventListener('DOMContentLoaded',function(){
   let _resizeTimer=null;
   window.addEventListener('resize',function(){
     clearTimeout(_resizeTimer);
-    _resizeTimer=setTimeout(function(){autoOpenMobilePanel();},200);
+    _resizeTimer=setTimeout(function(){_panelAutoOpen();},200);
   });
   var ft=document.getElementById('f-time');
   if(!ft)return;
@@ -18934,7 +18938,7 @@ function getRecsForDate(d){
 
 function calDates(y,m){const first=new Date(y,m-1,1),dow=first.getDay(),offset=(dow-2+7)%7,start=new Date(y,m-1,1-offset),out=[];for(let w=0;w<6;w++){for(let d=0;d<6;d++){const dt=new Date(start);dt.setDate(dt.getDate()+w*7+d);out.push(dt);}}return out;}
 
-function render(){document.getElementById('nav-month').textContent=currentMonth;document.getElementById('nav-year').textContent=currentYear;loadHolidays(currentYear);try{loadRentals(currentYear,currentMonth);}catch(_e){}renderChips();renderCal();try{var _c9=document.getElementById('cal');if(_c9&&_c9.offsetHeight>120)localStorage.setItem('_calGridH',_c9.offsetHeight);}catch(e){}autoOpenMobilePanel();try{_srailAlignTop();}catch(e){}}
+function render(){document.getElementById('nav-month').textContent=currentMonth;document.getElementById('nav-year').textContent=currentYear;loadHolidays(currentYear);try{loadRentals(currentYear,currentMonth);}catch(_e){}renderChips();renderCal();try{var _c9=document.getElementById('cal');if(_c9&&_c9.offsetHeight>120)localStorage.setItem('_calGridH',_c9.offsetHeight);}catch(e){}_panelAutoOpen();try{_srailAlignTop();}catch(e){}}
 var _holidays={},_holLoadedYears={};
 function loadHolidays(year){
   if(_holLoadedYears[year])return;_holLoadedYears[year]=true;
@@ -18973,7 +18977,8 @@ function loadRentals(year,month){
 }
 // 그 날짜의 대관 일정 — getPerfs가 합류시킬 PERFS 모양 목록(dday는 대관에 의미 없어 null)
 function getRentals(key){
-  if(!GCAL_RENTALS.length)return [];
+  // ⚠ var 호이스팅 구간 방어 — 부팅 중 setMainView→_mvApply 경로가 이 선언줄보다 먼저 getPerfs를 탄다(그땐 GCAL_RENTALS === undefined).
+  if(!GCAL_RENTALS||!GCAL_RENTALS.length)return [];
   return GCAL_RENTALS.filter(function(r){return r.s===key;}).map(function(r){return Object.assign({},r,{dday:null});});
 }
 
@@ -18987,11 +18992,17 @@ async function loadCafeJangdo(){
   ]);
 }
 // 모바일이면 자동으로 오늘 날짜 panel 열기 (drawer 항상 표시)
-function autoOpenMobilePanel(){
-  if(!window.matchMedia('(max-width:768px)').matches)return;
+/* [260731 운영자] 「사이드바 항상 펼쳐지게」 — 캘린더 모드에선 날짜 패널이 상주한다.
+   구 ≤768 하단 drawer의 「항상 표시」 계약(.panel-close 숨김 + 오늘/선택일 고정)을 데스크톱 우측 사이드바로 확장한 것 —
+   새 동작 창작이 아니라 이미 있던 계약의 적용 범위 확대. biz(대시보드) 모드는 제외 = 그 우측은 판매현황 레일 자리다. */
+function _panelSticky(){ return (typeof _mainView==='undefined')||_mainView!=='biz'; }
+// 패널 자동 오픈 — 상주 대상(캘린더 모드) 또는 모바일. 이미 열려 있으면 무시.
+function _panelAutoOpen(){
+  if(!_panelSticky()&&!window.matchMedia('(max-width:768px)').matches)return;
   if(panelOpen)return;
   if(typeof openPanel!=='function')return;
-  try{openPanel(new Date());}catch(e){}
+  try{openPanel(new Date(),(typeof getRecsForDate==='function')?getRecsForDate(new Date()):[]);}
+  catch(e){ panelOpen=false; try{console.warn('[panel] 자동 펼침 보류(다음 render에서 재시도)',e&&e.message);}catch(_){} }   // 실패하면 열림 플래그를 되돌린다 — 안 그러면 이후 render가 '이미 열림'으로 보고 영영 재시도를 안 한다
 }
 
 
@@ -19974,6 +19985,15 @@ function openPanelWithPerfHighlight(perfName, dateKey){
 
 function closePanel(){
   var _pnl=document.getElementById('panel');
+  // [260731] 상주 패널(캘린더 모드) = 「닫기」가 빈 자리를 만들지 않는다 — 선택만 풀고 오늘 날짜로 되돌린다.
+  //   Esc·삭제 후·바깥 클릭 등 기존 closePanel 호출처가 전부 이 규칙을 함께 탄다(호출처 개별 수정 0).
+  //   모바일(≤768 하단시트)은 기존 닫기 동작 그대로 — 화면 절반을 먹는 시트라 닫을 수 있어야 한다.
+  if(_panelSticky()&&!window.matchMedia('(max-width:768px)').matches){
+    if(panelOpen&&!selected)return;   // 이미 '오늘 상주' 상태 = 재렌더 낭비 방지(바깥 클릭 연타 등)
+    selected=null;_panelProgLastAnimKey=null;
+    try{openPanel(new Date(),(typeof getRecsForDate==='function')?getRecsForDate(new Date()):[]);}catch(_e){}
+    render();return;
+  }
   var _wasOpen=panelOpen;
   panelOpen=false;selected=null;_panelProgLastAnimKey=null;
   var _ma=document.getElementById('main-area');if(_ma)_ma.style.marginRight='0';
@@ -19989,7 +20009,7 @@ function closePanel(){
   }
   render();
 }
-function changeMonth(delta){currentMonth+=delta;if(currentMonth<1){currentMonth=12;currentYear--;}if(currentMonth>12){currentMonth=1;currentYear++;}_weekState={};_calAnimateOnNextRender=true;if(window.matchMedia('(max-width:768px)').matches){render();}else{closePanel();}}
+function changeMonth(delta){currentMonth+=delta;if(currentMonth<1){currentMonth=12;currentYear--;}if(currentMonth>12){currentMonth=1;currentYear++;}_weekState={};_calAnimateOnNextRender=true;if(window.matchMedia('(max-width:768px)').matches||_panelSticky()){render();}else{closePanel();}}   /* [260731] 상주 패널은 월을 넘겨도 접히지 않는다(모바일 하단 drawer와 동일) — 구 데스크톱 closePanel은 비상주(biz 오버레이)에서만 */
 
 function onPlatChange(){
   const p=document.getElementById('f-plat').value;
