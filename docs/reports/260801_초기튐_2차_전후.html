@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>첫 화면 튐(크게 떴다 작아짐) — 2차 수정 전후 (260801)</title>
+<style>
+  :root{--accent:#4A4DE7;--text:#1A1A2E;--dim:#888;--border:rgba(0,0,0,0.09);--green:#1A6B3C;--danger:#E24B4A;--surface:#fff;--radius:16px}
+  body{margin:0;font-family:'Pretendard','Noto Sans KR',system-ui,sans-serif;background:linear-gradient(135deg,#FDF6F3 0%,#F0EBF5 50%,#EBF0F8 100%);color:var(--text);padding:28px 4vw 60px}
+  h1{font-size:22px;margin:0 0 6px}
+  .sub{color:var(--dim);font-size:13px;margin-bottom:26px}
+  h2{font-size:16px;margin:34px 0 10px;color:var(--accent)}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px;box-shadow:0 8px 32px rgba(74,77,231,0.08)}
+  .card .cap{font-size:12.5px;font-weight:700;margin-bottom:8px}
+  .card .cap .bad{color:var(--danger)} .card .cap .good{color:var(--green)}
+  .card img{width:100%;display:block;border-radius:8px;border:1px solid var(--border)}
+  table{border-collapse:collapse;font-size:12.5px;background:var(--surface);border-radius:12px;overflow:hidden;box-shadow:0 8px 32px rgba(74,77,231,0.08)}
+  th,td{padding:7px 12px;border-bottom:1px solid var(--border);text-align:right}
+  th:first-child,td:first-child{text-align:left}
+  th{background:rgba(74,77,231,0.06);font-weight:700}
+  .ok{color:var(--green);font-weight:700} .ng{color:var(--danger);font-weight:700}
+  .note{font-size:12.5px;color:var(--dim);line-height:1.6;max-width:900px}
+  code{background:rgba(74,77,231,0.07);border-radius:5px;padding:1px 5px;font-size:11.5px}
+</style>
+</head>
+<body>
+<h1>「아직도 처음에 잠깐 크게 떴다가 작아진다」 — 2차 수정 전후</h1>
+<div class="sub">260801 · 1차 수정(#521, 상시 확대 해소)에 이은 <b>부팅 튐</b> 건 · 실측 = 헤드리스 크로미움 <code>?qa=1#biz</code> rAF 샘플러 · <code>tools/scratch/probe_bizboot.mjs</code></div>
+
+<h2>원인 — 줌이 첫 페인트 <b>뒤에</b> 걸린다</h2>
+<p class="note">규격 줌(<code>_bizZoomApply</code>)은 23k행짜리 단일 파일의 <b>스크립트 본문에서</b> 호출된다. 그래서 파싱·부팅이 끝날 때까지
+<b>250~370ms 동안 줌이 없는 크기로 화면이 먼저 그려지고</b>, 그 뒤에 줌이 걸리며 한 번 튄다.
+브라우저 줌을 올려 쓰는 화면(110·125%)에선 상쇄 줌이 1보다 작아서(z=0.8) <b>크게 떴다가 작아지는</b> 방향으로 보인다.</p>
+
+<h3 style="font-size:13.5px;margin:18px 0 6px">부팅 타임라인 실측 — 창 2048 · 브라우저 125% (rAF 샘플, 값이 바뀐 순간만)</h3>
+<table>
+<tr><th>전 (1차 수정본)</th><th>zoom</th><th>실제 적용 css zoom</th><th>연간 실적 보드 폭</th></tr>
+<tr><td>t = 135ms</td><td>-</td><td>1</td><td>—</td></tr>
+<tr><td>t = 265ms</td><td>-</td><td>1</td><td class="ng">989 (줌 없는 큰 상태로 그려짐)</td></tr>
+<tr><td>t = 372ms</td><td>0.8</td><td>0.8</td><td class="ng">996 ← 이 순간 <b>튐</b></td></tr>
+</table>
+<table style="margin-top:10px">
+<tr><th>후 (선적용)</th><th>zoom</th><th>실제 적용 css zoom</th><th>연간 실적 보드 폭</th></tr>
+<tr><td>t = 77ms</td><td class="ok">0.8</td><td>1</td><td>— (아직 콘텐츠 없음)</td></tr>
+<tr><td>t = 208ms</td><td class="ok">0.8</td><td>0.8</td><td class="ok">996 (처음부터 확정 크기)</td></tr>
+<tr><td>t = 266ms</td><td class="ok">0.8</td><td>0.8</td><td class="ok">996 (변화 없음)</td></tr>
+</table>
+<p class="note">핵심: <b>콘텐츠가 그려지기 전(t=77ms)에 줌이 확정</b>되므로, 중간 크기로 그려지는 프레임이 0개다.</p>
+
+<h2>튐의 두 상태 — 사용자가 실제로 보던 것</h2>
+<div class="grid">
+  <div class="card"><div class="cap"><span class="bad">전</span> — 첫 ~370ms 동안 보이던 상태(줌 미적용): 보드 높이 1141 · 차트 560 · 세로 넘침 89px</div><img src="260801_튐_전_첫프레임_확대상태.png" alt="튐 전 상태"></div>
+  <div class="card"><div class="cap"><span class="good">후</span> — 확정 상태(z=0.8): 보드 높이 911 · 차트 448 · 넘침 0 — <b>이 화면이 처음부터 뜬다</b></div><img src="260801_튐_후_첫프레임_확정상태.png" alt="확정 상태"></div>
+</div>
+<p class="note">두 상태의 글자·카드 크기 차이가 25% — "잠깐 크게 떴다가 작아진다"의 실체다(창 2048 · 브라우저 125% 기준).</p>
+
+<h2>무엇을 고쳤나</h2>
+<p class="note"><code>#body-wrap</code> 여는 태그 <b>바로 뒤</b>에 선적용 인라인 스크립트를 뒀다 — 파서가 거기서 멈춰 실행하므로 첫 페인트 전에 줌이 확정된다.
+줌 계산식은 그 한 곳(<code>_bizZoomTarget</code>)에만 두고 본문 <code>_bizZoomApply</code>(리사이즈·모드 전환)가 <b>같은 함수를 재사용</b>한다 — 값 이원화 없음.
+<code>_mainView</code>는 아직 선언 전이라, 같은 규칙으로 원본 <code>sessionStorage.mvView</code>를 읽는다. <code>&lt;script&gt;</code>는 UA <code>display:none</code>이라 부모 flex 항목이 되지 않는다.</p>
+
+<h2>회귀 확인 — 다른 조건은 그대로</h2>
+<table>
+<tr><th>조건</th><th>최종 zoom</th><th>확정 시각</th><th>판정</th></tr>
+<tr><td>2048창 · 브라우저 125%</td><td>0.8</td><td class="ok">77ms (전 372ms)</td><td class="ok">튐 제거</td></tr>
+<tr><td>2400창 · 브라우저 80%</td><td>1.25</td><td class="ok">60ms (전 230ms)</td><td class="ok">튐 제거·값 동일</td></tr>
+<tr><td>2560창 · 브라우저 100%</td><td>미적용(1)</td><td>—</td><td class="ok">무변</td></tr>
+</table>
+
+<h2>게이트</h2>
+<p class="note">check_design ✓(raw hex 1605/1605 무변·:root 2/0·신규 토큰 0) · check_refs ✓ · smoke 로그인 ✓(JS 회귀 0) · 콘솔 에러 0</p>
+</body>
+</html>
