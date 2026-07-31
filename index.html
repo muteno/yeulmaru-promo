@@ -876,8 +876,12 @@ button{font-family:inherit;cursor:pointer}
 .panel-day{font-size:13px;color:var(--dim);margin-top:2px}
 .panel-dow{font-size:13px;font-weight:600;margin-left:8px;color:var(--dim)}
 .panel-hdr-hol{font-size:13px;font-weight:600;color:#D64545}
-.panel-hdr-prog{font-size:13px;font-weight:600;color:var(--accent)}
-.panel-hdr-labels{margin-top:7px;display:flex;flex-wrap:wrap;gap:6px}
+/* [260731 운영자] 그날 일정 = 1행 1건. 표기는 캘린더 셀 배지 규격을 그대로 계승(원 16px·글자 8px·공/전/교/대/셋,
+   기획=var(--accent) · 대관/셋업=var(--neutral-text)) — 패널·셀이 같은 형태로 읽힌다. 신규 값 0 */
+.panel-hdr-prog{font-size:13px;font-weight:600;color:var(--text);display:flex;align-items:center;min-width:0}
+.panel-hdr-dot{display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;border-radius:50%;font-size:8px;font-weight:600;color:var(--surface-solid);flex-shrink:0;margin-right:5px}
+.panel-hdr-prog>.nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.panel-hdr-labels{margin-top:7px;display:flex;flex-direction:column;gap:5px}
 .panel-hdr-labels>span{margin-left:0}
 .panel-svc{margin:2px 0 16px;padding-bottom:14px;border-bottom:1px solid var(--border)}
 .panel-svc-row{font-size:13px;font-weight:600;color:#333;line-height:2}
@@ -2905,6 +2909,11 @@ function onSpAreaContextMenu(event){
   onSpContextMenu(event,rowIndex);
 }
 function getDdayText(dd){if(dd>0)return'D-'+dd;if(dd===0)return'D-Day';return'D+'+Math.abs(dd);}
+// [260731 운영자] 배지 문자·색 = 캘린더 셀과 날짜 패널 헤더의 공용 1출처(두 곳이 어긋나는 사고 차단).
+// 문자: 셋업 「셋」 · 대관 「대」 · 전시 「전」 · 교육 「교」 · 그 외 기획 「공」
+// 색: 대관·셋업 = 무채색(--neutral-text) / 기획 = --accent (신규 hex 0)
+function perfBadgeLb(p){return p._setup?'셋':(p.t==='e'?'전':p.t==='a'?'교':p.t==='r'?'대':'공');}
+function perfBadgeBg(p){return (p._setup||p.t==='r')?'var(--neutral-text)':'var(--accent)';}
 function renderPerfsHtml(perfs,td,past,dateKey){
 if(!perfs||!perfs.length)return'';
 var cperfs=perfs.filter(function(p){return p.t!=='e';});
@@ -2912,7 +2921,7 @@ if(!cperfs.length)return'';
 var out='';
 for(var i=0;i<cperfs.length;i++){var perf=cperfs[i],fn=perf.f||perf.n,sn=perf.n,dd=perf.dday,
 // [260731 운영자] 셋업일 = 「셋」. 대관은 「대」, 기획은 기존 표기(공·전·교) 계승 — 「기」 신설 안 함.
-lb=perf._setup?'셋':(perf.t==='e'?'전':perf.t==='a'?'교':perf.t==='r'?'대':'공');
+lb=perfBadgeLb(perf);
 var nameHtml='<span class="pf">'+escapeHtml(fn)+'</span><span class="ps">'+escapeHtml(sn)+'</span>';
 // 좌클릭: 홍보 현황 모달  /  우클릭: 정보 박스 — data-perf-name + this 패턴으로 사이드바와 통일 (escape 안전)
 var safeFn=escapeHtml(fn);
@@ -2929,7 +2938,7 @@ var ctxAttr=(!past&&!_gc)?' oncontextmenu="event.stopPropagation();event.prevent
 var cursorStyle=(!past&&!_gc)?'cursor:pointer;':'';
 // [260731] 대관 원형 배지 = 무채색 토큰(--neutral-text) — 기획(accent 인디고)과 한눈에 갈린다. 팔레트 계승(신규 hex 0)
 //   운영자 2차: 셋업(「셋」)은 대관·기획 가리지 않고 전부 무채색 — 기획 셋업에도 강조색을 쓰지 않는다.
-var lbBg=(perf._setup||perf.t==='r')?'var(--neutral-text)':'var(--accent)';
+var lbBg=perfBadgeBg(perf);
 if(past)out+='<span style="display:inline-flex;align-items:center;margin-left:6px"><span style="display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;border-radius:50%;font-size:8px;background:rgba(0,0,0,0.05);color:rgba(0,0,0,0.22);flex-shrink:0">'+lb+'</span><span class="pname" style="margin-left:4px;font-size:9px;color:rgba(0,0,0,0.18)">'+nameHtml+'</span></span>';
 else if(td)out+='<span class="perf-badge"'+clickAttr+ctxAttr+' style="'+cursorStyle+'display:inline-flex;align-items:center;margin-left:6px"><span style="display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;border-radius:50%;font-size:8px;font-weight:600;background:rgba(255,255,255,0.85);color:#111;flex-shrink:0">'+lb+'</span><span class="pname" style="margin-left:5px;font-size:9px;font-weight:700;color:#111">'+nameHtml+'</span></span>';
 else out+='<span class="perf-badge"'+clickAttr+ctxAttr+' style="'+cursorStyle+'display:inline-flex;align-items:center;margin-left:6px"><span style="display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;border-radius:50%;font-size:8px;font-weight:600;background:'+lbBg+';color:#fff;flex-shrink:0">'+lb+'</span><span class="pname" style="margin-left:5px;font-size:9px;font-weight:700;color:var(--text)">'+nameHtml+'</span>'+(dd!==null&&dd!==0?'<span class="pday" style="margin-left:8px;font-size:9px;color:var(--dim);white-space:nowrap">'+getDdayText(dd)+'</span>':'')+'</span>';
@@ -20005,7 +20014,10 @@ function openPanel(dateObj,recs){
   var _pKey=dk(dateObj);
   var _pHol=(window._holidays&&_holidays[_pKey])||'';
   var _pPerfs=((typeof getPerfs==='function')?getPerfs(dateObj):[]).filter(function(p){return p.t!=='e';});
-  var _pLabels=(_pHol?'<span class="panel-hdr-hol">'+escapeHtml(_pHol)+'</span>':'')+_pPerfs.map(function(p){return '<span class="panel-hdr-prog">'+escapeHtml(p.f||p.n)+'</span>';}).join('');
+  // [260731 운영자] 그날 일정 = 1행 1건 + 캘린더 셀과 같은 원형 배지(대·셋·공·전·교). 문자·색은 perfBadge* 공용 함수 계승.
+  var _pLabels=(_pHol?'<span class="panel-hdr-hol">'+escapeHtml(_pHol)+'</span>':'')+_pPerfs.map(function(p){
+    return '<span class="panel-hdr-prog"><span class="panel-hdr-dot" style="background:'+perfBadgeBg(p)+'">'+perfBadgeLb(p)+'</span><span class="nm">'+escapeHtml(p.f||p.n)+'</span></span>';
+  }).join('');
   var h='<div class="panel-hdr"><div style="flex:1;min-width:0"><div class="panel-date">'+(dateObj.getMonth()+1)+'월 '+dateObj.getDate()+'일<span class="panel-dow">'+dn+'요일</span></div>'+(_pLabels?'<div class="panel-hdr-labels">'+_pLabels+'</div>':'')+'</div><button class="panel-close" onclick="closePanel()">✕</button></div><div class="panel-body">';
   var dKey=dk(dateObj);
   // === 카페/장도 운영시간 (서비스 안내 — 본문 맨 위 고정) ===
