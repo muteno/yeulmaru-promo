@@ -1204,6 +1204,205 @@ async function getHolidays(env, year, forceRefresh) {
 }
 __name(getHolidays, "getHolidays");
 
+// ═══════════════════════════════════════════════════════════════════════════
+// === 대관 일정 (구글 캘린더 비공개 iCal 피드) — KV 캐시 + 요청 시 창(window) 전개 ===
+//   운영자 260731: 「구글 스케줄 하나 붙이고 싶다 · 받아오면 대관 공연이 들어온다 · [대]로 캘린더에 명시」
+//   · 캘린더 자체가 대관 전용(운영자 확인) → 이 피드에서 온 일정은 전부 대관(t='r')으로 취급한다.
+//   · 자격증명 = env.GCAL_ICS_URL(Cloudflare 시크릿) 하나. 구글 캘린더 설정 ▸ 「비공개 주소(iCal 형식)」 링크.
+//     ⚠ 이 URL 자체가 비밀번호다 — 레포·프론트에 절대 안 실린다. Worker만 들고 있고 응답엔 안 담긴다.
+//   · 원문 .ics는 KV에 10분 캐시(구글 rate limit 보호) · 전개(반복일정 풀기)는 매 요청마다 요청 창에서만.
+// ═══════════════════════════════════════════════════════════════════════════
+var GCAL_TTL = 600;   // .ics 원문 캐시 10분
+
+// RFC5545 줄 접힘(folding) 해제 — 다음 줄이 공백/탭으로 시작하면 앞줄에 이어붙인다.
+function icsUnfold(text) {
+  return String(text || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n").replace(/\n[ \t]/g, "");
+}
+__name(icsUnfold, "icsUnfold");
+
+// 값 이스케이프 해제 (\, \; \n \N)
+function icsText(v) {
+  return String(v || "").replace(/\\n/gi, " ").replace(/\\([,;\\])/g, "$1").trim();
+}
+__name(icsText, "icsText");
+
+// VEVENT 블록만 뽑아 { NAME: [{v, p}] } 형태로. p = TZID·VALUE 등 파라미터.
+function icsEvents(text) {
+  const out = [];
+  let cur = null;
+  for (const line of icsUnfold(text).split("\n")) {
+    const t = line.trim();
+    if (t === "BEGIN:VEVENT") { cur = {}; continue; }
+    if (t === "END:VEVENT") { if (cur) out.push(cur); cur = null; continue; }
+    if (!cur) continue;
+    const i = line.indexOf(":");
+    if (i < 0) continue;
+    const parts = line.slice(0, i).split(";");
+    const name = parts[0].trim().toUpperCase();
+    const p = {};
+    for (const seg of parts.slice(1)) {
+      const j = seg.indexOf("=");
+      if (j > 0) p[seg.slice(0, j).trim().toUpperCase()] = seg.slice(j + 1).trim();
+    }
+    (cur[name] = cur[name] || []).push({ v: line.slice(i + 1), p });
+  }
+  return out;
+}
+__name(icsEvents, "icsEvents");
+
+const _KST = 9 * 3600 * 1e3;
+function _kstKey(ms) {                       // epoch ms → KST 'YYYY-MM-DD'
+  return new Date(ms + _KST).toISOString().slice(0, 10);
+}
+__name(_kstKey, "_kstKey");
+function _kstHM(ms) {                        // epoch ms → KST 'HH:MM'
+  return new Date(ms + _KST).toISOString().slice(11, 16);
+}
+__name(_kstHM, "_kstHM");
+
+// iCal 날짜값 → {ms, allday}. 구글은 VALUE=DATE(종일) · TZID=Asia/Seoul(현지) · ...Z(UTC) 셋만 낸다.
+//   종일·현지시각은 KST 벽시계로 해석(= UTC로는 -9h)하여 epoch ms로 통일한다.
+function icsDate(f) {
+  if (!f) return null;
+  const raw = String(f.v || "").trim();
+  const allday = (f.p && f.p.VALUE === "DATE") || /^\d{8}$/.test(raw);
+  const m = raw.match(/^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})(Z)?)?$/);
+  if (!m) return null;
+  const [, y, mo, d, hh, mi, ss, z] = m;
+  const base = Date.UTC(+y, +mo - 1, +d, +(hh || 0), +(mi || 0), +(ss || 0));
+  // Z = 이미 UTC. 그 외(종일·TZID=Asia/Seoul·floating)는 KST 벽시각 → UTC로 9시간 되돌린다.
+  return { ms: z ? base : base - _KST, allday };
+}
+__name(icsDate, "icsDate");
+
+const _ICS_DOW = { SU: 0, MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6 };
+
+// RRULE 전개 — 요청 창 안의 시작시각들만 돌려준다.
+//   지원: FREQ=DAILY|WEEKLY|MONTHLY|YEARLY · INTERVAL · COUNT · UNTIL · BYDAY(주간) · EXDATE.
+//   미지원(BYMONTHDAY·BYSETPOS 등)은 기본 규칙으로 떨어진다 — 대관 일정은 대부분 단발이라 실사용 영향 없음.
+//   무한 루프 차단 = 최대 800회(≈2년치 일간 반복).
+function icsExpand(startMs, rrule, exSet, fromMs, toMs) {
+  if (!rrule) return (startMs >= fromMs && startMs <= toMs) ? [startMs] : [];
+  const R = {};
+  for (const seg of String(rrule).split(";")) {
+    const j = seg.indexOf("=");
+    if (j > 0) R[seg.slice(0, j).trim().toUpperCase()] = seg.slice(j + 1).trim();
+  }
+  const freq = (R.FREQ || "").toUpperCase();
+  const step = Math.max(1, parseInt(R.INTERVAL || "1", 10) || 1);
+  const count = R.COUNT ? parseInt(R.COUNT, 10) : 0;
+  const untilD = R.UNTIL ? icsDate({ v: R.UNTIL, p: {} }) : null;
+  const until = untilD ? untilD.ms : 0;
+  const byday = R.BYDAY ? R.BYDAY.split(",").map((s) => _ICS_DOW[s.trim().slice(-2).toUpperCase()]).filter((n) => n !== void 0) : [];
+  const out = [];
+  const s0 = new Date(startMs);
+  let n = 0, emitted = 0;
+  for (let i = 0; i < 800; i++) {
+    let occ;
+    if (freq === "DAILY") occ = startMs + n * step * 864e5;
+    else if (freq === "WEEKLY") occ = startMs + n * step * 7 * 864e5;
+    else if (freq === "MONTHLY") { const d = new Date(startMs); d.setUTCMonth(d.getUTCMonth() + n * step); occ = d.getTime(); }
+    else if (freq === "YEARLY") { const d = new Date(startMs); d.setUTCFullYear(d.getUTCFullYear() + n * step); occ = d.getTime(); }
+    else return (startMs >= fromMs && startMs <= toMs) ? [startMs] : [];
+    n++;
+    if (until && occ > until) break;
+    if (occ > toMs + 7 * 864e5) break;
+    // 주간 BYDAY = 그 주(간격 적용된 주)의 지정 요일들로 확장
+    const cands = (freq === "WEEKLY" && byday.length)
+      ? byday.map((w) => {
+          const d = new Date(occ);
+          const cur = new Date(d.getTime() + _KST).getUTCDay();   // KST 기준 요일
+          return d.getTime() + (w - cur) * 864e5;
+        })
+      : [occ];
+    for (const c of cands) {
+      if (c < startMs) continue;
+      if (until && c > until) continue;
+      if (exSet.has(_kstKey(c))) continue;
+      emitted++;
+      if (count && emitted > count) return out;
+      if (c >= fromMs && c <= toMs) out.push(c);
+    }
+    if (count && emitted >= count) break;
+  }
+  void s0;
+  return out;
+}
+__name(icsExpand, "icsExpand");
+
+// .ics 원문 — KV 10분 캐시. 실패 시 마지막 성공본으로 폴백(구글 장애에도 화면 안 비게).
+async function gcalRaw(env, force) {
+  const url = env.GCAL_ICS_URL;
+  if (!url) throw new Error("GCAL_ICS_URL 미설정");
+  if (!force) {
+    try { const c = await env.ops_kv.get("gcal:ics"); if (c) return c; } catch (e) {}
+  }
+  let txt = "";
+  try {
+    const r = await fetch(url, { headers: { "User-Agent": "yeulmaru-promo-worker" } });
+    if (r.ok) txt = await r.text();
+  } catch (e) {}
+  if (txt && txt.indexOf("BEGIN:VCALENDAR") >= 0) {
+    try { await env.ops_kv.put("gcal:ics", txt, { expirationTtl: GCAL_TTL }); } catch (e) {}
+    try { await env.ops_kv.put("gcal:ics:last", txt); } catch (e) {}
+    return txt;
+  }
+  const last = await env.ops_kv.get("gcal:ics:last");
+  if (last) return last;
+  throw new Error("구글 캘린더 응답 없음");
+}
+__name(gcalRaw, "gcalRaw");
+
+// [from, to] (KST 날짜키) 창의 대관 일정을 날짜별로 펼쳐 돌려준다.
+async function gcalDays(env, from, to, force) {
+  const txt = await gcalRaw(env, force);
+  const fromMs = Date.parse(from + "T00:00:00Z") - _KST;
+  const toMs = Date.parse(to + "T23:59:59Z") - _KST;
+  const days = [];
+  for (const ev of icsEvents(txt)) {
+    const st = icsDate(ev.DTSTART && ev.DTSTART[0]);
+    if (!st) continue;
+    if (String((ev.STATUS && ev.STATUS[0] && ev.STATUS[0].v) || "").toUpperCase() === "CANCELLED") continue;
+    const en = icsDate(ev.DTEND && ev.DTEND[0]);
+    const durMs = en ? Math.max(0, en.ms - st.ms) : 0;
+    const title = icsText(ev.SUMMARY && ev.SUMMARY[0] && ev.SUMMARY[0].v) || "대관";
+    const place = icsText(ev.LOCATION && ev.LOCATION[0] && ev.LOCATION[0].v);
+    const uid = icsText(ev.UID && ev.UID[0] && ev.UID[0].v) || (title + st.ms);
+    const exSet = /* @__PURE__ */ new Set();
+    for (const x of (ev.EXDATE || [])) {
+      for (const one of String(x.v).split(",")) {
+        const d = icsDate({ v: one.trim(), p: x.p });
+        if (d) exSet.add(_kstKey(d.ms));
+      }
+    }
+    const rrule = ev.RRULE && ev.RRULE[0] && ev.RRULE[0].v;
+    for (const occ of icsExpand(st.ms, rrule, exSet, fromMs, toMs)) {
+      // 여러 날 걸친 일정 = 걸친 날짜 전부에 찍는다. 종일 일정의 DTEND는 배타(exclusive)라 하루 뺀다.
+      const lastMs = st.allday ? occ + Math.max(0, durMs - 864e5) : occ + durMs;
+      let dk = _kstKey(occ);
+      const endKey = _kstKey(lastMs);
+      for (let guard = 0; guard < 400; guard++) {
+        if (dk >= from && dk <= to) {
+          days.push({
+            id: "gc:" + uid + ":" + dk,
+            d: dk,
+            title,
+            place,
+            allday: !!st.allday,
+            st: st.allday ? "" : _kstHM(occ),
+            et: (st.allday || !durMs) ? "" : _kstHM(occ + durMs)
+          });
+        }
+        if (dk >= endKey) break;
+        dk = _kstKey(Date.parse(dk + "T00:00:00Z") + 864e5);
+      }
+    }
+  }
+  days.sort((a, b) => (a.d === b.d ? String(a.st).localeCompare(String(b.st)) : a.d.localeCompare(b.d)));
+  return { ok: true, from, to, days, count: days.length };
+}
+__name(gcalDays, "gcalDays");
+
 // === LLM 공용 호출 — Gemini(무료, 우선) 또는 Claude(API키/OAuth) ===
 // GEMINI_API_KEY 있으면 Gemini, 없으면 Claude. (구독 OAuth는 앱 백엔드에서 403이라 사실상 Claude는 API키 필요)
 async function geminiText(env, system, userText, maxTokens) {
@@ -2077,6 +2276,26 @@ var index_default = {
         const year = parseInt(url.searchParams.get("year") || "", 10) || ky;
         const data = await getHolidays(env, year, url.searchParams.get("refresh") === "1");
         return json(data, env);
+      }
+
+      // [260731 운영자] 대관 일정 — 구글 캘린더 비공개 iCal 피드. 앱 로그인(비번) 필요 = 대관 일정은 내부 정보.
+      //   GET /api/gcal?from=YYYY-MM-DD&to=YYYY-MM-DD  (기본 = 이번 달 ±1달) · refresh=1 = .ics 캐시 무시
+      //   미설정(GCAL_ICS_URL 없음)이면 ok:false + days:[] — 프론트는 조용히 0건 처리(기존 화면 무영향).
+      if (url.pathname === "/api/gcal") {
+        const pw = request.headers.get("X-App-Password") || "";
+        if (!roleOf(pw, env)) return json({ ok: false, error: "unauthorized" }, env, 401);
+        if (!env.GCAL_ICS_URL) return json({ ok: false, error: "GCAL_ICS_URL 미설정", days: [], setup: true }, env);
+        const nowKst = new Date(Date.now() + 9 * 3600 * 1e3);
+        const y = nowKst.getUTCFullYear(), mo = nowKst.getUTCMonth();   // 0-based
+        // 기본 창 = 지난달 1일 ~ 다음달 말일 (Date.UTC가 월 넘침·모자람을 알아서 정규화)
+        const dFrom = url.searchParams.get("from") || new Date(Date.UTC(y, mo - 1, 1)).toISOString().slice(0, 10);
+        const dTo = url.searchParams.get("to") || new Date(Date.UTC(y, mo + 2, 0)).toISOString().slice(0, 10);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(dFrom) || !/^\d{4}-\d{2}-\d{2}$/.test(dTo)) return json({ ok: false, error: "bad range", days: [] }, env, 400);
+        try {
+          return json(await gcalDays(env, dFrom, dTo, url.searchParams.get("refresh") === "1"), env);
+        } catch (e) {
+          return json({ ok: false, error: String(e && e.message || e), days: [] }, env);
+        }
       }
 
       // [260721 운영자] 콘텐츠 제작 ▸ 링크 자료수집 — 목록/파일 프록시 (핸들러 = 파일 하단 linkgrab 블록)
