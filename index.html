@@ -2700,18 +2700,56 @@ let PERFS=[];
 let _perfReady=false;   // [버그수정] 프로그램 로드+updatePerfOpen 완료 여부 — 홍보 위저드 조기 오픈(미로딩 상태) 차단용
 let _DRAFTS=[];         // 임시저장 전용 배열 — loadData에서 '임시저장' 컬럼으로 records와 분리(집계/관리에 구조적으로 안 섞임)
 function getPerfs(d){var k=dk(d),now=new Date();now.setHours(0,0,0,0);return PERFS.filter(function(p){return k>=p.s&&k<=p.e}).map(function(p){var sd=new Date(p.s);sd.setHours(0,0,0,0);var ed=new Date(p.e);ed.setHours(0,0,0,0);if(ed<now)return Object.assign({},p,{dday:null});if(now>=sd&&now<=ed)return Object.assign({},p,{dday:0});var diff=Math.round((sd-now)/86400000);return Object.assign({},p,{dday:diff});});}
+// ── [260731 운영자] 셀 하단 「전시 라인」 = 하드코딩 폐지 → 실데이터 구동 ──────────────────────
+// 구판은 상반기 2건(7층 2/27~6/28 · 장도 3/27~6/21)을 함수 안에 박아 둬서, 그 전시가 끝나자 라인이 영영 안 그려졌다.
+// 소스 = ① 프로그램 시트(PERFS t='e' — 캘린더가 이미 로드) ② 전시마스터 캐시(_anaState._exMaster — 판매 레일이 받아 둔 것 재활용, 추가 fetch 0).
+//   두 소스는 겹쳐도 무해(같은 레인에 OR로 얹힘) → dedup 불필요. 마스터 전용 전시·프로그램 시트 전용 전시 양쪽 다 잡힌다.
+// 레인(줄 2개·색·위치)은 종전 100% 계승 = 0:7층(초록) · 1:장도(분홍). 귀속 = 장소/전시명에 '장도'가 들어가면 장도, 아니면 7층.
+var _EX_LANE=[{id:'7층',c:'#006B3C'},{id:'장도',c:'#E84393'}];
+var _EX_DIM='rgba(0,0,0,0.04)';
+function _exLaneOf(name,place){ return (String(place||'')+' '+String(name||'')).indexOf('장도')>-1?1:0; }
+// 전시 기간 목록 [{lane,s,e}] — 소스 배열/객체 참조가 그대로면 캐시 재사용(한 번 렌더에 42셀 × 재계산 방지)
+var _exSpanCache=null,_exSpanPerfs=null,_exSpanMaster=null;
+function _exSpans(){
+  var mo=null; try{ mo=(typeof _anaState!=='undefined'&&_anaState)?_anaState._exMaster:null; }catch(_e){}
+  var pf=(typeof PERFS!=='undefined'&&PERFS)?PERFS:null;
+  if(_exSpanCache&&_exSpanPerfs===pf&&_exSpanMaster===mo)return _exSpanCache;
+  var out=[];
+  try{ (pf||[]).forEach(function(p){ if(p&&p.t==='e'&&p.s&&p.e)out.push({lane:_exLaneOf(p.f||p.n,p.l),s:p.s,e:p.e}); }); }catch(_e){}
+  try{ ((mo&&mo.rows)||[]).forEach(function(r){ var s=excelSerialToISO(r['시작일']),e=excelSerialToISO(r['종료일']); if(s&&e)out.push({lane:_exLaneOf(r['전시명'],''),s:s,e:e}); }); }catch(_e){}
+  _exSpanCache=out;_exSpanPerfs=pf;_exSpanMaster=mo;
+  return out;
+}
+// 소스가 늦게 도착(프로그램 시트·전시마스터는 캘린더 첫 렌더 뒤에 채워짐)하면 그리드만 다시 그린다 — 라인 누락 방지
+function _exLineRefresh(){
+  try{
+    if(!document.getElementById('cal'))return;
+    var before=_exSpanCache?_exSpanCache.length:-1, beforeP=_exSpanPerfs, beforeM=_exSpanMaster;
+    _exSpans();
+    if(_exSpanPerfs!==beforeP||_exSpanMaster!==beforeM||(_exSpanCache?_exSpanCache.length:-1)!==before)renderCal();
+  }catch(_e){}
+}
 function getExhibitStatus(d){
-var k=dk(d),now=new Date();now.setHours(0,0,0,0);
-var exh=[{id:'7층',s:'2026-02-27',e:'2026-06-28'},{id:'장도',s:'2026-03-27',e:'2026-06-21'}];
-return exh.map(function(x){var active=k>=x.s&&k<=x.e&&new Date(x.e)>=now;return{id:x.id,on:active};});
+var k=dk(d),today=dk(new Date());
+var st=_EX_LANE.map(function(x){return{id:x.id,on:false,live:false};});
+_exSpans().forEach(function(x){
+  if(k<x.s||k>x.e)return;
+  st[x.lane].on=true;
+  if(x.e>=today)st[x.lane].live=true;   // 아직 안 끝난 전시 = 진행중(지난 날짜는 흐리게 = 진행률 표시)
+});
+return st;
 }
 function renderExhibitBadge(d,nm,past){
 if(nm)return'';
 var st=getExhibitStatus(d);
-var colors=['#006B3C','#E84393'];
 var h='<div style="position:absolute;bottom:2px;left:0;right:0;display:flex;flex-direction:column;gap:3px;padding:0">';
 for(var i=0;i<st.length;i++){
-h+='<div style="height:0;border-top:2px solid '+(past?'rgba(0,0,0,0.04)':st[i].on?colors[i]:'rgba(0,0,0,0.04)')+'"></div>';
+// 전시 없는 날 = 종전 그대로 거의 안 보이는 회색 실선(칸 바닥선 역할).
+// 전시 있는 날 = 그 레인 색으로 「쭉」 그어진다(운영자 260731 — 구판은 진행중 전시의 지난 날짜를 회색으로 덮어
+//   장기 전시 후반엔 줄이 사실상 사라졌다). 지난 날짜는 색을 지우는 대신 opacity로만 죽여 진행률 느낌을 남긴다.
+// 이미 끝난 전시는 지난 기록이라 그대로 진하게 — 예전 달로 넘겨 봐도 그때 그은 줄이 보인다.
+var op=(st[i].on&&past&&st[i].live)?';opacity:.38':'';
+h+='<div style="height:0;border-top:2px solid '+(st[i].on?_EX_LANE[i].c:_EX_DIM)+op+'"></div>';
 }
 return h+'</div>';
 }
@@ -4022,6 +4060,7 @@ async function initApp(){
     try{_srailInit(false,_calP);}catch(_e){console.warn('[initApp srail]',_e);}
   },0);
   var _pPrograms=loadPrograms().then(function(){ updatePerfOpen(); _perfReady=true;
+    try{_exLineRefresh();}catch(_e){}   // [260731] 프로그램 시트 도착 = 캘린더 전시 라인·공연 배지 소스 갱신 → 그리드 재렌더
     // 판매 레일이 PERFS보다 먼저 그려졌으면 재렌더 — 프로그램 시트 폴백 카드(마스터 미등록 판매중 공연) 누락 방지
     if(typeof _salesState!=='undefined'&&_salesState&&_salesState.daily&&_salesState.master&&!_srailBusy){try{_srailRender();}catch(_e){}}
   }).catch(function(e){console.warn('[initApp loadPrograms]',e);});
@@ -5267,6 +5306,7 @@ function _srailInit(force,_fetchGate){
     if(res[4])_anaState._exDaily=res[4];
     if(res[5])_anaState._exMaster=res[5];
     _srailBusy=false; _srailRender();
+    try{_exLineRefresh();}catch(_e){}   // [260731] 전시마스터 도착 = 캘린더 전시 라인 소스 갱신 → 그리드 재렌더
   }).catch(function(e){
     if(gen!==_srailGen)return;
     _srailBusy=false; console.warn('[srail]',e);
