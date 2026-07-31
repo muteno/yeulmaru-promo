@@ -5429,6 +5429,9 @@ function _bizPlotlyZoomShim(){
   });
 }
 var _BIZ_CHART_MIN=180, _BIZ_CHART_MAX=560;
+// [260801 운영자] yrm 차트 범례 y — paper 비율이라 컨테이너 높이가 바뀌면 간격도 같이 변한다(고정값 -0.18 = 560에서 88px 빈 띠 · 180에서는 라벨과 충돌).
+//   → 「플롯 아래 22px(= 눈금 라벨 12 + 숨구멍 8)」을 픽셀로 고정해 매 높이마다 환산. 플롯 높이 = height − margin.t(32) − margin.b(52).
+function _yrmLegY(h){ return -(22/Math.max(60,h-84)); }
 function _bizFitViewport(){
   try{
     if(typeof _mainView==='undefined'||_mainView!=='biz')return;
@@ -5441,7 +5444,7 @@ function _bizFitViewport(){
       var cur=Math.round(ch.getBoundingClientRect().height/_bizZ());   // gBCR 시각좌표 → 디자인(레이아웃) 단위로 환산해 style px와 동단위 비교
       if(Math.abs(px-cur)<2)return false;
       ch.style.height=px+'px';
-      try{ if(window.Plotly&&ch.querySelector('.js-plotly-plot,svg'))Plotly.relayout(ch,{height:px}); }catch(_p){}
+      try{ if(window.Plotly&&ch.querySelector('.js-plotly-plot,svg'))Plotly.relayout(ch,{height:px,'legend.y':_yrmLegY(px)}); }catch(_p){}   // [260801] 높이만 바꾸면 범례가 paper 비율대로 따라 내려가 아래에 빈 띠가 생긴다 — 범례 y도 같이 환산(눈금 라벨 아래 16px 고정)
       try{ _srailAlignTop(); }catch(_a){}
       return true;
     };
@@ -9879,10 +9882,14 @@ function _yrDrawChart(first,pfx,stO){
         annos.push({x:(years[_g0]+years[_g1])/2,yref:'paper',y:0.98,yanchor:'top',text:_lbl+' '+(_up?'▲':'▼')+' '+(_up?'+':'−')+Math.abs(_tpc).toFixed(1)+'%',showarrow:false,font:{color:_ac,size:10},bgcolor:labelBg,bordercolor:_ac,borderwidth:1,borderpad:3});   // 라벨 = 상단(값 라벨 위)
       }
     }
-    annos.push({x:1,y:1.07,xref:'paper',yref:'paper',text:'(단위: 만명)',showarrow:false,xanchor:'right',yanchor:'bottom',font:{color:fc,size:10.5}});   // [260723 운영자] 우상단 단위 표기
-    // [260725 운영자] yrm(대시보드 좌 보드)만 높이 560 — 모달(pfx='yr')은 410 그대로. 상단 마진 34→50은 필수 동반:
-    //   「(단위: 만명)」 주석이 y:1.07(paper) = 플롯 높이에 비례해 위로 올라가므로, 560에서는 34로는 잘린다.
-    layout={barmode:'overlay',height:((pfx==='yrm')?560:410),margin:{t:((pfx==='yrm')?50:34),r:22,b:48,l:56},paper_bgcolor:paper,plot_bgcolor:paper,font:{family:'inherit',size:11,color:fc},xaxis:{dtick:1,gridcolor:transp,zeroline:false,tickangle:0},yaxis:{gridcolor:grid,zeroline:false,ticksuffix:'',rangemode:'tozero'},showlegend:true,legend:{orientation:'h',y:-0.18,x:0.5,xanchor:'center'},bargap:.6,annotations:annos};   // [260723 운영자] barmode overlay — 막대를 연도 중앙에 겹쳐 세워 곡선 점(마커)이 기둥 중앙에 정확히 얹힘(구 group=좌우 오프셋으로 점↔기둥 어긋남) · y축 만명 단위(÷10000)
+    var _m=(pfx==='yrm');   // [260801 운영자 "차트가 쭈그라들게 보인다 · 가로가 비어있음"] 대시보드 인라인(yrm) = 죽은 여백 회수 대상
+    annos.push({x:1,y:(_m?1.02:1.07),xref:'paper',yref:'paper',text:'(단위: 만명)',showarrow:false,xanchor:'right',yanchor:'bottom',font:{color:fc,size:10.5}});   // [260723 운영자] 우상단 단위 표기 · [260801] yrm은 1.07→1.02(상단 마진 축소분에 맞춰 붙임 — 잘림 0)
+    // [260725 운영자] yrm(대시보드 좌 보드)만 높이 560 — 모달(pfx='yr')은 410 그대로.
+    // [260801 운영자] yrm 차트가 「쭈그라들어」 보이던 원인 = 카드 안 죽은 여백. 실측(1920 · _bizFitViewport로 컨테이너 399px):
+    //   플롯 795×261 → 하단에 88px(전체 높이의 22%)이 통째로 빈 가로 띠였다. 범례 y:-0.18(플롯 높이 비례)이 눈금 라벨 아래로
+    //   과하게 내려가 Plotly가 하단 마진을 그만큼 자동 확장한 탓. 좌우도 l56+r22=78px이 눈금값("10") 실폭보다 넉넉.
+    //   → yrm만 t50→32 · l56→42 · r22→14 · b48→52 · 범례 -0.18→플롯 아래 22px 고정(_yrmLegY · 마진 52 안에 들어앉아 자동확장 0). 모달(pfx='yr')은 종전 값 그대로.
+    layout={barmode:'overlay',height:(_m?560:410),margin:{t:(_m?32:34),r:(_m?14:22),b:(_m?52:48),l:(_m?42:56)},paper_bgcolor:paper,plot_bgcolor:paper,font:{family:'inherit',size:11,color:fc},xaxis:{dtick:1,gridcolor:transp,zeroline:false,tickangle:0},yaxis:{gridcolor:grid,zeroline:false,ticksuffix:'',rangemode:'tozero'},showlegend:true,legend:{orientation:'h',y:(_m?_yrmLegY(560):-0.18),yanchor:'top',x:0.5,xanchor:'center'},bargap:.6,annotations:annos};   // [260723 운영자] barmode overlay — 막대를 연도 중앙에 겹쳐 세워 곡선 점(마커)이 기둥 중앙에 정확히 얹힘(구 group=좌우 오프셋으로 점↔기둥 어긋남) · y축 만명 단위(÷10000)
   }else{
     var yi=years.indexOf(st.year);
     var ys=selCats.map(function(c){var r=_yrRow(c,st.metric);return r?(r.v[yi]||0):0;});
