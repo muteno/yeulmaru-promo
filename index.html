@@ -880,11 +880,13 @@ button{font-family:inherit;cursor:pointer}
    표(테이블)·테두리는 쓰지 않는다: 바깥 grid + 각 행 display:contents 로 열만 공유(마크업은 div/span 그대로).
    · 1열 구분 = 「공연·교육·대관·셋업」 글자만(운영자 260731 3차 — 알약/버튼 형태 폐지).
      형태는 같은 패널의 정본 부품 .sp-card-type(12.5px/700 색만 다른 글자 라벨) 계승, 색 규칙은 캘린더 셀과 공유
+     [260801 운영자] 폭 = 3글자 고정(40px = 12.5px×3 + 여유). 구 auto는 그날 구분이 2글자(공연)뿐이냐
+     3글자(리허설·교육실)가 섞였느냐에 따라 열 폭이 달라져 2열(제목) 시작 x가 날짜마다 흔들렸다.
    · 2열 제목 = 남는 폭 전부(minmax(0,1fr)) · 넘치면 …
    · 3열 장소 = auto = 가장 긴 장소명 폭으로 모든 행이 같은 x에서 시작(좌측 정렬) = 빈 표의 한 열처럼 읽힌다
    · 세로 = align-items:baseline. 열마다 글자 크기가 달라(12.5·13·11) 박스 중앙 정렬은 잉크가 어긋난다 —
      기준선을 공유시켜 「글자가 같은 줄 위에 앉은」 상태로. 실측 = tools/scratch/probe_panel_ink.mjs */
-.panel-hdr-labels{margin-top:7px;display:grid;grid-template-columns:auto minmax(0,1fr) auto;column-gap:8px;row-gap:5px;align-items:baseline}
+.panel-hdr-labels{margin-top:7px;display:grid;grid-template-columns:40px minmax(0,1fr) auto;column-gap:8px;row-gap:5px;align-items:baseline}
 .panel-hdr-labels>span{margin-left:0}
 .panel-hdr-hol{grid-column:1/-1}
 .panel-hdr-prog{display:contents}
@@ -2460,6 +2462,7 @@ html::-webkit-scrollbar-thumb{background:rgba(0,0,0,.15)}
 </div>
 
 <script src="data/edu_institutions.js"></script>
+<script src="data/edu_rooms.js"></script>
 <script>
 // MSAL config — must be defined before session-check IIFE (~line 1781)
 const _MSAL_CONFIG = {
@@ -2956,6 +2959,13 @@ function perfBadgeKind(p){return p._setup?'셋업':(p._reh?'리허설':(p.t==='e
 // 장소 표기 = 운영자 확정 4종(대극장·소극장·7층 전시실·장도 전시실). 구글 캘린더 공간 태그(_GC_PLACE)는
 // '7층'·'장도'로 짧게 들어와 그대로 쓰면 시트(정본) 표기와 어긋난다 → 여기서 정본 표기로 맞춘다.
 function perfPlaceLabel(l){var s=String(l||'').trim();return s==='7층'?'7층 전시실':(s==='장도'?'장도 전시실':s);}
+// [260801 운영자] 교육실 대관(data/edu_rooms.js — 대관 신청 CSV 산출물) = 날짜 패널(사이드바)에만 뜬다.
+//   「캘린더에 표기하지는 않고 사이드바에는 교육실이라고」 → getPerfs·renderPerfsHtml은 무접촉(셀 표기 0).
+//   구분 글자 = 「교육실」 · 색 = 대관과 같은 시안블루(--c5). 성격이 대관이라 팔레트를 그대로 계승(신규 hex 0).
+function getEduRooms(key){
+  if(typeof EDU_ROOMS==='undefined'||!EDU_ROOMS)return [];
+  return EDU_ROOMS.filter(function(r){return r.s===key;});
+}
 function renderPerfsHtml(perfs,td,past,dateKey){
 if(!perfs||!perfs.length)return'';
 var cperfs=perfs.filter(function(p){return p.t!=='e';});
@@ -20329,6 +20339,14 @@ function openPanel(dateObj,recs){
     return '<span class="panel-hdr-prog"><span class="panel-hdr-kind" style="color:'+perfBadgeBg(p)+'">'+perfBadgeKind(p)+'</span>'+
       '<span class="panel-hdr-nm" title="'+_nm+'">'+_nm+'</span>'+
       '<span class="panel-hdr-place">'+escapeHtml(perfPlaceLabel(p.l))+'</span></span>';
+  }).join('');
+  // [260801 운영자] 교육실 대관 — 같은 3열 격자에 이어 붙인다(구분 「교육실」 | 신청내용 | 방). 캘린더 셀엔 안 나간다.
+  _pLabels+=getEduRooms(_pKey).map(function(r){
+    var _en=escapeHtml(r.n||r.g||'대관');
+    var _et=escapeHtml([r.n,r.g,r.t,r.l].filter(Boolean).join(' · '));   // 잘린 제목·시간·단체명은 툴팁으로(3열 격자는 넓히지 않는다)
+    return '<span class="panel-hdr-prog"><span class="panel-hdr-kind" style="color:var(--c5)">교육실</span>'+
+      '<span class="panel-hdr-nm" title="'+_et+'">'+_en+'</span>'+
+      '<span class="panel-hdr-place">'+escapeHtml(r.l)+'</span></span>';
   }).join('');
   var h='<div class="panel-hdr"><div style="flex:1;min-width:0"><div class="panel-date">'+(dateObj.getMonth()+1)+'월 '+dateObj.getDate()+'일<span class="panel-dow">'+dn+'요일</span></div>'+(_pLabels?'<div class="panel-hdr-labels">'+_pLabels+'</div>':'')+'</div><button class="panel-close" onclick="closePanel()">✕</button></div><div class="panel-body">';
   var dKey=dk(dateObj);
