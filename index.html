@@ -2530,7 +2530,8 @@ const MENUS=[
   {label:'대시보드',id:'biz'},   // [260723 운영자] 좌측 mv-seg 분리 토글 폐지 → 대시보드(사업 실적) 메인 전환. 클릭 = setMainView('biz') · 호버 = 세부(연간 실적·연간 일정)
   {label:'캘린더',id:'cal'},   // 클릭 = setMainView('cal') · 호버 = 세부(홍보 신청·온라인/오프라인 홍보 현황 — 구 '홍보 신청·확인' 대메뉴 흡수)
   {label:'콘텐츠 제작',id:'content'},   // [260710 운영자] PLAY ZONE 좌측으로 스위치 · [260729 운영자] PLAY ZONE 세부메뉴(도화지·에니어그램) 전부 흡수 → 대메뉴 통합
-  {label:'회원 관리',id:'member'},   // [260731 운영자] 구 '사업 실적 ▸ 회원 조회'를 대메뉴 5번으로 승격 — 개인정보라 admin 전용(buildNav가 비관리자에게 숨김)
+  // [260731 운영자 2차] 「회원 관리」 대메뉴 폐지 → 대메뉴 4종. 회원 분포(구 '회원 기본 개요') = 대시보드 세부로 이동(_bizMenuBuild, admin만).
+  //   회원 조회(표)는 나가는 문을 잃지 않게 회원 분포 모달 헤더의 [회원 조회] 버튼으로 진입(양방향 — 구 회원 조회 ▸ 기본 개요 버튼의 짝).
   // [260729 운영자] {label:'PLAY ZONE',id:'playzone'} 제거 — 세부는 콘텐츠 제작 드롭다운 「PLAY ZONE」 섹션으로 이관(_contentMenuBuild). 롤백 = 이 줄 복구 + 아래 _qaDeepLink alias 되돌리기.
 ];
 
@@ -3666,14 +3667,14 @@ function _qaBanner(){
   }catch(e){}
 }
 /* [QA] 뷰 딥링크 — ?qa=1#<화면>으로 그 화면 직행. 기존 네비 버튼(data-mid)을 그대로 .click() = 새 라우팅 창작 없음.
-   화면 id = sales(판매 현황)·biz(대시보드)·cal(캘린더)·content(콘텐츠)·member(회원 관리, admin만).
+   화면 id = sales(판매 현황)·biz(대시보드)·cal(캘린더)·content(콘텐츠). [260731 2차] member(회원 관리) 대메뉴 폐지 → biz alias.
    [260731] 폐지된 대메뉴 해시(prodreg·promoapply·bizstatus)는 흡수처 대메뉴로 alias — 기존 딥링크 끊김 0. */
 function _qaDeepLink(){
   if(!window._QA) return;
   var raw=(location.hash||'').replace(/^#/,'').trim().toLowerCase();
   if(!raw) return;
-  var ids=['sales','biz','cal','content','member'];   // [260731] 대메뉴 5종 · [260729] playzone 폐지 — 구 해시는 아래 alias로 흡수처 직행(딥링크 끊김 0)
-  var alias={dashboard:'biz',dash:'biz',home:'biz',calendar:'cal',year:'biz',status:'biz',bizstatus:'biz',product:'sales',prod:'sales',prodreg:'sales',promo:'cal',apply:'cal',promoapply:'cal',sale:'sales',play:'content',playzone:'content'};
+  var ids=['sales','biz','cal','content'];   // [260731 2차] 대메뉴 4종(member 폐지) · [260729] playzone 폐지 — 구 해시는 아래 alias로 흡수처 직행(딥링크 끊김 0)
+  var alias={dashboard:'biz',dash:'biz',home:'biz',calendar:'cal',year:'biz',status:'biz',bizstatus:'biz',product:'sales',prod:'sales',prodreg:'sales',promo:'cal',apply:'cal',promoapply:'cal',sale:'sales',play:'content',playzone:'content',member:'biz'};   // [260731 2차] member = 회원 분포가 있는 대시보드로
   var id = ids.indexOf(raw)>=0 ? raw : (alias[raw]||null);
   if(!id){ try{console.warn('[QA] 알 수 없는 딥링크 해시:',raw,'· 사용가능=',ids.join('/'));}catch(e){} return; }
   var tries=0;
@@ -4471,8 +4472,8 @@ function _navHovStop(b){ if(b&&b._hovRAF){cancelAnimationFrame(b._hovRAF);b._hov
 function buildNav(){
   const c=document.getElementById('nav-menus');c.innerHTML='';
   const hb=document.createElement('div');hb.className='nav-hover-bg';c.appendChild(hb);   // navigation-01 이식 — 호버 배경 pill(살몬 언더바 = 260723 폐지)
-  // [260731] 회원 관리 = 개인정보(운영_회원) 전용 대메뉴 — 비관리자에겐 대메뉴 자체를 숨김(구 '사업 실적 ▸ 회원 조회' admin 게이트 계승)
-  const menus=(userRole==='admin'?[...MENUS.filter(function(m){return m.id!=='promo';})]:MENUS).filter(function(m){return m.id!=='member'||userRole==='admin';});
+  // [260731 2차] 회원 관리 대메뉴 폐지 — 개인정보(운영_회원) admin 게이트는 세부메뉴(_bizMenuBuild 회원 분포) + open* 함수 자체 게이트가 계속 담당
+  const menus=(userRole==='admin'?[...MENUS.filter(function(m){return m.id!=='promo';})]:MENUS);
   // 관리(admin)는 nav-center 메뉴에서 빼고 우상단 톱니 아이콘으로 이동 — admin에게만 노출
   var _gear=document.getElementById('admin-gear'); if(_gear)_gear.style.display=(userRole==='admin')?'flex':'none';
   var _pw=document.getElementById('pres-wrap'); if(_pw)_pw.style.display=(userRole==='admin')?'block':'none';
@@ -4499,13 +4500,12 @@ function buildNav(){
       if(m.id==='admin'){openAdminPanel();return;}
       if(m.id==='platform'){openPlatformBoard();return;}
       if(m.id==='sales'){_ddOpen(b,_salesMenuBuild,210,'sales');return;}
-      if(m.id==='member'){openMemberLookup();return;}   // [260731 운영자] 회원 관리 = 클릭 즉시 회원 조회(hover는 아래 _sub 드롭다운 — 구 prodreg "둘다" 패턴 계승)
       if(m.id==='playzone'){_ddOpen(b,_playzoneMenuBuild,210,'playzone');return;}
       document.querySelectorAll('.nav-btn').forEach(x=>x.classList.remove('on'));b.classList.add('on');
     };
     // 세부메뉴 보유 메뉴 = 호버 즉시 드롭다운(운영자 260709 "바로" — 스침 오발 방지 가드 120ms만). 다른 팝업이 열려 있으면 안 뺏음.
-    // [260731] 대메뉴 5종 전부 세부 보유(대시보드·캘린더는 클릭=화면 전환 + 호버=세부 — 구 prodreg "둘다" 패턴)
-    var _sub=(m.id==='content')?_contentMenuBuild:(m.id==='sales')?_salesMenuBuild:(m.id==='biz')?_bizMenuBuild:(m.id==='cal')?_calMenuBuild:(m.id==='member')?_memberMenuBuild:(m.id==='playzone')?_playzoneMenuBuild:null;
+    // [260731] 대메뉴 4종 전부 세부 보유(대시보드·캘린더는 클릭=화면 전환 + 호버=세부 — 구 prodreg "둘다" 패턴)
+    var _sub=(m.id==='content')?_contentMenuBuild:(m.id==='sales')?_salesMenuBuild:(m.id==='biz')?_bizMenuBuild:(m.id==='cal')?_calMenuBuild:(m.id==='playzone')?_playzoneMenuBuild:null;
     if(_sub){ b.setAttribute('aria-haspopup','true');   // navigation-01 이식 — 세부메뉴 보유 표시(a11y · 딤 축과 동일 문법)
       // [260723 운영자] navigation-01 모바일 문법 — 세부메뉴 = 인라인 아코디언(내용 = 데스크탑 드롭다운과 같은 빌더 재사용 · 항목 탭 = 패널 닫고 이동)
       var _acc=document.createElement('div');_acc.className='nav-acc';
@@ -20537,20 +20537,17 @@ function _calMenuBuild(menu){
     +'<button type="button" onclick="_ddCloseAll();openPromoBoard()" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'">온라인 홍보 현황</button>'
     +'<button type="button" onclick="_ddCloseAll();openPlatformBoard()" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'">오프라인 홍보 현황</button>';   // [260714 운영자] 온라인 홍보 현황(openPromoBoard)·오프라인 홍보 현황(openPlatformBoard)
 }
-// 대시보드 세부 — 연간 실적(openYearBoard, 구 '사업 현황' 대메뉴) + 연간 일정.
+// 대시보드 세부 — 연간 실적(openYearBoard, 구 '사업 현황' 대메뉴) + 연간 일정 + 회원 분포(admin, 구 '회원 관리' 대메뉴).
 //   [260731 운영자] '사업 현황'과 '연간 실적'은 같은 보드였음 → 표 내용(2012~2026 연간 실적)에 맞는 「연간 실적」만 남김.
 //   판매 현황·실적 입력은 여기 두지 않음 = 대메뉴 1번과 같은 화면(한 화면 = 한 자리).
 function _bizMenuBuild(menu){
   var itemCss='display:flex;align-items:center;gap:10px;width:100%;padding:11px 14px;border:0;text-align:left;font-size:13px;font-weight:600;color:var(--text);border-radius:9px;cursor:pointer;font-family:inherit;transition:background .12s';
   menu.innerHTML='<div style="padding:8px 14px 6px;font-size:11px;color:var(--dim);font-weight:700">대시보드</div>'
     +'<button type="button" onclick="_ddCloseAll();openYearBoard()" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'">연간 실적</button>'
-    +'<button type="button" onclick="_ddCloseAll();openAnnualCalendar()" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'">연간 일정</button>';   // [260731 운영자] 연간 일정 = 구 '사업 실적'서 대시보드로 이동
-}
-// 회원 관리 세부 — 회원 조회(+우측 미니 차트 = 기본 개요). 구 _salesMenuBuild 마지막 항목을 그대로 옮김(admin 전용 게이트는 buildNav가 대메뉴째 담당).
-function _memberMenuBuild(menu){
-  var itemCss='display:flex;align-items:center;gap:10px;width:100%;padding:11px 14px;border:0;text-align:left;font-size:13px;font-weight:600;color:var(--text);border-radius:9px;cursor:pointer;font-family:inherit;transition:background .12s';
-  menu.innerHTML='<div style="padding:8px 14px 6px;font-size:11px;color:var(--dim);font-weight:700">회원 관리</div>'
-    +'<button type="button" onclick="_ddCloseAll();openMemberLookup()" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'"><span style="flex:1">회원 조회</span><span onclick="event.stopPropagation();_ddCloseAll();openMemberOverview()" title="회원 기본 개요 (거주지·연령·분포 맵)" style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:7px;color:var(--accent)" onmouseenter="this.style.background=\'var(--accent-light)\';event.stopPropagation()" onmouseleave="this.style.background=\'none\'"><svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M2 12V7M7 12V2M12 12V5"/></svg></span></button>';   // 회원 DB(운영_회원 시트) read-only 조회 — 개인정보라 관리자 전용 · 우측 미니 차트 = 기본 개요 모달(운영자 260711 "세부 메뉴 우측에 기본 개요")
+    +'<button type="button" onclick="_ddCloseAll();openAnnualCalendar()" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'">연간 일정</button>'   // [260731 운영자] 연간 일정 = 구 '사업 실적'서 대시보드로 이동
+    // [260731 운영자 2차] 회원 관리 대메뉴 폐지 → 「회원 분포」(openMemberOverview — 거주지 TOP·연령대·전국 분포 맵)를 대시보드 세부 3번으로.
+    //   개인정보 집계라 관리자에게만 노출(구 대메뉴 admin 게이트 계승 · 함수 자체 게이트도 유지). 항목 문법 = 위 두 항목과 동일(신규 값 0).
+    +(userRole==='admin'?'<button type="button" onclick="_ddCloseAll();openMemberOverview()" title="거주지·연령·전국 분포 요약 (회원 조회는 여기서 진입)" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'">회원 분포</button>':'');
 }
 function _contentMenuBuild(menu){
   // [260711 운영자] 영상 편집기 3분류 신설 — 1 영상 편집 · 2 자막 삽입 · 3 영상 프롬프팅 (한 도구, 탭 진입점 3개)
@@ -22330,7 +22327,7 @@ function _playzoneMenuBuild(menu){
 }
 // 판매 현황 드롭다운(대메뉴 1번) — [260731 운영자] 순서 = 1 상품 등록·변경 · 2 실적 조회 · 3 실적 입력(관리자) · 4 실적 분석.
 //   이름 = 화면 기준 통일: 실적 조회 = openAnalyticsBoard(구 '판매 실적 조회') · 실적 분석 = openBusinessBoard(구 '연간 실적 분석'·'연간 누적 실적').
-//   연간 일정·회원 조회는 여기서 나감(→ 대시보드 · 회원 관리 대메뉴).
+//   연간 일정·회원 조회는 여기서 나감(→ 대시보드 ▸ 연간 일정 · 대시보드 ▸ 회원 분포).
 function _salesMenuBuild(menu){
   var itemCss='display:flex;align-items:center;gap:10px;width:100%;padding:11px 14px;border:0;text-align:left;font-size:13px;font-weight:600;color:var(--text);border-radius:9px;cursor:pointer;font-family:inherit;transition:background .12s';
   menu.innerHTML='<div style="padding:8px 14px 6px;font-size:11px;color:var(--dim);font-weight:700">판매 현황</div>'
@@ -22362,7 +22359,7 @@ async function openMemberLookup(){
       +'<select id="mem-f1" onchange="_memFillSel(2);_memRender()" style="width:auto;max-width:190px;padding:9px 10px;border:1px solid var(--border2);border-radius:var(--r-btn);font-size:12.5px;font-family:inherit;background:var(--surface-solid);color:var(--text)"><option value="">시도 전체</option></select>'
       +'<select id="mem-f2" onchange="_memFillSel(3);_memRender()" style="width:auto;max-width:160px;padding:9px 10px;border:1px solid var(--border2);border-radius:var(--r-btn);font-size:12.5px;font-family:inherit;background:var(--surface-solid);color:var(--text)"><option value="">시군구 전체</option></select>'
       +'<select id="mem-f3" onchange="_memRender()" style="width:auto;max-width:150px;padding:9px 10px;border:1px solid var(--border2);border-radius:var(--r-btn);font-size:12.5px;font-family:inherit;background:var(--surface-solid);color:var(--text)"><option value="">동·읍면 전체</option></select>'
-      +'<button type="button" onclick="closeMemberLookup();openMemberOverview()" title="거주지·연령·전국 분포 요약" style="padding:9px 13px;border:1.5px solid var(--accent);background:var(--accent);color:var(--surface-solid);border-radius:var(--r-btn);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:6px"><svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M2 12V7M7 12V2M12 12V5"/></svg>기본 개요</button>'
+      +'<button type="button" onclick="closeMemberLookup();openMemberOverview()" title="거주지·연령·전국 분포 요약" style="padding:9px 13px;border:1.5px solid var(--accent);background:var(--accent);color:var(--surface-solid);border-radius:var(--r-btn);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:6px"><svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M2 12V7M7 12V2M12 12V5"/></svg>회원 분포</button>'   /* [260731 2차] 이름 통일 = 대시보드 세부메뉴 「회원 분포」(구 '기본 개요' — 한 화면 = 한 이름) */
       +'<button type="button" id="mem-refresh" onclick="_memLoad(true)" title="시트에서 다시 불러오기" style="padding:9px 13px;border:1.5px solid var(--accent);background:var(--accent-glow);color:var(--accent);border-radius:var(--r-btn);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">새로고침</button>'
       +'</div>'
       +'<div id="mem-body" style="max-height:56vh;overflow:auto;border:1px solid var(--border);border-radius:var(--r-btn)"></div>'
@@ -22445,7 +22442,7 @@ function _memRender(){
     +'</table>'+(shown.length?'':'<div style="padding:22px;text-align:center;font-size:12.5px;color:var(--dim)">결과가 없어요</div>');
 }
 
-// === [260711] 회원 기본 개요 — 홍보현황(pb-modal) 셸 계승 · 거주지 TOP5 + 연령대 + 전국 분포 버블맵 (admin 전용) ===
+// === [260711] 회원 분포(구 '회원 기본 개요' — 260731 2차 개명) — 홍보현황(pb-modal) 셸 계승 · 거주지 TOP5 + 연령대 + 전국 분포 버블맵 (admin 전용) ===
 // 데이터 = _memState(회원 조회와 공유) — 연령대 필드는 Worker memberSheetRead 파생값(생년월일 원값 미전송).
 // 맵 = 인라인 SVG 남한 실루엣 + 위경도→등장방형 투영 버블(외부 요청 0) · 색 = --accent 알파 변주(팔레트 폐쇄 §🚨).
 var _MEM_GEO={   // 좌표 [경도,위도,라벨방향] — 전남광주통합특별시는 실분포 인지 위해 주요 시군구 개별, 그 외 시도 = 중심 1점. 방향 = 인접 버블 라벨 겹침 분산(여수·순천·광양 밀집)
@@ -22466,12 +22463,14 @@ function _memGeoKey(sido,sgg){
 function _memXY(lonlat){return [(lonlat[0]-124.5)*65,(39-lonlat[1])*80];}   // lon124.5~131.5·lat33~39 → 455×480 (위도/경도 km비 보정)
 function closeMemberOverview(){var el=document.getElementById('member-ov');if(el)el.remove();}
 async function openMemberOverview(){
-  if(userRole!=='admin'){showToast('회원 개요는 관리자 전용이에요','error');return;}
+  if(userRole!=='admin'){showToast('회원 분포는 관리자 전용이에요','error');return;}
   closeMemberOverview();
   var el=document.createElement('div');el.id='member-ov';
   el.innerHTML='<div class="modal-bg show" style="z-index:var(--z-modal)" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeMemberOverview)">'
     +'<div class="modal pb-modal" style="width:96vw;max-width:1100px;height:88vh;max-height:88vh;overflow:hidden;padding:0;position:relative;display:flex;flex-direction:column">'
     +'<button class="modal-x" onclick="closeMemberOverview()" title="닫기" aria-label="닫기" style="position:absolute;top:16px;right:18px;float:none;margin:0;z-index:10">✕</button>'
+    // [260731 운영자 2차] 회원 관리 대메뉴 폐지 → 회원 조회(표)로 가는 문을 여기에(구 회원 조회 ▸ 회원 분포 버튼의 짝). 셸에 두는 이유 = 로딩·로드실패 상태에서도 항상 있게. 버튼 문법 = 회원 조회 모달 '새로고침' 계승(신규 값 0).
+    +'<button type="button" onclick="closeMemberOverview();openMemberLookup()" title="회원 명부 조회 (운영_회원 시트)" style="position:absolute;top:14px;right:56px;z-index:10;padding:8px 12px;border:1.5px solid var(--accent);background:var(--accent-glow);color:var(--accent);border-radius:var(--r-btn);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">회원 조회</button>'
     +'<div id="mem-ov-body" style="flex:1;overflow:auto;padding:25px 29px;text-align:center;color:var(--dim)">'+_ldHtml(16)+'회원 데이터 불러오는 중…</div>'
     +'</div></div>';
   document.body.appendChild(el);
@@ -22519,7 +22518,7 @@ function _memOvRender(){
   var ageHtml='<div style="font-size:14px;font-weight:800;margin:18px 0 6px;text-align:left">연령대 분포 <span style="font-size:10.5px;color:var(--dim);font-weight:500">(생년월일 기준 · 만나이 근사)</span></div>'
     +ages.map(function(a){return bar(a[0],a[1],maxA,pct(a[1])+'%');}).join('');
   body.style.textAlign='left';body.style.color='var(--text)';
-  body.innerHTML='<div style="font-size:16px;font-weight:800;margin-bottom:2px">회원 기본 개요</div>'
+  body.innerHTML='<div style="font-size:16px;font-weight:800;margin-bottom:2px">회원 분포</div>'
     +'<div style="font-size:12px;color:var(--dim);margin-bottom:14px">운영_회원 시트 · 주소 미상 '+unloc.toLocaleString()+'명 제외 집계 · 개인 식별 없음(집계 전용)</div>'
     +kpi
     +'<div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start">'
