@@ -64,7 +64,6 @@
 - **CSS 정본**: `node tools/miso/build_css_spec.mjs` → `첨부/정본_스타일.css` + `첨부/CSS_정본_지시.md`
   (standalone을 실렌더해 「화면에 실제로 있는 선택자」만 골라 원문 그대로 추출 · 작은 자산은 data:URI 인라인)
 - 회원 패키지: `node tools/miso/build_members.mjs` → `비공개/` (커밋 안 됨)
-- 검증: `node tools/miso/smoke_standalone.mjs` (격리 서빙 자동 · playwright 필요)
 - **이 폴더 파일을 손으로 고치지 말 것** — 원본(index.html·CSV·문서 원문)을 고치고 재생성.
 
 ## ⚠️ 운영자 판단 필요 (평의회 지적 — 코드로 못 정하는 사안)
