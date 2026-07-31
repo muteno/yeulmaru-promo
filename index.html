@@ -2521,14 +2521,16 @@ function platDisplay(p1,p2){
 }
 const DAYS=['화','수','목','금','토','일'];
 const DAY_NAMES=['일','월','화','수','목','금','토'];
+// [260731 운영자] 대메뉴 7 → 5 재편 · 원칙 = 「한 화면 = 한 이름 = 한 자리」(같은 보드를 두 이름으로 부르던 중복 청산).
+//   구 대메뉴 흡수처: 상품 등록·변경 → 판매 현황 ▸ 상품 등록·변경 / 홍보 신청·확인 → 캘린더 세부 / 사업 현황(openYearBoard) → 대시보드 ▸ 연간 실적.
+//   이름 통일: openYearBoard = 「연간 실적」(구 '사업 현황'·'연간 실적 (사업 현황)') · openAnalyticsBoard = 「실적 조회」(구 '판매 실적 조회'·'판매 현황') · openBusinessBoard = 「실적 분석」(구 '연간 실적 분석'·'연간 누적 실적').
+//   롤백 = 이 배열 + buildNav 분기 + _qaDeepLink ids/alias + 아래 5개 *MenuBuild 되돌리기.
 const MENUS=[
-  {label:'대시보드',id:'biz'},   // [260723 운영자] 좌측 mv-seg 분리 토글 폐지 → 대시보드(사업 실적)=메뉴 1번 · 기본값 · 캘린더=메뉴 2번. 클릭 = setMainView('biz') · 호버/활성 = 일반 nav 계승
-  {label:'캘린더',id:'cal'},
-  {label:'상품 등록·변경',id:'prodreg'},   // [260711 운영자] 구 '상품 등록 및 홍보 신청'을 상품/홍보 2개 대메뉴로 분리 — 상품 등록 관련
-  {label:'홍보 신청·확인',id:'promoapply'},   // [260711 운영자] 〃 홍보 신청 관련(일괄 신청·계획·현황). id≠'promo'(buildNav admin 숨김 필터 회피 = 기존 노출 유지)
-  {label:'사업 실적',id:'sales'},   // [260710 운영자] 구 '사업현황' — 플랫폼 현황 서브 흡수 · [260711] 연간 일정도 여기로 이동
-  {label:'사업 현황',id:'bizstatus'},   // [260723 운영자] 연간 실적(망마·장도 2012~2026) 표 그대로 살린 보드 — 기존 '사업 실적'과 별개 대메뉴(openYearBoard)
+  {label:'판매 현황',id:'sales'},   // 대메뉴 1 — 구 '사업 실적'. 세부 = 상품 등록·변경 / 실적 조회 / 실적 입력(관리자) / 실적 분석
+  {label:'대시보드',id:'biz'},   // [260723 운영자] 좌측 mv-seg 분리 토글 폐지 → 대시보드(사업 실적) 메인 전환. 클릭 = setMainView('biz') · 호버 = 세부(연간 실적·연간 일정)
+  {label:'캘린더',id:'cal'},   // 클릭 = setMainView('cal') · 호버 = 세부(홍보 신청·온라인/오프라인 홍보 현황 — 구 '홍보 신청·확인' 대메뉴 흡수)
   {label:'콘텐츠 제작',id:'content'},   // [260710 운영자] PLAY ZONE 좌측으로 스위치 · [260729 운영자] PLAY ZONE 세부메뉴(도화지·에니어그램) 전부 흡수 → 대메뉴 통합
+  {label:'회원 관리',id:'member'},   // [260731 운영자] 구 '사업 실적 ▸ 회원 조회'를 대메뉴 5번으로 승격 — 개인정보라 admin 전용(buildNav가 비관리자에게 숨김)
   // [260729 운영자] {label:'PLAY ZONE',id:'playzone'} 제거 — 세부는 콘텐츠 제작 드롭다운 「PLAY ZONE」 섹션으로 이관(_contentMenuBuild). 롤백 = 이 줄 복구 + 아래 _qaDeepLink alias 되돌리기.
 ];
 
@@ -3664,13 +3666,14 @@ function _qaBanner(){
   }catch(e){}
 }
 /* [QA] 뷰 딥링크 — ?qa=1#<화면>으로 그 화면 직행. 기존 네비 버튼(data-mid)을 그대로 .click() = 새 라우팅 창작 없음.
-   화면 id = biz(대시보드)·cal(캘린더)·prodreg(상품등록)·promoapply(홍보)·sales(사업실적)·bizstatus(사업현황)·content(콘텐츠)·playzone. */
+   화면 id = sales(판매 현황)·biz(대시보드)·cal(캘린더)·content(콘텐츠)·member(회원 관리, admin만).
+   [260731] 폐지된 대메뉴 해시(prodreg·promoapply·bizstatus)는 흡수처 대메뉴로 alias — 기존 딥링크 끊김 0. */
 function _qaDeepLink(){
   if(!window._QA) return;
   var raw=(location.hash||'').replace(/^#/,'').trim().toLowerCase();
   if(!raw) return;
-  var ids=['biz','cal','prodreg','promoapply','sales','bizstatus','content'];   // [260729] playzone 대메뉴 폐지(콘텐츠 제작 흡수) → 목록에서 제외 · 구 해시는 아래 alias로 content 직행(딥링크 끊김 0)
-  var alias={dashboard:'biz',dash:'biz',home:'biz',calendar:'cal',year:'bizstatus',status:'bizstatus',product:'prodreg',prod:'prodreg',promo:'promoapply',apply:'promoapply',sale:'sales',play:'content',playzone:'content'};
+  var ids=['sales','biz','cal','content','member'];   // [260731] 대메뉴 5종 · [260729] playzone 폐지 — 구 해시는 아래 alias로 흡수처 직행(딥링크 끊김 0)
+  var alias={dashboard:'biz',dash:'biz',home:'biz',calendar:'cal',year:'biz',status:'biz',bizstatus:'biz',product:'sales',prod:'sales',prodreg:'sales',promo:'cal',apply:'cal',promoapply:'cal',sale:'sales',play:'content',playzone:'content'};
   var id = ids.indexOf(raw)>=0 ? raw : (alias[raw]||null);
   if(!id){ try{console.warn('[QA] 알 수 없는 딥링크 해시:',raw,'· 사용가능=',ids.join('/'));}catch(e){} return; }
   var tries=0;
@@ -4445,7 +4448,8 @@ function closeMobileNav(){
 function buildNav(){
   const c=document.getElementById('nav-menus');c.innerHTML='';
   const hb=document.createElement('div');hb.className='nav-hover-bg';c.appendChild(hb);   // navigation-01 이식 — 호버 배경 pill(살몬 언더바 = 260723 폐지)
-  const menus=userRole==='admin'?[...MENUS.filter(function(m){return m.id!=='promo';})]:MENUS;
+  // [260731] 회원 관리 = 개인정보(운영_회원) 전용 대메뉴 — 비관리자에겐 대메뉴 자체를 숨김(구 '사업 실적 ▸ 회원 조회' admin 게이트 계승)
+  const menus=(userRole==='admin'?[...MENUS.filter(function(m){return m.id!=='promo';})]:MENUS).filter(function(m){return m.id!=='member'||userRole==='admin';});
   // 관리(admin)는 nav-center 메뉴에서 빼고 우상단 톱니 아이콘으로 이동 — admin에게만 노출
   var _gear=document.getElementById('admin-gear'); if(_gear)_gear.style.display=(userRole==='admin')?'flex':'none';
   var _pw=document.getElementById('pres-wrap'); if(_pw)_pw.style.display=(userRole==='admin')?'block':'none';
@@ -4470,16 +4474,15 @@ function buildNav(){
       if(m.id==='content'){_ddOpen(b,_contentMenuBuild,210,'content');return;}
       if(m.id==='annual'){openAnnualCalendar();return;}
       if(m.id==='admin'){openAdminPanel();return;}
-      if(m.id==='prodreg'){openTicketReg();return;}   // [260711 운영자] 상품 등록·변경 = 클릭 즉시 상품 등록 화면(hover는 아래 _sub로 드롭다운 — "둘다")
-      if(m.id==='promoapply'){_ddOpen(b,_promoMenuBuild,210,'promoapply');return;}
       if(m.id==='platform'){openPlatformBoard();return;}
       if(m.id==='sales'){_ddOpen(b,_salesMenuBuild,210,'sales');return;}
-      if(m.id==='bizstatus'){openYearBoard();return;}   // [260723] 연간 실적 보드 직행(드롭다운 없음 · openAnnualCalendar 패턴 계승)
+      if(m.id==='member'){openMemberLookup();return;}   // [260731 운영자] 회원 관리 = 클릭 즉시 회원 조회(hover는 아래 _sub 드롭다운 — 구 prodreg "둘다" 패턴 계승)
       if(m.id==='playzone'){_ddOpen(b,_playzoneMenuBuild,210,'playzone');return;}
       document.querySelectorAll('.nav-btn').forEach(x=>x.classList.remove('on'));b.classList.add('on');
     };
-    // 세부메뉴 보유 메뉴(콘텐츠 제작·일정 관리·판매 현황·PLAY ZONE) = 호버 즉시 드롭다운(운영자 260709 "바로" — 스침 오발 방지 가드 120ms만). 다른 팝업이 열려 있으면 안 뺏음.
-    var _sub=(m.id==='content')?_contentMenuBuild:(m.id==='prodreg')?_prodregMenuBuild:(m.id==='promoapply')?_promoMenuBuild:(m.id==='playzone')?_playzoneMenuBuild:(m.id==='sales')?_salesMenuBuild:null;
+    // 세부메뉴 보유 메뉴 = 호버 즉시 드롭다운(운영자 260709 "바로" — 스침 오발 방지 가드 120ms만). 다른 팝업이 열려 있으면 안 뺏음.
+    // [260731] 대메뉴 5종 전부 세부 보유(대시보드·캘린더는 클릭=화면 전환 + 호버=세부 — 구 prodreg "둘다" 패턴)
+    var _sub=(m.id==='content')?_contentMenuBuild:(m.id==='sales')?_salesMenuBuild:(m.id==='biz')?_bizMenuBuild:(m.id==='cal')?_calMenuBuild:(m.id==='member')?_memberMenuBuild:(m.id==='playzone')?_playzoneMenuBuild:null;
     if(_sub){ b.setAttribute('aria-haspopup','true');   // navigation-01 이식 — 세부메뉴 보유 표시(a11y · 딤 축과 동일 문법)
       // [260723 운영자] navigation-01 모바일 문법 — 세부메뉴 = 인라인 아코디언(내용 = 데스크탑 드롭다운과 같은 빌더 재사용 · 항목 탭 = 패널 닫고 이동)
       var _acc=document.createElement('div');_acc.className='nav-acc';
@@ -5462,7 +5465,7 @@ function _srailTableHtml(perfs,exs){
   return h;
 }
 // 좌측 사업현황(연간 누적 실적) 인라인 보드 — openBusinessBoard(_bizRender) 축약 계승: 필터(연도·기획/대관) + KPI 3 + 월×점유율 산점도(Plotly) + 공연 리스트 표.
-// 장르 벤치마크·시즌 추세 등 전체 분석 = 기존 모달(사업 실적 ▸ 연간 실적 분석) 그대로 — 메인은 개요만. 색 = 토큰만(모달의 동결 회색 리터럴 대신 --past-bg·--border 대표 계승).
+// 장르 벤치마크·시즌 추세 등 전체 분석 = 기존 모달(판매 현황 ▸ 실적 분석) 그대로 — 메인은 개요만. 색 = 토큰만(모달의 동결 회색 리터럴 대신 --past-bg·--border 대표 계승).
 function _bizmSetYear(y){_bizmState.year=parseInt(y,10);_bizmState.types={};_bizInlineRender();}
 function _bizmToggleType(t){_bizmState.types[t]=!_bizmState.types[t];_bizInlineRender();}
 function _bizmSetProfit(p){_bizmState.profit=p;_bizInlineRender();}
@@ -5582,7 +5585,7 @@ function _bizInlineRender(){
   var total=list.length,avgAll=list.reduce(function(a,g){return a+g.avg;},0)/list.length,maxAll=Math.max.apply(null,list.map(function(g){return g.avg;}));
   var kc=function(lab,val,tk){return '<div class="bizm-kpi" style="--kpitok:var('+(tk||'--accent')+')"><div class="lab">'+lab+'</div><div class="val">'+val+'</div></div>';};   // [260723f Opus] 글래스 KPI 통일(1·2면 동일 시각언어)
   h+='<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px">'+kc('총 공연',total+'건','--accent')+kc('평균 점유율',avgAll.toFixed(1)+'%','--peach-text')+kc('최고 점유율',maxAll.toFixed(1)+'%','--green')+'</div>';   // [260723f] 역할색 3톤(총·평균·최고)
-  h+='<div class="bizm-card"><div class="ct">월 × 점유율 분포 <span class="sub">— 점 = 공연(장르색) · 파선 = 장르 평균 · 상세 분석 = 사업 실적 ▸ 연간 실적 분석</span></div><div id="bizm-chart" style="height:430px;margin:0 4px 2px"></div></div>';   // [260723c 선택값] 산점도 430 · [260723f] 카드 통일
+  h+='<div class="bizm-card"><div class="ct">월 × 점유율 분포 <span class="sub">— 점 = 공연(장르색) · 파선 = 장르 평균 · 상세 분석 = 판매 현황 ▸ 실적 분석</span></div><div id="bizm-chart" style="height:430px;margin:0 4px 2px"></div></div>';   // [260723c 선택값] 산점도 430 · [260723f] 카드 통일
   // [260723c 선택값] 장르 벤치마크·시즌 추세 = 표시(현행 계승) — 필터(수익성·회차·진행일) 인라인 상태(_bizmState)로 구동, 모달 무접촉
   h+='<div class="bizm-card"><div class="ct">장르 벤치마크 <span class="sub">— ◆장르 평균 · ⭐'+_bizmState.year+'년 공연 · 점=전체 기간 (선택 분류 기준)</span></div>'
     +'<div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin:6px 12px 8px">'+_chipRow('수익성',['전체','공공성','상업성'],_bizmState.profit,'_bizmSetProfit')+_chipRow('회차',['전체','1회','2~4회','5회+'],_bizmState.rounds,'_bizmSetRounds')+_chipRow('진행일',['전체','단일','2~3일','4일+'],_bizmState.rundays,'_bizmSetRunDays')+'</div>'
@@ -8065,7 +8068,7 @@ function _dailyRestoreOrigin(){
   if(o==='salesboard'){ if(typeof openSalesBoard==='function')openSalesBoard(); return; }
   if(o==='analytics'){ if(typeof openAnalyticsBoard==='function')openAnalyticsBoard(); return; }
   if(o==='salesmenu'){
-    var btn=_navBtnByLabel('사업 실적');
+    var btn=_navBtnByLabel('판매 현황');   // [260731] 구 '사업 실적' 대메뉴 → '판매 현황'으로 개명
     if(btn&&btn.offsetParent!==null&&typeof _ddOpen==='function'&&typeof _salesMenuBuild==='function'){ _ddOpen(btn,_salesMenuBuild,210,'sales'); return; }
     if(typeof openAnalyticsBoard==='function')openAnalyticsBoard(); return;
   }
@@ -9030,7 +9033,7 @@ function _bizRender(){
 }
 // ============================================================
 // 연간 실적 (사업 현황) — 예울마루(망마·장도) 2012~2026.1Q 연간 실적 표를 '그대로' 살린 보드.
-//   진입 = nav 「사업 현황」(대메뉴, id=bizstatus) · 모바일 더보기 시트. 데이터 = 아래 _YR 상수(엑셀 원본 무손실).
+//   진입 = nav 「대시보드 ▸ 연간 실적」(260731 재편 — 구 '사업 현황' 대메뉴 id=bizstatus 폐지) · 모바일 더보기 시트. 데이터 = 아래 _YR 상수(엑셀 원본 무손실).
 //   골격 = openBusinessBoard/_bizRender 100% 계승(모달·.fbar-chip·Plotly·KPI 카드·표) · 색은 팔레트 토큰만
 //   (Plotly는 CSS var()를 못 읽어 getComputedStyle로 런타임 해석 → 소스 raw hex 0, 게이트 총량 동결 유지).
 //   필터 = 연도별(select) + 공연/전시/교육 별(칩) · 애니메이션 = KPI 카운트업·막대 성장·표 페이드업.
@@ -20434,10 +20437,10 @@ function _bnavMore(){
   add('📝','네이버 블로그 글쓰기','openNaverBlogTool()');
   add('🔗','링크 자료수집','openLinkGrab()');
   add('🧩','플랫폼 현황','openPlatformBoard()');
-  add('⇄','사업 실적 화면 (메인)','setMainView(\'biz\')');   // [260723 평의회3 HIGH] 좁은 폭 토글 숨김 시에도 실적 메인 복귀 경로 보장
-  add('🏢','연간 누적 실적','openBusinessBoard()');
-  add('📊','연간 실적 (사업 현황)','openYearBoard()');
-  if(!isAdmin)add('📈','판매 현황','openAnalyticsBoard()');
+  add('⇄','대시보드 화면 (메인)','setMainView(\'biz\')');   // [260723 평의회3 HIGH] 좁은 폭 토글 숨김 시에도 메인 복귀 경로 보장
+  add('🏢','실적 분석','openBusinessBoard()');   // [260731] 이름 = 데스크탑 대메뉴와 통일(구 '연간 누적 실적')
+  add('📊','연간 실적','openYearBoard()');   // [260731] 〃 (구 '연간 실적 (사업 현황)')
+  if(!isAdmin)add('📈','실적 조회','openAnalyticsBoard()');   // [260731] 〃 (구 '판매 현황')
   if(isAdmin)add('✏️','직접 등록','openAdminWizard()');
   if(isAdmin)add('⚙️','관리','openAdminPanel()');
   add('💬','도우미 챗봇','_cbToggle()');
@@ -20489,17 +20492,32 @@ var _nbState=_nbDefaultState();
 // 상단 '콘텐츠 제작' 드롭다운 (네이버 블로그 + 향후 채널 확장)
 // [260711 운영자] 구 '상품 등록 및 홍보 신청' 드롭다운을 2개 대메뉴로 분리:
 //   상품 등록·변경(_prodregMenuBuild, 클릭 즉시 openTicketReg + hover 드롭다운) / 홍보 신청·확인(_promoMenuBuild) · 연간 일정은 사업 실적(_salesMenuBuild)으로 이동.
-function _prodregMenuBuild(menu){
-  var itemCss='display:flex;align-items:center;gap:10px;width:100%;padding:11px 14px;border:0;text-align:left;font-size:13px;font-weight:600;color:var(--text);border-radius:9px;cursor:pointer;font-family:inherit;transition:background .12s';   // 색 = _salesMenuBuild 계승(var(--text)/var(--dim)) — raw hex 0
-  menu.innerHTML='<div style="padding:8px 14px 6px;font-size:11px;color:var(--dim);font-weight:700">상품 등록·변경</div>'
-    +'<button type="button" onclick="_ddCloseAll();openTicketReg()" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'">상품 등록 및 변경</button>';
-}
-function _promoMenuBuild(menu){
+// [260731 운영자] 위 2개 대메뉴 폐지 → _prodregMenuBuild는 판매 현황 세부 1번(_salesMenuBuild)으로, _promoMenuBuild는 캘린더 세부(_calMenuBuild)로 흡수.
+//   항목 문법(itemCss·헤더 라벨·기본 강조 배경·호버 알파) = 구 빌더 100% 계승 — 신규 색·형태 0.
+
+// 캘린더 세부 — 홍보 신청(기본) + 홍보 현황 2종. [260731 운영자] 홍보는 신청↔현황이 한 지붕(구 '홍보 신청·확인' 대메뉴 흡수).
+//   '홍보 현황' 단일 화면은 존재하지 않음 = 실제 보드 2개(openPromoBoard 온라인 · openPlatformBoard 오프라인)를 그대로 이름으로 씀.
+function _calMenuBuild(menu){
   var itemCss='display:flex;align-items:center;gap:10px;width:100%;padding:11px 14px;border:0;text-align:left;font-size:13px;font-weight:600;color:var(--text);border-radius:9px;cursor:pointer;font-family:inherit;transition:background .12s';
-  menu.innerHTML='<div style="padding:8px 14px 6px;font-size:11px;color:var(--dim);font-weight:700">홍보 신청·확인</div>'
-    +'<button type="button" onclick="_ddCloseAll();openBatchWizard()" style="'+itemCss+';background:rgba(74,77,231,0.06)" onmouseenter="this.style.background=\'rgba(74,77,231,0.12)\'" onmouseleave="this.style.background=\'rgba(74,77,231,0.06)\'"><span style="flex:1">홍보 일괄 신청</span><span style="font-size:10px;color:var(--accent);font-weight:700">기본</span></button>'
+  menu.innerHTML='<div style="padding:8px 14px 6px;font-size:11px;color:var(--dim);font-weight:700">캘린더</div>'
+    +'<button type="button" onclick="_ddCloseAll();openBatchWizard()" style="'+itemCss+';background:rgba(74,77,231,0.06)" onmouseenter="this.style.background=\'rgba(74,77,231,0.12)\'" onmouseleave="this.style.background=\'rgba(74,77,231,0.06)\'"><span style="flex:1">홍보 신청</span><span style="font-size:10px;color:var(--accent);font-weight:700">기본</span></button>'
     +'<button type="button" onclick="_ddCloseAll();openPromoBoard()" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'">온라인 홍보 현황</button>'
-    +'<button type="button" onclick="_ddCloseAll();openPlatformBoard()" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'">오프라인 홍보 현황</button>';   // [260714 운영자] 홍보 일괄 신청(기본)·온라인 홍보 현황(openPromoBoard)·오프라인 홍보 현황(openPlatformBoard)
+    +'<button type="button" onclick="_ddCloseAll();openPlatformBoard()" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'">오프라인 홍보 현황</button>';   // [260714 운영자] 온라인 홍보 현황(openPromoBoard)·오프라인 홍보 현황(openPlatformBoard)
+}
+// 대시보드 세부 — 연간 실적(openYearBoard, 구 '사업 현황' 대메뉴) + 연간 일정.
+//   [260731 운영자] '사업 현황'과 '연간 실적'은 같은 보드였음 → 표 내용(2012~2026 연간 실적)에 맞는 「연간 실적」만 남김.
+//   판매 현황·실적 입력은 여기 두지 않음 = 대메뉴 1번과 같은 화면(한 화면 = 한 자리).
+function _bizMenuBuild(menu){
+  var itemCss='display:flex;align-items:center;gap:10px;width:100%;padding:11px 14px;border:0;text-align:left;font-size:13px;font-weight:600;color:var(--text);border-radius:9px;cursor:pointer;font-family:inherit;transition:background .12s';
+  menu.innerHTML='<div style="padding:8px 14px 6px;font-size:11px;color:var(--dim);font-weight:700">대시보드</div>'
+    +'<button type="button" onclick="_ddCloseAll();openYearBoard()" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'">연간 실적</button>'
+    +'<button type="button" onclick="_ddCloseAll();openAnnualCalendar()" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'">연간 일정</button>';   // [260731 운영자] 연간 일정 = 구 '사업 실적'서 대시보드로 이동
+}
+// 회원 관리 세부 — 회원 조회(+우측 미니 차트 = 기본 개요). 구 _salesMenuBuild 마지막 항목을 그대로 옮김(admin 전용 게이트는 buildNav가 대메뉴째 담당).
+function _memberMenuBuild(menu){
+  var itemCss='display:flex;align-items:center;gap:10px;width:100%;padding:11px 14px;border:0;text-align:left;font-size:13px;font-weight:600;color:var(--text);border-radius:9px;cursor:pointer;font-family:inherit;transition:background .12s';
+  menu.innerHTML='<div style="padding:8px 14px 6px;font-size:11px;color:var(--dim);font-weight:700">회원 관리</div>'
+    +'<button type="button" onclick="_ddCloseAll();openMemberLookup()" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'"><span style="flex:1">회원 조회</span><span onclick="event.stopPropagation();_ddCloseAll();openMemberOverview()" title="회원 기본 개요 (거주지·연령·분포 맵)" style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:7px;color:var(--accent)" onmouseenter="this.style.background=\'var(--accent-light)\';event.stopPropagation()" onmouseleave="this.style.background=\'none\'"><svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M2 12V7M7 12V2M12 12V5"/></svg></span></button>';   // 회원 DB(운영_회원 시트) read-only 조회 — 개인정보라 관리자 전용 · 우측 미니 차트 = 기본 개요 모달(운영자 260711 "세부 메뉴 우측에 기본 개요")
 }
 function _contentMenuBuild(menu){
   // [260711 운영자] 영상 편집기 3분류 신설 — 1 영상 편집 · 2 자막 삽입 · 3 영상 프롬프팅 (한 도구, 탭 진입점 3개)
@@ -22277,15 +22295,16 @@ function _playzoneMenuBuild(menu){
     +'<button type="button" onclick="_ddCloseAll();openBookingProcess()" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'">도화지</button>'
     +'<button type="button" onclick="_ddCloseAll();openEnneagram()" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'">에니어그램</button>';
 }
-// 판매 현황 드롭다운 — 판매 현황 보기(분석 보드) + 일일입력(관리자, 운영자 260709 "판매현황 대메뉴 아래에도 일일입력")
+// 판매 현황 드롭다운(대메뉴 1번) — [260731 운영자] 순서 = 1 상품 등록·변경 · 2 실적 조회 · 3 실적 입력(관리자) · 4 실적 분석.
+//   이름 = 화면 기준 통일: 실적 조회 = openAnalyticsBoard(구 '판매 실적 조회') · 실적 분석 = openBusinessBoard(구 '연간 실적 분석'·'연간 누적 실적').
+//   연간 일정·회원 조회는 여기서 나감(→ 대시보드 · 회원 관리 대메뉴).
 function _salesMenuBuild(menu){
   var itemCss='display:flex;align-items:center;gap:10px;width:100%;padding:11px 14px;border:0;text-align:left;font-size:13px;font-weight:600;color:var(--text);border-radius:9px;cursor:pointer;font-family:inherit;transition:background .12s';
-  menu.innerHTML='<div style="padding:8px 14px 6px;font-size:11px;color:var(--dim);font-weight:700">사업 실적</div>'
-    +(userRole==='admin'?'<button type="button" onclick="_ddCloseAll();openDailyInput()" style="'+itemCss+';background:rgba(74,77,231,0.06)" onmouseenter="this.style.background=\'rgba(74,77,231,0.12)\'" onmouseleave="this.style.background=\'rgba(74,77,231,0.06)\'"><span style="flex:1">일일 실적 입력</span></button>':'')
-    +'<button type="button" onclick="_ddCloseAll();openAnalyticsBoard()" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'">판매 실적 조회</button>'
-    +'<button type="button" onclick="_ddCloseAll();openBusinessBoard()" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'">연간 실적 분석</button>'   // [260710 운영자] 1 일일 실적 입력(관리자) · 2 판매 실적 조회 · 3 연간 실적 분석
-    +'<button type="button" onclick="_ddCloseAll();openAnnualCalendar()" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'">연간 일정</button>'   // [260711 운영자] 연간 일정 = 구 '상품 등록 및 홍보 신청'서 사업 실적으로 이동
-    +(userRole==='admin'?'<button type="button" onclick="_ddCloseAll();openMemberLookup()" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'"><span style="flex:1">회원 조회</span><span onclick="event.stopPropagation();_ddCloseAll();openMemberOverview()" title="회원 기본 개요 (거주지·연령·분포 맵)" style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:7px;color:var(--accent)" onmouseenter="this.style.background=\'var(--accent-light)\';event.stopPropagation()" onmouseleave="this.style.background=\'none\'"><svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M2 12V7M7 12V2M12 12V5"/></svg></span></button>':'');   // 회원 DB(운영_회원 시트) read-only 조회 — 개인정보라 관리자 전용 · 우측 미니 차트 = 기본 개요 모달(운영자 260711 "세부 메뉴 우측에 기본 개요")
+  menu.innerHTML='<div style="padding:8px 14px 6px;font-size:11px;color:var(--dim);font-weight:700">판매 현황</div>'
+    +'<button type="button" onclick="_ddCloseAll();openTicketReg()" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'">상품 등록·변경</button>'   // [260731 운영자] 구 '상품 등록·변경' 대메뉴 → 판매 현황 세부 1번
+    +'<button type="button" onclick="_ddCloseAll();openAnalyticsBoard()" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'">실적 조회</button>'
+    +(userRole==='admin'?'<button type="button" onclick="_ddCloseAll();openDailyInput()" style="'+itemCss+';background:rgba(74,77,231,0.06)" onmouseenter="this.style.background=\'rgba(74,77,231,0.12)\'" onmouseleave="this.style.background=\'rgba(74,77,231,0.06)\'"><span style="flex:1">실적 입력</span></button>':'')   // 구 '일일 실적 입력'(관리자)
+    +'<button type="button" onclick="_ddCloseAll();openBusinessBoard()" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'">실적 분석</button>';
 }
 // === [260710] 회원 조회 — 통합문서 '운영_회원' 시트 read-only (admin 전용 — Worker도 동일 게이트 강제) ===
 // 데이터 = 회원DB 주소정제 v2(주소1 시도·주소2 시군구·주소3 동/읍면·주소4 상세·우편번호·휴대폰정규화).
