@@ -1459,8 +1459,10 @@ function gcalParseRow(title) {
   let cut = masked.length;
   const marks = [/\d{1,2}\/\d{1,2}/, /\d{1,2}(?:\s*[~,]\s*\d{1,2})*\s*일/, /§/];
   marks.forEach((re) => { const g = masked.match(re); if (g && g.index >= 0 && g.index < cut) cut = g.index; });
-  const kw = masked.match(/(?:^|[\s\]0-9일])(셋업|철수|공연)/);   // 한글 뒤(「송년공연」)는 키워드로 안 본다 = 프런트와 동일 경계
-  if (kw) { const at = kw.index + kw[0].length - kw[1].length; if (at < cut) cut = at; }
+  // 키워드 경계 = 프런트 _gcParse의 KWRE 그대로: 셋업·철수·공연은 앞 경계 요구(한글 뒤 「송년공연」은 키워드 아님) ·
+  //   연습·리허설은 이름에 그대로 붙어 오는 실데이터(「오케스트라더여수연습 9/11」)가 있어 경계를 요구하지 않는다([260731 4차]).
+  const kw = masked.match(/(?:^|[\s\]0-9일])(셋업|철수|공연)|(연습|리허설)/);
+  if (kw) { const w = kw[1] || kw[2]; const at = kw.index + kw[0].length - w.length; if (at < cut) cut = at; }
   const name = (rest.slice(0, cut).replace(/[\s,·\-~]+$/, "").replace(/^[\s,·\-~]+/, "") || rest).trim();
   return { name, kind: kindTag || "대관", place: GCAL_PLACE[placeTag] || placeTag || "", drop: GCAL_DROP.test(name) };
 }
