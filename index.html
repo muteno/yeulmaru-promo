@@ -6304,10 +6304,16 @@ function _railYrmPerfTable(perfs,rateLab){
   // [260731 운영자] 「사업 성격」 열 삭제 · 그 자리에 「장르」 — 5칸(일자·프로그램·판매율·최근 7일 추이·장르).
   //   성격 값 자체는 데이터·필터(_bizmState.specFilter)·프로그램 관리 폼에 그대로 살아 있다(표에서만 안 보인다).
   var HL=['일자','프로그램',(rateLab||'판매율'),'최근 7일 추이','장르'];
-  var HA=['left','left','left','left','left'];   // [260729 운영자 개정2] 머리글 전 칸 좌측 — 본문 값도 전부 좌측이라 머리글↔값 축이 완전히 맞는다
+  // [260731 운영자 개정] 최근 7일 추이 = **가운데** 정렬(나머지는 좌측 유지).
+  var HA=['left','left','left','center','left'];
+  // [260731 운영자] 열 간격 벌리기 — 「프로그램↔판매율(전시 = 누적 관객수)」·「추이↔장르」 두 경계.
+  //   여는 쪽 셀의 왼쪽 여백만 키운다(td 기본 padding 8 + 이 값) → 열 폭·총합 100은 그대로, 글자만 떨어진다.
+  //   머리글·본문에 같은 값을 먹여 머리글↔값 세로축이 안 어긋나게 한다. 3열은 판매율·누적 관객수 공용 셀이라 둘 다 같이 벌어진다.
+  var HP=[0,0,18,0,18];
+  var pl=function(i){ return HP[i]?('padding-left:'+(8+HP[i])+'px;'):''; };
   var h='<table class="ana-tbl mv-tbl" style="font-size:13px;width:100%;table-layout:fixed">'+_ryColGroup(CW)+'<thead><tr>';
   HL.forEach(function(lab,i){
-    h+='<td style="text-align:'+HA[i]+'">'+lab+(i<HL.length-1?('<i class="ry-rz" role="separator" aria-label="'+lab+' 열 너비 조절" onpointerdown="_ryRzDown(event,'+i+')"></i>'):'')+'</td>';
+    h+='<td style="text-align:'+HA[i]+';'+(HP[i]?('padding-left:'+(10+HP[i])+'px;'):'')+'">'+lab+(i<HL.length-1?('<i class="ry-rz" role="separator" aria-label="'+lab+' 열 너비 조절" onpointerdown="_ryRzDown(event,'+i+')"></i>'):'')+'</td>';
   });
   h+='</tr></thead><tbody>';   // [260725 운영자] 「판매율」열 신설(추이 좌측) — 기본 폭 10/24/18/24/13/11 · [260729 운영자] 폭 = colgroup + 경계 드래그 조절
   perfs.forEach(function(p){
@@ -6320,10 +6326,10 @@ function _railYrmPerfTable(perfs,rateLab){
     h+='<tr class="clk" role="button" tabindex="0" data-uhakey="'+escapeHtml(_srailUhaKey(p))+'" onclick="_railYrmPick(\''+kind+'\',\''+_anaEsc(pkey)+'\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click();}" title="'+escapeHtml(p.name)+' — 클릭 = 아래 상세 보기">'
       +'<td style="'+td+'padding-left:14px;color:var(--accent);font-weight:700;white-space:nowrap;font-variant-numeric:tabular-nums">'+sd(p._ryDate||p.startDate)+'</td>'
       +'<td style="'+td+'overflow:hidden" title="'+escapeHtml(p.name)+(p._venue?' · '+escapeHtml(p._venue):'')+'"><div style="'+_RYNM+'">'+escapeHtml(p.name)+'</div>'+sub+'</td>'
-      +'<td style="'+td+'text-align:left;white-space:nowrap">'+rate+'</td>'
-      +'<td style="'+td+'text-align:left;white-space:nowrap">'+trend+'</td>'   // [260729 운영자] 추이 = 우측→좌측 정렬(머리글과 같은 축) · 우측정렬용 여백 padding-right:34 제거
+      +'<td style="'+td+pl(2)+'text-align:left;white-space:nowrap">'+rate+'</td>'
+      +'<td style="'+td+'text-align:center;white-space:nowrap">'+trend+'</td>'   // [260731 운영자] 추이 = 가운데 정렬(머리글과 같은 축) · 막대 7칸 고정이라 셀 안 폭이 일정해 가운데가 흔들리지 않는다
       // [260731 운영자] 구 「사업 성격」 셀(_mvSpecPill) 삭제 — 장르가 그 자리로 올라온다. 성격 갱신 입력구는 프로그램 관리 > 사업 성격(정본).
-      +'<td style="'+td+'padding-right:14px">'+_mvGenrePill(p.genre||'기타')+'</td></tr>';   // [260729 운영자] 전시도 장르 pill 표시 — 전시 genre = 프로그램 관리 지정값 또는 '시즌'(_ryExRow)
+      +'<td style="'+td+pl(4)+'padding-right:14px">'+_mvGenrePill(p.genre||'기타')+'</td></tr>';   // [260729 운영자] 전시도 장르 pill 표시 — 전시 genre = 프로그램 관리 지정값 또는 '시즌'(_ryExRow)
   });
   h+='</tbody></table>';
   return h;
@@ -11325,6 +11331,16 @@ async function _spToggleDone(rowIndex){
 function _msgGet(){
   try { return JSON.parse(localStorage.getItem('nomute_messages') || '[]'); } catch(e){ return []; }
 }
+// [260731 운영자] "홍보 알림 뜨는거 당분간 없애줘" — 홍보 담당자 알림(Worker PROMO_NOTIFY 요청1~3) 화면 소거 스위치.
+//   끄는 대상 = 트리거가 '홍보-'로 시작하는 알림뿐(홍보-당일 · 홍보-1시간전 · 홍보-미완료 · 홍보-미지정).
+//   신청 상태 알림(신청중→예정·취소·반려·불편사항 등)은 무접촉 = 그대로 뜬다.
+//   성격 = **표시 필터**(비파괴) — 메시지 시트 데이터는 안 지운다. 적용 지점 = 토스트·배지·메시지함 목록 3곳.
+//   되돌리기 = 이 상수 false 한 줄. 신규 생성 자체를 막는 건 Worker 쪽(src/index.js PROMO_NOTIFY_CFG.enabled) — 재배포 필요.
+var _PROMO_NOTIFY_MUTED=true;
+function _msgPromoMuted(m){
+  if(!_PROMO_NOTIFY_MUTED||!m)return false;
+  return /^홍보-/.test((m.trigger||'').toString().trim());
+}
 // 불편사항 접수 알림 판별 — refNo가 신청번호(No)가 아니라 불편사항 id('q'+ts)라
 // 신청 목록(records)에서 절대 못 찾는다. 클릭 시 '불편사항 관리' 화면으로 보내야 열린다.
 function _isQaMessage(m){
@@ -11502,7 +11518,7 @@ function refreshMsgBoxBadge(){
 function _refreshMsgBoxBadgeSync(){
   const myAppl = _msgMyAppl();
   const allMsgs = _msgGet();
-  const myMsgs = allMsgs.filter(function(m){ return m.recipient === myAppl && !m.read && _msgHasTarget(m); });
+  const myMsgs = allMsgs.filter(function(m){ return m.recipient === myAppl && !m.read && _msgHasTarget(m) && !_msgPromoMuted(m); });   // [260731 운영자] 홍보 알림 소거 = 배지 숫자에서도 빠진다(토스트만 막으면 빨간 배지가 계속 쌓여 '없앤' 게 아니다)
   const importantCount = myMsgs.filter(function(m){ return m.type === '중요'; }).length;
   const total = myMsgs.length;
   const btn = document.getElementById('msgbox-btn');
@@ -11540,7 +11556,7 @@ function _maybeShowMsgToast(myUnread, myAppl){
   // ⏱ 앱 진입 후 10초 지연 (진입 직후 어수선함·폭주 방지 — 운영자 지시). 진입 시각 미기록이면 대기.
   if(!window._appEnteredAt || (Date.now() - window._appEnteredAt) < 10000) return;
   if(_mtSeen===null) _mtSeen=new Set(_mtLoad());
-  var fresh=myUnread.filter(function(m){ return m && m.id && !_mtSeen.has(m.id); });
+  var fresh=myUnread.filter(function(m){ return m && m.id && !_mtSeen.has(m.id) && !_msgPromoMuted(m); });   // [260731 운영자] 홍보 알림은 토스트로 안 띄운다(seen 도장도 안 찍는다 = 되켤 때 그대로 복원)
   if(!fresh.length) return;
   fresh.forEach(function(m){ _mtSeen.add(m.id); }); _mtSave();
   fresh.sort(function(a,b){ return String(b.kst||'').localeCompare(String(a.kst||'')); });
@@ -11588,7 +11604,7 @@ async function openMsgBox(){
   }
   const allMsgs = _msgGet();
   // 대상 없는(DB 싱크 어긋난) 메시지는 숨긴다 — 메시지함에 보이는 건 전부 열려야 한다(운영자 260710)
-  const myMsgs = allMsgs.filter(function(m){ return m.recipient === myAppl && _msgHasTarget(m); });
+  const myMsgs = allMsgs.filter(function(m){ return m.recipient === myAppl && _msgHasTarget(m) && !_msgPromoMuted(m); });   // [260731 운영자] 홍보 알림 소거 — 목록에서도 숨김(배지와 같은 축이라 '안 읽은 게 있는데 안 보이는' 어긋남이 없다)
   myMsgs.sort(function(a, b){
     if(a.type === '중요' && b.type !== '중요') return -1;
     if(a.type !== '중요' && b.type === '중요') return 1;
