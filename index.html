@@ -20435,6 +20435,51 @@ function closePanel(){
 }
 function changeMonth(delta){currentMonth+=delta;if(currentMonth<1){currentMonth=12;currentYear--;}if(currentMonth>12){currentMonth=1;currentYear++;}_weekState={};_calAnimateOnNextRender=true;if(window.matchMedia('(max-width:768px)').matches||_panelSticky()){render();}else{closePanel();}}   /* [260731] 상주 패널은 월을 넘겨도 접히지 않는다(모바일 하단 drawer와 동일) — 구 데스크톱 closePanel은 비상주(biz 오버레이)에서만 */
 
+/* [260731 운영자] 캘린더 위 휠 스크롤 = 이전/다음 달 — 새 UI 없음(기존 changeMonth·월 전환 애니메이션 그대로 재사용).
+   페이지에 스크롤 여지가 남아 있으면 그쪽이 우선(가장자리 도달 뒤에만 월 넘김) · 셀 안 자체 스크롤 영역·모달은 비켜감(리스너가 #cal/#cal-head-wrap 스코프). */
+var _calWheelAcc=0,_calWheelT=0,_calWheelRst=null;
+function _calWheelScrollable(node){
+  for(var el=node;el&&el!==document.body;el=el.parentElement){
+    if(el.id==='cal'||el.id==='cal-head-wrap')return null;
+    if(el.scrollHeight-el.clientHeight>2){
+      var ov=getComputedStyle(el).overflowY;
+      if(ov==='auto'||ov==='scroll')return el;
+    }
+  }
+  return null;
+}
+function _calWheel(e){
+  if(e.ctrlKey||e.metaKey)return;                                     // 브라우저 확대 제스처는 그대로
+  var app=document.getElementById('app');
+  if(app&&app.classList.contains('biz-mode'))return;                  // 사업현황 모드 = 월 축 아님
+  if(Math.abs(e.deltaY)<=Math.abs(e.deltaX))return;                   // 가로 스크롤 제스처는 통과
+  var dir=e.deltaY>0?1:-1;
+  var sc=_calWheelScrollable(e.target);                               // 셀 내부 스크롤 영역이 아직 남았으면 양보
+  if(sc&&(dir>0?sc.scrollTop<sc.scrollHeight-sc.clientHeight-1:sc.scrollTop>1))return;
+  var doc=document.documentElement,room=doc.scrollHeight-doc.clientHeight;
+  if(room>4){                                                          // 페이지 스크롤 여지가 있으면 가장자리까지는 페이지가 먼저
+    var y=window.scrollY||doc.scrollTop;
+    if(dir>0?y<room-1:y>1){_calWheelAcc=0;return;}
+  }
+  e.preventDefault();
+  var now=(e.timeStamp||0);
+  if(now-_calWheelT<420)return;                                       // 관성 스크롤 연타 방지(월 1칸 = 1제스처)
+  if(_calWheelAcc*dir<0)_calWheelAcc=0;                               // 방향 바뀌면 누적 초기화
+  _calWheelAcc+=e.deltaY;
+  if(_calWheelRst)clearTimeout(_calWheelRst);
+  _calWheelRst=setTimeout(function(){_calWheelAcc=0;},220);
+  if(Math.abs(_calWheelAcc)<40)return;                                // 트랙패드 미세 스크롤은 무시
+  _calWheelAcc=0;_calWheelT=now;
+  changeMonth(dir);
+}
+function _calWheelInit(){
+  ['cal','cal-head-wrap'].forEach(function(id){
+    var el=document.getElementById(id);
+    if(el&&!el._calWheelOn){el.addEventListener('wheel',_calWheel,{passive:false});el._calWheelOn=1;}
+  });
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',_calWheelInit);else _calWheelInit();
+
 function onPlatChange(){
   const p=document.getElementById('f-plat').value;
   const p2sel=document.getElementById('f-plat2');
