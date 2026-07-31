@@ -5374,6 +5374,32 @@ function _bizFitViewport(){
     if(app){ app.classList.add('biz-fit'); setH(_BIZ_CHART_MAX); shrink(); }   // ③ 그래도 넘치면 여백 압축 단계 + 재축소
   }catch(_e){ console.warn('[biz fit]',_e); }
 }
+// [260731 운영자 5차] 책 면 높이 고정 — "3면이 너무 길다. 1·2면 크기로 보이는 게 고정이고, 넘으면 그 안에서 내부 스크롤".
+//   차트 축소(_bizFitViewport)로도 못 줄이는 면(3면 사업 결과 비교 = 표·차트가 값이라 못 줄임 · 4면 고객 분석)은
+//   **유리박스(data-bizmbox)를 한 화면 하단선에서 자르고 그 안에서만 스크롤**한다 — 바깥(문서) 스크롤 0 = 1·2면과 같은 판형 유지.
+//   넘침 측정 문법 = _bizFitViewport 계승(documentElement.scrollHeight − innerHeight, 시각px → _bizZ()로 디자인 단위 환산 · 데드밴드 2px).
+//   스크롤바 = 전앱 오버레이 정본(평소 투명 · 호버 리빌) 그대로 상속 = 신규 부품·색·토큰 0.
+function _bizmCapBoxes(){
+  try{
+    if(typeof _mainView==='undefined'||_mainView!=='biz')return;
+    if(!_bizBookWide())return;   // 좁은 폭(≤1200) = 세로로 쌓이는 구조라 문서 스크롤이 정상(_bizFitViewport의 레일 가드와 같은 축) — 캡 미적용
+    var boxes=[document.querySelector('#biz-main [data-bizmbox]'),document.querySelector('#rail-yrm [data-bizmbox]')]
+      .filter(function(b){ return b&&b.offsetParent!==null; });
+    if(!boxes.length)return;
+    boxes.forEach(function(b){ b.style.maxHeight=''; b.style.overflowY=''; });   // 먼저 원복 — 창을 키우면 자연 높이로 돌아온다(biz-fit ① 문법 계승)
+    var z=(typeof _bizZ==='function')?_bizZ():1;
+    var over=Math.round(document.documentElement.scrollHeight-window.innerHeight);   // 시각px
+    if(over<=2)return;
+    var lim=Math.max.apply(null,boxes.map(function(b){ return b.getBoundingClientRect().bottom; }))-over;   // 한 화면 안에 들어오는 하단선(시각px)
+    boxes.forEach(function(b){
+      var r=b.getBoundingClientRect();
+      if(r.bottom<=lim+1)return;                       // 안 넘치는 열은 자연 높이 유지(짧은 면까지 자르지 않는다)
+      var h=Math.max(200,Math.round((lim-r.top)/z));   // 하한 200 = 판형이 무너질 만큼은 안 자름
+      b.style.maxHeight=h+'px'; b.style.overflowY='auto';
+    });
+    try{ _srailAlignTop(); }catch(_e2){}               // 좌 박스가 잘렸으면 우 열 데칼코마니 재계산(하단선 Δ0 유지)
+  }catch(_e){ console.warn('[book cap]',_e); }
+}
 function _srailAlignTop(){
   var rail=document.getElementById('sales-rail'), hdr=document.querySelector('#main-area .hdr');
   // [260723] 실적 모드 = 캘린더 축 정렬 비활성 — 좌 보드와 같은 상단(패딩 24)에서 시작 · 높이 캡 해제(표 자연 높이 · 캘린더 시절 maxHeight 잔존 방지)
@@ -5412,6 +5438,16 @@ function _srailAlignTop(){
       var _anchor=(_lbox&&_lbox.offsetParent!==null)?_lbox:(_ltCard||_lcCard);
       var _boxed=(_anchor===_lbox&&_rbox&&_rbox.offsetParent!==null);   // 박스↔박스 정렬 가능 여부(불가 = 종전 카드↔카드 폴백)
       var _live=_anchor&&_rlCard&&_anchor.offsetParent!==null&&_rlCard.offsetParent!==null;
+      // [260731 운영자 5차] 「하단 블러 위 흰색 마무리 라인」 = 좌우 같은 높이. 두 유리박스 하단선은 이미 Δ0인데,
+      //   그 안 **마지막 흰 카드** 하단선은 우측만 18px 떠 있었다(실측 좌 19 = 패딩18+보더1 · 우 37 = 19 + 카드 바깥여백14 + 빈 상세슬롯4).
+      //   원인 = 상세(#srail-uha)가 「개별 사업 내역」 비노출 지시(_srailUhaCard)로 본문이 비어 있는데도 슬롯이 자리를 먹어,
+      //   목록 카드가 :last-child가 아니게 되어 L2092(박스 안 마지막 카드 여백 0)가 안 먹었다.
+      //   → 상세 본문이 비면 슬롯을 레이아웃에서 빼고 목록 카드 여백도 0(= 좌와 동일 인셋 19) · 상세가 차면 종전 그대로.
+      var _uhaBodyEl=document.getElementById('srail-uha-body');
+      var _uhaVoid=!(_uhaBodyEl&&_uhaBodyEl.children.length);
+      var _slotEl=document.getElementById('rail-yrm-uha');
+      if(_slotEl)_slotEl.style.display=_uhaVoid?'none':'';
+      if(_rlCard)_rlCard.style.marginBottom=_uhaVoid?'0px':'';
       if(_rl&&_live){
         var _ctEl=_rlCard.querySelector('.ct'), _ctH=_ctEl?_ctEl.getBoundingClientRect().height:0;
         var _tgt=_boxed?_rbox:_rlCard;   // 하단선을 좌 앵커에 붙일 우측 대상
@@ -5572,6 +5608,7 @@ function _srailArmResize(){
   window.addEventListener('resize',function(){
     try{_bizZoomApply();}catch(_e){}   // [260731] 창 크기·브라우저 줌 변경 = 1920 기준 줌 재산정(그 좌표계 위에서 아래 fit·정렬 재계산)
     try{_bizFitViewport();}catch(_e){}   // [260725 운영자] 창 크기 바뀌면 한 화면에 다시 맞춘다
+    try{_bizmCapBoxes();}catch(_e){}     // [260731 5차] 차트 축소로도 못 줄이는 면(3·4면) = 유리박스 내부 스크롤로 한 화면 유지
     _srailAlignTop();
     if(window.innerWidth<=1200)_srailCarStop();   // 레일 CSS 숨김되면 캐러셀 전역 리스너·타이머 철거(감사2 LOW — 숨은 레일 유휴 리스너 잔존 방지)
     if(window.innerWidth>1200&&_salesState&&!_salesState.daily&&!_srailBusy)_srailInit();
@@ -5878,7 +5915,7 @@ function _yrmRender(){
   h+='<div id="yrm-tbl"></div>';
   body.innerHTML=h;
   _yrmTable();
-  _bizEnsurePlotly(function(){ try{_yrDrawChart(true,'yrm',_YRM_ST);}catch(_e){console.warn('[yrm chart]',_e);} try{_bizFitViewport();}catch(_e){} });   // [260725] 그린 뒤 한 화면에 맞춤
+  _bizEnsurePlotly(function(){ try{_yrDrawChart(true,'yrm',_YRM_ST);}catch(_e){console.warn('[yrm chart]',_e);} try{_bizFitViewport();}catch(_e){} try{_bizmCapBoxes();}catch(_e){} });   // [260725] 그린 뒤 한 화면에 맞춤 · [260731 5차] 남는 넘침은 박스 내부 스크롤
 }
 function _yrmWin(d){ var win=6,max=_YR.years.length-win; var s=(_bizmState.yrStart==null?max:_bizmState.yrStart)+d; if(s<0)s=0; if(s>max)s=max; _bizmState.yrStart=s; _yrmTable(); }
 function _yrmTable(){
@@ -5902,21 +5939,35 @@ function _yrmTable(){
 }
 // ── [260731 운영자 4차] 대시보드 = 「책 4면」 ────────────────────────────────────────────
 // 면 = 1 연간 실적 · 2 판매 실적(구 우측 레일 '판매 현황' 개명) · 3 사업 결과 비교(구 좌 2면 '사업 현황') · 4 고객 분석(구 '회원 분포' 인라인化 · admin 전용 — 비admin은 3면 책).
-// 넓은 화면(>1200, 레일 노출) = 펼침 2면씩: 펼침1=[1|2](현행 배치 그대로), 펼침2=[3|4] — 좌 #biz-main=홀수면 · 우 #rail-yrm=짝수면, 넘김은 두 열이 같이(책넘김).
-// 좁은 화면(≤1200, 레일 숨김) = 1→2→3→4 한 면씩.
+// [260731 운영자 5차] 넓은 화면(>1200, 레일 노출) = **우 열은 2면(판매 실적) 고정 · 좌 열만 넘어간다**(운영자 "우측으로 누르면 1p만 3p로 바뀜, 2p는 그대로").
+//   좌 열 순환 = 1 → 3 → (4 admin) → 1 · 우 열은 재렌더조차 하지 않는다(판매 목록·자동 회전 상태 유지 = 넘김에 안 흔들림).
+//   구 모델(펼침 2면씩 [1|2]·[3|4] 두 열 동시 넘김)은 이 지시로 대체.
+// 좁은 화면(≤1200, 레일 숨김) = 1→2→3→4 한 면씩(종전 그대로 — 2면은 좌 보드가 레일 틀을 대신 그린다).
 // 하단 바 = 1개(#bizm-dots-row · 점 4개) — 넓을 땐 펼침 전체(두 열)의 가운데(_srailAlignTop이 translateX 보정), 좁을 땐 좌 보드 가운데.
-//   넓은 화면 점 = 현재 펼침의 두 면이 같이 켜짐(pair) · 우 레일 하단 점줄 바(.srail-uha-bar)는 260731 폐지 — 사업 넘김은 상세 카드 헤더 ‹ n / N ›(별도 축).
+//   넓은 화면 점 = 2면(우 열 고정) + 현재 좌 면이 같이 켜짐 · 2면 점은 이미 떠 있으므로 눌러도 안 움직인다.
 function _bizBookN(){ return (typeof userRole!=='undefined'&&userRole==='admin')?4:3; }
-function _bizLeftPage(){ var p=_bizmState.page||1; return _bizBookWide()?((p<=2)?1:3):p; }   // 좌 열이 실제로 그리는 면 번호
+function _bizLeftPage(){ var p=_bizmState.page||1; return _bizBookWide()?((p===2)?1:p):p; }   // 좌 열이 실제로 그리는 면 번호(넓은 화면에서 2면 = 우 열 몫이라 1면으로)
 function _bizBookWide(){ return window.innerWidth>1200; }
-function _bizBookRender(){ _bizInlineRender(); if(_bizBookWide()){ try{_railYrmRender();}catch(_e){console.warn('[book right]',_e);} } _bizmAnimate(); }
+function _bizmLeftFaces(){ var f=[1,3]; if(_bizBookN()>=4)f.push(4); return f; }   // 넓은 화면에서 좌 열이 도는 면 목록(2면 = 우 열 고정이라 제외)
+function _bizBookRender(){
+  _bizInlineRender();
+  // 우 열(2면)은 고정 — 틀이 없을 때(모드 진입·판형 전환 직후)만 세운다. 매 넘김 재렌더 = 목록·회전·선택 상태 리셋이라 금지.
+  if(_bizBookWide()&&!document.querySelector('#rail-yrm #rail-yrm-list')){ try{_railYrmRender();}catch(_e){console.warn('[book right]',_e);} }
+  _bizmAnimate();
+  if(typeof requestAnimationFrame==='function')requestAnimationFrame(function(){ try{_bizmCapBoxes();}catch(_e){} });   // 면 교체 직후 = 그 면 높이를 한 화면에 가둔다(넘치면 박스 내부 스크롤)
+}
 function _bizmGo(d){
   var N=_bizBookN(), p=_bizmState.page||1;
-  if(_bizBookWide()){ var s=(p<=2)?0:1; s=(s+d)%2; if(s<0)s+=2; p=s*2+1; }   // 펼침 단위 넘김(홀수면으로 착지) — 4면 책 = 펼침 2개 순환(비admin 펼침2 우측은 안내 카드)
+  if(_bizBookWide()){ var F=_bizmLeftFaces(), i=F.indexOf(_bizLeftPage()); if(i<0)i=0; i=(i+d)%F.length; if(i<0)i+=F.length; p=F[i]; }   // 좌 열만 순환(우 2면 고정)
   else { p+=d; if(p<1)p=N; if(p>N)p=1; }
   _bizmState.dir=d; _bizmState.page=p; _bizBookRender();
 }
-function _bizmTo(p){ var N=_bizBookN(); if(p<1||p>N)return; var cur=_bizmState.page||1; if(cur===p)return; _bizmState.dir=(p>cur)?1:-1; _bizmState.page=p; _bizBookRender(); }
+function _bizmTo(p){
+  var N=_bizBookN(); if(p<1||p>N)return;
+  if(_bizBookWide()&&p===2)return;   // 2면 = 우 열에 항상 떠 있다(넘길 대상 아님)
+  var cur=_bizLeftPage(); if(cur===p)return;
+  _bizmState.dir=(p>cur)?1:-1; _bizmState.page=p; _bizBookRender();
+}
 // 특정 면으로 책 넘김(biz 모드 진입 포함). 넓은 화면은 그 면이 속한 펼침이 열린다.
 // [260731 5차] 세부메뉴는 팝업(모달) 진입으로 되돌아가 여기를 부르지 않음 — 딥링크·롤백용으로 남겨둠(_bizMenuBuild 주석 참조).
 function _bizBookGo(p){
@@ -5925,7 +5976,7 @@ function _bizBookGo(p){
   _bizBookRender();
 }
 function _bizmAnimate(){
-  ['biz-main','rail-yrm'].forEach(function(id){   // [260731 4차] 책넘김 = 두 열 동시 슬라이드(우 열은 넓은 화면에서만 존재)
+  ['biz-main'].forEach(function(id){   // [260731 5차] 책넘김 = **좌 열만** 슬라이드(우 2면은 고정 = 안 흔들린다 · 구 두 열 동시 슬라이드 폐지)
     var el=document.getElementById(id); if(!el||el.offsetParent===null)return; var w=el.firstElementChild; if(!w)return;
     w.classList.remove('bizm-page','rev'); void w.offsetWidth; w.classList.add('bizm-page'); if((_bizmState.dir||1)<0)w.classList.add('rev');
   });
@@ -5935,7 +5986,7 @@ function _bizmDots(){
   var p=_bizmState.page||1, N=_bizBookN(), wide=_bizBookWide();
   var LBL=['연간 실적','판매 실적','사업 결과 비교','고객 분석'];
   var dots=''; for(var i=1;i<=N;i++){
-    var on=wide?(((p<=2)?(i<=2):(i>=3))):(i===p);   // 넓은 화면 = 현재 펼침의 두 면 pair 점등
+    var on=wide?((i===2)||(i===_bizLeftPage())):(i===p);   // [260731 5차] 넓은 화면 = 우 열 고정 2면 + 현재 좌 면이 같이 점등
     dots+='<button class="dot'+(on?' on':'')+'" type="button" aria-label="'+i+'면 '+LBL[i-1]+'" aria-pressed="'+on+'" onclick="_bizmTo('+i+')"></button>';
   }
   return '<div id="bizm-dots-row" style="display:flex;justify-content:center;margin:16px 0 2px;transition:transform .3s ease"><span class="bizm-pgctl" role="group" aria-label="대시보드 책 넘김"><button class="nav" type="button" aria-label="이전 면" onclick="_bizmGo(-1)">‹</button><span class="dots">'+dots+'</span><button class="nav" type="button" aria-label="다음 면" onclick="_bizmGo(1)">›</button></span></div>';
@@ -5952,9 +6003,8 @@ function _bizInlineRender(){
   if(typeof _mainView==='undefined'||_mainView!=='biz')return;
   if(typeof requestAnimationFrame==='function')requestAnimationFrame(function(){try{_srailAlignTop();}catch(_e){}});   // [260723 운영자] 좌 보드 렌더(innerHTML 반영) 후 우 판매현황 레일 높이 재캡 = 세로변 동일
   try{if(window.Plotly)['bizm-chart','bizm-genre','bizm-season','yrm-chart'].forEach(function(id){if(document.getElementById(id))Plotly.purge(id);});}catch(_e){}   // [260723 평의회4] innerHTML 파기 전 purge — 리스너·옵저버 누수 차단
-  // [260731 4차] 책 4면 — 좌 열이 그리는 면: 넓은 화면 = 홀수면(1·3, 짝수면은 우 #rail-yrm 담당) · 좁은 화면 = 현재 면 그대로(1~4)
-  var page=_bizmState.page||1;
-  if(_bizBookWide())page=(page<=2)?1:3;
+  // [260731 5차] 책 4면 — 좌 열이 그리는 면: 넓은 화면 = 2면 뺀 나머지(1·3·4 · 2면은 우 #rail-yrm 고정) · 좁은 화면 = 현재 면 그대로(1~4)
+  var page=_bizLeftPage();
   var _pgTag='';   // [260723 운영자] 페이지 인디케이터 알약(1/2) 제거 — 하단 _bizmDots(‹ • • ›)로 일원화(헤더 우측 오버플로·중복 표기 해소). page 변수는 아래 분기에서 계속 사용
   if(page===2){   // [260731 4차] 좁은 화면 전용 — 판매 실적 면(우 레일 틀을 좌 보드가 대신 그림 · 데이터 = 레일 6시트 공유)
     try{ var _uhaN=document.getElementById('srail-uha'), _railN=document.getElementById('sales-rail'); if(_uhaN&&_railN&&!_railN.contains(_uhaN))_railN.appendChild(_uhaN); }catch(_e){}
@@ -5964,7 +6014,7 @@ function _bizInlineRender(){
     else if(typeof _srailRender==='function'){ try{_srailRender();}catch(_e){console.warn('[book p2]',_e);} }
     return;
   }
-  if(page===4){   // [260731 4차] 좁은 화면 전용 — 고객 분석 면(admin, 비admin은 _bizBookN=3이라 진입 불가)
+  if(page===4){   // [260731 5차] 고객 분석 면(admin, 비admin은 _bizBookN=3이라 진입 불가) — 넓은 화면에서도 **좌 열**이 그린다(우 열 = 2면 고정)
     el.innerHTML='<div style="position:relative">'+_bizPageMemberHtml()+_bizmDots()+_bizmPageNav()+'</div>';
     _bizMemberEnsure();
     return;
@@ -6046,7 +6096,7 @@ function _bizInlineRender(){
   h+='</tbody></table></div>';
   h+='</div>'+_bizmDots()+_bizmPageNav()+'</div>';
   el.innerHTML=h;
-  _bizEnsurePlotly(function(){ try{_bizDrawChart(list, selTypes.length>1, 'bizm-chart', 430); _bizDrawGenreBench('bizm-genre',_bizmState); _bizDrawSeason('bizm-season',_bizmState);}catch(_e){console.warn('[bizm chart]',_e);} });
+  _bizEnsurePlotly(function(){ try{_bizDrawChart(list, selTypes.length>1, 'bizm-chart', 430); _bizDrawGenreBench('bizm-genre',_bizmState); _bizDrawSeason('bizm-season',_bizmState);}catch(_e){console.warn('[bizm chart]',_e);} try{_bizmCapBoxes();}catch(_e){} });   // [260731 5차] 차트까지 그린 뒤 = 3면 실높이 확정 → 한 화면 넘으면 박스 내부 스크롤
 }
 function _srailTodayISO(){ var t=new Date(); return t.getFullYear()+'-'+('0'+(t.getMonth()+1)).slice(-2)+'-'+('0'+t.getDate()).slice(-2); }
 // 홍보중 판정: true/false = 홍보창(ps~se||e) 지정 프로그램의 창 안/밖 · null = 홍보일 미지정·조인 실패(호출측 판매기간 폴백)
@@ -7075,14 +7125,14 @@ function _bizMemberEnsure(){
   var tgt=document.getElementById('mem-ov-inline'); if(!tgt)return;
   if(typeof userRole==='undefined'||userRole!=='admin')return;   // 비admin은 애초에 안내 카드(위)라 여기 안 온다 — 이중 안전
   var ready=_memState&&_memState.rows&&_memState.rows.length&&_memState.rows[0]['연령대']!==undefined;
-  if(ready){ _memOvRender('mem-ov-inline'); return; }
+  if(ready){ _memOvRender('mem-ov-inline'); try{_bizmCapBoxes();}catch(_e){} return; }
   if(_memLoading){ setTimeout(_bizMemberEnsure,600); return; }   // [페이블 검수 MED] _memLoad는 비행 중이면 콜백 없이 return — 폴링으로 합류(_memWarm 선로딩과 공존)
   if(window._bizMemBusy)return;
   window._bizMemBusy=1;
   Promise.resolve()
     .then(function(){ return (_memState&&_memState.rows&&_memState.rows.length)?null:_memLoad(false); })
     .then(function(){ if(_memState&&_memState.rows&&_memState.rows.length&&_memState.rows[0]['연령대']===undefined)return _memLoad(true); })   // 옛 캐시(연령대 없음) = 1회 신선 재로드(openMemberOverview와 동일 규칙)
-    .then(function(){ window._bizMemBusy=0; if(document.getElementById('mem-ov-inline'))_memOvRender('mem-ov-inline'); })
+    .then(function(){ window._bizMemBusy=0; if(document.getElementById('mem-ov-inline')){_memOvRender('mem-ov-inline'); try{_bizmCapBoxes();}catch(_e2){}} })   // [260731 5차] 4면도 그린 뒤 한 화면 캡
     .catch(function(e){ window._bizMemBusy=0; var t=document.getElementById('mem-ov-inline'); if(t)t.innerHTML='<div style="text-align:center;padding:50px;color:var(--danger);font-size:13px">회원 데이터를 못 불러왔어요 <button class="ana-chip" onclick="_bizMemberEnsure()" style="margin-left:8px">다시 시도</button></div>'; console.warn('[book p4]',e); });
 }
 function _railYrmRender(){
@@ -7090,18 +7140,16 @@ function _railYrmRender(){
   // [260724 운영자] 레이아웃 합침 — 상세(#srail-uha)를 틀 안 슬롯으로 이주. innerHTML 파기 전 밖으로 대피(엘리먼트·타이머·리스너 보존) 후 재장착.
   var uha=document.getElementById('srail-uha'), rail=document.getElementById('sales-rail');
   try{ if(uha&&rail&&el.contains(uha))rail.appendChild(uha); }catch(_e){}
-  // [260731 4차] 우 열 = 짝수면: 펼침1 → 2면 판매 실적(종전) · 펼침2 → 4면 고객 분석(admin) / 비admin 안내 카드
-  var rp=((_bizmState.page||1)<=2)?2:4;
-  try{ el.innerHTML=(rp===2)?_railYrmFrame():('<div style="position:relative">'+_bizPageMemberHtml()+'<div id="rail-yrm-uha" style="display:none"></div></div>'); }catch(_e){ console.warn('[rail-yrm]',_e); }
-  try{ var slot=document.getElementById('rail-yrm-uha'); if(uha&&slot)slot.appendChild(uha); }catch(_e){}   // 4면에서도 슬롯(숨김)에 주차 — 타이머·리스너 보존, 화면 노출 0
-  if(rp===4){ _bizMemberEnsure(); }
-  else { try{ if(window._railYrmActives)_srailUhaSync(window._railYrmActives); }catch(_e){} try{ if(_ryDrill.key)_ryDrillPaint(_ryDrill.key,0); }catch(_e){} try{ _railYrmSyncActive(); }catch(_e){} }   // [260731 4차 · 페이블 검수 MED] 펼침1 복귀 = 회전 기계·상세·액티브 pill 재점화(4면 휴식의 짝)
+  // [260731 5차] 우 열 = **2면(판매 실적) 고정** — 좌 열이 1·3·4면으로 넘어가도 여기는 안 바뀐다(구 '펼침2 = 고객 분석' 분기 폐지 · 4면은 좌 열이 그린다).
+  try{ el.innerHTML=_railYrmFrame(); }catch(_e){ console.warn('[rail-yrm]',_e); }
+  try{ var slot=document.getElementById('rail-yrm-uha'); if(uha&&slot)slot.appendChild(uha); }catch(_e){}
+  try{ if(window._railYrmActives)_srailUhaSync(window._railYrmActives); }catch(_e){} try{ if(_ryDrill.key)_ryDrillPaint(_ryDrill.key,0); }catch(_e){} try{ _railYrmSyncActive(); }catch(_e){}
 }
 // 판매중 목록(actives) 도착·갱신마다 리스트만 in-place 갱신(틀·KPI 재생성 없음). 틀 미구축이면 통째 렌더.
 function _railYrmSync(actives){
   try{ if(typeof window!=='undefined')window._railYrmActives=actives; }catch(_e){}
   var el=document.getElementById('rail-yrm'); if(!el)return;
-  if(_bizBookWide()&&(_bizmState.page||1)>2){ return; }   // [260731 4차] 펼침2(우=고객 분석) = 목록 DOM이 없다 — actives만 저장하고 4면 화면은 안 건드린다(재렌더가 고객 분석 본문을 지우는 사고 방지)
+  // [260731 5차] 넓은 화면 = 우 열이 늘 2면(판매 실적)이라 목록이 항상 있다 — 구 '펼침2 = 목록 DOM 없음' 조기반환 폐지
   var list=document.getElementById('rail-yrm-list');
   if(!list){ if(el.childNodes.length)return; _railYrmRender(); return; }   // [260731 4차] 틀이 있는데 목록만 없다 = 다른 면 — 통째 재렌더 금지(빈 틀일 때만 최초 구축)
   list.innerHTML=_railYrmTableHtml(actives);
@@ -7188,8 +7236,8 @@ function _srailUhaResume(){ _uhaCar.paused=false; var b=document.getElementById(
 function _srailUhaSync(actives){
   var box=document.getElementById('srail-uha'); if(!box)return;
   var biz=(typeof _mainView!=='undefined'&&_mainView==='biz');
-  var p4=(typeof _bizBookWide==='function'&&_bizBookWide()&&(_bizmState.page||1)>2);   // [260731 4차 · 페이블 검수 HIGH] 펼침2(우=고객 분석) = 회전 기계 완전 휴식 — 숨은 슬롯에서 재점화(data-on=1·타이머 재예약) 차단. 복귀 재점화 = _railYrmRender(2면)의 재동기 호출
-  if(!biz||p4||!actives||!actives.length){ box.style.display='none'; box.setAttribute('data-on','0'); _srailUhaStop(); _uhaCar.list=[]; _uhaCar.sig=''; return; }
+  // [260731 5차] 구 p4 휴식 가드 폐지 — 우 열이 늘 2면(판매 실적)이라 상세·회전이 숨는 면 자체가 없다(좌 4면으로 넘어가도 우 열은 그대로 돌아간다)
+  if(!biz||!actives||!actives.length){ box.style.display='none'; box.setAttribute('data-on','0'); _srailUhaStop(); _uhaCar.list=[]; _uhaCar.sig=''; return; }
   box.style.display='flex'; box.setAttribute('data-on','1');   // 데이터 있을 때만 노출(JS 구동 = 빈 박스 깜빡임 방지)
   var sig=actives.map(_srailUhaKey).join('|');
   var bodyEl=document.getElementById('srail-uha-body');
