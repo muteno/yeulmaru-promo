@@ -2699,7 +2699,7 @@ const PROMO_MAP_SPOTS=[
 let PERFS=[];
 let _perfReady=false;   // [버그수정] 프로그램 로드+updatePerfOpen 완료 여부 — 홍보 위저드 조기 오픈(미로딩 상태) 차단용
 let _DRAFTS=[];         // 임시저장 전용 배열 — loadData에서 '임시저장' 컬럼으로 records와 분리(집계/관리에 구조적으로 안 섞임)
-function getPerfs(d){var k=dk(d),now=new Date();now.setHours(0,0,0,0);return PERFS.filter(function(p){return k>=p.s&&k<=p.e}).map(function(p){var sd=new Date(p.s);sd.setHours(0,0,0,0);var ed=new Date(p.e);ed.setHours(0,0,0,0);if(ed<now)return Object.assign({},p,{dday:null});if(now>=sd&&now<=ed)return Object.assign({},p,{dday:0});var diff=Math.round((sd-now)/86400000);return Object.assign({},p,{dday:diff});});}
+function getPerfs(d){var k=dk(d),now=new Date();now.setHours(0,0,0,0);var _p=PERFS.filter(function(p){return k>=p.s&&k<=p.e}).map(function(p){var sd=new Date(p.s);sd.setHours(0,0,0,0);var ed=new Date(p.e);ed.setHours(0,0,0,0);if(ed<now)return Object.assign({},p,{dday:null});if(now>=sd&&now<=ed)return Object.assign({},p,{dday:0});var diff=Math.round((sd-now)/86400000);return Object.assign({},p,{dday:diff});});return (typeof getRentals==='function')?_p.concat(getRentals(k)):_p;}   /* [260731] 구글 캘린더 대관(t='r')은 PERFS에 안 섞고 여기서만 합류 — 정본(PERFS) 오염 0 */
 function getExhibitStatus(d){
 var k=dk(d),now=new Date();now.setHours(0,0,0,0);
 var exh=[{id:'7층',s:'2026-02-27',e:'2026-06-28'},{id:'장도',s:'2026-03-27',e:'2026-06-21'}];
@@ -2852,12 +2852,17 @@ var nameHtml='<span class="pf">'+escapeHtml(fn)+'</span><span class="ps">'+escap
 // 좌클릭: 홍보 현황 모달  /  우클릭: 정보 박스 — data-perf-name + this 패턴으로 사이드바와 통일 (escape 안전)
 var safeFn=escapeHtml(fn);
 var dataAttr=' data-perf-name="'+safeFn+'"';
-var clickAttr=!past?dataAttr+' onclick="event.stopPropagation();openProgramView(this.dataset.perfName)" title="클릭: 조회 / 우클릭: 빠른 정보"':dataAttr;
-var ctxAttr=!past?' oncontextmenu="event.stopPropagation();event.preventDefault();onPerfContextMenu(event,this);return false;"':'';
-var cursorStyle=!past?'cursor:pointer;':'';
+// [260731] 구글 캘린더 대관(_gc)은 PERFS 정본에 없어 openProgramView가 못 찾는다 → 클릭·우클릭 없이 시간·장소 툴팁만.
+var _gc=perf._gc;
+var _gcTip=_gc?(safeFn+(perf._allday?' · 종일':(perf._st?(' · '+perf._st+(perf._et?'~'+perf._et:'')):''))+(perf.l?' · '+escapeHtml(perf.l):'')+' (대관)'):'';
+var clickAttr=_gc?(dataAttr+' title="'+_gcTip+'"'):(!past?dataAttr+' onclick="event.stopPropagation();openProgramView(this.dataset.perfName)" title="클릭: 조회 / 우클릭: 빠른 정보"':dataAttr);
+var ctxAttr=(!past&&!_gc)?' oncontextmenu="event.stopPropagation();event.preventDefault();onPerfContextMenu(event,this);return false;"':'';
+var cursorStyle=(!past&&!_gc)?'cursor:pointer;':'';
+// [260731] 대관 원형 배지 = 무채색 토큰(--neutral-text) — 기획(accent 인디고)과 한눈에 갈린다. 팔레트 계승(신규 hex 0)
+var lbBg=_gc?'var(--neutral-text)':'var(--accent)';
 if(past)out+='<span style="display:inline-flex;align-items:center;margin-left:6px"><span style="display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;border-radius:50%;font-size:8px;background:rgba(0,0,0,0.05);color:rgba(0,0,0,0.22);flex-shrink:0">'+lb+'</span><span class="pname" style="margin-left:4px;font-size:9px;color:rgba(0,0,0,0.18)">'+nameHtml+'</span></span>';
 else if(td)out+='<span class="perf-badge"'+clickAttr+ctxAttr+' style="'+cursorStyle+'display:inline-flex;align-items:center;margin-left:6px"><span style="display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;border-radius:50%;font-size:8px;font-weight:600;background:rgba(255,255,255,0.85);color:#111;flex-shrink:0">'+lb+'</span><span class="pname" style="margin-left:5px;font-size:9px;font-weight:700;color:#111">'+nameHtml+'</span></span>';
-else out+='<span class="perf-badge"'+clickAttr+ctxAttr+' style="'+cursorStyle+'display:inline-flex;align-items:center;margin-left:6px"><span style="display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;border-radius:50%;font-size:8px;font-weight:600;background:var(--accent);color:#fff;flex-shrink:0">'+lb+'</span><span class="pname" style="margin-left:5px;font-size:9px;font-weight:700;color:var(--text)">'+nameHtml+'</span>'+(dd!==null&&dd!==0?'<span class="pday" style="margin-left:8px;font-size:9px;color:var(--dim);white-space:nowrap">'+getDdayText(dd)+'</span>':'')+'</span>';
+else out+='<span class="perf-badge"'+clickAttr+ctxAttr+' style="'+cursorStyle+'display:inline-flex;align-items:center;margin-left:6px"><span style="display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;border-radius:50%;font-size:8px;font-weight:600;background:'+lbBg+';color:#fff;flex-shrink:0">'+lb+'</span><span class="pname" style="margin-left:5px;font-size:9px;font-weight:700;color:var(--text)">'+nameHtml+'</span>'+(dd!==null&&dd!==0?'<span class="pday" style="margin-left:8px;font-size:9px;color:var(--dim);white-space:nowrap">'+getDdayText(dd)+'</span>':'')+'</span>';
 }return out;
 }
 let password='',userRole='user',records=[],currentYear=new Date().getFullYear(),currentMonth=new Date().getMonth()+1;
@@ -3663,6 +3668,14 @@ async function _qaApi(method,path){
   if(p.indexOf('/api/presence')===0)return{now:Date.now(),users:[]};
   if(p.indexOf('/api/memo')===0)return{text:''};
   if(p.indexOf('/api/config')===0||p.indexOf('/api/auth')===0)return{ok:true};
+  // [260731] 대관(구글 캘린더) — QA는 이번 달 샘플 3건(단발·종일 다일·야간)으로 「대」 배지 렌더만 검증. 실피드 미접촉
+  if(p.indexOf('/api/gcal')===0){
+    var _off=function(n){var d=new Date();d.setHours(0,0,0,0);d.setDate(d.getDate()+n);return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);};
+    var _mk=function(n,t,pl,st,et,ad){return{id:'gcqa:'+n,d:_off(n),title:t,place:pl,allday:!!ad,st:st||'',et:et||''};};
+    return{ok:true,days:[_mk(0,'여수시립합창단 정기연주회','대극장','19:30','21:30'),
+      _mk(2,'전남교육청 학생예술제','소극장','','',true),_mk(3,'전남교육청 학생예술제','소극장','','',true),
+      _mk(6,'기업 초청 콘서트','대극장','20:00','22:00')],count:4};
+  }
   return{rows:[],headers:[],programs:[]};
 }
 function _qaBanner(){
@@ -18780,7 +18793,7 @@ function getRecsForDate(d){
 
 function calDates(y,m){const first=new Date(y,m-1,1),dow=first.getDay(),offset=(dow-2+7)%7,start=new Date(y,m-1,1-offset),out=[];for(let w=0;w<6;w++){for(let d=0;d<6;d++){const dt=new Date(start);dt.setDate(dt.getDate()+w*7+d);out.push(dt);}}return out;}
 
-function render(){document.getElementById('nav-month').textContent=currentMonth;document.getElementById('nav-year').textContent=currentYear;loadHolidays(currentYear);renderChips();renderCal();try{var _c9=document.getElementById('cal');if(_c9&&_c9.offsetHeight>120)localStorage.setItem('_calGridH',_c9.offsetHeight);}catch(e){}autoOpenMobilePanel();try{_srailAlignTop();}catch(e){}}
+function render(){document.getElementById('nav-month').textContent=currentMonth;document.getElementById('nav-year').textContent=currentYear;loadHolidays(currentYear);try{loadRentals(currentYear,currentMonth);}catch(_e){}renderChips();renderCal();try{var _c9=document.getElementById('cal');if(_c9&&_c9.offsetHeight>120)localStorage.setItem('_calGridH',_c9.offsetHeight);}catch(e){}autoOpenMobilePanel();try{_srailAlignTop();}catch(e){}}
 var _holidays={},_holLoadedYears={};
 function loadHolidays(year){
   if(_holLoadedYears[year])return;_holLoadedYears[year]=true;
@@ -18789,6 +18802,40 @@ function loadHolidays(year){
     if(ch&&typeof renderCal==='function')renderCal();
   }).catch(function(){_holLoadedYears[year]=false;});
 }
+/* ═══ 대관 일정 (구글 캘린더 비공개 iCal 피드 → Worker /api/gcal) ═══
+   운영자 260731: 「구글 스케줄 하나 붙이고 싶다 · 받아오면 대관 공연이 들어온다 · [대]로 캘린더에 명시」
+   · 캘린더 자체가 대관 전용 → 여기서 온 일정은 전부 t='r'(대관). 「대」 배지는 renderPerfsHtml이 이미 t='r'에 그린다(신규 표기 창작 0).
+   · PERFS(SharePoint 프로그램 시트 = 정본)에는 절대 안 섞는다 — 별도 배열에 두고 getPerfs 출력에서만 합류.
+     이유: PERFS는 홍보 신청·판매 집계·일괄 위저드가 함께 읽는 정본이라 외부 일정이 들어가면 그쪽이 오염된다.
+   · 미설정(GCAL_ICS_URL 없음)·오류면 조용히 0건 — 기존 화면 무영향. */
+var GCAL_RENTALS=[],_gcalLoaded={},_gcalBusy=false;
+function loadRentals(year,month){
+  var ym=year+'-'+('0'+month).slice(-2);
+  if(_gcalLoaded[ym]||_gcalBusy)return;
+  _gcalLoaded[ym]=true;_gcalBusy=true;
+  // 요청 창 = 그 달 ±1달(월 넘김 프리페치 — 이전/다음 달로 넘겨도 즉시 보인다)
+  var f=new Date(Date.UTC(year,month-2,1)),t=new Date(Date.UTC(year,month+1,0));
+  api('GET','/api/gcal?from='+f.toISOString().slice(0,10)+'&to='+t.toISOString().slice(0,10)).then(function(d){
+    _gcalBusy=false;
+    if(!d||!d.days)return;
+    var seen={};GCAL_RENTALS.forEach(function(r){seen[r.id]=1;});
+    var ch=false;
+    d.days.forEach(function(x){
+      if(!x||!x.d||seen[x.id])return;
+      var tt=(x.title||'대관').toString();
+      GCAL_RENTALS.push({id:x.id,f:tt,n:tt,l:(x.place||''),t:'r',g:'대관',s:x.d,e:x.d,o:0,
+        _gc:1,_allday:!!x.allday,_st:x.st||'',_et:x.et||''});
+      ch=true;
+    });
+    if(ch&&typeof renderCal==='function')renderCal();
+  }).catch(function(){_gcalBusy=false;_gcalLoaded[ym]=false;});
+}
+// 그 날짜의 대관 일정 — getPerfs가 합류시킬 PERFS 모양 목록(dday는 대관에 의미 없어 null)
+function getRentals(key){
+  if(!GCAL_RENTALS.length)return [];
+  return GCAL_RENTALS.filter(function(r){return r.s===key;}).map(function(r){return Object.assign({},r,{dday:null});});
+}
+
 // === 카페/장도 운영시간 (DB 운영_카페일정 / 운영_장도) — 날짜 패널 서비스 안내용 ===
 var _cafeHours={},_jangdoHours={};
 async function loadCafeJangdo(){
