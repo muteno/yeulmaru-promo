@@ -1,0 +1,47 @@
+<!doctype html><html lang=ko><meta charset=utf-8><title>260731 날짜 패널 「그날 일정」 구분 = 글자 라벨 + 잉크 수평 실측 — 전후</title>
+<style>body{font-family:Pretendard,-apple-system,sans-serif;background:#FDF6F3;color:#1A1A2E;margin:0;padding:28px}
+h1{font-size:19px;margin:0 0 6px}h2{font-size:15px;margin:26px 0 8px}
+.c{background:#fff;border:1px solid rgba(0,0,0,.09);border-radius:16px;padding:14px 16px;box-shadow:0 8px 32px rgba(74,77,231,.08);margin-bottom:18px}
+.row{display:flex;gap:18px;flex-wrap:wrap}
+img{max-width:100%;border:1px solid rgba(0,0,0,.12);border-radius:8px;background:#FDFCFB;display:block}
+table{border-collapse:collapse;font-size:13px;margin-top:8px}td,th{border:1px solid rgba(0,0,0,.12);padding:6px 10px;text-align:left}th{background:#EEEDF3}
+td.n,th.n{text-align:right}.ok{color:#1A6B3C;font-weight:700}.bad{color:#E24B4A;font-weight:700}
+small{color:#6B6B7B}code{background:#EEEDF3;border-radius:4px;padding:1px 4px}</style>
+<h1>260731 — 날짜 패널 「그날 일정」: 구분 = 알약 폐지·글자만 + 3열 잉크 수평 실측</h1>
+<small>운영자 3차 지시: <b>"저 공연 버튼은 없애줘. 그냥 글자로 표현. / 각 글자가 광학 잉크 렌즈로 가로 수평을 맞춰주나 봐봐"</b></small>
+
+<h2>전후</h2>
+<div class=row>
+  <div class=c><div style="font-size:13px;font-weight:700;margin-bottom:8px">전 — 알약(버튼) 라벨</div>
+    <img src="260731_패널그날일정_글자라벨_전.png" alt="전"></div>
+  <div class=c><div style="font-size:13px;font-weight:700;margin-bottom:8px">후 — 글자만(색으로 구분) · 세 열이 같은 기준선</div>
+    <img src="260731_패널그날일정_글자라벨_후.png" alt="후"></div>
+</div>
+
+<h2>조치</h2>
+<table>
+<tr><th>구간</th><th>내용</th></tr>
+<tr><td><code>.panel-hdr-kind</code></td><td>배경·패딩·라운드 <b>전부 제거</b> → 글자만. 형태는 같은 패널의 정본 부품 <code>.sp-card-type</code>(12.5px/700, 색만 다른 글자 라벨) 계승. 색은 종전 그대로 캘린더 셀과 공유(<code>perfBadgeBg()</code> — 기획 <code>--accent</code> / 대관·셋업 <code>--neutral-text</code>), 인라인 <code>background</code> → <code>color</code></td></tr>
+<tr><td><code>.panel-hdr-labels</code></td><td><code>align-items:center</code> → <b><code>baseline</code></b>. 열마다 글자 크기가 달라(12.5 · 13 · 11px) 박스 중앙 정렬은 글리프가 어긋난다 — 기준선을 공유시켜 「같은 줄 위에 앉은」 상태로</td></tr>
+</table>
+
+<h2>광학 잉크 실측 — <code>tools/scratch/probe_panel_ink.mjs</code></h2>
+<p style="font-size:13.5px;line-height:1.7;max-width:940px">글자 <b>박스</b>가 아니라 <b>글리프 잉크</b>를 잰다. 각 열 텍스트의 baseline = <code>Range</code> 상단 + <code>fontBoundingBoxAscent</code>,
+잉크 상·하단 = canvas <code>TextMetrics.actualBoundingBoxAscent/Descent</code>. 기준 = 2열(제목), 값 = [1열 구분, 3열 장소]의 편차. 5행 전건 측정.</p>
+<table>
+<tr><th>정렬 모드</th><th class=n>baseline 최대 Δ</th><th class=n>잉크중심 최대 Δ</th><th class=n>잉크하단 최대 Δ</th><th>판정</th></tr>
+<tr><td><code>align-items:center</code> (구판)</td><td class="n bad">0.500</td><td class=n>0.500</td><td class="n bad">1.500</td><td>행마다 세 글자가 서로 다른 기준선 — 「수평이 안 맞는」 상태</td></tr>
+<tr><td><b><code>align-items:baseline</code> (적용)</b></td><td class="n ok">0.000</td><td class=n>0.500</td><td class=n>1.000</td><td class=ok>기준선 완전 일치 (5행 × 2열 전건 0.000)</td></tr>
+</table>
+<p style="font-size:13px;line-height:1.7;max-width:940px"><small>
+· 잉크중심·잉크하단의 잔여 Δ는 <b>글자 크기가 다르면 물리적으로 남는 몫</b>이다(13px 제목이 11px 장소보다 위아래로 더 크다). 한글은 디센더가 없어 <b>기준선 일치 = 눈에 보이는 수평 일치</b>이므로 baseline이 정답.<br>
+· baseline Δ 0.000은 폰트에 의존하지 않는 <b>레이아웃 규칙의 결과</b>(격자 항목의 기준선 공유)라 실측 환경(오프라인 = Pretendard 미로딩·폴백 폰트)과 무관하게 유지된다. 잉크중심/하단 수치만 폰트 의존 — 0.5px 단위로 양자화된 것도 폴백 폰트 메트릭 탓.<br>
+· 억지 <code>translateY</code> 광학보정은 <b>쓰지 않았다</b> — 기준선 공유만으로 0.000이 나오므로 하드코딩 보정값이 필요 없다(값이 굳으면 폰트·크기 변경 때 드리프트 원인).
+</small></p>
+
+<h2>검증</h2>
+<p style="font-size:13.5px;line-height:1.7">
+· <code>python3 tools/check_design.py</code> → 통과, raw hex <b>1605/1605 무증가</b>(색은 종전 토큰 그대로, <code>--surface-solid</code>·<code>--r-btn</code> 사용처만 사라짐)<br>
+· <code>node tools/scratch/smoke_boot.mjs</code> → 부팅 에러 0<br>
+· 재현: <code>node tools/scratch/probe_panel_ink.mjs index.html center baseline</code> · 캡처 <code>node tools/scratch/shot_panel_hdr.mjs index.html out.png</code>
+</p>
