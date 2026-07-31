@@ -4445,6 +4445,26 @@ function closeMobileNav(){
     c.querySelectorAll('.nav-btn.acc-on').forEach(function(x){x.classList.remove('acc-on');x.removeAttribute('aria-expanded');});}
   const h=document.querySelector('.hamburger');if(h){h.classList.remove('is-open');h.setAttribute('aria-expanded','false');}
 }
+// [260731 운영자] "지나가는 중에는 안 열리게" — 포인터 속도 기반 의도 판정(hover intent).
+//   느리게(=겨냥해서) 들어오면 지연 0으로 즉시 열고, 빠르게 스쳐 지나가는 중이면 열지 않는다.
+//   스쳐가다 그 메뉴에서 멈추거나 느려지면 그 순간 열림(_NAV_HOV_TICK 주기 재판정) — '못 열리는 메뉴'는 없음.
+//   조절값 = 아래 상수 2개뿐(신규 CSS·색 0).
+var _NAV_HOV_SLOW=0.55,   // px/ms(=550px/s) 이하 = '의도' 판정 → 즉시 열기
+    _NAV_HOV_TICK=60,     // ms — 스쳐가는 중 재판정 주기
+    _NAV_HOV_IDLE=70,     // ms — 이만큼 mousemove가 없으면 '멈춤'(속도 0)으로 간주 = 급히 와서 딱 멈춘 경우 즉시 열림
+    _navPtr={x:0,y:0,t:0,v:0};
+document.addEventListener('mousemove',function(e){
+  var n=(window.performance&&performance.now)?performance.now():Date.now(),dt=n-_navPtr.t;
+  if(dt>0&&_navPtr.t){
+    var dx=e.clientX-_navPtr.x,dy=e.clientY-_navPtr.y;
+    _navPtr.v=Math.sqrt(dx*dx+dy*dy)/dt;   // 멈춤 판정은 _navPtrV()의 무이벤트 시간이 담당(여기서 0으로 덮으면 큰 점프를 '느림'으로 오판)
+  }
+  _navPtr.x=e.clientX;_navPtr.y=e.clientY;_navPtr.t=n;
+},{passive:true});
+function _navPtrV(){   // 현재 포인터 속도 — 마지막 mousemove가 오래됐으면 '멈춤'(0)
+  var n=(window.performance&&performance.now)?performance.now():Date.now();
+  return (!_navPtr.t||n-_navPtr.t>_NAV_HOV_IDLE)?0:_navPtr.v;
+}
 function buildNav(){
   const c=document.getElementById('nav-menus');c.innerHTML='';
   const hb=document.createElement('div');hb.className='nav-hover-bg';c.appendChild(hb);   // navigation-01 이식 — 호버 배경 pill(살몬 언더바 = 260723 폐지)
@@ -4494,11 +4514,20 @@ function buildNav(){
     }
     b.onmouseenter=()=>{ if(c.classList.contains('mobile-open'))return;   // 모바일 패널 = 호버 축 비활성(탭 mouseenter 오발로 데스크탑 드롭다운 열림 차단)
       _navHoverBgTo(b); clearTimeout(window._ddHovT2);   // 메뉴로 넘어오면 닫기 예약 취소
-      // [260731 운영자] "세부가 있으면 마우스 호버하면 바로 내려오게" — 구 120ms 스침 가드 폐지(지연 0 · 등장 모션 acctDrop .22s는 그대로)
+      // [260731 운영자] "세부가 있으면 마우스 호버하면 바로 내려오게" — 구 120ms 일괄 가드 폐지.
+      //   대신 속도 판정(_navPtrV): 겨냥해서 들어오면 지연 0 즉시 · 스쳐 지나가는 중이면 안 염(멈추면 그때 열림).
       if(_sub){ clearTimeout(b._hovT);
-        var _ddH=document.getElementById('dd-pop');
-        if(_ddH&&_ddH.dataset.owner===m.id)return;   // 이미 이 메뉴 열림 = 유지(깜빡 방지)
-        _ddOpen(b,_sub,210,m.id);                    // 없거나 다른 메뉴 = 열기/전환
+        var _openSub=function(){
+          var _ddH=document.getElementById('dd-pop');
+          if(_ddH&&_ddH.dataset.owner===m.id)return;   // 이미 이 메뉴 열림 = 유지(깜빡 방지)
+          _ddOpen(b,_sub,210,m.id);                    // 없거나 다른 메뉴 = 열기/전환
+        };
+        if(_navPtrV()<=_NAV_HOV_SLOW){_openSub();return;}   // 느린 진입 = 의도 → 즉시
+        (function _poll(){ b._hovT=setTimeout(function(){   // 스쳐가는 중 = 보류, 느려지면 그 순간 열기
+          if(!b.matches(':hover'))return;                   // 이미 지나감 = 취소(mouseleave도 clearTimeout)
+          if(_navPtrV()<=_NAV_HOV_SLOW){_openSub();return;}
+          _poll();
+        },_NAV_HOV_TICK); })();
       }
       else { var _dd=document.getElementById('dd-pop'); if(_dd&&_dd.dataset.owner){ clearTimeout(window._ddHovT2); window._ddHovT2=setTimeout(_ddCloseAll,160); } }   // 세부메뉴 없는 버튼 호버 = 열린 호버 드롭다운 닫기 예약
     };
