@@ -149,7 +149,7 @@ button{font-family:inherit;cursor:pointer}
 .nav .year-text{font-size:14px;color:rgba(255,255,255,.9);margin-left:9.6px}   /* 간격 8→9.6(1.2배, 운영자 260710) · 알파 .7→.9(운영자 260723 밝게) */
 .nav .arrow{width:34px;height:34px;font-size:16px;background:none;border:none;color:rgba(255,255,255,.75);box-shadow:none}   /* [260710 운영자] 감싼 원형 버튼 제거 — 글리프만 */
 .nav .arrow:hover{background:rgba(255,255,255,.12);color:rgba(255,255,255,1);border:none;box-shadow:none}
-#chips .prog-btn{margin-top:7px}   /* 요일바(48) 세로 중앙 = (48-34)/2 */
+#chips .prog-btn{margin-top:8px}   /* 요일바(48) 세로 중앙 = (48-32)/2 — .prog-btn 실측 32px(구 주석 34는 오기, 중심 1px 편심이었다). 실렌더 검증 260731 */
 .nav-sub{font-size:13px;color:rgba(255,255,255,.6)}
 /* .nav-beta 제거됨(운영자 260705 "베타 이제 없애고") — 마크업·규칙 삭제, hex 2 청산 */
 .role-tag{font-size:10px;font-weight:700;letter-spacing:0.5px;padding:3px 8px;border-radius:8px;margin-right:4px;cursor:pointer;transition:opacity .15s}
@@ -2038,13 +2038,17 @@ table.promo-board-table thead th:last-child{border-top-right-radius:11px}
 /* [260723e] 레이아웃·유리 선택값은 두 모드 공통으로 승격(위 기본 규칙에 반영) — biz 전용 스코프 잔여분만 아래 유지 */
 #biz-main{display:none}
 #app.biz-mode #chips,#app.biz-mode #cal-head-wrap,#app.biz-mode #cal,#app.biz-mode .pet,#app.biz-mode .crablane{display:none}
-#chips{display:none}   /* [260723 운영자] 깔때기 필터 = 판매현황 레일 우상단(chips-rail)으로 이동 → 데스크탑(>1200)에선 이 요일바 #chips 숨김(연간실적/캘린더 헤더 겹침 해소) */
-@media(max-width:1200px){#app:not(.biz-mode) #chips{display:flex}}   /* 모바일·태블릿(≤1200 = 레일 숨김) 캘린더 모드에서만 요일바 우측 깔때기 폴백 노출(프로그램 필터 접근 유지 · biz모드/데스크탑 제외) */
+#chips{display:none}   /* [260723 운영자] 깔때기 필터 = 판매현황 레일 우상단(chips-rail)으로 이동 → biz(실적) 모드에선 이 요일바 #chips 숨김(연간실적 헤더 겹침 해소) */
+#app:not(.biz-mode) #chips{display:flex}   /* [260731 운영자 복원] 캘린더 모드 = 레일 숨김(아래) → 깔때기 필터는 다시 요일바 우측(구 260723 이전 자리)이 주 위치. 뷰포트 분기 폐지(데스크탑도 노출) — 레일 안 chips-rail은 biz 모드 전용으로 잔존 */
 #app.biz-mode #biz-main{display:block}
 #app.biz-mode #sales-rail .srail-leg{display:none}   /* 범례 = 카드 차트 전용 — 표 모드에선 숨김 */
 #app.biz-mode .nav-mnav{opacity:.82;pointer-events:none}   /* 월 네비 = 캘린더 축 — 클릭 차단(pointer-events:none 유지 = [260723 평의회3] 유령 월변경 방지) · 딤 .45→.82(운영자 260723 "7 2026 밝게") */
 #sales-rail{transition:opacity .25s ease}
 @media(max-width:1200px){#sales-rail{display:none}}
+/* [260731 운영자] 캘린더 모드 = 판매 레일 없음 — 「캘린더 누를 때 사업 판매현황이 있을 필요가 없다」.
+   260708 판매 레일 도입(PR 139) 이전 화면 복원: 캘린더가 전체 폭을 쓰고, 날짜 클릭 시 우측 360px 사이드바(#panel)가 살아나며 캘린더가 그만큼 밀린다(_panelRailReflow).
+   레일 마크업·데이터·렌더러(.srail/#srail-uha/#rail-yrm)는 전부 보존 — biz(대시보드) 모드에선 그대로 노출되고, 판매현황 전체 보드는 nav 「판매 현황」이 담당. */
+#app:not(.biz-mode) #sales-rail{display:none}
 /* ===== [260723f Opus] 사업 실적 좌 보드 — 촤르륵 책장 넘김 + 글래스 정본 수려화(팔레트 폐쇄·토큰/흰알파만·신규 hex 0) ===== */
 @keyframes bizPageR{from{opacity:0;transform:translateX(38px)}to{opacity:1;transform:none}}   /* › 다음 면 = 우→중앙(오른쪽에서 넘어옴) */
 @keyframes bizPageL{from{opacity:0;transform:translateX(-38px)}to{opacity:1;transform:none}}   /* ‹ 이전 면 = 좌→중앙 */
@@ -5307,13 +5311,17 @@ function _srailArmResize(){
     },200);
   });
 }
-// 날짜 패널 위치 계산 — 캘린더 위 오버레이(레일 유지). 레일이 보이면 패널 오른쪽 끝을 레일 왼쪽 경계에 맞추고, 숨으면 우측 끝. 캘린더(main-area)는 안 밀림(운영자 260708). resize 공용.
+// 날짜 패널 위치 계산 — resize·모드전환 공용.
+//  · 레일이 보일 때(biz 모드) = 기존대로 캘린더 위 오버레이. 패널 오른쪽 끝을 레일 왼쪽 경계에 맞추고 main-area는 안 밀림(운영자 260708).
+//  · 레일이 숨을 때(캘린더 모드·≤1200) = 구(260708 이전) 우측 사이드바 복원. 패널이 우측 끝에 서고 캘린더(main-area)가 360px 밀린다(운영자 260731).
+//    ≤768 모바일은 CSS가 하단시트 + main-area margin-right:0 !important로 승 — 여기 값은 무시된다.
 function _panelRailReflow(){
   var p=document.getElementById('panel'); if(!p)return;
   var sr=document.getElementById('sales-rail');
   var w=(sr&&sr.offsetParent!==null&&sr.offsetWidth)?sr.offsetWidth:0;
   p.style.right=w+'px';
-  var ma=document.getElementById('main-area'); if(ma)ma.style.marginRight='0';
+  var open=(typeof panelOpen!=='undefined')&&panelOpen;
+  var ma=document.getElementById('main-area'); if(ma)ma.style.marginRight=(!w&&open)?'360px':'0';
 }
 // 최신 입력 기준일 — 헤더 '기준 M.D' 표기 (공연 일일입력 + 전시일일 중 최신)
 function _srailAsof(){
@@ -5393,6 +5401,7 @@ function _mvApply(noRail){
   app.classList.toggle('biz-mode',_mainView==='biz');
   try{_bizZoomApply();}catch(_e){}   // [260731] 모드 전환 즉시 줌 규격 동기(biz=1920 기준 고정 · cal=해제) — 이후 정렬식이 새 좌표계로 계산
   _mvSync();
+  try{if(typeof panelOpen!=='undefined'&&panelOpen)_panelRailReflow();}catch(_e){}   // [260731] 모드 전환 = 레일 노출이 바뀜 → 열린 날짜 패널의 right·캘린더 밀림값 재계산(캘린더=우측 사이드바 / biz=오버레이)
   try{_srailAlignTop();}catch(_e){}
   if(_mainView==='biz'){ try{_bizInlineRender();}catch(_e){console.warn('[bizm]',_e);} try{_railYrmRender();}catch(_e){} }
   if(noRail)return;   // initApp 부트 = 레일 fetch는 기존 게이트(_calP 뒤 _srailInit)가 담당 — 네트워크 우선권(260711) 불변
