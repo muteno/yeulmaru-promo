@@ -1,0 +1,49 @@
+<!doctype html><html lang=ko><meta charset=utf-8><title>260731 캘린더 휠 스크롤 = 이전/다음 달 이동 · 전후</title>
+<style>body{font-family:Pretendard,-apple-system,sans-serif;background:#FDF6F3;color:#1A1A2E;margin:0;padding:28px}
+h1{font-size:19px;margin:0 0 6px}h2{font-size:15px;margin:26px 0 8px}
+.c{background:#fff;border:1px solid rgba(0,0,0,.09);border-radius:16px;padding:14px 16px;box-shadow:0 8px 32px rgba(74,77,231,.08);margin-bottom:18px}
+img{max-width:100%;border:1px solid rgba(0,0,0,.12);border-radius:8px;background:#FDFCFB;display:block}
+.step{font-size:12px;color:#6B6B7B;margin:0 0 6px;font-weight:700}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;font-size:13px;margin-top:8px}td,th{border:1px solid rgba(0,0,0,.12);padding:6px 10px;text-align:right}th{background:#EEEDF3}td:first-child,th:first-child{text-align:left}
+.ok{color:#1A6B3C;font-weight:700}.bad{color:#E24B4A;font-weight:700}small{color:#6B6B7B}
+p,li{font-size:13.5px;line-height:1.7;max-width:900px}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px}</style>
+
+<h1>260731 — 캘린더 위에서 휠 스크롤하면 이전 달 / 다음 달로 이동</h1>
+<small>실렌더 실측(playwright + /opt/pw-browsers chromium · <code>file://index.html</code> 부팅 후 캘린더 모드 전환 →
+캘린더 한가운데에 커서를 두고 <code>mouse.wheel</code> 실제 발생) · 화면 = 상단 nav 월 표시(<code>#nav-month</code> / <code>#nav-year</code>) 영역</small>
+
+<h2>실측 — 같은 조작, 같은 지점, 전 vs 후</h2>
+<table>
+<tr><th>조작(캘린더 위 커서)</th><th>전</th><th>후</th></tr>
+<tr><td>시작 상태</td><td>2026년 7월</td><td>2026년 7월</td></tr>
+<tr><td>휠 아래로 1번</td><td class=bad>2026년 7월 (변화 없음)</td><td class=ok>2026년 8월 (다음 달)</td></tr>
+<tr><td>이어서 휠 위로 2번</td><td class=bad>2026년 7월 (변화 없음)</td><td class=ok>2026년 6월 (이전 달)</td></tr>
+<tr><td>12월에서 아래로</td><td class=bad>—</td><td class=ok>다음 해 1월 (연도 넘김 정상)</td></tr>
+<tr><td>트랙패드 미세 스크롤(6px×3)</td><td>변화 없음</td><td class=ok>변화 없음 (오작동 방지)</td></tr>
+</table>
+
+<h2>전 — 휠을 굴려도 7월 그대로</h2>
+<div class=c>
+  <p class=step>① 시작</p><img src="260731_휠스크롤_월이동_전_1시작.png" alt="전 시작 2026년 7월">
+  <p class=step>② 휠 아래로 1번 → 그대로 7월</p><img src="260731_휠스크롤_월이동_전_2아래로.png" alt="전 아래로 2026년 7월">
+  <p class=step>③ 휠 위로 2번 → 그대로 7월</p><img src="260731_휠스크롤_월이동_전_3위로2번.png" alt="전 위로 2026년 7월">
+</div>
+
+<h2>후 — 휠 아래 = 다음 달, 휠 위 = 이전 달</h2>
+<div class=c>
+  <p class=step>① 시작</p><img src="260731_휠스크롤_월이동_후_1시작.png" alt="후 시작 2026년 7월">
+  <p class=step>② 휠 아래로 1번 → 8월</p><img src="260731_휠스크롤_월이동_후_2아래로.png" alt="후 아래로 2026년 8월">
+  <p class=step>③ 휠 위로 2번 → 6월</p><img src="260731_휠스크롤_월이동_후_3위로2번.png" alt="후 위로 2026년 6월">
+</div>
+
+<h2>조치 (index.html · <code>changeMonth</code> 바로 아래 1블록)</h2>
+<ul>
+<li><b>디자인 변경 0</b> — 새 버튼·새 색·새 토큰 없음. 기존 <code>changeMonth(±1)</code>과 기존 월 전환 애니메이션(<code>_calAnimateOnNextRender</code>)을 그대로 호출한다. 화면에 새로 그려지는 요소가 없어 <code>tools/check_design.py</code> 기준 변동 없음(통과).</li>
+<li><b>붙는 자리</b> — <code>#cal</code>·<code>#cal-head-wrap</code>에만 <code>wheel</code> 리스너(<code>passive:false</code>). 요소 자체에 붙어 <code>renderCal</code>의 innerHTML 교체에도 살아남고, 모달·사이드패널·판매 레일 위 스크롤은 애초에 이 리스너를 타지 않는다.</li>
+<li><b>비켜가는 경우</b> — ① <code>#app.biz-mode</code>(사업현황 모드 = 월 축 아님, 기존 <code>.nav-mnav</code> 클릭 차단 계약과 동일) ② <code>Ctrl/⌘+휠</code>(브라우저 확대) ③ 가로 스크롤 제스처 ④ 셀 안에 자체 스크롤 영역이 남아 있을 때 ⑤ 페이지에 스크롤 여지가 남아 있을 때(가장자리에 닿은 뒤에만 월 넘김).</li>
+<li><b>오작동 방지</b> — 누적 <code>|deltaY| ≥ 40</code>에서만 1칸(트랙패드 미세 스크롤 무시), 월 전환 후 <b>420ms 쿨다운</b>(관성 스크롤 연타로 몇 달씩 튀는 것 방지), 방향이 바뀌면 누적 즉시 초기화(위↔아래 즉시 반응).</li>
+</ul>
+<p><small>모바일(≤768)은 기존대로 상단 <code>‹ ›</code> 화살표 사용 — 터치 스와이프는 기존 롱프레스·시트 제스처와 충돌 소지가 있어 이번 범위에서 제외.</small></p>
+</html>
