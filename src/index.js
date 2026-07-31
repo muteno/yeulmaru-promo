@@ -599,7 +599,10 @@ var PROMO_NOTIFY = {
   unassigned: { type: "일반", trigger: "홍보-미지정",  title: "📣 담당자 미지정 홍보가 있어요", body: "오늘 {시간} {플랫폼} 「{제목}」 홍보에 지정된 담당자가 없으니 확인해주세요." }
 };
 // 발송 규칙(운영자 선택값). morningAt=아침 알림 시각, leadMin=사전 리드, overdueMin=미완료 지연, scanMin=cron 주기.
-var PROMO_NOTIFY_CFG = { morningAt: "09:30", leadMin: 60, overdueMin: 15, scanMin: 15, quietStartH: 22, quietEndH: 8, unassignedVal: "상관 없음", copyApplicant: false, overdueRepeat: true, overdueMaxRep: 4 };
+// [260731 운영자] "홍보 알림 뜨는거 당분간 없애줘" → enabled:false = 스캔 자체를 건너뛴다(메시지 시트에 새 홍보 알림이 안 쌓인다).
+//   scanMin은 그대로 둔다 — scheduled()의 하루 1회 보류 자동취소·공휴일 갱신이 이 값을 창(window) 폭으로 쓰기 때문(끄면 그쪽이 같이 죽는다).
+//   되돌리기 = enabled:true 한 줄. ⚠ 반영은 Cloudflare Worker 재배포 후(프론트 소거 스위치 _PROMO_NOTIFY_MUTED는 배포 즉시 적용).
+var PROMO_NOTIFY_CFG = { enabled: false, morningAt: "09:30", leadMin: 60, overdueMin: 15, scanMin: 15, quietStartH: 22, quietEndH: 8, unassignedVal: "상관 없음", copyApplicant: false, overdueRepeat: true, overdueMaxRep: 4 };
 
 function _pnFill(tpl, v) {
   return String(tpl || "").replace(/\{수신자\}/g, v["수신자"] || "").replace(/\{시간\}/g, v["시간"] || "").replace(/\{플랫폼\}/g, v["플랫폼"] || "").replace(/\{제목\}/g, v["제목"] || "");
@@ -616,6 +619,7 @@ __name(_pnHash, "_pnHash");
 
 // 홍보기록을 스캔해 요청1~3 알림을 '메시지' 시트에 적재. cron(매 scanMin분)에서 호출.
 async function promoNotifyScan(env) {
+  if (!PROMO_NOTIFY_CFG.enabled) { console.log("promoNotifyScan: disabled (운영자 260731 — 홍보 알림 당분간 중지)"); return 0; }
   const token = await getToken(env);
   const { rows } = await handleGetSheet(token, "홍보기록");
   const managers = await getManagersCached(token);
