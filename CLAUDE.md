@@ -18,3 +18,5 @@
 ## 【바인딩】 yeulmaru-promo
 
 - **디자인 정본** = `docs/디자인기틀.md`
+
+- **[픽셀실측] 상비 측정기** = `shared/measure_align.js`(nomute-editor 원본 그대로 이식 · 260731 — 개조 금지 · 갱신 = 원본에서 재복사) — `node shared/measure_align.js index.html <셀렉터…> [--prep js]` → 기하(픽토Δ·정렬선Δ) 하드 판정(≤0.67) + 광학 잉크Δ 참고 + 십자선 캡처([전후] 증빙). 서빙 루트 = 레포 루트. 수동 실행 전용 · 훅 편입 금지.
