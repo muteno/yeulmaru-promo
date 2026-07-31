@@ -1,0 +1,69 @@
+<!doctype html><html lang=ko><meta charset=utf-8><title>260731 일·월 통합칸 — 일요일 내용이 월요일 서브셀 침범 수정 · 전후</title>
+<style>body{font-family:Pretendard,-apple-system,sans-serif;background:#FDF6F3;color:#1A1A2E;margin:0;padding:28px}
+h1{font-size:19px;margin:0 0 6px}h2{font-size:15px;margin:26px 0 8px}
+.c{background:#fff;border:1px solid rgba(0,0,0,.09);border-radius:16px;padding:14px 16px;box-shadow:0 8px 32px rgba(74,77,231,.08);margin-bottom:18px}
+img{max-width:100%;border:1px solid rgba(0,0,0,.12);border-radius:8px;background:#FDFCFB;display:block}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;font-size:13px;margin-top:8px}td,th{border:1px solid rgba(0,0,0,.12);padding:6px 10px;text-align:right}th{background:#EEEDF3}td:first-child,th:first-child{text-align:left}
+.ok{color:#1A6B3C;font-weight:700}.bad{color:#E24B4A;font-weight:700}small{color:#6B6B7B}
+p,li{font-size:13.5px;line-height:1.7;max-width:900px}</style>
+<h1>260731 — 캘린더 일·월 통합칸: 일요일 날짜줄이 월요일 서브셀을 덮던 문제</h1>
+<small>실렌더 실측(playwright-core + /opt/pw-browsers chromium · <code>file://index.html</code>에 2026-08 시드 주입 후 <code>renderCal()</code> 직접 호출) ·
+측정 기준점 = 통합칸 좌변 · 월요일 서브셀 좌변(칸 폭의 75% 지점)</small>
+
+<h2>실측 수치 — 통합칸(폭 233.83px) 안에서 각 요소의 우변 위치</h2>
+<table>
+<tr><th>항목</th><th>전</th><th>후</th></tr>
+<tr><td>월요일 서브셀 좌변(경계)</td><td>175.38px</td><td>175.38px</td></tr>
+<tr><td>일요일 날짜줄 <code>.dn</code> 우변</td><td class=bad>219.83px</td><td class=ok>161.38px</td></tr>
+<tr><td><b>날짜줄 침범량(우변 − 경계)</b></td><td class=bad>+44.45px</td><td class=ok>−14.00px</td></tr>
+<tr><td>특별일정 <code>.sp-area</code> 우변</td><td class=bad>225.83px</td><td class=ok>167.38px</td></tr>
+<tr><td><b>특별일정 침범량</b></td><td class=bad>+50.45px</td><td class=ok>−8.00px</td></tr>
+<tr><td>일정 목록 <code>.c-inner</code> 우변(종전 정상)</td><td class=ok>166.36px</td><td class=ok>166.36px</td></tr>
+</table>
+<p><small>침범량 음수 = 경계 안쪽에서 끝남. 후 값 −14 / −8 = 일반 셀의 우측 여백(<code>.dn</code> 14px · <code>.sp-area</code> 8px)을 3/4 경계 기준으로 그대로 계승한 값.</small></p>
+
+<h2>원인</h2>
+<p>
+일요일 칸은 우측 1/4이 월요일 서브셀(<code>.mon-sub</code>, 260706 운영자 확정)이라 <b>일요일 내용은 3/4에서 끊겨야</b> 한다.
+일정 목록(<code>.c.sunmon .c-inner{width:calc(75% - 5px)}</code>)과 카운트(<code>.c-count</code>)는 그 규칙이 있었는데,
+<b>절대배치로 셀 위에 얹히는 두 오버레이에만 없었다</b>:
+</p>
+<ul>
+<li><code>.dn</code>(날짜 + 프로그램 배지) — <code>setupCellOverlays()</code>가 <code>.c-inner</code> 밖으로 꺼내 <code>position:absolute; right:14px</code>로 고정 → <b>칸 전체 폭</b>을 먹었다.</li>
+<li><code>.sp-area</code>(담당자 특별일정 전광판) — CSS <code>left:8px; right:8px</code> → 마찬가지로 칸 전체 폭.</li>
+</ul>
+<p>
+그래서 일요일에 프로그램·대관이 걸리면 배지 줄이 그대로 월요일 칸까지 흘러 <b>월요일 날짜 숫자와 일정 위에 겹쳐</b> 찍혔다
+(첨부 화면의 「2 (대)공사 (대)[7층]기획…」이 「3」을 덮은 상태). <code>.mon-sub</code> 배경이 투명이라 가려주지도 못한다.
+</p>
+
+<h2>조치 (2줄)</h2>
+<ul>
+<li><code>setupCellOverlays()</code> — <code>dn.style.right = 통합칸이면 'calc(25% + 14px)' : '14px'</code>. 인라인 스타일이라 인라인으로 분기(기존 배치 코드 자리 그대로).</li>
+<li>CSS — <code>.c.sunmon .sp-area{right:calc(25% + 8px)}</code>를 기존 <code>.c.sunmon</code> 블록에 추가.</li>
+</ul>
+<p>신규 색·토큰·클래스 0(기존 <code>.c.sunmon</code> 3/4 규칙의 누락분 보충). 다음 달 일요일(<code>nm</code>)은 애초에 분할하지 않아 <code>sunmon</code>이 안 붙으므로 영향 없음.</p>
+
+<h2>전 (침범 +44.45px — 월요일 「3」·09:00 일정 위에 겹침)</h2>
+<div class="c scroll"><img src="260731_일월통합칸_일요일침범_전.png" alt="전 — 일요일 배지 줄이 월요일 서브셀까지 넘어와 날짜 3을 덮음"></div>
+
+<h2>후 (침범 없음 — 3/4 경계에서 말줄임 처리)</h2>
+<div class="c scroll"><img src="260731_일월통합칸_일요일침범_후.png" alt="후 — 일요일 배지 줄이 경계에서 끊기고 월요일 3과 일정이 온전히 보임"></div>
+
+<h2>모바일(420px) — 같은 축 확인</h2>
+<div class="c scroll"><img src="260731_일월통합칸_일요일침범_전_모바일.png" alt="전(모바일) — 두 번째 배지가 월요일 3에 겹침"><small>전 — 배지가 월요일 「3」에 겹침</small></div>
+<div class="c scroll"><img src="260731_일월통합칸_일요일침범_후_모바일.png" alt="후(모바일) — 겹침 해소"><small>후 — 겹침 해소</small></div>
+
+<h2>회귀 확인</h2>
+<ul>
+<li><code>python3 tools/check_design.py</code> — 통과(raw hex 1605/1605 · :root 2/0 · 신규 색·토큰 0)</li>
+<li><code>node tools/smoke_login.mjs</code> — PASS(JS 회귀 0)</li>
+<li>일반 셀(화~토)의 <code>.dn</code> 우측 여백 14px 무변 · 통합칸 <code>.c-inner</code>·<code>.c-count</code>·<code>.cell-corner</code> 무변</li>
+</ul>
+
+<h2>같이 본 것 — 이번 조치에 포함하지 않음</h2>
+<ul>
+<li><b>전시 레인 바닥선</b>(<code>renderExhibitBadge</code>, <code>left:0;right:0</code>)은 그대로 뒀다. 이건 날짜 내용이 아니라 <b>칸을 가로질러 이어지는 진행 막대</b>라 끊으면 월요일 1/4에서 선이 사라진다 — 설계 판단이 필요해 손대지 않음.</li>
+<li><b>모바일(≤480px)에서 프로그램 배지가 있는 일요일 칸은 날짜 숫자가 밀려 잘린다</b>(위 전/후 모바일 캡처 모두에서 「2」 미표시 = <b>이번 변경 이전부터의 기존 동작</b>). 모바일은 <code>.dn</code>이 가운데 정렬이라 배지가 숫자를 밀어낸다. 별건이라 운영자 판단 대기.</li>
+</ul>
