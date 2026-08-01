@@ -19819,12 +19819,45 @@ function _gcSubsumeDay(list){
     return true;
   });
 }
+// [260801 운영자] 구글 캘린더 「입력 오류」 수동 보정표 — 규칙이 아니라 목록이다.
+//   운영자: 「입력한 사람이 애초에 잘못 적은 거니까 수동으로 몇 개 잡자」. 캘린더 원본이 고쳐지면 그 줄만 지우면 된다.
+//   ① 2026-08-30 여수음악제 — 대극장 제목이 「29일,30일 17:00」로 적혔지만 30일 공연은 대극장이 아니라 소극장이다.
+//      → 그날 대극장 행은 오입력이라 지우고, 소극장 「여수음악제 임산부를위한음악회」를 본 이름 「여수음악제」로 되돌린다(운영자 「여수음악제 본만」).
+//   d=날짜키 · n=캘린더 표기 이름 · l=장소(비우면 장소 무관) · act: drop=그날 그 행만 숨김 / rename=이름 교체(to) · toPlace=장소 교체.
+//   ⚠ 판정은 _gcNorm 정규화 비교 = 띄어쓰기·괄호 차이는 무시. 날짜 하루 단위라 같은 일정의 다른 날은 손대지 않는다(8/29 대극장은 그대로).
+var _GC_FIX=[
+  {d:'2026-08-30',n:'여수음악제',l:'대극장',act:'drop'},
+  {d:'2026-08-30',n:'여수음악제 임산부를위한음악회',l:'소극장',act:'rename',to:'여수음악제'}
+];
+function _gcFixDay(list,key){
+  if(!list||!list.length)return list||[];
+  var fx=[];for(var i=0;i<_GC_FIX.length;i++){ if(_GC_FIX[i].d===key)fx.push(_GC_FIX[i]); }
+  if(!fx.length)return list;
+  var out=[];
+  list.forEach(function(r){
+    var hit=null;
+    for(var j=0;j<fx.length;j++){
+      var f=fx[j];
+      if(_gcNorm(f.n)!==_gcNorm(r&&r.n))continue;
+      if(f.l&&_gcNorm(f.l)!==_gcNorm(r&&r.l))continue;
+      hit=f;break;
+    }
+    if(!hit){out.push(r);return;}
+    if(hit.act==='drop')return;
+    var o=Object.assign({},r);
+    if(hit.to){o.n=hit.to;o.f=hit.to;}
+    if(hit.toPlace)o.l=hit.toPlace;
+    out.push(o);
+  });
+  return out;
+}
 // 그 날짜의 대관 일정 — getPerfs가 합류시킬 PERFS 모양 목록(dday는 대관에 의미 없어 null)
 function getRentals(key){
   // ⚠ var 호이스팅 구간 방어 — 부팅 중 setMainView→_mvApply 경로가 이 선언줄보다 먼저 getPerfs를 탄다(그땐 GCAL_RENTALS === undefined).
   if(!GCAL_RENTALS||!GCAL_RENTALS.length)return [];
   var dup=_gcDupSet();   // 정본에 이미 있는 건 여기서 뺀다(정본 우선)
   var day=GCAL_RENTALS.filter(function(r){return r.s===key&&!dup[r.id];});
+  day=_gcFixDay(day,key);            // 수동 보정이 먼저 — 보정 뒤 이름으로 접기 판정이 돌아야 한다
   return _gcSubsumeDay(day).map(function(r){return Object.assign({},r,{dday:null});});
 }
 
