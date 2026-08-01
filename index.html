@@ -10021,7 +10021,8 @@ function _yrDrawChart(first,pfx,stO){
     //   플롯 795×261 → 하단에 88px(전체 높이의 22%)이 통째로 빈 가로 띠였다. 범례 y:-0.18(플롯 높이 비례)이 눈금 라벨 아래로
     //   과하게 내려가 Plotly가 하단 마진을 그만큼 자동 확장한 탓. 좌우도 l56+r22=78px이 눈금값("10") 실폭보다 넉넉.
     //   → yrm만 t50→32 · l56→42 · r22→14 · b48→52 · 범례 -0.18→플롯 아래 22px 고정(_yrmLegY · 마진 52 안에 들어앉아 자동확장 0). 모달(pfx='yr')은 종전 값 그대로.
-    layout={barmode:'overlay',height:(_m?560:410),margin:{t:(_m?32:34),r:(_m?14:22),b:(_m?52:48),l:(_m?42:56)},paper_bgcolor:paper,plot_bgcolor:paper,font:{family:'inherit',size:11,color:fc},xaxis:{dtick:1,gridcolor:transp,zeroline:false,tickangle:0},yaxis:{gridcolor:grid,zeroline:false,ticksuffix:'',rangemode:'tozero'},showlegend:true,legend:{orientation:'h',y:(_m?_yrmLegY(560):-0.18),yanchor:'top',x:0.5,xanchor:'center'},bargap:.6,annotations:annos};   // [260723 운영자] barmode overlay — 막대를 연도 중앙에 겹쳐 세워 곡선 점(마커)이 기둥 중앙에 정확히 얹힘(구 group=좌우 오프셋으로 점↔기둥 어긋남) · y축 만명 단위(÷10000)
+    // [260801 운영자 "차트 우측 공백 — 가로 여백 최대한"] x축 range 명시 = 데이터(2012~2025) 밖 유령 눈금(2026) 제거. autorange 패딩이 마지막 해 뒤로 빈 칸을 만들던 것 차단(±0.5 = 막대 반폭 0.2 + 콜아웃 여유).
+    layout={barmode:'overlay',height:(_m?560:410),margin:{t:(_m?32:34),r:(_m?14:22),b:(_m?52:48),l:(_m?42:56)},paper_bgcolor:paper,plot_bgcolor:paper,font:{family:'inherit',size:11,color:fc},xaxis:{dtick:1,gridcolor:transp,zeroline:false,tickangle:0,range:[years[0]-0.5,years[years.length-1]+0.5]},yaxis:{gridcolor:grid,zeroline:false,ticksuffix:'',rangemode:'tozero'},showlegend:true,legend:{orientation:'h',y:(_m?_yrmLegY(560):-0.18),yanchor:'top',x:0.5,xanchor:'center'},bargap:.6,annotations:annos};   // [260723 운영자] barmode overlay — 막대를 연도 중앙에 겹쳐 세워 곡선 점(마커)이 기둥 중앙에 정확히 얹힘(구 group=좌우 오프셋으로 점↔기둥 어긋남) · y축 만명 단위(÷10000)
   }else{
     var yi=years.indexOf(st.year);
     var ys=selCats.map(function(c){var r=_yrRow(c,st.metric);return r?(r.v[yi]||0):0;});
@@ -10032,6 +10033,13 @@ function _yrDrawChart(first,pfx,stO){
   var _ally=traces.reduce(function(a,t){return a.concat(t.y||[]);},[]);var _ymax=Math.max.apply(null,_ally.concat([0]));layout.yaxis.range=[0,_ymax>0?_ymax*1.08:1];   // [260723] y축 명시 고정 — newPlot(0)+animate가 축 재계산을 안 해 막대가 천장 뚫는 것 차단
   var cfg={responsive:true,displayModeBar:false};
   Plotly.react(div,traces,layout,cfg).then(function(){try{_yrApplyShadow(pfx);}catch(e){}});   // [260723] 렌더 후 콜아웃 칩 드롭섀도 적용 · 첫 진입 페이드는 #yr-chart 컨테이너 CSS(fadeUp)가 담당
+  // [260801 운영자 "차트 우측 공백"] responsive:true는 window resize만 듣는다 — 그린 뒤 레일 정렬·biz-fit·줌 적용으로 컨테이너가 넓어져도
+  //   플롯이 그릴 당시 폭으로 남아 우측이 빈 띠가 됐다. 컨테이너 폭을 ResizeObserver로 관측해 즉시 재맞춤(자기교정 — _srailRO 문법 계승).
+  if(window.ResizeObserver&&!div._yrRO){
+    div._yrROW=div.clientWidth;
+    div._yrRO=new ResizeObserver(function(){ var w=div.clientWidth; if(!w||w===div._yrROW)return; div._yrROW=w; try{Plotly.Plots.resize(div);}catch(_e){} });
+    div._yrRO.observe(div);
+  }
 }
 function _yrRender(pfx){
   pfx=pfx||'yr';   // [260723c] 'yr' = 모달(기본·불변) · 'yrm' = 메인 인라인 1페이지 — id 충돌 없이 동일 보드 재사용
