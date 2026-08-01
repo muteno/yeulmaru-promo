@@ -17543,7 +17543,8 @@ async function saveApplyMonth(idx){
     invalidateApplyCache();
     if(stEl){stEl.textContent='✓ 저장됨';stEl.style.color='#0F8B4C';setTimeout(function(){if(stEl)stEl.textContent='';},2000);}
     if(wasEmpty)renderApplySettings(true);
-    autoRegisterHolidayExclusions().then(function(n){if(n){renderApplySettings(true);showToast(n+'개 공휴일 자동 등록됨','success');}});
+    // 월 변경 시 항상 재렌더링 — 공휴일이 제거만 된 경우(추가 0건)에도 목록·기간 범위가 갱신되어야 한다
+    autoRegisterHolidayExclusions().then(function(n){renderApplySettings(true);if(n)showToast(n+'개 공휴일 자동 등록됨','success');});
   }catch(e){
     if(stEl){stEl.textContent='저장 실패';stEl.style.color='var(--danger)';}
     showToast('저장 실패: '+e.message,'error');
@@ -17574,7 +17575,7 @@ async function addApplyMonth(){
     if(r&&r.row)APPLY_SETTINGS_ROWS.접수월.push(r.row);
     invalidateApplyCache();
     renderApplySettings(true);
-    autoRegisterHolidayExclusions().then(function(n){if(n){renderApplySettings(true);showToast(n+'개 공휴일 자동 등록됨','success');}});
+    autoRegisterHolidayExclusions().then(function(n){renderApplySettings(true);if(n)showToast(n+'개 공휴일 자동 등록됨','success');});
     showToast('접수월 추가됨','success');
   }catch(e){
     showToast('추가 실패: '+e.message,'error');
@@ -17660,8 +17661,9 @@ function buildIndividualListHtml(){
     html+='<div style="display:flex;align-items:center;gap:10px;padding:7px 12px;background:#fff;border:1px solid #eee;border-radius:8px;font-size:13px">';
     var _holNm=(window._holidays&&_holidays[ex.date])||'';
     var _isFull=(ex.start==='00:00'&&ex.end==='23:59');
+    var _holBadge=_holNm.indexOf('기념일')>=0?'기념일':'공휴일';
     html+='<span style="color:#333;font-weight:600;min-width:90px">'+escapeHtml(ex.date)+'</span>';
-    html+=_holNm?'<span style="color:#D64545;flex:1;font-weight:600">'+escapeHtml(_holNm)+' <span style="font-size:10px;color:#D64545;background:rgba(214,69,69,0.1);padding:1px 6px;border-radius:8px;font-weight:600;margin-left:2px">공휴일</span>'+(_isFull?'':' <span style="color:#999;font-weight:400;font-size:11px">'+escapeHtml(_rangeShort(ex.start,ex.end).replace(' ~ ','~'))+'</span>')+'</span>':'<span style="color:#666;flex:1">'+escapeHtml(_rangeShort(ex.start,ex.end))+'</span>';
+    html+=_holNm?'<span style="color:#D64545;flex:1;font-weight:600">'+escapeHtml(_holNm)+' <span style="font-size:10px;color:#D64545;background:rgba(214,69,69,0.1);padding:1px 6px;border-radius:8px;font-weight:600;margin-left:2px">'+_holBadge+'</span>'+(_isFull?'':' <span style="color:#999;font-weight:400;font-size:11px">'+escapeHtml(_rangeShort(ex.start,ex.end).replace(' ~ ','~'))+'</span>')+'</span>':'<span style="color:#666;flex:1">'+escapeHtml(_rangeShort(ex.start,ex.end))+'</span>';
     html+='<button onclick="deleteExclusion('+idx+')" style="padding:3px 9px;border:1px solid rgba(216,75,74,0.25);border-radius:6px;background:#fff;color:var(--danger-btn);cursor:pointer;font-size:11px">삭제</button>';
     html+='</div>';
   });
