@@ -19790,12 +19790,30 @@ function loadRentals(year,month){
     if(ch&&typeof renderCal==='function')renderCal();
   }).catch(function(){_gcalBusy=false;_gcalLoaded[ym]=false;_gcalDrain();});
 }
+// [260801 운영자] 같은 날 「본 일정 + 그 하위 일정」이 함께 오면 본 일정만 남긴다.
+//   실데이터: 8/30 「여수음악제(대극장)」 + 「여수음악제 임산부를위한음악회(소극장)」 — 운영자 「여수음악제 본만 살리면 된다」.
+//              10/24 「전남합창제」 + 「전남합창제 대기실」 · 10/29~30 「여수학생오케스트라」 + 「여수학생오케스트라페스티벌 대기실」도 같은 모양.
+//   판정 = 정규화 이름이 같은 날 다른 항목의 이름을 통째로 품을 때만(더 짧은 쪽 = 본 일정). 이름이 조금이라도 어긋나면 남남 = 둘 다 남긴다(오제거 0).
+//   3자 미만 이름은 포함 판정이 위험해 제외 — _gcDupSet의 「3자 미만 제외」 계약 계승.
+//   리허설(_reh)은 상태가 다른 별건이라 접지 않는다(운영자 260731 「연습은 공연일하고 달라」).
+function _gcSubsumeDay(list){
+  if(!list||list.length<2)return list||[];
+  var base=[];
+  list.forEach(function(r){ if(r&&r._reh)return; var k=_gcNorm(r&&r.n); if(k.length>=3)base.push(k); });
+  return list.filter(function(r){
+    if(r&&r._reh)return true;
+    var k=_gcNorm(r&&r.n); if(k.length<3)return true;
+    for(var i=0;i<base.length;i++){ if(base[i].length<k.length&&k.indexOf(base[i])>-1)return false; }
+    return true;
+  });
+}
 // 그 날짜의 대관 일정 — getPerfs가 합류시킬 PERFS 모양 목록(dday는 대관에 의미 없어 null)
 function getRentals(key){
   // ⚠ var 호이스팅 구간 방어 — 부팅 중 setMainView→_mvApply 경로가 이 선언줄보다 먼저 getPerfs를 탄다(그땐 GCAL_RENTALS === undefined).
   if(!GCAL_RENTALS||!GCAL_RENTALS.length)return [];
   var dup=_gcDupSet();   // 정본에 이미 있는 건 여기서 뺀다(정본 우선)
-  return GCAL_RENTALS.filter(function(r){return r.s===key&&!dup[r.id];}).map(function(r){return Object.assign({},r,{dday:null});});
+  var day=GCAL_RENTALS.filter(function(r){return r.s===key&&!dup[r.id];});
+  return _gcSubsumeDay(day).map(function(r){return Object.assign({},r,{dday:null});});
 }
 
 // === 카페/장도 운영시간 (DB 운영_카페일정 / 운영_장도) — 날짜 패널 서비스 안내용 ===
