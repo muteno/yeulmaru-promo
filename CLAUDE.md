@@ -13,6 +13,8 @@
 - **디자인 게이트** = `tools/check_design.py` — `index.html`·`signage/*.html` 편집 시 커밋 전 필수(`.githooks/pre-commit`이 강제).
 - **디자인 제안·시안·튜닝** = `docs/플레이그라운드_포터블.md` — 만지는 플레이그라운드식 HTML(정적 이미지·텍스트 나열 갈음 금지), 산출 = `docs/reports/`.
 - **앱 도메인 상세** = `docs/앱지침.md`.
+- **동시 편집 주의(다중 세션)** = 커밋·푸시·머지 직전 `git fetch origin main` 필수. main force-push 금지, 머지는 PR로, 머지된 브랜치에 새 커밋 금지.
+- **데이터 안전** = SharePoint 마스터(xlsm) 직접 편집 금지 — 시트 데이터는 앱 모달/Worker API로만. Worker(`src/index.js`)는 git push와 무관, `wrangler deploy` 별도 필요.
 - **작업 이력(append-only)** = `docs/작업이력.md`.
 - **시크릿 인벤토리·회전 절차(값 없음·이름/위치/회전만)** = `docs/KEYS.md`.
 
