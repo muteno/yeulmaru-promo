@@ -871,20 +871,30 @@ button{font-family:inherit;cursor:pointer}
 .panel{position:fixed;top:56px;right:0;width:360px;height:calc(100vh - 56px);background:rgba(255,255,255,0.40);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border-left:1px solid var(--glass-border);box-shadow:-8px 0 32px rgba(26,26,46,0.03);z-index:10;display:flex;flex-direction:column}
 .panel.pn-in{animation:slideIn .35s ease}
 .panel.pn-out{animation:slideOut .35s ease}
-.panel-hdr{display:flex;align-items:flex-start;justify-content:space-between;padding:20px 24px 16px;border-bottom:1px solid var(--border)}
+/* [260801 운영자] 아래 여백 16 → 14 = 「장도·카페 블록이 제 구분선과 두는 거리」와 같은 값(.panel-svc padding-bottom:14px).
+   헤더 목록도 같은 간격으로 제 구분선(.panel-hdr border-bottom)과 떨어진다 = 두 블록이 같은 리듬. */
+.panel-hdr{display:flex;align-items:flex-start;justify-content:space-between;padding:20px 24px 14px;border-bottom:1px solid var(--border)}
 .panel-date{font-size:20px;font-weight:700}
 .panel-day{font-size:13px;color:var(--dim);margin-top:2px}
 .panel-dow{font-size:13px;font-weight:600;margin-left:8px;color:var(--dim)}
+/* [260801 운영자] 연도 = 「2026년 8월 29일 토요일」. 요일(.panel-dow)과 같은 급(13px/600/--dim)이고
+   날짜와의 여백도 같은 8px — 좌우 대칭(연도 margin-right = 요일 margin-left). 값 복제 없이 규칙만 뒤집는다. */
+.panel-yr{font-size:13px;font-weight:600;margin-right:8px;color:var(--dim)}
 .panel-hdr-hol{font-size:13px;font-weight:600;color:#D64545}
 /* [260731 운영자 2차] 그날 일정 = 「n행 3열」로 함께 움직이는 격자 — 구분 | 제목 | 장소.
    표(테이블)·테두리는 쓰지 않는다: 바깥 grid + 각 행 display:contents 로 열만 공유(마크업은 div/span 그대로).
    · 1열 구분 = 「공연·교육·대관·셋업」 글자만(운영자 260731 3차 — 알약/버튼 형태 폐지).
      형태는 같은 패널의 정본 부품 .sp-card-type(12.5px/700 색만 다른 글자 라벨) 계승, 색 규칙은 캘린더 셀과 공유
+     [260801 운영자] 폭 = 3글자 고정(40px = 12.5px×3 + 여유). 구 auto는 그날 구분이 2글자(공연)뿐이냐
+     3글자(리허설·교육실)가 섞였느냐에 따라 열 폭이 달라져 2열(제목) 시작 x가 날짜마다 흔들렸다.
    · 2열 제목 = 남는 폭 전부(minmax(0,1fr)) · 넘치면 …
    · 3열 장소 = auto = 가장 긴 장소명 폭으로 모든 행이 같은 x에서 시작(좌측 정렬) = 빈 표의 한 열처럼 읽힌다
    · 세로 = align-items:baseline. 열마다 글자 크기가 달라(12.5·13·11) 박스 중앙 정렬은 잉크가 어긋난다 —
      기준선을 공유시켜 「글자가 같은 줄 위에 앉은」 상태로. 실측 = tools/scratch/probe_panel_ink.mjs */
-.panel-hdr-labels{margin-top:7px;display:grid;grid-template-columns:auto minmax(0,1fr) auto;column-gap:8px;row-gap:5px;align-items:baseline}
+/* [260801 운영자] ① 날짜 줄과의 여백 = 종전 7px의 두 배(14px). ② 줄 간격 = 장도·카페 줄(.panel-svc-row)과 동일 —
+   그쪽이 13px/line-height:2(=26px 피치)라 여기도 line-height:2 + row-gap:0으로 같은 피치를 만든다(간격값 창작 0).
+   행 높이는 가장 큰 글자(13px 제목)가 잡고, 12.5·11px 열은 baseline 정렬이라 같은 줄 위에 그대로 앉는다. */
+.panel-hdr-labels{margin-top:14px;display:grid;grid-template-columns:40px minmax(0,1fr) auto;column-gap:8px;row-gap:0;line-height:2;align-items:baseline}
 .panel-hdr-labels>span{margin-left:0}
 .panel-hdr-hol{grid-column:1/-1}
 .panel-hdr-prog{display:contents}
@@ -2460,6 +2470,7 @@ html::-webkit-scrollbar-thumb{background:rgba(0,0,0,.15)}
 </div>
 
 <script src="data/edu_institutions.js"></script>
+<script src="data/edu_rooms.js"></script>
 <script src="data/perf_access_stats.js"></script><!-- [260731] 공연별 페이지 접속통계(드릴 2면) — 기계산출물: tools/build_access_stats.mjs가 data/access_stats/*.csv에서 생성 -->
 
 <script>
@@ -2958,6 +2969,13 @@ function perfBadgeKind(p){return p._setup?'셋업':(p._reh?'리허설':(p.t==='e
 // 장소 표기 = 운영자 확정 4종(대극장·소극장·7층 전시실·장도 전시실). 구글 캘린더 공간 태그(_GC_PLACE)는
 // '7층'·'장도'로 짧게 들어와 그대로 쓰면 시트(정본) 표기와 어긋난다 → 여기서 정본 표기로 맞춘다.
 function perfPlaceLabel(l){var s=String(l||'').trim();return s==='7층'?'7층 전시실':(s==='장도'?'장도 전시실':s);}
+// [260801 운영자] 교육실 대관(data/edu_rooms.js — 대관 신청 CSV 산출물) = 날짜 패널(사이드바)에만 뜬다.
+//   「캘린더에 표기하지는 않고 사이드바에는 교육실이라고」 → getPerfs·renderPerfsHtml은 무접촉(셀 표기 0).
+//   구분 글자 = 「교육실」 · 색 = 대관과 같은 시안블루(--c5). 성격이 대관이라 팔레트를 그대로 계승(신규 hex 0).
+function getEduRooms(key){
+  if(typeof EDU_ROOMS==='undefined'||!EDU_ROOMS)return [];
+  return EDU_ROOMS.filter(function(r){return r.s===key;});
+}
 function renderPerfsHtml(perfs,td,past,dateKey){
 if(!perfs||!perfs.length)return'';
 var cperfs=perfs.filter(function(p){return p.t!=='e';});
@@ -20412,6 +20430,14 @@ function openPanel(dateObj,recs){
   var _pKey=dk(dateObj);
   var _pHol=(window._holidays&&_holidays[_pKey])||'';
   var _pPerfs=((typeof getPerfs==='function')?getPerfs(dateObj):[]).filter(function(p){return p.t!=='e';});
+  // [260801 운영자] 출력 순서 = 공연 → 전시 → 교육 → 대관 → 교육실(맨 아래 별도 합류).
+  //   구분 글자(perfBadgeKind)로만 줄 세운다 — 표기와 순서가 한 출처라 둘이 어긋날 수 없다.
+  //   셋업·리허설(준비 상태)은 운영자 지정 목록 밖 → 지정분 뒤, 교육실 앞. 같은 구분끼리는 원래 순서 유지(안정 정렬).
+  var _PK_ORDER=['공연','전시','교육','대관','셋업','리허설'];
+  _pPerfs.sort(function(a,b){
+    var ia=_PK_ORDER.indexOf(perfBadgeKind(a)),ib=_PK_ORDER.indexOf(perfBadgeKind(b));
+    return (ia<0?_PK_ORDER.length:ia)-(ib<0?_PK_ORDER.length:ib);
+  });
   // [260731 운영자 2차] 그날 일정 = 3열(구분 | 제목 | 장소) 격자 1행 1건. 색은 perfBadge* 공용 함수 계승(셀과 동일),
   // 구분은 패널에서만 풀어쓰기, 제목은 CSS 말줄임(잘린 전체 이름은 title 툴팁).
   var _pLabels=(_pHol?'<span class="panel-hdr-hol">'+escapeHtml(_pHol)+'</span>':'')+_pPerfs.map(function(p){
@@ -20420,7 +20446,15 @@ function openPanel(dateObj,recs){
       '<span class="panel-hdr-nm" title="'+_nm+'">'+_nm+'</span>'+
       '<span class="panel-hdr-place">'+escapeHtml(perfPlaceLabel(p.l))+'</span></span>';
   }).join('');
-  var h='<div class="panel-hdr"><div style="flex:1;min-width:0"><div class="panel-date">'+(dateObj.getMonth()+1)+'월 '+dateObj.getDate()+'일<span class="panel-dow">'+dn+'요일</span></div>'+(_pLabels?'<div class="panel-hdr-labels">'+_pLabels+'</div>':'')+'</div><button class="panel-close" onclick="closePanel()">✕</button></div><div class="panel-body">';
+  // [260801 운영자] 교육실 대관 — 같은 3열 격자에 이어 붙인다(구분 「교육실」 | 신청내용 | 방). 캘린더 셀엔 안 나간다.
+  _pLabels+=getEduRooms(_pKey).map(function(r){
+    var _en=escapeHtml(r.n||r.g||'대관');
+    var _et=escapeHtml([r.n,r.g,r.t,r.l].filter(Boolean).join(' · '));   // 잘린 제목·시간·단체명은 툴팁으로(3열 격자는 넓히지 않는다)
+    return '<span class="panel-hdr-prog"><span class="panel-hdr-kind" style="color:var(--c5)">교육실</span>'+
+      '<span class="panel-hdr-nm" title="'+_et+'">'+_en+'</span>'+
+      '<span class="panel-hdr-place">'+escapeHtml(r.l)+'</span></span>';
+  }).join('');
+  var h='<div class="panel-hdr"><div style="flex:1;min-width:0"><div class="panel-date"><span class="panel-yr">'+dateObj.getFullYear()+'년</span>'+(dateObj.getMonth()+1)+'월 '+dateObj.getDate()+'일<span class="panel-dow">'+dn+'요일</span></div>'+(_pLabels?'<div class="panel-hdr-labels">'+_pLabels+'</div>':'')+'</div><button class="panel-close" onclick="closePanel()">✕</button></div><div class="panel-body">';
   var dKey=dk(dateObj);
   // === 카페/장도 운영시간 (서비스 안내 — 본문 맨 위 고정) ===
   var _cfRaw=((window._cafeHours&&_cafeHours[dKey])||'').toString().trim();
