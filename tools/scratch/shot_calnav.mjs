@@ -1,0 +1,12 @@
+import { chromium } from 'playwright-core';
+const OUT = process.argv[2] || '/tmp/out.png';
+const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', headless: true, args: ['--no-sandbox'] });
+const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 });
+await ctx.route('**', r => (r.request().url().startsWith('file:') ? r.continue() : r.abort()));
+const p = await ctx.newPage();
+const errs = []; p.on('pageerror', e => errs.push(String(e).split('\n')[0]));
+await p.goto('file:///home/user/yeulmaru-promo/index.html?qa=1#cal', { waitUntil: 'domcontentloaded', timeout: 60000 });
+await p.waitForTimeout(4000);
+await p.screenshot({ path: OUT });
+console.log('errors:', errs.slice(0,5).join(' | ') || 'none');
+await b.close();
