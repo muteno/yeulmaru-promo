@@ -25,7 +25,7 @@ wrangler login
 
 ### 시크릿 등록
 ```bash
-cd worker
+# wrangler.toml 이 있는 레포 루트에서 실행 (별도 worker/ 폴더 없음)
 wrangler secret put AZURE_CLIENT_ID
 # → 입력: 9f3a0105-aa86-4a8b-bad0-bd651688d854
 
@@ -66,7 +66,7 @@ Azure Portal → 앱 등록 → yeulmaru_dashboard → API 사용 권한:
 
 ## 3단계: HTML 배포
 
-### `web/index.html` 수정
+### `index.html` 수정 (레포 루트)
 ```js
 // 이 줄을 Worker 배포 URL로 변경
 const API = 'https://yeulmaru-promo-api.YOUR.workers.dev';
@@ -98,7 +98,7 @@ URL: `https://muteno.github.io/yeulmaru-promo/`
 
 ### "File not found"
 - SharePoint 파일명이 `통합 문서1.xlsm`인지 확인
-- `worker/src/index.js`의 SP 객체에서 파일명 수정 가능
+- `src/index.js`의 SP 객체에서 파일명 수정 가능
 
 ### CORS 에러
 - `wrangler.toml`의 `ALLOWED_ORIGIN`을 GitHub Pages URL로 제한 가능

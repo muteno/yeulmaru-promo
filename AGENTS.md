@@ -19,7 +19,7 @@
 5. 운영자 승인분은 즉시 기틀 편입: 토큰 추가 → `docs/디자인기틀.md` 등재 →
    `tools/check_design.py` baseline 갱신 + 사유 주석.
 6. **디자인 제안·시안·튜닝 = 만지는 플레이그라운드식 HTML**(정적 이미지·텍스트 나열로 갈음 금지) —
-   운영 규칙 = `CLAUDE.md` §🎛, 골격·검증·안티패턴 = `docs/플레이그라운드_포터블.md`, 산출 = `docs/reports/`.
+   운영 규칙 = `CLAUDE.md` 【바인딩】 절(라우터), 골격·검증·안티패턴 = `docs/플레이그라운드_포터블.md`, 산출 = `docs/reports/`.
 
 ## ⚠️ 동시 편집 주의 (이 repo는 여러 세션이 동시 작업)
 - 커밋/푸시/머지 **직전에 반드시 `git fetch origin main`** — 옛 main 기반 브랜치를 그대로 머지하면
@@ -29,4 +29,4 @@
 
 ## 🚫 데이터 안전
 - 로컬 `통합 문서1.xlsm` 직접 편집 금지(SharePoint 마스터와 충돌·손상). 시트 데이터는 앱 모달/Worker API로만.
-- Worker(`src/index.js`)는 git과 무관 — Cloudflare에 별도 배포해야 반영.
+- Worker(`src/index.js`)는 git에 추적되지만 **커밋만으론 배포 안 됨** — Cloudflare에 `wrangler deploy` 별도 실행해야 반영(git push ≠ 배포).
