@@ -2972,9 +2972,14 @@ function perfPlaceLabel(l){var s=String(l||'').trim();return s==='7층'?'7층 �
 // [260801 운영자] 교육실 대관(data/edu_rooms.js — 대관 신청 CSV 산출물) = 날짜 패널(사이드바)에만 뜬다.
 //   「캘린더에 표기하지는 않고 사이드바에는 교육실이라고」 → getPerfs·renderPerfsHtml은 무접촉(셀 표기 0).
 //   구분 글자 = 「교육실」 · 색 = 대관과 같은 시안블루(--c5). 성격이 대관이라 팔레트를 그대로 계승(신규 hex 0).
+//   [260801 운영자 2차] 리허설룸 1·2도 교육실 대관 개념 장소다 → 구글 캘린더 「리」 일정(GCAL_EDU)을 같은 줄에 합류시킨다.
+//     대기실·연습 예약이 캘린더 셀에서 빠지고 패널 교육실 줄로 내려온다. 원천이 둘(신청 CSV·캘린더)이라 합류는 여기 한 곳에서만.
 function getEduRooms(key){
-  if(typeof EDU_ROOMS==='undefined'||!EDU_ROOMS)return [];
-  return EDU_ROOMS.filter(function(r){return r.s===key;});
+  var base=(typeof EDU_ROOMS!=='undefined'&&EDU_ROOMS)?EDU_ROOMS.filter(function(r){return r.s===key;}):[];
+  var gc=(typeof GCAL_EDU!=='undefined'&&GCAL_EDU)?GCAL_EDU.filter(function(r){return r.s===key;}):[];
+  if(gc.length&&typeof _gcFixDay==='function')gc=_gcFixDay(gc,key);   // 캘린더 입력 오류 수동 보정(이름·장소·시간)
+  if(!gc.length)return base;
+  return base.concat(gc).sort(function(a,b){ return String(a.t||'').localeCompare(String(b.t||''))||String(a.l||'').localeCompare(String(b.l||'')); });
 }
 function renderPerfsHtml(perfs,td,past,dateKey){
 if(!perfs||!perfs.length)return'';
@@ -19578,18 +19583,19 @@ function loadHolidays(year){
    ⚠ 셋업 정보가 제목 텍스트에만 있어 파싱이 유일한 경로다. 실데이터 60건(393칸)으로 실측 — 셋업 명시 12건 전건 일치.
      제목에 공연일이 안 적힌 일정은 판정 불가 → 전부 본 일정으로 둔다(임의 추측 금지).
    시안·검증 = docs/reports/260731_대관캘린더표기_플레이그라운드.html */
-var GCAL_RENTALS=[],GCAL_EXHIBS=[],_gcalLoaded={},_gcalBusy=false,_gcalQ=[],_gcalHyd=false;
+var GCAL_RENTALS=[],GCAL_EXHIBS=[],GCAL_EDU=[],_gcalLoaded={},_gcalBusy=false,_gcalQ=[],_gcalHyd=false;
 // [260801 운영자] 「대관만 늦게 뜬다」 3종 수정 — ① 대기열(요청 중 달 넘김 = 그냥 버려져 그 달이 영영 안 뜨던 구멍)
 //   ② 부팅 동시 출발(initApp — 구: loadData 완료 뒤 render 안에서야 출발 = 직렬 한 겹) ③ localStorage 캐시(F5마다 처음부터 받던 것)
 //   대관은 정본(PERFS·프로그램 시트)에 없는 외부 피드라 캐시도 여기 따로 둔다 — 정본 캐시와 섞지 않는다.
-var GCAL_LS='_gcal_v2';   // [260731 4차] 파싱 규칙 변경(리허설 상태·공연명 통일) = 구 캐시는 옛 이름·상태를 들고 있어 키를 올려 버린다
+var GCAL_LS='_gcal_v3';   // [260801] 리허설룸 = 교육실 레일 분리 + 제목 보정표 = 구 캐시는 옛 장소·이름을 들고 있어 키를 올려 버린다 (구: v2 — 260731 4차 파싱 규칙 변경)
 function _gcalWin(year,month){ var f=new Date(Date.UTC(year,month-2,1)),t=new Date(Date.UTC(year,month+1,0)); return [f.toISOString().slice(0,10),t.toISOString().slice(0,10)]; }   // 요청 창 = 그 달 ±1달(월 넘김 프리페치)
 function _gcalPersist(){
   try{
     var lo=_gcDayAdd(_gcToday(),-100),hi=_gcDayAdd(_gcToday(),160);   // ±3~5달만 보관(무한 증식 방지)
     localStorage.setItem(GCAL_LS,JSON.stringify({t:Date.now(),
       r:GCAL_RENTALS.filter(function(x){return x.s>=lo&&x.s<=hi;}),
-      x:GCAL_EXHIBS.filter(function(x){return x.e>=lo&&x.s<=hi;})}));
+      x:GCAL_EXHIBS.filter(function(x){return x.e>=lo&&x.s<=hi;}),
+      u:GCAL_EDU.filter(function(x){return x.s>=lo&&x.s<=hi;})}));
   }catch(_e){}
 }
 function _gcalHydrate(){   // 캐시 즉시 그리기 → 네트워크는 뒤에서 갱신(SWR). _gcalLoaded는 안 채운다 = 이번 세션 갱신은 그대로 돈다
@@ -19601,15 +19607,41 @@ function _gcalHydrate(){   // 캐시 즉시 그리기 → 네트워크는 뒤에
     (c.r||[]).forEach(function(r){ if(!seen[r.id]){seen[r.id]=1;GCAL_RENTALS.push(r);} });
     var seenX={}; GCAL_EXHIBS.forEach(function(r){seenX[r.id]=1;});
     (c.x||[]).forEach(function(r){ if(!seenX[r.id]){seenX[r.id]=1;GCAL_EXHIBS.push(r);} });
+    var seenU={}; GCAL_EDU.forEach(function(r){seenU[r.id]=1;});
+    (c.u||[]).forEach(function(r){ if(!seenU[r.id]){seenU[r.id]=1;GCAL_EDU.push(r);} });
   }catch(_e){}
 }
 function _gcToday(){ var d=new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
-var _GC_PLACE={'대':'대극장','소':'소극장','장':'장도','7층':'7층','야외':'야외','리1':'리허설실1','리1,2':'리허설실1·2'};
+// [260801 운영자] 「리」 = 리허설룸. 리허설룸 1·2는 성격이 교육실 대관이라 캘린더 셀이 아니라 날짜 패널 「교육실」 줄로 간다(_GC_EDU).
+var _GC_PLACE={'대':'대극장','소':'소극장','장':'장도','7층':'7층','야외':'야외','리1':'리허설룸 1','리2':'리허설룸 2','리1,2':'리허설룸 1·2'};
+var _GC_EDU={'리1':1,'리2':1,'리1,2':1};
+// [260801 운영자] 구글 캘린더 「제목 자체가 잘못 적힌」 건 = 파싱 전에 제목을 갈아끼운다(입력한 사람이 애초에 잘못 적은 것).
+//   규칙이 아니라 목록이다 — 캘린더 원본이 고쳐지면 그 줄만 지운다. raw 비교는 _gcNorm 정규화(띄어쓰기·따옴표 차이 무시).
+var _GC_TITLE_FIX=[
+  // LG피아노 = 26일 셋업 · 27일 본공연(운영자 확인). 캘린더엔 10/26~28 통짜로만 적혀 있어 상태가 안 갈렸다. 28일 행은 _GC_FIX에서 삭제.
+  {raw:"[대][기획]LG피아노", title:"[대][기획]LG피아노 26일 셋업 27일 공연"},
+  // 여수음악제(KBS교향악단)와 여수예총 주최 건은 남남 — 이름으로 갈리게 「여수예총」을 붙인다(운영자 「여수음악제랑 다름」).
+  {raw:"[대][대관]여수음악제 특별공연 19:30", title:"[대][대관]여수예총 여수음악제 특별공연 19:30"},
+  // 에코국제음악제 = 영재오케스트라와 별개 행사(운영자) — 단체명이 제목에 섞여 같은 건처럼 보였다.
+  {raw:"[대][대관]에코국제음악제 영재원오케스트라 공연 19:30", title:"[대][대관]여수 에코국제음악제 19:30"},
+  // 단체명 표기 통일 = 「여수영재오케스트라」(운영자). 9/6 리허설룸 연습 → 11/14 본공연이 같은 단체다.
+  {raw:"[대][대관]여수영재원오케스트라 정기연주회 17:00", title:"[대][대관]여수영재오케스트라 정기연주회 17:00"},
+  {raw:"[리1][대관]영재오케스트라 연습 13:00~17:00", title:"[리1][대관]여수영재오케스트라"},
+  // 전남학생교육페스티벌 = 대기실까지 같은 행사(운영자) — 캘린더만 「예술교육」으로 적혀 이름이 갈렸다.
+  {raw:"[리1,2][대관] 전남학생예술교육페스티벌 대기실", title:"[리1,2][대관]전남학생교육페스티벌 대기실"},
+  // 야외 = 장도 일원 창작스튜디오 입주작가전(운영자). 제목 앞 따옴표·이름 표기 정리.
+  {raw:"'[야외][기획]입주작가전 '안민환'", title:"[야외][기획]창작스튜디오 입주작가전 안민환"}
+];
+function _gcTitleFix(title){
+  var k=_gcNorm(title);
+  for(var i=0;i<_GC_TITLE_FIX.length;i++){ if(_gcNorm(_GC_TITLE_FIX[i].raw)===k)return _GC_TITLE_FIX[i].title; }
+  return title;
+}
 var _GC_DROP=/^(공사|점검|휴관|휴무)$/;
 function _gcDayAdd(k,n){var d=new Date(k+'T00:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10);}
 // 제목 → {name, kind, place, isEx, lane, t, setup{날짜키:1}, drop}
 function _gcParse(title,s,e){
-  var raw=String(title||'').replace(/^['"\s]+/,''),tags=[],rest=raw,m;
+  var raw=String(_gcTitleFix(title)||'').replace(/^['"\s]+/,''),tags=[],rest=raw,m;
   while((m=rest.match(/^\s*\[([^\]]*)\]/))){tags.push(m[1].trim());rest=rest.slice(m[0].length);}
   rest=rest.trim();
   var kindTag='',placeTag='';
@@ -19695,6 +19727,7 @@ function _gcParse(title,s,e){
   // ⚠ 레인 판정엔 「풀어쓴 공간명」을 넘긴다 — _exLaneOf는 '장도'를 찾는데 태그는 '장'이라 그대로 주면 7층으로 떨어진다.
   return {name:name,kind:kindTag||'대관',placeTag:placeTag,place:_GC_PLACE[placeTag]||placeTag,
           isEx:isEx,lane:_exLaneOf(name,_GC_PLACE[placeTag]||placeTag),t:(kindTag==='기획')?'c':'r',
+          edu:_GC_EDU[placeTag]?1:0,   // 리허설룸 = 교육실 대관 개념(운영자 260801) → 셀 배지 대신 날짜 패널 교육실 줄
           setup:setup,reh:reh,drop:_GC_DROP.test(name)};
 }
 // 정본(PERFS)에 이미 있는 프로그램은 구글 쪽을 숨긴다 — 「기획 이미 등록되어 있는 게 우선」(운영자 260731).
@@ -19764,8 +19797,10 @@ function loadRentals(year,month){
     // [260801] 이번 응답 = 그 창(fk~tk)의 정본 — 창 안 기존 항목(캐시 하이드레이트분 포함)은 걷어내고 새로 채운다(구글에서 지운 일정·유령 잔재 제거)
     GCAL_RENTALS=GCAL_RENTALS.filter(function(r){return !(r.s>=fk&&r.s<=tk);});
     GCAL_EXHIBS=GCAL_EXHIBS.filter(function(r){return !(r.s>=fk&&r.e<=tk);});
+    GCAL_EDU=GCAL_EDU.filter(function(r){return !(r.s>=fk&&r.s<=tk);});
     var seen={};GCAL_RENTALS.forEach(function(r){seen[r.id]=1;});
     var seenX={};GCAL_EXHIBS.forEach(function(r){seenX[r.id]=1;});
+    var seenU={};GCAL_EDU.forEach(function(r){seenU[r.id]=1;});
     var ch=true;
     order.forEach(function(uid){
       var g=grp[uid];
@@ -19776,6 +19811,16 @@ function loadRentals(year,month){
       if(p.isEx){                                          // 전시 공간 = 배지 아니라 셀 하단 라인
         var xid='gx:'+uid;
         if(!seenX[xid]){seenX[xid]=1;GCAL_EXHIBS.push({id:xid,n:p.name,lane:p.lane,s:s,e:e});ch=true;}
+        return;
+      }
+      if(p.edu){                                           // [260801 운영자] 리허설룸 = 교육실 대관 개념 장소 → 셀 배지 0, 날짜 패널 「교육실」 줄로만
+        g.rows.forEach(function(x){
+          var eid='ge:'+x.id;
+          if(seenU[eid])return;seenU[eid]=1;
+          var tm=x.allday?'종일':((x.st||'')+(x.st&&x.et?'-'+x.et:'')||'종일');
+          GCAL_EDU.push({id:eid,s:x.d,t:tm,l:p.place,n:p.name,g:'',_edu:1,_gc:1});
+          ch=true;
+        });
         return;
       }
       g.rows.forEach(function(x){
@@ -19811,11 +19856,16 @@ function _gcSubsumeDay(list){
 //   운영자: 「입력한 사람이 애초에 잘못 적은 거니까 수동으로 몇 개 잡자」. 캘린더 원본이 고쳐지면 그 줄만 지우면 된다.
 //   ① 2026-08-30 여수음악제 — 대극장 제목이 「29일,30일 17:00」로 적혔지만 30일 공연은 대극장이 아니라 소극장이다.
 //      → 그날 대극장 행은 오입력이라 지우고, 소극장 「여수음악제 임산부를위한음악회」를 본 이름 「여수음악제」로 되돌린다(운영자 「여수음악제 본만」).
-//   d=날짜키 · n=캘린더 표기 이름 · l=장소(비우면 장소 무관) · act: drop=그날 그 행만 숨김 / rename=이름 교체(to) · toPlace=장소 교체.
+//   ② 2026-10-28 LG피아노 — 26일 셋업·27일 본공연이 맞다(운영자). 캘린더는 10/26~28로 하루 더 잡혀 있어 28일 행을 지운다.
+//      (26·27일 상태 갈림은 _GC_TITLE_FIX의 제목 교체가 맡는다 — 같은 일정 전체에 걸리는 건 제목이 정본이라서)
+//   ③ 2026-09-06 여수영재오케스트라 — 리허설룸 1 「종일」 예약(운영자). 캘린더 제목엔 13:00~17:00로 적혀 있다.
+//   d=날짜키 · n=캘린더(제목 보정 후) 이름 · l=장소(비우면 장소 무관) · act: drop=그날 그 행만 숨김 / rename=이름 교체(to) · toPlace=장소 · toTime=시간(교육실 줄 전용).
 //   ⚠ 판정은 _gcNorm 정규화 비교 = 띄어쓰기·괄호 차이는 무시. 날짜 하루 단위라 같은 일정의 다른 날은 손대지 않는다(8/29 대극장은 그대로).
 var _GC_FIX=[
   {d:'2026-08-30',n:'여수음악제',l:'대극장',act:'drop'},
-  {d:'2026-08-30',n:'여수음악제 임산부를위한음악회',l:'소극장',act:'rename',to:'여수음악제'}
+  {d:'2026-08-30',n:'여수음악제 임산부를위한음악회',l:'소극장',act:'rename',to:'여수음악제'},
+  {d:'2026-10-28',n:'LG피아노',l:'대극장',act:'drop'},
+  {d:'2026-09-06',n:'여수영재오케스트라',l:'리허설룸 1',act:'edit',toTime:'종일'}
 ];
 function _gcFixDay(list,key){
   if(!list||!list.length)return list||[];
@@ -19835,6 +19885,7 @@ function _gcFixDay(list,key){
     var o=Object.assign({},r);
     if(hit.to){o.n=hit.to;o.f=hit.to;}
     if(hit.toPlace)o.l=hit.toPlace;
+    if(hit.toTime&&r&&r._edu)o.t=hit.toTime;   // ⚠ 교육실 줄에서만 t=시간 · 대관 줄의 t는 구분(r/c)이라 건드리면 안 된다
     out.push(o);
   });
   return out;
