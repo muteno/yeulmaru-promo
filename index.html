@@ -650,6 +650,14 @@ button{font-family:inherit;cursor:pointer}
 .month-nav{display:flex;align-items:center;gap:16px}
 .arrow{width:38px;height:38px;border-radius:50%;border:1px solid rgba(0,0,0,0.06);background:var(--glass);backdrop-filter:blur(8px);font-size:18px;display:flex;align-items:center;justify-content:center;color:#666;transition:all .2s;box-shadow:0 2px 8px rgba(0,0,0,0.04)}
 .arrow:hover{background:var(--accent-light);color:var(--accent);border-color:var(--accent-glow);box-shadow:0 4px 12px rgba(74,77,231,0.15)}
+/* [260801 운영자] 캘린더 좌우 월 이동 화살표 — 휠(_calWheel)·스와이프(_calSw)와 같은 changeMonth 축을 눈에 보이게.
+   형태 = 상단 월네비 정본 글래스 화살표(.arrow: --glass + blur(8px)) 100% 재사용 = 신규 색·신규 형태 0, 위치만 .cal-stage(캘린더 박스) 기준 절대배치. */
+.cal-stage{position:relative}
+.cal-arrow{position:absolute;top:50%;transform:translateY(-50%);z-index:7;cursor:pointer;opacity:.8}
+.cal-arrow:hover{opacity:1}
+.cal-arrow.prev{left:-19px}   /* 버튼 중심 = 캘린더 세로변 위(바깥 절반 19px = #main-area 좌우 패딩 20/15 안 → 가로 넘침 0) — 셀 내용 가림 최소 */
+.cal-arrow.next{right:-19px}
+@media (max-width:768px){.cal-arrow.prev{left:4px}.cal-arrow.next{right:4px}}   /* 모바일 패딩 16 < 버튼 절반 17 → 안쪽으로 붙임(화면 밖 잘림 방지) */
 .month-text{font-size:32px;font-weight:800;color:var(--accent)}
 .year-text{font-size:17px;color:var(--dim);margin-left:8px;font-weight:400}
 .chips{display:flex;gap:10px;flex-wrap:wrap}
@@ -2067,7 +2075,7 @@ table.promo-board-table thead th:last-child{border-top-right-radius:11px}
 /* [260723 운영자 선택값] 실적 모드 레이아웃 = 좌우 1:1 · 바깥 20 · 상단 18 · 간격 15 · 우 유리 .35/blur15 · 라운드 20(--radius-lg) — 캘린더 모드는 현행 그대로 */
 /* [260723e] 레이아웃·유리 선택값은 두 모드 공통으로 승격(위 기본 규칙에 반영) — biz 전용 스코프 잔여분만 아래 유지 */
 #biz-main{display:none}
-#app.biz-mode #chips,#app.biz-mode #cal-head-wrap,#app.biz-mode #cal,#app.biz-mode .pet,#app.biz-mode .crablane{display:none}
+#app.biz-mode #chips,#app.biz-mode #cal-head-wrap,#app.biz-mode #cal,#app.biz-mode .cal-arrow,#app.biz-mode .pet,#app.biz-mode .crablane{display:none}
 #chips{display:none}   /* [260723 운영자] 깔때기 필터 = 판매현황 레일 우상단(chips-rail)으로 이동 → biz(실적) 모드에선 이 요일바 #chips 숨김(연간실적 헤더 겹침 해소) */
 #app:not(.biz-mode) #chips{display:flex}   /* [260731 운영자 복원] 캘린더 모드 = 레일 숨김(아래) → 깔때기 필터는 다시 요일바 우측(구 260723 이전 자리)이 주 위치. 뷰포트 분기 폐지(데스크탑도 노출) — 레일 안 chips-rail은 biz 모드 전용으로 잔존 */
 #app.biz-mode #biz-main{display:block}
@@ -2376,7 +2384,11 @@ html::-webkit-scrollbar-thumb{background:rgba(0,0,0,.15)}
       <!-- [260723 운영자] 메인 전환 토글 = 최상단 nav 월네비 우측으로 이주(구 #mv-row 보드 위 칩줄 폐지) · _srailAlignTop은 #mv-row 부재 시 _mvH=0으로 좌·우 대칭 상승(정렬 유지) -->
       <div id="chips" style="position:sticky;top:56px;z-index:6;height:0;justify-content:flex-end;padding-right:8px"></div><!-- [260723 운영자] 깔때기 필터는 판매현황 레일 우상단(chips-rail)이 주 위치 — 이 요일바 #chips는 모바일·태블릿(레일 숨김)에서만 폴백 노출(display = CSS 뷰포트 분기, 구 인라인 display:flex 제거 = biz모드 겹침 버그 뿌리 해소) -->
       <div class="cal-head-wrap" id="cal-head-wrap"></div>
-        <div class="cal" id="cal"></div>
+        <div class="cal-stage" id="cal-stage"><!-- [260801 운영자] 월 이동 화살표 앵커 — 높이·배경 없음(.cal 그대로 흐름 유지), 좌우 .cal-arrow만 절대배치 -->
+          <div class="cal" id="cal"></div>
+          <button class="arrow cal-arrow prev" onclick="changeMonth(-1)" title="이전 달" aria-label="이전 달">‹</button>
+          <button class="arrow cal-arrow next" onclick="changeMonth(1)" title="다음 달" aria-label="다음 달">›</button>
+        </div>
         <img class="pet" src="image/pets/pet.webp" alt="" aria-hidden="true" draggable="false"><!-- 공차는 애 — 캘린더 맨 아래 셀 아랫변 기준(운영자 260710 "너무 위에서 심란") · #cal 형제라 renderCal innerHTML에 안 지워짐 · 표시 여부 = 관리자 전역설정 pets_visible 게이트(_petEnter) -->
         <div class="crablane" aria-hidden="true"><div class="petcrab"></div><div class="petlove"></div></div><!-- 픽셀 펫 레인 — 노뮤트서 이전한 크랩(정면·컨페티)·LOVE(측면 walk) · #cal 형제(renderCal 생존)라 공차는 애와 같은 하단 무대서 3마리 랜덤 등장 · 기본 숨김·관리자 토글로 켬(운영자 260711: 263·265번 보관 결정 → 3마리 로직 유지+전역 토글로 대체) -->
         <div id="biz-main" aria-label="사업 현황 (연간 누적 실적)"></div><!-- [260723 운영자] 메인 기본 화면 = 사업 실적 — #cal 형제(renderCal innerHTML 안전) · biz-mode에서만 표시 · 내용 = _bizInlineRender -->
@@ -10014,7 +10026,8 @@ function _yrDrawChart(first,pfx,stO){
     //   플롯 795×261 → 하단에 88px(전체 높이의 22%)이 통째로 빈 가로 띠였다. 범례 y:-0.18(플롯 높이 비례)이 눈금 라벨 아래로
     //   과하게 내려가 Plotly가 하단 마진을 그만큼 자동 확장한 탓. 좌우도 l56+r22=78px이 눈금값("10") 실폭보다 넉넉.
     //   → yrm만 t50→32 · l56→42 · r22→14 · b48→52 · 범례 -0.18→플롯 아래 22px 고정(_yrmLegY · 마진 52 안에 들어앉아 자동확장 0). 모달(pfx='yr')은 종전 값 그대로.
-    layout={barmode:'overlay',height:(_m?560:410),margin:{t:(_m?32:34),r:(_m?14:22),b:(_m?52:48),l:(_m?42:56)},paper_bgcolor:paper,plot_bgcolor:paper,font:{family:'inherit',size:11,color:fc},xaxis:{dtick:1,gridcolor:transp,zeroline:false,tickangle:0},yaxis:{gridcolor:grid,zeroline:false,ticksuffix:'',rangemode:'tozero'},showlegend:true,legend:{orientation:'h',y:(_m?_yrmLegY(560):-0.18),yanchor:'top',x:0.5,xanchor:'center'},bargap:.6,annotations:annos};   // [260723 운영자] barmode overlay — 막대를 연도 중앙에 겹쳐 세워 곡선 점(마커)이 기둥 중앙에 정확히 얹힘(구 group=좌우 오프셋으로 점↔기둥 어긋남) · y축 만명 단위(÷10000)
+    // [260801 운영자 "차트 우측 공백 — 가로 여백 최대한"] x축 range 명시 = 데이터(2012~2025) 밖 유령 눈금(2026) 제거. autorange 패딩이 마지막 해 뒤로 빈 칸을 만들던 것 차단(±0.5 = 막대 반폭 0.2 + 콜아웃 여유).
+    layout={barmode:'overlay',height:(_m?560:410),margin:{t:(_m?32:34),r:(_m?14:22),b:(_m?52:48),l:(_m?42:56)},paper_bgcolor:paper,plot_bgcolor:paper,font:{family:'inherit',size:11,color:fc},xaxis:{dtick:1,gridcolor:transp,zeroline:false,tickangle:0,range:[years[0]-0.5,years[years.length-1]+0.5]},yaxis:{gridcolor:grid,zeroline:false,ticksuffix:'',rangemode:'tozero'},showlegend:true,legend:{orientation:'h',y:(_m?_yrmLegY(560):-0.18),yanchor:'top',x:0.5,xanchor:'center'},bargap:.6,annotations:annos};   // [260723 운영자] barmode overlay — 막대를 연도 중앙에 겹쳐 세워 곡선 점(마커)이 기둥 중앙에 정확히 얹힘(구 group=좌우 오프셋으로 점↔기둥 어긋남) · y축 만명 단위(÷10000)
   }else{
     var yi=years.indexOf(st.year);
     var ys=selCats.map(function(c){var r=_yrRow(c,st.metric);return r?(r.v[yi]||0):0;});
@@ -10025,6 +10038,13 @@ function _yrDrawChart(first,pfx,stO){
   var _ally=traces.reduce(function(a,t){return a.concat(t.y||[]);},[]);var _ymax=Math.max.apply(null,_ally.concat([0]));layout.yaxis.range=[0,_ymax>0?_ymax*1.08:1];   // [260723] y축 명시 고정 — newPlot(0)+animate가 축 재계산을 안 해 막대가 천장 뚫는 것 차단
   var cfg={responsive:true,displayModeBar:false};
   Plotly.react(div,traces,layout,cfg).then(function(){try{_yrApplyShadow(pfx);}catch(e){}});   // [260723] 렌더 후 콜아웃 칩 드롭섀도 적용 · 첫 진입 페이드는 #yr-chart 컨테이너 CSS(fadeUp)가 담당
+  // [260801 운영자 "차트 우측 공백"] responsive:true는 window resize만 듣는다 — 그린 뒤 레일 정렬·biz-fit·줌 적용으로 컨테이너가 넓어져도
+  //   플롯이 그릴 당시 폭으로 남아 우측이 빈 띠가 됐다. 컨테이너 폭을 ResizeObserver로 관측해 즉시 재맞춤(자기교정 — _srailRO 문법 계승).
+  if(window.ResizeObserver&&!div._yrRO){
+    div._yrROW=div.clientWidth;
+    div._yrRO=new ResizeObserver(function(){ var w=div.clientWidth; if(!w||w===div._yrROW)return; div._yrROW=w; try{Plotly.Plots.resize(div);}catch(_e){} });
+    div._yrRO.observe(div);
+  }
 }
 function _yrRender(pfx){
   pfx=pfx||'yr';   // [260723c] 'yr' = 모달(기본·불변) · 'yrm' = 메인 인라인 1페이지 — id 충돌 없이 동일 보드 재사용
