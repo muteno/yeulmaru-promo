@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>첫 화면 배경 늦음(블러 미적용 상태로 시작) — 전후 (260801)</title>
+<style>
+  :root{--accent:#4A4DE7;--text:#1A1A2E;--dim:#888;--border:rgba(0,0,0,0.09);--green:#1A6B3C;--danger:#E24B4A;--surface:#fff;--radius:16px}
+  body{margin:0;font-family:'Pretendard','Noto Sans KR',system-ui,sans-serif;background:linear-gradient(135deg,#FDF6F3 0%,#F0EBF5 50%,#EBF0F8 100%);color:var(--text);padding:28px 4vw 60px}
+  h1{font-size:22px;margin:0 0 6px}
+  .sub{color:var(--dim);font-size:13px;margin-bottom:26px}
+  h2{font-size:16px;margin:34px 0 10px;color:var(--accent)}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px;box-shadow:0 8px 32px rgba(74,77,231,0.08)}
+  .card .cap{font-size:12.5px;font-weight:700;margin-bottom:8px}
+  .card .cap .bad{color:var(--danger)} .card .cap .good{color:var(--green)}
+  .card img{width:100%;display:block;border-radius:8px;border:1px solid var(--border)}
+  table{border-collapse:collapse;font-size:12.5px;background:var(--surface);border-radius:12px;overflow:hidden;box-shadow:0 8px 32px rgba(74,77,231,0.08)}
+  th,td{padding:7px 12px;border-bottom:1px solid var(--border);text-align:right}
+  th:first-child,td:first-child{text-align:left}
+  th{background:rgba(74,77,231,0.06);font-weight:700}
+  .ok{color:var(--green);font-weight:700} .ng{color:var(--danger);font-weight:700}
+  .note{font-size:12.5px;color:var(--dim);line-height:1.6;max-width:940px}
+  code{background:rgba(74,77,231,0.07);border-radius:5px;padding:1px 5px;font-size:11.5px}
+</style>
+</head>
+<body>
+<h1>「처음에 잠깐 배경 없는(블러 안 걸린) 상태로 시작돼 튄다」 — 전후</h1>
+<div class="sub">260801 · 실측 = 헤드리스 크로미움 <code>?qa=1#biz</code> · 배경 응답 300ms 고정 · 3회 반복 · <code>bgprobe.mjs</code></div>
+
+<h2>원인 — 배경 사진이 CSS 배경이라 늦게 발견되고, 우선순위도 낮다</h2>
+<p class="note">배경 사진은 <code>#body-wrap::before</code>의 <code>background:url("image/bg-yeulmaru.webp")</code>(278KB)로 걸려 있다.
+CSS 배경 이미지는 브라우저가 <b>CSS를 파싱하고 그 요소의 레이아웃까지 끝낸 뒤에야</b> 존재를 알게 되고, 가져오는 우선순위도 낮다.
+그래서 <b>배경 없는 화면이 먼저 페인트되고</b>, 200ms쯤 뒤에 사진이 얹히면서 그 위의 유리(<code>backdrop-filter</code>) 표현이 한 번에 바뀐다 —
+운영자가 말한 "블러 투명도가 적용 안 된 상태로 시작돼서 튄다".</p>
+
+<h2>전후 — 첫 화면</h2>
+<div class="grid">
+  <div class="card"><div class="cap"><span class="bad">전</span> — 배경 도착 전 첫 페인트: 사진이 없어 유리 박스가 <b>밋밋한 흰 판</b>으로 보인다</div><img src="260801_배경늦음_전_배경없는첫화면.png" alt="배경 없는 첫 화면"></div>
+  <div class="card"><div class="cap"><span class="good">후</span> — 첫 페인트에 배경이 이미 있음: 유리 블러·채도가 처음부터 정상</div><img src="260801_배경늦음_후_배경있는첫화면.png" alt="배경 있는 첫 화면"></div>
+</div>
+
+<h2>실측 — 배경 요청 시각(응답 300ms 고정, 3회)</h2>
+<table>
+<tr><th></th><th>요청 시작</th><th>도착</th><th>첫 페인트(FCP)</th><th>판정</th></tr>
+<tr><td>전 #1</td><td class="ng">257ms</td><td class="ng">564ms</td><td>336ms</td><td class="ng">배경이 첫 페인트보다 <b>228ms 늦음</b></td></tr>
+<tr><td>전 #2</td><td class="ng">250ms</td><td class="ng">556ms</td><td>372ms</td><td class="ng">184ms 늦음</td></tr>
+<tr><td>전 #3</td><td class="ng">271ms</td><td class="ng">579ms</td><td>408ms</td><td class="ng">171ms 늦음</td></tr>
+<tr><td>후 #1</td><td class="ok">34ms</td><td class="ok">344ms</td><td>348ms</td><td class="ok">첫 페인트에 <b>이미 도착</b></td></tr>
+<tr><td>후 #2</td><td class="ok">34ms</td><td class="ok">346ms</td><td>388ms</td><td class="ok">도착 후 페인트</td></tr>
+<tr><td>후 #3</td><td class="ok">38ms</td><td class="ok">397ms</td><td>436ms</td><td class="ok">도착 후 페인트</td></tr>
+</table>
+<p class="note">요청 시작 <b>250ms → 34ms</b>(216ms 앞당김), 도착 <b>566ms → 362ms</b>(평균 204ms 앞당김). 3회 모두 <b>도착 ≤ 첫 페인트</b>로 역전됐다.</p>
+
+<h2>수정 — 한 줄</h2>
+<p class="note"><code>&lt;head&gt;</code>의 preconnect 다음에 <code>&lt;link rel="preload" as="image" href="image/bg-yeulmaru.webp" fetchpriority="high"&gt;</code> 추가.
+문서 파싱이 시작되는 즉시 최우선으로 내려받게 한다. 경로는 CSS의 <code>url()</code>과 <b>정확히 동일</b>해야 중복 요청이 생기지 않으므로 쿼리(<code>?v=</code>)를 붙이지 않았다.
+CSS·디자인 값 변경 0 — 이미지·토큰·블러 설정은 전부 그대로다.</p>
+
+<h2>게이트</h2>
+<p class="note">check_design ✓(raw hex 1605/1605 무변·신규 토큰 0) · check_refs ✓ · smoke 로그인 ✓</p>
+
+<h2>남는 한계(운영자 판단 사항)</h2>
+<p class="note">아주 느린 회선에서는 278KB가 첫 페인트보다 늦을 수 있다. 그때도 튀지 않게 하려면 배경에 짧은 페이드를 넣는 방법이 있는데,
+이는 <b>새 연출을 만드는 일</b>이라 기틀 원칙(디자인 임의 창작 금지)에 따라 손대지 않았다. 필요하시면 지시 주시면 반영한다.</p>
+</body>
+</html>
