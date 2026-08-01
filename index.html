@@ -3329,6 +3329,11 @@ function _appEnterStagger(appEl){
     els.forEach(function(el){el.classList.add('ae-pre');});
     appEl.style.display='';
     void appEl.offsetHeight;
+    // [260801 운영자 "부팅 때 커졌다가 작아진다"] 커튼(로그인 카드 리프트 640ms) 동안 #app은 display:none — 그 사이 Plotly가 도착하면
+    //   _bizFitViewport가 `rail.offsetParent===null`로 즉시 return해 헛돈다(재호출 훅 없음 = 웜캐시에서 차트가 560px로 영구 고정,
+    //   사용자가 창을 건드리는 순간에야 −28.8%로 접힘 — 평의회 실측 1-B). 여기 = 앱이 보이는 첫 순간·레이아웃 플러시 직후라
+    //   레일 offsetParent가 살아 있다 → 이 한 번으로 그 경로도 첫 프레임부터 최종 크기. 멱등(setH 2px 데드밴드)이라 중복 호출 무해.
+    try{ if(typeof _bizFitViewport==='function')_bizFitViewport(); }catch(_e){}
     // (살몬 언더바 pill 재배치 로직 = 260723 언더바 폐지로 제거 — 활성 표시는 클래스 색상뿐이라 rect 무관)
     els.forEach(function(el,i){var d=Math.min(i,2);setTimeout(function(){el.classList.add('ae-in');el.classList.remove('ae-pre');},50+d*95);});
     setTimeout(function(){els.forEach(function(el){el.classList.remove('ae-in','ae-pre');});},1200);  // 연출 후 클래스 청산(sticky transform 잔류 방지)
@@ -6012,6 +6017,12 @@ function _yrmRender(){
   h+='<div id="yrm-tbl"></div>';
   body.innerHTML=h;
   _yrmTable();
+  // [260801 운영자 "부팅 때 커졌다가 폭 맞춰 작아진다"] 차트 자리는 항상 최대치(560px)로 태어나는데, 그걸 줄이는 _bizFitViewport는
+  //   여태 Plotly CDN 콜백(아래)에서만 불렸다 = 스크립트가 도착할 때까지 큰 상태가 그대로 노출(평의회 실측: 2560×1080에서 672ms ·
+  //   1920×950에서 614ms · 차트 560→399/269, 좌 보드 −14~−26%, 문서 높이가 뷰포트를 161~291px 넘겨 실적표 하단이 잘린 채 떠 있다가 접힘).
+  //   → 마크업을 붙인 직후, Plotly를 기다리기 전에 최종 높이를 확정한다. 높이 계산부는 Plotly와 무관하고 relayout은 window.Plotly 가드가
+  //   있어(_bizFitViewport 내부) 선호출이 안전하며, setH 2px 데드밴드로 멱등 = 아래 콜백의 재호출은 no-op.
+  try{_bizFitViewport();}catch(_e){}
   _bizEnsurePlotly(function(){ try{_yrDrawChart(true,'yrm',_YRM_ST);}catch(_e){console.warn('[yrm chart]',_e);} try{_bizFitViewport();}catch(_e){} });   // [260725] 그린 뒤 한 화면에 맞춤
 }
 function _yrmWin(d){ var win=6,max=_YR.years.length-win; var s=(_bizmState.yrStart==null?max:_bizmState.yrStart)+d; if(s<0)s=0; if(s>max)s=max; _bizmState.yrStart=s; _yrmTable(); }

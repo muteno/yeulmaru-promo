@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>부팅 「커졌다 작아짐」 — 평의회 최종 원인·수정 전후 (260801)</title>
+<style>
+  :root{--accent:#4A4DE7;--text:#1A1A2E;--dim:#888;--border:rgba(0,0,0,0.09);--green:#1A6B3C;--danger:#E24B4A;--surface:#fff;--radius:16px}
+  body{margin:0;font-family:'Pretendard','Noto Sans KR',system-ui,sans-serif;background:linear-gradient(135deg,#FDF6F3 0%,#F0EBF5 50%,#EBF0F8 100%);color:var(--text);padding:28px 4vw 60px}
+  h1{font-size:22px;margin:0 0 6px}
+  .sub{color:var(--dim);font-size:13px;margin-bottom:26px}
+  h2{font-size:16px;margin:34px 0 10px;color:var(--accent)}
+  h3{font-size:13.5px;margin:18px 0 6px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px;box-shadow:0 8px 32px rgba(74,77,231,0.08)}
+  .card .cap{font-size:12.5px;font-weight:700;margin-bottom:8px}
+  .card .cap .bad{color:var(--danger)} .card .cap .good{color:var(--green)}
+  .card img{width:100%;display:block;border-radius:8px;border:1px solid var(--border)}
+  table{border-collapse:collapse;font-size:12.5px;background:var(--surface);border-radius:12px;overflow:hidden;box-shadow:0 8px 32px rgba(74,77,231,0.08)}
+  th,td{padding:7px 12px;border-bottom:1px solid var(--border);text-align:right}
+  th:first-child,td:first-child{text-align:left}
+  th{background:rgba(74,77,231,0.06);font-weight:700}
+  .ok{color:var(--green);font-weight:700} .ng{color:var(--danger);font-weight:700}
+  .note{font-size:12.5px;color:var(--dim);line-height:1.6;max-width:960px}
+  code{background:rgba(74,77,231,0.07);border-radius:5px;padding:1px 5px;font-size:11.5px}
+</style>
+</head>
+<body>
+<h1>부팅 「커졌다가 작아짐」 — 오퍼스 평의회 최종 원인·수정 전후</h1>
+<div class="sub">260801 · 6구역 병렬 실측 + 발견별 적대 검증(반증 시도) 17에이전트 · 실측 = 헤드리스 크로미움 + Plotly 로컬 스텁(도착 시각만 제어) · 로그인 연출 경로 재현 사본</div>
+
+<h2>결론 — 배율 문제가 아니었다. 차트 자리의 「사후 보정」 구조다</h2>
+<p class="note"><code>#yrm-chart</code>는 <b>항상 최대치 560px로 태어나고</b>, 그걸 뷰포트에 맞춰 줄이는 <code>_bizFitViewport()</code>는
+<b>Plotly CDN 스크립트가 도착한 뒤에야</b> 처음 불렸다(호출부가 전 파일에 <code>resize</code>와 <code>_bizEnsurePlotly</code> 콜백 단 2곳).
+그래서 대시보드는 <b>뷰포트를 161~291px 넘기는 큰 상태로 먼저 뜨고</b>, 스크립트가 도착하면 그때 접혔다.
+#521·#524가 잡은 「배율 튐」과는 다른 종류 — 폭은 전 구간 불변이고 <b>세로 리플로우</b>다.</p>
+
+<h2>전후 — 앱이 뜨는 첫 프레임 (창 1920×950)</h2>
+<div class="grid">
+  <div class="card"><div class="cap"><span class="bad">전</span> — 빈 차트 상자 560px · 보드 1141px · 문서 1241px &gt; 뷰포트 950px → <b>「전체 실적표」가 화면 밖으로 밀려난 채</b> 떠 있다가 접힘</div><img src="260801_차트리플로우_전_큰상태.png" alt="전 큰 상태"></div>
+  <div class="card"><div class="cap"><span class="good">후</span> — 차트 269px · 보드 850px · 문서 950px = 뷰포트 <b>처음부터 실적표 「계」 행까지 전부 노출</b></div><img src="260801_차트리플로우_후_확정상태.png" alt="후 확정 상태"></div>
+</div>
+
+<h2>부팅 타임라인 실측 — 로그인 연출 경로</h2>
+<h3>① 콜드 캐시(Plotly 1200ms) — 「크게 떴다가 작아짐」</h3>
+<table>
+<tr><th>창</th><th>전: 앱 노출 시점</th><th>전: 축소 시점</th><th>전: 큰 상태 지속</th><th>후: 앱 노출 시점 크기</th></tr>
+<tr><td>2560×1080</td><td class="ng">t=840ms · 보드 1141 · 차트 560</td><td>t=1505ms → 980 / 399</td><td class="ng">665ms</td><td class="ok">t=848ms · <b>980 / 399 (확정)</b></td></tr>
+<tr><td>1920×950</td><td class="ng">t=836ms · 보드 1141 · 차트 560</td><td>t=1441ms → 850 / 269</td><td class="ng">605ms</td><td class="ok">t=834ms · <b>850 / 269 (확정)</b></td></tr>
+<tr><td>2048×784 (브라우저 125%)</td><td class="ng">t=869ms · 보드 911 · 차트 448</td><td>t=1519ms → 692 / 229</td><td class="ng">650ms</td><td class="ok">t=858ms · <b>692 / 229 (확정)</b></td></tr>
+</table>
+<h3>② 웜 캐시(Plotly 60ms) — 「큰 채로 안 줄어듦」</h3>
+<p class="note">커튼(로그인 카드 리프트 640ms) 동안 <code>#app</code>은 <code>display:none</code>이라, 그 사이 도착한 Plotly의 fit 호출이
+<code>rail.offsetParent===null</code>로 <b>즉시 return하며 헛돌았다</b>(재호출 훅 없음). 그래서 차트가 560px로 <b>영구 고정</b>되고,
+사용자가 창을 건드리는 순간에야 <code>resize</code> 훅이 한 번에 접었다.</p>
+<table>
+<tr><th>창</th><th>전</th><th>후</th></tr>
+<tr><td>2560×1080</td><td class="ng">보드 1141 · 차트 560 · 문서 1241 <b>영구</b>(축소 0회)</td><td class="ok">t=870ms 보드 980 · 차트 399 · 문서 1080</td></tr>
+<tr><td>1920×950</td><td class="ng">보드 1141 · 차트 560 · 문서 1241 <b>영구</b>(축소 0회)</td><td class="ok">t=846ms 보드 850 · 차트 269 · 문서 950</td></tr>
+</table>
+
+<h2>수정 — 기존 함수 재사용 2줄(새 값·새 CSS 0개)</h2>
+<table>
+<tr><th>#</th><th>위치</th><th>내용</th><th>담당 경로</th></tr>
+<tr><td>F1</td><td><code>_yrmRender</code> — <code>_yrmTable();</code> 다음</td><td><code>try{_bizFitViewport();}catch(_e){}</code></td><td>마크업 직후 = Plotly 대기 전에 최종 높이 확정(F5 새로고침·세션복원·재렌더)</td></tr>
+<tr><td>F2</td><td><code>_appEnterStagger</code> — <code>void appEl.offsetHeight;</code> 다음</td><td><code>try{if(typeof _bizFitViewport==='function')_bizFitViewport();}catch(_e){}</code></td><td>커튼이 걷혀 앱이 보이는 첫 순간 재확정(로그인 연출 경로 ①②)</td></tr>
+</table>
+<p class="note"><b>안전성</b> — <code>_bizFitViewport</code>는 캘린더 모드·레일 숨김·차트 없음을 이미 조기 return하고, 내부 <code>Plotly.relayout</code>은
+<code>if(window.Plotly&amp;&amp;…)</code> 가드가 있어 Plotly 없이 선호출해도 예외가 없다. <code>setH</code>의 2px 데드밴드로 <b>멱등</b>이라 F1·F2 중복 호출은 no-op.
+높이 계산은 <code>_bizZ()</code>로 디자인 단위 환산 → #524 줌 상쇄와 좌표계 충돌 없음.</p>
+
+<h2>회귀 확인</h2>
+<table>
+<tr><th>조건</th><th>기대</th><th>실측(후)</th></tr>
+<tr><td>2560×1329 (높은 창 — 원래 무증상)</td><td>차트 560 유지·축소 없음</td><td class="ok">보드 1141 · 차트 560 · 문서 1329 — 무변</td></tr>
+<tr><td>브라우저 125% (2048×784 / outer 2560)</td><td>#524 줌 상쇄 유지</td><td class="ok">zoom 0.8 t=79ms 유지 · 첫 프레임부터 확정 크기</td></tr>
+</table>
+
+<h2>평의회에서 기각된 후보(반증 근거)</h2>
+<table>
+<tr><th>후보</th><th>기각 사유(실측)</th></tr>
+<tr><td>웹폰트 FOUT</td><td>웜캐시 변화 0 · 콜드에서도 보드 1141→1122(<b>−1.7%</b>) · 문서·차트 높이 불변</td></tr>
+<tr><td>레일 지연 렌더로 좌 보드가 전폭→절반</td><td>폭이 첫 페인트~종료까지 전 프레임 동일(1280/1280/1245) — <code>#sales-rail{width:50%}</code>+<code>class="biz-mode"</code> 하드코딩이 이미 방어</td></tr>
+<tr><td>서비스워커 구버전 선노출</td><td>변화 방향이 반대(+6.5%)이고 1회 로드 후 자연 치유</td></tr>
+<tr><td>outerWidth 미확정 / innerWidth≤1200 게이트</td><td>실브라우저에서 outerWidth는 t=0.4ms에 확정 · 2560창은 게이트 도달 불가 · 변화 0건</td></tr>
+<tr><td>로그인 연출이 큰 상태를 늘린다</td><td>오히려 640ms를 가려준다(Plotly 1200ms: 연출O 681ms vs 연출X 1227ms)</td></tr>
+</table>
+
+<h2>게이트</h2>
+<p class="note">check_design ✓(raw hex 1605/1605 무변·:root 2/0·신규 토큰 0) · check_refs ✓ · smoke 로그인 ✓(JS 회귀 0)</p>
+
+<h2>남은 선택지(미반영)</h2>
+<p class="note"><code>_yrDrawChart</code>의 <code>layout.height:(_m?560:410)</code> 리터럴은 그대로 뒀다 — 같은 동기 블록에서 뒤이어
+<code>_bizFitViewport</code>가 relayout하므로 페인트 경계가 없어 현재 무증상이고, 손대면 디자인 값 변경 위험이 이득보다 크다.</p>
+</body>
+</html>
