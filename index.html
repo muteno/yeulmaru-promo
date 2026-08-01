@@ -6967,9 +6967,11 @@ var _RYNM='font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellip
 //     [ 우측정렬 고정폭 숫자 ][ 단위 %·명 ][ 부가 (분자/분모) ]
 //     숫자를 고정폭 박스에 우측정렬 → 자릿수가 달라도 일의 자리가 같은 세로선. 단위·괄호도 자동으로 같은 x에서 시작.
 //     폭은 최대값 기준(판매율 3자리 '100' · 전시 누적 6자 '12,345') — 실측으로 맞춘 값.
-var _RY_NUMW='3.7em';   // 6자리 전시 누계('123,456')까지 슬롯 안에 들어가는 실측값 — 넘치면 그 행만 기준선이 어긋난다
-function _ryNumSlot(txt,colVar){   // 숫자 = 고정폭 우측정렬(tabular-nums로 자릿폭 균일)
-  return '<b style="display:inline-block;min-width:'+_RY_NUMW+';text-align:right;color:var('+colVar+');font-weight:800;font-variant-numeric:tabular-nums">'+txt+'</b>';
+// [260801 운영자 "누적관객수 '누' 시작 부분을 판매율 시작부분하고 각 인덱싱의 좌측 기준변을 맞춰줘"]
+//   구 3.7em 고정폭 **우측**정렬 슬롯(260731 끝선 맞춤)은 자릿수에 따라 시작점이 들쭉날쭉 — 판매율 「95」(2자리)와
+//   누적 「1,234」(5자리)의 좌변이 어긋났다. → 슬롯 폐지·자연폭 = 모든 값이 열 좌변(머리글과 같은 선)에서 시작.
+function _ryNumSlot(txt,colVar){   // 숫자 = 좌측 시작(tabular-nums로 자릿폭 균일 · 단위는 뒤에 바로 붙는다)
+  return '<b style="color:var('+colVar+');font-weight:800;font-variant-numeric:tabular-nums">'+txt+'</b>';
 }
 function _ryRateCell(cur,tot,pct,col){
   if(pct===null||pct===undefined||isNaN(pct))return '<span style="color:var(--muted);font-size:12px">—</span>';
@@ -7002,7 +7004,7 @@ function _rySubLine(run,venue){
 }
 // [260729 운영자] 누적 관객수 셀(전시 3열) — 「달성률 아니라 누적 관객수, 숫자 누계만」. 표기 = 판매율과 같은 문법(강조색 --accent 볼드 + 회색 단위) · 좌측 정렬.
 // [260731 운영자] 「전시 같은경우에는 전시 강조색을 써서 수치를 써줘」 — 색 = 전시 그룹 머리글과 같은 --peach-text(팔레트 계승, 신규 색 0).
-//   숫자는 판매율과 **같은 공용 슬롯**(_ryNumSlot) → 공연 표의 % 자릿수와 전시 표의 관객수 자릿수가 같은 세로선에서 끝난다.
+//   숫자는 판매율과 **같은 공용 슬롯**(_ryNumSlot) → [260801 개정] 공연 표의 %와 전시 표의 관객수가 같은 세로선(열 좌변)에서 **시작**한다.
 function _ryAccCell(n){
   if(n===null||n===undefined||isNaN(n))return '<span style="color:var(--muted);font-size:12px">—</span>';
   return _ryNumSlot(Math.round(n).toLocaleString(),'--peach-text')
@@ -7093,7 +7095,8 @@ function _railYrmPerfTable(perfs,rateLab){
   //   여는 쪽 셀의 왼쪽 여백만 키운다(td 기본 padding 8 + 이 값) → 열 폭·총합 100은 그대로, 글자만 떨어진다.
   //   머리글·본문에 같은 값을 먹여 머리글↔값 세로축이 안 어긋나게 한다. 3열은 판매율·누적 관객수 공용 셀이라 둘 다 같이 벌어진다.
   var HP=[0,0,18,0,18];
-  var pl=function(i){ return HP[i]?('padding-left:'+(8+HP[i])+'px;'):''; };
+  // [260801 운영자 "각 인덱싱의 좌측 기준변을 맞춰줘"] 본문 셀 좌여백 8+HP → 10+HP = 머리글(10+HP)과 같은 선 — 머리글 첫 글자와 값 첫 글자가 한 세로선에서 시작
+  var pl=function(i){ return HP[i]?('padding-left:'+(10+HP[i])+'px;'):''; };
   // [260731 운영자] 머리글 「최근 7일 추이」의 중심을 막대 중심에 맞춘다.
   //   식: 머리글 중심 = L+PLh+(W-PLh-PRh)/2 · 막대 중심 = L+PLb+(W-PLb-8-133)/2+33.5
   //       (머리글 padding-left 10 · 본문 8 · 본문 padding-right 8 · 내용 133 = 막대 67 + 간격 10 + 숫자 56 · 막대 절반 33.5)
@@ -10016,7 +10019,7 @@ function _yrDrawChart(first,pfx,stO){
         var _tpc=(_tr.v[_p0]>0)?((_tr.v[_p1]-_tr.v[_p0])/_tr.v[_p0]*100):0;
         var _ac=_yrCss('--accent'),_span=years[_p1]-years[_p0],_lbl='근 '+_span+'개년('+years[_p0]+'→'+years[_p1]+') 관람 추이';
         traces.push({type:'scatter',mode:'lines+markers',name:_lbl,x:[years[_g0],years[_g1]],y:[_ga,_gb],customdata:[_gr.v[_g0],_gr.v[_g1]],line:{color:_ac,width:2.4,dash:'dot'},marker:{color:_ac,size:7,symbol:'circle',line:{color:paper,width:1.5}},hovertemplate:'%{x}년 공연 %{customdata:,}명<extra>근 '+_span+'개년 추이</extra>',showlegend:false,cliponaxis:false});   // 직선 점선 = 공연 2022→2025 꼭짓점 직결(계 부유값 아님)
-        annos.push({x:(years[_g0]+years[_g1])/2,yref:'paper',y:0.98,yanchor:'top',text:_lbl+' '+(_up?'▲':'▼')+' '+(_up?'+':'−')+Math.abs(_tpc).toFixed(1)+'%',showarrow:false,font:{color:_ac,size:10},bgcolor:labelBg,bordercolor:_ac,borderwidth:1,borderpad:3});   // 라벨 = 상단(값 라벨 위)
+        annos.push({x:(years[_g0]+years[_g1])/2,y:10,yanchor:'top',text:_lbl+' '+(_up?'▲':'▼')+' '+(_up?'+':'−')+Math.abs(_tpc).toFixed(1)+'%',showarrow:false,font:{color:_ac,size:10},bgcolor:labelBg,bordercolor:_ac,borderwidth:1,borderpad:3});   // [260801 운영자 "조금 낮춰 · 10 구분선이 박스 윗부분과 일치"] paper 0.98 → 데이터 y=10 + yanchor:top = 박스 윗변이 y축 10 눈금선에 정확히 붙음(범위 변해도 유지)
       }
     }
     var _m=(pfx==='yrm');   // [260801 운영자 "차트가 쭈그라들게 보인다 · 가로가 비어있음"] 대시보드 인라인(yrm) = 죽은 여백 회수 대상
