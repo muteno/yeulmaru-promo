@@ -2169,7 +2169,7 @@ table.promo-board-table thead th:last-child{border-top-right-radius:11px}
 /* [260729 운영자] 분야 표식 = 세로 막대 → 원형 블릿(운영자 지목 = 공연·전시 머리글 앞 표식 · "색상은 유지"). 카드 제목 블릿(.ct-bul 막대)과 모양이 갈려 대분류(카드)↔중분류(분야) 위계가 보인다.
    값 100% 계승 = 정본 컴포넌트 6번 칩의 점 부품 .chip-dot(L658 — 8×8 · r50%) · flex-shrink:0은 .ct-bul 계승(flex 헤더에서 찌그러짐 방지) · 색 = 종전 --gtok 그대로(공연 --accent · 전시 --peach-text). 신규 hex·px 0 */
 .ry-grp-hd::before{content:'';width:8px;height:8px;border-radius:50%;background:var(--gtok,var(--accent));flex-shrink:0}
-.ry-grp-bd{position:relative;flex:1;min-height:0;overflow-y:auto;scrollbar-width:thin;-ms-overflow-style:none;scrollbar-color:transparent transparent;scrollbar-gutter:stable}   /* [260731 운영자 4차 · 픽셀실측] gutter 상시 확보 — 스크롤 생긴 그룹만 표 폭이 7px 깎여 공연↔전시 열 세로선이 어긋나던 것(실측 Δ≈7px) 해소. 전 그룹 동일 폭 = 열 경계 Δ0 */
+.ry-grp-bd{position:relative;flex:1;min-height:0;overflow-y:auto;scrollbar-width:thin;-ms-overflow-style:none;scrollbar-color:transparent transparent;scrollbar-gutter:stable}   /* [260731 운영자 4차 · 픽셀실측] gutter 상시 확보 — 스크롤 생긴 그룹만 표 폭이 7px 깎여 공연↔전시 열 세로선이 어긋나던 것(실측 Δ≈7px) 해소. 전 그룹 동일 폭 = 열 경계 Δ0 · gutter 미지원 브라우저는 JS 폴백 _ryGrpEqualize(260801 Q.38)가 같은 폭 통일을 보증 */
 .ry-grp-bd::-webkit-scrollbar{width:7px;height:0;background:transparent}
 #rail-yrm:hover .ry-grp-bd{scrollbar-color:rgba(0,0,0,0.075) transparent}   /* [260729 운영자] 호버 리빌 투명도 50% — 진행 중인 프로그램 표 가로 스크롤바가 분야 사이를 가로지르며 도드라져 절반으로(0.15→0.075 · 흑알파 변주) */
 #rail-yrm:hover .ry-grp-bd::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.075)}
@@ -7186,6 +7186,43 @@ function _railYrmCardTitle(){
   // [260729 운영자] 구 '진행 중인 프로그램' 개명 → 「프로그램 별 판매 추이」 · 블릿(.ct-bul) = 좌 보드 두 카드와 같은 부품(강조색1)
   return '<span class="ct-bul"></span>프로그램 별 판매 추이';
 }
+// ── [260801 운영자 · Q.38] 3열 숫자 세로선 보증 — 그룹 표 폭 통일(JS 폴백) ──────────────────────
+// 공연·전시·교육은 그룹(.ry-grp-bd)마다 별개 <table>이라, 3열 숫자(판매율 %·전시 누적 관객수)의 일의 자리
+// 세로선은 「세 표의 폭이 픽셀까지 같다」에 기대 있다. 260731 4차가 CSS scrollbar-gutter:stable로 그 폭을
+// 맞췄지만, gutter 미지원 브라우저(구 Safari 등 — 클래식 스크롤바)는 스크롤 생긴 그룹만 표 폭이 스크롤바만큼
+// 깎여 전시 숫자가 공연 %의 세로선에서 밀려난다. → 각 그룹의 실측 콘텐츠 폭(clientWidth−패딩)을 재서
+// 가장 좁은 그룹에 맞춰 나머지에 padding-right를 주는 것으로 gutter 예약을 JS로 재현한다.
+// gutter 지원 브라우저 = 전 그룹 폭이 이미 동일 → 차 0 → no-op. 신규 시각 요소 0(빈 여백뿐 · 색·형태 무접촉).
+function _ryGrpEqualize(box){
+  try{
+    box=box||document.getElementById('rail-yrm-list'); if(!box)return;
+    var bds=box.querySelectorAll('.ry-grp-bd'); if(bds.length<2)return;
+    var nat=[],min=Infinity;
+    for(var i=0;i<bds.length;i++){
+      var el=bds[i], cs=getComputedStyle(el);
+      var padR=parseFloat(cs.paddingRight)||0, padL=parseFloat(cs.paddingLeft)||0;
+      var eq=el._ryEqPad||0;   // 이 함수가 이전에 준 몫은 원 폭 계산에서 되돌린다(중첩 누적 방지)
+      var w=el.clientWidth-padL-(padR-eq);   // 자연 콘텐츠 폭 = 스크롤바(+거터)에 깎인 몫만 반영된 값
+      nat.push({el:el,w:w,base:padR-eq});
+      if(w<min)min=w;
+    }
+    if(!(min>0)||!isFinite(min))return;
+    nat.forEach(function(n){
+      var e=Math.max(0,n.w-min);
+      if(Math.abs((n.el._ryEqPad||0)-e)<0.5)return;   // 변화 없으면 안 쓴다(ResizeObserver 재귀 안정)
+      n.el._ryEqPad=e;
+      n.el.style.paddingRight=(e>0)?((n.base+e)+'px'):'';
+    });
+    // 그룹 높이·행수 변화로 스크롤바가 나중에 생기고 사라지는 것까지 따라간다(관측 대상 = 그룹 몸통 자신)
+    if(window.ResizeObserver){
+      if(!window._ryEqRO)window._ryEqRO=new ResizeObserver(function(){
+        if(window._ryEqRaf)return;
+        window._ryEqRaf=requestAnimationFrame(function(){ window._ryEqRaf=0; try{_ryGrpEqualize();}catch(_e){} });
+      });
+      for(var j=0;j<bds.length;j++){ if(!bds[j]._ryEqObs){ bds[j]._ryEqObs=1; window._ryEqRO.observe(bds[j]); } }
+    }
+  }catch(_e){ console.warn('[ry grp eq]',_e); }
+}
 // [260724 운영자 한 수] 표 행 클릭 → 우하단 2×2에 그 프로그램 상세 표시(목록 ↔ 상세 = 한 몸 · 화면 이동 없음). 매칭 = _srailUhaKey(표는 필터/정렬로 순서가 달라 인덱스 대신 키).
 function _railYrmPick(kind,key){
   try{
@@ -7344,6 +7381,7 @@ function _ryDrillClose(anim){
   _ryBackBtn(box,0);
   var acts=(typeof window!=='undefined')?window._railYrmActives:null;
   box.innerHTML=_railYrmTableHtml(acts);
+  try{ _ryGrpEqualize(box); }catch(_e){}   // [260801 Q.38] 상세 → 목록 복귀 시에도 그룹 표 폭 통일(3열 숫자 세로선)
   if(anim)_ryFlip(box.querySelector('.ry-grp')||box,-1);
   try{ _railYrmSyncActive(); }catch(_e){}
   try{ _srailAlignTop(); }catch(_e){}
@@ -7391,7 +7429,7 @@ function _railYrmRender(){
   _bizmState.rightId=_bizRightId(p);
   try{if(window.Plotly)['#bizm-genre','#bizm-season'].forEach(function(s){var n=el.querySelector(s); if(n)Plotly.purge(n);});}catch(_e){}   // 우 열이 들고 있던 차트만 purge(노드 지정 = 좌 열 동명 id 무접촉) — 리스너·옵저버 누수 차단
   if(pair){ try{ el.innerHTML=''; _bizCompRender(el,2); }catch(_e){ console.warn('[rail-yrm pair]',_e); } }
-  else { try{ el.innerHTML=_railYrmFrame(); }catch(_e){ console.warn('[rail-yrm]',_e); } }
+  else { try{ el.innerHTML=_railYrmFrame(); }catch(_e){ console.warn('[rail-yrm]',_e); } try{ _ryGrpEqualize(); }catch(_e){} }   // [260801 Q.38] 최초 틀 구축 직후에도 그룹 표 폭 통일
   try{ if(!document.getElementById('rail-yrm-uha')){ var _sl=document.createElement('div'); _sl.id='rail-yrm-uha'; _sl.style.display='none'; el.appendChild(_sl); } }catch(_e){}   // 짝 면에도 상세 슬롯(숨김) 확보 — 회전 기계 타이머·리스너 보존, 화면 노출 0
   try{ var slot=document.getElementById('rail-yrm-uha'); if(uha&&slot)slot.appendChild(uha); }catch(_e){}
   if(!pair){ try{ if(window._railYrmActives)_srailUhaSync(window._railYrmActives); }catch(_e){} try{ if(_ryDrill.key)_ryDrillPaint(_ryDrill.key,0); }catch(_e){} try{ _railYrmSyncActive(); }catch(_e){} }   // [260731 4차 · 페이블 검수 MED] 판매 실적 복귀 = 회전 기계·상세·액티브 pill 재점화(짝 면 휴식의 짝)
@@ -7405,6 +7443,7 @@ function _railYrmSync(actives){
   var list=document.getElementById('rail-yrm-list');
   if(!list){ if(el.childNodes.length)return; _railYrmRender(); return; }   // [260731 4차] 틀이 있는데 목록만 없다 = 다른 면 — 통째 재렌더 금지(빈 틀일 때만 최초 구축)
   list.innerHTML=_railYrmTableHtml(actives);
+  try{ _ryGrpEqualize(list); }catch(_e){}   // [260801 Q.38] 그룹 표 폭 통일 — 3열 숫자(판매율·전시 누적 관객수) 세로선 보증
   if(_ryDrill.key&&!_ryDrillPaint(_ryDrill.key,0))_ryDrill.key='';   // 상세를 보던 중 데이터가 갱신되면 상세를 다시 그린다(그 프로그램이 사라졌으면 목록 유지)
   var ct=el.querySelector('.bizm-card .ct'); if(ct)ct.innerHTML=_railYrmCardTitle();
   _railYrmSyncActive();   // [260724 한 수] 재렌더 후에도 2×2에 떠 있는 프로그램의 행 액티브 유지
