@@ -880,13 +880,11 @@ button{font-family:inherit;cursor:pointer}
    표(테이블)·테두리는 쓰지 않는다: 바깥 grid + 각 행 display:contents 로 열만 공유(마크업은 div/span 그대로).
    · 1열 구분 = 「공연·교육·대관·셋업」 글자만(운영자 260731 3차 — 알약/버튼 형태 폐지).
      형태는 같은 패널의 정본 부품 .sp-card-type(12.5px/700 색만 다른 글자 라벨) 계승, 색 규칙은 캘린더 셀과 공유
-     [260801 운영자] 폭 = 3글자 고정(40px = 12.5px×3 + 여유). 구 auto는 그날 구분이 2글자(공연)뿐이냐
-     3글자(리허설·교육실)가 섞였느냐에 따라 열 폭이 달라져 2열(제목) 시작 x가 날짜마다 흔들렸다.
    · 2열 제목 = 남는 폭 전부(minmax(0,1fr)) · 넘치면 …
    · 3열 장소 = auto = 가장 긴 장소명 폭으로 모든 행이 같은 x에서 시작(좌측 정렬) = 빈 표의 한 열처럼 읽힌다
    · 세로 = align-items:baseline. 열마다 글자 크기가 달라(12.5·13·11) 박스 중앙 정렬은 잉크가 어긋난다 —
      기준선을 공유시켜 「글자가 같은 줄 위에 앉은」 상태로. 실측 = tools/scratch/probe_panel_ink.mjs */
-.panel-hdr-labels{margin-top:7px;display:grid;grid-template-columns:40px minmax(0,1fr) auto;column-gap:8px;row-gap:5px;align-items:baseline}
+.panel-hdr-labels{margin-top:7px;display:grid;grid-template-columns:auto minmax(0,1fr) auto;column-gap:8px;row-gap:5px;align-items:baseline}
 .panel-hdr-labels>span{margin-left:0}
 .panel-hdr-hol{grid-column:1/-1}
 .panel-hdr-prog{display:contents}
@@ -2363,38 +2361,6 @@ html::-webkit-scrollbar-thumb{background:rgba(0,0,0,.15)}
 
   <div id="body-wrap" style="display:flex;position:relative;min-height:calc(100vh - 56px);isolation:isolate"
     onclick="if(!event.target.closest('[data-panel]')&&!event.target.closest('[data-cell]'))closePanel()">
-    <script>
-    /* [260801 운영자 "처음에 잠깐 크게 떴다가 작아진다"] 대시보드 줌 선적용 — 규격 줌을 스크립트 본문(3천 행 아래)에서
-       걸면 그 전 250~370ms 동안 줌 없는 크기로 그려졌다가 뒤늦게 튄다(실측: 브라우저 125%면 첫 프레임이 25% 크게 떴다가 축소).
-       파서가 여기서 멈춰 실행 → 첫 페인트 전에 확정되므로 튐이 0프레임. 계산식은 이 한 곳(_bizZoomTarget)에만 두고
-       본문 _bizZoomApply·리사이즈·모드전환이 같은 함수를 재사용한다(값 이원화 금지). script 요소는 UA display:none = 부모 flex 항목 아님.
-       _mainView는 아직 선언 전(뒤 스크립트 블록) → sessionStorage 원본(mvView)에서 같은 규칙으로 읽는다. */
-    var _BIZ_ZOOM_STEPS=[.25,.33,.5,.67,.75,.8,.9,1,1.1,1.25,1.5,1.75,2,2.5,3,4,5];   // 크로미움 페이지 줌 단계
-    /* [260801] 브라우저 줌 배율 추정 — outerWidth는 페이지 줌에 영향받지 않는 창 폭이라 outerWidth/innerWidth ≈ 줌 배율.
-       창 테두리·스크롤바 오차(~1%)는 실제 줌 단계로 스냅해 흡수하고, 어느 단계와도 6% 밖이면 보정을 포기(=1)해 오작동보다 무보정을 택한다. */
-    function _bizBrowserZoom(){
-      var iw=window.innerWidth, ow=window.outerWidth;
-      if(!iw||!ow)return 1;
-      var raw=ow/iw, best=1, bd=Infinity;
-      for(var i=0;i<_BIZ_ZOOM_STEPS.length;i++){ var s=_BIZ_ZOOM_STEPS[i], d=Math.abs(raw-s)/s; if(d<bd){bd=d;best=s;} }
-      return bd<=.06?best:1;
-    }
-    /* 목표 줌 = 브라우저 줌 배율만 상쇄(100% = 1 → 확대 없음·종전 유동 레이아웃) · 캘린더 모드·좁은 폭(≤1200)은 해제 */
-    function _bizZoomTarget(){
-      var v='biz';
-      try{ v=(typeof _mainView!=='undefined'&&_mainView)?_mainView:(sessionStorage.getItem('mvView')==='cal'?'cal':'biz'); }catch(_e){}
-      if(v!=='biz'||window.innerWidth<=1200)return 1;
-      var z=Math.max(.75,Math.min(2.2,1/_bizBrowserZoom()));   // 클램프 = 과축소 가독 하한 .75 / 상한 2.2
-      z=Math.round(z*1000)/1000;
-      return Math.abs(z-1)<.003?1:z;
-    }
-    (function(){ try{
-      var z=_bizZoomTarget(); if(z===1)return;
-      var bw=document.getElementById('body-wrap'); if(!bw)return;
-      bw.style.zoom=String(z);
-      bw.style.minHeight=Math.floor((window.innerHeight-56)/z)+'px';   // 인라인 calc(100vh−56px)는 zoom에 이중 스케일 → px 보정(floor 필수 — 본문 주석 참조)
-    }catch(_e){} })();
-    </script>
     <div id="main-area" style="flex:1;padding:18px 20px 24px 20px;transition:margin-right .3s,opacity .25s ease"><!-- [260723e 선택값] 상단 18 · 바깥 20(구 24/32) · 레일 표시 폭에선 media가 우측 15(간격) -->
       <!-- 구 .hdr(월네비+필터 밴드) 폐지(운영자 260710 "확보한 만큼 캘린더 위로") — 월네비 = 상단 nav · 필터 = 요일바 줄 우측(sticky 겹침, height 0 = 흐름 무점유) -->
       <!-- [260723 운영자] 메인 전환 토글 = 최상단 nav 월네비 우측으로 이주(구 #mv-row 보드 위 칩줄 폐지) · _srailAlignTop은 #mv-row 부재 시 _mvH=0으로 좌·우 대칭 상승(정렬 유지) -->
@@ -2494,7 +2460,6 @@ html::-webkit-scrollbar-thumb{background:rgba(0,0,0,.15)}
 </div>
 
 <script src="data/edu_institutions.js"></script>
-<script src="data/edu_rooms.js"></script>
 <script src="data/perf_access_stats.js"></script><!-- [260731] 공연별 페이지 접속통계(드릴 2면) — 기계산출물: tools/build_access_stats.mjs가 data/access_stats/*.csv에서 생성 -->
 
 <script>
@@ -2993,13 +2958,6 @@ function perfBadgeKind(p){return p._setup?'셋업':(p._reh?'리허설':(p.t==='e
 // 장소 표기 = 운영자 확정 4종(대극장·소극장·7층 전시실·장도 전시실). 구글 캘린더 공간 태그(_GC_PLACE)는
 // '7층'·'장도'로 짧게 들어와 그대로 쓰면 시트(정본) 표기와 어긋난다 → 여기서 정본 표기로 맞춘다.
 function perfPlaceLabel(l){var s=String(l||'').trim();return s==='7층'?'7층 전시실':(s==='장도'?'장도 전시실':s);}
-// [260801 운영자] 교육실 대관(data/edu_rooms.js — 대관 신청 CSV 산출물) = 날짜 패널(사이드바)에만 뜬다.
-//   「캘린더에 표기하지는 않고 사이드바에는 교육실이라고」 → getPerfs·renderPerfsHtml은 무접촉(셀 표기 0).
-//   구분 글자 = 「교육실」 · 색 = 대관과 같은 시안블루(--c5). 성격이 대관이라 팔레트를 그대로 계승(신규 hex 0).
-function getEduRooms(key){
-  if(typeof EDU_ROOMS==='undefined'||!EDU_ROOMS)return [];
-  return EDU_ROOMS.filter(function(r){return r.s===key;});
-}
 function renderPerfsHtml(perfs,td,past,dateKey){
 if(!perfs||!perfs.length)return'';
 var cperfs=perfs.filter(function(p){return p.t!=='e';});
@@ -5438,16 +5396,28 @@ function _srailEls(){ return { body:document.getElementById('srail-body'), cnt:d
 //   좌표계 실측(Chrome 141, probe): gBCR=시각좌표(×z) · offsetWidth/clientWidth/scrollTop/computedStyle=레이아웃 단위(비스케일) ·
 //   vh/vw=zoom이 한 번 더 곱해짐(min-height 보정 필수). → gBCR로 잰 값을 style px에 쓰는 정렬식은 _bizZ()로 나눠 단위 통일.
 //   오버레이(모달·dd-pop·FAB·토스트)는 body 직속(줌 밖) + gBCR(시각좌표) 배치라 무보정으로 정위치. 캘린더 모드 = zoom 해제(종전 그대로).
-// [260801 운영자 "처음에 항상 화면이 확대되서 시작된다"] 260731의 기준 폭 1920 하드코딩(z=innerWidth/1920)이 원인 —
-//   FHD보다 넓은 창(2560·3440·4K)에서 z가 1.33~2.0으로 잡혀 브라우저 100%인데도 첫 화면부터 전체가 확대돼 떴다(반대로 1920 미만은 .75 축소).
-//   교정: 브라우저 줌 배율만 상쇄(_bizZoomTarget — #body-wrap 여는 태그 직후 선적용 스크립트에 정의) → 100% = z1(확대 없음·종전 유동 레이아웃),
-//   줌을 내리면 그만큼 z를 올려 260731의 목적(배율이 바뀌어도 규격 동일)은 그대로 유지. 정의를 앞에 둔 이유 = 첫 페인트 전 적용(튐 0프레임).
-var _BIZ_DESIGN_W=1920;   // 구 규격 기준 폭 — 하드코딩 폐지 후 참고값으로만 잔존(줌 계산에 미사용)
+var _BIZ_DESIGN_W=1920;   // 규격 기준 폭 — 운영자 "100% 화면에 딱맞음"의 그 화면(FHD) · [260801] 하드코딩 폐지(아래 _bizZoomBaseW) 후 참고값으로만 잔존
+// [260801 운영자 "처음에 항상 화면이 확대되서 시작된다"] 기준 폭 1920 하드코딩이 원인 — FHD보다 넓은 창(2560·3440·4K 등)에서
+//   z=innerWidth/1920 이 1.33~1.93으로 잡혀 브라우저 100%인데도 첫 화면부터 전체가 확대돼 떴다(클램프 상한 2.2까지).
+//   교정: 기준 폭 = 「그 창의 브라우저 100% 기준 폭」(outerWidth 실측) — 260731의 목적(브라우저 줌 배율이 바뀌어도 규격 동일)은
+//   그대로 유지되면서, 100%에서는 어떤 화면 폭이든 z=1(종전 유동 레이아웃 = 확대 없음)로 돌아온다.
+//   outerWidth는 페이지 줌에 영향받지 않는 창 폭 → outerWidth/innerWidth ≈ 브라우저 줌 배율. 창 테두리·스크롤바 오차(~2%)는
+//   브라우저 실제 줌 단계로 스냅해 흡수하고, 어느 단계와도 6% 밖이면 보정을 포기(z=1)해 오작동보다 무보정을 택한다.
+var _BIZ_ZOOM_STEPS=[.25,.33,.5,.67,.75,.8,.9,1,1.1,1.25,1.5,1.75,2,2.5,3,4,5];   // 크로미움 페이지 줌 단계
+function _bizBrowserZoom(){
+  var iw=window.innerWidth, ow=window.outerWidth;
+  if(!iw||!ow)return 1;
+  var raw=ow/iw, best=1, bd=Infinity;
+  for(var i=0;i<_BIZ_ZOOM_STEPS.length;i++){ var s=_BIZ_ZOOM_STEPS[i], d=Math.abs(raw-s)/s; if(d<bd){bd=d;best=s;} }
+  return bd<=.06?best:1;   // 어느 단계와도 멀면(창 테두리 큰 환경·비정상 값) 보정 포기 = z1
+}
 function _bizZ(){ var bw=document.getElementById('body-wrap'); if(!bw)return 1; var z=(typeof bw.currentCSSZoom==='number')?bw.currentCSSZoom:(bw.offsetWidth?bw.getBoundingClientRect().width/bw.offsetWidth:1); return (isFinite(z)&&z>0.05)?z:1; }   // currentCSSZoom 폴백 = 실측비(zoom 미지원 브라우저 = 1 → 보정식 자동 무효·종전 거동)
 function _bizZoomApply(){
   try{
     var bw=document.getElementById('body-wrap'); if(!bw)return;
-    var z=_bizZoomTarget();   // 선적용 스크립트와 같은 계산식(값 이원화 금지) — 여기서는 리사이즈·모드전환 후 재확정만
+    var on=(typeof _mainView!=='undefined'&&_mainView==='biz')&&window.innerWidth>1200;
+    var z=on?Math.max(.75,Math.min(2.2,1/_bizBrowserZoom())):1;   // 브라우저 줌만 상쇄(100% = z1 확대 없음) · 클램프 = 과축소 가독 하한 .75 / 상한 2.2
+    z=Math.round(z*1000)/1000; if(Math.abs(z-1)<.003)z=1;
     if(z===1){ if(bw.style.zoom){ bw.style.zoom=''; bw.style.minHeight='calc(100vh - 56px)'; } return; }
     bw.style.zoom=String(z);
     bw.style.minHeight=Math.floor((window.innerHeight-56)/z)+'px';   // 인라인 calc(100vh-56px)는 zoom에 다시 곱해져 뷰포트 초과 → px 보정(probe 실측) · floor 필수 = round 올림이면 ×z 복원 시 +1px 유령 넘침 → biz-fit 오발동(평의회 구역3 F1: 60샘플 중 9배율 재현·floor로 9/9 정상화)
@@ -6733,10 +6703,11 @@ function _srailDrillPage(){ var n=_srailView&&_srailView.page; return (n===2)?2:
 function _srailPageTo(n){ if(!_srailView||_srailView.mode!=='drill')return; _srailView.page=(n===2)?2:1; _srailRender(); }
 function _srailPageGo(d){ _srailPageTo(_srailDrillPage()===1?2:1); }
 var _SRAIL_DPG_LBL=['판매 현황','페이지 접속통계'];
+// [260801 운영자] 면 넘김은 드릴 본문이 아니라 판매 현황 nav바(헤더 행) 슬롯에 — 1면 본문은 종전 그대로(무접촉).
 function _srailDrillDots(){
   var cur=_srailDrillPage(), dots='';
   for(var i=1;i<=2;i++)dots+='<button class="dot'+(i===cur?' on':'')+'" type="button" aria-label="'+i+'면 '+_SRAIL_DPG_LBL[i-1]+'" aria-pressed="'+(i===cur)+'" onclick="_srailPageTo('+i+')"></button>';
-  return '<div style="display:flex;justify-content:center;margin:12px 0 2px"><span class="bizm-pgctl" role="group" aria-label="공연 상세 책 넘김"><button class="nav" type="button" aria-label="이전 면" onclick="_srailPageGo(-1)">‹</button><span class="dots">'+dots+'</span><button class="nav" type="button" aria-label="다음 면" onclick="_srailPageGo(1)">›</button></span></div>';
+  return '<span class="bizm-pgctl" role="group" aria-label="공연 상세 책 넘김" style="margin-left:4px"><button class="nav" type="button" style="width:22px;height:22px;font-size:13px" aria-label="이전 면" onclick="_srailPageGo(-1)">‹</button><span class="dots">'+dots+'</span><button class="nav" type="button" style="width:22px;height:22px;font-size:13px" aria-label="다음 면" onclick="_srailPageGo(1)">›</button></span>';
 }
 var _ACC_IDX=null;
 function _accIdx(){
@@ -6750,34 +6721,62 @@ function _accLabels(key){ var S=(typeof PERF_ACCESS_STATS!=='undefined'&&PERF_AC
 // 분포 막대 — 고객 분석(_memOvRender) 막대와 같은 형태·색(1·2위 = --accent .79 · 그 외 = --peach-text .5)
 function _accBar(label,pct,max,hi){
   var w=max>0?Math.max(2,pct/max*100):0;
-  return '<div style="display:flex;align-items:center;gap:9px;margin:7px 0"><div style="flex:0 0 66px;font-size:11.5px;font-weight:600;color:var(--text);text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+escapeHtml(label)+'</div>'
-    +'<div style="flex:1;height:15px;background:var(--past-bg);border-radius:3.5px;overflow:hidden"><div style="width:'+w.toFixed(1)+'%;height:100%;background:'+(hi?'var(--accent);opacity:.79':'var(--peach-text);opacity:.5')+';border-radius:3.5px"></div></div>'
-    +'<div style="flex:0 0 46px;font-size:11px;color:var(--dim);text-align:left;font-variant-numeric:tabular-nums">'+pct.toFixed(1)+'%</div></div>';
+  return '<div style="display:flex;align-items:center;gap:9px;margin:4px 0"><div style="flex:0 0 62px;font-size:11px;font-weight:600;color:var(--text);text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+escapeHtml(label)+'</div>'
+    +'<div style="flex:1;height:13px;background:var(--past-bg);border-radius:3.5px;overflow:hidden"><div style="width:'+w.toFixed(1)+'%;height:100%;background:'+(hi?'var(--accent);opacity:.79':'var(--peach-text);opacity:.5')+';border-radius:3.5px"></div></div>'
+    +'<div style="flex:0 0 42px;font-size:10.5px;color:var(--dim);text-align:left;font-variant-numeric:tabular-nums">'+pct.toFixed(1)+'%</div></div>';
 }
 function _accDist(title,sub,vals,labels){
   var max=vals.length?Math.max.apply(null,vals):0;
   var rank=vals.map(function(v,i){return [v,i];}).sort(function(a,b){return b[0]-a[0];}).slice(0,2).map(function(x){return x[1];});
-  return '<div style="font-size:12.5px;font-weight:800;margin:0 0 4px">'+escapeHtml(title)+' <span style="font-size:10.5px;color:var(--dim);font-weight:500">'+escapeHtml(sub||'')+'</span></div>'
+  return '<div style="font-size:12px;font-weight:800;margin:0 0 3px">'+escapeHtml(title)+' <span style="font-size:10px;color:var(--dim);font-weight:500">'+escapeHtml(sub||'')+'</span></div>'
     +labels.map(function(l,i){ return _accBar(l,vals[i]||0,max,rank.indexOf(i)>=0); }).join('');
 }
-// 드릴 2면 본문 — KPI(.ana-kpi 계승) + 연령대·지역 분포 막대(흰 구획 카드 .srail-chart 미러)
+// 사업 유형어 — 문장 첫머리 「이 공연/전시/교육/대관은 …」. 전시 드릴은 별도(_srailRenderDrillEx)라 여기선 공연·대관·교육만 갈린다.
+function _accKindWord(p,a){
+  var nm=String((p&&p.name)||''), g=String((p&&p.genre)||'');
+  if(/교육|아카데미|워크숍|워크샵|스쿨|강좌|레슨/.test(nm+g))return '교육';
+  if(/전시/.test(nm+g))return '전시';
+  if(a&&a.c==='대관')return '대관';
+  return '공연';
+}
+// 조사 자동 선택 — 끝 글자 받침 유무(은/는 · 이/가). 문장에 「은(는)」 같은 괄호 표기가 안 나오게.
+function _accJosa(w,withF,withoutF){
+  var s=String(w||''), c=s.charCodeAt(s.length-1);
+  if(!(c>=0xAC00&&c<=0xD7A3))return withoutF;   // 한글 아니면(숫자·영문) 받침 없는 쪽
+  return ((c-0xAC00)%28)?withF:withoutF;
+}
+// 연령 라벨(CSV) → 문장용 「00대」 표기
+function _accAgeWord(l){
+  var m=String(l||'').match(/^(\d+)~/); if(m)return (Math.floor(+m[1]/10)*10)+'대';
+  if(/^(\d+)세 이상/.test(String(l||'')))return (Math.floor(+RegExp.$1/10)*10)+'대 이상';
+  return String(l||'');
+}
+// 드릴 2면 본문 — 맨 위 한 줄 요약 문장(AI 분석 카드 계승) + KPI(.ana-kpi) + 연령·지역 분포 한 카드(.srail-chart)
 function _srailAccHtml(p){
   var a=_accOf(p&&p.name);
   if(!a)return '<div class="u-empty" style="padding:26px 8px"><div class="ico">📊</div><div class="msg">이 공연의 접속통계가 아직 없어요</div><div style="font-size:11px;color:var(--muted);margin-top:6px">예매 사이트 접속 통계에 집계되면 표시돼요</div></div>';
   var ageL=_accLabels('age'), regL=_accLabels('region');
   var ages=a.a||[], regs=a.g||[];
   var topAgeI=ages.reduce(function(bi,v,i){return v>ages[bi]?i:bi;},0);
+  var topRegI=regs.reduce(function(bi,v,i){return v>regs[bi]?i:bi;},0);
   var inHouse=(regs[0]||0)+(regs[1]||0)+(regs[2]||0);   // 관내 = 여수·순천·광양 (고객 분석 관내 3시 기준과 동일)
   var cvr=(a.t>0&&p.seats!==null&&p.seats!==undefined&&!isNaN(p.seats))?(p.seats/a.t*100):null;
-  var h='<div class="ana-kpis">';
-  h+='<div class="ana-kpi"><div class="lab">총 접속수</div><div class="val">'+a.t.toLocaleString()+'</div><div class="sub2" style="color:var(--dim)">로그인 회원 기준</div></div>';
-  h+='<div class="ana-kpi"><div class="lab">최다 연령대</div><div class="val" style="font-size:15px">'+escapeHtml(ageL[topAgeI]||'—')+'</div><div class="sub2" style="color:var(--dim)">'+(ages[topAgeI]||0).toFixed(1)+'%</div></div>';
-  h+='<div class="ana-kpi"><div class="lab">관내 비중</div><div class="val">'+inHouse.toFixed(1)+'%</div><div class="sub2" style="color:var(--dim)">여수·순천·광양</div></div>';
-  h+='<div class="ana-kpi"><div class="lab">접속 대비 구매</div><div class="val">'+(cvr===null?'—':cvr.toFixed(1)+'%')+'</div><div class="sub2" style="color:var(--dim)">'+(cvr===null?'집계 전':'판매 '+Math.round(p.seats).toLocaleString()+'석 ÷ 접속')+'</div></div>';
+  // [260801 운영자] 맨 위 한 줄 요약 — 「이 공연은 여수에 거주한 40대가 관심을 가지고 있습니다」
+  //   성별은 접속 통계 CSV에 열이 없어 문장에서 생략(a.x 성별 값이 실리면 자동으로 「40대 여성」으로 붙는다 — 빌더만 갈아끼우면 됨).
+  var sx=String(a.x||'').trim();
+  var kind=_accKindWord(p,a), who=_accAgeWord(ageL[topAgeI])+(sx?' '+sx:'');
+  var sent='이 <b>'+escapeHtml(kind)+'</b>'+_accJosa(kind,'은','는')+' <b>'+escapeHtml(regL[topRegI]||'—')+'</b>에 거주한 <b>'+escapeHtml(who)+'</b>'
+    +_accJosa(who,'이','가')+' 관심을 가지고 있습니다 <span style="color:var(--dim);font-weight:500">('+(regs[topRegI]||0).toFixed(1)+'% · '+(ages[topAgeI]||0).toFixed(1)+'%)</span>';
+  var h='<div class="sr-ai-card" style="margin-bottom:8px">'+_srailAiHd()+_srailAiRow('var(--accent)','관심 타겟',sent)+'</div>';
+  // KPI 3장 = 한 줄(2면 전용 min-width 해제) — 1면과 같은 칸 높이 안에 들어가게(운영자 260801 「기존 칸에 그대로」)
+  h+='<div class="ana-kpis">';
+  h+='<div class="ana-kpi" style="min-width:0"><div class="lab">총 접속수</div><div class="val">'+a.t.toLocaleString()+'</div><div class="sub2" style="color:var(--dim)">로그인 회원</div></div>';
+  h+='<div class="ana-kpi" style="min-width:0"><div class="lab">관내 비중</div><div class="val">'+inHouse.toFixed(1)+'%</div><div class="sub2" style="color:var(--dim)">여수·순천·광양</div></div>';
+  h+='<div class="ana-kpi" style="min-width:0"><div class="lab">접속 대비 구매</div><div class="val">'+(cvr===null?'—':cvr.toFixed(1)+'%')+'</div><div class="sub2" style="color:var(--dim)">'+(cvr===null?'집계 전':'판매석 ÷ 접속')+'</div></div>';
   h+='</div>';
-  h+='<div class="srail-chart" style="padding:11px 13px 9px">'+_accDist('연령대 분포','(접속 회원 비율)',ages,ageL)+'</div>';
-  h+='<div class="srail-chart" style="padding:11px 13px 9px">'+_accDist('지역 분포','(접속 회원 거주지 비율)',regs,regL)+'</div>';
-  h+='<div class="srail-note" style="padding:2px 2px 0;color:var(--muted);font-size:11px">'+escapeHtml('공연별 페이지 접속 통계'+(a.v?' · '+a.v:'')+(a.c?' · '+a.c:'')+((typeof PERF_ACCESS_STATS!=='undefined'&&PERF_ACCESS_STATS.asof)?' · 기준 '+PERF_ACCESS_STATS.asof:''))+'</div>';
+  h+='<div class="srail-chart" style="padding:10px 12px 8px">'+_accDist('연령대 분포','(접속 회원 비율)',ages,ageL)
+    +'<div class="sr-ai-div" style="margin:8px 0"></div>'+_accDist('지역 분포','(거주지 비율)',regs,regL)+'</div>';
+  h+='<div class="srail-note" style="padding:2px 2px 0;color:var(--muted);font-size:10.5px">'+escapeHtml('공연별 페이지 접속 통계'+(a.v?' · '+a.v:'')+(a.c?' · '+a.c:'')+((typeof PERF_ACCESS_STATS!=='undefined'&&PERF_ACCESS_STATS.asof)?' · 기준 '+PERF_ACCESS_STATS.asof:'')+' · 성별 열 없음')+'</div>';
   return h;
 }
 function _srailRenderDrill(els,p,activeCount,opts){   // [260724] opts.noNav = 우하단 자동전환 재사용 시 상단 nav바 [← 목록] 슬롯 무접촉(전역 slot 하이재킹 방지)
@@ -6799,7 +6798,7 @@ function _srailRenderDrill(els,p,activeCount,opts){   // [260724] opts.noNav = �
   var peerMed=peerOcc.length?peerOcc[Math.floor(peerOcc.length/2)]:null;
   var medTxt=(peerMed!==null)?('또래('+peers.length+'건) 중앙값 '+peerMed.toFixed(0)+'% 대비 '+(occ-peerMed>=0?'+':'')+(occ-peerMed).toFixed(0)+'%p'):'비교할 또래 종료공연 없음';
   // [260710 운영자] 액션 문구(「목표 대비 부진 …」 등) 제거 + [← 목록] = 판매 현황 nav바 우측으로 + [실적 수정][자세히 보기] = 드릴 우측 상단
-  if(!(opts&&opts.noNav))_srailNavSlot('<button class="ana-back" style="margin-bottom:0;padding:4px 10px;font-size:11px" onclick="_srailBack()">← 목록</button>');
+  if(!(opts&&opts.noNav))_srailNavSlot('<button class="ana-back" style="margin-bottom:0;padding:4px 10px;font-size:11px" onclick="_srailBack()">← 목록</button>'+_srailDrillDots());   // [260801] 면 넘김(1 판매 현황 · 2 페이지 접속통계) = 헤더 슬롯 — 드릴 본문(1면) 무접촉
   var h='<div class="srail-drill">';
   h+='<div class="srail-dhd"><span class="srail-dname" title="'+escapeHtml(p.name)+'">'+escapeHtml(p.name)+'</span>'
     +'<span style="display:inline-flex;gap:6px;flex-shrink:0;margin-left:auto">'
@@ -6810,7 +6809,7 @@ function _srailRenderDrill(els,p,activeCount,opts){   // [260724] opts.noNav = �
   h+='<div class="srail-meta" style="margin-bottom:8px">'+escapeHtml((p.genre||'기타')+' · '+ax+' · 오픈석 '+p.totalOpen.toLocaleString()+'석'+(p._openSrc==='sum'?' (회차 합산)':(p._openSrc==='xN'?' (1회차×회차 보정)':''))+(p._roundsN?' · 회차 '+p._roundsN:(p._rcSrc==='span'?' · 회차 '+p._rcEst+' 추정(기간·미입력)':''))+(p.dateStr?' · '+p.dateStr:''))+'</div>';
   // [260731 운영자] 2면(페이지 접속통계) — 제목·부제 줄까지는 공통, 본문만 갈아끼운다. 우하단 자동전환(opts.noNav)은 1면 고정.
   var _pg=(opts&&opts.noNav)?1:_srailDrillPage();
-  if(_pg===2){ els.body.innerHTML=h+_srailAccHtml(p)+_srailDrillDots()+'</div>'; return; }
+  if(_pg===2){ els.body.innerHTML=h+_srailAccHtml(p)+'</div>'; return; }
   h+='<div class="ana-kpis">';
   h+='<div class="ana-kpi"><div class="lab">현재 누적 점유율</div><div class="val">'+(noData?'집계 전':occ.toFixed(1)+'%')+'</div></div>';
   h+='<div class="ana-kpi"><div class="lab">어제대비</div><div class="val" style="color:'+dCol+'">'+dStr+'</div></div>';
@@ -6829,7 +6828,6 @@ function _srailRenderDrill(els,p,activeCount,opts){   // [260724] opts.noNav = �
   h+='<div class="sr-ai-div"></div>';
   h+=_srailAiRow('var(--accent)','최대 레버',_anaTopLever(_anaDailySeries(p)));
   h+='</div>';
-  if(!(opts&&opts.noNav))h+=_srailDrillDots();   // [260731] 면 넘김(1 판매 현황 · 2 페이지 접속통계) — 자동전환 카드에는 미노출
   h+='</div>';
   els.body.innerHTML=h;
 }
@@ -20412,14 +20410,6 @@ function openPanel(dateObj,recs){
   var _pKey=dk(dateObj);
   var _pHol=(window._holidays&&_holidays[_pKey])||'';
   var _pPerfs=((typeof getPerfs==='function')?getPerfs(dateObj):[]).filter(function(p){return p.t!=='e';});
-  // [260801 운영자] 출력 순서 = 공연 → 전시 → 교육 → 대관 → 교육실(맨 아래 별도 합류).
-  //   구분 글자(perfBadgeKind)로만 줄 세운다 — 표기와 순서가 한 출처라 둘이 어긋날 수 없다.
-  //   셋업·리허설(준비 상태)은 운영자 지정 목록 밖 → 지정분 뒤, 교육실 앞. 같은 구분끼리는 원래 순서 유지(안정 정렬).
-  var _PK_ORDER=['공연','전시','교육','대관','셋업','리허설'];
-  _pPerfs.sort(function(a,b){
-    var ia=_PK_ORDER.indexOf(perfBadgeKind(a)),ib=_PK_ORDER.indexOf(perfBadgeKind(b));
-    return (ia<0?_PK_ORDER.length:ia)-(ib<0?_PK_ORDER.length:ib);
-  });
   // [260731 운영자 2차] 그날 일정 = 3열(구분 | 제목 | 장소) 격자 1행 1건. 색은 perfBadge* 공용 함수 계승(셀과 동일),
   // 구분은 패널에서만 풀어쓰기, 제목은 CSS 말줄임(잘린 전체 이름은 title 툴팁).
   var _pLabels=(_pHol?'<span class="panel-hdr-hol">'+escapeHtml(_pHol)+'</span>':'')+_pPerfs.map(function(p){
@@ -20427,14 +20417,6 @@ function openPanel(dateObj,recs){
     return '<span class="panel-hdr-prog"><span class="panel-hdr-kind" style="color:'+perfBadgeBg(p)+'">'+perfBadgeKind(p)+'</span>'+
       '<span class="panel-hdr-nm" title="'+_nm+'">'+_nm+'</span>'+
       '<span class="panel-hdr-place">'+escapeHtml(perfPlaceLabel(p.l))+'</span></span>';
-  }).join('');
-  // [260801 운영자] 교육실 대관 — 같은 3열 격자에 이어 붙인다(구분 「교육실」 | 신청내용 | 방). 캘린더 셀엔 안 나간다.
-  _pLabels+=getEduRooms(_pKey).map(function(r){
-    var _en=escapeHtml(r.n||r.g||'대관');
-    var _et=escapeHtml([r.n,r.g,r.t,r.l].filter(Boolean).join(' · '));   // 잘린 제목·시간·단체명은 툴팁으로(3열 격자는 넓히지 않는다)
-    return '<span class="panel-hdr-prog"><span class="panel-hdr-kind" style="color:var(--c5)">교육실</span>'+
-      '<span class="panel-hdr-nm" title="'+_et+'">'+_en+'</span>'+
-      '<span class="panel-hdr-place">'+escapeHtml(r.l)+'</span></span>';
   }).join('');
   var h='<div class="panel-hdr"><div style="flex:1;min-width:0"><div class="panel-date">'+(dateObj.getMonth()+1)+'월 '+dateObj.getDate()+'일<span class="panel-dow">'+dn+'요일</span></div>'+(_pLabels?'<div class="panel-hdr-labels">'+_pLabels+'</div>':'')+'</div><button class="panel-close" onclick="closePanel()">✕</button></div><div class="panel-body">';
   var dKey=dk(dateObj);
