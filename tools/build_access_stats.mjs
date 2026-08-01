@@ -43,10 +43,16 @@ for (const f of files) {
   const col = { s: idx('공연시작일'), e: idx('공연종료일'), c: idx('구분'), v: idx('공연장'), n: idx('공연명'), t: idx('총 접속수') };
   const ageIdx = AGE_COLS.map(a => head.findIndex(h => h.replace(/\(%\)$/, '').trim() === a));
   const regIdx = REGION_COLS.map(a => head.findIndex(h => h.replace(/\(%\)$/, '').trim() === a));
+  // 성별 열은 현재 내려받기 CSV에 없다 — 있으면(남성(%)/여성(%)) 우세 성별을 x로 실어 문장에 「40대 여성」으로 붙는다.
+  const mIdx = head.findIndex(h => /^남(성|자)/.test(h.replace(/\(%\)$/, '').trim()));
+  const fIdx = head.findIndex(h => /^여(성|자)/.test(h.replace(/\(%\)$/, '').trim()));
   for (const r of rows.slice(1)) {
     const name = String(r[col.n] ?? '').trim();
     if (!name) continue;
+    const mv = mIdx >= 0 ? num(r[mIdx]) : null, fv = fIdx >= 0 ? num(r[fIdx]) : null;
+    const x = (mv === null || fv === null) ? '' : (fv >= mv ? '여성' : '남성');
     out.push({
+      ...(x ? { x } : {}),
       s: String(r[col.s] ?? '').trim(),
       e: String(r[col.e] ?? '').trim(),
       c: String(r[col.c] ?? '').trim(),
