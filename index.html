@@ -2363,6 +2363,38 @@ html::-webkit-scrollbar-thumb{background:rgba(0,0,0,.15)}
 
   <div id="body-wrap" style="display:flex;position:relative;min-height:calc(100vh - 56px);isolation:isolate"
     onclick="if(!event.target.closest('[data-panel]')&&!event.target.closest('[data-cell]'))closePanel()">
+    <script>
+    /* [260801 운영자 "처음에 잠깐 크게 떴다가 작아진다"] 대시보드 줌 선적용 — 규격 줌을 스크립트 본문(3천 행 아래)에서
+       걸면 그 전 250~370ms 동안 줌 없는 크기로 그려졌다가 뒤늦게 튄다(실측: 브라우저 125%면 첫 프레임이 25% 크게 떴다가 축소).
+       파서가 여기서 멈춰 실행 → 첫 페인트 전에 확정되므로 튐이 0프레임. 계산식은 이 한 곳(_bizZoomTarget)에만 두고
+       본문 _bizZoomApply·리사이즈·모드전환이 같은 함수를 재사용한다(값 이원화 금지). script 요소는 UA display:none = 부모 flex 항목 아님.
+       _mainView는 아직 선언 전(뒤 스크립트 블록) → sessionStorage 원본(mvView)에서 같은 규칙으로 읽는다. */
+    var _BIZ_ZOOM_STEPS=[.25,.33,.5,.67,.75,.8,.9,1,1.1,1.25,1.5,1.75,2,2.5,3,4,5];   // 크로미움 페이지 줌 단계
+    /* [260801] 브라우저 줌 배율 추정 — outerWidth는 페이지 줌에 영향받지 않는 창 폭이라 outerWidth/innerWidth ≈ 줌 배율.
+       창 테두리·스크롤바 오차(~1%)는 실제 줌 단계로 스냅해 흡수하고, 어느 단계와도 6% 밖이면 보정을 포기(=1)해 오작동보다 무보정을 택한다. */
+    function _bizBrowserZoom(){
+      var iw=window.innerWidth, ow=window.outerWidth;
+      if(!iw||!ow)return 1;
+      var raw=ow/iw, best=1, bd=Infinity;
+      for(var i=0;i<_BIZ_ZOOM_STEPS.length;i++){ var s=_BIZ_ZOOM_STEPS[i], d=Math.abs(raw-s)/s; if(d<bd){bd=d;best=s;} }
+      return bd<=.06?best:1;
+    }
+    /* 목표 줌 = 브라우저 줌 배율만 상쇄(100% = 1 → 확대 없음·종전 유동 레이아웃) · 캘린더 모드·좁은 폭(≤1200)은 해제 */
+    function _bizZoomTarget(){
+      var v='biz';
+      try{ v=(typeof _mainView!=='undefined'&&_mainView)?_mainView:(sessionStorage.getItem('mvView')==='cal'?'cal':'biz'); }catch(_e){}
+      if(v!=='biz'||window.innerWidth<=1200)return 1;
+      var z=Math.max(.75,Math.min(2.2,1/_bizBrowserZoom()));   // 클램프 = 과축소 가독 하한 .75 / 상한 2.2
+      z=Math.round(z*1000)/1000;
+      return Math.abs(z-1)<.003?1:z;
+    }
+    (function(){ try{
+      var z=_bizZoomTarget(); if(z===1)return;
+      var bw=document.getElementById('body-wrap'); if(!bw)return;
+      bw.style.zoom=String(z);
+      bw.style.minHeight=Math.floor((window.innerHeight-56)/z)+'px';   // 인라인 calc(100vh−56px)는 zoom에 이중 스케일 → px 보정(floor 필수 — 본문 주석 참조)
+    }catch(_e){} })();
+    </script>
     <div id="main-area" style="flex:1;padding:18px 20px 24px 20px;transition:margin-right .3s,opacity .25s ease"><!-- [260723e 선택값] 상단 18 · 바깥 20(구 24/32) · 레일 표시 폭에선 media가 우측 15(간격) -->
       <!-- 구 .hdr(월네비+필터 밴드) 폐지(운영자 260710 "확보한 만큼 캘린더 위로") — 월네비 = 상단 nav · 필터 = 요일바 줄 우측(sticky 겹침, height 0 = 흐름 무점유) -->
       <!-- [260723 운영자] 메인 전환 토글 = 최상단 nav 월네비 우측으로 이주(구 #mv-row 보드 위 칩줄 폐지) · _srailAlignTop은 #mv-row 부재 시 _mvH=0으로 좌·우 대칭 상승(정렬 유지) -->
@@ -2463,6 +2495,8 @@ html::-webkit-scrollbar-thumb{background:rgba(0,0,0,.15)}
 
 <script src="data/edu_institutions.js"></script>
 <script src="data/edu_rooms.js"></script>
+<script src="data/perf_access_stats.js"></script><!-- [260731] 공연별 페이지 접속통계(드릴 2면) — 기계산출물: tools/build_access_stats.mjs가 data/access_stats/*.csv에서 생성 -->
+
 <script>
 // MSAL config — must be defined before session-check IIFE (~line 1781)
 const _MSAL_CONFIG = {
@@ -5404,28 +5438,16 @@ function _srailEls(){ return { body:document.getElementById('srail-body'), cnt:d
 //   좌표계 실측(Chrome 141, probe): gBCR=시각좌표(×z) · offsetWidth/clientWidth/scrollTop/computedStyle=레이아웃 단위(비스케일) ·
 //   vh/vw=zoom이 한 번 더 곱해짐(min-height 보정 필수). → gBCR로 잰 값을 style px에 쓰는 정렬식은 _bizZ()로 나눠 단위 통일.
 //   오버레이(모달·dd-pop·FAB·토스트)는 body 직속(줌 밖) + gBCR(시각좌표) 배치라 무보정으로 정위치. 캘린더 모드 = zoom 해제(종전 그대로).
-var _BIZ_DESIGN_W=1920;   // 규격 기준 폭 — 운영자 "100% 화면에 딱맞음"의 그 화면(FHD) · [260801] 하드코딩 폐지(아래 _bizZoomBaseW) 후 참고값으로만 잔존
-// [260801 운영자 "처음에 항상 화면이 확대되서 시작된다"] 기준 폭 1920 하드코딩이 원인 — FHD보다 넓은 창(2560·3440·4K 등)에서
-//   z=innerWidth/1920 이 1.33~1.93으로 잡혀 브라우저 100%인데도 첫 화면부터 전체가 확대돼 떴다(클램프 상한 2.2까지).
-//   교정: 기준 폭 = 「그 창의 브라우저 100% 기준 폭」(outerWidth 실측) — 260731의 목적(브라우저 줌 배율이 바뀌어도 규격 동일)은
-//   그대로 유지되면서, 100%에서는 어떤 화면 폭이든 z=1(종전 유동 레이아웃 = 확대 없음)로 돌아온다.
-//   outerWidth는 페이지 줌에 영향받지 않는 창 폭 → outerWidth/innerWidth ≈ 브라우저 줌 배율. 창 테두리·스크롤바 오차(~2%)는
-//   브라우저 실제 줌 단계로 스냅해 흡수하고, 어느 단계와도 6% 밖이면 보정을 포기(z=1)해 오작동보다 무보정을 택한다.
-var _BIZ_ZOOM_STEPS=[.25,.33,.5,.67,.75,.8,.9,1,1.1,1.25,1.5,1.75,2,2.5,3,4,5];   // 크로미움 페이지 줌 단계
-function _bizBrowserZoom(){
-  var iw=window.innerWidth, ow=window.outerWidth;
-  if(!iw||!ow)return 1;
-  var raw=ow/iw, best=1, bd=Infinity;
-  for(var i=0;i<_BIZ_ZOOM_STEPS.length;i++){ var s=_BIZ_ZOOM_STEPS[i], d=Math.abs(raw-s)/s; if(d<bd){bd=d;best=s;} }
-  return bd<=.06?best:1;   // 어느 단계와도 멀면(창 테두리 큰 환경·비정상 값) 보정 포기 = z1
-}
+// [260801 운영자 "처음에 항상 화면이 확대되서 시작된다"] 260731의 기준 폭 1920 하드코딩(z=innerWidth/1920)이 원인 —
+//   FHD보다 넓은 창(2560·3440·4K)에서 z가 1.33~2.0으로 잡혀 브라우저 100%인데도 첫 화면부터 전체가 확대돼 떴다(반대로 1920 미만은 .75 축소).
+//   교정: 브라우저 줌 배율만 상쇄(_bizZoomTarget — #body-wrap 여는 태그 직후 선적용 스크립트에 정의) → 100% = z1(확대 없음·종전 유동 레이아웃),
+//   줌을 내리면 그만큼 z를 올려 260731의 목적(배율이 바뀌어도 규격 동일)은 그대로 유지. 정의를 앞에 둔 이유 = 첫 페인트 전 적용(튐 0프레임).
+var _BIZ_DESIGN_W=1920;   // 구 규격 기준 폭 — 하드코딩 폐지 후 참고값으로만 잔존(줌 계산에 미사용)
 function _bizZ(){ var bw=document.getElementById('body-wrap'); if(!bw)return 1; var z=(typeof bw.currentCSSZoom==='number')?bw.currentCSSZoom:(bw.offsetWidth?bw.getBoundingClientRect().width/bw.offsetWidth:1); return (isFinite(z)&&z>0.05)?z:1; }   // currentCSSZoom 폴백 = 실측비(zoom 미지원 브라우저 = 1 → 보정식 자동 무효·종전 거동)
 function _bizZoomApply(){
   try{
     var bw=document.getElementById('body-wrap'); if(!bw)return;
-    var on=(typeof _mainView!=='undefined'&&_mainView==='biz')&&window.innerWidth>1200;
-    var z=on?Math.max(.75,Math.min(2.2,1/_bizBrowserZoom())):1;   // 브라우저 줌만 상쇄(100% = z1 확대 없음) · 클램프 = 과축소 가독 하한 .75 / 상한 2.2
-    z=Math.round(z*1000)/1000; if(Math.abs(z-1)<.003)z=1;
+    var z=_bizZoomTarget();   // 선적용 스크립트와 같은 계산식(값 이원화 금지) — 여기서는 리사이즈·모드전환 후 재확정만
     if(z===1){ if(bw.style.zoom){ bw.style.zoom=''; bw.style.minHeight='calc(100vh - 56px)'; } return; }
     bw.style.zoom=String(z);
     bw.style.minHeight=Math.floor((window.innerHeight-56)/z)+'px';   // 인라인 calc(100vh-56px)는 zoom에 다시 곱해져 뷰포트 초과 → px 보정(probe 실측) · floor 필수 = round 올림이면 ×z 복원 시 +1px 유령 넘침 → biz-fit 오발동(평의회 구역3 F1: 60샘플 중 9배율 재현·floor로 9/9 정상화)
@@ -6702,8 +6724,62 @@ var _AI_ICO='<svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true" 
 function _srailAiHd(){ return '<div class="sr-ai-hd">'+_AI_ICO+'AI 분석</div>'; }
 function _srailAiRow(color,label,html){ return '<div class="sr-ai-item"><span class="bu" style="background:'+color+'"></span><span><b>[' +label+ ']</b> : '+html+'</span></div>'; }
 // ── 인라인 드릴 (개별 분석 — 분석 보드 드릴 핵심 항목의 레일판. kind: perf=공연(_anaScreen2 계승) / ex=전시(_anaExhibDrillRender 계승)) ──
-function _srailDrill(kind,key){ _srailView={mode:'drill',kind:kind,name:key}; _srailRender(); }
+function _srailDrill(kind,key){ _srailView={mode:'drill',kind:kind,name:key,page:1}; _srailRender(); }   // [260731] page = 드릴 면(1 판매 현황 · 2 페이지 접속통계) — 진입은 항상 1면
 function _srailBack(){ _srailView={mode:'list',name:null}; _srailRender(); }
+// ── [260731 운영자] 공연 드릴 2면 = 「페이지 접속통계」 ──
+// 원천 = 예매 사이트 공연별 접속 통계 CSV → data/perf_access_stats.js(기계산출물, tools/build_access_stats.mjs).
+// 면 넘김 = 대시보드 책넘김과 같은 부품(.bizm-pgctl ‹ • ›) · 분포 막대 = 고객 분석(_memOvRender) 막대 계승(색·알파 동일, 신규 값 0).
+function _srailDrillPage(){ var n=_srailView&&_srailView.page; return (n===2)?2:1; }
+function _srailPageTo(n){ if(!_srailView||_srailView.mode!=='drill')return; _srailView.page=(n===2)?2:1; _srailRender(); }
+function _srailPageGo(d){ _srailPageTo(_srailDrillPage()===1?2:1); }
+var _SRAIL_DPG_LBL=['판매 현황','페이지 접속통계'];
+function _srailDrillDots(){
+  var cur=_srailDrillPage(), dots='';
+  for(var i=1;i<=2;i++)dots+='<button class="dot'+(i===cur?' on':'')+'" type="button" aria-label="'+i+'면 '+_SRAIL_DPG_LBL[i-1]+'" aria-pressed="'+(i===cur)+'" onclick="_srailPageTo('+i+')"></button>';
+  return '<div style="display:flex;justify-content:center;margin:12px 0 2px"><span class="bizm-pgctl" role="group" aria-label="공연 상세 책 넘김"><button class="nav" type="button" aria-label="이전 면" onclick="_srailPageGo(-1)">‹</button><span class="dots">'+dots+'</span><button class="nav" type="button" aria-label="다음 면" onclick="_srailPageGo(1)">›</button></span></div>';
+}
+var _ACC_IDX=null;
+function _accIdx(){
+  if(_ACC_IDX)return _ACC_IDX;
+  var m={},rs=((typeof PERF_ACCESS_STATS!=='undefined'&&PERF_ACCESS_STATS&&PERF_ACCESS_STATS.rows)||[]);
+  rs.forEach(function(r){ var k=_uName(r.n); if(!k)return; var cur=m[k]; if(!cur||(r.t||0)>(cur.t||0))m[k]=r; });   // 동명 중복 행 = 접속수 큰 쪽 채택
+  _ACC_IDX=m; return m;
+}
+function _accOf(name){ if(!name)return null; return _accIdx()[_uName(name)]||null; }
+function _accLabels(key){ var S=(typeof PERF_ACCESS_STATS!=='undefined'&&PERF_ACCESS_STATS)||{}; return (key==='age'?S.ageLabels:S.regionLabels)||[]; }
+// 분포 막대 — 고객 분석(_memOvRender) 막대와 같은 형태·색(1·2위 = --accent .79 · 그 외 = --peach-text .5)
+function _accBar(label,pct,max,hi){
+  var w=max>0?Math.max(2,pct/max*100):0;
+  return '<div style="display:flex;align-items:center;gap:9px;margin:7px 0"><div style="flex:0 0 66px;font-size:11.5px;font-weight:600;color:var(--text);text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+escapeHtml(label)+'</div>'
+    +'<div style="flex:1;height:15px;background:var(--past-bg);border-radius:3.5px;overflow:hidden"><div style="width:'+w.toFixed(1)+'%;height:100%;background:'+(hi?'var(--accent);opacity:.79':'var(--peach-text);opacity:.5')+';border-radius:3.5px"></div></div>'
+    +'<div style="flex:0 0 46px;font-size:11px;color:var(--dim);text-align:left;font-variant-numeric:tabular-nums">'+pct.toFixed(1)+'%</div></div>';
+}
+function _accDist(title,sub,vals,labels){
+  var max=vals.length?Math.max.apply(null,vals):0;
+  var rank=vals.map(function(v,i){return [v,i];}).sort(function(a,b){return b[0]-a[0];}).slice(0,2).map(function(x){return x[1];});
+  return '<div style="font-size:12.5px;font-weight:800;margin:0 0 4px">'+escapeHtml(title)+' <span style="font-size:10.5px;color:var(--dim);font-weight:500">'+escapeHtml(sub||'')+'</span></div>'
+    +labels.map(function(l,i){ return _accBar(l,vals[i]||0,max,rank.indexOf(i)>=0); }).join('');
+}
+// 드릴 2면 본문 — KPI(.ana-kpi 계승) + 연령대·지역 분포 막대(흰 구획 카드 .srail-chart 미러)
+function _srailAccHtml(p){
+  var a=_accOf(p&&p.name);
+  if(!a)return '<div class="u-empty" style="padding:26px 8px"><div class="ico">📊</div><div class="msg">이 공연의 접속통계가 아직 없어요</div><div style="font-size:11px;color:var(--muted);margin-top:6px">예매 사이트 접속 통계에 집계되면 표시돼요</div></div>';
+  var ageL=_accLabels('age'), regL=_accLabels('region');
+  var ages=a.a||[], regs=a.g||[];
+  var topAgeI=ages.reduce(function(bi,v,i){return v>ages[bi]?i:bi;},0);
+  var inHouse=(regs[0]||0)+(regs[1]||0)+(regs[2]||0);   // 관내 = 여수·순천·광양 (고객 분석 관내 3시 기준과 동일)
+  var cvr=(a.t>0&&p.seats!==null&&p.seats!==undefined&&!isNaN(p.seats))?(p.seats/a.t*100):null;
+  var h='<div class="ana-kpis">';
+  h+='<div class="ana-kpi"><div class="lab">총 접속수</div><div class="val">'+a.t.toLocaleString()+'</div><div class="sub2" style="color:var(--dim)">로그인 회원 기준</div></div>';
+  h+='<div class="ana-kpi"><div class="lab">최다 연령대</div><div class="val" style="font-size:15px">'+escapeHtml(ageL[topAgeI]||'—')+'</div><div class="sub2" style="color:var(--dim)">'+(ages[topAgeI]||0).toFixed(1)+'%</div></div>';
+  h+='<div class="ana-kpi"><div class="lab">관내 비중</div><div class="val">'+inHouse.toFixed(1)+'%</div><div class="sub2" style="color:var(--dim)">여수·순천·광양</div></div>';
+  h+='<div class="ana-kpi"><div class="lab">접속 대비 구매</div><div class="val">'+(cvr===null?'—':cvr.toFixed(1)+'%')+'</div><div class="sub2" style="color:var(--dim)">'+(cvr===null?'집계 전':'판매 '+Math.round(p.seats).toLocaleString()+'석 ÷ 접속')+'</div></div>';
+  h+='</div>';
+  h+='<div class="srail-chart" style="padding:11px 13px 9px">'+_accDist('연령대 분포','(접속 회원 비율)',ages,ageL)+'</div>';
+  h+='<div class="srail-chart" style="padding:11px 13px 9px">'+_accDist('지역 분포','(접속 회원 거주지 비율)',regs,regL)+'</div>';
+  h+='<div class="srail-note" style="padding:2px 2px 0;color:var(--muted);font-size:11px">'+escapeHtml('공연별 페이지 접속 통계'+(a.v?' · '+a.v:'')+(a.c?' · '+a.c:'')+((typeof PERF_ACCESS_STATS!=='undefined'&&PERF_ACCESS_STATS.asof)?' · 기준 '+PERF_ACCESS_STATS.asof:''))+'</div>';
+  return h;
+}
 function _srailRenderDrill(els,p,activeCount,opts){   // [260724] opts.noNav = 우하단 자동전환 재사용 시 상단 nav바 [← 목록] 슬롯 무접촉(전역 slot 하이재킹 방지)
   if(els.cnt){ els.cnt.textContent=activeCount; els.cnt.style.display=activeCount?'':'none'; }
   if(els.asof)els.asof.textContent=_srailAsof();
@@ -6732,6 +6808,9 @@ function _srailRenderDrill(els,p,activeCount,opts){   // [260724] opts.noNav = �
     +'<button class="ana-chip" onclick="_srailOpenBoard(\''+_anaEsc(p.name)+'\')" title="분석 보드에서 비슷한 공연 비교까지 자세히 보기">자세히 보기</button>'
     +'</span></div>';
   h+='<div class="srail-meta" style="margin-bottom:8px">'+escapeHtml((p.genre||'기타')+' · '+ax+' · 오픈석 '+p.totalOpen.toLocaleString()+'석'+(p._openSrc==='sum'?' (회차 합산)':(p._openSrc==='xN'?' (1회차×회차 보정)':''))+(p._roundsN?' · 회차 '+p._roundsN:(p._rcSrc==='span'?' · 회차 '+p._rcEst+' 추정(기간·미입력)':''))+(p.dateStr?' · '+p.dateStr:''))+'</div>';
+  // [260731 운영자] 2면(페이지 접속통계) — 제목·부제 줄까지는 공통, 본문만 갈아끼운다. 우하단 자동전환(opts.noNav)은 1면 고정.
+  var _pg=(opts&&opts.noNav)?1:_srailDrillPage();
+  if(_pg===2){ els.body.innerHTML=h+_srailAccHtml(p)+_srailDrillDots()+'</div>'; return; }
   h+='<div class="ana-kpis">';
   h+='<div class="ana-kpi"><div class="lab">현재 누적 점유율</div><div class="val">'+(noData?'집계 전':occ.toFixed(1)+'%')+'</div></div>';
   h+='<div class="ana-kpi"><div class="lab">어제대비</div><div class="val" style="color:'+dCol+'">'+dStr+'</div></div>';
@@ -6750,6 +6829,7 @@ function _srailRenderDrill(els,p,activeCount,opts){   // [260724] opts.noNav = �
   h+='<div class="sr-ai-div"></div>';
   h+=_srailAiRow('var(--accent)','최대 레버',_anaTopLever(_anaDailySeries(p)));
   h+='</div>';
+  if(!(opts&&opts.noNav))h+=_srailDrillDots();   // [260731] 면 넘김(1 판매 현황 · 2 페이지 접속통계) — 자동전환 카드에는 미노출
   h+='</div>';
   els.body.innerHTML=h;
 }
