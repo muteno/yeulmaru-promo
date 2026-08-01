@@ -84,7 +84,7 @@ git push -u origin main
 
 GitHub → Settings → Pages → Source: main, /(root) → Save
 
-URL: `https://muteno.github.io/yeulmaru-promo/`
+URL: `https://muteno.github.io/yeulmaru-promo/` (커스텀 도메인 = `https://promo.yeulmaru.org` · CNAME)
 
 ## 트러블슈팅
 
@@ -101,4 +101,4 @@ URL: `https://muteno.github.io/yeulmaru-promo/`
 - `src/index.js`의 SP 객체에서 파일명 수정 가능
 
 ### CORS 에러
-- `wrangler.toml`의 `ALLOWED_ORIGIN`을 GitHub Pages URL로 제한 가능
+- `wrangler.toml`의 `ALLOWED_ORIGIN`을 실제 접속 도메인(`https://promo.yeulmaru.org` 등)으로 제한 가능 — 변경 후 `wrangler deploy` 필요
