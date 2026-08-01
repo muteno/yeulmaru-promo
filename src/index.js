@@ -1185,22 +1185,39 @@ async function fetchHolidaysFromKasi(env, year) {
 }
 __name(fetchHolidaysFromKasi, "fetchHolidaysFromKasi");
 
+// 재단 기념일 (매년 고정) — 공휴일 응답에 병합되어 접수 제외·달력 표기에 동일 적용된다.
+//   운영자 260801: 개관 기념일 5/10 · 재단 창립 기념일 8/1
+var FOUNDATION_ANNIVERSARIES = [
+  { md: "05-10", name: "개관 기념일" },
+  { md: "08-01", name: "재단 창립 기념일" }
+];
+function mergeAnniversaries(payload, year) {
+  const days = (payload && Array.isArray(payload.days) ? payload.days : []).slice();
+  for (const a of FOUNDATION_ANNIVERSARIES) {
+    const date = `${year}-${a.md}`;
+    if (!days.some((d) => d && d.date === date)) days.push({ date, name: a.name });
+  }
+  days.sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
+  return Object.assign({}, payload, { days });
+}
+__name(mergeAnniversaries, "mergeAnniversaries");
+
 async function getHolidays(env, year, forceRefresh) {
   const key = `holidays:${year}`;
   if (!forceRefresh) {
     const cached = await env.ops_kv.get(key);
-    if (cached) return JSON.parse(cached);
+    if (cached) return mergeAnniversaries(JSON.parse(cached), year);
   }
   let days = [];
   try { days = await fetchHolidaysFromKasi(env, year); } catch (e) {}
   if (days.length) {
     const payload = { year, days, cachedAt: (/* @__PURE__ */ new Date()).toISOString() };
     await env.ops_kv.put(key, JSON.stringify(payload));
-    return payload;
+    return mergeAnniversaries(payload, year);
   }
   const cached = await env.ops_kv.get(key);
-  if (cached) return JSON.parse(cached);
-  return { year, days: [], cachedAt: null };
+  if (cached) return mergeAnniversaries(JSON.parse(cached), year);
+  return mergeAnniversaries({ year, days: [], cachedAt: null }, year);
 }
 __name(getHolidays, "getHolidays");
 
