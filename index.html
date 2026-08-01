@@ -650,6 +650,14 @@ button{font-family:inherit;cursor:pointer}
 .month-nav{display:flex;align-items:center;gap:16px}
 .arrow{width:38px;height:38px;border-radius:50%;border:1px solid rgba(0,0,0,0.06);background:var(--glass);backdrop-filter:blur(8px);font-size:18px;display:flex;align-items:center;justify-content:center;color:#666;transition:all .2s;box-shadow:0 2px 8px rgba(0,0,0,0.04)}
 .arrow:hover{background:var(--accent-light);color:var(--accent);border-color:var(--accent-glow);box-shadow:0 4px 12px rgba(74,77,231,0.15)}
+/* [260801 운영자] 캘린더 좌우 월 이동 화살표 — 휠(_calWheel)·스와이프(_calSw)와 같은 changeMonth 축을 눈에 보이게.
+   형태 = 상단 월네비 정본 글래스 화살표(.arrow: --glass + blur(8px)) 100% 재사용 = 신규 색·신규 형태 0, 위치만 .cal-stage(캘린더 박스) 기준 절대배치. */
+.cal-stage{position:relative}
+.cal-arrow{position:absolute;top:50%;transform:translateY(-50%);z-index:7;cursor:pointer;opacity:.8}
+.cal-arrow:hover{opacity:1}
+.cal-arrow.prev{left:-19px}   /* 버튼 중심 = 캘린더 세로변 위(바깥 절반 19px = #main-area 좌우 패딩 20/15 안 → 가로 넘침 0) — 셀 내용 가림 최소 */
+.cal-arrow.next{right:-19px}
+@media (max-width:768px){.cal-arrow.prev{left:4px}.cal-arrow.next{right:4px}}   /* 모바일 패딩 16 < 버튼 절반 17 → 안쪽으로 붙임(화면 밖 잘림 방지) */
 .month-text{font-size:32px;font-weight:800;color:var(--accent)}
 .year-text{font-size:17px;color:var(--dim);margin-left:8px;font-weight:400}
 .chips{display:flex;gap:10px;flex-wrap:wrap}
@@ -2067,7 +2075,7 @@ table.promo-board-table thead th:last-child{border-top-right-radius:11px}
 /* [260723 운영자 선택값] 실적 모드 레이아웃 = 좌우 1:1 · 바깥 20 · 상단 18 · 간격 15 · 우 유리 .35/blur15 · 라운드 20(--radius-lg) — 캘린더 모드는 현행 그대로 */
 /* [260723e] 레이아웃·유리 선택값은 두 모드 공통으로 승격(위 기본 규칙에 반영) — biz 전용 스코프 잔여분만 아래 유지 */
 #biz-main{display:none}
-#app.biz-mode #chips,#app.biz-mode #cal-head-wrap,#app.biz-mode #cal,#app.biz-mode .pet,#app.biz-mode .crablane{display:none}
+#app.biz-mode #chips,#app.biz-mode #cal-head-wrap,#app.biz-mode #cal,#app.biz-mode .cal-arrow,#app.biz-mode .pet,#app.biz-mode .crablane{display:none}
 #chips{display:none}   /* [260723 운영자] 깔때기 필터 = 판매현황 레일 우상단(chips-rail)으로 이동 → biz(실적) 모드에선 이 요일바 #chips 숨김(연간실적 헤더 겹침 해소) */
 #app:not(.biz-mode) #chips{display:flex}   /* [260731 운영자 복원] 캘린더 모드 = 레일 숨김(아래) → 깔때기 필터는 다시 요일바 우측(구 260723 이전 자리)이 주 위치. 뷰포트 분기 폐지(데스크탑도 노출) — 레일 안 chips-rail은 biz 모드 전용으로 잔존 */
 #app.biz-mode #biz-main{display:block}
@@ -2376,7 +2384,11 @@ html::-webkit-scrollbar-thumb{background:rgba(0,0,0,.15)}
       <!-- [260723 운영자] 메인 전환 토글 = 최상단 nav 월네비 우측으로 이주(구 #mv-row 보드 위 칩줄 폐지) · _srailAlignTop은 #mv-row 부재 시 _mvH=0으로 좌·우 대칭 상승(정렬 유지) -->
       <div id="chips" style="position:sticky;top:56px;z-index:6;height:0;justify-content:flex-end;padding-right:8px"></div><!-- [260723 운영자] 깔때기 필터는 판매현황 레일 우상단(chips-rail)이 주 위치 — 이 요일바 #chips는 모바일·태블릿(레일 숨김)에서만 폴백 노출(display = CSS 뷰포트 분기, 구 인라인 display:flex 제거 = biz모드 겹침 버그 뿌리 해소) -->
       <div class="cal-head-wrap" id="cal-head-wrap"></div>
-        <div class="cal" id="cal"></div>
+        <div class="cal-stage" id="cal-stage"><!-- [260801 운영자] 월 이동 화살표 앵커 — 높이·배경 없음(.cal 그대로 흐름 유지), 좌우 .cal-arrow만 절대배치 -->
+          <div class="cal" id="cal"></div>
+          <button class="arrow cal-arrow prev" onclick="changeMonth(-1)" title="이전 달" aria-label="이전 달">‹</button>
+          <button class="arrow cal-arrow next" onclick="changeMonth(1)" title="다음 달" aria-label="다음 달">›</button>
+        </div>
         <img class="pet" src="image/pets/pet.webp" alt="" aria-hidden="true" draggable="false"><!-- 공차는 애 — 캘린더 맨 아래 셀 아랫변 기준(운영자 260710 "너무 위에서 심란") · #cal 형제라 renderCal innerHTML에 안 지워짐 · 표시 여부 = 관리자 전역설정 pets_visible 게이트(_petEnter) -->
         <div class="crablane" aria-hidden="true"><div class="petcrab"></div><div class="petlove"></div></div><!-- 픽셀 펫 레인 — 노뮤트서 이전한 크랩(정면·컨페티)·LOVE(측면 walk) · #cal 형제(renderCal 생존)라 공차는 애와 같은 하단 무대서 3마리 랜덤 등장 · 기본 숨김·관리자 토글로 켬(운영자 260711: 263·265번 보관 결정 → 3마리 로직 유지+전역 토글로 대체) -->
         <div id="biz-main" aria-label="사업 현황 (연간 누적 실적)"></div><!-- [260723 운영자] 메인 기본 화면 = 사업 실적 — #cal 형제(renderCal innerHTML 안전) · biz-mode에서만 표시 · 내용 = _bizInlineRender -->
