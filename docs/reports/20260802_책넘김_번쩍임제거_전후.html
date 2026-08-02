@@ -1,0 +1,175 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>책 넘김 번쩍임 제거 — 전후(만지는 비교) · 260802</title>
+<style>
+:root{
+  --accent:#4A4DE7;--accent-light:#E8E8FD;
+  --peach-text:#D88455;
+  --glass:rgba(255,255,255,0.55);--glass-border:var(--glass);
+  --glass-shadow:0 8px 32px rgba(74,77,231,0.08),0 2px 8px rgba(0,0,0,0.04);
+  --glass-surface:rgba(255,255,255,.78);--glass-bd:var(--glass);
+  --border:rgba(0,0,0,0.09);
+  --text:#1A1A2E;--dim:#888;--muted:#bbb;--neutral-text:#6B6B7B;
+  --radius:16px;--radius-lg:20px;
+}
+*{box-sizing:border-box}
+body{font-family:'Pretendard','Noto Sans KR',sans-serif;margin:0;padding:26px;color:var(--text);
+  background:linear-gradient(135deg,#FDF6F3 0%,#F0EBF5 50%,#EBF0F8 100%);position:relative;min-height:100vh}
+/* 유리(backdrop-filter)가 실제로 흐릴 무늬 — 번쩍임은 이 무늬 위에서만 보인다 */
+body::before{content:'';position:fixed;inset:0;z-index:-1;opacity:.5;
+  background:
+    radial-gradient(420px 420px at 12% 22%,rgba(74,77,231,.5),transparent 60%),
+    radial-gradient(380px 380px at 62% 12%,rgba(216,132,85,.45),transparent 60%),
+    radial-gradient(520px 520px at 82% 72%,rgba(74,77,231,.35),transparent 62%),
+    repeating-linear-gradient(45deg,rgba(0,0,0,.05) 0 12px,transparent 12px 24px)}
+h1{font-size:20px;margin:0 0 6px}
+.sub{font-size:13px;color:#6B6B7B;margin-bottom:16px;line-height:1.7;max-width:1100px}
+.bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:18px}
+.bar button{font-family:inherit;font-size:13px;font-weight:700;padding:8px 14px;border-radius:var(--radius);
+  border:1.5px solid var(--glass-bd);background:var(--glass-surface);color:var(--text);cursor:pointer;box-shadow:var(--glass-shadow)}
+.bar button:hover{border-color:var(--accent);color:var(--accent)}
+.bar .hint{font-size:12px;color:#6B6B7B}
+.cols{display:flex;gap:22px;align-items:flex-start;flex-wrap:wrap}
+.pane{flex:1;min-width:380px}
+.tag{display:inline-block;font-size:12px;font-weight:800;padding:3px 10px;border-radius:999px;margin-bottom:8px}
+.tag.b{background:rgba(226,75,74,.12);color:#E24B4A}
+.tag.a{background:rgba(26,107,60,.12);color:#1A6B3C}
+/* ── 정본 계승: 글래스 헤더 · 유리박스 · 책넘김 키프레임 (index.html 값 그대로) ── */
+@keyframes bizPageR{from{opacity:0;transform:translateX(38px)}to{opacity:1;transform:none}}
+@keyframes bizPageL{from{opacity:0;transform:translateX(-38px)}to{opacity:1;transform:none}}
+.bizm-flip{overflow:hidden}
+.bizm-flip>*{animation:bizPageR .42s cubic-bezier(.22,.61,.36,1);will-change:transform,opacity}
+.bizm-flip.rev>*{animation-name:bizPageL}
+.bizm-kpi{position:relative;flex:1;min-width:124px;padding:15px 16px 14px;background:var(--glass-surface);border:1px solid var(--glass-bd);border-radius:var(--radius);box-shadow:var(--glass-shadow);overflow:hidden}
+.bizm-kpi::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--kpitok,var(--accent))}
+.bizm-kpi .lab{font-size:11px;color:var(--dim);font-weight:600;margin-bottom:7px}
+.bizm-kpi .val{font-size:22px;font-weight:800;color:var(--kpitok,var(--accent));font-variant-numeric:tabular-nums;line-height:1.05}
+.bizm-pgctl{display:inline-flex;align-items:center;gap:9px}
+.bizm-pgctl .nav{width:26px;height:26px;border-radius:10px;border:1.5px solid var(--glass-bd);background:var(--glass-surface);color:var(--text);font-size:15px;font-weight:700;line-height:1;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;box-shadow:var(--glass-shadow);font-family:inherit;padding:0}
+.bizm-pgctl .dots{display:inline-flex;gap:6px;align-items:center}
+.bizm-pgctl .dot{width:6px;height:6px;border-radius:999px;background:var(--muted);border:none;padding:0}
+.bizm-pgctl .dot.on{background:var(--peach-text);width:18px}
+.row{display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap}
+.card{background:var(--glass-surface);border:1px solid var(--glass-bd);border-radius:var(--radius);box-shadow:var(--glass-shadow);padding:14px 16px;font-size:12.5px;color:var(--neutral-text)}
+.chartish{height:150px;border-radius:var(--radius);background:linear-gradient(180deg,rgba(74,77,231,.12),rgba(74,77,231,.02));border:1px solid var(--glass-bd);display:flex;align-items:flex-end;gap:6px;padding:12px}
+.chartish i{flex:1;background:var(--accent-light);border-radius:3px}
+.chartish i:last-child{background:var(--accent)}
+.note{margin-top:24px;font-size:13px;line-height:1.8;background:rgba(255,255,255,.8);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px 20px;max-width:1100px}
+.note mark{background:rgba(74,77,231,.12);color:var(--accent);font-weight:700;padding:0 3px;border-radius:3px}
+code{background:rgba(0,0,0,.05);padding:1px 5px;border-radius:5px;font-size:12px}
+</style></head><body>
+<h1>대시보드 책 넘김 — 「겉 유리는 제자리, 내용만 촤르르」 전후 (만져보는 비교)</h1>
+<div class="sub">
+  지시: 「1-2페이지에서 3-4페이지로 이동하면 화면이 번쩍이면서 바뀌는데, 겉면 블러는 동일하잖아? 오로지 내용부분만 촤르르 아주 자연스럽게 고프레임으로 바꿔줘」(260802)<br>
+  아래 ‹ › 를 누르면 <b>왼쪽(전)·오른쪽(후)이 동시에</b> 넘어가. 왼쪽은 지금 코드처럼 열을 통째로 갈아 유리 프레임까지 다시 만들고, 오른쪽은 유리는 그대로 두고 안쪽만 바꿔.
+  <b>느리게(0.25×)</b>를 켜면 번쩍임 순간이 눈에 보여.
+</div>
+<div class="bar">
+  <button onclick="go(-1)">‹ 이전 면</button>
+  <button onclick="go(1)">다음 면 ›</button>
+  <button onclick="slow()" id="slowbtn">느리게 0.25× 켜기</button>
+  <span class="hint">지금 면: <b id="pg">1면 · 연간 실적</b></span>
+</div>
+<div class="cols">
+  <div class="pane"><span class="tag b">전 — 열을 통째로 교체(유리 프레임 재생성 → 번쩍)</span><div id="colBefore"></div></div>
+  <div class="pane"><span class="tag a">후 — 유리 프레임 유지 · 안쪽만 교체 + 높이 글라이드</span><div id="colAfter"></div></div>
+</div>
+<div class="note">
+  <b>무엇이 번쩍였나</b>
+  <ul>
+    <li>면을 넘길 때 열의 <code>innerHTML</code>을 통째로 갈아서 <mark>글래스 헤더·유리박스 노드까지 새로 생긴다</mark> → <code>backdrop-filter</code> 합성 레이어가 파기·재생성되며 한 프레임 비어 보인다.</li>
+    <li>1-2면 ↔ 3-4면은 <b>좌·우 두 열이 동시에</b> 갈리는 유일한 이동이라(<code>_bizBookRender</code>의 <code>rid</code> 변경) 화면 전체가 번쩍인다.</li>
+    <li>면마다 내용 길이가 달라 <b>높이가 툭 튄다</b>(1면 짧음 ↔ 3면 김) — 이것도 「번쩍」으로 느껴진다.</li>
+  </ul>
+  <b>고친 방식</b>
+  <ul>
+    <li><code>_bizmSwap(el,html)</code> 신설 — 프레임(<code>[data-bizmhead]</code>·<code>[data-bizmbox]</code>) 노드는 두고 <b>그 안 + 점줄 속만</b> 갈아끼운다. 프레임이 없거나 구조가 다르면 종전 통째 교체로 폴백(회귀 0).</li>
+    <li>유리박스 높이를 옛→새로 <mark>.42s cubic-bezier(.22,.61,.36,1)</mark>(기존 <code>bizPageR/L</code>과 같은 값)로 글라이드 → 상하 튐 제거. 끝나면 자연 높이로 복귀.</li>
+    <li>넘김 동안만 <code>will-change:transform,opacity</code> → 합성 레이어 승격(고프레임). 클래스가 .42s 뒤 제거되므로 평소 부담 0. 새 색·새 값·새 부품 0.</li>
+    <li><code>prefers-reduced-motion</code>이면 높이 글라이드도 끈다(기존 애니 규약과 같은 축).</li>
+  </ul>
+</div>
+<script>
+// index.html 정본 문자열 계승 — 글래스 헤더 · 유리박스
+function head(title,sub,right){
+  return '<div data-bizmhead style="display:flex;align-items:center;gap:10px;min-height:47px;padding:1px 18px 0;background:rgba(255,255,255,.9);backdrop-filter:blur(11px);-webkit-backdrop-filter:blur(11px);border:1px solid var(--glass-border);border-bottom:1px solid rgba(0,0,0,.07);border-radius:var(--radius-lg) var(--radius-lg) 0 0;box-shadow:inset 0 1px 0 rgba(255,255,255,.6);overflow:hidden">'
+    +'<span style="font-size:14.5px;font-weight:800;color:var(--accent);white-space:nowrap">'+title+'</span>'
+    +'<span style="font-size:11px;color:var(--muted);font-weight:500;white-space:nowrap">'+sub+'</span>'
+    +'<span style="margin-left:auto;display:inline-flex;gap:9px;align-items:center;padding:6px 0">'+(right||'')+'</span></div>';
+}
+var BOX='<div data-bizmbox style="background:rgba(255,255,255,.15);backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px);border:1px solid rgba(255,255,255,.7);border-top:none;border-radius:0 0 var(--radius-lg) var(--radius-lg);box-shadow:var(--glass-shadow);padding:18px">';
+function kpi(l,v,t){ return '<div class="bizm-kpi" style="--kpitok:var('+(t||'--accent')+')"><div class="lab">'+l+'</div><div class="val">'+v+'</div></div>'; }
+function bars(n){ var s=''; for(var i=0;i<n;i++)s+='<i style="height:'+(20+((i*37)%75))+'%"></i>'; return '<div class="chartish">'+s+'</div>'; }
+function dots(p){
+  var L=['연간 실적','판매 실적','사업 결과 비교','고객 분석'], d='';
+  for(var i=1;i<=4;i++)d+='<button class="dot'+((i===p||i===p+1)?' on':'')+'" type="button" aria-label="'+i+'면 '+L[i-1]+'"></button>';   // 펼침(n·n+1) 점등 = 넓은 화면 규약
+  return '<div id="bizm-dots-row" style="display:flex;justify-content:center;margin:16px 0 2px"><span class="bizm-pgctl"><button class="nav" type="button" onclick="go(-1)">‹</button><span class="dots">'+d+'</span><button class="nav" type="button" onclick="go(1)">›</button></span></div>';
+}
+var PAGES={
+ 1:function(){ return '<div style="position:relative">'+head('연간 실적',' 2012~2026.1Q','<span style="font-size:11.5px;color:var(--neutral-text);font-weight:600">누적 <b style="color:var(--accent);font-size:14px;font-weight:800">3,690,031명</b></span>')
+   +BOX+'<div class="row">'+kpi('올해 누적','182,447')+kpi('공연','96,120','--accent')+kpi('전시','54,905','--peach-text')+'</div>'
+   +bars(14)+'<div class="card" style="margin-top:12px">연도별 누적 관객 — 2012~2026.1Q</div>'
+   +'</div>'+dots(1)+'</div>'; },
+ 3:function(){ return '<div style="position:relative">'+head('사업 결과 비교',' · 연간 누적 실적 (운영대장)','<span style="font-size:11.5px;color:var(--neutral-text);font-weight:600">2026년 · 기획</span>')
+   +BOX+'<div class="row">'+kpi('공연 수','37')+kpi('평균 점유율','41.2','--peach-text')+kpi('최고 점유율','96.4')+'</div>'
+   +bars(18)+'<div class="card" style="margin-top:12px">월 × 점유율 분포</div>'
+   +bars(9)+'<div class="card" style="margin-top:12px">시즌 추세 — 봄·여름·가을·겨울</div>'
+   +'<div class="card" style="margin-top:12px">공연 목록 표 (37건) — 내용이 길어 1면보다 세로가 훨씬 길다</div>'
+   +'</div>'+dots(3)+'</div>'; }
+};
+var page=1, dir=1, SLOW=1;
+function frameHtml(p){ return PAGES[p](); }
+// ── 전: 열을 통째로 교체(현재 코드) ───────────────────────────────
+function renderBefore(){
+  var el=document.getElementById('colBefore');
+  el.innerHTML=frameHtml(page);
+  animate(el);
+}
+// ── 후: 프레임 유지 · 안쪽만 교체 + 높이 글라이드(_bizmSwap과 동일 로직) ──
+function swap(el,html){
+  var oH=el.querySelector('[data-bizmhead]'), oB=el.querySelector('[data-bizmbox]');
+  if(!oH||!oB){ el.innerHTML=html; return; }
+  var tmp=document.createElement('div'); tmp.innerHTML=html;
+  var nH=tmp.querySelector('[data-bizmhead]'), nB=tmp.querySelector('[data-bizmbox]');
+  var oD=el.querySelector('#bizm-dots-row'), nD=tmp.querySelector('#bizm-dots-row');
+  if(!nH||!nB||(!oD)!==(!nD)){ el.innerHTML=html; return; }
+  var h0=oB.getBoundingClientRect().height;
+  oH.innerHTML=nH.innerHTML; oB.innerHTML=nB.innerHTML;
+  if(oD&&nD)oD.innerHTML=nD.innerHTML;
+  if(h0>0){
+    oB.style.transition='none'; oB.style.height=h0+'px'; oB.style.overflow='hidden';
+    requestAnimationFrame(function(){
+      var h1=oB.scrollHeight;
+      oB.style.transition='height '+(0.42*SLOW)+'s cubic-bezier(.22,.61,.36,1)';
+      oB.style.height=h1+'px';
+      setTimeout(function(){ oB.style.height=''; oB.style.overflow=''; oB.style.transition=''; },470*SLOW);
+    });
+  }
+}
+function renderAfter(){
+  var el=document.getElementById('colAfter');
+  swap(el,frameHtml(page));
+  animate(el);
+}
+function animate(el){
+  ['[data-bizmhead]','[data-bizmbox]'].forEach(function(sel){
+    var t=el.querySelector(sel); if(!t)return;
+    t.classList.remove('bizm-flip','rev'); void t.offsetWidth;
+    t.style.animationDuration='';
+    t.classList.add('bizm-flip'); if(dir<0)t.classList.add('rev');
+    Array.prototype.forEach.call(t.children,function(c){ c.style.animationDuration=(0.42*SLOW)+'s'; });
+    setTimeout(function(){ t.classList.remove('bizm-flip','rev'); },480*SLOW);
+  });
+}
+function go(d){
+  dir=d; page=(page===1)?3:1;
+  document.getElementById('pg').textContent=(page===1)?'1면 · 연간 실적':'3면 · 사업 결과 비교';
+  renderBefore(); renderAfter();
+}
+function slow(){
+  SLOW=(SLOW===1)?4:1;
+  document.getElementById('slowbtn').textContent=(SLOW===1)?'느리게 0.25× 켜기':'보통 속도로';
+}
+renderBefore(); renderAfter();
+</script>
+</body></html>
