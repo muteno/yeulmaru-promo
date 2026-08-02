@@ -5525,7 +5525,14 @@ function _bizFitViewport(){
     var rail=document.getElementById('sales-rail'); if(!rail||rail.offsetParent===null)return;
     var ch=document.getElementById('yrm-chart');
     if(!ch||ch.offsetParent===null){ if(app)app.classList.remove('biz-fit'); return; }   // 차트 없는 화면(2면 운영대장)엔 압축 잔존 금지 — 1면에서 켜진 biz-fit이 2면에 반쪽 압축으로 남던 버그(평의회 구역1 M4)
-    var over=function(){ return Math.round(document.documentElement.scrollHeight-window.innerHeight); };
+    // [260802e] 넘침 계량(디자인px 통일): 이젤(고정 유리박스, 260802d) 켜짐 = **박스 내부** 넘침(scrollH−clientH — 표가 박스
+    //   안선(패딩 18 위)에서 끝나게) · 꺼짐(좁은 화면·자연 높이) = 종전 문서 넘침. 구판은 문서 기준뿐이라 박스가 고정된 뒤로는
+    //   문서가 안 넘쳐 차트가 560 그대로 → 전체 실적표가 박스 하단에 잘린 채 내부 스크롤로 숨었다(운영자 캡처).
+    var over=function(){
+      var _bx=document.querySelector('#biz-main [data-bizmbox]');
+      if(_bx&&_bx.style.height&&typeof _bizBookWide==='function'&&_bizBookWide())return _bx.scrollHeight-_bx.clientHeight;   // 박스 내부 치수 = 레이아웃(디자인) 단위 — 줌 환산 불요
+      return Math.round((document.documentElement.scrollHeight-window.innerHeight)/_bizZ());
+    };
     var setH=function(px){
       var cur=Math.round(ch.getBoundingClientRect().height/_bizZ());   // gBCR 시각좌표 → 디자인(레이아웃) 단위로 환산해 style px와 동단위 비교
       if(Math.abs(px-cur)<2)return false;
@@ -5536,7 +5543,7 @@ function _bizFitViewport(){
     };
     var shrink=function(){                        // 넘치는 만큼 차트를 줄인다(최대 3패스면 수렴)
       for(var i=0;i<3;i++){
-        var _z=_bizZ(), o=Math.ceil(over()/_z), cur=Math.round(ch.getBoundingClientRect().height/_z);   // 넘침(루트 시각px)·현높이(gBCR) 둘 다 디자인 단위로 — 줌 상태에서도 1패스 수렴
+        var _z=_bizZ(), o=Math.ceil(over()), cur=Math.round(ch.getBoundingClientRect().height/_z);   // [260802e] over()가 이미 디자인 단위 반환(박스/문서 두 분기 공통) · 현높이(gBCR)만 /z 환산
         var want=Math.min(_BIZ_CHART_MAX,Math.max(_BIZ_CHART_MIN,cur-o));
         if(!setH(want))break;
       }
@@ -5547,6 +5554,29 @@ function _bizFitViewport(){
     if(shrink()<=2)return;                        // ② 차트만 줄여서 들어오면 끝 · 허용치 2px = setH 데드밴드·모드 왕복 잔차(평의회 구역1 H1·구역3 F6)가 여백 압축(biz-fit)을 오발동하지 않게
     if(app){ app.classList.add('biz-fit'); setH(_BIZ_CHART_MAX); shrink(); }   // ③ 그래도 넘치면 여백 압축 단계 + 재축소
   }catch(_e){ console.warn('[biz fit]',_e); }
+}
+// [260802e] 3면(사업 결과 비교) 좌 열 = 마지막 카드(시즌 추세) 차트가 이젤 박스의 남는 몫을 흡수 — 1면 _bizFitViewport와 같은 축.
+//   목표 = 카드 하단이 박스 안선(패딩 18 위)에서 끝나게 · 범위 = 정본 상수 그대로(_BIZ_CHART_MIN 180 ~ _BIZ_CHART_MAX 560,
+//   기본 300에서 부족하면 줄고 남으면 1면 「여백을 차트 확대로 흡수」(260725) 전례대로 늘린다 · 값 창작 0).
+//   이젤 꺼짐(좁은 화면·자연 높이) = 무동작(회귀 0) · 범례 y = -0.18@300과 동일한 픽셀 간격(46px)을 높이별 환산(_yrmLegY와 같은 문법).
+function _bizFitSeason(){
+  try{
+    if(typeof _mainView==='undefined'||_mainView!=='biz')return;
+    var ch=document.getElementById('bizm-season'); if(!ch||ch.offsetParent===null)return;
+    var bx=ch.closest('[data-bizmbox]'); if(!bx||!bx.style.height||!_bizBookWide())return;
+    var card=ch.closest('.bizm-card'); if(!card)return;
+    var _z=_bizZ();
+    for(var i=0;i<3;i++){   // 흡수분만큼 다시 남는 몫이 변해 2패스면 수렴(1면 shrink 3패스와 동형)
+      var cs=getComputedStyle(bx);
+      var inB=bx.getBoundingClientRect().bottom-(parseFloat(cs.borderBottomWidth)||0)-(parseFloat(cs.paddingBottom)||0);
+      var room=(inB-card.getBoundingClientRect().bottom)/_z;   // +: 빈 유리 · −: 넘침
+      var cur=Math.round(ch.getBoundingClientRect().height/_z);
+      var want=Math.min(_BIZ_CHART_MAX,Math.max(_BIZ_CHART_MIN,Math.round(cur+room)));
+      if(Math.abs(want-cur)<2)break;
+      ch.style.height=want+'px';
+      try{ if(window.Plotly&&ch.querySelector('.js-plotly-plot,svg')){ var _pr=Plotly.relayout(ch,{height:want,'legend.y':-(46/Math.max(60,want-46))}); if(_pr&&_pr.catch)_pr.catch(function(){}); } }catch(_p){}   // 넘김 도중 노드 교체 레이스 = 조용히 폐기(다음 fit 패스가 새 노드에 다시 맞춘다)
+    }
+  }catch(_e){ console.warn('[season fit]',_e); }
 }
 function _srailAlignTop(){
   var rail=document.getElementById('sales-rail'), hdr=document.querySelector('#main-area .hdr');
@@ -5579,19 +5609,25 @@ function _srailAlignTop(){
     //   · 내용이 짧으면 아래가 빈 유리로 남는다(운영자: 「다 안 채워도 됨」) · 길면 박스 안에서 스크롤(프레임은 그대로).
     //   · 좌·우 두 박스에 같은 값 = 하단선 Δ0(L2089 계약 유지) · 슬라이더 바는 박스 바로 아래라 자동으로 같은 y에 고정.
     //   · 좁은 화면(레일 없음)은 종전 자연 높이 그대로(모바일 회귀 0).
+    var _easelOn=false;   // [260802e] 이젤 실제 적용 여부 — 아래 목록 스트레치·fill 패스가 공식(고정 박스 기준/자연 높이 폴백)을 갈아탄다
     try{
       var _pb1=document.querySelector('#biz-main [data-bizmbox]'), _pb2=document.querySelector('#rail-yrm [data-bizmbox]');
       [_pb1,_pb2].forEach(function(_b){ if(_b){ _b.style.minHeight=''; _b.style.height=''; _b.style.maxHeight=''; _b.style.overflowY=''; } });
       if(_bizBookWide()&&_pb1&&_pb1.offsetParent!==null){
         var _drB=document.getElementById('bizm-dots-row');
         var _drH=_drB?((_drB.getBoundingClientRect().height/_z)+18):44;                 // 점줄 바 블록 = 실측 높이 + 위 여백 16 + 아래 2(_bizmDots 정본 margin)
-        var _fixH=Math.round((window.innerHeight-_pb1.getBoundingClientRect().top)/_z-_drH-24);   // 24 = #sales-rail 하단 패딩(화면 하단 여백 정본)
-        if(_fixH>320){
-          [_pb1,_pb2].forEach(function(_b){
-            if(!_b||_b.offsetParent===null)return;
+        // [260802e] 하단선(디자인px) 한 줄을 먼저 확정하고, **각 박스 높이 = 하단선 − 자기 상단**으로 잡는다.
+        //   구판 = 좌 박스 상단 기준 _fixH 하나를 두 박스에 공용 → 좌·우 헤더 높이가 다르면(3-4면: 좌=조작부 有 · 우=부제뿐)
+        //   상단이 어긋난 만큼 우 하단선이 떠 「블러 칸 틀어짐」(운영자 캡처 Δ≈25px)이 됐다. 하단선 고정 자체(이젤 계약)는 그대로.
+        var _lineY=Math.round(window.innerHeight/_z-_drH-24);   // 24 = #sales-rail 하단 패딩(화면 하단 여백 정본)
+        var _hs=[_pb1,_pb2].map(function(_b){ return (_b&&_b.offsetParent!==null)?Math.round(_lineY-_b.getBoundingClientRect().top/_z):null; });
+        if(_hs[0]!==null&&_hs[0]>320&&(_hs[1]===null||_hs[1]>320)){
+          _easelOn=true;
+          [_pb1,_pb2].forEach(function(_b,_i){
+            if(!_b||_b.offsetParent===null||_hs[_i]===null)return;
             var _nat=_b.scrollHeight;                                 // 높이 지운 직후 = 내용 자연 높이(패딩 포함)
-            _b.style.height=_fixH+'px';
-            _b.style.overflowY=(_nat>_fixH+1)?'auto':'';               // 넘칠 때만 박스 안 스크롤 — 안 넘치면 overflow 무설정(행 호버 팝오버·툴팁 잘림 0)
+            _b.style.height=_hs[_i]+'px';
+            _b.style.overflowY=(_nat>_hs[_i]+1)?'auto':'';             // 넘칠 때만 박스 안 스크롤 — 안 넘치면 overflow 무설정(행 호버 팝오버·툴팁 잘림 0)
           });
         }
       }
@@ -5613,7 +5649,24 @@ function _srailAlignTop(){
       var _anchor=(_lbox&&_lbox.offsetParent!==null)?_lbox:(_ltCard||_lcCard);
       var _boxed=(_anchor===_lbox&&_rbox&&_rbox.offsetParent!==null);   // 박스↔박스 정렬 가능 여부(불가 = 종전 카드↔카드 폴백)
       var _live=_anchor&&_rlCard&&_anchor.offsetParent!==null&&_rlCard.offsetParent!==null;
-      if(_rl&&_live){
+      if(_rl&&_live&&_easelOn&&_rbox&&_rbox.style.height){
+        // [260802e] 이젤 고정(260802d) 후 구식은 순환이었다: _tail = 「박스 하단 − 카드 하단」인데 박스 하단이 화면 고정이라
+        //   카드 밑 **빈 유리까지 tail로 읽혀** _want ≒ 현재 목록 높이(no-op) → 내용이 적으면 흰 카드가 박스 중턱에서 끝났다(운영자 캡처).
+        //   신식 = 목표선(자기 박스 안선 = 하단 − 보더 − 패딩) − 카드 뒤 정적 몫(상세 슬롯 외높이 + 카드 하단 마진) − 현재 카드 하단
+        //   = 부족분(Δ)만 목록 높이에 더한다(현재값+Δ = 비순환·멱등 · 좌 박스도 같은 하단선이라 좌↔우 흰 라인 자동 일치).
+        var _csB=getComputedStyle(_rbox);
+        var _inBt=_rbox.getBoundingClientRect().bottom-(parseFloat(_csB.borderBottomWidth)||0)-(parseFloat(_csB.paddingBottom)||0);   // 박스 안선(시각px)
+        var _aftH=0, _slotB=document.getElementById('rail-yrm-uha');
+        if(_slotB&&_rbox.contains(_slotB)){ var _scs=getComputedStyle(_slotB); _aftH=_slotB.getBoundingClientRect().height+(parseFloat(_scs.marginTop)||0)+(parseFloat(_scs.marginBottom)||0); }
+        var _cmb=parseFloat(getComputedStyle(_rlCard).marginBottom)||0;
+        var _dlt=(_inBt-_aftH-_cmb-_rlCard.getBoundingClientRect().bottom)/_z;
+        if(Math.abs(_dlt)>1){
+          var _cur=_rl.getBoundingClientRect().height/_z;
+          var _nw=Math.max(120,Math.round(_cur+_dlt));
+          _rl.style.height=_nw+'px'; _rl.style.maxHeight=_nw+'px';
+        }
+      } else if(_rl&&_live){
+        // 이젤 꺼짐(좁은 화면 폭 1200 초과~낮은 높이 등) = 박스가 자연 높이 → 종전(260731) 좌 앵커 공식 그대로(회귀 0)
         var _ctEl=_rlCard.querySelector('.ct'), _ctH=_ctEl?_ctEl.getBoundingClientRect().height:0;
         var _tgt=_boxed?_rbox:_rlCard;   // 하단선을 좌 앵커에 붙일 우측 대상
         var _tail=_boxed?(_rbox.getBoundingClientRect().bottom-_rlCard.getBoundingClientRect().bottom):0;   // 목록 카드 아래로 박스가 더 먹는 몫(카드 여백 + 상세 슬롯 + 박스 패딩·보더)
@@ -5625,6 +5678,22 @@ function _srailAlignTop(){
           if(_res&&Math.abs(_res)<=40){ var _fix=_want+_res; _rl.style.height=_fix+'px'; _rl.style.maxHeight=_fix+'px'; }   // [260725] 허용치 12→40 — 앵커가 전체 실적표로 바뀌었으니 여유를 둔다(실측 잔차는 0)
         }
       } else if(_rl){ _rl.style.height=''; _rl.style.maxHeight=''; }
+      // [260802e] fill 패스 — data-bizmfill 마킹 요소(3면 우 공연 목록 표 등)를 자기 박스 안선까지 min-height로 늘린다.
+      //   내용이 넘치면(공간 부족 Δ<0) 강제 안 함(박스 내부 스크롤이 정본) · 이젤 꺼짐 = 전부 해제(자연 높이 회귀 0).
+      try{
+        var _fls=document.querySelectorAll('[data-bizmbox] [data-bizmfill]');
+        for(var _fi=0;_fi<_fls.length;_fi++){
+          var _f=_fls[_fi]; _f.style.minHeight='';
+          if(!_easelOn)continue;
+          var _fbx=_f.closest('[data-bizmbox]');
+          if(!_fbx||_fbx.offsetParent===null||!_fbx.style.height)continue;
+          var _fcs=getComputedStyle(_fbx);
+          var _fLine=_fbx.getBoundingClientRect().bottom-(parseFloat(_fcs.borderBottomWidth)||0)-(parseFloat(_fcs.paddingBottom)||0);
+          var _fr=_f.getBoundingClientRect();
+          var _room=(_fLine-_fr.bottom)/_z;
+          if(_room>1)_f.style.minHeight=Math.round(_fr.height/_z+_room)+'px';
+        }
+      }catch(_e5){}
       var _slot=document.getElementById('rail-yrm-uha'), _uhaEl=document.getElementById('srail-uha');
       var _slotOn=_uhaEl&&_uhaEl.getAttribute('data-on')==='1';
       if(_slot){ _slot.style.minHeight=''; }   // [260725] 상세 슬롯 = 표 비노출 후 점줄만 남음 → 높이 강제 없음
@@ -5772,8 +5841,9 @@ function _srailArmResize(){
   }catch(_e){}
   window.addEventListener('resize',function(){
     try{_bizZoomApply();}catch(_e){}   // [260731] 창 크기·브라우저 줌 변경 = 1920 기준 줌 재산정(그 좌표계 위에서 아래 fit·정렬 재계산)
-    try{_bizFitViewport();}catch(_e){}   // [260725 운영자] 창 크기 바뀌면 한 화면에 다시 맞춘다
     _srailAlignTop();
+    try{_bizFitViewport();}catch(_e){}   // [260725 운영자] 창 크기 바뀌면 한 화면에 다시 맞춘다 · [260802e] 이젤(박스 높이) 재고정 **후** 맞춰야 새 박스 기준(순서 이동) + 시즌 차트도 동축
+    try{_bizFitSeason();}catch(_e){}
     if(window.innerWidth<=1200)_srailCarStop();   // 레일 CSS 숨김되면 캐러셀 전역 리스너·타이머 철거(감사2 LOW — 숨은 레일 유휴 리스너 잔존 방지)
     if(window.innerWidth>1200&&_salesState&&!_salesState.daily&&!_srailBusy)_srailInit();
     // [260731 4차] 1200 경계 넘나듦 = 책 판형 전환(펼침 2면 ↔ 한 면) — 좌·우 열 재렌더(면 매핑·점줄 개수·바 중앙이 판형에 묶여 있다)
@@ -6177,7 +6247,7 @@ function _bizmAnimate(cols){
   // [260802b] 넘김이 끝난 뒤 기하 재계산 1패스 — _srailAlignTop은 렌더 직후 rAF 한 번만 돌아서, 그 순간의 값이
   //   과도기(애니·차트 늦은 그리기 등)면 잘못 잡힌 높이가 **그대로 박힌다**(운영자 실측: 3면 갔다 오면 1-2면 유리박스가 화면 아래까지).
   //   애니가 끝난 뒤 한 번 더 재면 그런 과도기 값이 스스로 풀린다(값 계산은 정본 그대로 · 새 규칙 0).
-  setTimeout(function(){ try{ if(typeof _srailAlignTop==='function')_srailAlignTop(); }catch(_e){} },500);
+  setTimeout(function(){ try{ if(typeof _srailAlignTop==='function')_srailAlignTop(); }catch(_e){} try{ if(typeof _bizFitViewport==='function')_bizFitViewport(); }catch(_e){} try{ if(typeof _bizFitSeason==='function')_bizFitSeason(); }catch(_e){} },500);   // [260802e] 이젤 재고정 후 차트 fit도 1패스(늦은 차트 그리기·면 전환 과도기 자가 복구 — 둘 다 해당 차트 없으면 no-op)
 }
 // ── [260802 운영자] 「겉면 블러는 동일하잖아? 오로지 내용부분만 촤르르 아주 자연스럽게 고프레임으로」 ─────────────
 // 번쩍임의 정체(코드 실측): 면을 넘길 때 열의 innerHTML을 **통째로** 갈아 글래스 프레임(헤더 `[data-bizmhead]` ·
@@ -6206,7 +6276,10 @@ function _bizmSwap(el,html){
   //   — `_srailAlignTop`이 짝 면에 걸어 둔 minHeight 등이 다음 면까지 남으면 「블러 창이 아래까지」가 재현된다.
   //   [260802d] height·overflowY는 「이젤 고정」(_srailAlignTop)이 매번 같은 값으로 다시 넣는 값이라 **지우지 않는다**
   //   — 지우면 교체~rAF 사이 한 프레임이 자연 높이로 튄다(= 이젤이 흔들린다). 구 규약 잔재(minHeight·maxHeight)만 청소.
-  try{ oB.style.minHeight=''; oB.style.maxHeight=''; oB.style.transition=''; oH.style.height=''; oH.style.minHeight=''; }catch(_e){}
+  //   [260802e] 헤더 min-height는 **지우지 않는다** — _bizmHead 정본 스타일(min-height:47px)이라 지우면 첫 넘김부터
+  //   헤더가 내용 높이(22px대)로 붕괴 → 박스 상단이 면마다 25px씩 밀려 「블러 칸 틀어짐」의 원인①이었다(운영자 실측 캡처).
+  //   _srailAlignTop이 헤더 minHeight를 쓰는 일은 없으므로 잔재 청소 대상이 아니다.
+  try{ oB.style.minHeight=''; oB.style.maxHeight=''; oB.style.transition=''; oH.style.height=''; }catch(_e){}
   return true;
 }
 function _bizmPageNav(){ return ''; }   // [260723f] 절대배치 ‹›(구 srail-cbtn) 폐지 — 페이지 컨트롤은 헤더 우측 _bizmDots로 통합(‹ • • ›)
@@ -6221,7 +6294,7 @@ function _bizmDots(){
 }
 function _bizmHead(right,title,sub){
   return '<div data-bizmhead style="display:flex;align-items:center;gap:10px;min-height:47px;padding:1px 18px 0;background:rgba(255,255,255,.9);backdrop-filter:blur(11px);-webkit-backdrop-filter:blur(11px);border:1px solid var(--glass-border);border-bottom:1px solid rgba(0,0,0,.07);border-radius:var(--radius-lg) var(--radius-lg) 0 0;box-shadow:inset 0 1px 0 rgba(255,255,255,.6);overflow:hidden">'   // [260723f Opus] 상단 흰 하이라이트(유리 입체감)
-    +'<span style="font-size:14.5px;font-weight:800;color:var(--accent);white-space:nowrap;letter-spacing:-.01em">'+(title||'사업 현황')+'</span>'
+    +(title===''?'':'<span style="font-size:14.5px;font-weight:800;color:var(--accent);white-space:nowrap;letter-spacing:-.01em">'+(title||'사업 현황')+'</span>')   // [260802e] title='' = 제목 생략(짝 면 우 열 — 좌와 같은 「사업 결과 비교」 이중 표기 방지, 운영자 「같은 내용이면 좌측에만」) · undefined/미지정은 종전 폴백 그대로
     +'<span style="font-size:11px;color:var(--muted);font-weight:500;white-space:nowrap">'+(sub||'· 연간 누적 실적 (운영대장)')+'</span>'
     +'<span style="margin-left:auto;display:inline-flex;gap:9px;align-items:center;flex-wrap:wrap;padding:6px 0">'+(right||'')+'</span></div>';
 }
@@ -6267,12 +6340,13 @@ function _bizCompRender(el,half){
   half=half||0;
   var L=(half!==2);                                    // L = 전반(3-1) 담당 열 = 조작부(연도·분류·자세히 보기) 소유 열
   var DOTS=(half===2)?'':(_bizmDots()+_bizmPageNav());   // 우 열엔 점줄 없음(_railYrmFrame과 동일 규약)
-  var SUB=(half===2)?' · 장르 벤치마크 · 시즌 추세':' · 연간 누적 실적 (운영대장)';
+  var TTL=(half===2)?'':'사업 결과 비교';               // [260802e] 같은 제목 이중 표기 = 좌에만(운영자) — 우 열은 부제만(아래 SUB가 라벨 역할)
+  var SUB=(half===2)?'장르 벤치마크 · 시즌 추세':' · 연간 누적 실적 (운영대장)';
   var RETRY=(half===2)?'_railYrmRender()':'_bizInlineRender()';
   var tgtId=el.id;
   if(typeof requestAnimationFrame==='function')requestAnimationFrame(function(){try{_srailAlignTop();}catch(_e){}});
   if(!_bizState.raw){
-    _bizmSwap(el,'<div style="position:relative">'+_bizmHead('','사업 결과 비교',SUB)+_BIZM_BOX+'<div style="position:relative;min-height:300px"><div class="sk-sweep" aria-hidden="true"></div><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--accent);opacity:.75;font-size:14px;font-weight:600">'+_ldHtml(16)+'운영 데이터 불러오는 중</div></div>'+'</div>'+DOTS+'</div>');   // [260802] 프레임 유지 · [PR 357 타 세션] 빔 스윕 로딩 통일 채택(양쪽 보존)
+    _bizmSwap(el,'<div style="position:relative">'+_bizmHead('',TTL,SUB)+_BIZM_BOX+'<div style="position:relative;min-height:300px"><div class="sk-sweep" aria-hidden="true"></div><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--accent);opacity:.75;font-size:14px;font-weight:600">'+_ldHtml(16)+'운영 데이터 불러오는 중</div></div>'+'</div>'+DOTS+'</div>');   // [260802] 프레임 유지 · [PR 357 타 세션] 빔 스윕 로딩 통일 채택(양쪽 보존)
     // 레일이 숨는 폭(≤1200) = 레일 6시트 fetch가 없어 자체 확보 — 넓은 화면은 레일 플로우(res[3]→_bizState.raw)가 채움(중복 fetch 방지)
     if(window.innerWidth<=1200&&!window._bizmBusy){
       window._bizmBusy=1;
@@ -6282,13 +6356,13 @@ function _bizCompRender(el,half){
         _bizInlineRender();
       }).catch(function(e){
         window._bizmBusy=0;var b=document.getElementById(tgtId);
-        if(b&&_mainView==='biz'&&_bizLeftPage()===3)b.innerHTML='<div style="position:relative">'+_bizmHead('','사업 결과 비교',SUB)+_BIZM_BOX+'<div style="text-align:center;padding:50px;color:var(--danger);font-size:13px">데이터 로드 실패: '+escapeHtml(e.message||String(e))+' <button class="ana-chip" onclick="'+RETRY+'" style="margin-left:8px">다시 시도</button></div>'+'</div>'+DOTS+'</div>';
+        if(b&&_mainView==='biz'&&_bizLeftPage()===3)b.innerHTML='<div style="position:relative">'+_bizmHead('',TTL,SUB)+_BIZM_BOX+'<div style="text-align:center;padding:50px;color:var(--danger);font-size:13px">데이터 로드 실패: '+escapeHtml(e.message||String(e))+' <button class="ana-chip" onclick="'+RETRY+'" style="margin-left:8px">다시 시도</button></div>'+'</div>'+DOTS+'</div>';
       });
     }
     return;
   }
   var all=_bizClean();
-  if(!all.length){ _bizmSwap(el,'<div style="position:relative">'+_bizmHead('','사업 결과 비교',SUB)+_BIZM_BOX+'<div style="text-align:center;padding:50px;color:var(--dim)">📭 표시할 운영 데이터가 없습니다</div>'+'</div>'+DOTS+'</div>'); return; }
+  if(!all.length){ _bizmSwap(el,'<div style="position:relative">'+_bizmHead('',TTL,SUB)+_BIZM_BOX+'<div style="text-align:center;padding:50px;color:var(--dim)">📭 표시할 운영 데이터가 없습니다</div>'+'</div>'+DOTS+'</div>'); return; }
   var years=Array.from(new Set(all.map(function(r){return r._year;}))).sort(function(a,b){return b-a;});
   var thisY=(new Date()).getFullYear();
   if(_bizmState.year===null||years.indexOf(_bizmState.year)<0)_bizmState.year=(years.indexOf(thisY)>=0)?thisY:years[0];
@@ -6309,7 +6383,7 @@ function _bizCompRender(el,half){
     types.forEach(function(t){ var on=!!_bizmState.types[t]; var only=selTypes.length===1&&on; right+='<label class="fbar-chip'+(on?' on':'')+(only?' lock':'')+'" style="padding:5px 11px"><input type="checkbox" '+(on?'checked':'')+(only?' disabled':'')+' onchange="_bizmToggleType(\''+_anaEsc(t)+'\')">'+escapeHtml(t)+'</label>'; });   // [260723 평의회4] onchange 이스케이프 = 정본 _anaEsc(따옴표만 치환하던 약식 관례 경화)
     right+='<button class="ana-chip" onclick="openBusinessBoard()" title="장르 벤치마크·시즌 추세까지 — 사업 결과 비교 크게 보기">자세히 보기</button>';   // [260731 4차] 세부메뉴가 인라인 면 이동으로 바뀌며 잃은 전체 모달 진입로 보전(기존 .ana-chip 부품)
   }
-  var h='<div style="position:relative">'+_bizmHead(right,'사업 결과 비교',SUB)+_BIZM_BOX;   // [260731 4차] 3면 이름 = 세부메뉴와 동일어(구 기본값 '사업 현황')
+  var h='<div style="position:relative">'+_bizmHead(right,TTL,SUB)+_BIZM_BOX;   // [260731 4차] 3면 이름 = 세부메뉴와 동일어(구 기본값 '사업 현황')
   if(!list.length){ h+='<div style="text-align:center;padding:40px;color:var(--dim)">해당 연도/분류 데이터가 없습니다</div>'+'</div>'+DOTS+'</div>'; _bizmSwap(el,h); return; }
   var total=list.length,avgAll=list.reduce(function(a,g){return a+g.avg;},0)/list.length,maxAll=Math.max.apply(null,list.map(function(g){return g.avg;}));
   var kc=function(lab,val,tk){return '<div class="bizm-kpi" style="--kpitok:var('+(tk||'--accent')+')"><div class="lab">'+lab+'</div><div class="val">'+val+'</div></div>';};   // [260723f Opus] 글래스 KPI 통일(1·2면 동일 시각언어)
@@ -6321,7 +6395,7 @@ function _bizCompRender(el,half){
     +'<div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin:6px 12px 8px">'+_chipRow('수익성',['전체','공공성','상업성'],_bizmState.profit,'_bizmSetProfit')+_chipRow('회차',['전체','1회','2~4회','5회+'],_bizmState.rounds,'_bizmSetRounds')+_chipRow('진행일',['전체','단일','2~3일','4일+'],_bizmState.rundays,'_bizmSetRunDays')+'</div>'
     +'<div id="bizm-genre" style="height:300px;margin:0 4px 2px"></div></div>';
   var _season='<div class="bizm-card"><div class="ct">시즌(연도)별 장르 점유율 추세 <span class="sub">— 장르별 연평균 점유율 · 큰점='+_bizmState.year+'년 · 위 분류/필터 반영</span></div><div id="bizm-season" style="height:300px;margin:0 4px 2px"></div></div>';
-  var _tbl='<div style="border:1px solid var(--border);border-radius:12px;background:var(--surface-solid);padding:4px 0 2px;overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="border-bottom:2px solid var(--border);color:var(--dim);font-size:12px;text-align:left">';
+  var _tbl='<div data-bizmfill style="border:1px solid var(--border);border-radius:12px;background:var(--surface-solid);padding:4px 0 2px;overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="border-bottom:2px solid var(--border);color:var(--dim);font-size:12px;text-align:left">';   // [260802e] data-bizmfill = 마지막 흰 도형을 박스 안선(패딩 18 위)까지 늘리는 마킹(_srailAlignTop) — 행이 적어도(1월 2건 등) 흰 라인이 좌 열과 같은 하단선에서 끝난다(운영자 「없던 있든 흰색 라인 다 맞춰줘」)
   ['공연일','공연명','장르','회차','판매좌석','오픈석','점유율'].forEach(function(c,i){_tbl+='<td style="padding:8px 12px;'+(i>=3?'text-align:right;':'')+(i===0?'padding-left:14px;':'')+(i===6?'padding-right:14px;':'')+'white-space:nowrap">'+c+'</td>';});
   _tbl+='</tr></thead><tbody>';
   var WD=['일','월','화','수','목','금','토'];
@@ -6344,7 +6418,7 @@ function _bizCompRender(el,half){
   h+=(half===1)?(_kpi+_dist+_season):(half===2)?(_bench+_tbl):(_kpi+_dist+_bench+_season+_tbl);
   h+='</div>'+DOTS+'</div>';
   _bizmSwap(el,h);   // [260802] 프레임 유지·안쪽만 교체(1-2면 ↔ 3-4면 두 열 동시 넘김의 번쩍임 제거)
-  _bizEnsurePlotly(function(){ try{ if(half!==2){_bizDrawChart(list, selTypes.length>1, 'bizm-chart', 430); _bizDrawSeason('bizm-season',_bizmState);} if(half!==1)_bizDrawGenreBench('bizm-genre',_bizmState); }catch(_e){console.warn('[bizm chart]',_e);} });   // 그 열에 실제로 놓인 차트만 그린다(반대편 열 것은 그쪽 렌더가 담당)
+  _bizEnsurePlotly(function(){ try{ if(half!==2){_bizDrawChart(list, selTypes.length>1, 'bizm-chart', 430); _bizDrawSeason('bizm-season',_bizmState);} if(half!==1)_bizDrawGenreBench('bizm-genre',_bizmState); }catch(_e){console.warn('[bizm chart]',_e);} try{_bizFitSeason();}catch(_e){} });   // 그 열에 실제로 놓인 차트만 그린다(반대편 열 것은 그쪽 렌더가 담당) · [260802e] 그린 뒤 시즌 차트를 박스 안선에 맞춤(1면 _bizFitViewport와 같은 축)
 }
 function _srailTodayISO(){ var t=new Date(); return t.getFullYear()+'-'+('0'+(t.getMonth()+1)).slice(-2)+'-'+('0'+t.getDate()).slice(-2); }
 // 홍보중 판정: true/false = 홍보창(ps~se||e) 지정 프로그램의 창 안/밖 · null = 홍보일 미지정·조인 실패(호출측 판매기간 폴백)

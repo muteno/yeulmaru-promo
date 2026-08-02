@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>20260802 이젤 흰 라인 정렬 — 전후</title>
+<style>
+  :root{--accent:#4A4DE7;--peach-text:#D88455;--green:#1A6B3C;--danger:#E24B4A;--text:#1A1A2E;--dim:#888;--muted:#bbb;--border:rgba(0,0,0,0.09);--surface:#fff;--bg:linear-gradient(135deg,#FDF6F3 0%,#F0EBF5 50%,#EBF0F8 100%)}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Pretendard','Noto Sans KR',sans-serif;background:var(--bg);color:var(--text);padding:28px 4vw 60px}
+  h1{font-size:21px;margin-bottom:4px}
+  h1 b{color:var(--accent)}
+  .sub{font-size:12.5px;color:var(--dim);margin-bottom:26px}
+  .scene{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:18px;margin-bottom:26px;box-shadow:0 8px 32px rgba(74,77,231,0.08)}
+  .scene h2{font-size:15px;margin-bottom:2px}
+  .scene .cap{font-size:12px;color:var(--dim);margin-bottom:10px}
+  .tgl{display:inline-flex;gap:6px;margin-bottom:10px}
+  .tgl button{font:inherit;font-size:12.5px;font-weight:700;padding:6px 16px;border-radius:9px;border:1.5px solid var(--border);background:#fff;color:var(--dim);cursor:pointer}
+  .tgl button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  .shot{position:relative;border:1px solid var(--border);border-radius:12px;overflow:hidden}
+  .shot img{display:block;width:100%;height:auto}
+  .shot img.hide{display:none}
+  .badge{position:absolute;top:10px;left:10px;font-size:12px;font-weight:800;padding:4px 12px;border-radius:8px;color:#fff}
+  .badge.bf{background:var(--danger)}.badge.af{background:var(--green)}
+  .note{font-size:12.5px;line-height:1.65;color:var(--text);margin-top:10px}
+  .note b{color:var(--accent)}
+  table{border-collapse:collapse;font-size:12.5px;width:100%;margin-top:8px}
+  td,th{border:1px solid var(--border);padding:6px 10px;text-align:left}
+  th{background:rgba(74,77,231,0.05);font-weight:700}
+  td.num{font-variant-numeric:tabular-nums;text-align:right}
+  .bad{color:var(--danger);font-weight:700}.good{color:var(--green);font-weight:700}
+  .why{background:rgba(74,77,231,0.045);border-radius:12px;padding:14px 16px;font-size:12.5px;line-height:1.7;margin-bottom:26px}
+</style>
+</head>
+<body>
+<h1>유리 블러 박스(이젤) <b>흰 라인 정렬</b> — 전후 <span style="font-size:12px;color:var(--muted);font-weight:500">260802 · 1920×1080 헤드리스 실측 · QA 목데이터</span></h1>
+<div class="sub">지시: ① 차트를 줄여 전체 실적표가 블러 칸에 딱(적절한 간격) ② 블러 칸 무접촉 ③ 판매 실적도 내용 없어도 딱 ④ 3-4면 「사업 결과 비교」 제목 좌측만 + 흰 칸 시작 수평선 통일 ⑤ 나올 것 다 나온 뒤 흰 라인 전부 정렬 ⑥ 블러 칸 틀어짐 제거 · 번쩍임 등 버그 금지 — 각 버튼을 눌러 전/후를 같은 자리에서 비교.</div>
+
+<div class="why">
+  <b style="color:var(--accent)">원인 3가지(코드 실측)</b><br>
+  ① <b>차트 압축이 문서 기준</b> — 이젤 고정(#545) 후 문서는 안 넘치므로 차트가 560 그대로 → 전체 실적표가 박스 하단에 잘려 내부 스크롤로 숨음(넘침 실측 161px).<br>
+  ② <b>우 목록 스트레치가 순환 계산</b> — 「박스 하단 − 카드 하단」을 tail로 읽는데 박스 하단이 화면 고정이라 빈 유리까지 tail로 잡혀 no-op → 흰 카드가 박스 중턱에서 끝남(빈 유리 187px).<br>
+  ③ <b>넘김(_bizmSwap)이 헤더 정본 min-height:47px를 삭제</b> — 첫 넘김부터 헤더가 내용 높이(좌 41·우 22)로 붕괴 → 박스 상단이 열마다 밀려 하단선 Δ19px 틀어짐.<br>
+  <b style="color:var(--green)">수정</b>: 하단선(뷰포트−점줄−24) 한 줄을 먼저 확정하고 <b>각 박스 높이 = 하단선 − 자기 상단</b>(이젤 계약 그대로·크기 불변) · 차트 압축 기준을 박스 내부로 · 목록 스트레치를 「현재값+부족분」 비순환식으로 · 헤더 min-height 삭제 중단 · 3-4면 우 제목 생략(좌측만) · 마지막 흰 도형 fill(data-bizmfill).
+</div>
+
+<div class="scene">
+  <h2>① 1-2면 · 연간 실적 + 판매 실적(데이터 있음)</h2>
+  <div class="cap">좌: 차트 560 고정 → 전체 실적표가 박스 밖(1154)까지 · 우: 흰 카드가 825에서 끝나 빈 유리 187px</div>
+  <div class="tgl"><button class="on" onclick="sw(this,'s1',0)">전</button><button onclick="sw(this,'s1',1)">후</button></div>
+  <div class="shot" id="s1">
+    <img src="20260802_흰라인정렬_전_12면.png" alt="전 — 1-2면: 전체 실적표 잘림, 판매 실적 카드 중턱 종료">
+    <img class="hide" src="20260802_흰라인정렬_후_12면.png" alt="후 — 1-2면: 차트 399로 압축, 표·카드가 박스 안선(993)에서 종료">
+    <span class="badge bf">전</span>
+  </div>
+  <div class="note">후: 차트 <b>560→399 자동 압축</b> → 전체 실적표가 교육·계 행까지 전부 보이고 하단이 박스 안선(1012−패딩18−보더1=<b>993</b>)에서 끝남. 우 목록도 979(카드 하단 마진 14 = 260731 정본 몫)까지 스트레치.</div>
+</div>
+
+<div class="scene">
+  <h2>② 1-2면 · 판매 실적 비어 있음(QA 빈 데이터)</h2>
+  <div class="cap">「내용이 없어도 딱 맞아떨어지게」 — 빈 안내문뿐이어도 흰 카드가 같은 라인까지</div>
+  <div class="tgl"><button class="on" onclick="sw(this,'s2',0)">전</button><button onclick="sw(this,'s2',1)">후</button></div>
+  <div class="shot" id="s2">
+    <img src="20260802_흰라인정렬_전_12면_빈데이터.png" alt="전 — 빈 판매 실적 카드가 254에서 끝나 빈 유리 758px">
+    <img class="hide" src="20260802_흰라인정렬_후_12면_빈데이터.png" alt="후 — 빈 카드도 979까지 스트레치">
+    <span class="badge bf">전</span>
+  </div>
+  <div class="note">전: 카드가 <span class="bad">254</span>에서 끝나 빈 유리 758px → 후: <span class="good">979</span>까지 채움(내용 유무 무관 동일 라인).</div>
+</div>
+
+<div class="scene">
+  <h2>③ 3-4면 · 사업 결과 비교(짝 면)</h2>
+  <div class="cap">중복 제목 · 헤더 붕괴(41/22) → 박스 틀어짐 Δ19px · 좌 카드 잘림 · 우 하단 빈 유리</div>
+  <div class="tgl"><button class="on" onclick="sw(this,'s3',0)">전</button><button onclick="sw(this,'s3',1)">후</button></div>
+  <div class="shot" id="s3">
+    <img src="20260802_흰라인정렬_전_34면.png" alt="전 — 사업 결과 비교 제목 중복, 우 박스가 19px 위로 뜸, 시즌 추세 카드 잘림">
+    <img class="hide" src="20260802_흰라인정렬_후_34면.png" alt="후 — 제목 좌측만, 박스 Δ0, 시즌 차트 248로 흡수, 표가 993까지 fill">
+    <span class="badge bf">전</span>
+  </div>
+  <div class="note">후: 우측 헤더는 「장르 벤치마크 · 시즌 추세」만(제목은 좌측 한 곳) · 헤더 47px 통일로 흰 유리 시작선 동일 · 시즌 추세 차트 300→<b>248 흡수</b>로 좌 카드 하단 993.1 · 1월 공연 표(2행)는 <b>fill</b>로 993까지 = <b>좌·우 흰 라인 Δ0.1px</b>.</div>
+</div>
+
+<div class="scene">
+  <h2>실측표 (1920×1080 · 디자인px)</h2>
+  <table>
+    <tr><th>항목</th><th>전</th><th>후</th></tr>
+    <tr><td>1-2면 좌 박스 내용 넘침(scroll−client)</td><td class="num bad">+161px(표 잘림·내부 스크롤)</td><td class="num good">0px(차트 560→399)</td></tr>
+    <tr><td>1-2면 좌 전체 실적표 하단 ↔ 박스 안선(993)</td><td class="num bad">1154(+161)</td><td class="num good">993(Δ0)</td></tr>
+    <tr><td>1-2면 우 판매 실적 카드 하단(데이터/빈)</td><td class="num bad">825 / 254</td><td class="num good">979 / 979(마진 14 = 정본 몫)</td></tr>
+    <tr><td>3-4면 헤더 높이(좌/우)</td><td class="num bad">41 / 22(붕괴)</td><td class="num good">47 / 47(정본 min-height)</td></tr>
+    <tr><td>3-4면 박스 상단·하단 Δ(좌−우)</td><td class="num bad">19 / 19(틀어짐)</td><td class="num good">0 / 0</td></tr>
+    <tr><td>3-4면 마지막 흰 카드 하단(좌/우)</td><td class="num bad">1039(박스 밖·잘림) / 613(빈 유리 380px)</td><td class="num good">993.1 / 993(Δ0.1)</td></tr>
+    <tr><td>넘김 왕복 후(1→3-4→1) 박스·차트</td><td class="num bad">우 카드 스트레치 소실</td><td class="num good">121→1012·399 동일(표류 0)</td></tr>
+    <tr><td>프레임 노드 유지(번쩍임 계약 #543)</td><td class="num">유지</td><td class="num good">유지(노드 동일성 실측 true)</td></tr>
+    <tr><td>재계산 20회 반복 흔들림</td><td class="num">—</td><td class="num good">상태 1개(무흔들림)</td></tr>
+    <tr><td>JS 에러(고속 왕복 Plotly 레이스 제외 = 기존 3건 동일)</td><td class="num">0</td><td class="num good">0</td></tr>
+  </table>
+  <div class="note" style="color:var(--dim)">경계 기록: 화면이 아주 짧으면(예 1920×740) 압축(biz-fit) 후에도 최소 차트(180)로 못 담는 잔여는 박스 내부 스크롤(정본 260802d 「길면 박스 안 스크롤」) · 좁은 화면(≤1200)은 이젤·fill 전부 해제(자연 높이 회귀 0).</div>
+</div>
+
+<script>
+function sw(btn,id,i){
+  var box=document.getElementById(id);
+  var imgs=box.querySelectorAll('img');
+  imgs.forEach(function(im,k){im.classList.toggle('hide',k!==i);});
+  var bd=box.querySelector('.badge');
+  bd.textContent=i?'후':'전'; bd.className='badge '+(i?'af':'bf');
+  btn.parentNode.querySelectorAll('button').forEach(function(b){b.classList.toggle('on',b===btn);});
+}
+</script>
+</body>
+</html>
