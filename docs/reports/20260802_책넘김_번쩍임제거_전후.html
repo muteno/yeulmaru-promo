@@ -72,19 +72,20 @@ code{background:rgba(0,0,0,.05);padding:1px 5px;border-radius:5px;font-size:12px
 </div>
 <div class="cols">
   <div class="pane"><span class="tag b">전 — 열을 통째로 교체(유리 프레임 재생성 → 번쩍)</span><div id="colBefore"></div></div>
-  <div class="pane"><span class="tag a">후 — 유리 프레임 유지 · 안쪽만 교체 + 높이 글라이드</span><div id="colAfter"></div></div>
+  <div class="pane"><span class="tag a">후 — 유리 프레임 유지 · 안쪽만 교체(높이는 종전 그대로)</span><div id="colAfter"></div></div>
 </div>
 <div class="note">
   <b>무엇이 번쩍였나</b>
   <ul>
     <li>면을 넘길 때 열의 <code>innerHTML</code>을 통째로 갈아서 <mark>글래스 헤더·유리박스 노드까지 새로 생긴다</mark> → <code>backdrop-filter</code> 합성 레이어가 파기·재생성되며 한 프레임 비어 보인다.</li>
     <li>1-2면 ↔ 3-4면은 <b>좌·우 두 열이 동시에</b> 갈리는 유일한 이동이라(<code>_bizBookRender</code>의 <code>rid</code> 변경) 화면 전체가 번쩍인다.</li>
-    <li>면마다 내용 길이가 달라 <b>높이가 툭 튄다</b>(1면 짧음 ↔ 3면 김) — 이것도 「번쩍」으로 느껴진다.</li>
+    <li>면마다 내용 길이가 달라 높이가 바뀌는 건 <b>종전 그대로 둔다</b> — 높이에 손대면 <code>_srailAlignTop</code>의 두 박스 하단선 계약이 깨진다(260802b 실측).</li>
   </ul>
   <b>고친 방식</b>
   <ul>
     <li><code>_bizmSwap(el,html)</code> 신설 — 프레임(<code>[data-bizmhead]</code>·<code>[data-bizmbox]</code>) 노드는 두고 <b>그 안 + 점줄 속만</b> 갈아끼운다. 프레임이 없거나 구조가 다르면 종전 통째 교체로 폴백(회귀 0).</li>
-    <li>유리박스 높이를 옛→새로 <mark>.42s cubic-bezier(.22,.61,.36,1)</mark>(기존 <code>bizPageR/L</code>과 같은 값)로 글라이드 → 상하 튐 제거. 끝나면 자연 높이로 복귀.</li>
+    <li><b>높이 글라이드는 철회했다(260802b).</b> 넘김 0.42s 동안 유리박스가 <b>옛 면 높이로 고정</b>돼 있는데, 렌더 직후 rAF로 도는 <code>_srailAlignTop</code>이 바로 그 값을 재서 우 목록 높이와 짝 면 박스 minHeight를 잡는다 → 우 「판매 실적」 유리박스가 화면 아래까지 늘어나 박혔다(운영자 실측). 실제 <code>_srailAlignTop</code>을 떼어 재현: 정상 <code>#rail-yrm-list 242px</code> vs 좌 박스 900px 잠금 시 <code>842px</code>(잠금 해제 후에도 남음). → 삭제 = 높이 계약 종전 그대로.</li>
+    <li>프레임을 재사용하므로, 통째 교체 때 자동으로 사라지던 <b>인라인 기하 스타일</b>(<code>height</code>·<code>minHeight</code>·<code>maxHeight</code>)을 교체 시 손으로 지운다 — 짝 면에서 걸린 minHeight가 다음 면까지 남아 「블러 창이 아래까지」가 재현되는 걸 막는다.</li>
     <li>넘김 동안만 <code>will-change:transform,opacity</code> → 합성 레이어 승격(고프레임). 클래스가 .42s 뒤 제거되므로 평소 부담 0. 새 색·새 값·새 부품 0.</li>
     <li><code>prefers-reduced-motion</code>이면 높이 글라이드도 끈다(기존 애니 규약과 같은 축).</li>
   </ul>
@@ -133,18 +134,10 @@ function swap(el,html){
   var nH=tmp.querySelector('[data-bizmhead]'), nB=tmp.querySelector('[data-bizmbox]');
   var oD=el.querySelector('#bizm-dots-row'), nD=tmp.querySelector('#bizm-dots-row');
   if(!nH||!nB||(!oD)!==(!nD)){ el.innerHTML=html; return; }
-  var h0=oB.getBoundingClientRect().height;
   oH.innerHTML=nH.innerHTML; oB.innerHTML=nB.innerHTML;
   if(oD&&nD)oD.innerHTML=nD.innerHTML;
-  if(h0>0){
-    oB.style.transition='none'; oB.style.height=h0+'px'; oB.style.overflow='hidden';
-    requestAnimationFrame(function(){
-      var h1=oB.scrollHeight;
-      oB.style.transition='height '+(0.42*SLOW)+'s cubic-bezier(.22,.61,.36,1)';
-      oB.style.height=h1+'px';
-      setTimeout(function(){ oB.style.height=''; oB.style.overflow=''; oB.style.transition=''; },470*SLOW);
-    });
-  }
+  // 프레임 재사용 = 통째 교체 때 사라지던 인라인 기하 스타일을 손으로 청소(정본 _bizmSwap과 동일)
+  oB.style.height=''; oB.style.minHeight=''; oB.style.maxHeight=''; oB.style.overflow=''; oB.style.transition='';
 }
 function renderAfter(){
   var el=document.getElementById('colAfter');
