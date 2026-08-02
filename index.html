@@ -3374,6 +3374,12 @@ function _appEnterStagger(appEl){
     els.forEach(function(el){el.classList.add('ae-pre');});
     appEl.style.display='';
     void appEl.offsetHeight;
+    // [260802g 실측 「맨 처음 로딩 때 블러 칸이 어긋났다가 돌아옴」] 커튼(640ms display:none) 동안 initApp 렌더의 rAF 이젤
+    //   (_srailAlignTop)는 offsetParent null로 전부 스킵 — 공개 순간 아래 _bizFitViewport만으론 차트가 이미 맞는 화면(브라우저 줌
+    //   >100%·세로 여유 모니터)에서 setH가 no-op라 내부 _srailAlignTop도 안 불려, 좌(자연높이 큼)·우(로더 작음) 블러 박스가
+    //   어긋난 채 노출됐다가 첫 데이터 도착 정렬에야 돌아왔다(헤드리스 z0.8 실측: 하단선 Δ707px·0.9s+ 지속).
+    //   → 공개 직후 리사이즈 핸들러 정본 순서(정렬 → fit)대로 이젤을 먼저 고정(멱등 · 캘린더 모드도 같은 함수가 정본 경로).
+    try{ if(typeof _srailAlignTop==='function')_srailAlignTop(); }catch(_e){}
     // [260801 운영자 "부팅 때 커졌다가 작아진다"] 커튼(로그인 카드 리프트 640ms) 동안 #app은 display:none — 그 사이 Plotly가 도착하면
     //   _bizFitViewport가 `rail.offsetParent===null`로 즉시 return해 헛돈다(재호출 훅 없음 = 웜캐시에서 차트가 560px로 영구 고정,
     //   사용자가 창을 건드리는 순간에야 −28.8%로 접힘 — 평의회 실측 1-B). 여기 = 앱이 보이는 첫 순간·레이아웃 플러시 직후라
@@ -6393,7 +6399,7 @@ function _bizCompRender(el,half){
   var tgtId=el.id;
   if(typeof requestAnimationFrame==='function')requestAnimationFrame(function(){try{_srailAlignTop();}catch(_e){}});
   if(!_bizState.raw){
-    _bizmSwap(el,'<div style="position:relative">'+_bizmHead('',TTL,SUB)+_BIZM_BOX+'<div style="position:relative;min-height:300px"><div class="sk-sweep" aria-hidden="true"></div><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--accent);opacity:.75;font-size:14px;font-weight:600">'+_ldHtml(16)+'운영 데이터 불러오는 중</div></div>'+'</div>'+DOTS+'</div>');   // [260802] 프레임 유지 · [PR 357 타 세션] 빔 스윕 로딩 통일 채택(양쪽 보존)
+    _bizmSwap(el,'<div style="position:relative">'+_bizmHead('',TTL,SUB)+_BIZM_BOX+'<div style="position:relative;height:100%;min-height:300px"><div class="sk-sweep" aria-hidden="true"></div><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--accent);opacity:.75;font-size:14px;font-weight:600">'+_ldHtml(16)+'운영 데이터 불러오는 중</div></div>'+'</div>'+DOTS+'</div>');   // [260802] 프레임 유지 · [PR 357 타 세션] 빔 스윕 로딩 통일 채택(양쪽 보존) · [260802g] height:100% = 이젤 박스 전면(스윕·문구 정중앙 — 4면 로더와 동일 규약, 데이터 도착 시 _bizmSwap이 통째 교체라 원복 불요)
     // 레일이 숨는 폭(≤1200) = 레일 6시트 fetch가 없어 자체 확보 — 넓은 화면은 레일 플로우(res[3]→_bizState.raw)가 채움(중복 fetch 방지)
     if(window.innerWidth<=1200&&!window._bizmBusy){
       window._bizmBusy=1;
@@ -7611,7 +7617,11 @@ function _railYrmFrame(){
   // [260725 운영자] 우 틀 = 「판매 실적」(구 '판매 현황' — 260731 4차 책 4면 개명 · 2면 이름 = 세부메뉴와 동일어) · 연간 축 표기(누적 N명·2012~2026.1Q)와 상수 KPI 4칸(_uhaLeftStrip)은 제거 → 그 자리만큼 아래 리스트가 위로 올라옴
   var acts=(typeof window!=='undefined')?window._railYrmActives:null;
   var h='<div style="position:relative">'+_bizmHead('','판매 실적',' ')+_BIZM_BOX;
-  h+='<div class="bizm-card"><div class="ct">'+_railYrmCardTitle()+'</div><div id="rail-yrm-list">'+_railYrmTableHtml(acts)+'</div></div>';
+  // [260802g 운영자 「로딩 통일」] 데이터 도착 전 = 흰 카드(구 .rail-yrm-empty 소형 로더) 대신 4면(고객 분석)과 같은
+  //   블러 전면 스윕 로더 — 「사업 실적 불러오는 중」 정중앙(문구 = 운영자 지정) · height:100% 규약 = 4면 로더와 동일.
+  //   #rail-yrm-load = 카드·목록 부재 상태의 유일 마커 — actives 첫 도착 시 _railYrmSync가 이 마커를 보고 프레임 재구축.
+  if(!acts)h+='<div id="rail-yrm-load" style="position:relative;height:100%;min-height:260px"><div class="sk-sweep" aria-hidden="true"></div><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--accent);opacity:.75;font-size:14px;font-weight:600">'+_ldHtml(16)+'사업 실적 불러오는 중</div></div>';
+  else h+='<div class="bizm-card"><div class="ct">'+_railYrmCardTitle()+'</div><div id="rail-yrm-list">'+_railYrmTableHtml(acts)+'</div></div>';
   h+='<div id="rail-yrm-uha"></div>';   // [260731 운영자] 상세(#srail-uha) 슬롯 = 유리박스 '안'으로 이주. 하단 점줄 바는 폐지(우 카드 하단선 = 좌 「전체 실적표」와 일치) · 박스 밖 하단 바는 책 넘김(#bizm-dots-row) 하나만
   h+='</div>';   // 유리박스 닫기
   h+='</div>';
@@ -7619,9 +7629,12 @@ function _railYrmFrame(){
 }
 // [260731 4차] 4면 = 고객 분석(구 '회원 분포' 인라인化) — 본문 = _memOvRender 재사용(모달과 같은 집계·부품), admin 전용.
 //   비admin = 좁은 화면에선 면 자체가 없고(_bizBookN=3), 넓은 화면 펼침2 우측만 안내 카드(레이아웃 유지 · 데이터 0).
+// [260802g 운영자 「스윕·문구 = 블러 창 전면·정중앙」] 로더 height:100% = 이젤 고정 박스의 내부높이(전역 border-box라 안선까지)를 채워
+//   sk-sweep이 유리 전체를 쓸고 문구가 세로 정중앙(구 min-height 260 = 박스 상단 일부만). 이젤 꺼짐(좁은 화면 = 박스 자연높이)은
+//   100%가 auto로 무효 → min-height 260 폴백(종전 그대로). 데이터 렌더 직전 _bizMemberEnsure가 height를 지워 자연 흐름 원복.
 function _bizPageMemberHtml(){
   var inner=(typeof userRole!=='undefined'&&userRole==='admin')
-    ?('<div id="mem-ov-inline" style="position:relative;min-height:260px"><div class="sk-sweep" aria-hidden="true"></div><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--accent);opacity:.75;font-size:14px;font-weight:600">'+_ldHtml(16)+'회원 데이터 불러오는 중</div></div>')
+    ?('<div id="mem-ov-inline" style="position:relative;height:100%;min-height:260px"><div class="sk-sweep" aria-hidden="true"></div><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--accent);opacity:.75;font-size:14px;font-weight:600">'+_ldHtml(16)+'회원 데이터 불러오는 중</div></div>')
     :('<div style="text-align:center;padding:60px 20px;color:var(--dim);font-size:13px">🔒 고객 분석은 관리자 전용이에요<br><span style="font-size:11.5px;color:var(--muted)">개인정보 집계라 관리자 계정에서만 열려요</span></div>');
   return _bizmHead('','고객 분석',' · 운영_회원 · 개인 식별 없음(집계 전용)')+_BIZM_BOX+inner+'</div>';
 }
@@ -7629,14 +7642,14 @@ function _bizMemberEnsure(){
   var tgt=document.getElementById('mem-ov-inline'); if(!tgt)return;
   if(typeof userRole==='undefined'||userRole!=='admin')return;   // 비admin은 애초에 안내 카드(위)라 여기 안 온다 — 이중 안전
   var ready=_memState&&_memState.rows&&_memState.rows.length&&_memState.rows[0]['연령대']!==undefined;
-  if(ready){ _memOvRender('mem-ov-inline'); return; }
+  if(ready){ tgt.style.height=''; _memOvRender('mem-ov-inline'); return; }   // [260802g] 로딩용 height:100% 원복 — 실데이터는 자연 흐름(넘치면 박스 내부 스크롤 정본)
   if(_memLoading){ setTimeout(_bizMemberEnsure,600); return; }   // [페이블 검수 MED] _memLoad는 비행 중이면 콜백 없이 return — 폴링으로 합류(_memWarm 선로딩과 공존)
   if(window._bizMemBusy)return;
   window._bizMemBusy=1;
   Promise.resolve()
     .then(function(){ return (_memState&&_memState.rows&&_memState.rows.length)?null:_memLoad(false); })
     .then(function(){ if(_memState&&_memState.rows&&_memState.rows.length&&_memState.rows[0]['연령대']===undefined)return _memLoad(true); })   // 옛 캐시(연령대 없음) = 1회 신선 재로드(openMemberOverview와 동일 규칙)
-    .then(function(){ window._bizMemBusy=0; if(document.getElementById('mem-ov-inline'))_memOvRender('mem-ov-inline'); })
+    .then(function(){ window._bizMemBusy=0; var t2=document.getElementById('mem-ov-inline'); if(t2){ t2.style.height=''; _memOvRender('mem-ov-inline'); } })   // [260802g] 로딩용 height:100% 원복(위 ready 경로와 동일 규약)
     .catch(function(e){ window._bizMemBusy=0; var t=document.getElementById('mem-ov-inline'); if(t)t.innerHTML='<div style="text-align:center;padding:50px;color:var(--danger);font-size:13px">회원 데이터를 못 불러왔어요 <button class="ana-chip" onclick="_bizMemberEnsure()" style="margin-left:8px">다시 시도</button></div>'; console.warn('[book p4]',e); });
 }
 function _railYrmRender(){
@@ -7664,7 +7677,13 @@ function _railYrmSync(actives){
   var el=document.getElementById('rail-yrm'); if(!el)return;
   if(_bizBookWide()&&_bizRightId(_bizmState.page||1)!==2){ return; }   // [260801 5차] 우 열이 「판매 실적」이 아닌 동안(짝 면) = 목록 DOM이 없다 — actives만 저장하고 화면은 안 건드린다(재렌더가 그 면 본문을 지우는 사고 방지)
   var list=document.getElementById('rail-yrm-list');
-  if(!list){ if(el.childNodes.length)return; _railYrmRender(); return; }   // [260731 4차] 틀이 있는데 목록만 없다 = 다른 면 — 통째 재렌더 금지(빈 틀일 때만 최초 구축)
+  if(!list){
+    // [260802g] 통일 로더 마커(#rail-yrm-load)가 떠 있다 = actives 첫 도착 — 그 열의 프레임을 카드+목록으로 재구축.
+    //   넓은 화면 = 우 열(_railYrmRender) · 좁은 화면 2면 = 좌 보드(_bizInlineRender) — 어느 쪽이든 _bizmSwap이 프레임 유지·안쪽만 교체(번쩍임 0).
+    var _ld=document.getElementById('rail-yrm-load');
+    if(_ld){ try{ if(el.contains(_ld))_railYrmRender(); else if(typeof _bizInlineRender==='function')_bizInlineRender(); }catch(_e){console.warn('[rail-yrm load→list]',_e);} return; }
+    if(el.childNodes.length)return; _railYrmRender(); return;   // [260731 4차] 틀이 있는데 목록만 없다 = 다른 면 — 통째 재렌더 금지(빈 틀일 때만 최초 구축)
+  }
   list.innerHTML=_railYrmTableHtml(actives);
   try{ _ryGrpEqualize(list); }catch(_e){}   // [260801 Q.38] 그룹 표 폭 통일 — 3열 숫자(판매율·전시 누적 관객수) 세로선 보증
   if(_ryDrill.key&&!_ryDrillPaint(_ryDrill.key,0))_ryDrill.key='';   // 상세를 보던 중 데이터가 갱신되면 상세를 다시 그린다(그 프로그램이 사라졌으면 목록 유지)
