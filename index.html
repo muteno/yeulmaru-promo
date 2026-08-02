@@ -2103,8 +2103,11 @@ table.promo-board-table thead th:last-child{border-top-right-radius:11px}
    붙는 곳 = 글래스 헤더([data-bizmhead])와 유리박스([data-bizmbox]) — 프레임은 안 움직이고 그 자식(제목·카드)만 움직인다.
    overflow:hidden = 넘어오는 내용이 프레임 밖으로 새지 않게(넘김 동안만 · _bizmAnimate가 끝나면 클래스 제거 = 팝오버·스크롤 원복).
    키프레임·이징 100% 계승(bizPageR/L · 신규 값 0). */
+/* [260802 운영자] 「오로지 내용부분만 촤르르 아주 자연스럽게 고프레임으로」 — 넘김 동안만 합성 레이어로 승격(will-change).
+   클래스가 .42s 뒤 제거되므로(_bizmAnimate) 평소엔 레이어를 물지 않는다 = 상시 메모리 부담 0.
+   프레임(유리) 노드 자체는 _bizmSwap이 유지 — 이 애니는 그 '안'에서만 돈다(transform·opacity = 페인트 없는 속성). */
 .bizm-flip{overflow:hidden}
-.bizm-flip>*{animation:bizPageR .42s cubic-bezier(.22,.61,.36,1)}
+.bizm-flip>*{animation:bizPageR .42s cubic-bezier(.22,.61,.36,1);will-change:transform,opacity}
 .bizm-flip.rev>*{animation-name:bizPageL}
 @media (prefers-reduced-motion:reduce){.bizm-flip>*{animation:none}}
 /* [260723 운영자] 메인 토글(홍보 캘린더 ↔ 연간 실적) 촤르륵 슬라이드 — 좌측 콘텐츠만 이동, 우측 판매현황 레일은 고정. bizPage 키프레임 계승 */
@@ -6153,6 +6156,40 @@ function _bizmAnimate(cols){
     });
   });
 }
+// ── [260802 운영자] 「겉면 블러는 동일하잖아? 오로지 내용부분만 촤르르 아주 자연스럽게 고프레임으로」 ─────────────
+// 번쩍임의 정체(코드 실측): 면을 넘길 때 열의 innerHTML을 **통째로** 갈아 글래스 프레임(헤더 `[data-bizmhead]` ·
+//   유리박스 `[data-bizmbox]`) 노드까지 새로 만든다 → backdrop-filter 합성 레이어가 파기·재생성되며 한 프레임 비어 보인다.
+//   1-2면 ↔ 3-4면은 좌·우 두 열이 동시에 갈리는 유일한 이동이라(_bizBookRender의 rid 변경) 화면 전체가 번쩍인다.
+// → 프레임 노드는 **그대로 두고 그 안만** 갈아끼운다(헤더 속·박스 속·점줄 속). 프레임이 없거나 구조가 다르면
+//   종전 통째 교체로 폴백 = 회귀 0. 애니(_bizmAnimate)는 그대로 그 프레임의 자식들에게 걸린다.
+// 높이도 옛→새로 같은 이징·같은 길이(.42s cubic-bezier(.22,.61,.36,1) — bizPageR/L 계승, 신규 값 0)로 글라이드해
+//   내용 길이가 다른 면 사이(1면 ↔ 3면)의 상하 튐을 없앤다. 애니는 transform·opacity·height만 = 합성 위주(고프레임).
+function _bizmReduceMotion(){ try{ return !!(window.matchMedia&&window.matchMedia('(prefers-reduced-motion:reduce)').matches); }catch(_e){ return false; } }
+function _bizmSwap(el,html){
+  if(!el)return false;
+  var oH=el.querySelector('[data-bizmhead]'), oB=el.querySelector('[data-bizmbox]');
+  if(!oH||!oB){ el.innerHTML=html; return false; }                    // 첫 렌더(프레임 없음) = 통째로
+  var tmp=document.createElement('div'); tmp.innerHTML=html;
+  var nH=tmp.querySelector('[data-bizmhead]'), nB=tmp.querySelector('[data-bizmbox]');
+  var oD=el.querySelector('#bizm-dots-row'), nD=tmp.querySelector('#bizm-dots-row');
+  if(!nH||!nB||(!oD)!==(!nD)){ el.innerHTML=html; return false; }     // 점줄 유무까지 같은 구조일 때만 안쪽 교체
+  var h0=oB.getBoundingClientRect().height;
+  oH.innerHTML=nH.innerHTML;
+  oB.innerHTML=nB.innerHTML;
+  if(oD&&nD)oD.innerHTML=nD.innerHTML;                                 // 점 점등 상태 갱신(노드는 유지 = 하단 바도 안 깜빡인다)
+  try{
+    if(h0>0&&!_bizmReduceMotion()){
+      oB.style.transition='none'; oB.style.height=h0+'px'; oB.style.overflow='hidden';
+      requestAnimationFrame(function(){
+        var h1=oB.scrollHeight;
+        oB.style.transition='height .42s cubic-bezier(.22,.61,.36,1)';
+        oB.style.height=h1+'px';
+        setTimeout(function(){ oB.style.height=''; oB.style.overflow=''; oB.style.transition=''; },470);   // 자연 높이로 복귀(내부 스크롤·팝오버 원복) — .42s + 여유
+      });
+    }
+  }catch(_e){ oB.style.height=''; oB.style.overflow=''; oB.style.transition=''; }
+  return true;
+}
 function _bizmPageNav(){ return ''; }   // [260723f] 절대배치 ‹›(구 srail-cbtn) 폐지 — 페이지 컨트롤은 헤더 우측 _bizmDots로 통합(‹ • • ›)
 function _bizmDots(){
   var N=_bizBookN(), vis=_bizVisPages();
@@ -6181,23 +6218,23 @@ function _bizInlineRender(){
   if(page===2){   // [260731 4차] 좁은 화면 전용 — 판매 실적 면(우 레일 틀을 좌 보드가 대신 그림 · 데이터 = 레일 6시트 공유)
     try{ var _uhaN=document.getElementById('srail-uha'), _railN=document.getElementById('sales-rail'); if(_uhaN&&_railN&&!_railN.contains(_uhaN))_railN.appendChild(_uhaN); }catch(_e){}
     try{ var _ryN=document.getElementById('rail-yrm'); if(_ryN)_ryN.innerHTML=''; }catch(_e){}   // #rail-yrm-list ID 유일성 — 숨은 레일 쪽 잔존 DOM 비움(uha는 위에서 대피)
-    el.innerHTML=_railYrmFrame()+_bizmDots()+_bizmPageNav();
+    _bizmSwap(el,_railYrmFrame()+_bizmDots()+_bizmPageNav());   // [260802] 프레임 유지·안쪽만 교체(번쩍임 제거)
     if(!(_salesState&&_salesState.daily&&_salesState.master&&_salesState.ops)){ if(typeof _srailInit==='function')_srailInit(false,null,true); }   // allowNarrow = 좁은 화면 6시트 확보(§_srailInit)
     else if(typeof _srailRender==='function'){ try{_srailRender();}catch(_e){console.warn('[book p2]',_e);} }
     return;
   }
   if(page===4){   // [260801 5차] 고객 분석 면(admin, 비admin은 _bizBookN=3이라 진입 불가) — 좌 열이 그린다(넓은 화면도 동일 · 우 열은 「판매 실적」 고정)
-    el.innerHTML='<div style="position:relative">'+_bizPageMemberHtml()+_bizmDots()+_bizmPageNav()+'</div>';
+    _bizmSwap(el,'<div style="position:relative">'+_bizPageMemberHtml()+_bizmDots()+_bizmPageNav()+'</div>');   // [260802] 프레임 유지·안쪽만 교체
     _bizMemberEnsure();
     return;
   }
   if(page===1){
     // [260723g 운영자 시안] 누적 총 = 헤더 우측(히어로 박스 폐지) · 부제 = 기간 · 본문 = 컴팩트(_yrmRender)
     var _grand='<span style="font-size:11.5px;color:var(--neutral-text);font-weight:600;white-space:nowrap">누적 <b style="color:var(--accent);font-size:14px;font-weight:800;font-variant-numeric:tabular-nums">'+_YR.grand.toLocaleString()+'명</b></span>';   // [260723 운영자] 「누적 3,690,031명」 — 실수치 + 숫자·명까지 강조색('총' 삭제)
-    el.innerHTML='<div style="position:relative">'
+    _bizmSwap(el,'<div style="position:relative">'
       +_bizmHead(_grand+_pgTag,'연간 실적',' 2012~2026.1Q')
       +_BIZM_BOX+'<div id="yrm-body"></div>'+'</div>'+_bizmDots()
-      +_bizmPageNav()+'</div>';
+      +_bizmPageNav()+'</div>');   // [260802] 프레임 유지·안쪽만 교체
     _yrmRender();
     return;
   }
@@ -6216,7 +6253,7 @@ function _bizCompRender(el,half){
   var tgtId=el.id;
   if(typeof requestAnimationFrame==='function')requestAnimationFrame(function(){try{_srailAlignTop();}catch(_e){}});
   if(!_bizState.raw){
-    el.innerHTML='<div style="position:relative">'+_bizmHead('','사업 결과 비교',SUB)+_BIZM_BOX+'<div style="position:relative;min-height:300px"><div class="sk-sweep" aria-hidden="true"></div><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--accent);opacity:.75;font-size:14px;font-weight:600">'+_ldHtml(16)+'운영 데이터 불러오는 중</div></div>'+'</div>'+DOTS+'</div>';   // [PR 357 타 세션] 빔 스윕 로딩 통일 채택(양쪽 보존)
+    _bizmSwap(el,'<div style="position:relative">'+_bizmHead('','사업 결과 비교',SUB)+_BIZM_BOX+'<div style="position:relative;min-height:300px"><div class="sk-sweep" aria-hidden="true"></div><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--accent);opacity:.75;font-size:14px;font-weight:600">'+_ldHtml(16)+'운영 데이터 불러오는 중</div></div>'+'</div>'+DOTS+'</div>');   // [260802] 프레임 유지 · [PR 357 타 세션] 빔 스윕 로딩 통일 채택(양쪽 보존)
     // 레일이 숨는 폭(≤1200) = 레일 6시트 fetch가 없어 자체 확보 — 넓은 화면은 레일 플로우(res[3]→_bizState.raw)가 채움(중복 fetch 방지)
     if(window.innerWidth<=1200&&!window._bizmBusy){
       window._bizmBusy=1;
@@ -6232,7 +6269,7 @@ function _bizCompRender(el,half){
     return;
   }
   var all=_bizClean();
-  if(!all.length){ el.innerHTML='<div style="position:relative">'+_bizmHead('','사업 결과 비교',SUB)+_BIZM_BOX+'<div style="text-align:center;padding:50px;color:var(--dim)">📭 표시할 운영 데이터가 없습니다</div>'+'</div>'+DOTS+'</div>'; return; }
+  if(!all.length){ _bizmSwap(el,'<div style="position:relative">'+_bizmHead('','사업 결과 비교',SUB)+_BIZM_BOX+'<div style="text-align:center;padding:50px;color:var(--dim)">📭 표시할 운영 데이터가 없습니다</div>'+'</div>'+DOTS+'</div>'); return; }
   var years=Array.from(new Set(all.map(function(r){return r._year;}))).sort(function(a,b){return b-a;});
   var thisY=(new Date()).getFullYear();
   if(_bizmState.year===null||years.indexOf(_bizmState.year)<0)_bizmState.year=(years.indexOf(thisY)>=0)?thisY:years[0];
@@ -6254,7 +6291,7 @@ function _bizCompRender(el,half){
     right+='<button class="ana-chip" onclick="openBusinessBoard()" title="장르 벤치마크·시즌 추세까지 — 사업 결과 비교 크게 보기">자세히 보기</button>';   // [260731 4차] 세부메뉴가 인라인 면 이동으로 바뀌며 잃은 전체 모달 진입로 보전(기존 .ana-chip 부품)
   }
   var h='<div style="position:relative">'+_bizmHead(right,'사업 결과 비교',SUB)+_BIZM_BOX;   // [260731 4차] 3면 이름 = 세부메뉴와 동일어(구 기본값 '사업 현황')
-  if(!list.length){ h+='<div style="text-align:center;padding:40px;color:var(--dim)">해당 연도/분류 데이터가 없습니다</div>'+'</div>'+DOTS+'</div>'; el.innerHTML=h; return; }
+  if(!list.length){ h+='<div style="text-align:center;padding:40px;color:var(--dim)">해당 연도/분류 데이터가 없습니다</div>'+'</div>'+DOTS+'</div>'; _bizmSwap(el,h); return; }
   var total=list.length,avgAll=list.reduce(function(a,g){return a+g.avg;},0)/list.length,maxAll=Math.max.apply(null,list.map(function(g){return g.avg;}));
   var kc=function(lab,val,tk){return '<div class="bizm-kpi" style="--kpitok:var('+(tk||'--accent')+')"><div class="lab">'+lab+'</div><div class="val">'+val+'</div></div>';};   // [260723f Opus] 글래스 KPI 통일(1·2면 동일 시각언어)
   // [260801 운영자] 조각 5개 — 「담는 자리」만 half로 갈린다(카드 마크업·순서 문법은 종전 그대로 · 신규 부품 0)
@@ -6287,7 +6324,7 @@ function _bizCompRender(el,half){
   //   half 0(좁은 화면 한 열) = 자르기 전 순서 그대로(KPI→분포→벤치마크→시즌→표) = 회귀 0
   h+=(half===1)?(_kpi+_dist+_season):(half===2)?(_bench+_tbl):(_kpi+_dist+_bench+_season+_tbl);
   h+='</div>'+DOTS+'</div>';
-  el.innerHTML=h;
+  _bizmSwap(el,h);   // [260802] 프레임 유지·안쪽만 교체(1-2면 ↔ 3-4면 두 열 동시 넘김의 번쩍임 제거)
   _bizEnsurePlotly(function(){ try{ if(half!==2){_bizDrawChart(list, selTypes.length>1, 'bizm-chart', 430); _bizDrawSeason('bizm-season',_bizmState);} if(half!==1)_bizDrawGenreBench('bizm-genre',_bizmState); }catch(_e){console.warn('[bizm chart]',_e);} });   // 그 열에 실제로 놓인 차트만 그린다(반대편 열 것은 그쪽 렌더가 담당)
 }
 function _srailTodayISO(){ var t=new Date(); return t.getFullYear()+'-'+('0'+(t.getMonth()+1)).slice(-2)+'-'+('0'+t.getDate()).slice(-2); }
@@ -7472,8 +7509,10 @@ function _railYrmRender(){
   var p=_bizmState.page||1, pair=(_bizBookWide()&&_bizPageIsPair(p));
   _bizmState.rightId=_bizRightId(p);
   try{if(window.Plotly)['#bizm-genre','#bizm-season'].forEach(function(s){var n=el.querySelector(s); if(n)Plotly.purge(n);});}catch(_e){}   // 우 열이 들고 있던 차트만 purge(노드 지정 = 좌 열 동명 id 무접촉) — 리스너·옵저버 누수 차단
-  if(pair){ try{ el.innerHTML=''; _bizCompRender(el,2); }catch(_e){ console.warn('[rail-yrm pair]',_e); } }
-  else { try{ el.innerHTML=_railYrmFrame(); }catch(_e){ console.warn('[rail-yrm]',_e); } try{ _ryGrpEqualize(); }catch(_e){} }   // [260801 Q.38] 최초 틀 구축 직후에도 그룹 표 폭 통일
+  if(pair){ try{ _bizCompRender(el,2); }catch(_e){ console.warn('[rail-yrm pair]',_e); } }   // [260802] 구 `el.innerHTML=''` 선지우기 폐지 — 프레임(유리)이 살아 있어야 _bizmSwap이 안쪽만 갈아끼운다(#rail-yrm-uha 슬롯은 아래에서 재확보)
+  else { try{ _bizmSwap(el,_railYrmFrame()); }catch(_e){ console.warn('[rail-yrm]',_e); } try{ _ryGrpEqualize(); }catch(_e){} }   // [260801 Q.38] 최초 틀 구축 직후에도 그룹 표 폭 통일
+  // [260802] 프레임 유지 교체(_bizmSwap)는 열을 비우지 않으므로, 짝 면에서 만들어 둔 숨김 슬롯이 「판매 실적」 복귀 시 틀 안 슬롯과 겹칠 수 있다 → 첫 개(틀 안 = 문서 순서상 앞)만 남기고 정리(id 유일성 보존).
+  try{ var _sls=el.querySelectorAll('#rail-yrm-uha'); for(var _si=1;_si<_sls.length;_si++)if(!_sls[_si].childNodes.length)_sls[_si].parentNode.removeChild(_sls[_si]); }catch(_e){}
   try{ if(!document.getElementById('rail-yrm-uha')){ var _sl=document.createElement('div'); _sl.id='rail-yrm-uha'; _sl.style.display='none'; el.appendChild(_sl); } }catch(_e){}   // 짝 면에도 상세 슬롯(숨김) 확보 — 회전 기계 타이머·리스너 보존, 화면 노출 0
   try{ var slot=document.getElementById('rail-yrm-uha'); if(uha&&slot)slot.appendChild(uha); }catch(_e){}
   if(!pair){ try{ if(window._railYrmActives)_srailUhaSync(window._railYrmActives); }catch(_e){} try{ if(_ryDrill.key)_ryDrillPaint(_ryDrill.key,0); }catch(_e){} try{ _railYrmSyncActive(); }catch(_e){} }   // [260731 4차 · 페이블 검수 MED] 판매 실적 복귀 = 회전 기계·상세·액티브 pill 재점화(짝 면 휴식의 짝)
