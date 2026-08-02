@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>20260802 수평선 고정(Δ14px 제거) + 레이아웃 게이트 — 전후</title>
+<style>
+  :root{--accent:#4A4DE7;--peach-text:#D88455;--green:#1A6B3C;--danger:#E24B4A;--text:#1A1A2E;--dim:#888;--muted:#bbb;--border:rgba(0,0,0,0.09);--surface:#fff;--bg:linear-gradient(135deg,#FDF6F3 0%,#F0EBF5 50%,#EBF0F8 100%)}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Pretendard','Noto Sans KR',sans-serif;background:var(--bg);color:var(--text);padding:28px 4vw 60px}
+  h1{font-size:21px;margin-bottom:4px}h1 b{color:var(--accent)}
+  .sub{font-size:12.5px;color:var(--dim);margin-bottom:24px;line-height:1.6}
+  .scene{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:18px;margin-bottom:24px;box-shadow:0 8px 32px rgba(74,77,231,0.08)}
+  .scene h2{font-size:15px;margin-bottom:2px}
+  .scene .cap{font-size:12px;color:var(--dim);margin-bottom:10px}
+  .tgl{display:inline-flex;gap:6px;margin-bottom:10px}
+  .tgl button{font:inherit;font-size:12.5px;font-weight:700;padding:6px 16px;border-radius:9px;border:1.5px solid var(--border);background:#fff;color:var(--dim);cursor:pointer}
+  .tgl button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  .shot{position:relative;border:1px solid var(--border);border-radius:12px;overflow:hidden}
+  .shot img{display:block;width:100%;height:auto}.shot img.hide{display:none}
+  .badge{position:absolute;top:8px;left:10px;font-size:12px;font-weight:800;padding:3px 11px;border-radius:8px;color:#fff}
+  .badge.bf{background:var(--danger)}.badge.af{background:var(--green)}
+  .rule{position:absolute;left:0;right:0;height:0;border-top:2px dashed rgba(226,75,74,.85);pointer-events:none}
+  .note{font-size:12.5px;line-height:1.7;margin-top:10px}.note b{color:var(--accent)}
+  table{border-collapse:collapse;font-size:12.5px;width:100%;margin-top:8px}
+  td,th{border:1px solid var(--border);padding:6px 10px;text-align:left}
+  th{background:rgba(74,77,231,0.05);font-weight:700}
+  td.num{font-variant-numeric:tabular-nums;text-align:right}
+  .bad{color:var(--danger);font-weight:700}.good{color:var(--green);font-weight:700}
+  .why{background:rgba(74,77,231,0.045);border-radius:12px;padding:14px 16px;font-size:12.5px;line-height:1.75;margin-bottom:24px}
+  code{background:rgba(0,0,0,.05);padding:1px 5px;border-radius:5px;font-size:11.5px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media (max-width:900px){.grid2{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<h1>흰 라인 <b>수평선 고정</b> + 「항상 이 상태」 잠금 게이트 <span style="font-size:12px;color:var(--muted);font-weight:500">260802f · 헤드리스 실측 7종 화면</span></h1>
+<div class="sub">운영자 지시: 「블러 처리한 부분을 <b>항상 '후'와 같게 고정</b>할 방법이 있나 · 내용 흰색칸은 지금과 같이 유지 · 그런데 후도 첨부 사진 부분이 <b>수평이 아님</b>」 → ① 남아 있던 <b>14px 어긋남</b> 제거 ② 그 상태를 커밋마다 자동 검사하는 <b>게이트</b> 신설.</div>
+
+<div class="why">
+  <b style="color:var(--accent)">① 수평이 아니었던 이유</b> — 좌 「전체 실적표」 카드는 정본 CSS <code>[data-bizmbox] .bizm-card:last-child{margin-bottom:0}</code>로 하단 여백이 0이라 박스 안선(993)에 딱 붙는데,
+  우 「판매 실적」 카드는 뒤에 <b>빈 상세 슬롯 div</b>(<code>#rail-yrm-uha</code>)가 있어 <code>:last-child</code>가 아니었다 → 여백 14가 살아남아 <b>979</b>에서 끝났다(=운영자 표시 지점).<br>
+  <b style="color:var(--green)">수정</b>: 상세가 비어 있으면 목록 카드가 그 박스의 마지막 흰 도형이므로 같은 규약(여백 0)을 적용, 상세가 뜨면 원복(카드↔상세 14 간격은 정본).<br><br>
+  <b style="color:var(--accent)">② 「항상 고정」 방법</b> — 사람 눈 대신 <b>기계가 매 커밋 검사</b>한다: <code>tools/smoke_layout.mjs</code>(pre-commit 자동 · 수동 <code>npm run smoke:layout</code>).
+  계약 4가지 = ⓐ좌·우 유리박스 상·하단선 Δ≤1.2px ⓑ마지막 흰 도형 하단선 Δ≤1.2px ⓒ흰 도형↔박스 안선 밀착(빈 유리 ≤2.5px·잘림 0) ⓓ재계산 12회 무흔들림.
+  깨지면 <b>커밋이 막힌다</b>. 역검증: 이 수정 <b>직전 머지본에 게이트를 걸면 정확히 Δ14.0px를 잡아내며 실패</b>한다(감시가 실제로 작동).<br><br>
+  <b style="color:var(--accent)">③ 큰/작은 화면도 같이</b> — 1600×900에서 3면 좌측이 112px 넘치던 것(차트가 최소치라 못 줄임) → 분포 차트까지 순차 흡수. 2560×1440에서 좌측에 199px 빈 유리(차트가 최대치라 못 늘림) → 마지막 흰 카드가 흡수(우측 판매 실적 카드와 같은 규약).
+</div>
+
+<div class="scene">
+  <h2>① 문제 지점 — 화면 하단 스트립(운영자 표시 부분)</h2>
+  <div class="cap">1920×1080 · 좌 전체 실적표 카드 하단 vs 우 판매 실적 카드 하단 (빨간 점선 = 좌측 하단선)</div>
+  <div class="tgl"><button class="on" onclick="sw(this,'s1',0)">전</button><button onclick="sw(this,'s1',1)">후</button></div>
+  <div class="shot" id="s1">
+    <img src="20260802_수평선_전_하단스트립.png" alt="전 — 우 카드가 14px 먼저 끝나 수평이 아님">
+    <img class="hide" src="20260802_수평선_후_하단스트립.png" alt="후 — 좌·우 카드 하단이 같은 수평선">
+    <span class="badge bf">전</span>
+    <span class="rule" style="top:62%"></span>
+  </div>
+  <div class="note">전: 좌 <b>993</b> / 우 <span class="bad">979</span> → <span class="bad">Δ14px</span> · 후: 좌 <b>993</b> / 우 <b>993</b> → <span class="good">Δ0</span>.</div>
+</div>
+
+<div class="scene">
+  <h2>② 큰 화면(2560×1440) — 차트가 최대치여도 흰 라인 일치</h2>
+  <div class="cap">좌: 차트 560(최대) + 전체 실적표 카드가 남는 몫 흡수 · 우: 판매 실적 카드 — 두 흰 도형이 같은 하단선</div>
+  <div class="grid2">
+    <div><div class="shot"><img src="20260802_수평선_후_2560_1면.png" alt="2560 1면 — 좌우 흰 카드 하단 일치"><span class="badge af">후 · 1면</span></div></div>
+    <div><div class="shot"><img src="20260802_수평선_후_2560_3면.png" alt="2560 3면 — 시즌 추세 카드와 우 표가 같은 하단선"><span class="badge af">후 · 3면</span></div></div>
+  </div>
+  <div class="note">3면도 동일: 좌 「시즌 추세」 카드와 우 「공연 목록 표」가 같은 라인에서 끝난다(전에는 좌 199px·47.9px 빈 유리).</div>
+</div>
+
+<div class="scene">
+  <h2>실측표 — 화면 7종 전수(게이트 결과)</h2>
+  <table>
+    <tr><th>화면</th><th>박스 상·하단 Δ</th><th>흰 라인 Δ</th><th>안선 밀착</th><th>판정</th></tr>
+    <tr><td>2560×1440</td><td class="num">0 / 0</td><td class="num good">0</td><td>좌 카드 흡수</td><td class="good">PASS</td></tr>
+    <tr><td>1920×1080</td><td class="num">0 / 0</td><td class="num good">0</td><td>차트 399</td><td class="good">PASS</td></tr>
+    <tr><td>1600×900</td><td class="num">0 / 0</td><td class="num good">0</td><td>시즌+분포 순차 압축</td><td class="good">PASS</td></tr>
+    <tr><td>1440×820</td><td class="num">0 / 0</td><td class="num good">0</td><td>차트 확장으로 빈 유리 0</td><td class="good">PASS</td></tr>
+    <tr><td>1366×768 · 1280×800</td><td class="num">0 / 0</td><td class="num good">0</td><td>압축 단계</td><td class="good">PASS</td></tr>
+    <tr><td>1920×740(초단신)</td><td class="num">0 / 0</td><td class="num good">0</td><td>최소 차트 후 잔여는 박스 내부 스크롤(정본)</td><td class="good">PASS</td></tr>
+    <tr><td><b>수정 직전 머지본(역검증)</b></td><td class="num">0 / 0</td><td class="num bad">14.0</td><td class="bad">우 빈 유리 14</td><td class="bad">FAIL(게이트가 잡음)</td></tr>
+  </table>
+  <div class="note" style="color:var(--dim)">부가 회귀: 유리 프레임 노드 유지 true(번쩍임 계약 #543) · 재계산 12~20회 상태 1개 · 드릴(상세) 열림 시에도 카드+슬롯 하단 = 안선 · 좁은 화면(1100) 이젤·fill 전부 해제 · check_design 1605/1605 동결 · JS 회귀 0.
+  <br>※ 목데이터로 상세를 열면 SVG 좌표 NaN 경고가 뜨는데 <b>수정 전 머지본에서도 동수(72건)</b> — 목데이터에 상세 차트용 필드가 없어서 생기는 하네스 아티팩트(운영 데이터 무관).</div>
+</div>
+
+<script>
+function sw(btn,id,i){
+  var box=document.getElementById(id);
+  box.querySelectorAll('img').forEach(function(im,k){im.classList.toggle('hide',k!==i);});
+  var bd=box.querySelector('.badge'); bd.textContent=i?'후':'전'; bd.className='badge '+(i?'af':'bf');
+  btn.parentNode.querySelectorAll('button').forEach(function(b){b.classList.toggle('on',b===btn);});
+}
+</script>
+</body>
+</html>
