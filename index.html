@@ -1645,6 +1645,16 @@ table.promo-board-table th:last-child .col-resize-handle{display:none}
 #ve-board .nb-input,#ve-board .nb-textarea{border-radius:12px}
 @media(max-width:760px){.ve-stage{max-height:40vh}#ve-board .nb-wrap{grid-template-columns:1fr}}   /* 모바일 1열 폴백 유지 — 스코프 오버라이드가 기존 미디어쿼리(특이도 열세)를 덮지 않게 재선언 */
 
+/* === 콘텐츠 제작 — 한글문서 편집 (hw-*) — 운영자 260803. 색·반경 전부 :root 토큰(신규 raw hex 0) ===
+   페이지 캔버스(.hwp-page)는 hwp/viewer-core.js 가 인라인 스타일로 만든다(--surface-solid·--glass-shadow 토큰) — 여기선 무대만 잡는다. */
+.hw-stage{flex:1;min-height:0;overflow:auto;background:var(--neutral);border-radius:12px;padding:14px;display:flex;flex-direction:column;align-items:center;gap:14px}
+.hw-stage.drag{outline:2px dashed var(--accent);outline-offset:-5px;background:var(--accent-light)}
+.hw-bar{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding-bottom:11px}
+.hw-name{font-size:12.5px;font-weight:600;color:var(--dim);flex:1;min-width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hw-ask{display:flex;gap:9px;align-items:flex-end;padding-top:12px;border-top:1px solid var(--border)}
+.hw-ask .nb-textarea{flex:1;min-width:0;resize:none;height:62px}
+@media(max-width:760px){.hw-ask{flex-direction:column;align-items:stretch}.hw-ask .btn{width:100%}}
+
 /* ============================================================
    예울마루 프로모 — UI 통일 토큰 (yeulmaru-ui.css)
    ADDITIVE: 기존 클래스/여백/픽토그램/PIN/필터/챗봇/빗금/스크롤바는 건드리지 않음.
@@ -22242,6 +22252,7 @@ function _contentMenuBuild(menu){
   var hov=' onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'"';
   menu.innerHTML='<div style="padding:8px 14px 6px;font-size:11px;color:var(--dim);font-weight:700">콘텐츠 제작</div>'
     +'<button type="button" onclick="_ddCloseAll();openNaverBlogTool()" style="'+itemCss+'"'+hov+'>네이버 블로그</button>'
+    +'<button type="button" onclick="_ddCloseAll();openHwpEditor()" style="'+itemCss+'"'+hov+'>한글문서 편집</button>'   /* [260803 운영자] 문서 올림 → 미리보기 → 말로 수정 (claw-hwp 이식 — hwp/NOTICE.md) */
     +'<button type="button" onclick="_ddCloseAll();openLinkGrab()" style="'+itemCss+'"'+hov+'>링크 자료수집</button>'   /* [260721 운영자] 네이버 블로그 바로 아래 — URL 붙여넣기 = 자료 일괄 다운로드 */
     +'<button type="button" onclick="_ddCloseAll();window.open(\'cutout/\',\'_blank\',\'noopener\')" style="'+itemCss+'"'+hov+'>누끼따기</button>'   /* [260726 운영자 "등재"] 사진 배경 제거 — 독립 도구 /cutout/ 새 탭(온디바이스 처리 · 대시보드 상태 보존 = noopener 새 탭) */
     +'<div style="margin:6px 8px 0;padding:8px 6px 4px;font-size:11px;color:var(--dim);font-weight:700;border-top:1px solid var(--border)">영상 편집기</div>'
@@ -26425,6 +26436,186 @@ function _veSpecPrompt(){
   L.push('◼ 네거티브(피할 것): '+(negs.length?negs.join(', '):'없음'));
   if(p.refine)L.push('◼ 정교화: 참조 이미지 선행 생성 — '+(p.refModel||'(이미지 모델 미선택)')+' → 키프레임·스타일 참조로 영상 모델에 투입');
   return L.join('\n');
+}
+
+// ============================================================
+// 콘텐츠 제작 ▸ 한글문서 편집 (hw-*) — 운영자 260803
+//  문서(.hwp/.hwpx) 올림 → 진짜 페이지 미리보기 → 「어떻게 바꿀지」 말로 설명 → 수정된 문서 내려받기.
+//  ① 미리보기 = 브라우저 온디바이스. hwp/viewer-core.js(claw-hwp의 rhwp WASM 렌더러 이식본 — hwp/NOTICE.md)가
+//     캔버스로 실제 페이지를 그린다. 파일은 미리보기 단계에서 서버로 안 나간다.
+//  ② 수정 = 이 레포 깃의 구독 OAuth(shared/claude_failover.js 5계정 체인)로 GitHub Actions에서 수행.
+//     경로: Worker /api/hwp/upload(원본 커밋) → /api/hwp/dispatch → hwp-edit.yml(claude -p · opus 5 · effort medium,
+//     claw-hwp 「hwp」 스킬 설치) → drafts/<id>.json 커밋 → /api/blog/draft 폴링(블로그와 같은 폴링 경로 재사용)
+//     → /api/hwp/file 로 결과 바이트 수령 → 같은 뷰어로 수정본 렌더.
+//  🔒 공용 PC 원칙(블로그 도우미와 동일): 닫으면 상태 전멸 — 다음 사용자에게 남의 문서가 안 보인다.
+//  레퍼런스 = openNaverBlogTool/openLinkGrab 보드 골격 + .btn/.nb-chip/.nb-textarea/.u-empty 정본 컴포넌트. 신규 raw hex 0.
+// ============================================================
+var _HW_MAX=8*1024*1024;      // 업로드 상한 8MB — 한글 공문서는 통상 1MB 미만(용량 초과는 안내로 차단)
+var _HW_EXT=/\.(hwp|hwpx)$/i;
+var _hwState=null;            // {name,bytes,out,outName,view,busy,step,pages,escHandler}
+var _hwMod=null;              // hwp/viewer-core.js 모듈(최초 1회 로드 — WASM 4.5MB)
+function _hwDefault(){return {name:'',bytes:null,out:null,outName:'',view:'orig',busy:false,step:'',pages:0,escHandler:null};}
+async function _hwViewer(){ if(!_hwMod)_hwMod=await import('./hwp/viewer-core.js'); return _hwMod; }
+
+function openHwpEditor(){
+  var el=document.getElementById('hw-board');
+  if(!el){el=document.createElement('div');el.id='hw-board';document.body.appendChild(el);}
+  try{if(_hwState&&_hwState.escHandler)document.removeEventListener('keydown',_hwState.escHandler);}catch(_e){}
+  _hwState=_hwDefault();   // 🔒 매번 새로 — 이전 사용자의 문서를 복원하지 않는다
+  el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeHwpEditor)">'
+    +'<div class="modal" style="width:96vw;max-width:1080px;height:92vh;max-height:92vh;padding:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:var(--surface-solid)">'
+    +'<button class="modal-x" onclick="closeHwpEditor()" title="닫기" style="position:absolute;top:14px;right:22px;z-index:10">✕</button>'
+    +'<div style="padding:18px 24px;border-bottom:1px solid var(--border);font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px">📄 <span>한글문서 편집</span></div>'
+    +'<div style="flex:1;display:flex;flex-direction:column;min-height:0;padding:16px 24px 18px">'
+      +'<div id="hw-bar" class="hw-bar"></div>'
+      +'<div id="hw-stage" class="hw-stage"></div>'
+      +'<div id="hw-ask" class="hw-ask"></div>'
+    +'</div>'
+    +'<input type="file" id="hw-file" accept=".hwp,.hwpx" style="display:none" onchange="_hwOnFile(this)">'
+    +'</div></div>';
+  _hwState.escHandler=function(e){if(e.key==='Escape'&&!_hwState.busy)closeHwpEditor();};
+  document.addEventListener('keydown',_hwState.escHandler);
+  _hwWireDrop();
+  _hwRender();
+}
+function closeHwpEditor(){
+  if(_hwState&&_hwState.escHandler)document.removeEventListener('keydown',_hwState.escHandler);
+  _hwState=_hwDefault();   // 🔒 문서·수정본 전부 폐기(인메모리만 썼으므로 참조만 끊으면 끝)
+  var el=document.getElementById('hw-board');if(el)el.innerHTML='';
+}
+function _hwPick(){var f=document.getElementById('hw-file');if(f)f.click();}
+
+// ── 화면 ──────────────────────────────────────────────────────────────────
+function _hwRender(){
+  var bar=document.getElementById('hw-bar'),ask=document.getElementById('hw-ask');
+  if(!bar||!ask)return;
+  var s=_hwState,has=!!s.bytes;
+  bar.innerHTML=has
+    ? '<span class="hw-name" title="'+escapeHtml(s.name)+'">'+escapeHtml(s.name)+(s.pages?' · '+s.pages+'쪽':'')+'</span>'
+      +'<button type="button" class="nb-chip'+(s.view==='orig'?' on':'')+'" onclick="_hwView(\'orig\')">원본</button>'
+      +'<button type="button" class="nb-chip'+(s.view==='out'?' on':'')+'" onclick="_hwView(\'out\')"'+(s.out?'':' disabled style="opacity:.45;cursor:default"')+'>수정본</button>'
+      +'<button type="button" class="btn btn--neutral btn--sm" onclick="_hwPick()">다른 문서</button>'
+      +(s.out?'<button type="button" class="btn btn--primary btn--sm" onclick="_hwDownload()">내려받기</button>':'')
+    : '';
+  ask.innerHTML=has
+    ? '<textarea id="hw-ask-input" class="nb-textarea" placeholder="어떻게 바꿀까요? 예) 예산을 오천만원으로 고치고, 추진 기간을 2026년 9월까지로 늘려줘"'+(s.busy?' disabled':'')+'></textarea>'
+      +'<button type="button" id="hw-run" class="btn btn--primary btn--md" onclick="_hwRun()"'+(s.busy?' disabled':'')+'>'+(s.busy?_ldHtml(14)+' '+escapeHtml(s.step||'수정하는 중'):'문서 수정')+'</button>'
+    : '';
+  if(!s.busy&&!s.bytes)_hwStageEmpty();
+}
+function _hwStageEmpty(){
+  var st=document.getElementById('hw-stage');if(!st)return;
+  st.innerHTML='<div class="u-empty" style="margin:auto"><div class="ico">📄</div>'
+    +'<div class="msg">한글문서(.hwp · .hwpx)를 올리면 미리보기가 열려요</div>'
+    +'<div style="font-size:12px;color:var(--dim);margin-bottom:14px;line-height:1.7">여기로 끌어다 놓거나 아래 버튼으로 고르세요<br>미리보기는 이 컴퓨터 안에서만 열립니다</div>'
+    +'<button type="button" class="btn btn--primary btn--md" onclick="_hwPick()">문서 고르기</button></div>';
+}
+function _hwStageMsg(msg,isErr){
+  var st=document.getElementById('hw-stage');if(!st)return;
+  st.innerHTML='<div class="u-empty" style="margin:auto"><div class="msg" style="color:'+(isErr?'var(--danger-btn)':'var(--neutral-text)')+'">'+msg+'</div></div>';
+}
+function _hwView(v){
+  if(v==='out'&&!_hwState.out)return;
+  _hwState.view=v;_hwRender();_hwDraw();
+}
+// 현재 뷰(원본/수정본)를 캔버스로 그린다 — 렌더는 온디바이스(hwp/viewer-core.js)
+async function _hwDraw(){
+  var st=document.getElementById('hw-stage');if(!st)return;
+  var s=_hwState,bytes=(s.view==='out'&&s.out)?s.out:s.bytes;
+  if(!bytes){_hwStageEmpty();return;}
+  _hwStageMsg(_ldHtml(16)+' 문서를 여는 중');
+  try{
+    var m=await _hwViewer();
+    if(s!==_hwState)return;                          // 🔒 세대 가드 — 그리는 사이 닫혔으면 폐기
+    st.innerHTML='';
+    var r=m.renderHwp(st,bytes);
+    if(s.view==='orig')s.pages=r.pageCount;
+    if(!s._ro){s._ro=new ResizeObserver(function(){try{m.fitPages(st);}catch(_e){}});s._ro.observe(st);}
+    _hwRender();
+  }catch(e){
+    if(s!==_hwState)return;
+    _hwStageMsg('문서를 열지 못했어요 — 손상됐거나 지원하지 않는 형식일 수 있어요<br><span style="font-size:11.5px;color:var(--dim)">'+escapeHtml(String((e&&e.message)||e)).slice(0,160)+'</span>',true);
+  }
+}
+
+// ── 파일 받기 ─────────────────────────────────────────────────────────────
+function _hwOnFile(input){var f=input&&input.files&&input.files[0];if(f)_hwTake(f);if(input)input.value='';}
+function _hwTake(file){
+  if(!_HW_EXT.test(file.name||'')){showToast('한글문서(.hwp · .hwpx)만 올릴 수 있어요','error');return;}
+  if(file.size>_HW_MAX){showToast('문서가 너무 커요 — 8MB 이하만 올릴 수 있어요','error');return;}
+  var s=_hwState;
+  file.arrayBuffer().then(function(buf){
+    if(s!==_hwState)return;
+    s.name=file.name;s.bytes=new Uint8Array(buf);s.out=null;s.outName='';s.view='orig';s.pages=0;
+    _hwRender();_hwDraw();
+  }).catch(function(e){showToast('파일을 읽지 못했어요: '+String((e&&e.message)||e),'error');});
+}
+function _hwWireDrop(){
+  var st=document.getElementById('hw-stage');if(!st)return;
+  st.addEventListener('dragover',function(e){e.preventDefault();st.classList.add('drag');});
+  st.addEventListener('dragleave',function(){st.classList.remove('drag');});
+  st.addEventListener('drop',function(e){
+    e.preventDefault();st.classList.remove('drag');
+    var f=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0];
+    if(f&&!_hwState.busy)_hwTake(f);
+  });
+}
+function _hwDownload(){
+  var s=_hwState;if(!s.out)return;
+  var url=URL.createObjectURL(new Blob([s.out],{type:'application/octet-stream'}));
+  var a=document.createElement('a');a.href=url;a.download=s.outName||('수정본_'+s.name);
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(function(){URL.revokeObjectURL(url);},1500);
+}
+
+// ── 수정 요청 (Actions · 구독 OAuth) ──────────────────────────────────────
+function _hwB64(u8){                       // 바이트 → base64 (대용량에서 스택 터지지 않게 조각내 변환)
+  var CH=0x8000,parts=[];
+  for(var i=0;i<u8.length;i+=CH)parts.push(String.fromCharCode.apply(null,u8.subarray(i,i+CH)));
+  return btoa(parts.join(''));
+}
+function _hwErr(msg){
+  if(msg.indexOf('NO_PAT')>-1)showToast('문서 수정이 서버에 아직 설정되지 않았어요 — 관리자에게 문의해 주세요','error');
+  else if(msg.indexOf('TIMEOUT')>-1)showToast('시간이 초과됐어요 — 다른 작업이 먼저 처리 중이면 순서가 밀릴 수 있어요. 잠시 후 다시 시도해 주세요','error');
+  else showToast('수정 실패: '+msg,'error');
+}
+async function _hwRun(){
+  var s=_hwState;if(!s.bytes||s.busy)return;
+  var inp=document.getElementById('hw-ask-input');
+  var ask=String((inp&&inp.value)||'').trim();
+  if(!ask){showToast('어떻게 바꿀지 적어 주세요','error');if(inp)inp.focus();return;}
+  s.busy=true;s.step='올리는 중';_hwRender();
+  try{
+    var id='hw'+Date.now()+Math.floor(Math.random()*1000);
+    var up=await fetch(API+'/api/hwp/upload',{method:'POST',headers:_nbApiHeaders(),body:JSON.stringify({id:id,name:s.name,b64:_hwB64(s.bytes)})});
+    if(up.status===503)throw new Error('NO_PAT');
+    if(up.status===401)throw new Error('로그인이 필요해요 — 다시 로그인해 주세요');
+    if(!up.ok)throw new Error('upload '+up.status+': '+(await up.text()).slice(0,150));
+    if(s!==_hwState)return;
+
+    s.step='수정하는 중';_hwRender();
+    var dp=await fetch(API+'/api/hwp/dispatch',{method:'POST',headers:_nbApiHeaders(),body:JSON.stringify({id:id,name:s.name,ask:ask})});
+    if(!dp.ok)throw new Error('dispatch '+dp.status+': '+(await dp.text()).slice(0,150));
+    if(s!==_hwState)return;
+
+    var res=await _nbPollDraft(id,720000);            // 블로그와 같은 폴링 경로(drafts/<id>.json)
+    if(s!==_hwState)return;
+    if(!res||res.ok===false)throw new Error((res&&res.error)||'빈 응답');
+
+    s.step='받는 중';_hwRender();
+    var fr=await fetch(API+'/api/hwp/file?id='+encodeURIComponent(id)+'&t='+Date.now(),{headers:_nbApiHeaders()});
+    if(!fr.ok)throw new Error('file '+fr.status);
+    var out=new Uint8Array(await fr.arrayBuffer());
+    if(s!==_hwState)return;
+    s.out=out;s.outName=String(res.name||('수정본_'+s.name));s.busy=false;s.step='';s.view='out';
+    if(inp)inp.value='';
+    _hwRender();_hwDraw();
+    showToast('문서를 수정했어요'+(res.summary?' — '+String(res.summary).slice(0,40):'')+' ✨','success');
+  }catch(e){
+    if(s!==_hwState)return;
+    s.busy=false;s.step='';_hwRender();
+    _hwErr(String((e&&e.message)||e));
+  }
 }
 
 // ============================================================

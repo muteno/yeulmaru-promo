@@ -2239,6 +2239,81 @@ var index_default = {
         }
       }
 
+      // === 콘텐츠 제작 ▸ 한글문서 편집 (260803 운영자) ===
+      // 브라우저엔 GitHub 토큰이 없다 — 원본 업로드·워크플로 트리거·결과 수령이 전부 여기(시크릿 GITHUB_PAT)를 지난다.
+      // 진행 상태 폴링은 신설하지 않고 블로그와 같은 /api/blog/draft(drafts/<id>.json)를 재사용한다.
+      // 흐름: upload(원본 커밋) → dispatch(hwp-edit.yml) → [Actions가 claude -p 로 수정 후 결과 커밋] → file(결과 바이트).
+      if (url.pathname.startsWith("/api/hwp/")) {
+        const cfg = ghBlogCfg(env);
+        if (!cfg.pat) return json({ error: "no_github_pat", note: "Worker에 GITHUB_PAT 시크릿 미설정" }, env, 503);
+        const ghHdr = { "Authorization": "Bearer " + cfg.pat, "Accept": "application/vnd.github+json", "User-Agent": "yeulmaru-promo-worker" };
+        const hwpId = (v) => String(v || "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 64);
+        // 확장자는 화이트리스트 — 경로 조작 차단(문서 이름은 커밋 경로에 안 쓰고 워크플로 payload로만 넘긴다)
+        const hwpExt = (n) => (/\.hwpx$/i.test(String(n || "")) ? "hwpx" : "hwp");
+
+        if (url.pathname === "/api/hwp/upload" && request.method === "POST") {
+          let b = {};
+          try { b = await request.json(); } catch (e) {}
+          const id = hwpId(b.id);
+          const b64 = String(b.b64 || "").replace(/\s/g, "");
+          if (!id) return json({ error: "id required" }, env, 400);
+          if (!b64) return json({ error: "빈 파일이에요" }, env, 400);
+          if (b64.length > 12e6) return json({ error: "문서가 너무 커요(8MB 이하)" }, env, 413);
+          const path = `drafts/hwp/${id}.in.${hwpExt(b.name)}`;
+          try {
+            const gr = await fetch(`https://api.github.com/repos/${cfg.repo}/contents/${path}`, {
+              method: "PUT",
+              headers: { ...ghHdr, "Content-Type": "application/json" },
+              body: JSON.stringify({ message: `chore(hwp): ${id} 원본 [skip ci]`, content: b64, branch: cfg.branch })
+            });
+            if (!gr.ok) return json({ error: gr.status === 401 || gr.status === 403 ? "github_denied" : "upload_failed", status: gr.status, note: (await gr.text()).slice(0, 200) }, env, 502);
+            return json({ ok: true, id, path }, env);
+          } catch (e) {
+            return json({ error: String((e && e.message) || e) }, env, 502);
+          }
+        }
+
+        // 트리거 — 전용 event_type(hwp-edit)이라 블로그 초안 큐(concurrency: nb-blog)에 안 막힌다.
+        if (url.pathname === "/api/hwp/dispatch" && request.method === "POST") {
+          let b = {};
+          try { b = await request.json(); } catch (e) {}
+          const id = hwpId(b.id);
+          if (!id) return json({ error: "id required" }, env, 400);
+          const inner = { id, name: String(b.name || "문서").slice(0, 160), ext: hwpExt(b.name), ask: String(b.ask || "").slice(0, 4000) };
+          try {
+            const gr = await fetch(`https://api.github.com/repos/${cfg.repo}/dispatches`, {
+              method: "POST",
+              headers: { ...ghHdr, "Content-Type": "application/json" },
+              body: JSON.stringify({ event_type: "hwp-edit", client_payload: { d: inner } })
+            });
+            if (gr.ok) return json({ ok: true, id }, env);
+            return json({ error: gr.status === 401 || gr.status === 403 ? "github_denied" : "dispatch_failed", status: gr.status, note: (await gr.text()).slice(0, 200) }, env, 502);
+          } catch (e) {
+            return json({ error: String((e && e.message) || e) }, env, 502);
+          }
+        }
+
+        // 결과 바이트 — 1MB 넘는 파일도 오게 raw 미디어타입으로 받는다(contents API의 base64 content 필드는 1MB 상한).
+        // 확장자는 워크플로가 원본과 같게 쓰므로 hwp → hwpx 순으로 시도.
+        if (url.pathname === "/api/hwp/file" && request.method === "GET") {
+          const id = hwpId(url.searchParams.get("id"));
+          if (!id) return json({ error: "id required" }, env, 400);
+          for (const ext of ["hwp", "hwpx"]) {
+            try {
+              const gr = await fetch(`https://api.github.com/repos/${cfg.repo}/contents/drafts/hwp/${id}.out.${ext}?ref=${encodeURIComponent(cfg.branch)}&t=${Date.now()}`, {
+                headers: { ...ghHdr, "Accept": "application/vnd.github.raw" }
+              });
+              if (gr.status === 404) continue;
+              if (!gr.ok) return json({ error: "github " + gr.status }, env, 502);
+              return new Response(gr.body, { headers: { "Content-Type": "application/octet-stream", ...corsHeaders(env) } });
+            } catch (e) {
+              return json({ error: String((e && e.message) || e) }, env, 502);
+            }
+          }
+          return json({ error: "not_ready" }, env, 404);
+        }
+      }
+
       const token = await getToken(env);
 
       // 홍보기록
