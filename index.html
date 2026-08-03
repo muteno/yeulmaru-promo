@@ -23989,7 +23989,7 @@ var _memState=null,_memLoading=false,_memEscH=null,_memQT=null,_memEpoch=0;
 // [260731 운영자 "바로 안 열려요"] PII 재적재 가드를 「#member-lookup 존재」 → 「purge 에포크」로 교체.
 //   구 가드는 회원 조회 모달이 DOM에 없으면(= 회원 분포로 곧장 들어온 경우) 응답을 통째로 버려서 개요가 항상 "못 불러왔어요"였다.
 //   에포크 = _memPurge(로그아웃·유휴잠금)가 증가 → await 중 purge된 응답만 정확히 폐기(보안 의도 동일, 진입 경로 무관).
-function _memPurge(){_memState=null;_memLoading=false;_memEpoch++;var bg=document.getElementById('member-lookup');if(bg){if(_memEscH){document.removeEventListener('keydown',_memEscH);_memEscH=null;}bg.remove();}var ov=document.getElementById('member-ov');if(ov)ov.remove();var inl=document.getElementById('mem-ov-inline');if(inl)inl.innerHTML='<div style="text-align:center;padding:40px;color:var(--dim);font-size:13px">세션 종료로 집계를 비웠어요</div>';}   // [260731 4차 · 페이블 검수 HIGH] 인라인 4면(고객 분석)에 그려진 회원 집계 DOM도 소거 — 로그아웃·유휴잠금 PII 위생 동일 적용
+function _memPurge(){_memState=null;_memLoading=false;_memEpoch++;_memAiHist=[];_memAiBusy=false;var bg=document.getElementById('member-lookup');if(bg){if(_memEscH){document.removeEventListener('keydown',_memEscH);_memEscH=null;}bg.remove();}var ov=document.getElementById('member-ov');if(ov)ov.remove();var inl=document.getElementById('mem-ov-inline');if(inl)inl.innerHTML='<div style="text-align:center;padding:40px;color:var(--dim);font-size:13px">세션 종료로 집계를 비웠어요</div>';}   // [260731 4차 · 페이블 검수 HIGH] 인라인 4면(고객 분석)에 그려진 회원 집계 DOM도 소거 — 로그아웃·유휴잠금 PII 위생 동일 적용
 // 선로딩(운영자 260731 "항상 바로 나오게") — 대시보드 ▸ 회원 분포 항목에 마우스만 올려도 백그라운드 적재 시작.
 //   클릭 시점엔 이미 캐시라 즉시 그려진다. 중복 발사는 _memLoading·_memState 가드로 차단(추가 API 호출 0).
 function _memWarm(){ if(userRole!=='admin'||_memState||_memLoading)return; try{_memLoad(false);}catch(e){} }
@@ -24192,13 +24192,17 @@ function _memOvRender(targetId){   // [260731 4차] targetId = 인라인 4면(me
   var ageHtml='<div style="font-size:14px;font-weight:800;margin:18px 0 6px;text-align:left">연령대 분포 <span style="font-size:10.5px;color:var(--dim);font-weight:500">(생년월일 기준 · 만나이 근사)</span></div>'
     +ages.map(function(a){return bar(a[0],a[1],maxA,pct(a[1])+'%',!!ageTop2[a[0]]);}).join('');   // 연령대는 나이순 정렬이라 '많은 순 1·2위'를 따로 계산(ageTop2)
   body.style.textAlign='left';body.style.color='var(--text)';
+  var sfx=(targetId==='mem-ov-inline')?'i':'m';   // [260803] AI 채팅 DOM id 접미 — 모달·인라인 공존 시 id 충돌 방지(위 targetId 컨테이너 분리와 같은 이유)
   body.innerHTML='<div style="font-size:16px;font-weight:800;margin-bottom:2px">고객 분석</div>'
     +'<div style="font-size:12px;color:var(--dim);margin-bottom:14px">운영_회원 시트 · 주소 미상 '+unloc.toLocaleString()+'명 제외 집계 · 개인 식별 없음(집계 전용)</div>'
     +kpi
-    +'<div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start">'
-    +'<div style="flex:1 1 340px;min-width:300px;background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius);padding:13px"><div style="font-size:14px;font-weight:800;margin-bottom:4px">전국 분포 맵 <span style="font-size:10.5px;color:var(--dim);font-weight:500">(버블 = 회원수 비례)</span></div>'+_memOvMap(geo)+'</div>'
+    // [260803 운영자] 흰 카드 높이 정렬: flex-start → stretch = 좌(맵) 하단선을 우(거주지·연령) 카드와 일치. 맵 svg는 늘어난 칸 세로 중앙(여백 균등).
+    +'<div style="display:flex;gap:24px;flex-wrap:wrap;align-items:stretch">'
+    +'<div style="flex:1 1 340px;min-width:300px;background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius);padding:13px;display:flex;flex-direction:column"><div style="font-size:14px;font-weight:800;margin-bottom:4px">전국 분포 맵 <span style="font-size:10.5px;color:var(--dim);font-weight:500">(버블 = 회원수 비례)</span></div><div style="flex:1;display:flex;align-items:center;min-height:0">'+_memOvMap(geo)+'</div></div>'
     +'<div style="flex:1 1 380px;min-width:300px;background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius);padding:13px 17px">'+topHtml+ageHtml+'</div>'
-    +'</div>';
+    +'</div>'
+    +_memAiCardHtml(sfx);   // [260803 운영자] 고객 분석 아래 AI 채팅(집계 질의응답) — 모달·4면 인라인 공용
+  _memAiPaint(sfx);
 }
 function _memOvMap(geo){
   // 남한 실루엣(대략 위경도 폴리곤 — 인지용 근사) + 제주 타원
@@ -24232,6 +24236,174 @@ function _memOvMap(geo){
     +'<path d="'+d+'" fill="var(--accent)" opacity="0.08" stroke="var(--border2)" stroke-width="1"/>'
     +'<ellipse cx="'+jj[0].toFixed(1)+'" cy="'+jj[1].toFixed(1)+'" rx="26" ry="10" fill="var(--accent)" opacity="0.08" stroke="var(--border2)" stroke-width="1"/>'
     +bubbles+'</svg>';
+}
+
+// === [260803 운영자] 고객 분석 AI 채팅 — 「어떤 고객이 몇 명 있어?」 집계 질의응답 (admin·집계 전용) ===
+// 1차 = 로컬 집계 엔진: 지역(시·시도)·연령대·관내·TOP·총원 질문을 _memState 집계로 즉답(비용 0·집계와 오차 0).
+// 2차 = 정형 밖 자유 질문만 /api/mem-chat(Worker llmText — 전송물 = 집계 JSON뿐, 이름·전화·상세주소 미전송).
+//   미배포(404)·키 없음(503)이면 안내 폴백 — 예울이 챗봇 /api/qa 미배포 폴백 선례 계승. Worker는 wrangler deploy 별도.
+// UI = 정본 챗봇 부품(.cb-body/.cb-msg/.cb-chip — 기틀 §2 #11) + 회원 조회 입력·accent 버튼 결 계승. 신규 색·클래스·raw hex 0.
+var _memAiHist=[],_memAiBusy=false;
+var _MEM_AI_CHIPS=['여수 30대 회원 몇 명이야?','관내 비중은?','가장 많은 연령대 TOP3','거주지 TOP5 알려줘'];
+function _memAiCardHtml(sfx){
+  return '<div style="margin-top:24px;background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius);padding:13px 17px">'
+    +'<div style="font-size:14px;font-weight:800;margin-bottom:4px">AI 채팅 <span style="font-size:10.5px;color:var(--dim);font-weight:500">(회원 집계 질의응답 · 개인 식별 정보 미사용)</span></div>'
+    +'<div id="mem-ai-log-'+sfx+'" class="cb-body" style="max-height:236px;min-height:118px;overflow-y:auto;padding:8px 4px"></div>'
+    +'<div style="display:flex;gap:8px;margin-top:8px">'
+    +'<input id="mem-ai-q-'+sfx+'" maxlength="200" placeholder="예: 순천 20대 회원 몇 명이야?" onkeydown="if(event.key===\'Enter\'&&!event.isComposing)_memAiSend(\''+sfx+'\')" style="flex:1;min-width:0;padding:9px 12px;border:1px solid var(--border2);border-radius:var(--r-btn);font-size:13px;font-family:inherit;background:var(--surface-solid);color:var(--text)">'
+    +'<button type="button" onclick="_memAiSend(\''+sfx+'\')" style="flex:0 0 auto;padding:9px 16px;border:1.5px solid var(--accent);background:var(--accent);color:var(--surface-solid);border-radius:var(--r-btn);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">질문</button>'
+    +'</div></div>';
+}
+function _memAiPaint(sfx){
+  var log=document.getElementById('mem-ai-log-'+sfx);if(!log)return;
+  var h='';
+  if(!_memAiHist.length)h+='<div class="cb-msg bot">회원 집계에 대해 물어보세요 — 지역·연령대 인원, 비율, TOP 순위를 바로 세어 드려요.\n(집계 수치만 다루고 개인 정보는 보지 않아요)</div>'
+    +'<div class="cb-chiprow">'+_MEM_AI_CHIPS.map(function(c){return '<button type="button" class="cb-chip" onclick="_memAiChip(\''+sfx+'\',this.textContent)">'+c+'</button>';}).join('')+'</div>';
+  _memAiHist.forEach(function(m){h+=(m.u!==undefined)?'<div class="cb-msg user">'+_memEsc(m.u)+'</div>':'<div class="cb-msg bot">'+m.b+'</div>';});
+  log.innerHTML=h;
+  log.scrollTop=log.scrollHeight;
+}
+function _memAiPaintAll(){_memAiPaint('i');_memAiPaint('m');}
+function _memAiChip(sfx,t){var i=document.getElementById('mem-ai-q-'+sfx);if(i)i.value=t;_memAiSend(sfx);}
+// 집계 인덱스(질의용) — _memState당 1회 계산 캐시. 거주지 = 시 단위(_memCityName·구는 시로 합산 = 화면 「거주지 TOP」와 동일 기준).
+function _memAiIdx(){
+  if(!_memState||!_memState.rows||!_memState.rows.length)return null;
+  if(_memState._ai)return _memState._ai;
+  var byCity={},bySido={},age={},cityAge={},sidoAge={},unloc=0,rows=_memState.rows;
+  rows.forEach(function(r){
+    var s1=String(r['주소1']||'').trim(),s2=String(r['주소2']||'').trim(),a=String(r['연령대']||'').trim()||'미상';
+    age[a]=(age[a]||0)+1;
+    if(!s1){unloc++;return;}
+    bySido[s1]=(bySido[s1]||0)+1;(sidoAge[s1]=sidoAge[s1]||{})[a]=(sidoAge[s1][a]||0)+1;
+    var ct=_memCityName(s1,s2);
+    if(ct){byCity[ct]=(byCity[ct]||0)+1;(cityAge[ct]=cityAge[ct]||{})[a]=(cityAge[ct][a]||0)+1;}
+  });
+  _memState._ai={n:rows.length,unloc:unloc,byCity:byCity,bySido:bySido,age:age,cityAge:cityAge,sidoAge:sidoAge};
+  return _memState._ai;
+}
+function _memAiPct(c,n){return n?(c/n*100).toFixed(1):'0.0';}
+function _memAiFmt(c){return (c||0).toLocaleString();}
+// 질문에서 지역 찾기 — 데이터에 실존하는 시·시도명만(별칭 = 접미 제거형: 여수시→여수 · 서울특별시→서울 · 경상남도→경남). 창작 지명 매칭 없음.
+function _memAiRegions(q,idx){
+  var found=[];
+  function scan(name,kind){
+    var alts=[name],st,m2;
+    if(kind==='city'){st=name.replace(/(시|군|구)$/,'');if(st.length>=2&&st!==name)alts.push(st);}
+    else{
+      st=name.replace(/(특별자치도|특별자치시|통합특별시|광역시|특별시|도)$/,'');if(st.length>=2&&st!==name)alts.push(st);
+      m2=name.match(/^(.).(남|북)도$/);if(m2)alts.push(m2[1]+m2[2]);   // 경상남도→경남 · 충청북도→충북
+      if(name==='전남광주통합특별시'){alts.push('전남광주');alts.push('전남');}
+    }
+    for(var i=0;i<alts.length;i++){var p=q.indexOf(alts[i]);if(p>=0){found.push({name:name,kind:kind,pos:p,end:p+alts[i].length});return;}}
+  }
+  Object.keys(idx.byCity).forEach(function(c){scan(c,'city');});
+  Object.keys(idx.bySido).forEach(function(s){scan(s,'sido');});
+  // 같은 토큰이 시·시도 양쪽에 걸리면(서울 = 서울시·서울특별시) 시 우선 — 연령 교차 집계가 있는 축
+  return found.filter(function(f){
+    if(f.kind==='city')return true;
+    return !found.some(function(g){return g.kind==='city'&&g.pos<f.end&&f.pos<g.end;});
+  });
+}
+function _memAiAges(q){
+  var out=[],m,re=/([1-9]0)\s*대/g,nums=[];
+  while((m=re.exec(q)))nums.push({b:m[1]+'대',pos:m.index,end:re.lastIndex});
+  if(nums.length===2){   // 「20대~40대」「20대부터 40대」 = 구간 확장
+    var mid=q.slice(nums[0].end,nums[1].pos);
+    if(mid.length<=4&&/^[\s~∼〜\-–—]*(부터|에서)?[\s~∼〜\-–—]*$/.test(mid)){
+      var a=parseInt(nums[0].b,10),b=parseInt(nums[1].b,10);
+      for(var d=Math.min(a,b);d<=Math.max(a,b);d+=10)out.push(d+'대');
+      nums=[];
+    }
+  }
+  nums.forEach(function(x){if(out.indexOf(x.b)<0)out.push(x.b);});
+  if(/10세\s*미만|10살\s*미만/.test(q))out.push('10세 미만');
+  if(/미상/.test(q))out.push('미상');
+  return out;
+}
+// 로컬 결정 엔진 — 답을 만들면 문자열, 정형 밖이면 null(→ LLM 폴백)
+function _memAiLocal(q,idx){
+  var n=idx.n,GN3=['여수시','순천시','광양시'];
+  if(/성별|남성|여성|남자|여자/.test(q))return '집계엔 성별 정보가 없어요 — 지역·연령대 인원만 답할 수 있어요.';
+  var regions=_memAiRegions(q,idx),ages=_memAiAges(q);
+  var gwannae=/관내|여수.?순천.?광양/.test(q);
+  var topM=q.match(/(?:top|톱|상위)\s*([0-9]+)/i);
+  var wantTop=/가장|제일|최다|많은\s*(순|곳|지역|연령)|어디.*많|top|톱|상위/i.test(q);
+  var wantAgeAxis=/연령|나이|세대|몇\s*대/.test(q);
+  if(wantTop){
+    var N=topM?Math.max(1,Math.min(10,parseInt(topM[1],10))):3;
+    if(wantAgeAxis){   // 연령대 TOP — 지역이 붙으면 그 지역 안에서(여수에서 가장 많은 연령대)
+      var src=regions.length?(regions[0].kind==='city'?idx.cityAge[regions[0].name]:idx.sidoAge[regions[0].name]):idx.age;
+      var base=regions.length?(regions[0].kind==='city'?idx.byCity[regions[0].name]:idx.bySido[regions[0].name]):n;
+      if(!src)return _memEsc(regions[0].name)+' 집계가 없어요.';
+      var lst=Object.keys(src).filter(function(k){return k!=='미상';}).sort(function(x,y){return src[y]-src[x];}).slice(0,N);
+      return (regions.length?_memEsc(regions[0].name)+' ':'')+'연령대 TOP'+lst.length+' — '+lst.map(function(k,i){return (i+1)+'위 '+k+' '+_memAiFmt(src[k])+'명('+_memAiPct(src[k],base)+'%)';}).join(' · ');
+    }
+    var cl=Object.keys(idx.byCity).sort(function(x,y){return idx.byCity[y]-idx.byCity[x];}).slice(0,N);
+    return '거주지 TOP'+cl.length+'(시 기준) — '+cl.map(function(c,i){return (i+1)+'위 '+_memEsc(c)+' '+_memAiFmt(idx.byCity[c])+'명('+_memAiPct(idx.byCity[c],n)+'%)';}).join(' · ');
+  }
+  if(gwannae){
+    var parts=GN3.map(function(c){var t=ages.length?ages.reduce(function(s,a){return s+((idx.cityAge[c]||{})[a]||0);},0):(idx.byCity[c]||0);return {c:c,t:t};});
+    var tot=parts[0].t+parts[1].t+parts[2].t;
+    return '관내(여수·순천·광양) '+(ages.length?ages.join('·')+' ':'')+'회원은 '+_memAiFmt(tot)+'명 · 전체의 '+_memAiPct(tot,n)+'%예요 — '+parts.map(function(p){return p.c.replace('시','')+' '+_memAiFmt(p.t);}).join(' · ');
+  }
+  if(regions.length){
+    var det=regions.slice(0,4).map(function(rg){
+      var tot=rg.kind==='city'?(idx.byCity[rg.name]||0):(idx.bySido[rg.name]||0);
+      var am=rg.kind==='city'?idx.cityAge[rg.name]:idx.sidoAge[rg.name];
+      var cnt=ages.length?ages.reduce(function(s,a){return s+((am||{})[a]||0);},0):tot;
+      return {rg:rg,tot:tot,cnt:cnt};
+    });
+    if(det.length===1){
+      var d0=det[0],nm=_memEsc(d0.rg.name);
+      if(ages.length)return nm+' '+ages.join('·')+' 회원은 '+_memAiFmt(d0.cnt)+'명이에요 · '+nm+' 회원('+_memAiFmt(d0.tot)+'명)의 '+_memAiPct(d0.cnt,d0.tot)+'% · 전체의 '+_memAiPct(d0.cnt,n)+'%';
+      var rank=Object.keys(idx.byCity).sort(function(x,y){return idx.byCity[y]-idx.byCity[x];}).indexOf(d0.rg.name);
+      return nm+' 회원은 '+_memAiFmt(d0.cnt)+'명이에요 · 전체의 '+_memAiPct(d0.cnt,n)+'%'+(rank>=0?' · 거주지 '+(rank+1)+'위':'');
+    }
+    var sum=det.reduce(function(s,d){return s+d.cnt;},0);
+    return det.map(function(d){return _memEsc(d.rg.name)+' '+_memAiFmt(d.cnt)+'명';}).join(' · ')+' — 합계 '+_memAiFmt(sum)+'명(전체의 '+_memAiPct(sum,n)+'%)'+(ages.length?' · '+ages.join('·')+' 기준':'');
+  }
+  if(ages.length){
+    var cnt2=ages.reduce(function(s,a){return s+(idx.age[a]||0);},0);
+    if(ages.length===1){
+      var ao=Object.keys(idx.age).filter(function(k){return k!=='미상';}).sort(function(x,y){return idx.age[y]-idx.age[x];}),rk=ao.indexOf(ages[0]);
+      return ages[0]+' 회원은 '+_memAiFmt(cnt2)+'명이에요 · 전체의 '+_memAiPct(cnt2,n)+'%'+(rk>=0?' · 연령대 '+(rk+1)+'위':'');
+    }
+    return ages.join('·')+' 회원은 합해서 '+_memAiFmt(cnt2)+'명이에요 · 전체의 '+_memAiPct(cnt2,n)+'%';
+  }
+  if(/총|전체|모두|다\s*해서|합계|몇\s*명/.test(q)&&/회원|명|인원|고객/.test(q))
+    return '총 회원은 '+_memAiFmt(n)+'명이에요 · 주소 미상 '+_memAiFmt(idx.unloc)+'명(지역 집계 제외) · 연령 미상 '+_memAiFmt(idx.age['미상']||0)+'명';
+  return null;
+}
+// 자유 질문 폴백 — 전송 = 집계 JSON만(이름·전화·상세주소 없음 = 개인 식별 0)
+function _memAiStats(idx){
+  var cs=Object.keys(idx.byCity).sort(function(x,y){return idx.byCity[y]-idx.byCity[x];});
+  var city={},etc=0;
+  cs.forEach(function(c,i){if(i<30){var o={'합계':idx.byCity[c]},am=idx.cityAge[c]||{};Object.keys(am).forEach(function(a){o[a]=am[a];});city[c]=o;}else etc+=idx.byCity[c];});
+  return {'총회원':idx.n,'주소미상':idx.unloc,'연령대':idx.age,'시도':idx.bySido,'시군구_상위30_연령교차':city,'시군구_기타합':etc,'관내정의':'여수시·순천시·광양시 합'};
+}
+async function _memAiLLM(q){
+  var r=await api('POST','/api/mem-chat',{q:q,stats:_memAiStats(_memAiIdx())});
+  if(!r||!r.text)throw new Error('빈 응답');
+  return String(r.text);
+}
+function _memAiSend(sfx){
+  var inp=document.getElementById('mem-ai-q-'+sfx);if(!inp)return;
+  var q=(inp.value||'').trim();if(!q||_memAiBusy)return;
+  var idx=_memAiIdx();
+  if(!idx){showToast('회원 데이터가 아직 안 불러와졌어요','error');return;}
+  inp.value='';
+  if(_memAiHist.length>60)_memAiHist=_memAiHist.slice(-40);   // 세션 메모리 무한 누적 방지
+  _memAiHist.push({u:q});
+  var ans=null;try{ans=_memAiLocal(q,idx);}catch(e){console.warn('[mem-ai local]',e);}
+  if(ans){_memAiHist.push({b:ans});_memAiPaintAll();return;}
+  var pend={b:_ldHtml(12)+'생각 중'};
+  _memAiHist.push(pend);_memAiBusy=true;_memAiPaintAll();
+  _memAiLLM(q).then(function(t){pend.b=_memEsc(t).slice(0,4000);})
+    .catch(function(e){var s=String(e&&e.message||e);
+      pend.b=(s.indexOf('404')===0||s.indexOf('503')===0)
+        ?'자유 질문 AI는 서버 배포 전이에요 — 지금은 집계 질문에 바로 답해요. 예: 「여수 30대 몇 명?」 「거주지 TOP5」'
+        :'응답 실패: '+_memEsc(s.slice(0,90));})
+    .then(function(){_memAiBusy=false;_memAiPaintAll();});
 }
 
 // [260710 운영자] 에니어그램 모달화 — 새 탭 → 메인 위 모달(iframe 임베드) + 전체화면 토글 + ↗ 새 탭 + ✕. 도화지와 동일 셸.

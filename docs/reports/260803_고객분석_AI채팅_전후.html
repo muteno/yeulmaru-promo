@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>260803 고객 분석 — 흰 카드 높이 정렬 + AI 채팅 전후</title>
+<style>
+  body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;max-width:1000px;margin:30px auto;padding:0 20px;color:#1A1A2E;line-height:1.6}
+  h1{font-size:20px} h2{font-size:16px;margin-top:34px}
+  img{max-width:100%;border:1px solid rgba(0,0,0,0.12);border-radius:12px;display:block;margin:10px 0}
+  table{border-collapse:collapse;font-size:13px} td,th{border:1px solid rgba(0,0,0,0.12);padding:6px 12px;text-align:left}
+  .dim{color:#888;font-size:12.5px} code{background:rgba(74,77,231,0.08);padding:1px 5px;border-radius:5px;font-size:12px}
+</style>
+</head>
+<body>
+<h1>260803 — 고객 분석: 흰 카드 높이 정렬 + AI 채팅(집계 질의응답)</h1>
+<p class="dim">지시(운영자): ① 전국 분포 맵 흰 박스 높이를 오른쪽(거주지·연령 카드)과 일치 ② 고객 분석 아래에 AI 채팅 — 「어떤 고객이 00명 있어?」에 답하게.<br>
+스크린샷 = QA 진입로(<code>?qa=admin</code>) + 합성 회원 분포(주소1·주소2·연령대만, PII 0) 주입 — 실데이터·실API 미접촉.</p>
+
+<h2>① 전 — 좌 맵 카드가 짧아 하단선 어긋남 (실측 Δ64.7px)</h2>
+<img src="260803_고객분석_AI채팅_전.png" alt="전: 좌 맵 카드 하단이 우 카드보다 64.7px 짧음">
+
+<h2>② 후 — 하단선 일치(Δ0) + 아래 AI 채팅 카드</h2>
+<img src="260803_고객분석_AI채팅_후.png" alt="후: 두 카드 하단선 일치, 아래 AI 채팅 카드">
+
+<h2>③ 후 — AI 채팅 실동작 (로컬 집계 엔진 즉답)</h2>
+<img src="260803_고객분석_AI채팅_후_대화.png" alt="후: 채팅 3문 3답">
+
+<h2>실측</h2>
+<table>
+<tr><th></th><th>전</th><th>후</th></tr>
+<tr><td>좌(맵)·우 카드 하단선 차</td><td>Δ64.7px (좌 763.6 / 우 828.3)</td><td><b>Δ0</b> (둘 다 828.3)</td></tr>
+<tr><td>채팅 응답 검증(목데이터 여수 497명·30대 30%)</td><td>—</td><td>「여수 30대」= 149명(30.0%·전체 15.3%) ✓ · 「관내 비중」= 816명(84.0%) ✓ · 「연령대 TOP3」 ✓</td></tr>
+<tr><td>게이트</td><td colspan="2">check_design 1605/1605(신규 hex 0) · check_refs ✓ · smoke_layout PASS(1920×1080·1600×900) · smoke_login PASS · 인라인 JS 문법 전 블록 ✓</td></tr>
+</table>
+
+<h2>구현 요약</h2>
+<ul>
+<li><b>높이 정렬</b>: 카드 행 <code>align-items:flex-start → stretch</code> + 맵 카드 flex column화(svg는 늘어난 칸 세로 중앙) — <code>_memOvRender</code>, 모달·4면 인라인 공용.</li>
+<li><b>AI 채팅</b>: 정본 챗봇 부품(<code>.cb-body/.cb-msg/.cb-chip</code> — 기틀 §2 #11) + 회원 조회 입력·accent 버튼 결 계승. 신규 색·클래스·raw hex 0.</li>
+<li><b>응답 2단</b>: ① 로컬 집계 엔진(<code>_memAiLocal</code>) — 지역(시·시도)·연령대·관내·TOP·총원 질문을 화면 집계와 같은 기준으로 즉답(비용 0·오차 0) ② 정형 밖 자유 질문 = <code>/api/mem-chat</code>(Worker <code>llmText</code>, 집계 JSON만 전송 = 개인 식별 0) — 미배포/키 없음이면 안내 폴백(예울이 <code>/api/qa</code> 선례). ⚠ Worker 반영은 <code>wrangler deploy</code> 별도.</li>
+<li><b>PII 위생</b>: 로그아웃·유휴잠금(<code>_memPurge</code>)이 채팅 이력도 소거.</li>
+</ul>
+</body>
+</html>
