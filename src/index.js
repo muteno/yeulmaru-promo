@@ -2688,7 +2688,7 @@ function lgSpecial(href) {
   try { u = new URL(href); } catch (_) { return null; }
   const h = u.hostname.toLowerCase();
   const st = lgStreamInfo(href);
-  if (st) return { kind: "video", dl: null, stream: st.stream, vid: st.vid, thumb: st.thumb, note: "스트리밍 — 권리 확인 동의 후 [저장]으로 변환해 받기" };
+  if (st) return { kind: "video", dl: null, stream: st.stream, vid: st.vid, thumb: st.thumb, note: "스트리밍 — [저장]을 누르면 변환해서 받아요(보통 2~5분)" };
   if (h.endsWith("dropbox.com")) {
     u.searchParams.set("dl", "1");
     const folder = u.pathname.includes("/scl/fo/") || u.pathname.startsWith("/sh/");
@@ -2966,7 +2966,7 @@ async function lgStreamOnly(target, st, env) {
   return json({
     source: "stream",
     title: (meta && meta.title) || target.hostname.replace(/^www\./, ""),
-    items: [{ kind: "video", title: name, url: href, dl: null, via: "", note: sp.note || "스트리밍 — 권리 확인 동의 후 [저장]으로 변환해 받기", thumb: (meta && meta.thumb) || sp.thumb || st.thumb || "", stream: sp.stream || st.stream || "", vid: sp.vid || st.vid || "" }]
+    items: [{ kind: "video", title: name, url: href, dl: null, via: "", note: sp.note || "스트리밍 — [저장]을 누르면 변환해서 받아요(보통 2~5분)", thumb: (meta && meta.thumb) || sp.thumb || st.thumb || "", stream: sp.stream || st.stream || "", vid: sp.vid || st.vid || "" }]
   }, env);
 }
 // 항목별 용량·타입 조회(HEAD → Range 폴백) — 갤러리 우상단 표시용(프론트가 지연 호출)
@@ -3048,8 +3048,16 @@ function lgYtLookup(rel, id) {
     const parts = assets.filter((a) => re.test(a.name)).sort((a, b) => (a.name < b.name ? -1 : 1));
     if (parts.length) return { ready: true, size: parts.reduce((s, p) => s + p.size, 0), parts: parts.map((p) => ({ asset: p.id, size: p.size, name: p.name })) };
   }
-  if (assets.find((a) => a.name === id + ".err.txt")) return { failed: true };
+  const err = assets.find((a) => a.name === id + ".err.txt");
+  if (err) return { failed: true, errAsset: err.id };   // errAsset = 실패 사유 원문 위치(ytstat이 읽어 앱에 넘긴다)
   return null;
+}
+// 화질 = max·1080·720·480만(그 외 = max). ⚠ id 해시에 함께 들어간다 —
+// 안 넣으면 1080으로 한 번 변환한 영상에 「최고화질」을 눌러도 옛 1080본이 재사용된다.
+var LG_YT_Q = ["max", "1080", "720", "480"];
+function lgYtQ(v) {
+  v = String(v || "max");
+  return LG_YT_Q.indexOf(v) >= 0 ? v : "max";
 }
 async function lgYtDispatch(request, env) {
   const cfg = ghBlogCfg(env);
@@ -3058,21 +3066,35 @@ async function lgYtDispatch(request, env) {
   try { b = await request.json(); } catch (_) {}
   const vurl = String(b.url || "");
   if (!lgStreamInfo(vurl)) return json({ error: "스트리밍 영상 주소가 아니에요" }, env, 400);
-  const id = await lgYtId(vurl);
+  const q = lgYtQ(b.q);
+  const id = await lgYtId(vurl + "|" + q);
   const hit = lgYtLookup(await lgYtRel(env), id);
-  if (hit && hit.ready) return json(Object.assign({ ok: true, id }, hit), env);   // 같은 영상 변환분(단일/분할) 재사용
+  if (hit && hit.ready) return json(Object.assign({ ok: true, id, q }, hit), env);   // 같은 영상·같은 화질 변환분(단일/분할) 재사용
   const gr = await fetch(`https://api.github.com/repos/${cfg.repo}/dispatches`, {
     method: "POST",
     headers: { "Authorization": "Bearer " + cfg.pat, "Accept": "application/vnd.github+json", "Content-Type": "application/json", "User-Agent": "yeulmaru-promo-worker" },
-    body: JSON.stringify({ event_type: "ytdl", client_payload: { d: { id, url: vurl, title: String(b.title || "").slice(0, 120) } } })
+    body: JSON.stringify({ event_type: "ytdl", client_payload: { d: { id, url: vurl, q, title: String(b.title || "").slice(0, 120) } } })
   });
   if (!gr.ok) return json({ error: "dispatch_failed", status: gr.status, note: (await gr.text()).slice(0, 160) }, env, 502);
-  return json({ ok: true, id }, env);
+  return json({ ok: true, id, q }, env);
+}
+// 실패 사유 원문 읽기 — 러너가 올린 err.txt(≤1KB) 그대로. 260803 개정 전에는 앱이 원인과 무관하게
+// 「초대형(6GB 초과)」이라고만 떠서 운영자가 용량 문제로 오해했다(실제 원인 = 유튜브 봇 차단).
+async function lgYtErrText(env, assetId) {
+  const cfg = ghBlogCfg(env);
+  try {
+    const r = await fetch(`https://api.github.com/repos/${cfg.repo}/releases/assets/${assetId}`, {
+      headers: { "Authorization": "Bearer " + cfg.pat, "Accept": "application/octet-stream", "User-Agent": "yeulmaru-promo-worker" }
+    });
+    if (!r.ok) return "";
+    return (await r.text()).slice(0, 900);
+  } catch (_) { return ""; }
 }
 async function lgYtStat(url, env) {
   const id = String(url.searchParams.get("id") || "").replace(/[^A-Za-z0-9]/g, "").slice(0, 20);
   if (!id) return json({ error: "id가 필요해요" }, env, 400);
   const hit = lgYtLookup(await lgYtRel(env), id);
+  if (hit && hit.failed && hit.errAsset) hit.reason = await lgYtErrText(env, hit.errAsset);
   return json(hit || { ready: false }, env);
 }
 async function lgYtFile(url, env) {
