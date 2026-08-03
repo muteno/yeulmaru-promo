@@ -400,7 +400,7 @@ async function handleAddSheetRow(token, sheetName, body, role, slug) {
   const lastCol = colLetter(body.values.length);
   await graphPatch(token, `${sheetPathFor(driveId, itemId, sheetName)}/range(address='A${nextRow}:${lastCol}${nextRow}')`, { values: [body.values] });
   // [260724] 프로그램 홍보 ON/OFF 플래그 = '홍보노출' 열 단일 셀로 별도 기록(본 A~M 저장과 분리 → N~Q 운영자 수동열 무접촉). best-effort: 실패해도 본 저장 유지.
-  //   [260729] sideCells(회차·수익성)도 같은 라인 — 프로그램 폼이 보낸 부가열을 한 번에 기록.
+  //   [260729] sideCells(회차·장르)도 같은 라인 — 프로그램 폼이 보낸 부가열을 한 번에 기록. ([260803] 구 수익성 부가열 = 축 폐지)
   if (slug === "program" && (body.promoFlag != null || body.sideCells)) {
     try { await writeProgramSideCells(token, driveId, itemId, sheetName, nextRow, Object.assign({}, body.sideCells || {}, body.promoFlag != null ? { "홍보노출": body.promoFlag } : {}), headers); }
     catch (e) { console.error("program side cells write (add)", e); }
@@ -416,7 +416,7 @@ async function handleUpdateSheetRow(token, sheetName, row, body, role, slug) {
   const lastCol = colLetter(body.values.length);
   await graphPatch(token, `${sheetPathFor(driveId, itemId, sheetName)}/range(address='A${row}:${lastCol}${row}')`, { values: [body.values] });
   // [260724] 홍보 ON/OFF 플래그 = '홍보노출' 열 단일 셀 별도 기록(N~Q 무접촉). best-effort: 실패해도 본 A~M 저장은 이미 성공.
-  //   [260729] sideCells(회차·수익성)도 동승 — add 경로와 쌍둥이(동시 수정 의무).
+  //   [260729] sideCells(회차·장르)도 동승 — add 경로와 쌍둥이(동시 수정 의무). ([260803] 구 수익성 부가열 = 축 폐지)
   if (slug === "program" && (body.promoFlag != null || body.sideCells)) {
     try { await writeProgramSideCells(token, driveId, itemId, sheetName, row, Object.assign({}, body.sideCells || {}, body.promoFlag != null ? { "홍보노출": body.promoFlag } : {})); }
     catch (e) { console.error("program side cells write (update)", e); }
@@ -427,10 +427,10 @@ async function handleUpdateSheetRow(token, sheetName, row, body, role, slug) {
 }
 __name(handleUpdateSheetRow, "handleUpdateSheetRow");
 
-// [260724] 프로그램 부가열(홍보노출·회차·수익성)을 그 열 단일 셀에만 기록 — 본 A~M 위치 저장과 분리해 N~Q(구분=장르 등 운영자 수동열)를 어떤 write 범위에도 넣지 않음(물리적 무접촉).
+// [260724] 프로그램 부가열(홍보노출·회차·장르)을 그 열 단일 셀에만 기록 — 본 A~M 위치 저장과 분리해 N~Q(구분=장르 등 운영자 수동열)를 어떤 write 범위에도 넣지 않음(물리적 무접촉).
 //   헤더가 없으면 맨 끝(1행)에 자동 보강(예측제외·임시저장과 동일 이행 → 배포만으로 활성, 운영자 수동 스텝 0). 호출부가 try/catch(best-effort).
-//   [260729] 구 writeProgramPromoFlag를 열 이름 목록으로 범용화 — '회차'(프로그램별 공연 횟수)·'수익성'(예술성=공공성/사업성=상업성)이 같은 라인을 그대로 탄다.
-//   pairs = { 홍보노출:'Y', 회차:'3', 수익성:'공공성' } — 값이 undefined/null인 키는 건너뛴다(빈 문자열은 '지움'이라 기록한다).
+//   [260729] 구 writeProgramPromoFlag를 열 이름 목록으로 범용화 — '회차'(프로그램별 공연 횟수)·'장르'가 같은 라인을 그대로 탄다. ([260803] 구 '수익성' 부가열 = 예술성/사업성 축 폐지로 은퇴)
+//   pairs = { 홍보노출:'Y', 회차:'3', 장르:'클래식' } — 값이 undefined/null인 키는 건너뛴다(빈 문자열은 '지움'이라 기록한다).
 async function writeProgramSideCells(token, driveId, itemId, sheetName, row, pairs, knownHeaders) {
   const names = Object.keys(pairs || {}).filter((k) => pairs[k] !== undefined && pairs[k] !== null);
   if (!names.length) return;
@@ -2439,6 +2439,48 @@ var index_default = {
           if (body.mode === "append") return json(await opsAppendRows(token, body.sheet, rows), env);
           return json(await opsWriteSheet(token, body.sheet, body.headers || [], rows), env);
         }
+      }
+
+      // === [260803] 시트 유지보수(admin 전용) — 열/시트 「은퇴」 전용 라인(예술성/사업성 축 폐지에서 신설).
+      //   이름 기반 조회(포지션 무관 = 열 밀림 사고 축과 무관) + confirm 문자열 재입력 필수(오타·오호출 방어) + 로그 시트 기록.
+      //   ① POST /api/maint/delete-column {sheet, header, confirm:'<sheet>:<header>'} — 1행에서 헤더를 찾아 그 열 전체 물리 삭제(Range.delete shift:Left). 헤더 없음 = ok:false(멱등).
+      //   ② POST /api/maint/delete-sheet {sheet:'운영_<이름>', confirm:'<sheet>'} — 운영_ 네임스페이스만(핵심 시트 보호). 시트 없음 = ok:false(멱등).
+      if (url.pathname === "/api/maint/delete-column" && request.method === "POST") {
+        const mAuth = await checkAdmin(request, env, token);
+        if (!mAuth.admin) return json({ error: "Admin only (maintenance)" }, env, 403);
+        const body = await request.json();
+        const sheet = String(body.sheet || "").trim(), header = String(body.header || "").trim();
+        if (!sheet || !header) return json({ error: "sheet/header required" }, env, 400);
+        if (body.confirm !== sheet + ":" + header) return json({ error: "confirm mismatch — confirm:'<sheet>:<header>' 재입력 필요" }, env, 400);
+        const { driveId, itemId } = await findFile(token);
+        const hdr = await graphGet(token, `${sheetPathFor(driveId, itemId, sheet)}/usedRange?$select=values`);
+        const headers = (hdr.values && hdr.values[0]) ? hdr.values[0].map((v) => String(v == null ? "" : v).trim()) : [];
+        const idx = headers.indexOf(header);
+        if (idx < 0) return json({ ok: false, sheet, header, note: "header not found (이미 삭제됨?)", headers }, env);
+        const col = colLetter(idx + 1);
+        await graphPost(token, `${sheetPathFor(driveId, itemId, sheet)}/range(address='${col}:${col}')/delete`, { shift: "Left" });
+        opsCache = {};
+        invalidateSheetCache("program");
+        await logToSheet(token, "admin", "MAINT", sheet, 0, `delete-column ${header} (${col}열)`);
+        return json({ ok: true, sheet, header, col }, env);
+      }
+      if (url.pathname === "/api/maint/delete-sheet" && request.method === "POST") {
+        const sAuth = await checkAdmin(request, env, token);
+        if (!sAuth.admin) return json({ error: "Admin only (maintenance)" }, env, 403);
+        const body = await request.json();
+        const sheet = String(body.sheet || "").trim();
+        if (!sheet) return json({ error: "sheet required" }, env, 400);
+        if (sheet.indexOf("운영_") !== 0) return json({ error: "운영_* 시트만 삭제 가능(핵심 시트 보호)" }, env, 400);
+        if (body.confirm !== sheet) return json({ error: "confirm mismatch — confirm:'<sheet>' 재입력 필요" }, env, 400);
+        const { driveId, itemId } = await findFile(token);
+        const ws = await graphGet(token, `/drives/${driveId}/items/${itemId}/workbook/worksheets`);
+        const hit = (ws.value || []).find((w) => w.name === sheet);
+        if (!hit) return json({ ok: false, sheet, note: "sheet not found (이미 삭제됨?)" }, env);
+        const dr = await fetch(`https://graph.microsoft.com/v1.0/drives/${driveId}/items/${itemId}/workbook/worksheets/${encodeURIComponent(hit.id)}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+        if (!dr.ok && dr.status !== 404) return json({ error: `Graph DELETE ${dr.status}: ${await dr.text()}` }, env, 502);
+        opsCache = {};
+        await logToSheet(token, "admin", "MAINT", sheet, 0, "delete-sheet");
+        return json({ ok: true, sheet }, env);
       }
 
       // 공휴일 (KASI) — GET ?year=YYYY [&refresh=1]. KV 캐시. 임시·대체공휴일 포함.
