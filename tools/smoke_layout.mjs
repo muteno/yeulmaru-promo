@@ -45,8 +45,16 @@ const MEASURE = `(()=>{
     const box=document.querySelector(sel+' [data-bizmbox]');
     if(!box||box.offsetParent===null)return null;
     const r=box.getBoundingClientRect();
+    // [260803] 「흰 도형」 = 실제로 흰 게 그려진 것만. #rail-yrm-uha(회전 상세 슬롯)는 본문(#srail-uha-body)이
+    //   비면 자기 여백 4px만 있는 **투명** 껍데기라 흰 도형이 아니다 — 구판은 이걸 세어 우 목록 카드가 좌보다
+    //   18px 높이 끝난 상태를 Δ0으로 통과시켰다(운영자 260803 캡처 = 이 게이트의 사각). 이제 빈 슬롯은 제외한다.
+    const painted=e=>{
+      if(e.id!=='rail-yrm-uha')return true;
+      const b=e.querySelector('#srail-uha-body');
+      return b?b.children.length>0:true;
+    };
     const cands=[...box.querySelectorAll('.bizm-card, .bizm-strip, [data-bizmfill], #rail-yrm-uha')]
-      .filter(e=>e.offsetParent!==null&&e.getBoundingClientRect().height>1);
+      .filter(e=>e.offsetParent!==null&&e.getBoundingClientRect().height>1&&painted(e));
     const last=cands.length?cands.reduce((a,b)=>b.getBoundingClientRect().bottom>a.getBoundingClientRect().bottom?b:a):null;
     return {top:+r.top.toFixed(1), bottom:+r.bottom.toFixed(1), innerBottom:+inner(box).toFixed(1),
       white:last?+last.getBoundingClientRect().bottom.toFixed(1):null,
