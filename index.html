@@ -5769,6 +5769,17 @@ function _srailAlignTop(){
       var _anchor=(_lbox&&_lbox.offsetParent!==null)?_lbox:(_ltCard||_lcCard);
       var _boxed=(_anchor===_lbox&&_rbox&&_rbox.offsetParent!==null);   // 박스↔박스 정렬 가능 여부(불가 = 종전 카드↔카드 폴백)
       var _live=_anchor&&_rlCard&&_anchor.offsetParent!==null&&_rlCard.offsetParent!==null;
+      // [260803 운영자 「흰색 = 좌측 전체 실적표의 저 부분 · 블러 창은 절대 무접촉」] 빈 회전 상세 슬롯 접기 ──
+      //   회전 상세(_srailUhaSync)는 1면에 데이터가 있으면 늘 켜지는데(display:flex) 본문(#srail-uha-body)이 안 그려지면
+      //   슬롯은 **자기 여백 4px**(.srail-uha-body padding-top L1963)만 차지한다 = 눈에는 아무것도 없다.
+      //   구판은 그 4px을 「상세가 떠 있다」로 읽어 #547의 여백 0 규약을 풀었다 → 목록 카드가 여백 14 + 슬롯 4 =
+      //   **좌 「전체 실적표」보다 18px 높이** 끝났다(운영자 캡처 실측 재현: 우 1011 vs 좌 1029 · 2180×1116).
+      //   기존 게이트는 슬롯을 「흰 도형」으로 세어(투명인데) Δ0으로 통과시켰다 — 그래서 계속 되살아났다.
+      //   → 본문이 비면 슬롯을 자리 0(높이 0·클립)으로 접고 「꺼짐」으로 본다 = 마지막 흰 도형 = 목록 카드 → 안선 밀착.
+      //   상세가 그려지면 같은 패스가 즉시 원복(_srailUhaShow 끝 재정렬 훅) · 유리박스(이젤) 기하는 손대지 않는다.
+      var _slotB=document.getElementById('rail-yrm-uha'), _uhaBd=document.getElementById('srail-uha-body');
+      var _slotFill=!(_uhaBd&&_slotB&&_slotB.contains(_uhaBd)&&!_uhaBd.children.length);   // 본문에 카드가 그려졌는가(본문이 슬롯 밖·부재 = 종전대로 인정)
+      if(_slotB){ _slotB.style.height=_slotFill?'':'0px'; _slotB.style.overflow=_slotFill?'':'hidden'; }
       if(_rl&&_live&&_easelOn&&_rbox&&_rbox.style.height){
         // [260802e] 이젤 고정(260802d) 후 구식은 순환이었다: _tail = 「박스 하단 − 카드 하단」인데 박스 하단이 화면 고정이라
         //   카드 밑 **빈 유리까지 tail로 읽혀** _want ≒ 현재 목록 높이(no-op) → 내용이 적으면 흰 카드가 박스 중턱에서 끝났다(운영자 캡처).
@@ -5776,8 +5787,8 @@ function _srailAlignTop(){
         //   = 부족분(Δ)만 목록 높이에 더한다(현재값+Δ = 비순환·멱등 · 좌 박스도 같은 하단선이라 좌↔우 흰 라인 자동 일치).
         var _csB=getComputedStyle(_rbox);
         var _inBt=_rbox.getBoundingClientRect().bottom-(parseFloat(_csB.borderBottomWidth)||0)-(parseFloat(_csB.paddingBottom)||0);   // 박스 안선(시각px)
-        var _aftH=0, _slotB=document.getElementById('rail-yrm-uha');
-        var _slotOnB=!!(_slotB&&_rbox.contains(_slotB)&&_slotB.offsetParent!==null&&_slotB.getBoundingClientRect().height>0.5);   // 상세(회전 카드)가 실제로 떠 있는가
+        var _aftH=0;
+        var _slotOnB=!!(_slotB&&_rbox.contains(_slotB)&&_slotB.offsetParent!==null&&_slotFill&&_slotB.getBoundingClientRect().height>0.5);   // 상세(회전 카드)가 **보이게** 떠 있는가(빈 슬롯은 위에서 접었다)
         if(_slotOnB){ var _scs=getComputedStyle(_slotB); _aftH=_slotB.getBoundingClientRect().height+(parseFloat(_scs.marginTop)||0)+(parseFloat(_scs.marginBottom)||0); }
         // [260802f 운영자 「수평이 아님」] 상세 슬롯이 비어 있으면 목록 카드가 **박스의 마지막 흰 도형**이다 —
         //   좌 열은 정본 CSS `[data-bizmbox] .bizm-card:last-child{margin-bottom:0}`(L2141)로 하단 여백이 0이라 안선에 딱 붙는데,
@@ -7885,6 +7896,7 @@ function _srailUhaShow(i){
   catch(_e){ console.warn('[uha show]',_e); e.body.innerHTML='<div class="u-empty" style="padding:22px 8px"><div class="msg">상세를 그리지 못했어요</div></div>'; }
   e.body.scrollTop=0;   // 프로그램 전환 = 상세 상단부터(독립 스크롤 리셋)
   try{ if(typeof _railYrmMarkRow==='function')_railYrmMarkRow(_srailUhaKey(p)); }catch(_e){}   // [260724 한 수] 위 표의 선택 행 액티브 동기(자동 전환 포함)
+  try{ _srailAlignTop(); }catch(_e){}   // [260803] 본문 비었다↔그려졌다 전환 = 슬롯 접힘/폄이 바뀐다 → 흰 라인 재정렬(멱등 · _srailUhaSync L7883과 같은 훅)
 }
 function _srailUhaTo(i){ _srailUhaKick(); _srailUhaShow(i); }   // 수동 넘김 = 자동 잠깐 멈췄다 재개
 function _srailUhaActive(){ var b=document.getElementById('srail-uha'); return !!(b&&b.offsetParent&&_uhaCar.list.length>=2&&!_uhaCar.paused); }

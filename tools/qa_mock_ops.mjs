@@ -66,4 +66,8 @@ export const FEED_SCRIPT = `(()=>{
   if(typeof _bizState!=='undefined'&&_bizState)_bizState.raw=window.__MOCK_OPS;
   if(typeof _salesState!=='undefined'&&_salesState){ _salesState.ops=window.__MOCK_OPS; _salesState._opsIdx=null; }
   if(typeof _railYrmSync==='function')_railYrmSync(window._mockActives());
+  // [260803] 실앱 _srailRender와 같은 순서로 회전 상세(우하단 2×2)까지 켠다 — 이 배선이 빠져 있어서
+  //   「본문 없는 빈 슬롯 4px + 카드 여백 14가 우 흰 카드를 18px 밀어올리는」 실제 운영 화면 상태가
+  //   스모크에서 재현되지 않았다(운영자 260803 캡처). 목데이터라 실API·PII 미접촉은 그대로.
+  if(typeof _srailUhaSync==='function')_srailUhaSync(window._mockActives());
 })()`;
