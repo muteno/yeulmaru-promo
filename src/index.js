@@ -2585,8 +2585,10 @@ function lgSpecial(href) {
   return null;
 }
 // 아이콘·로고·트래킹 픽셀 등 자료 가치 없는 이미지 걸러내기(범용 스캔 전용 — 명시 링크는 안 거름)
+//  rsrc.php = 메타(페이스북·인스타·스레드)의 정적 리소스 번들러 경로 — 파일명이 해시라 logo/icon 어휘에 안 걸리는데
+//  내용물은 전부 UI 스프라이트다(실측 260803: 스레드 공유 링크 스캔 결과 = 그 로고 .svg 1건이 「자료 1건」의 정체였다).
 function lgJunkImg(abs) {
-  return /favicon|sprite|logo|icon|badge|pixel|spacer|blank|1x1|\/emoji\/|\/flags?\//i.test(abs);
+  return /favicon|sprite|logo|icon|badge|pixel|spacer|blank|1x1|\/emoji\/|\/flags?\/|\/rsrc\.php\//i.test(abs);
 }
 // 링크트리 페이지 — __NEXT_DATA__ JSON에서 링크·첨부(EXTENSION documentUrl) 추출
 function lgParseLinktree(html) {
@@ -2675,6 +2677,181 @@ function lgParseGeneric(html, baseUrl) {
   }
   return { source: "page", title: String((og && og[1]) || (tm && tm[1]) || "").trim(), items };
 }
+// ============================================================
+// 스레드(Threads) 전용 파서 — 운영자 260803 "스레드 다운이 안가져와지는데 · 프로필 이런것만 가져오는듯"
+//  왜 범용 스캔이 못 잡나: 스레드 웹앱은 Next.js가 아니라 메타의 Relay/Comet 스택("Barcelona")이라
+//  게시물 사진·영상이 <img>/<video> 태그로 안 나온다. 실물은 전부
+//      <script type="application/json" data-sjs>…</script>
+//  안 SSR JSON(image_versions2 / video_versions)에 서명된 CDN 주소로 들어 있다.
+//  → 범용 스캔(태그·확장자 축)이 줍는 건 UI 스프라이트뿐 = 「자료 1건 = 스레드 로고」(실측 260803 재현).
+//  로직 정본 = muteno/nomute-editor apps/vidl/plugins/…/nomute_threads.py(러너에서 검증된 추출기)의 이식.
+//  실측 함정 3종(그 파일 주석 = 여기서도 그대로 유효):
+//   ⓐ 한 페이지에 video_versions 블록이 여럿(추천글 포함) → code(=shortcode) 대조가 필수.
+//   ⓑ 캐러셀 항목엔 media_type이 없다 → video_versions 유무로 사진/영상을 가른다.
+//   ⓒ 서명(oe=)이 영상 약 1일·사진 약 4일에 만료된다 → 주소 캐싱 금지(매번 새로 판다).
+// ============================================================
+var LG_TH_ALPHA = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+var LG_TH_SJS = /<script[^>]+type="application\/json"[^>]*\bdata-sjs\b[^>]*>([\s\S]*?)<\/script>/g;
+var LG_TH_PATH = /^\/(?:@([^/?#]+)\/)?(post|t|share)\/([\w-]+)/;
+// 정규 주소 형태 — @ 가 페이지 안에서 &#064; 로 이스케이프돼 있어(실측) '@'만 보는 정규식은 못 잡는다.
+var LG_TH_POST = /threads\.(?:net|com)\/(?:@|&#0*64;|%40)([^/"'?#&]+)\/post\/([\w-]+)/i;
+// 브라우저로 보이게 하는 최소 세트 — 이게 없으면 로그인 월·축약 셸이 200 text/html로 조용히 돌아온다.
+var LG_TH_NAV = {
+  "User-Agent": LG_UA,
+  "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+  "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+  "Sec-Fetch-Mode": "navigate", "Sec-Fetch-Dest": "document", "Sec-Fetch-Site": "none",
+  "Sec-Fetch-User": "?1", "Upgrade-Insecure-Requests": "1"
+};
+function lgThInfo(u) {
+  const h = u.hostname.toLowerCase().replace(/^www\./, "");
+  if (h !== "threads.net" && h !== "threads.com" && !h.endsWith(".threads.net") && !h.endsWith(".threads.com")) return null;
+  const m = u.pathname.match(LG_TH_PATH);
+  return m ? { user: m[1] || "", kind: m[2], code: m[3] } : null;
+}
+// shortcode → 숫자 postID(위치기반 base64). 11자면 64^10 규모라 Number 정밀도를 넘는다 → BigInt 필수.
+function lgThPk(code) {
+  let pk = 0n;
+  for (const c of String(code)) { const i = LG_TH_ALPHA.indexOf(c); if (i < 0) return ""; pk = pk * 64n + BigInt(i); }
+  return pk.toString();
+}
+function lgThWalk(node, hit) {
+  if (Array.isArray(node)) { for (const v of node) lgThWalk(v, hit); return; }
+  if (node && typeof node === "object") { hit(node); for (const k in node) lgThWalk(node[k], hit); }
+}
+// 이 게시물에 해당하는 노드만 골라낸다 — code(문자) 우선, 없으면 pk(숫자)로도 맞춰본다(응답 형태에 따라 한쪽만 실린다).
+function lgThNodes(html, code) {
+  const pk = lgThPk(code), found = [];
+  const re = new RegExp(LG_TH_SJS.source, "g");
+  let m;
+  while ((m = re.exec(html))) {
+    const raw = m[1];
+    if (raw.indexOf(code) < 0 && (!pk || raw.indexOf(pk) < 0)) continue;   // 이 글이 안 든 블록은 파싱 자체를 생략
+    let data;
+    try { data = JSON.parse(raw); } catch (_) { continue; }
+    lgThWalk(data, (n) => {
+      const c = n.code;
+      const ok = c === code || ((c === void 0 || c === null) && pk && String(n.pk) === pk);
+      if (ok && found.indexOf(n) < 0) found.push(n);
+    });
+  }
+  return found;
+}
+// 게시물 노드 '안에서' 실제 미디어를 가진 딕트를 등장 순서대로. 고정 경로(carousel_media)로 찍으면 래퍼 하나에 통째로 놓친다.
+function lgThMedia(post) {
+  const out = [];
+  const hasMedia = (x) => {
+    if (x.carousel_media) return false;   // 캐러셀 컨테이너도 대표 썸네일을 문다 → 여기서 멈추면 슬라이드 전량이 사라진다
+    const c = x.image_versions2 && x.image_versions2.candidates;
+    return !!(x.video_versions || (c && c[0] && c[0].url));
+  };
+  const rec = (x) => {
+    if (Array.isArray(x)) { for (const v of x) rec(v); return; }
+    if (x && typeof x === "object") {
+      if (hasMedia(x)) { if (out.indexOf(x) < 0) out.push(x); return; }
+      for (const k in x) rec(x[k]);
+    }
+  };
+  rec(post);
+  return out;
+}
+function lgThBestImg(m) {   // 최고 해상도 1장(면적 기준)
+  const c = (m.image_versions2 && m.image_versions2.candidates) || [];
+  let best = null, px = -1;
+  for (const x of c) { if (!x || !x.url) continue; const p = (x.width || 0) * (x.height || 0); if (p > px) { best = x; px = p; } }
+  return best;
+}
+function lgThBestVid(m) {   // type 101 > 102 > 103 (값이 작을수록 고화질)
+  let best = null, rank = 1e9;
+  for (const x of m.video_versions || []) { if (!x || !x.url) continue; const t = Number(x.type) || 999; if (t < rank) { best = x; rank = t; } }
+  return best;
+}
+// 파싱 결과 = { source:'threads', … } · 게시물 노드를 못 찾으면 null(호출부가 범용 스캔으로 강등)
+function lgParseThreads(html, code, user) {
+  const nodes = lgThNodes(html, code);
+  if (!nodes.length) return null;
+  let post = nodes[0], slides = [];
+  for (const n of nodes) { const g = lgThMedia(n); if (g.length > slides.length) { slides = g; post = n; } }
+  const who = String((post.user && post.user.username) || user || "threads").replace(/[^\w.-]+/g, "");
+  const cap = String((post.caption && post.caption.text) || "");
+  const ttl = cap.trim().split("\n")[0].slice(0, 60);
+  const items = [];
+  slides.forEach((m, i) => {
+    const nm = who + "_" + code + (slides.length > 1 ? "_" + (i + 1) : "");
+    const v = lgThBestVid(m), img = lgThBestImg(m);
+    if (v) items.push({ kind: "video", title: nm + ".mp4", url: v.url, dl: v.url, via: "proxy", note: "", thumb: (img && img.url) || "", stream: "", vid: "" });
+    else if (img) items.push({ kind: "img", title: nm + ".jpg", url: img.url, dl: img.url, via: "proxy", note: "", thumb: img.url, stream: "", vid: "" });
+  });
+  return { source: "threads", title: (ttl ? ttl + " · " : "") + "@" + (who || "threads"), items };
+}
+// 스레드 주소 1건을 목록으로 — 공유 링크(/share/) 해소 → 원글 페이지 수신 → SSR JSON 파싱.
+//  ⚠ 공유 링크는 요청자에 따라 응답이 갈린다(실측 260803):
+//    · 브라우저 UA → 200 + 클라이언트 라우팅 셸(og:* 0건 · 미디어 JSON 0건) = 읽을 정답이 페이지에 없다
+//    · 비-브라우저 UA → 302 Location = 정규 주소(/@user/post/<code>) = 서버가 직접 알려준다
+//  그래서 share 첫 요청만 일부러 봇 UA로 던지고, 원글 페이지는 다시 브라우저 UA로 연다(그래야 SSR JSON이 실린다).
+async function lgThResolve(u, th) {
+  if (th.kind !== "share") return { th, page: u.toString() };
+  try {
+    const r = await fetch(u.toString(), { redirect: "manual", signal: AbortSignal.timeout(12e3), headers: { "User-Agent": "yeulmaru-linkgrab/1.0", "Accept-Language": LG_TH_NAV["Accept-Language"] } });
+    const m = LG_TH_POST.exec(r.headers.get("location") || "");
+    if (r.body && r.body.cancel) { try { r.body.cancel(); } catch (_) {} }
+    if (m) return { th: { user: m[1], kind: "post", code: m[2] }, page: "https://www.threads.com/@" + m[1] + "/post/" + m[2] };
+  } catch (_) {}
+  return null;   // 302를 못 받았다 = 셸 폴백(호출부가 메타에서 되찾는다)
+}
+async function lgGrabThreads(u, th) {
+  let hit = await lgThResolve(u, th), html = "";
+  if (!hit) {
+    // 폴백 = 공유 셸을 브라우저 UA로 열어 메타(og:url·al:android:url)에서 정규 주소를 되찾는다.
+    //  ⚠ 본문 아무 데서나 정규 주소를 줍는 폴백은 두지 않는다 — 한 페이지에 추천글 코드가 수십 개 섞여 엉뚱한 글을 받는다.
+    let shell;
+    try { shell = await fetch(u.toString(), { redirect: "follow", signal: AbortSignal.timeout(15e3), headers: LG_TH_NAV }); } catch (_) { return null; }
+    if (!shell.ok) return null;
+    html = await shell.text();
+    const mu = html.match(/property=["'](?:og:url|al:android:url)["'][^>]*content=["']([^"']+)/i);
+    const m = LG_TH_POST.exec((mu && mu[1]) || shell.url || "");
+    if (!m) return { source: "page", title: "스레드", items: [], _shell: true };   // 정답 신호 0 = 지어내지 않는다
+    hit = { th: { user: m[1], kind: "post", code: m[2] }, page: "https://www.threads.com/@" + m[1] + "/post/" + m[2] };
+    html = "";
+  }
+  if (!html) {
+    let r;
+    try { r = await fetch(hit.page, { redirect: "follow", signal: AbortSignal.timeout(15e3), headers: LG_TH_NAV }); } catch (_) { return null; }
+    if (!r.ok) return null;
+    const buf = await r.arrayBuffer();
+    html = new TextDecoder("utf-8").decode(buf.byteLength > 6e6 ? buf.slice(0, 6e6) : buf);   // 원글 페이지 실측 ≈ 850KB(범용 3MB 캡보다 넉넉히)
+  }
+  const out = lgParseThreads(html, hit.th.code, hit.th.user);
+  if (out) return out;
+  // SSR JSON을 못 읽었다(로그인 월·구조 변경) = 그 페이지 범용 스캔으로 강등.
+  // 최소한 og:image(대표 사진)는 원글 페이지에 언제나 실려 있다 → 로고 1건보다는 낫다.
+  const gen = lgParseGeneric(html, hit.page);
+  return gen.items.length ? gen : null;
+}
+// 스트리밍 주소(유튜브 등) 1건 = 그 자체가 결과 — 페이지를 열지 않는다.
+//  왜: ⓐ 받을 파일이 그 HTML 안에 없다(스캔해도 자기 영상은 목록에 안 들어온다 — 실측 = 파비콘·JS 번들 36건)
+//      ⓑ 유튜브가 데이터센터 IP(워커 egress)에 HTTP 429를 준다 = 「페이지 응답 오류 HTTP 429」로 전량 실패(운영자 260803 실측).
+//  필요한 정보(영상 id·썸네일)는 이미 주소에 다 있고, 제목만 oEmbed로 보강한다(가벼운 공개 엔드포인트 · 실패해도 결과 불변).
+async function lgStreamMeta(st, href) {
+  if (st.stream !== "youtube") return null;
+  try {
+    const r = await fetch("https://www.youtube.com/oembed?format=json&url=" + encodeURIComponent(href), { signal: AbortSignal.timeout(6e3), headers: { "User-Agent": LG_UA, "Accept": "application/json" } });
+    if (!r.ok) return null;
+    const d = await r.json();
+    return { title: String(d.title || "").slice(0, 120), thumb: String(d.thumbnail_url || "") };
+  } catch (_) { return null; }
+}
+async function lgStreamOnly(target, st, env) {
+  const href = target.toString();
+  const sp = lgSpecial(href) || {};
+  const meta = await lgStreamMeta(st, href);
+  const name = (meta && meta.title) || href.replace(/^https?:\/\/(www\.)?/, "").slice(0, 80);
+  return json({
+    source: "stream",
+    title: (meta && meta.title) || target.hostname.replace(/^www\./, ""),
+    items: [{ kind: "video", title: name, url: href, dl: null, via: "", note: sp.note || "스트리밍 — 권리 확인 동의 후 [저장]으로 변환해 받기", thumb: (meta && meta.thumb) || sp.thumb || st.thumb || "", stream: sp.stream || st.stream || "", vid: sp.vid || st.vid || "" }]
+  }, env);
+}
 // 항목별 용량·타입 조회(HEAD → Range 폴백) — 갤러리 우상단 표시용(프론트가 지연 호출)
 async function lgHead(url, env) {
   let target;
@@ -2697,10 +2874,22 @@ async function lgHead(url, env) {
 async function lgList(url, env) {
   let target;
   try { target = lgGuardUrl(url.searchParams.get("url")); } catch (e) { return json({ error: e.message }, env, 400); }
+  // ① 스트리밍 주소 = 페이지를 열지 않고 그 자리에서 확정(유튜브 429 봉합 · lgStreamOnly 주석 참조)
+  const st0 = lgStreamInfo(target.toString());
+  if (st0) return lgStreamOnly(target, st0, env);
+  // ② 스레드 = 전용 파서(사진·영상이 태그가 아니라 SSR JSON에 있다 · lgParseThreads 주석 참조) — 실패하면 ③으로 강등
+  const th0 = lgThInfo(target);
+  if (th0) {
+    let thOut = null;
+    try { thOut = await lgGrabThreads(target, th0); } catch (_) {}
+    if (thOut) { if (!thOut.title) thOut.title = target.hostname; return json(thOut, env); }
+  }
+  // ③ 범용 스캔
   let res;
   try { res = await lgFetchPage(target, 15e3); } catch (_) { return json({ error: "페이지에 접속하지 못했어요(시간 초과·차단)" }, env, 502); }
   if (res.status >= 520) return json({ error: "이 사이트가 백엔드 자동 접속을 막고 있어요(해외·봇 차단 추정, HTTP " + res.status + ") — 이 링크는 자동 수집이 안 돼요" }, env, 502);
   if (res.status === 403 || res.status === 406) return json({ error: "이 사이트가 자동 수집을 거부했어요(HTTP " + res.status + ")" }, env, 502);
+  if (res.status === 429) return json({ error: "이 사이트가 접속 횟수를 제한했어요(HTTP 429) — 잠시 뒤 다시 시도해 주세요" }, env, 502);
   if (!res.ok) return json({ error: "페이지 응답 오류 HTTP " + res.status }, env, 502);
   const ct = (res.headers.get("content-type") || "").toLowerCase();
   if (!ct.includes("text/html")) {
