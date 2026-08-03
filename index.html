@@ -5840,6 +5840,29 @@ function _srailAlignTop(){
           if(_room>1)_f.style.minHeight=Math.round(_fr.height/_z+_room)+'px';
         }
       }catch(_e5){}
+      // ── [260803 2차 운영자 「다른 각 창도 개선한 대로 · 넘어간 거 많음」] 넘침 최종 흡수 = 스크롤을 **마지막 자식 안으로** ──
+      //   260802d 정본은 「길면 박스 안에서 스크롤」이었는데, 박스가 스크롤에 들어가면 클립선이 **패딩박스 하단**이라
+      //   유리 하단 여백(패딩 18)까지 흰색이 내려온다 = 반대 열(안선에서 끝남)과 최대 18px 어긋난다
+      //   (실측: 4면 좌 1047 vs 우 1029 · 1920×740 1면 11px · 1600×680 1·3면 18px).
+      //   → 넘칠 땐 박스 대신 **그 열의 마지막 자식**이 자기 안에서 스크롤한다: 프레임(이젤)·패딩·보더 전부 불변,
+      //     마지막 흰 도형 하단 = 박스 안선 = 좌·우 같은 수평선. 안 넘치면 전부 해제(회귀 0).
+      //   멱등: 목표 높이 = 「안선 − 자기 상단」(현재값 미참조) → 몇 번을 다시 계산해도 같은 값(흔들림 0).
+      try{
+        [document.querySelector('#biz-main [data-bizmbox]'),document.querySelector('#rail-yrm [data-bizmbox]')].forEach(function(_ab){
+          if(!_ab||_ab.offsetParent===null)return;
+          var _kids=[].slice.call(_ab.children).filter(function(e){return e.offsetParent!==null&&e.getBoundingClientRect().height>1;});
+          if(!_kids.length)return;
+          var _lastK=_kids[_kids.length-1];
+          var _reset=function(){ _lastK.style.maxHeight=''; if(_lastK._bizmOvf){ _lastK.style.overflowY=''; _lastK._bizmOvf=0; } };
+          if(!_easelOn||!_ab.style.height){ _reset(); return; }
+          var _acs=getComputedStyle(_ab);
+          var _aIn=_ab.getBoundingClientRect().bottom-(parseFloat(_acs.borderBottomWidth)||0)-(parseFloat(_acs.paddingBottom)||0);
+          var _aWant=Math.round((_aIn-_lastK.getBoundingClientRect().top)/_z);
+          if(_aWant<60){ _reset(); return; }                       // 자리가 없다시피 하면 종전 거동 유지(과압축 금지)
+          if(_lastK.scrollHeight>_aWant+1){ _lastK.style.maxHeight=_aWant+'px'; _lastK.style.overflowY='auto'; _lastK._bizmOvf=1; _ab.style.overflowY=''; }
+          else _reset();
+        });
+      }catch(_e6){}
       var _slot=document.getElementById('rail-yrm-uha'), _uhaEl=document.getElementById('srail-uha');
       var _slotOn=_uhaEl&&_uhaEl.getAttribute('data-on')==='1';
       if(_slot){ _slot.style.minHeight=''; }   // [260725] 상세 슬롯 = 표 비노출 후 점줄만 남음 → 높이 강제 없음
@@ -24215,11 +24238,18 @@ function _memOvRender(targetId){   // [260731 4차] targetId = 인라인 4면(me
   if(!_memState||!_memState.rows.length){body.innerHTML='<div style="padding:40px;font-size:13px;color:var(--danger)">회원 데이터를 못 불러왔어요 — 통합문서 「운영_회원」 시트를 확인해 주세요</div>';return;}
   // [260803 운영자 「저 창은 스크롤 없음 — 대화만 네모 박스 안에서」] FIT = 모달 전용 「창 높이 채움」 모드.
   //   모달은 높이가 고정(92vh)이라 막대·맵이 남는 높이를 나눠 갖고(행 17~36px 신축 · 최대치 = 종전 36px과 동일),
-  //   대화는 채팅 박스 안에서만 스크롤한다. 인라인 4면(mem-ov-inline)은 종전 자연 흐름 그대로 —
-  //   책 이젤 계약(tools/smoke_layout.mjs)이 그 면의 기하를 잠그고 있어 손대지 않는다.
+  //   대화는 채팅 박스 안에서만 스크롤한다.
   //   좁은 화면(맵·막대 카드가 줄바꿈되는 폭 = 카드 기준폭 340+380+간격 24 → 모달 안쪽 744px 미만)은 FIT 해제 =
   //   종전 자연 흐름 그대로(맵이 폭에 맞춰 커지고 모달은 스크롤) — 모바일 풀스크린 모달 회귀 방지.
-  var FIT=!targetId&&(typeof window!=='undefined')&&window.innerWidth>=840;
+  // [260803 2차 운영자 「다른 각 창도 개선한 대로 맞춰줘 — 넘어간 거 많음」] 인라인 4면(mem-ov-inline)도 FIT 대상으로 편입.
+  //   구판은 「이젤 계약이 그 면 기하를 잠그니 손대지 않는다」였는데 **거꾸로였다** — 자연 흐름이 이젤(고정 유리박스)을
+  //   넘쳐 박스가 내부 스크롤로 넘어가면, 스크롤 중인 열은 클립선이 **패딩박스 하단**이라 흰색이 박스 아래 테두리까지
+  //   내려온다(실측 2180×1116: 좌 1047 vs 우 1029 = Δ18 · 예울이 카드가 잘린 채 유리 여백을 먹었다).
+  //   → 이젤이 켜져 박스 높이가 확정된 인라인 4면은 모달과 같은 FIT(막대·맵 신축 · 대화는 자기 박스 안 스크롤)로
+  //     한 창에 담는다 = 넘침 0 → 마지막 흰 카드가 박스 안선에서 끝난다(좌·우 흰 라인 Δ0). 이젤 기하는 무접촉.
+  var _inFit=false;
+  try{ if(targetId&&body.closest){ var _mbx=body.closest('[data-bizmbox]'); _inFit=!!(_mbx&&_mbx.style.height&&typeof _bizBookWide==='function'&&_bizBookWide()); } }catch(_ef){}
+  var FIT=(typeof window!=='undefined')&&window.innerWidth>=840&&(!targetId||_inFit);
   var rows=_memState.rows,n=rows.length;
   // 집계: 시군구·시도·연령대·지오
   var sgg={},sido={},age={},geo={},unloc=0;
@@ -24275,6 +24305,9 @@ function _memOvRender(targetId){   // [260731 4차] targetId = 인라인 4면(me
     +barList(ages.map(function(a){return bar(a[0],a[1],maxA,pct(a[1])+'%',!!ageTop2[a[0]]);}).join(''),ages.length);   // 연령대는 나이순 정렬이라 '많은 순 1·2위'를 따로 계산(ageTop2)
   body.style.textAlign='left';body.style.color='var(--text)';
   if(FIT){body.style.display='flex';body.style.flexDirection='column';}   // 셸의 overflow:auto는 유지 = 아주 낮은 창(≤800px)에서만 마지막 안전판으로 스크롤
+  // [260803 2차] 인라인 4면 FIT = 이젤 안선까지가 그릴 판 → 높이 100%(유리박스 콘텐츠 박스 = 안선)로 못박아야 위 flex 신축이 성립.
+  //   FIT 해제(좁은 화면·이젤 꺼짐)면 로딩용 100%를 지워 종전 자연 흐름으로 되돌린다(_bizMemberEnsure의 height='' 규약과 동일).
+  if(targetId)body.style.height=(FIT?'100%':'');
   var sfx=(targetId==='mem-ov-inline')?'i':'m';   // [260803] AI 채팅 DOM id 접미 — 모달·인라인 공존 시 id 충돌 방지(위 targetId 컨테이너 분리와 같은 이유)
   body.innerHTML='<div style="font-size:16px;font-weight:800;margin-bottom:2px">고객 분석</div>'
     +'<div style="font-size:12px;color:var(--dim);margin-bottom:'+(FIT?10:14)+'px">운영_회원 시트 · 주소 미상 '+unloc.toLocaleString()+'명 제외 집계 · 개인 식별 없음(집계 전용)</div>'
@@ -24282,7 +24315,10 @@ function _memOvRender(targetId){   // [260731 4차] targetId = 인라인 4면(me
     // [260803 운영자] 흰 카드 높이 정렬: flex-start → stretch = 좌(맵) 하단선을 우(거주지·연령) 카드와 일치. 맵 svg는 늘어난 칸 세로 중앙(여백 균등).
     // [260803 FIT] 두 카드 줄이 남는 높이를 전부 가져간다(flex:1 1 auto) — 맵 svg는 절대배치라 높이를 안 밀고(칸에 맞춰 축소),
     //   막대 카드는 자기 최소높이(행 17px×16 + 제목)까지만 줄어든다. 좁은 화면(줄바꿈)에선 종전처럼 자연 높이.
-    +'<div style="display:flex;gap:24px;flex-wrap:wrap;align-items:stretch'+(FIT?';flex:1 1 auto':'')+'">'
+    // [260803 2차] 인라인 4면(이젤 안)에서만 이 줄이 **자기 안에서** 스크롤한다(min-height:0 → 남는 몫이 모자라도 카드 줄이 이젤을 안 뚫는다).
+    //   1면 목록 카드가 「넘치면 카드 안 스크롤」인 것과 같은 규약 — 낮은 화면(1600×900 등)에서 두 카드가 줄바꿈돼
+    //   최소높이가 박스보다 커질 때도 마지막 흰 카드(예울이)가 안선에서 끝난다. 모달(FIT)은 종전 그대로 = 회귀 0.
+    +'<div style="display:flex;gap:24px;flex-wrap:wrap;align-items:stretch'+(FIT?';flex:1 1 auto':'')+(_inFit?';min-height:0;overflow-y:auto':'')+'">'
     +'<div style="flex:1 1 340px;min-width:300px;background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius);padding:13px;display:flex;flex-direction:column'+(FIT?';overflow:hidden':'')+'"><div style="font-size:14px;font-weight:800;margin-bottom:4px">전국 분포 맵 <span style="font-size:10.5px;color:var(--dim);font-weight:500">(버블 = 회원수 비례)</span></div><div style="flex:1;'+(FIT?'position:relative;min-height:180px':'display:flex;align-items:center;min-height:0')+'">'+_memOvMap(geo,FIT)+'</div></div>'
     +'<div style="flex:1 1 380px;min-width:300px;background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius);padding:13px 17px'+(FIT?';display:flex;flex-direction:column;overflow:hidden':'')+'">'+topHtml+ageHtml+'</div>'
     +'</div>'
