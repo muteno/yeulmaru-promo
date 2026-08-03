@@ -6,6 +6,9 @@ name: 앱 블로그/분석 (claude -p · repository_dispatch)
 # [260803 예울이 AI 채팅] payload.yeulchat=1 이면 블로그 경로 대신 「예울이」 분기 — persona/yeuli.md 카드(루시봇
 #   컨셉: 카드 원문 주입 = 카드 수정이 곧 말투, 코드 수정 0) + 질문 1턴 → drafts/yc<ts>r<n>.json 커밋(같은 폴링 경로).
 #   Worker는 여분 payload 키를 그대로 통과시키므로 배포된 /api/blog/dispatch·/api/blog/draft 를 무변경 재사용한다.
+#   모델 라우팅(운영자 260803): 기본 = claude-sonnet-5·effort high(대화 속도 우선) / 복잡 질문(payload.deep=1,
+#   앱 _yeulAiDeep 판정 — 이때 앱이 「기다려 달라」 말풍선을 먼저 띄움) = claude-opus-5·effort medium.
+#   payload.t = KST 시(0~23) — 카드 §3 등대 모드(21~06시) 판정용 참고 정보로 동봉.
 # [블로그 개선] 새 초안(mode=blog·수정요청 아님)은 WebSearch·WebFetch를 허용해 공연·출연진·작품을
 #   먼저 조사(BW-2)하고, 사람 말투 문체 계약(BW-1)으로 쓰며, 본문 뒤 ===TAGS===(네이버 태그 30개, BW-5)
 #   ===RESEARCH===(검증용 리서치 노트) 섹션을 함께 출력 → 파서가 {text,tags,research}로 분리해 저장.
@@ -69,10 +72,16 @@ jobs:
               cprompt += '- 사실만: 카드·참고 정보에 없는 구체 사실(날짜·가격·규정 조항·인원수)은 지어내지 말고 「확실하지 않다」고 말한다.\n';
               cprompt += '- 길이: 2~6문장, 채팅 말풍선 하나 분량. 머리말·사고 과정 없이 답변 본문만 출력한다.\n';
               if (p.ctx) cprompt += '\n# 참고 정보 (앱이 동봉한 집계 요약 — 개인정보 없음)\n' + String(p.ctx).slice(0, 1200) + '\n';
+              const chour = parseInt(p.t, 10);
+              if (chour >= 0 && chour <= 23) cprompt += '\n# 현재 시각(KST) — 카드 §3 모드 판정용\n' + chour + '시\n';
               cprompt += '\n# 질문\n' + String(p.q || '').slice(0, 800);
+              // [260803 운영자] 모델 라우팅 — 기본 소넷5·high(속도) / 복잡(deep) opus5·medium(앱이 대기 안내 선표시)
+              const cdeep = !!p.deep;
+              const cmodel = cdeep ? 'claude-opus-5' : 'claude-sonnet-5';
+              const ceffort = cdeep ? 'medium' : 'high';
               const cpath = require('path');
               const { runClaudeWithFailover: runChat } = require(cpath.join(process.env.GITHUB_WORKSPACE, 'shared/claude_failover.js'));
-              const cr = runChat({ args: ['-p', '--model', 'claude-opus-5', '--effort', 'high', '--max-turns', '1'], input: cprompt, cwd: process.env.RUNNER_TEMP || '/tmp' });
+              const cr = runChat({ args: ['-p', '--model', cmodel, '--effort', ceffort, '--max-turns', '1'], input: cprompt, cwd: process.env.RUNNER_TEMP || '/tmp' });
               const cout = (cr.ok && String(cr.raw || '').trim())
                 ? { id, mode: 'chat', ok: true, text: String(cr.raw).trim().slice(0, 8000), ts: new Date().toISOString() }
                 : { id, mode: 'chat', ok: false, error: (cr.error || '빈 응답'), ts: new Date().toISOString() };
