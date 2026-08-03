@@ -7458,8 +7458,8 @@ function _ryExRow(e){
 }
 function _railYrmTableHtml(actives){
   if(!actives)return '<div class="rail-yrm-empty">'+_ldHtml(14)+'불러오는 중</div>';
-  // [260803 운영자] 「판매중만」 체크 토글 — 켬 = 판매중만(종전 표와 동일) · 끔(기본) = 지난(종료) 프로그램까지 전체(실적 조회 흡수).
-  //   전체여도 판매중이 위(종전 시작일순 그대로), 지난 건 그 아래 최근 종료순 — 모니터링 축은 안 밀린다.
+  // [260803 운영자] 「판매중만」 체크 토글 — 켬(기본 · 260803 2차 「판매중만을 기본값으로」) = 판매중만(종전 표와 동일) · 끔 = 지난(종료) 프로그램까지 전체(실적 조회 흡수).
+  //   전체여도 판매중이 위(종전 시작일순 그대로), 지난 건 그 아래 종료일 오름차순(260803 2차) — 모니터링 축은 안 밀린다.
   if(_ryLiveOnly())actives=actives.filter(function(x){return !x._past;});
   var perfs=actives.filter(function(x){return x._kind!=='ex';});
   // [260729 운영자] 전시 = 공연 행 모양으로 정규화(_ryExRow) → 이 아래 필터·정렬·표 렌더가 공연과 완전히 같은 코드를 탄다(인덱싱 동일).
@@ -7472,8 +7472,8 @@ function _railYrmTableHtml(actives){
   };
   perfs=perfs.filter(keep); exs=exs.filter(keep);
   var byDate=function(a,b){var ad=a.startDate?a.startDate.getTime():9e15,bd=b.startDate?b.startDate.getTime():9e15;if(ad!==bd)return ad-bd;return a.name<b.name?-1:1;};
-  // [260803] 지난 건 정렬 = 최근 종료(공연일)순 — 어제 끝난 게 목록 최상단 과거줄에 오게(실적 조회 동선). 판매중은 종전 byDate 그대로.
-  var byPast=function(a,b){var ad=(a.endDate||a.startDate),bd=(b.endDate||b.startDate);ad=ad?ad.getTime():-9e15;bd=bd?bd.getTime():-9e15;if(ad!==bd)return bd-ad;return a.name<b.name?-1:1;};
+  // [260803 2차 운영자 「반대 방향으로 나열」] 지난 건 정렬 = 종료일 오름차순(먼저 끝난 게 위 · 최근 끝난 게 그룹 맨 아래) — 판매중 그룹(시작일순)과 시간 진행 방향이 같다. 일자 미상은 종전대로 맨 뒤(9e15). 판매중은 종전 byDate 그대로.
+  var byPast=function(a,b){var ad=(a.endDate||a.startDate),bd=(b.endDate||b.startDate);ad=ad?ad.getTime():9e15;bd=bd?bd.getTime():9e15;if(ad!==bd)return ad-bd;return a.name<b.name?-1:1;};
   var ord=function(arr){var lv=[],pa=[];arr.forEach(function(x){(x._past?pa:lv).push(x);});lv.sort(byDate);pa.sort(byPast);return lv.concat(pa);};
   perfs=ord(perfs); exs=ord(exs);   // 정렬 축도 동일(시작일순 · 지난 건은 그룹 하단)
   if(!perfs.length&&!exs.length)return '<div class="rail-yrm-empty">🎫 지금 판매·진행중인 프로그램이 없어요</div>';
@@ -7491,11 +7491,11 @@ function _railYrmTableHtml(actives){
        +grp('교육','--green',edus,_railYrmPerfTable);
   return h;
 }
-// [260803 운영자] 「판매중만」 체크 토글 — 대시보드 표에 지난(종료) 프로그램까지 전체 노출(기본 · 운영자 「기존에 진행한 공연들까지 다 뜨고」),
-//   체크하면 판매중만(종전 표와 동일). 부품 = 정본 스위치 .sw/.sw-k 그대로(기틀 §2-3 「ON/OFF 토글 전부 이걸 재사용」) · 신규 색·토큰 0.
-//   상태 = 기기 기억(localStorage — 열 폭 ryColW와 같은 축) + 메모리 폴백(프라이빗 모드) · 회전 상세·캘린더 레일 카드는 이 토글 무관(판매중 전용).
+// [260803 운영자] 「판매중만」 체크 토글 — 체크(기본 · 260803 2차 「판매중만을 기본값으로」) = 판매중만(종전 표와 동일),
+//   해제 = 지난(종료) 프로그램까지 전체 노출(운영자 「기존에 진행한 공연들까지 다 뜨고」 — 실적 조회 흡수). 부품 = 정본 스위치 .sw/.sw-k 그대로(기틀 §2-3 「ON/OFF 토글 전부 이걸 재사용」) · 신규 색·토큰 0.
+//   상태 = 기기 기억(localStorage — 열 폭 ryColW와 같은 축 · 미저장 = 켬) + 메모리 폴백(프라이빗 모드) · 회전 상세·캘린더 레일 카드는 이 토글 무관(판매중 전용).
 var _RY_LIVE_KEY='ryLiveOnly', _ryLiveMem=null;
-function _ryLiveOnly(){ if(_ryLiveMem!==null)return _ryLiveMem; try{return localStorage.getItem(_RY_LIVE_KEY)==='1';}catch(_e){return false;} }
+function _ryLiveOnly(){ if(_ryLiveMem!==null)return _ryLiveMem; try{return localStorage.getItem(_RY_LIVE_KEY)!=='0';}catch(_e){return true;} }
 function _ryLiveToggle(){
   var v=!_ryLiveOnly(); _ryLiveMem=v;
   try{localStorage.setItem(_RY_LIVE_KEY,v?'1':'0');}catch(_e){}
