@@ -32,7 +32,7 @@
 <link rel="preload" as="image" href="image/bg-yeulmaru.webp" fetchpriority="high">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=DM+Serif+Display&display=swap" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.min.css" rel="stylesheet">
-<!-- PWA — 설치형 웹앱 (260704). 서비스워커는 의도적으로 미사용: 캐시 스테일(옛 index.html) 방지, 설치는 manifest만으로 동작 -->
+<!-- PWA — 설치형 웹앱 (260704). 서비스워커 = 260729 접속 안정용 도입(sw.js · HTML 네트워크 우선이라 스테일 없음, body 끝에서 등록) — 구 「의도적 미사용」 주석은 낡은 정보라 정정(Q39) -->
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#4A4DE7">
 <meta name="mobile-web-app-capable" content="yes">
@@ -2300,6 +2300,38 @@ body.ry-rzing,body.ry-rzing *{cursor:col-resize !important;user-select:none}
 ::-webkit-scrollbar-thumb:horizontal{background:rgba(0,0,0,.15)}   /* 가로 = 상시 표시 유지(구 정책 「가로는 상시 8px 발견성」 계승 — 가로바는 폭 토글 대상이 아니었어 시프트도 없다) */
 html::-webkit-scrollbar-thumb{background:rgba(0,0,0,.15)}
 [data-sbmove="1"]::-webkit-scrollbar-thumb{background:rgba(0,0,0,.28)}
+/* ═══ [Q39 260803 운영자 「노뮤트 에디터 기능 프로모 배선」] 입력칸 클립(복사·붙여넣기·지우개/되돌리기) ═══
+   원본 = nomute-editor viewer/nm-clip.css(운영자 260627~260803 계약) — 기하·상태 로직 계승, 색 = 이 레포 :root 토큰 재스킨(기틀 §3.5② · 신규 hex 0).
+   형태 축 = 정본 .icon-btn(원형 유리 아이콘 버튼)의 「입력칸 상단 테두리 걸침」 26px 소형판. 「버튼 내 SVG·이모지 금지」는 텍스트 라벨 버튼(.btn) 축 — 순수 아이콘 원형은 .icon-btn 정본 축(§2 #4·기존 #memo-btn 동형).
+   ⚠ .iobtn-edge에 backdrop-filter 금지 — 노뮤트 revdlg/asklinkrow 스코프의 반(反)번쩍 축(입력칸 위 오버레이 블러 = 타이핑마다 재샘플 번쩍임 · 감사8인 260704)을 전 버튼에 전역 채택한 것(원본 base .iobtn엔 blur 실존 — 평의회4 D4 정정). 「blur 8px 추가」로 고치지 말 것. */
+.iobtn{position:absolute;top:8px;right:8px;width:30px;height:30px;display:grid;place-items:center;padding:0;color:var(--dim);background:var(--glass-surface);border:1px solid var(--border);border-radius:9px;cursor:pointer;z-index:2;transition:transform .12s,background .15s,color .15s,border-color .15s,opacity .15s;-webkit-tap-highlight-color:transparent}
+.iobtn:hover{background:var(--accent-light);color:var(--accent)}
+.iobtn:active{transform:scale(.98)}
+.iobtn.ok{background:var(--accent);color:var(--surface-solid);border-color:var(--accent)}
+.iobtn svg{display:block}
+.iobtn-edge{top:0;right:14px;transform:translateY(-50%);width:26px;height:26px;border-radius:50%;opacity:.78;background:var(--glass-surface);border-color:var(--border2);color:var(--neutral-text);box-shadow:0 2px 8px rgba(0,0,0,0.04)}   /* 잉크 = 중립 사다리 --neutral-text(평의회8 — --dim×.78은 대비 2.63:1로 비텍스트 3:1 미달 · neutral-text×.78 ≈ 3.4:1 통과 · 신규 색 0) */
+.iobtn-edge:hover{opacity:1;background:var(--accent-light);color:var(--accent);border-color:var(--accent-glow)}
+.iobtn-edge:active{transform:translateY(-50%) scale(.98);color:var(--accent);border-color:var(--accent-glow)}
+.iobtn-edge.ok{opacity:1;background:var(--glass-surface);color:var(--accent);border-color:var(--accent-glow)}
+.iobtn-edge svg{width:13px;height:13px}
+.iobtn-pp{right:46px}                          /* 붙여넣기 = 항상 노출 · 지우개 좌측 (가로 사다리 14/46/78 = 원본 계승) */
+.iobtn-erase{right:14px}                       /* 지우개 = 최우측 · 누르면 입력 비움 */
+.iobtn-off{opacity:.3;pointer-events:none}     /* 빈칸 = 지울 것 없음 → 흐리게·비활성 */
+.iobtn-undo{color:var(--text);border-color:var(--dim);opacity:1}   /* 지움 직후 ~10초 = 되돌리기(또렷한 픽토그램 + 강한 링 — 원본 「idle 2배 링」 축의 라이트 대응 · 평의회4 D2) */
+.iobtn-copy{right:46px}                        /* 지우개 없는 입력 = [복사 46 | 붙여넣기 14] */
+.iobtn-copy-e{right:78px}                      /* 지우개 동반 = [복사 78 | 붙여넣기 46 | 지우개 14] */
+.iobtn-hide{display:none}                      /* 내용 비면 복사 숨김(붙여넣기·지우개는 유지) */
+.iowrap>input:not([style*="width"]),.iowrap>textarea:not([style*="width"]){width:100%;box-sizing:border-box}   /* [평의회2] 폭 지위 승계 — 래퍼가 끼면 flex 스트레치·기본폭 의존 칸의 폭 규칙이 끊기므로 래퍼 전폭 충전(인라인 width 보유 칸은 자기 값 유지) */
+.iowrap:has(>input[style*="display:none"]) .iobtn,.iowrap:has(>input[style*="display: none"]) .iobtn{display:none}   /* [평의회2] 부착 후 재숨김된 칸(유형 「기타」 해제 등) = 유령 버튼 소등(:has 선례 L109) */
+/* 붙여넣기 폴백 모달(readText 막힌 환경 = 길게 눌러 붙여넣기) — 원본 pastefb 골격에 정본 .u-backdrop/.u-pop 값 계승 · 버튼 = 정본 .btn 그대로 써서 별도 버튼 규칙 0 */
+.pastefb{border:none;outline:none;background:transparent;max-width:100vw;max-height:100dvh;width:fit-content;padding:0;margin:auto}   /* fit-content = UA 기본 복원(평의회8 B — width:auto는 dialog 전폭 스트레치라 데스크톱서 좌귀퉁이 붙음) */
+.pastefb::backdrop{background:var(--backdrop);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
+.pastefb-box{width:min(360px,90vw);background:var(--glass-surface);border:1px solid var(--glass-bd);-webkit-backdrop-filter:blur(28px) saturate(160%);backdrop-filter:blur(28px) saturate(160%);border-radius:var(--r-pop);box-shadow:var(--elev);padding:16px;display:flex;flex-direction:column;gap:12px}
+.pastefb-msg{font-size:13px;color:var(--neutral-text);line-height:1.5}
+.pastefb-msg b{color:var(--accent)}
+.pastefb-ta{width:100%;box-sizing:border-box;min-height:90px;resize:none;padding:10px 14px;border:1.5px solid var(--border);border-radius:12px;background:var(--surface-solid);color:var(--text);font-family:inherit;font-size:14px;outline:none}
+.pastefb-ta:focus{border-color:var(--accent);box-shadow:0 0 0 4px var(--accent-glow)}   /* .modal input:focus 정본 문법 계승 */
+.pastefb-row{display:flex;gap:8px;justify-content:flex-end}
 </style>
   <!-- MSAL.js for Microsoft OAuth (OneDrive 폴더 트리) — 공식 docs 권장 이중 fallback -->
   <script src="https://alcdn.msauth.net/browser/2.35.0/js/msal-browser.min.js"></script>
@@ -3918,6 +3950,7 @@ function _qaDeepLink(){
 }
 (function(){if(window._QA){try{_qaEnter();}catch(_qe){console.error('[QA] enter fail',_qe);}return;}try{localStorage.removeItem('myApplicant');localStorage.removeItem('myUserDept');}catch(e){}const s=sessionStorage.getItem('pw');if(s){var _lk=null;try{_lk=sessionStorage.getItem('_lockedAt');}catch(e){} if(_lk){try{if(!_loginEmail)_loginEmail=(sessionStorage.getItem('myEmail')||'').trim();}catch(e){} lockScreen();}else{_enterAppFromSession();_msalHasLiveSession();}}else{var _rp=null;try{_rp=localStorage.getItem('_resumePin');}catch(e){} if(_rp){try{localStorage.removeItem('_resumePin');}catch(e){} _loginEmail=_rp; if(typeof startLoginShader==='function'){try{startLoginShader();}catch(e){}} if(typeof goToPinStep==='function'){setTimeout(function(){goToPinStep(true);},0);}else{if(typeof initLoginScreen==='function')initLoginScreen();}}else{if(typeof initLoginScreen==='function')initLoginScreen();}}})();
 
+var _apiWrites=0;   // [Q39 평의회6] 비행 중 쓰기 재계 — nmSyncBusy가 읽어 배포 자동 리로드가 PATCH/POST를 절단하지 못하게(모달 닫힘~쓰기 완료 사이 무방비 창 봉합)
 async function api(method,path,body){
   if(window._QA)return _qaApi(method,path,body);   // [QA] 실네트워크 차단 — 목데이터만(실API·실데이터 미접촉)
   const headers={'Content-Type':'application/json','X-App-Password':password};
@@ -3926,7 +3959,10 @@ async function api(method,path,body){
   if(subPin)headers['X-Sub-Admin-PIN']=subPin;
   const o={method,headers};
   if(body)o.body=JSON.stringify(body);
-  const r=await fetch(`${API}${path}`,o);if(!r.ok)throw new Error(`${r.status}: ${await r.text()}`);return r.json();
+  const _w=(method!=='GET'); if(_w)_apiWrites++;
+  try{
+    const r=await fetch(`${API}${path}`,o);if(!r.ok)throw new Error(`${r.status}: ${await r.text()}`);return r.json();
+  }finally{ if(_w)_apiWrites=Math.max(0,_apiWrites-1); }   // finally 필수 — 예외에 감산이 새면 영구 busy = 자동 탑재 전면 사망(평의회6 경고)
 }
 
 // (isSuperAdmin 제거됨 — 슈퍼admin 개념 폐기, 권한은 role==='admin'로 통일)
@@ -18578,7 +18614,7 @@ function buildScheduleListHtml(rows){
   
   // 필터 영역
   html+='<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center">';
-  html+='<input id="sched-q" type="text" placeholder="🔍 제목/담당자/프로그램/내용 검색 (엔터 즉시)" value="'+escapeHtml(_schedFilter.q)+'" oninput="setSchedQuery(this.value)" onkeydown="handleSchedQueryKey(event)" style="padding:6px 12px;border:1px solid #ddd;border-radius:8px;font-size:12px;background:#fff;min-width:240px;flex:0 1 300px">';
+  html+='<input id="sched-q" type="text" placeholder="🔍 제목/담당자/프로그램/내용 검색 (엔터 즉시)" value="'+escapeHtml(_schedFilter.q)+'" oninput="setSchedQuery(this.value)" onkeydown="handleSchedQueryKey(event)" style="padding:6px 12px;border:1px solid #ddd;border-radius:8px;font-size:12px;background:#fff;min-width:240px;width:100%;box-sizing:border-box;flex:0 1 300px">';
   html+='<select class="sched-filter" onchange="setSchedFilter(\'month\',this.value)" style="padding:6px 10px;border:1px solid #ddd;border-radius:8px;font-size:12px;background:#fff"><option value="all"'+(_schedFilter.month==='all'?' selected':'')+'>전체 월</option>'+allMonths.map(m=>'<option value="'+m+'"'+(_schedFilter.month===m?' selected':'')+'>'+m+'월</option>').join('')+'</select>';
   html+='<select class="sched-filter" onchange="setSchedFilter(\'cat\',this.value)" style="padding:6px 10px;border:1px solid #ddd;border-radius:8px;font-size:12px;background:#fff"><option value="all"'+(_schedFilter.cat==='all'?' selected':'')+'>전체 구분</option>'+allCats.map(c=>'<option value="'+escapeHtml(c)+'"'+(_schedFilter.cat===c?' selected':'')+'>'+escapeHtml(c)+'</option>').join('')+'</select>';
   html+='<select class="sched-filter" onchange="setSchedFilter(\'status\',this.value)" style="padding:6px 10px;border:1px solid #ddd;border-radius:8px;font-size:12px;background:#fff"><option value="all"'+(_schedFilter.status==='all'?' selected':'')+'>전체 상태</option>'+allStatuses.map(s=>'<option value="'+escapeHtml(s)+'"'+(_schedFilter.status===s?' selected':'')+'>'+escapeHtml(s)+'</option>').join('')+'</select>';
@@ -18789,7 +18825,7 @@ function buildLogsListHtml(){
   html+='</div>';
   
   html+='<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center">';
-  html+='<input id="logs-q" type="text" placeholder="🔍 변경 내용/시트 검색 (엔터 즉시)" value="'+escapeHtml(_logsFilter.q)+'" oninput="setLogsQuery(this.value)" onkeydown="handleLogsQueryKey(event)" style="padding:6px 12px;border:1px solid #ddd;border-radius:8px;font-size:12px;background:#fff;min-width:220px;flex:0 1 280px">';
+  html+='<input id="logs-q" type="text" placeholder="🔍 변경 내용/시트 검색 (엔터 즉시)" value="'+escapeHtml(_logsFilter.q)+'" oninput="setLogsQuery(this.value)" onkeydown="handleLogsQueryKey(event)" style="padding:6px 12px;border:1px solid #ddd;border-radius:8px;font-size:12px;background:#fff;min-width:220px;width:100%;box-sizing:border-box;flex:0 1 280px">';
   html+='<select onchange="setLogsFilter(\'action\',this.value)" style="padding:6px 10px;border:1px solid #ddd;border-radius:8px;font-size:12px;background:#fff"><option value="all"'+(_logsFilter.action==='all'?' selected':'')+'>전체 액션</option>'+allActions.map(a=>'<option value="'+escapeHtml(a)+'"'+(_logsFilter.action===a?' selected':'')+'>'+escapeHtml(a)+'</option>').join('')+'</select>';
   html+='<select onchange="setLogsFilter(\'sheet\',this.value)" style="padding:6px 10px;border:1px solid #ddd;border-radius:8px;font-size:12px;background:#fff"><option value="all"'+(_logsFilter.sheet==='all'?' selected':'')+'>전체 시트</option>'+allSheets.map(s=>'<option value="'+escapeHtml(s)+'"'+(_logsFilter.sheet===s?' selected':'')+'>'+escapeHtml(s)+'</option>').join('')+'</select>';
   html+='<select onchange="setLogsFilter(\'role\',this.value)" style="padding:6px 10px;border:1px solid #ddd;border-radius:8px;font-size:12px;background:#fff"><option value="all"'+(_logsFilter.role==='all'?' selected':'')+'>전체 권한</option>'+allRoles.map(r=>'<option value="'+escapeHtml(r)+'"'+(_logsFilter.role===r?' selected':'')+'>'+escapeHtml(r)+'</option>').join('')+'</select>';
@@ -23897,7 +23933,7 @@ function openBookingProcess(){
   el.innerHTML='<div class="bp-card" id="bp-card"><div class="bp-hd"><b>도화지</b>'
     +'<span id="bp-file-wrap" style="display:none;align-items:center;gap:6px;min-width:0">'
       +'<button type="button" class="bp-tbtn" onclick="_bpFileNew(\'blank\')" title="새 도화지 문서">'+_BP_ICO.page+'새 도표</button>'
-      +'<input type="text" class="bp-fname" id="bp-fname" maxlength="80" aria-label="도표 이름" onchange="_bpRename(this.value)">'
+      +'<input type="text" class="bp-fname" id="bp-fname" maxlength="80" aria-label="도표 이름" data-noclip onchange="_bpRename(this.value)">'
       +'<button type="button" class="bp-carat" onclick="_bpListMenu(this)" aria-label="도표 목록" title="도표 목록">'+_BP_ICO.tri+'</button>'
     +'</span>'
     +'<span class="sp"></span>'
@@ -24072,7 +24108,7 @@ async function openMemberLookup(){
       +'<h3 style="margin:0 0 3px;font-size:16px;font-weight:800">회원 조회</h3>'
       +'<div id="mem-sub" style="font-size:11.5px;color:var(--dim);margin-bottom:12px">불러오는 중…</div>'
       +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center">'
-      +'<input id="mem-q" placeholder="이름 · 휴대폰 · 주소 검색" oninput="clearTimeout(_memQT);_memQT=setTimeout(_memRender,150)" style="flex:1;width:auto;min-width:180px;padding:9px 12px;border:1px solid var(--border2);border-radius:var(--r-btn);font-size:13px;font-family:inherit;background:var(--surface-solid);color:var(--text)">'
+      +'<input id="mem-q" placeholder="이름 · 휴대폰 · 주소 검색" oninput="clearTimeout(_memQT);_memQT=setTimeout(_memRender,150)" style="flex:1;width:100%;box-sizing:border-box;min-width:180px;padding:9px 12px;border:1px solid var(--border2);border-radius:var(--r-btn);font-size:13px;font-family:inherit;background:var(--surface-solid);color:var(--text)">'
       +'<select id="mem-f1" onchange="_memFillSel(2);_memRender()" style="width:auto;max-width:190px;padding:9px 10px;border:1px solid var(--border2);border-radius:var(--r-btn);font-size:12.5px;font-family:inherit;background:var(--surface-solid);color:var(--text)"><option value="">시도 전체</option></select>'
       +'<select id="mem-f2" onchange="_memFillSel(3);_memRender()" style="width:auto;max-width:160px;padding:9px 10px;border:1px solid var(--border2);border-radius:var(--r-btn);font-size:12.5px;font-family:inherit;background:var(--surface-solid);color:var(--text)"><option value="">시군구 전체</option></select>'
       +'<select id="mem-f3" onchange="_memRender()" style="width:auto;max-width:150px;padding:9px 10px;border:1px solid var(--border2);border-radius:var(--r-btn);font-size:12.5px;font-family:inherit;background:var(--surface-solid);color:var(--text)"><option value="">동·읍면 전체</option></select>'
@@ -24666,7 +24702,7 @@ function _tktRender(){
   h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px;min-width:560px">'
     +'<tr>'+['등급','권종','정가(원)','판매좌석 수','비고'].map(function(c){return '<th style="text-align:left;font-size:11px;color:var(--dim);font-weight:700;padding:6px 4px;border-bottom:1px solid var(--border2)">'+c+'</th>';}).join('')+'</tr>'
     +st.seats.map(function(s,i){
-      var cell=function(k,w,ph){return '<td style="padding:3px 2px"><input type="text" value="'+escapeHtml(s[k])+'" placeholder="'+(ph||'')+'" oninput="_tktSeatIn('+i+',\''+k+'\',this.value)" style="width:'+w+';padding:7px 9px;font-size:12.5px"></td>';};
+      var cell=function(k,w,ph){return '<td style="padding:3px 2px"><input type="text" data-noclip value="'+escapeHtml(s[k])+'" placeholder="'+(ph||'')+'" oninput="_tktSeatIn('+i+',\''+k+'\',this.value)" style="width:'+w+';padding:7px 9px;font-size:12.5px"></td>';};
       return '<tr>'+cell('등급','72px',i===0?'전석':'')+cell('권종','96px',i===0?'일반석':'')+cell('정가','96px',i===0?'50000':'')+cell('석수','88px','')+cell('비고','100%','')+'</tr>';
     }).join('')+'</table></div>';
   // 4) 할인·가격 요약
@@ -26019,7 +26055,7 @@ function _veSrcPanel(tabKey){
     h+='<button type="button" class="btn '+(has?'btn--primary':'btn--neutral')+' btn--sm"'+(has?'':' disabled title="1. 영상 편집에서 [반영하기]를 누르면 이어져요"')+' onclick="_veLoadMade()">제작본 불러오기</button>';
   }
   h+='<button type="button" class="btn btn--ghost btn--sm" onclick="document.getElementById(\'ve-file\').click()">영상 파일 삽입</button>';
-  h+='<input id="ve-url" class="nb-input" style="flex:1;min-width:150px;width:auto;padding:8px 11px;font-size:12.5px" placeholder="영상 링크 (http://…)" onkeydown="if(event.key===\'Enter\')_veUrlLoad(\''+tabKey+'\')">';   // 문구 단순화(운영자 260711)
+  h+='<input id="ve-url" class="nb-input" style="flex:1;min-width:150px;width:100%;box-sizing:border-box;padding:8px 11px;font-size:12.5px" placeholder="영상 링크 (http://…)" onkeydown="if(event.key===\'Enter\')_veUrlLoad(\''+tabKey+'\')">';   // 문구 단순화(운영자 260711)
   h+='<button type="button" class="btn btn--neutral btn--sm" onclick="_veUrlLoad(\''+tabKey+'\')">불러오기</button>';
   h+='</div>';
   h+='<input type="file" id="ve-file" accept="video/*" style="display:none" onchange="_veFilePick(this,\''+tabKey+'\')">';
@@ -28169,6 +28205,241 @@ document.getElementById('confirm-modal').addEventListener('click',e=>{if(e.targe
 </div>
 </div>
 </div>
+<!-- ═══ [Q39 260803 운영자 「노뮤트 에디터 기능 프로모 배선」] ① 입력칸 클립 ═══
+  원본 = nomute-editor viewer/nm-clip.js(운영자 260627~260803 계약: 캐럿 삽입 붙여넣기·지움/붙여넣기 공용 10초 되돌리기·아이콘 번쩍임 가드·비활성 칸 가드)
+       + nm-svg.js 아이콘 5상수 + ly.html 개량 clipPasteFallback(visualViewport 키보드 클램프판 — SSOT판보다 모바일 키보드에서 우수).
+  각색 2점(로직 무변경): ⓐ 이 앱은 입력칸 ~95%가 런타임 innerHTML 생성이라 에디터의 「생성처 수동 부착」 대신
+    초기 스윕 + MutationObserver + focusin 안전망 3층 자동부착(멱등 = el._clipBound). 새 입력칸 = 자동 편입, 빼려면 data-noclip 1속성.
+  ⓑ 플렉스 행 아이템은 래퍼가 지위 승계(에디터는 표면별 CSS 1줄로 풀던 축 — 자동부착이라 코드로 흡수).
+  면제 = _CLIP_EXEMPT_SEL(사유 필수·늘리면 주석 동반): .pin(자체 붙여넣기 분배 핸들러 실존)·password류(잠금 취지)·readonly/disabled(입력 불가)
+    ·.pw-folder-input(onpaste 차단 명문)·.inl-input(표 인라인 편집 = 셀 레이아웃)·inputmode 숫자(판매 그리드 등 값 입력 UI = 노뮤트 「숫자칩 면제」 동축)·data-noclip(명시 opt-out).
+  강제 = tools/check_wiring.py(모듈 골격·면제표·3층 배선 줄 실존 · pre-commit). -->
+<script>
+(function(){'use strict';
+var CHECK_SVG='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>';
+var COPY_SVG='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>';
+var PASTE_SVG='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>';
+var ERASE_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/></svg>';
+var UNDO_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-5"/></svg>';
+var ERASE_UNDO_MS=10000;   // 지움 후 되돌리기 노출 시간(~10초)
+async function clipCopy(text,btn,after){   // 복사 → ✓ 피드백
+  try{ await navigator.clipboard.writeText(text||''); }catch(_e){}
+  btn.innerHTML=CHECK_SVG; btn._icon='check'; btn.classList.add('ok');   // _icon 갱신 = 'ok' 해제 후 refresh가 원아이콘 복원하게(번쩍 가드와 짝)
+  setTimeout(function(){ btn.classList.remove('ok'); after(); },1200);
+}
+async function clipPasteText(){   // 클립보드 텍스트 읽기(폴백 포함) — readText 우선 / 막힌 환경엔 '길게 눌러 붙여넣기' 폴백(노뮤트 통일 기틀 260628)
+  try{ if(navigator.clipboard&&navigator.clipboard.readText){ const t=await navigator.clipboard.readText(); if(t)return t; } }catch(_e){}
+  return await clipPasteFallback();
+}
+function clipPasteFallback(){   // ly.html 개량판 — dialog top-layer + visualViewport 키보드 클램프
+  return new Promise(function(resolve){
+    const ov=document.createElement('dialog'); ov.className='pastefb';
+    ov.innerHTML='<div class="pastefb-box"><div class="pastefb-msg">아래 칸을 <b>길게 눌러 “붙여넣기”</b> 하면 자동 반영돼요</div>'
+      +'<textarea class="pastefb-ta" placeholder="여기에 붙여넣기" autocapitalize="off" autocomplete="off" spellcheck="false"></textarea>'
+      +'<div class="pastefb-row"><button type="button" class="btn btn--sm btn--neutral pastefb-cancel">취소</button><button type="button" class="btn btn--sm btn--ghost pastefb-ok">적용</button></div></div>';
+    document.body.appendChild(ov);
+    const ta=ov.querySelector('.pastefb-ta'); let done=false;
+    const vvClamp=function(){   // 키보드 축소 visual viewport에 다이얼로그 맞춤(dialog top-layer는 키보드에 안 줄어듦 → 수동 클램프)
+      const vv=window.visualViewport; if(!vv||!ov.isConnected)return;
+      if(vv.height<window.innerHeight-60){
+        ov.style.maxHeight=Math.round(vv.height*0.92)+'px';
+        ov.style.marginTop=Math.round(vv.offsetTop+vv.height*0.04)+'px';
+      }else{ ov.style.maxHeight=''; ov.style.marginTop=''; }
+    };
+    if(window.visualViewport){ window.visualViewport.addEventListener('resize',vvClamp); window.visualViewport.addEventListener('scroll',vvClamp); }
+    const finish=function(v){ if(done)return; done=true; if(window.visualViewport){ window.visualViewport.removeEventListener('resize',vvClamp); window.visualViewport.removeEventListener('scroll',vvClamp); } try{ ov.close(); }catch(_e){} ov.remove(); resolve(v||null); };
+    ta.addEventListener('paste',function(){ setTimeout(function(){ if(ta.value)finish(ta.value); },30); });   // 붙여넣기 즉시 자동 반영
+    ov.querySelector('.pastefb-ok').onclick=function(){ finish(ta.value); };
+    ov.querySelector('.pastefb-cancel').onclick=function(){ finish(null); };
+    ov.addEventListener('cancel',function(e){ e.preventDefault(); finish(null); });   // ESC
+    ov.addEventListener('click',function(e){ if(e.target===ov)finish(null); });       // 백드롭 탭
+    try{ ov.showModal(); }catch(_e){ ov.setAttribute('open',''); }
+    setTimeout(function(){ try{ ta.focus(); }catch(_e){} },60);
+  });
+}
+function attachCopyPaste(el,withErase){   // 빈칸=붙여넣기 / 내용 있으면 [복사][붙여넣기](+지우개) · 지우개 = 비움→~10초 되돌리기 (노뮤트 정본 로직 그대로)
+  if(!el||el._clipBound||!el.parentNode)return; el._clipBound=true;   // 중복 부착 가드 + 분리 노드 탈락(평의회3 — 선마킹 후 insertBefore TypeError = 배치 중단·영구 오염 봉합 · 진짜 재삽입되면 그 삽입 레코드로 자연 재부착)
+  var wrap=document.createElement('div'); wrap.style.position='relative'; wrap.classList.add('iowrap');
+  try{   // [프로모 각색 ⓑ] 플렉스 행 아이템 지위 = 원값 그대로 승계(승격 금지 — 평의회2: '1 1 auto' 강제 폴백은 margin-left:auto 검색칸 등 0 1 auto 칸에서 래퍼가 잔여폭을 훔쳤다) · 폭 지위는 아래 .iowrap>input CSS가 승계
+    var pcs=getComputedStyle(el.parentNode), ecs=getComputedStyle(el);
+    if(pcs.display.indexOf('flex')>-1){ if(ecs.flex)wrap.style.flex=ecs.flex; wrap.style.minWidth='0'; if(ecs.alignSelf&&ecs.alignSelf!=='auto')wrap.style.alignSelf=ecs.alignSelf; }
+  }catch(_e){}
+  el.parentNode.insertBefore(wrap,el); wrap.appendChild(el);
+  var split=true;   // 붙여넣기 항상 유지 + 복사 별도(좌측)
+  var nBtn=(split?2:1)+(withErase?1:0);
+  el.style.paddingRight=(el.tagName!=='TEXTAREA')?(14+nBtn*32)+'px':'42px';   // 텍스트칸 = 버튼이 1행 위 테두리로 떠 안 겹침 → 42 유지
+  var btn=document.createElement('button'); btn.type='button'; btn.className='iobtn iobtn-edge'+(withErase?' iobtn-pp':''); wrap.appendChild(btn);
+  var copyB=null;
+  if(split){
+    copyB=document.createElement('button'); copyB.type='button'; copyB.className='iobtn iobtn-edge iobtn-copy'+(withErase?' iobtn-copy-e':'')+' iobtn-hide';
+    copyB.innerHTML=COPY_SVG; copyB.setAttribute('aria-label','복사'); copyB.title='복사';
+    copyB.onclick=function(ev){ ev.preventDefault(); clipCopy(el.value,copyB,refresh); };
+    wrap.appendChild(copyB);
+  }
+  var eraser=null,undoTimer=null,undoVal='',prog=false,armUndo=null;   // prog = 프로그램적 변경(지움/복원) = 되돌리기창 종료 트리거 아님
+  var setIcon=function(b,svg,key){ if(b._icon!==key){ b.innerHTML=svg; b._icon=key; } };   // 아이콘 동일하면 재대입 안 함 = 타이핑마다 SVG 파괴·재생성(번쩍거림) 차단
+  var refresh=function(){
+    var filled=(el.value||'').trim().length>0;
+    if(!btn.classList.contains('ok')){ setIcon(btn,PASTE_SVG,'paste'); btn.dataset.mode='paste'; btn.setAttribute('aria-label','붙여넣기'); btn.title='붙여넣기'; }
+    if(copyB&&!copyB.classList.contains('ok')){ setIcon(copyB,COPY_SVG,'copy'); copyB.classList.toggle('iobtn-hide',!filled); }
+    if(eraser)eraser.classList.toggle('iobtn-off',!filled&&!eraser.classList.contains('iobtn-undo'));
+  };
+  if(withErase){
+    eraser=document.createElement('button'); eraser.type='button'; eraser.className='iobtn iobtn-edge iobtn-erase';
+    eraser.innerHTML=ERASE_SVG; eraser.setAttribute('aria-label','입력 지우기'); eraser.title='입력 지우기';
+    var exitUndo=function(){
+      if(undoTimer){ clearTimeout(undoTimer); undoTimer=null; }
+      eraser.classList.remove('iobtn-undo'); eraser.innerHTML=ERASE_SVG;
+      eraser.setAttribute('aria-label','입력 지우기'); eraser.title='입력 지우기'; refresh();
+    };
+    armUndo=function(prev){   // 직전 입력(prev) 복원용 되돌리기 무장 — 지움·붙여넣기 공용
+      undoVal=prev;
+      eraser.classList.remove('iobtn-off'); eraser.classList.add('iobtn-undo');
+      eraser.innerHTML=UNDO_SVG; eraser.setAttribute('aria-label','되돌리기'); eraser.title='되돌리기 (직전 입력 복원)';
+      if(undoTimer)clearTimeout(undoTimer); undoTimer=setTimeout(exitUndo,ERASE_UNDO_MS);
+    };
+    eraser.onclick=function(ev){
+      ev.preventDefault();
+      if(el.disabled)return;   // 비활성 칸 우회 입력 차단
+      if(eraser.classList.contains('iobtn-undo')){   // 되돌리기 모드 = 직전 입력 복원
+        prog=true; el.value=undoVal; el.dispatchEvent(new Event('input',{bubbles:true})); prog=false;
+        el.dispatchEvent(new Event('change',{bubbles:true}));   // [평의회5] change 동시발화(복원도 확정 값)
+        try{ el.focus(); }catch(_e){} exitUndo(); return;
+      }
+      if(!(el.value||'').length)return;
+      var prev=el.value;
+      prog=true; el.value=''; el.dispatchEvent(new Event('input',{bubbles:true})); prog=false;
+      el.dispatchEvent(new Event('change',{bubbles:true}));   // [평의회5] change 동시발화(지움도 확정 값)
+      try{ el.focus(); }catch(_e){}
+      armUndo(prev);
+    };
+    el.addEventListener('input',function(){ if(!prog&&undoTimer)exitUndo(); });
+    wrap.appendChild(eraser);
+  }
+  btn.onclick=async function(ev){
+    ev.preventDefault();
+    if(el.disabled)return;   // 비활성 칸 우회 입력 차단
+    var selS=el.selectionStart,selE=el.selectionEnd;   // await 전 캐럿/선택 스냅
+    var t=await clipPasteText();
+    if(t){
+      if(el.maxLength>0){   // [평의회5] maxlength 클램프 — setRangeText·value+= 는 maxlength 미적용(스펙)이라 카카오 76자 등 규격 우회 봉합 = 네이티브 붙여넣기와 동일 거동으로 수렴
+        var room=el.maxLength-el.value.length+((typeof selS==='number'&&typeof selE==='number')?(selE-selS):0);
+        if(room<=0){ refresh(); return; }
+        t=t.slice(0,room);
+      }
+      var prev=el.value;
+      prog=true;
+      if(typeof el.setRangeText==='function'&&typeof selS==='number')el.setRangeText(t,selS,selE,'end');   // 캐럿/선택영역에 삽입(기존 보존) · 덮어쓰기 아님
+      else el.value+=t;   // 폴백(email형 등 selection 미지원) = 끝에 이어붙임
+      el.dispatchEvent(new Event('input',{bubbles:true})); prog=false;   // 수동 input 발화 = 각 칸의 oninput 동기 로직 그대로 작동
+      el.dispatchEvent(new Event('change',{bubbles:true}));   // [평의회5] change 동시발화 — change-단독 배선 칸(onchange=) 유실 봉합 · 전 리스너 {input 쌍등록·멱등 or value 직독} 역검증 완료
+      if(armUndo&&prev)armUndo(prev);   // 붙여넣기도 되돌리기 가능(직전 전체값 복원)
+    }
+    refresh();
+  };
+  el.addEventListener('input',refresh); refresh();
+}
+/* ── [프로모 각색 ⓐ] 3층 자동부착 — 초기 스윕 + MutationObserver + focusin 안전망 ── */
+var _CLIP_EXEMPT_SEL='.pin,.pw-folder-input,.inl-input,input[type="password"],[readonly],[disabled],[data-noclip],[inputmode="numeric"],[inputmode="decimal"],.ve-cut .nb-input';   // .ve-cut = 컷 타임코드 74px 값칩(평의회2 — 노뮤트 숫자칩 면제 동축)
+function _clipEligible(el){
+  if(!el||el._clipBound||!el.tagName)return false;
+  if(el.tagName==='TEXTAREA'){ /* 전 textarea 대상 */ }
+  else if(el.tagName==='INPUT'){ var t=(el.getAttribute('type')||'text').toLowerCase(); if(t!=='text'&&t!=='url'&&t!=='search'&&t!=='email')return false; }
+  else return false;
+  try{ if(el.matches(_CLIP_EXEMPT_SEL)||el.closest('[data-noclip]'))return false; }catch(_e){}
+  if(el.classList.contains('pastefb-ta'))return false;   // 클립 폴백 자기 자신 제외(자기참조 차단 — 노뮤트 게이트 동축)
+  if(el.offsetParent===null&&document.activeElement!==el)return false;   // [평의회2] 숨김 칸 보류(display:none 래핑 = 유령 버튼) — 노출 후 focusin·재스윕이 부착
+  var w=el.clientWidth; if(w&&w<200)return false;   // [평의회2] 폭 하한 — 110px 클립 사다리가 못 앉는 협소칸(140px 검색칩 등) 제외 · MO 시점 w=0(레이아웃 전)은 통과 = .iowrap 폭 CSS·명시 면제가 이중 방어
+  return true;
+}
+function _clipSweep(root){
+  if(!root||!root.querySelectorAll)return;
+  if(root.tagName&&(root.tagName==='INPUT'||root.tagName==='TEXTAREA')){ if(_clipEligible(root))attachCopyPaste(root,true); return; }
+  var els=root.querySelectorAll('input,textarea');
+  for(var i=0;i<els.length;i++){ if(_clipEligible(els[i]))attachCopyPaste(els[i],true); }
+}
+new MutationObserver(function(muts){
+  for(var m=0;m<muts.length;m++){
+    var add=muts[m].addedNodes;
+    for(var i=0;i<add.length;i++){ var n=add[i]; if(n.nodeType===1&&!n.classList.contains('iowrap'))_clipSweep(n); }   // iowrap 재삽입 이벤트는 스킵(부착이 유발한 변이)
+  }
+}).observe(document.body,{childList:true,subtree:true});
+document.addEventListener('focusin',function(e){   // 안전망 — 어떤 경로로든 놓친 칸도 첫 포커스에 부착(부착 = DOM 이동 = 포커스 유실 → 즉시 복원)
+  var el=e.target; if(!_clipEligible(el))return;
+  var sS=el.selectionStart,sE=el.selectionEnd;
+  attachCopyPaste(el,true);
+  try{ el.focus({preventScroll:true}); if(typeof sS==='number')el.setSelectionRange(sS,sE); }catch(_e){}
+});
+_clipSweep(document.body);   // 초기 스윕(정적 칸)
+window.attachCopyPaste=attachCopyPaste;   // 노뮤트 공용 API 계약 유지(수동 부착·withErase 선택 경로)
+window.nmClip={sweep:_clipSweep,eligible:_clipEligible};   // 테스트·수동 재스윕 훅
+})();
+</script>
+<!-- ═══ [Q39 260803 운영자] ② 동기화 생명선 ═══
+  원본 = nomute-editor viewer/nm-sync.js 3기능 중 ①·③ 이식. ② 로그인 만료 자가치유(/manifest.json redirect 프로브)는
+  CF Access 게이트웨이 전용 신호라 이 앱 인프라(GitHub Pages + PIN/MSAL 앱 내 인증)에 대응물 없음 = 비배선(사유 명기).
+  ① 비활성→활성 복귀 = window.nmRefresh 자동 호출 — 이 앱 정본 재동기 훅 = _checkForUpdates(「방식B: 폴링+뱃지·자동 리로드 X」 계약 유지 · 45s 폴링을 복귀 순간 즉시로 앞당김).
+  ③ 자기 문서 HEAD ETag/Last-Modified 대조 = 새 배포 감지 → 한가할 때만 location.reload() 자동 탑재(수동 재열기 불요).
+     · sw.js 무간섭 = fetch 리스너 「req.method !== 'GET'」 조기 통과(HEAD) → 항상 진짜 네트워크 응답(실측 · check_wiring이 그 줄 실존 감시).
+     · 리로드 안전 = sessionStorage 세션 생존 + 부트 세션복원 IIFE + mvView 뷰 복원 · _lockedAt 도장 시 잠금화면 = 유휴 잠금 설계 그대로.
+     · 한가 판정 busy() = 입력 포커스·contenteditable·열린 모달(.modal-bg.show/.confirm-bg.show/dialog[open]/z99999 고정 오버레이) → 작업 중 강제 이탈 0(감지는 다음 복귀로 이월).
+     · 경계(명시): 복귀 트리거뿐이라 탭을 한 번도 안 떠나는 화면은 다음 복귀·수동 새로고침까지 구코드 유지(에디터 원본과 동일 계약). -->
+<script>
+(function(){'use strict';
+var lastKick=0,tagInflight=false;
+var bootLM=Date.parse(document.lastModified)||0;   // [평의회1 D3] 기준값 = 네트워크가 아니라 **문서 자신**(SW 6s 타임아웃이 구캐시 셸을 그려도 그 사본의 시각 = 진짜 정체성 · 네트워크 무관이라 오프라인 부팅도 무장 = D6 동시 해소)
+async function selfTag(){   // 자기 문서 HEAD의 Last-Modified epoch — ETag 문자열 비교 폐지(W/ 접두·인코딩 분기·프록시 스트립 오발 계열 원천 소멸 = 평의회1 D5 · GH Pages는 전 파일 LM 도장 실측)
+  try{ var r=await fetch(location.pathname,{method:'HEAD',cache:'no-store'}); if(!r.ok)return null; var lm=Date.parse(r.headers.get('last-modified')||''); return isNaN(lm)?null:lm; }catch(_e){ return null; }
+}
+function busy(){   // 리로드 한가 판정 — 입력 중·모달 열림·페이지 자체 선언(nmSyncBusy) = 미룸
+  try{ if(typeof window.nmSyncBusy==='function'&&window.nmSyncBusy())return true; }catch(_e){}
+  var a=document.activeElement;
+  if(a&&(a.tagName==='INPUT'||a.tagName==='TEXTAREA'||a.isContentEditable))return true;
+  try{
+    if(document.querySelector('.modal-bg.show,.confirm-bg.show,dialog[open],.overlay-load.show,.bp-bg,.cb-win.show,.memo-pop.show,.sub-pop-bg,.bn-sheet-bg,#cell-context-menu'))return true;   // [평의회6 C-1] 저장 스피너·도화지·챗봇·메모 팝·2차 팝·시트·셀 메뉴 — 스타일시트 z라 인라인 검사(아래)에 안 걸리던 표면들
+    var kids=document.body.children;   // createElement 직결 오버레이(완료 처리·취소 사유 등 = 클래스 없는 fixed z99999)
+    for(var i=0;i<kids.length;i++){ var st=kids[i].style;
+      if(st&&st.position==='fixed'&&String(st.zIndex)==='99999'){
+        var cs=getComputedStyle(kids[i]);   // [평의회1 D1] 가시성 3조건 — 상주 숨김 오버레이(캘린더 툴팁 잔존 opacity:0·캡스락 display:none·QA 배너 pointer-events:none)가 영구 busy = 자동 탑재 전면 사망하던 축 봉합
+        if(cs.display==='none'||cs.opacity==='0'||cs.pointerEvents==='none')continue;
+        return true;
+      }
+    }
+  }catch(_e){}
+  return false;
+}
+async function verCheck(){   // ③ 새 배포 자동 탑재 — 서버 문서가 지금 문서보다 **새로울 때만**(단조 부등호 = 진동·엣지 후퇴·문자열 변주 원천 불성립) 한가 시 리로드
+  if(tagInflight||!bootLM)return; tagInflight=true;   // bootLM 0(LM 헤더 부재 환경) = 기능 안전 비활성
+  try{
+    var lm=await selfTag();
+    if(lm&&lm>bootLM+1000){   // +1s 여유 = 초 단위 반올림 잡음 컷 · ⚠ 한계(명시·평의회1 D4): GH Pages는 배포마다 전 파일 mtime 도장이라 docs만 바뀐 배포도 잡힌다 — 헤더만으론 구분 불가 = 복귀당 1회 리로드로 수렴(운영자 결정 대기 축)
+      if(busy()){ console.log('[배선-sync] 새 배포 감지 — 작업 중이라 이월(다음 복귀 때 재시도)'); return; }
+      console.log('[배선-sync] 새 배포 감지 — 자동 리로드로 신규 코드 탑재');   // 계측 — 조용한 리로드 금지
+      location.reload();
+    }
+  }finally{ tagInflight=false; }
+}
+function resumeNow(){   // ①+③ — 비활성→활성 전환의 단일 진입점(테스트 훅 겸용)
+  var t=Date.now(); if(t-lastKick<5e3)return; lastKick=t;   // 5s 코얼레싱 = vis/focus/pageshow 동시 발화 1회 처리
+  try{ if(typeof window.nmRefresh==='function')window.nmRefresh(); }catch(_e){}   // ① 복귀 즉시 데이터 신선도 확인(방식B 뱃지 축)
+  verCheck();                                                                     // ③ 새 코드 있으면(한가 시) 자동 탑재
+}
+document.addEventListener('visibilitychange',function(){ if(!document.hidden)resumeNow(); });
+window.addEventListener('focus',function(){ resumeNow(); });
+window.addEventListener('pageshow',function(e){ if(e.persisted){ lastKick=0; resumeNow(); } });   // bfcache 복귀 = vis 미발화 경로 · 가드 해제
+if(typeof window.nmRefresh!=='function')window.nmRefresh=function(){ try{ if(typeof _checkForUpdates==='function')_checkForUpdates(); }catch(_e){} };   // 이 앱 정본 재동기 훅 = 방식B 즉시 확인(로그인 전·뱃지 표시 중 가드는 _checkForUpdates 자체 내장)
+window.nmSyncBusy=function(){   // [평의회6 C-2 + 평의회1 D2] 셀렉터가 원리적으로 못 보는 축 = 비행 중 쓰기·대기 타이머·MSAL·AI 응답 — 페이지측 선언 훅(노뮤트 계약 그대로)
+  try{
+    return !!( (typeof _apiWrites!=='undefined'&&_apiWrites>0)                                    // Graph 쓰기 비행 중(api 카운터 · finally 감산)
+      || (typeof _loggingIn!=='undefined'&&_loggingIn)                                           // MSAL 팝업·토큰 교환 중
+      || (typeof _memAiBusy!=='undefined'&&_memAiBusy)                                           // 고객 분석 AI 응답 대기(30초~2분 = 탭 이탈 유도 구간)
+      || (typeof _memoState!=='undefined'&&_memoState&&_memoState.timer)                         // 메모 500ms 디바운스 대기
+      || (typeof _bpS!=='undefined'&&_bpS&&(_bpS.saveT||_bpS.srvT||_bpS.srvBusy)) );             // 도화지 임시보관·서버 반영 대기
+  }catch(_e){ return false; }
+};
+window.nmSync={resumeNow:resumeNow,verCheck:verCheck,busy:busy};   // 테스트·페이지 위임 훅(에디터 계약 계승)
+})();
+</script>
 <!-- [접속 안정 260729] 서비스워커 = GitHub Pages 배포 순단·회선 불안정 때 마지막 정상 화면을 대신 내주는 폴백. HTML은 항상 네트워크 우선이라 업데이트는 그대로 반영된다. 등록 실패해도 앱 동작에는 영향 없음. 회수 방법은 sw.js 상단 주석 참조. -->
 <script>
 if('serviceWorker' in navigator){
