@@ -4611,7 +4611,8 @@ function _ddAdmin(btn){
     menu.innerHTML='<div style="padding:8px 14px 6px;font-size:11px;color:#999;font-weight:700">관리</div>'
       + items.map(function(it){ return _it('_ddCloseAll();adminRoute(\''+it[0]+'\')',it[1]); }).join('')
       + '<div style="height:1px;background:var(--border);margin:6px 10px"></div>'
-      + _it('_ddCloseAll();openLockSettings()','자동 잠금 시간');   // [260724 운영자] 시스템 설정 성격 = 관리 6개(데이터 화면)와 구분선으로 분리 · 향후 관련 설정 모이면 '시스템 설정' 그룹으로
+      + _it('_ddCloseAll();openLockSettings()','자동 잠금 시간')   // [260724 운영자] 시스템 설정 성격 = 관리 6개(데이터 화면)와 구분선으로 분리 · 향후 관련 설정 모이면 '시스템 설정' 그룹으로
+      + _it('_ddCloseAll();openYeulPersona()','예울이 페르소나');   // [260803 운영자] 루시봇 컨셉 — AI 답변 말투 카드 조정(기본 = 레포 persona/yeuli.md)
   });
 }
 function showLogoutModal(){
@@ -4836,6 +4837,31 @@ function openLockSettings(){
   el.innerHTML=html;
 }
 function closeLockSettings(){var el=document.getElementById('admin-panel');if(el)el.innerHTML='';}
+// [260803 운영자] 예울이 페르소나 조정 — 루시봇 카드 컨셉(카드 문장 = 곧 말투): 기본 = 레포 persona/yeuli.md(SSOT),
+//   여기 적으면 이 기기에서만 오버라이드(localStorage — AI 요청에 동봉되어 카드 대신 주입). 모달 골격 = openLockSettings 계승.
+function openYeulPersona(){
+  var cur=_yeulAiPersona();
+  var html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeYeulPersona)"><div class="modal" style="width:520px;position:relative">'
+    +'<button class="modal-x" onclick="closeYeulPersona()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;float:none;margin:0;z-index:10">✕</button>'
+    +'<div style="display:flex;align-items:center;margin-bottom:14px;gap:8px;padding-bottom:14px;padding-right:48px;border-bottom:1px solid var(--border)"><h3 style="margin:0;flex:1;text-align:left">예울이 페르소나</h3></div>'
+    +'<div style="font-size:12px;color:var(--dim);margin-bottom:12px;line-height:1.6">AI 답변(자유 질문)의 성격·말투 카드예요. <b>카드 문장이 곧 말투</b>가 됩니다(루시봇 방식).<br>비워두면 레포 카드(<b>persona/yeuli.md</b>)를 쓰고, 여기 적으면 <b>이 기기에서만</b> 이 내용이 우선해요. 규정·FAQ·집계 즉답에는 영향 없음.</div>'
+    +'<textarea id="yeul-persona-ta" maxlength="6000" placeholder="예: 너는 예울마루 도우미 예울이. 밝고 정중한 존댓말, 답은 2~6문장, 이모지는 아주 가끔." style="width:100%;height:220px;padding:10px 12px;border:1px solid var(--border2);border-radius:var(--r-btn);font-size:12.5px;font-family:inherit;resize:vertical;background:var(--surface-solid);color:var(--text)">'+_memEsc(cur)+'</textarea>'
+    +'<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">'
+    +'<button type="button" class="btn btn--neutral btn--md" onclick="_yeulPersonaSave(1)">비우기 — 레포 카드 사용</button>'
+    +'<button type="button" class="btn btn--primary btn--md" onclick="_yeulPersonaSave()">저장</button>'
+    +'</div></div></div>';
+  var el=document.getElementById('admin-panel');
+  if(!el){el=document.createElement('div');el.id='admin-panel';document.body.appendChild(el);}
+  el.innerHTML=html;
+}
+function closeYeulPersona(){var el=document.getElementById('admin-panel');if(el)el.innerHTML='';}
+function _yeulPersonaSave(clear){
+  var ta=document.getElementById('yeul-persona-ta');
+  var v=clear?'':String((ta&&ta.value)||'').trim();
+  try{ if(v)localStorage.setItem(_YEULAI_LS,v); else localStorage.removeItem(_YEULAI_LS); }catch(_e){}
+  if(typeof showToast==='function')showToast(v?'예울이 페르소나 저장 — 이 기기 전용':'페르소나 비움 — 레포 카드(persona/yeuli.md) 사용','success');
+  closeYeulPersona();
+}
 // 관리자 전역 토글 — 하단 펫(3마리 랜덤) 표시 on/off. POST /api/config(관리자·KV) → 전역 반영(⚠ Worker 배포 필요). 260711
 function _petToggle(on){
   _petsOn=!!on;
@@ -5932,10 +5958,11 @@ function _srailAsof(){
   return '기준 '+(Math.floor(mx/100)%100)+'.'+(mx%100);
 }
 // 진행중 전시 목록 — 분석 보드 _anaExhibBuild 재사용(무료 전시는 달성률 개념이 없어 분석 보드와 동일하게 제외)
-function _srailExhibs(){
+function _srailExhibs(incPast){
+  // [260803 운영자] incPast = 종료(ended) 전시까지 포함 — 대시보드 표 「전체」 노출용(판매 축이라 무료 제외는 동일). 미지정 = 종전 그대로 판매중만.
   if(!(_anaState&&_anaState._exDaily&&_anaState._exMaster))return [];
   try{
-    return _anaExhibBuild().filter(function(e){return e.status==='active'&&e.profit!=='무료';}).map(function(e){
+    return _anaExhibBuild().filter(function(e){return (e.status==='active'||(incPast&&e.status==='ended'))&&e.profit!=='무료';}).map(function(e){
       var sd=_salesDate(e.시작일), ed=_salesDate(e.종료일), today=new Date(); today.setHours(0,0,0,0);
       e._kind='ex';
       e._dday=sd?Math.round((sd-today)/86400000):null;          // 정렬 축 = 공연과 동일(시작일 기준, 진행중=음수)
@@ -6866,7 +6893,8 @@ function _srailRenderInner(els){
   // 판매중 공연 + 진행중 전시(종류 무관 "진행중인 건 다" — 운영자 260707). 교육은 시트 생기면 여기 합류(확장점).
   var perfActives=perfs.filter(function(p){return p.status==='active';});
   perfActives.forEach(function(p){p._kind='perf';});
-  var exActives=_srailExhibs();
+  var exAll=_srailExhibs(true);   // [260803] 종료 전시까지 한 번에 빌드 — 판매중(exActives)은 종전대로 분리, 종료분은 아래 pasts에서만 소비
+  var exActives=exAll.filter(function(e){return e.status==='active';});
   // [운영자 260710] 노출축 = 「현재 홍보중」 — 홍보창(ps~se||e) 밖이면 숨김(미지정·조인 실패 = 판매기간 폴백 = 그대로 통과) + 판매 N일차 주석
   var pgIdx=_srailPgIdx();
   // [260723 평의회2 MED-1] 실적 표 모드 = 판매 축(운영자 원문 「현재 판매중인 프로그램」 — 판매중이면 홍보창 밖이어도 표에 나옴) · 홍보창 필터는 캘린더 카드 모드 전용 유지
@@ -6880,7 +6908,18 @@ function _srailRenderInner(els){
     .sort(function(a,b){ var ad=(a._kind==='ex'?a._dday:a.dday), bd=(b._kind==='ex'?b._dday:b.dday); ad=(ad===null||ad===undefined)?9e9:ad; bd=(bd===null||bd===undefined)?9e9:bd; if(ad!==bd)return ad-bd; if(!!a.noData!==!!b.noData)return a.noData?1:-1; return a.occ-b.occ; });
   // [260724 운영자] 2×2 우하단 = 「사업 판매현황」 자동전환 — 상단 목록/드릴 분기와 독립으로 매 렌더 동기(biz 모드에서만 노출, 그 외 숨김·정지)
   try{ _srailUhaSync(actives); }catch(_e){ console.warn('[uha sync]',_e); }
-  try{ _railYrmSync(actives); }catch(_e){ console.warn('[rail-yrm sync]',_e); }   // [260724 운영자] 연간실적 틀 우측 이식(2단계) = 판매중 공연·전시 블릿 리스트 동기
+  // [260803 운영자] 「기존에 진행한 공연들까지 다 뜨고, 체크 토글로 판매중만」 — 대시보드 표(#rail-yrm-list) 데이터에
+  //   지난(종료) 프로그램을 _past=1로 합류(실적 조회 흡수 1단계). 표에서만 노출·「판매중만」 토글(_ryLiveOnly)이 거른다 —
+  //   회전 상세(_srailUhaSync 위)·캘린더 레일 카드(아래 actives 렌더)는 판매중 전용 그대로. 장소·판매 N일차 조인 = actives와 동일 문법.
+  var pasts=[];
+  try{
+    var perfEnded=perfs.filter(function(p){return p.status==='ended';});
+    perfEnded.forEach(function(p){ p._kind='perf'; p._past=1; var pg=_srailPgOf(pgIdx,p._mid,p.name); p._saleN=_srailSaleDayN(p.saleStart,pg); p._venue=(pg&&pg.l)?String(pg.l):''; });
+    var exEnded=exAll.filter(function(e){return e.status==='ended';});
+    exEnded.forEach(function(e){ e._kind='ex'; e._past=1; var pg2=_srailPgOf(pgIdx,null,e.name); e._saleN=_srailSaleDayN(null,pg2); e._venue=(pg2&&pg2.l)?String(pg2.l):''; });
+    pasts=perfEnded.concat(exEnded);
+  }catch(_e){ console.warn('[srail past]',_e); pasts=[]; }
+  try{ _railYrmSync(pasts.length?actives.concat(pasts):actives); }catch(_e){ console.warn('[rail-yrm sync]',_e); }   // [260724 운영자] 연간실적 틀 우측 이식(2단계) = 판매중 공연·전시 블릿 리스트 동기
   // 인라인 드릴 상태 — 대상이 갱신 후 사라졌으면(판매·전시 종료 등) 목록으로 복귀
   if(_srailView.mode==='drill'){
     var dp=actives.find(function(x){ return _srailView.kind==='ex'?(x._kind==='ex'&&x.id===_srailView.name):(x._kind==='perf'&&x.name===_srailView.name); });
@@ -7307,7 +7346,7 @@ function _railYrmPerfTable(perfs,rateLab){
     }
     return sd((p&&(p._ryDate||p.startDate)));
   };
-  var dcol=function(p){ return (p&&p._kind==='ex')?'--peach-text':'--accent'; };
+  var dcol=function(p){ return (p&&p._past)?'--muted':((p&&p._kind==='ex')?'--peach-text':'--accent'); };   // [260803] 지난 행 일자 = 중립 사다리(--muted) — 판매중과 즉시 갈린다
   var td='padding:11px 8px;vertical-align:top;';   // [260725 운영자] 제목 위 정렬로 통일 — 제목 아래 장소 서브라인이 붙으므로 행 전체를 위 기준으로
   // [260725 운영자] 프로그램 열이 남는 폭을 다 먹어 추이 차트가 우측 끝까지 밀렸던 것 → table-layout:fixed + 폭 명시로 추이를 좌측으로 당김.
   // 폭 누계 11/45/74/87/100 — 분야 표가 전부 이 한 함수라 열 경계가 자동으로 같다(세로 오와열 정렬).
@@ -7336,14 +7375,15 @@ function _railYrmPerfTable(perfs,rateLab){
   });
   h+='</tr></thead><tbody>';   // [260725 운영자] 「판매율」열 신설(추이 좌측) — 기본 폭 10/24/18/24/13/11 · [260729 운영자] 폭 = colgroup + 경계 드래그 조절
   perfs.forEach(function(p){
-    var trend=p.noData?('<span style="color:var(--muted);font-size:12px">'+((p.dday!==null&&p.dday>0)?'오픈 예정':'데이터 부족')+'</span>')
-      :_mvBars(p.days,p.diff,p._unit,(p._kind==='ex')?'--peach-text':null,(p._kind==='ex')?'--peach-light':null);   // [260731 운영자 4차] 전시 추이 = 전시색(--peach-text 사다리) — 3열 누적 관객수·그룹 블릿과 같은 축
+    var trend=p._past?'<span style="color:var(--muted);font-size:12px">판매 종료</span>'   // [260803] 지난 행 추이 = 「판매 종료」 문구(noData '오픈 예정' 문법 계승) — 최종 실적은 3열·행 클릭 상세가 담당
+      :(p.noData?('<span style="color:var(--muted);font-size:12px">'+((p.dday!==null&&p.dday>0)?'오픈 예정':'데이터 부족')+'</span>')
+      :_mvBars(p.days,p.diff,p._unit,(p._kind==='ex')?'--peach-text':null,(p._kind==='ex')?'--peach-light':null));   // [260731 운영자 4차] 전시 추이 = 전시색(--peach-text 사다리) — 3열 누적 관객수·그룹 블릿과 같은 축
     // 3열 = 공연·교육 「판매율」(N% (분자/분모)) · 전시 「누적 관객수」(누계 숫자) — 둘 다 강조색 볼드·좌측 정렬로 같은 문법
     var rate=p.noData?'<span style="color:var(--muted);font-size:12px">—</span>'
       :((p._kind==='ex')?_ryAccCell(p._acc):_ryRateCell(p.seats,p.totalOpen,p.occ,'--accent'));
     var sub=_rySubLine((p._ryRun!==undefined&&p._ryRun!==null)?p._ryRun:_ryRunTxt(p),p._venue);
     var kind=(p._kind==='ex')?'ex':'perf', pkey=(p._kind==='ex')?(p.id||p.name):p.name;   // 드릴 키 = _srailUhaKey와 같은 축(전시 = ID 우선)
-    h+='<tr class="clk" role="button" tabindex="0" data-uhakey="'+escapeHtml(_srailUhaKey(p))+'" onclick="_railYrmPick(\''+kind+'\',\''+_anaEsc(pkey)+'\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click();}" title="'+escapeHtml(p.name)+' — 클릭 = 아래 상세 보기">'
+    h+='<tr class="clk" role="button" tabindex="0"'+(p._past?' style="background:var(--past-bg)"':'')+' data-uhakey="'+escapeHtml(_srailUhaKey(p))+'" onclick="_railYrmPick(\''+kind+'\',\''+_anaEsc(pkey)+'\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click();}" title="'+escapeHtml(p.name)+' — 클릭 = 아래 상세 보기">'
       +'<td style="'+td+'padding-left:14px;color:var('+dcol(p)+');font-weight:700;white-space:nowrap;font-variant-numeric:tabular-nums">'+dcell(p)+'</td>'
       +'<td style="'+td+'overflow:hidden" title="'+escapeHtml(p.name)+(p._venue?' · '+escapeHtml(p._venue):'')+'"><div style="'+_RYNM+'">'+escapeHtml(p.name)+'</div>'+sub+'</td>'
       +'<td style="'+td+pl(2)+'text-align:left;white-space:nowrap">'+rate+'</td>'
@@ -7371,7 +7411,7 @@ function _ryExRow(e){
   // 추이 = 3열 「누적 관객수」와 같은 축(누계총인원 → 없으면 누계유료)이라 막대 증분과 위 숫자가 같은 것을 센다
   var days=ds.map(function(r){ var v=_salesNum(r['누계총인원']); if(v===null)v=_salesNum(r['누계유료']); return {bd:_salesNum(r['기준일자']),seat:(v===null?0:v)}; });
   var acc=(e._total!==null&&e._total!==undefined)?e._total:e._paid;   // 누적 관객수 = 누계총인원 → 없으면 누계유료
-  return {_kind:'ex',id:(e.id||''),name:e.name,_src:e,
+  return {_kind:'ex',id:(e.id||''),name:e.name,_src:e,_past:(e._past?1:0),
     startDate:sd,endDate:ed,_ryDate:(ed||sd),
     dday:((e._dday===null||e._dday===undefined)?null:e._dday),
     noData:!!e.noData,seats:e._paid,totalOpen:e._goal,occ:((e.occ===null||e.occ===undefined)?null:e.occ),_acc:acc,
@@ -7382,6 +7422,9 @@ function _ryExRow(e){
 }
 function _railYrmTableHtml(actives){
   if(!actives)return '<div class="rail-yrm-empty">'+_ldHtml(14)+'불러오는 중</div>';
+  // [260803 운영자] 「판매중만」 체크 토글 — 켬 = 판매중만(종전 표와 동일) · 끔(기본) = 지난(종료) 프로그램까지 전체(실적 조회 흡수).
+  //   전체여도 판매중이 위(종전 시작일순 그대로), 지난 건 그 아래 최근 종료순 — 모니터링 축은 안 밀린다.
+  if(_ryLiveOnly())actives=actives.filter(function(x){return !x._past;});
   var perfs=actives.filter(function(x){return x._kind!=='ex';});
   // [260729 운영자] 전시 = 공연 행 모양으로 정규화(_ryExRow) → 이 아래 필터·정렬·표 렌더가 공연과 완전히 같은 코드를 탄다(인덱싱 동일).
   var exs=actives.filter(function(x){return x._kind==='ex';}).map(_ryExRow);
@@ -7393,7 +7436,10 @@ function _railYrmTableHtml(actives){
   };
   perfs=perfs.filter(keep); exs=exs.filter(keep);
   var byDate=function(a,b){var ad=a.startDate?a.startDate.getTime():9e15,bd=b.startDate?b.startDate.getTime():9e15;if(ad!==bd)return ad-bd;return a.name<b.name?-1:1;};
-  perfs.sort(byDate); exs.sort(byDate);   // 정렬 축도 동일(시작일순)
+  // [260803] 지난 건 정렬 = 최근 종료(공연일)순 — 어제 끝난 게 목록 최상단 과거줄에 오게(실적 조회 동선). 판매중은 종전 byDate 그대로.
+  var byPast=function(a,b){var ad=(a.endDate||a.startDate),bd=(b.endDate||b.startDate);ad=ad?ad.getTime():-9e15;bd=bd?bd.getTime():-9e15;if(ad!==bd)return bd-ad;return a.name<b.name?-1:1;};
+  var ord=function(arr){var lv=[],pa=[];arr.forEach(function(x){(x._past?pa:lv).push(x);});lv.sort(byDate);pa.sort(byPast);return lv.concat(pa);};
+  perfs=ord(perfs); exs=ord(exs);   // 정렬 축도 동일(시작일순 · 지난 건은 그룹 하단)
   if(!perfs.length&&!exs.length)return '<div class="rail-yrm-empty">🎫 지금 판매·진행중인 프로그램이 없어요</div>';
   // [260725 운영자] 분야별 투명 네모 — 각 네모가 자기 안에서만 스크롤. 높이는 건수 비례로 자동 배분(flex-grow).
   // 교육(_kind==='edu')은 아직 actives에 흘러들어오는 소스가 없어 평소엔 렌더되지 않는다(데이터가 생기면 자동 노출).
@@ -7409,9 +7455,27 @@ function _railYrmTableHtml(actives){
        +grp('교육','--green',edus,_railYrmPerfTable);
   return h;
 }
+// [260803 운영자] 「판매중만」 체크 토글 — 대시보드 표에 지난(종료) 프로그램까지 전체 노출(기본 · 운영자 「기존에 진행한 공연들까지 다 뜨고」),
+//   체크하면 판매중만(종전 표와 동일). 부품 = 정본 스위치 .sw/.sw-k 그대로(기틀 §2-3 「ON/OFF 토글 전부 이걸 재사용」) · 신규 색·토큰 0.
+//   상태 = 기기 기억(localStorage — 열 폭 ryColW와 같은 축) + 메모리 폴백(프라이빗 모드) · 회전 상세·캘린더 레일 카드는 이 토글 무관(판매중 전용).
+var _RY_LIVE_KEY='ryLiveOnly', _ryLiveMem=null;
+function _ryLiveOnly(){ if(_ryLiveMem!==null)return _ryLiveMem; try{return localStorage.getItem(_RY_LIVE_KEY)==='1';}catch(_e){return false;} }
+function _ryLiveToggle(){
+  var v=!_ryLiveOnly(); _ryLiveMem=v;
+  try{localStorage.setItem(_RY_LIVE_KEY,v?'1':'0');}catch(_e){}
+  var el=document.getElementById('rail-yrm');
+  var ct=el&&el.querySelector('.bizm-card .ct'); if(ct)ct.innerHTML=_railYrmCardTitle();   // 스위치 on/off 상태 재그림(토글은 상세 중 숨김이라 목록 화면에서만 눌린다)
+  var list=document.getElementById('rail-yrm-list');
+  if(list){ list.innerHTML=_railYrmTableHtml((typeof window!=='undefined'&&window._railYrmActives)||null); try{_ryGrpEqualize(list);}catch(_e){} try{_railYrmSyncActive();}catch(_e){} }
+  try{_srailAlignTop();}catch(_e){}   // 행수 변화 = 좌↔우 이젤 높이 재계산(리스트 in-place 갱신 경로와 동일 규약)
+}
 function _railYrmCardTitle(){
   // [260729 운영자] 구 '진행 중인 프로그램' 개명 → 「프로그램 별 판매 추이」 · 블릿(.ct-bul) = 좌 보드 두 카드와 같은 부품(강조색1)
-  return '<span class="ct-bul"></span>프로그램 별 판매 추이';
+  // [260803 운영자] 우측 = 「판매중만」 체크 토글 — 절대배치(.bizm-card>.ct position:relative 기존 규칙) = 제목 흐름·이젤 기하 무접촉.
+  var live=_ryLiveOnly();
+  return '<span class="ct-bul"></span>프로그램 별 판매 추이'
+    +'<span class="ry-live-tg" role="switch" aria-checked="'+(live?'true':'false')+'" tabindex="0" onclick="_ryLiveToggle()" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click();}" title="체크 = 판매중 프로그램만 · 해제 = 지난(종료) 프로그램까지 전체" style="position:absolute;right:14px;top:10px;display:'+((typeof _ryDrill!=='undefined'&&_ryDrill.key)?'none':'inline-flex')+';align-items:center;gap:7px;cursor:pointer;user-select:none;font-size:11px;font-weight:700;color:var(--dim)">'
+    +'판매중만<span class="sw'+(live?' on':'')+'"><span class="sw-k"></span></span></span>';
 }
 // ── [260801 운영자 · Q.38] 3열 숫자 세로선 보증 — 그룹 표 폭 통일(JS 폴백) ──────────────────────
 // 공연·전시·교육은 그룹(.ry-grp-bd)마다 별개 <table>이라, 3열 숫자(판매율 %·전시 누적 관객수)의 일의 자리
@@ -7594,6 +7658,7 @@ function _ryDrillOpen(want,silent){
 function _ryBackBtn(box,on){
   try{
     var ct=box&&box.parentNode&&box.parentNode.querySelector(':scope > .ct'); if(!ct)return;
+    var tg=ct.querySelector('.ry-live-tg'); if(tg)tg.style.display=on?'none':'';   // [260803] 상세 중엔 우측 「판매중만」 토글 숨김 — ‹(목록으로)와 같은 자리 겹침 방지
     var old=ct.querySelector('.modal-x'); if(old)old.parentNode.removeChild(old);
     if(!on)return;
     var b=document.createElement('button');
@@ -7668,7 +7733,7 @@ function _railYrmRender(){
   try{ var _sls=el.querySelectorAll('#rail-yrm-uha'); for(var _si=1;_si<_sls.length;_si++)if(!_sls[_si].childNodes.length)_sls[_si].parentNode.removeChild(_sls[_si]); }catch(_e){}
   try{ if(!document.getElementById('rail-yrm-uha')){ var _sl=document.createElement('div'); _sl.id='rail-yrm-uha'; _sl.style.display='none'; el.appendChild(_sl); } }catch(_e){}   // 짝 면에도 상세 슬롯(숨김) 확보 — 회전 기계 타이머·리스너 보존, 화면 노출 0
   try{ var slot=document.getElementById('rail-yrm-uha'); if(uha&&slot)slot.appendChild(uha); }catch(_e){}
-  if(!pair){ try{ if(window._railYrmActives)_srailUhaSync(window._railYrmActives); }catch(_e){} try{ if(_ryDrill.key)_ryDrillPaint(_ryDrill.key,0); }catch(_e){} try{ _railYrmSyncActive(); }catch(_e){} }   // [260731 4차 · 페이블 검수 MED] 판매 실적 복귀 = 회전 기계·상세·액티브 pill 재점화(짝 면 휴식의 짝)
+  if(!pair){ try{ if(window._railYrmActives)_srailUhaSync(window._railYrmActives.filter(function(x){return !x._past;})); }catch(_e){} try{ if(_ryDrill.key)_ryDrillPaint(_ryDrill.key,0); }catch(_e){} try{ _railYrmSyncActive(); }catch(_e){} }   // [260731 4차 · 페이블 검수 MED] 판매 실적 복귀 = 회전 기계·상세·액티브 pill 재점화(짝 면 휴식의 짝) · [260803] 지난(_past) 프로그램은 회전에 안 태운다(표 전용)
   else { try{ _srailUhaSync(null); }catch(_e){} }   // 짝 면 = 회전 기계 완전 휴식(숨은 슬롯에서 재점화 차단)
 }
 // 판매중 목록(actives) 도착·갱신마다 리스트만 in-place 갱신(틀·KPI 재생성 없음). 틀 미구축이면 통째 렌더.
@@ -7688,6 +7753,7 @@ function _railYrmSync(actives){
   try{ _ryGrpEqualize(list); }catch(_e){}   // [260801 Q.38] 그룹 표 폭 통일 — 3열 숫자(판매율·전시 누적 관객수) 세로선 보증
   if(_ryDrill.key&&!_ryDrillPaint(_ryDrill.key,0))_ryDrill.key='';   // 상세를 보던 중 데이터가 갱신되면 상세를 다시 그린다(그 프로그램이 사라졌으면 목록 유지)
   var ct=el.querySelector('.bizm-card .ct'); if(ct)ct.innerHTML=_railYrmCardTitle();
+  if(_ryDrill.key){ try{_ryBackBtn(list,1);}catch(_e){} }   // [260803] ct 재구축이 지운 ‹(목록으로) 재부착 + 토글 숨김 유지 — 상세 유지 갱신 경로 정합
   _railYrmSyncActive();   // [260724 한 수] 재렌더 후에도 2×2에 떠 있는 프로그램의 행 액티브 유지
   try{ _srailAlignTop(); }catch(_e){}   // [260725] 리스트만 갱신된 경로에서도 좌↔우 데칼코마니 높이 재계산
 }
@@ -24243,13 +24309,50 @@ function _memOvMap(geo){
 // 2차 = 정형 밖 자유 질문만 /api/mem-chat(Worker llmText — 전송물 = 집계 JSON뿐, 이름·전화·상세주소 미전송).
 //   미배포(404)·키 없음(503)이면 안내 폴백 — 예울이 챗봇 /api/qa 미배포 폴백 선례 계승. Worker는 wrangler deploy 별도.
 // UI = 정본 챗봇 부품(.cb-body/.cb-msg/.cb-chip — 기틀 §2 #11) + 회원 조회 입력·accent 버튼 결 계승. 신규 색·클래스·raw hex 0.
+
+// === [260803 운영자] 예울이 AI — 전사 자유질문 공용 브레인 (루시봇 컨셉 이식: 페르소나 카드 + 깃 Actions claude -p 구독 OAuth) ===
+// 경로 = 이미 배포된 배선만 재사용(Worker 무변경): POST /api/blog/dispatch(payload.yeulchat=1 — Worker는 여분 키 그대로 통과)
+//   → nb-blog.yml yeulchat 분기(persona/yeuli.md 카드 원문 + 질문 → claude -p opus·high·5계정 폴오버) → drafts/yc*.json 커밋
+//   → GET /api/blog/draft?id= 폴링. 소요 30초~2분(Actions 큐) · 비용 0(구독 OAuth). 사용처 = FAB 예울이 미응답 폴백 + 고객 분석 채팅.
+// 페르소나 SSOT = persona/yeuli.md(카드 수정 = 말투 자동 추종). 앱 설정 「예울이 페르소나」(openYeulPersona)가 기기별 오버라이드.
+// ⚠ 산출물 drafts/yc*.json = 공개 레포 커밋(블로그 초안과 동일 축) — 민감 내용 질문 금지 · 워크플로가 3일 지난 산출물 자동 정리.
+var _YEULAI_LS='yeulai_persona';
+function _yeulAiPersona(){try{return String(localStorage.getItem(_YEULAI_LS)||'').slice(0,6000);}catch(_e){return '';}}
+// [260803 운영자] 복잡 질문 판정 — 기본 = 소넷5·high(속도 우선) / deep = opus5·medium + 「기다려 달라」 안내 선표시(라우팅 실행은 워크플로)
+function _yeulAiDeep(q){q=String(q||'');return q.length>=60||/전략|기획|분석|설계|보고서|제안서?|비교|계획|정리해|작성해?\s*줘|써\s*줘|만들어|장단점|로드맵|개선안/.test(q);}
+async function _yeulAiAsk(q,ctx,onTick){
+  var id='yc'+Date.now()+'r'+Math.floor(Math.random()*1e4);
+  var d0=await api('POST','/api/blog/dispatch',{payload:{yeulchat:1,id:id,q:String(q||'').slice(0,800),persona:_yeulAiPersona(),ctx:String(ctx||'').slice(0,1200),deep:_yeulAiDeep(q)?1:0,t:new Date().getHours()}});
+  if(!d0||!d0.ok)throw new Error((d0&&d0.error)||'요청 실패');
+  var t0=Date.now();
+  while(Date.now()-t0<240000){
+    await new Promise(function(r){setTimeout(r,6000);});
+    if(onTick)try{onTick(Math.round((Date.now()-t0)/1000));}catch(_e){}
+    var d=null;
+    try{ d=await api('GET','/api/blog/draft?id='+encodeURIComponent(id)); }
+    catch(e){
+      var s=String(e&&e.message||e);
+      if(s.indexOf('404')===0)continue;                                        // 아직 미완 = 계속 폴링
+      if(s.indexOf('502')===0||s.indexOf('429')===0||/network|fetch/i.test(s))continue;   // 일시 장애 = 계속
+      throw e;                                                                 // 401/403/503 등 = 즉시 중단
+    }
+    if(d&&d.ready&&d.draft){
+      if(d.draft.ok===false)throw new Error(d.draft.error||'생성 실패');
+      var t=String(d.draft.text||'').trim();
+      if(!t)throw new Error('빈 응답');
+      return t;
+    }
+  }
+  throw new Error('시간 초과(4분) — Actions 큐가 밀렸을 수 있어요. 잠시 후 다시 물어봐 주세요');
+}
 var _memAiHist=[],_memAiBusy=false;
 var _MEM_AI_CHIPS=['여수 30대 회원 몇 명이야?','관내 비중은?','가장 많은 연령대 TOP3','거주지 TOP5 알려줘'];
 function _memAiCardHtml(sfx){
-  return '<div style="margin-top:24px;background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius);padding:13px 17px">'
-    +'<div style="font-size:14px;font-weight:800;margin-bottom:4px">AI 채팅 <span style="font-size:10.5px;color:var(--dim);font-weight:500">(회원 집계 질의응답 · 개인 식별 정보 미사용)</span></div>'
-    +'<div id="mem-ai-log-'+sfx+'" class="cb-body" style="max-height:236px;min-height:118px;overflow-y:auto;padding:8px 4px"></div>'
-    +'<div style="display:flex;gap:8px;margin-top:8px">'
+  // [260803 운영자 「얘 써줘 — 대화하는 느낌」] 헤더 = FAB 예울이 정본 부품(.cb-hdr/.cb-ava/.cb-titles) 그대로 — 아바타·이름·상태까지 동일 결
+  return '<div style="margin-top:24px;background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">'
+    +'<div class="cb-hdr"><div class="cb-ava"><img src="image/yeul.png" alt="" style="width:100%;height:100%;border-radius:50%;object-fit:cover"></div><div class="cb-titles"><div class="cb-title">예울이</div><div class="cb-sub">고객 분석 · 집계는 즉답 · 그 외 질문은 AI(30초~2분)</div></div></div>'
+    +'<div id="mem-ai-log-'+sfx+'" class="cb-body" style="max-height:236px;min-height:118px;overflow-y:auto;padding:12px 14px"></div>'
+    +'<div style="display:flex;gap:8px;padding:2px 14px 13px">'
     +'<input id="mem-ai-q-'+sfx+'" maxlength="200" placeholder="예: 순천 20대 회원 몇 명이야?" onkeydown="if(event.key===\'Enter\'&&!event.isComposing)_memAiSend(\''+sfx+'\')" style="flex:1;min-width:0;padding:9px 12px;border:1px solid var(--border2);border-radius:var(--r-btn);font-size:13px;font-family:inherit;background:var(--surface-solid);color:var(--text)">'
     +'<button type="button" onclick="_memAiSend(\''+sfx+'\')" style="flex:0 0 auto;padding:9px 16px;border:1.5px solid var(--accent);background:var(--accent);color:var(--surface-solid);border-radius:var(--r-btn);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">질문</button>'
     +'</div></div>';
@@ -24257,7 +24360,7 @@ function _memAiCardHtml(sfx){
 function _memAiPaint(sfx){
   var log=document.getElementById('mem-ai-log-'+sfx);if(!log)return;
   var h='';
-  if(!_memAiHist.length)h+='<div class="cb-msg bot">회원 집계에 대해 물어보세요 — 지역·연령대 인원, 비율, TOP 순위를 바로 세어 드려요.\n(집계 수치만 다루고 개인 정보는 보지 않아요)</div>'
+  if(!_memAiHist.length)h+='<div class="cb-msg bot">안녕하세요? 전 예울이예요 😊\n어떤 고객이 궁금하세요? 지역·연령대 인원, 비율, TOP 순위는 바로 세어 드려요.\n집계 밖 질문은 제가 생각해서 답해드려요 — 30초~2분쯤 걸려요!</div>'
     +'<div class="cb-chiprow">'+_MEM_AI_CHIPS.map(function(c){return '<button type="button" class="cb-chip" onclick="_memAiChip(\''+sfx+'\',this.textContent)">'+c+'</button>';}).join('')+'</div>';
   _memAiHist.forEach(function(m){h+=(m.u!==undefined)?'<div class="cb-msg user">'+_memEsc(m.u)+'</div>':'<div class="cb-msg bot">'+m.b+'</div>';});
   log.innerHTML=h;
@@ -24324,6 +24427,11 @@ function _memAiAges(q){
 function _memAiLocal(q,idx){
   var n=idx.n,GN3=['여수시','순천시','광양시'];
   if(/성별|남성|여성|남자|여자/.test(q))return '집계엔 성별 정보가 없어요 — 지역·연령대 인원만 답할 수 있어요.';
+  // [260803] 상담·아이디어 질문(늘리려면·어떻게·추천…)은 지역·연령 단어가 섞여 있어도 집계 즉답이 아니라 예울이 AI 몫 —
+  //   명시적 집계 의도(몇 명·비율·TOP…)가 같이 있을 때만 로컬이 답한다(「여수 30대」처럼 의도어 없는 단문은 집계로).
+  var wantCount=/몇\s*명|몇명|인원|숫자|명수|비율|퍼센트|%|얼마나|많아|많은|많이|적어|top|톱|상위|가장|제일|최다|총\s|전체|합계/i.test(q);
+  var advisory=/늘리|줄이|어떻게|어떡|방법|추천|전략|아이디어|하려면|해야|좋을까|어떨까|기획|홍보|이벤트/.test(q);
+  if(advisory&&!wantCount)return null;
   var regions=_memAiRegions(q,idx),ages=_memAiAges(q);
   var gwannae=/관내|여수.?순천.?광양/.test(q);
   var topM=q.match(/(?:top|톱|상위)\s*([0-9]+)/i);
@@ -24374,17 +24482,12 @@ function _memAiLocal(q,idx){
     return '총 회원은 '+_memAiFmt(n)+'명이에요 · 주소 미상 '+_memAiFmt(idx.unloc)+'명(지역 집계 제외) · 연령 미상 '+_memAiFmt(idx.age['미상']||0)+'명';
   return null;
 }
-// 자유 질문 폴백 — 전송 = 집계 JSON만(이름·전화·상세주소 없음 = 개인 식별 0)
-function _memAiStats(idx){
-  var cs=Object.keys(idx.byCity).sort(function(x,y){return idx.byCity[y]-idx.byCity[x];});
-  var city={},etc=0;
-  cs.forEach(function(c,i){if(i<30){var o={'합계':idx.byCity[c]},am=idx.cityAge[c]||{};Object.keys(am).forEach(function(a){o[a]=am[a];});city[c]=o;}else etc+=idx.byCity[c];});
-  return {'총회원':idx.n,'주소미상':idx.unloc,'연령대':idx.age,'시도':idx.bySido,'시군구_상위30_연령교차':city,'시군구_기타합':etc,'관내정의':'여수시·순천시·광양시 합'};
-}
-async function _memAiLLM(q){
-  var r=await api('POST','/api/mem-chat',{q:q,stats:_memAiStats(_memAiIdx())});
-  if(!r||!r.text)throw new Error('빈 응답');
-  return String(r.text);
+// 자유 질문 폴백 동봉용 집계 한 줄 요약 — 개인 식별 0(인원수뿐) · 공개 레포 커밋 축이라 최소만 동봉
+function _memAiCtx(idx){
+  var top=Object.keys(idx.byCity).sort(function(x,y){return idx.byCity[y]-idx.byCity[x];}).slice(0,5);
+  var ages=Object.keys(idx.age).sort(function(x,y){return idx.age[y]-idx.age[x];}).slice(0,4);
+  var gn=(idx.byCity['여수시']||0)+(idx.byCity['순천시']||0)+(idx.byCity['광양시']||0);
+  return '회원 집계 요약 — 총 '+idx.n+'명 · 관내(여수·순천·광양) '+gn+'명('+_memAiPct(gn,idx.n)+'%) · 거주지 상위 '+top.map(function(c){return c+' '+idx.byCity[c]+'명';}).join(', ')+' · 연령 상위 '+ages.map(function(a){return a+' '+idx.age[a]+'명';}).join(', ');
 }
 function _memAiSend(sfx){
   var inp=document.getElementById('mem-ai-q-'+sfx);if(!inp)return;
@@ -24396,13 +24499,13 @@ function _memAiSend(sfx){
   _memAiHist.push({u:q});
   var ans=null;try{ans=_memAiLocal(q,idx);}catch(e){console.warn('[mem-ai local]',e);}
   if(ans){_memAiHist.push({b:ans});_memAiPaintAll();return;}
-  var pend={b:_ldHtml(12)+'생각 중'};
+  var deepQ=_yeulAiDeep(q);   // [260803 운영자] 복잡 질문 = opus 딥 라우팅 — 「기다려 달라」 안내를 먼저(소넷 기본은 짧은 대기)
+  var wait=deepQ?'좀 복잡한 질문이네요 — 깊게 생각할게요, 조금만 기다려 주세요 🙏':'예울이가 생각 중이에요…';
+  var pend={b:_ldHtml(12)+wait};   // 집계 밖 질문 = 예울이 AI(깃 Actions claude — _yeulAiAsk 공용 브레인)
   _memAiHist.push(pend);_memAiBusy=true;_memAiPaintAll();
-  _memAiLLM(q).then(function(t){pend.b=_memEsc(t).slice(0,4000);})
-    .catch(function(e){var s=String(e&&e.message||e);
-      pend.b=(s.indexOf('404')===0||s.indexOf('503')===0)
-        ?'자유 질문 AI는 서버 배포 전이에요 — 지금은 집계 질문에 바로 답해요. 예: 「여수 30대 몇 명?」 「거주지 TOP5」'
-        :'응답 실패: '+_memEsc(s.slice(0,90));})
+  _yeulAiAsk(q,_memAiCtx(idx),function(sec){pend.b=_ldHtml(12)+wait+' · '+sec+'초';_memAiPaintAll();})
+    .then(function(t){pend.b=_memEsc(t).slice(0,4000);})
+    .catch(function(e){pend.b='죄송해요, 지금은 답을 못 가져왔어요 🙏 '+_memEsc(String(e&&e.message||e).slice(0,110));})
     .then(function(){_memAiBusy=false;_memAiPaintAll();});
 }
 
@@ -26877,7 +26980,7 @@ function _chatbotMount(){
   document.body.appendChild(fab);
   const win=document.createElement('div');
   win.id='cb-win';win.className='cb-win';
-  win.innerHTML='<div class="cb-hdr"><div class="cb-ava"><img src="image/yeul.png" alt="" style="width:100%;height:100%;border-radius:50%;object-fit:cover"></div><div class="cb-titles"><div class="cb-title">예울이</div><div class="cb-sub">자동응답 · 규정/프로그램 문의</div></div><button class="cb-close" onclick="_cbClear()" title="대화 지우기" style="font-size:15px">⟲</button><button class="cb-close" onclick="_cbToggle()">✕</button></div>'+
+  win.innerHTML='<div class="cb-hdr"><div class="cb-ava"><img src="image/yeul.png" alt="" style="width:100%;height:100%;border-radius:50%;object-fit:cover"></div><div class="cb-titles"><div class="cb-title">예울이</div><div class="cb-sub">자동응답 · 규정/프로그램 · 그 외엔 AI</div></div><button class="cb-close" onclick="_cbClear()" title="대화 지우기" style="font-size:15px">⟲</button><button class="cb-close" onclick="_cbToggle()">✕</button></div>'+
     '<div class="cb-body" id="cb-body"></div>'+
     '<div class="cb-foot"><input class="cb-in" id="cb-in" placeholder="궁금한 내용을 입력하세요" onkeydown="if(event.key===\'Enter\')_cbSend()"><button class="cb-send" onclick="_cbSend()"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg></button></div>';
   document.body.appendChild(win);
@@ -27136,19 +27239,18 @@ function _cbShowRule(r){
 function _cbRulesAnswer(q,qn){
   const done=function(rules){
     const res=_cbRulesSearch(rules,q);
-    if(res.clarify||!res.hits.length){
-      _cbBot(res.clarify
-        ?'음, 조금만 더 구체적으로 물어봐 주실래요? 🙂\n키워드가 있으면 바로 찾아드려요. 예를 들면 —'
-        :'그 내용은 규정에서 못 찾았어요 😢 다른 키워드로 다시 물어보시거나, 아래 예시처럼 질문해 보세요.');
+    if(res.clarify){
+      _cbBot('음, 조금만 더 구체적으로 물어봐 주실래요? 🙂\n키워드가 있으면 바로 찾아드려요. 예를 들면 —');
       _cbChips([
         {label:'경조 휴가는 며칠?',fn:function(){_cbAsk('경조 휴가는 며칠?');}},
         {label:'연차는 어떻게 생겨?',fn:function(){_cbAsk('연차는 어떻게 생겨?');}},
         {label:'출장비 지급 기준',fn:function(){_cbAsk('출장비 지급 기준');}},
         {label:'처음으로',fn:_cbHome,ghost:true}
       ]);
-      _cbLog('자유입력',q,'',res.clarify?'모호질문':'미응답');
+      _cbLog('자유입력',q,'','모호질문');
       return;
     }
+    if(!res.hits.length){_cbAiAnswer(q);return;}   // [260803 운영자] 규정·FAQ 미스 = 「미응답」 데드엔드 폐지 → 예울이 AI(전사 자유질문·_yeulAiAsk 공용 브레인)
     const best=res.hits[0];
     // [세분화 260611] 다항목 조항이면 되묻기 — 항목(자식 청크) 칩 제시 후 단정 답변
     {
@@ -27182,6 +27284,19 @@ function _cbRulesAnswer(q,qn){
   if(_cb.rules!==null){done(_cb.rules);return;}
   _cbTyping(true);
   _cbLoadRules().then(function(r){_cbTyping(false);done(r||[]);});
+}
+// [260803 운영자] 규칙 기반 미스 → 예울이 AI 폴백 — 루시봇 컨셉(persona/yeuli.md 카드 + 깃 Actions claude · 공용 _yeulAiAsk).
+//   결과·실패는 챗봇로그에 그대로 적재(기존 '미응답' 자리를 'AI답변'/'AI실패'가 대체).
+function _cbAiAnswer(q){
+  const deepQ=_yeulAiDeep(q);   // [260803 운영자] 복잡 질문 = opus 딥 — 「기다려 달라」 먼저 말하기
+  _cbBot(deepQ?'규정·FAQ엔 없는, 좀 복잡한 질문이네요 — 깊게 생각해서 답해드릴게요. 조금만 기다려 주세요 🙏':'규정·FAQ에선 못 찾았어요. 제가 직접 생각해서 답해드릴게요 — 잠깐이면 돼요 🙏');
+  const b=document.getElementById('cb-body');
+  const w=document.createElement('div');w.className='cb-msg bot';w.innerHTML=_ldHtml(12)+'예울이가 생각 중이에요…';
+  if(b){b.appendChild(w);_cbScroll();}
+  _yeulAiAsk(q,'',function(sec){w.innerHTML=_ldHtml(12)+'예울이가 생각 중이에요… '+sec+'초';})
+    .then(function(t){w.innerHTML=escapeHtml(String(t)).slice(0,4000);_cbScroll();_cbLog('AI답변',q,String(t).slice(0,80),'claude·yeulchat');})
+    .catch(function(e){w.innerHTML='죄송해요, 지금은 답을 못 가져왔어요 🙏 '+escapeHtml(String(e&&e.message||e).slice(0,110));_cbScroll();_cbLog('자유입력',q,'','AI실패');})
+    .then(function(){_cbChips([{label:'다른 질문',fn:function(){_cbPickCat('회사');}},{label:'처음으로',fn:_cbHome,ghost:true}]);});
 }
 function _cbSend(){
   const inp=document.getElementById('cb-in');
