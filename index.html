@@ -5932,10 +5932,11 @@ function _srailAsof(){
   return '기준 '+(Math.floor(mx/100)%100)+'.'+(mx%100);
 }
 // 진행중 전시 목록 — 분석 보드 _anaExhibBuild 재사용(무료 전시는 달성률 개념이 없어 분석 보드와 동일하게 제외)
-function _srailExhibs(){
+function _srailExhibs(incPast){
+  // [260803 운영자] incPast = 종료(ended) 전시까지 포함 — 대시보드 표 「전체」 노출용(판매 축이라 무료 제외는 동일). 미지정 = 종전 그대로 판매중만.
   if(!(_anaState&&_anaState._exDaily&&_anaState._exMaster))return [];
   try{
-    return _anaExhibBuild().filter(function(e){return e.status==='active'&&e.profit!=='무료';}).map(function(e){
+    return _anaExhibBuild().filter(function(e){return (e.status==='active'||(incPast&&e.status==='ended'))&&e.profit!=='무료';}).map(function(e){
       var sd=_salesDate(e.시작일), ed=_salesDate(e.종료일), today=new Date(); today.setHours(0,0,0,0);
       e._kind='ex';
       e._dday=sd?Math.round((sd-today)/86400000):null;          // 정렬 축 = 공연과 동일(시작일 기준, 진행중=음수)
@@ -6866,7 +6867,8 @@ function _srailRenderInner(els){
   // 판매중 공연 + 진행중 전시(종류 무관 "진행중인 건 다" — 운영자 260707). 교육은 시트 생기면 여기 합류(확장점).
   var perfActives=perfs.filter(function(p){return p.status==='active';});
   perfActives.forEach(function(p){p._kind='perf';});
-  var exActives=_srailExhibs();
+  var exAll=_srailExhibs(true);   // [260803] 종료 전시까지 한 번에 빌드 — 판매중(exActives)은 종전대로 분리, 종료분은 아래 pasts에서만 소비
+  var exActives=exAll.filter(function(e){return e.status==='active';});
   // [운영자 260710] 노출축 = 「현재 홍보중」 — 홍보창(ps~se||e) 밖이면 숨김(미지정·조인 실패 = 판매기간 폴백 = 그대로 통과) + 판매 N일차 주석
   var pgIdx=_srailPgIdx();
   // [260723 평의회2 MED-1] 실적 표 모드 = 판매 축(운영자 원문 「현재 판매중인 프로그램」 — 판매중이면 홍보창 밖이어도 표에 나옴) · 홍보창 필터는 캘린더 카드 모드 전용 유지
@@ -6880,7 +6882,18 @@ function _srailRenderInner(els){
     .sort(function(a,b){ var ad=(a._kind==='ex'?a._dday:a.dday), bd=(b._kind==='ex'?b._dday:b.dday); ad=(ad===null||ad===undefined)?9e9:ad; bd=(bd===null||bd===undefined)?9e9:bd; if(ad!==bd)return ad-bd; if(!!a.noData!==!!b.noData)return a.noData?1:-1; return a.occ-b.occ; });
   // [260724 운영자] 2×2 우하단 = 「사업 판매현황」 자동전환 — 상단 목록/드릴 분기와 독립으로 매 렌더 동기(biz 모드에서만 노출, 그 외 숨김·정지)
   try{ _srailUhaSync(actives); }catch(_e){ console.warn('[uha sync]',_e); }
-  try{ _railYrmSync(actives); }catch(_e){ console.warn('[rail-yrm sync]',_e); }   // [260724 운영자] 연간실적 틀 우측 이식(2단계) = 판매중 공연·전시 블릿 리스트 동기
+  // [260803 운영자] 「기존에 진행한 공연들까지 다 뜨고, 체크 토글로 판매중만」 — 대시보드 표(#rail-yrm-list) 데이터에
+  //   지난(종료) 프로그램을 _past=1로 합류(실적 조회 흡수 1단계). 표에서만 노출·「판매중만」 토글(_ryLiveOnly)이 거른다 —
+  //   회전 상세(_srailUhaSync 위)·캘린더 레일 카드(아래 actives 렌더)는 판매중 전용 그대로. 장소·판매 N일차 조인 = actives와 동일 문법.
+  var pasts=[];
+  try{
+    var perfEnded=perfs.filter(function(p){return p.status==='ended';});
+    perfEnded.forEach(function(p){ p._kind='perf'; p._past=1; var pg=_srailPgOf(pgIdx,p._mid,p.name); p._saleN=_srailSaleDayN(p.saleStart,pg); p._venue=(pg&&pg.l)?String(pg.l):''; });
+    var exEnded=exAll.filter(function(e){return e.status==='ended';});
+    exEnded.forEach(function(e){ e._kind='ex'; e._past=1; var pg2=_srailPgOf(pgIdx,null,e.name); e._saleN=_srailSaleDayN(null,pg2); e._venue=(pg2&&pg2.l)?String(pg2.l):''; });
+    pasts=perfEnded.concat(exEnded);
+  }catch(_e){ console.warn('[srail past]',_e); pasts=[]; }
+  try{ _railYrmSync(pasts.length?actives.concat(pasts):actives); }catch(_e){ console.warn('[rail-yrm sync]',_e); }   // [260724 운영자] 연간실적 틀 우측 이식(2단계) = 판매중 공연·전시 블릿 리스트 동기
   // 인라인 드릴 상태 — 대상이 갱신 후 사라졌으면(판매·전시 종료 등) 목록으로 복귀
   if(_srailView.mode==='drill'){
     var dp=actives.find(function(x){ return _srailView.kind==='ex'?(x._kind==='ex'&&x.id===_srailView.name):(x._kind==='perf'&&x.name===_srailView.name); });
@@ -7307,7 +7320,7 @@ function _railYrmPerfTable(perfs,rateLab){
     }
     return sd((p&&(p._ryDate||p.startDate)));
   };
-  var dcol=function(p){ return (p&&p._kind==='ex')?'--peach-text':'--accent'; };
+  var dcol=function(p){ return (p&&p._past)?'--muted':((p&&p._kind==='ex')?'--peach-text':'--accent'); };   // [260803] 지난 행 일자 = 중립 사다리(--muted) — 판매중과 즉시 갈린다
   var td='padding:11px 8px;vertical-align:top;';   // [260725 운영자] 제목 위 정렬로 통일 — 제목 아래 장소 서브라인이 붙으므로 행 전체를 위 기준으로
   // [260725 운영자] 프로그램 열이 남는 폭을 다 먹어 추이 차트가 우측 끝까지 밀렸던 것 → table-layout:fixed + 폭 명시로 추이를 좌측으로 당김.
   // 폭 누계 11/45/74/87/100 — 분야 표가 전부 이 한 함수라 열 경계가 자동으로 같다(세로 오와열 정렬).
@@ -7336,14 +7349,15 @@ function _railYrmPerfTable(perfs,rateLab){
   });
   h+='</tr></thead><tbody>';   // [260725 운영자] 「판매율」열 신설(추이 좌측) — 기본 폭 10/24/18/24/13/11 · [260729 운영자] 폭 = colgroup + 경계 드래그 조절
   perfs.forEach(function(p){
-    var trend=p.noData?('<span style="color:var(--muted);font-size:12px">'+((p.dday!==null&&p.dday>0)?'오픈 예정':'데이터 부족')+'</span>')
-      :_mvBars(p.days,p.diff,p._unit,(p._kind==='ex')?'--peach-text':null,(p._kind==='ex')?'--peach-light':null);   // [260731 운영자 4차] 전시 추이 = 전시색(--peach-text 사다리) — 3열 누적 관객수·그룹 블릿과 같은 축
+    var trend=p._past?'<span style="color:var(--muted);font-size:12px">판매 종료</span>'   // [260803] 지난 행 추이 = 「판매 종료」 문구(noData '오픈 예정' 문법 계승) — 최종 실적은 3열·행 클릭 상세가 담당
+      :(p.noData?('<span style="color:var(--muted);font-size:12px">'+((p.dday!==null&&p.dday>0)?'오픈 예정':'데이터 부족')+'</span>')
+      :_mvBars(p.days,p.diff,p._unit,(p._kind==='ex')?'--peach-text':null,(p._kind==='ex')?'--peach-light':null));   // [260731 운영자 4차] 전시 추이 = 전시색(--peach-text 사다리) — 3열 누적 관객수·그룹 블릿과 같은 축
     // 3열 = 공연·교육 「판매율」(N% (분자/분모)) · 전시 「누적 관객수」(누계 숫자) — 둘 다 강조색 볼드·좌측 정렬로 같은 문법
     var rate=p.noData?'<span style="color:var(--muted);font-size:12px">—</span>'
       :((p._kind==='ex')?_ryAccCell(p._acc):_ryRateCell(p.seats,p.totalOpen,p.occ,'--accent'));
     var sub=_rySubLine((p._ryRun!==undefined&&p._ryRun!==null)?p._ryRun:_ryRunTxt(p),p._venue);
     var kind=(p._kind==='ex')?'ex':'perf', pkey=(p._kind==='ex')?(p.id||p.name):p.name;   // 드릴 키 = _srailUhaKey와 같은 축(전시 = ID 우선)
-    h+='<tr class="clk" role="button" tabindex="0" data-uhakey="'+escapeHtml(_srailUhaKey(p))+'" onclick="_railYrmPick(\''+kind+'\',\''+_anaEsc(pkey)+'\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click();}" title="'+escapeHtml(p.name)+' — 클릭 = 아래 상세 보기">'
+    h+='<tr class="clk" role="button" tabindex="0"'+(p._past?' style="background:var(--past-bg)"':'')+' data-uhakey="'+escapeHtml(_srailUhaKey(p))+'" onclick="_railYrmPick(\''+kind+'\',\''+_anaEsc(pkey)+'\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click();}" title="'+escapeHtml(p.name)+' — 클릭 = 아래 상세 보기">'
       +'<td style="'+td+'padding-left:14px;color:var('+dcol(p)+');font-weight:700;white-space:nowrap;font-variant-numeric:tabular-nums">'+dcell(p)+'</td>'
       +'<td style="'+td+'overflow:hidden" title="'+escapeHtml(p.name)+(p._venue?' · '+escapeHtml(p._venue):'')+'"><div style="'+_RYNM+'">'+escapeHtml(p.name)+'</div>'+sub+'</td>'
       +'<td style="'+td+pl(2)+'text-align:left;white-space:nowrap">'+rate+'</td>'
@@ -7371,7 +7385,7 @@ function _ryExRow(e){
   // 추이 = 3열 「누적 관객수」와 같은 축(누계총인원 → 없으면 누계유료)이라 막대 증분과 위 숫자가 같은 것을 센다
   var days=ds.map(function(r){ var v=_salesNum(r['누계총인원']); if(v===null)v=_salesNum(r['누계유료']); return {bd:_salesNum(r['기준일자']),seat:(v===null?0:v)}; });
   var acc=(e._total!==null&&e._total!==undefined)?e._total:e._paid;   // 누적 관객수 = 누계총인원 → 없으면 누계유료
-  return {_kind:'ex',id:(e.id||''),name:e.name,_src:e,
+  return {_kind:'ex',id:(e.id||''),name:e.name,_src:e,_past:(e._past?1:0),
     startDate:sd,endDate:ed,_ryDate:(ed||sd),
     dday:((e._dday===null||e._dday===undefined)?null:e._dday),
     noData:!!e.noData,seats:e._paid,totalOpen:e._goal,occ:((e.occ===null||e.occ===undefined)?null:e.occ),_acc:acc,
@@ -7382,6 +7396,9 @@ function _ryExRow(e){
 }
 function _railYrmTableHtml(actives){
   if(!actives)return '<div class="rail-yrm-empty">'+_ldHtml(14)+'불러오는 중</div>';
+  // [260803 운영자] 「판매중만」 체크 토글 — 켬 = 판매중만(종전 표와 동일) · 끔(기본) = 지난(종료) 프로그램까지 전체(실적 조회 흡수).
+  //   전체여도 판매중이 위(종전 시작일순 그대로), 지난 건 그 아래 최근 종료순 — 모니터링 축은 안 밀린다.
+  if(_ryLiveOnly())actives=actives.filter(function(x){return !x._past;});
   var perfs=actives.filter(function(x){return x._kind!=='ex';});
   // [260729 운영자] 전시 = 공연 행 모양으로 정규화(_ryExRow) → 이 아래 필터·정렬·표 렌더가 공연과 완전히 같은 코드를 탄다(인덱싱 동일).
   var exs=actives.filter(function(x){return x._kind==='ex';}).map(_ryExRow);
@@ -7393,7 +7410,10 @@ function _railYrmTableHtml(actives){
   };
   perfs=perfs.filter(keep); exs=exs.filter(keep);
   var byDate=function(a,b){var ad=a.startDate?a.startDate.getTime():9e15,bd=b.startDate?b.startDate.getTime():9e15;if(ad!==bd)return ad-bd;return a.name<b.name?-1:1;};
-  perfs.sort(byDate); exs.sort(byDate);   // 정렬 축도 동일(시작일순)
+  // [260803] 지난 건 정렬 = 최근 종료(공연일)순 — 어제 끝난 게 목록 최상단 과거줄에 오게(실적 조회 동선). 판매중은 종전 byDate 그대로.
+  var byPast=function(a,b){var ad=(a.endDate||a.startDate),bd=(b.endDate||b.startDate);ad=ad?ad.getTime():-9e15;bd=bd?bd.getTime():-9e15;if(ad!==bd)return bd-ad;return a.name<b.name?-1:1;};
+  var ord=function(arr){var lv=[],pa=[];arr.forEach(function(x){(x._past?pa:lv).push(x);});lv.sort(byDate);pa.sort(byPast);return lv.concat(pa);};
+  perfs=ord(perfs); exs=ord(exs);   // 정렬 축도 동일(시작일순 · 지난 건은 그룹 하단)
   if(!perfs.length&&!exs.length)return '<div class="rail-yrm-empty">🎫 지금 판매·진행중인 프로그램이 없어요</div>';
   // [260725 운영자] 분야별 투명 네모 — 각 네모가 자기 안에서만 스크롤. 높이는 건수 비례로 자동 배분(flex-grow).
   // 교육(_kind==='edu')은 아직 actives에 흘러들어오는 소스가 없어 평소엔 렌더되지 않는다(데이터가 생기면 자동 노출).
@@ -7409,9 +7429,27 @@ function _railYrmTableHtml(actives){
        +grp('교육','--green',edus,_railYrmPerfTable);
   return h;
 }
+// [260803 운영자] 「판매중만」 체크 토글 — 대시보드 표에 지난(종료) 프로그램까지 전체 노출(기본 · 운영자 「기존에 진행한 공연들까지 다 뜨고」),
+//   체크하면 판매중만(종전 표와 동일). 부품 = 정본 스위치 .sw/.sw-k 그대로(기틀 §2-3 「ON/OFF 토글 전부 이걸 재사용」) · 신규 색·토큰 0.
+//   상태 = 기기 기억(localStorage — 열 폭 ryColW와 같은 축) + 메모리 폴백(프라이빗 모드) · 회전 상세·캘린더 레일 카드는 이 토글 무관(판매중 전용).
+var _RY_LIVE_KEY='ryLiveOnly', _ryLiveMem=null;
+function _ryLiveOnly(){ if(_ryLiveMem!==null)return _ryLiveMem; try{return localStorage.getItem(_RY_LIVE_KEY)==='1';}catch(_e){return false;} }
+function _ryLiveToggle(){
+  var v=!_ryLiveOnly(); _ryLiveMem=v;
+  try{localStorage.setItem(_RY_LIVE_KEY,v?'1':'0');}catch(_e){}
+  var el=document.getElementById('rail-yrm');
+  var ct=el&&el.querySelector('.bizm-card .ct'); if(ct)ct.innerHTML=_railYrmCardTitle();   // 스위치 on/off 상태 재그림(토글은 상세 중 숨김이라 목록 화면에서만 눌린다)
+  var list=document.getElementById('rail-yrm-list');
+  if(list){ list.innerHTML=_railYrmTableHtml((typeof window!=='undefined'&&window._railYrmActives)||null); try{_ryGrpEqualize(list);}catch(_e){} try{_railYrmSyncActive();}catch(_e){} }
+  try{_srailAlignTop();}catch(_e){}   // 행수 변화 = 좌↔우 이젤 높이 재계산(리스트 in-place 갱신 경로와 동일 규약)
+}
 function _railYrmCardTitle(){
   // [260729 운영자] 구 '진행 중인 프로그램' 개명 → 「프로그램 별 판매 추이」 · 블릿(.ct-bul) = 좌 보드 두 카드와 같은 부품(강조색1)
-  return '<span class="ct-bul"></span>프로그램 별 판매 추이';
+  // [260803 운영자] 우측 = 「판매중만」 체크 토글 — 절대배치(.bizm-card>.ct position:relative 기존 규칙) = 제목 흐름·이젤 기하 무접촉.
+  var live=_ryLiveOnly();
+  return '<span class="ct-bul"></span>프로그램 별 판매 추이'
+    +'<span class="ry-live-tg" role="switch" aria-checked="'+(live?'true':'false')+'" tabindex="0" onclick="_ryLiveToggle()" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click();}" title="체크 = 판매중 프로그램만 · 해제 = 지난(종료) 프로그램까지 전체" style="position:absolute;right:14px;top:10px;display:'+((typeof _ryDrill!=='undefined'&&_ryDrill.key)?'none':'inline-flex')+';align-items:center;gap:7px;cursor:pointer;user-select:none;font-size:11px;font-weight:700;color:var(--dim)">'
+    +'판매중만<span class="sw'+(live?' on':'')+'"><span class="sw-k"></span></span></span>';
 }
 // ── [260801 운영자 · Q.38] 3열 숫자 세로선 보증 — 그룹 표 폭 통일(JS 폴백) ──────────────────────
 // 공연·전시·교육은 그룹(.ry-grp-bd)마다 별개 <table>이라, 3열 숫자(판매율 %·전시 누적 관객수)의 일의 자리
@@ -7594,6 +7632,7 @@ function _ryDrillOpen(want,silent){
 function _ryBackBtn(box,on){
   try{
     var ct=box&&box.parentNode&&box.parentNode.querySelector(':scope > .ct'); if(!ct)return;
+    var tg=ct.querySelector('.ry-live-tg'); if(tg)tg.style.display=on?'none':'';   // [260803] 상세 중엔 우측 「판매중만」 토글 숨김 — ‹(목록으로)와 같은 자리 겹침 방지
     var old=ct.querySelector('.modal-x'); if(old)old.parentNode.removeChild(old);
     if(!on)return;
     var b=document.createElement('button');
@@ -7668,7 +7707,7 @@ function _railYrmRender(){
   try{ var _sls=el.querySelectorAll('#rail-yrm-uha'); for(var _si=1;_si<_sls.length;_si++)if(!_sls[_si].childNodes.length)_sls[_si].parentNode.removeChild(_sls[_si]); }catch(_e){}
   try{ if(!document.getElementById('rail-yrm-uha')){ var _sl=document.createElement('div'); _sl.id='rail-yrm-uha'; _sl.style.display='none'; el.appendChild(_sl); } }catch(_e){}   // 짝 면에도 상세 슬롯(숨김) 확보 — 회전 기계 타이머·리스너 보존, 화면 노출 0
   try{ var slot=document.getElementById('rail-yrm-uha'); if(uha&&slot)slot.appendChild(uha); }catch(_e){}
-  if(!pair){ try{ if(window._railYrmActives)_srailUhaSync(window._railYrmActives); }catch(_e){} try{ if(_ryDrill.key)_ryDrillPaint(_ryDrill.key,0); }catch(_e){} try{ _railYrmSyncActive(); }catch(_e){} }   // [260731 4차 · 페이블 검수 MED] 판매 실적 복귀 = 회전 기계·상세·액티브 pill 재점화(짝 면 휴식의 짝)
+  if(!pair){ try{ if(window._railYrmActives)_srailUhaSync(window._railYrmActives.filter(function(x){return !x._past;})); }catch(_e){} try{ if(_ryDrill.key)_ryDrillPaint(_ryDrill.key,0); }catch(_e){} try{ _railYrmSyncActive(); }catch(_e){} }   // [260731 4차 · 페이블 검수 MED] 판매 실적 복귀 = 회전 기계·상세·액티브 pill 재점화(짝 면 휴식의 짝) · [260803] 지난(_past) 프로그램은 회전에 안 태운다(표 전용)
   else { try{ _srailUhaSync(null); }catch(_e){} }   // 짝 면 = 회전 기계 완전 휴식(숨은 슬롯에서 재점화 차단)
 }
 // 판매중 목록(actives) 도착·갱신마다 리스트만 in-place 갱신(틀·KPI 재생성 없음). 틀 미구축이면 통째 렌더.
@@ -7688,6 +7727,7 @@ function _railYrmSync(actives){
   try{ _ryGrpEqualize(list); }catch(_e){}   // [260801 Q.38] 그룹 표 폭 통일 — 3열 숫자(판매율·전시 누적 관객수) 세로선 보증
   if(_ryDrill.key&&!_ryDrillPaint(_ryDrill.key,0))_ryDrill.key='';   // 상세를 보던 중 데이터가 갱신되면 상세를 다시 그린다(그 프로그램이 사라졌으면 목록 유지)
   var ct=el.querySelector('.bizm-card .ct'); if(ct)ct.innerHTML=_railYrmCardTitle();
+  if(_ryDrill.key){ try{_ryBackBtn(list,1);}catch(_e){} }   // [260803] ct 재구축이 지운 ‹(목록으로) 재부착 + 토글 숨김 유지 — 상세 유지 갱신 경로 정합
   _railYrmSyncActive();   // [260724 한 수] 재렌더 후에도 2×2에 떠 있는 프로그램의 행 액티브 유지
   try{ _srailAlignTop(); }catch(_e){}   // [260725] 리스트만 갱신된 경로에서도 좌↔우 데칼코마니 높이 재계산
 }
