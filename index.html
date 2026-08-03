@@ -24318,9 +24318,11 @@ function _memOvMap(geo){
 // ⚠ 산출물 drafts/yc*.json = 공개 레포 커밋(블로그 초안과 동일 축) — 민감 내용 질문 금지 · 워크플로가 3일 지난 산출물 자동 정리.
 var _YEULAI_LS='yeulai_persona';
 function _yeulAiPersona(){try{return String(localStorage.getItem(_YEULAI_LS)||'').slice(0,6000);}catch(_e){return '';}}
+// [260803 운영자] 복잡 질문 판정 — 기본 = 소넷5·high(속도 우선) / deep = opus5·medium + 「기다려 달라」 안내 선표시(라우팅 실행은 워크플로)
+function _yeulAiDeep(q){q=String(q||'');return q.length>=60||/전략|기획|분석|설계|보고서|제안서?|비교|계획|정리해|작성해?\s*줘|써\s*줘|만들어|장단점|로드맵|개선안/.test(q);}
 async function _yeulAiAsk(q,ctx,onTick){
   var id='yc'+Date.now()+'r'+Math.floor(Math.random()*1e4);
-  var d0=await api('POST','/api/blog/dispatch',{payload:{yeulchat:1,id:id,q:String(q||'').slice(0,800),persona:_yeulAiPersona(),ctx:String(ctx||'').slice(0,1200)}});
+  var d0=await api('POST','/api/blog/dispatch',{payload:{yeulchat:1,id:id,q:String(q||'').slice(0,800),persona:_yeulAiPersona(),ctx:String(ctx||'').slice(0,1200),deep:_yeulAiDeep(q)?1:0,t:new Date().getHours()}});
   if(!d0||!d0.ok)throw new Error((d0&&d0.error)||'요청 실패');
   var t0=Date.now();
   while(Date.now()-t0<240000){
@@ -24497,9 +24499,11 @@ function _memAiSend(sfx){
   _memAiHist.push({u:q});
   var ans=null;try{ans=_memAiLocal(q,idx);}catch(e){console.warn('[mem-ai local]',e);}
   if(ans){_memAiHist.push({b:ans});_memAiPaintAll();return;}
-  var pend={b:_ldHtml(12)+'예울이가 생각 중이에요…'};   // [260803] 집계 밖 질문 = 예울이 AI(깃 Actions claude — _yeulAiAsk 공용 브레인)
+  var deepQ=_yeulAiDeep(q);   // [260803 운영자] 복잡 질문 = opus 딥 라우팅 — 「기다려 달라」 안내를 먼저(소넷 기본은 짧은 대기)
+  var wait=deepQ?'좀 복잡한 질문이네요 — 깊게 생각할게요, 조금만 기다려 주세요 🙏':'예울이가 생각 중이에요…';
+  var pend={b:_ldHtml(12)+wait};   // 집계 밖 질문 = 예울이 AI(깃 Actions claude — _yeulAiAsk 공용 브레인)
   _memAiHist.push(pend);_memAiBusy=true;_memAiPaintAll();
-  _yeulAiAsk(q,_memAiCtx(idx),function(sec){pend.b=_ldHtml(12)+'예울이가 생각 중이에요… '+sec+'초';_memAiPaintAll();})
+  _yeulAiAsk(q,_memAiCtx(idx),function(sec){pend.b=_ldHtml(12)+wait+' · '+sec+'초';_memAiPaintAll();})
     .then(function(t){pend.b=_memEsc(t).slice(0,4000);})
     .catch(function(e){pend.b='죄송해요, 지금은 답을 못 가져왔어요 🙏 '+_memEsc(String(e&&e.message||e).slice(0,110));})
     .then(function(){_memAiBusy=false;_memAiPaintAll();});
@@ -27284,7 +27288,8 @@ function _cbRulesAnswer(q,qn){
 // [260803 운영자] 규칙 기반 미스 → 예울이 AI 폴백 — 루시봇 컨셉(persona/yeuli.md 카드 + 깃 Actions claude · 공용 _yeulAiAsk).
 //   결과·실패는 챗봇로그에 그대로 적재(기존 '미응답' 자리를 'AI답변'/'AI실패'가 대체).
 function _cbAiAnswer(q){
-  _cbBot('규정·FAQ에선 못 찾았어요. 제가 직접 생각해서 답해드릴게요 — 30초~2분쯤 걸려요 🙏');
+  const deepQ=_yeulAiDeep(q);   // [260803 운영자] 복잡 질문 = opus 딥 — 「기다려 달라」 먼저 말하기
+  _cbBot(deepQ?'규정·FAQ엔 없는, 좀 복잡한 질문이네요 — 깊게 생각해서 답해드릴게요. 조금만 기다려 주세요 🙏':'규정·FAQ에선 못 찾았어요. 제가 직접 생각해서 답해드릴게요 — 잠깐이면 돼요 🙏');
   const b=document.getElementById('cb-body');
   const w=document.createElement('div');w.className='cb-msg bot';w.innerHTML=_ldHtml(12)+'예울이가 생각 중이에요…';
   if(b){b.appendChild(w);_cbScroll();}
