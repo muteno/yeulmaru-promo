@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>260803 링크 자료수집 — 스레드 전용 파서 + 스트리밍 단축회로 — 전후</title>
+<style>
+  :root{--accent:#4A4DE7;--text:#1A1A2E;--dim:#888;--border:rgba(0,0,0,0.09)}
+  body{margin:0;padding:34px 26px 60px;font-family:'Pretendard','Noto Sans KR',sans-serif;background:linear-gradient(135deg,#FDF6F3 0%,#F0EBF5 50%,#EBF0F8 100%);color:var(--text)}
+  h1{font-size:20px;margin:0 0 6px}
+  .sub{color:var(--dim);font-size:13px;margin-bottom:28px;line-height:1.7}
+  h2{font-size:15px;margin:34px 0 12px;display:flex;align-items:center;gap:8px}
+  h2::before{content:'';width:4px;height:16px;border-radius:2px;background:var(--accent)}
+  .pair{display:flex;gap:18px;flex-wrap:wrap}
+  figure{margin:0;flex:1 1 460px;min-width:320px}
+  figcaption{font-size:12.5px;font-weight:700;margin-bottom:8px}
+  figcaption .b{color:var(--dim)} figcaption .a{color:var(--accent)}
+  img{width:100%;height:auto;border-radius:16px;border:1px solid var(--border);box-shadow:0 8px 32px rgba(74,77,231,0.08);display:block}
+  .note{font-size:12.5px;color:var(--dim);line-height:1.7;margin-top:10px}
+  code{background:rgba(74,77,231,0.08);border-radius:4px;padding:1px 5px;font-size:12px}
+</style>
+</head>
+<body>
+<h1>링크 자료수집 — 스레드 전용 파서 + 스트리밍 단축회로 (260803)</h1>
+<div class="sub">운영자 지시: 「스레드 다운이 안가져와지는데 확인좀해줘 · 지금 뭔가 가져오긴하는데 프로필 이런것만 가져오는듯 · 이렇게 안될때도 많음(유튜브 429)」<br>
+증빙 = 앱의 진짜 UI 코드(<code>openLinkGrab</code>/<code>_lgRender</code>)를 헤드리스로 실구동하고 <code>/api/linkgrab</code> 응답만 실측 페이로드로 바꿔 렌더 — 마크업 재현 0.<br>
+전 = 구 코드가 실제 페이지에서 뽑은 결과, 후 = 새 코드 실제 응답(둘 다 같은 실주소 <code>threads.com/share/F-Jw8QEYZ/</code> · <code>youtube.com/watch?v=L6m9z5-Whv4</code>).</div>
+
+<h2>① 스레드 공유 링크 — 「자료 1건 = UI 로고」 → 게시물 사진 2장</h2>
+<div class="pair">
+  <figure><figcaption><span class="b">전 — Threads · 자료 1건(스레드 UI 스프라이트 1.1KB)</span></figcaption><img src="전_스레드_로고1건.png" alt="전: 로고 1건"></figure>
+  <figure><figcaption><span class="a">후 — 글 제목·작성자 + 사진 2건(1440×1440 원본)</span></figcaption><img src="후_스레드_사진2건.png" alt="후: 사진 2건"></figure>
+</div>
+<div class="note">원인 = 스레드 웹앱은 Relay/Comet 스택("Barcelona")이라 사진·영상이 <code>&lt;img&gt;</code>/<code>&lt;video&gt;</code> 태그로 안 나오고 <code>&lt;script type="application/json" data-sjs&gt;</code> 안 SSR JSON(<code>image_versions2</code>/<code>video_versions</code>)에만 있다 → 태그·확장자 축의 범용 스캔이 줍는 건 UI 스프라이트뿐.
+게다가 <code>/share/</code> 주소는 <b>브라우저 UA로 열면 200 + 빈 라우팅 셸</b>(og:* 0건)이고 <b>비-브라우저 UA로 열어야 302로 정규 주소를 알려준다</b> — 그래서 share 첫 요청만 봇 UA, 원글 페이지는 다시 브라우저 UA로 연다.
+로직 정본 = <code>muteno/nomute-editor</code>의 검증된 yt-dlp 추출기(<code>nomute_threads.py</code>) 이식.</div>
+
+<h2>② 유튜브 — 「HTTP 429」 전량 실패 → 영상 1건 확정</h2>
+<div class="pair">
+  <figure><figcaption><span class="b">전 — 가져오기 실패 · 페이지 응답 오류 HTTP 429</span></figcaption><img src="전_유튜브_429실패.png" alt="전: 429 실패"></figure>
+  <figure><figcaption><span class="a">후 — 제목·썸네일 + 권리 동의 + [저장]</span></figcaption><img src="후_유튜브_영상1건.png" alt="후: 영상 1건"></figure>
+</div>
+<div class="note">원인 = 유튜브가 데이터센터 IP(워커 egress)에 429를 준다. 그런데 <b>애초에 그 페이지를 열 이유가 없다</b> — 받을 파일이 HTML 안에 없고, 실측상 429가 안 떠도 결과는 파비콘·JS 번들 <b>36건</b>이며 정작 붙여넣은 그 영상은 목록에 없었다.
+→ 스트리밍 주소는 페이지를 안 열고 주소만으로 항목을 확정하고(영상 id·썸네일은 이미 주소에 있다), 제목만 oEmbed로 보강한다(실패해도 결과 불변).</div>
+
+<h2>회귀 확인(변경 의도 밖 경로)</h2>
+<div class="note">
+· 링크트리(<code>linktr.ee/spotify</code>) 6건 · 위키백과 사진 64건 · 스레드 <b>프로필</b> 주소(게시물 아님) → 종전대로 범용 스캔 강등 · 없는 게시물 코드 → 오류 없이 0건.<br>
+· 스레드 영상 게시물(<code>@wowkim0510</code> 캐러셀) = 영상 4건 추출 · 실제 프록시 수신 확인(사진 <code>image/webp</code> 51KB · 영상 <code>video/mp4</code> 3.1MB, 둘 다 HTTP 200).<br>
+· 게이트 = check_design 1605/1605 ✓ · check_refs ✓ · smoke_login PASS · smoke_layout PASS.
+</div>
+</body>
+</html>
