@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>입력 기능 대시보드 편입 — 플레이그라운드 (260803)</title>
+<style>
+/* ⛳ 토큰 사본 — SSOT = index.html :root 2블록(260803 실측). 이 파일은 시안(자기완결) — 값 창작 0 */
+:root{
+  --accent:#4A4DE7; --accent-light:#E8E8FD; --accent-glow:rgba(74,77,231,0.15);
+  --peach-text:#D88455; --peach-light:#FBF0EC;
+  --bg:linear-gradient(135deg,#FDF6F3 0%,#F0EBF5 50%,#EBF0F8 100%);
+  --surface-solid:#fff; --glass:rgba(255,255,255,0.55);
+  --glass-surface:rgba(255,255,255,.78); --glass-bd:rgba(255,255,255,.6);
+  --glass-shadow:0 8px 32px rgba(74,77,231,0.08),0 2px 8px rgba(0,0,0,0.04);
+  --border:rgba(0,0,0,0.09); --text:#1A1A2E; --dim:#888; --muted:#bbb;
+  --past-bg:rgba(0,0,0,0.02); --green:#1A6B3C; --danger-btn:#E24B4A;
+  --c6:#F5B400; --radius:16px; --radius-lg:20px; --r-btn:10px;
+  --neutral:#EEEDF3; --neutral-text:#6B6B7B;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Pretendard','Segoe UI','Malgun Gothic',sans-serif;background:#23243a;color:var(--text);padding:18px;min-height:100vh}
+.wrap{display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start;justify-content:center}
+.stagewrap{flex:1 1 700px;max-width:1020px}
+/* ── 프레임 = 데스크톱 대시보드 우측 열(실사용 폭 ≈940px) ── */
+.frame{background:var(--bg);border-radius:14px;padding:16px 18px 20px;box-shadow:0 18px 50px rgba(0,0,0,.45);overflow:hidden;position:relative}
+.stagecap{color:#aab;font-size:12px;padding:10px 4px 0;line-height:1.6}
+/* 간이 nav (메뉴 제거 시뮬 대상) — .nav-btn 계승(어두운 유리 바 위 흰 라벨) */
+.navbar{display:flex;align-items:center;gap:4px;background:rgba(26,26,46,.55);backdrop-filter:blur(8px);border-radius:20px;padding:5px 10px;width:max-content;margin:0 auto 14px}
+.nav-btn{padding:8px 13px;border:none;border-radius:20px;font-size:13.5px;font-weight:500;background:transparent;color:rgba(255,255,255,.92);white-space:nowrap;line-height:1;cursor:pointer;font-family:inherit}
+.nav-btn.on{color:var(--c6);font-weight:800}
+.nav-btn.gone{display:none}
+.nav-note{font-size:10.5px;color:rgba(255,255,255,.55);margin-left:6px;padding-right:4px}
+/* 유리박스(판매 실적) = _BIZM_BOX 계승 */
+.ttl{font-size:14px;font-weight:800;color:var(--accent);padding:2px 4px 8px}
+.gbox{background:rgba(255,255,255,.15);backdrop-filter:blur(7px);border:1px solid rgba(255,255,255,.7);border-radius:var(--radius-lg);box-shadow:var(--glass-shadow);padding:18px}
+/* 카드 = .bizm-card / .ct / .ct-bul 계승 */
+.card{border:1px solid var(--border);border-radius:var(--radius);background:var(--surface-solid);box-shadow:0 2px 10px rgba(74,77,231,.04);margin-bottom:14px;overflow:hidden}
+.ct{font-size:13px;font-weight:700;color:var(--text);padding:12px 14px 8px;letter-spacing:-.01em;position:relative;display:flex;align-items:center}
+.ct-bul{display:inline-block;width:4px;height:14px;border-radius:2px;background:var(--accent);vertical-align:-2px;margin-right:8px;flex-shrink:0}
+.ct-right{position:absolute;right:14px;top:50%;transform:translateY(-50%);display:inline-flex;align-items:center;gap:var(--t-hgap,8px)}
+/* 정본 스위치 .sw/.sw-k (ON/OFF 내장 표기 포함) */
+.swlab{display:inline-flex;align-items:center;gap:7px;cursor:pointer;user-select:none;font-size:11px;font-weight:700;color:var(--dim)}
+.sw{width:46px;height:20px;border-radius:11px;background:#cfd3dc;position:relative;cursor:pointer;transition:background .2s;flex:0 0 auto;display:inline-block}
+.sw.on{background:var(--accent)}
+.sw-k{position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,0.25)}
+.sw.on .sw-k{left:28px}
+.sw::after{content:'OFF';position:absolute;right:6px;top:50%;transform:translateY(-50%);font-size:8.5px;font-weight:800;color:#80868f;letter-spacing:.2px;pointer-events:none}
+.sw.on::after{content:'ON';left:8px;right:auto;color:#fff}
+/* 입력 버튼 3부품(전부 정본) — pm-fbtn(글래스) / ana-chip / 텍스트 */
+.pm-fbtn{padding:var(--t-bpy,6px) 12px;border:1px solid var(--glass-bd);background:var(--glass-surface);backdrop-filter:blur(8px);color:var(--text);box-shadow:var(--glass-shadow);border-radius:var(--r-btn);cursor:pointer;font-size:var(--t-bfs,12px);font-weight:600;font-family:inherit;transition:all .15s;display:inline-flex;align-items:center;gap:6px}
+.pm-fbtn:hover{border-color:var(--accent);color:var(--accent)}
+.ana-chip{padding:var(--t-bpy,4px) 11px;border-radius:7px;border:1.5px solid var(--glass-bd);background:var(--glass-surface);backdrop-filter:blur(8px);box-shadow:var(--glass-shadow);color:var(--text);font-family:inherit;font-size:var(--t-bfs,11px);font-weight:600;cursor:pointer;transition:all .15s}
+.ana-chip:hover{border-color:var(--accent);color:var(--accent)}
+.txtbtn{background:none;border:none;color:var(--accent);font-size:var(--t-bfs,12px);font-weight:700;cursor:pointer;font-family:inherit;padding:var(--t-bpy,4px) 2px}
+.txtbtn:hover{text-decoration:underline}
+/* 그룹·표 = .ry-grp-hd / .ana-tbl 문법 계승 */
+.grp-hd{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:800;color:var(--text);padding:10px 12px 8px}
+.grp-hd .bul{width:8px;height:8px;border-radius:50%;background:var(--gtok,var(--accent))}
+.grp-hd .gc{font-weight:700;color:var(--dim);font-size:11px}
+table{width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed}
+thead td{padding:9px 8px;color:var(--dim);font-size:11px;font-weight:700;border-bottom:1px solid var(--border)}
+tbody td{padding:11px 8px;vertical-align:top;border-bottom:1px solid rgba(0,0,0,.045)}
+tbody tr{cursor:pointer}
+tbody tr:hover{background:rgba(74,77,231,.03)}
+tr.past{background:var(--past-bg)}
+.dt{color:var(--accent);font-weight:700;white-space:nowrap;font-variant-numeric:tabular-nums;padding-left:14px}
+tr.past .dt{color:var(--muted)}
+.nm{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.venue{font-size:11.5px;color:var(--dim);font-weight:500;margin-top:4px}
+.rate b{color:var(--accent);font-weight:800;font-variant-numeric:tabular-nums}
+.rate span{color:var(--dim);font-size:11.5px}
+.bars{display:inline-flex;align-items:flex-end;gap:3px;height:24px}
+.bars i{flex:0 0 7px;background:var(--accent-light);border-radius:2px}
+.bars i:last-child{background:var(--accent)}
+.tsum{display:inline-block;margin-left:8px;color:var(--accent);font-weight:800;font-size:12px}
+.endtxt{color:var(--muted);font-size:12px}
+.gpill{display:inline-block;padding:3px 9px;border-radius:999px;background:var(--accent-light);color:var(--accent);font-size:11px;font-weight:700}
+/* B안 — 행 입력 연필(.ry-spec-edit 문법 계승: hover 리빌) */
+.row-in{margin-left:8px;font-size:var(--t-pfs,12px);font-weight:700;color:var(--t-pcol,var(--dim));cursor:pointer;opacity:0;transition:opacity .12s,color .12s;white-space:nowrap}
+tbody tr:hover .row-in{opacity:1}
+.row-in:hover{color:var(--accent)}
+.frame[data-pencil="always"] .row-in{opacity:1}
+/* C안 — 2×2 상세 카드 미니어처 */
+.uha{border:1px solid var(--border);border-radius:var(--radius);background:var(--surface-solid);box-shadow:0 2px 10px rgba(74,77,231,.04);padding:0 0 12px;overflow:hidden}
+.uha .ct{padding:12px 14px 6px}
+.uha-kpi{display:flex;gap:10px;padding:6px 14px 2px}
+.uha-kpi .cell{flex:1;background:var(--accent-glow);border-radius:10px;padding:8px 10px}
+.uha-kpi .lab{font-size:10.5px;color:var(--dim);font-weight:700}
+.uha-kpi .val{font-size:15px;font-weight:800;color:var(--accent);margin-top:2px;font-variant-numeric:tabular-nums}
+.uha-foot{display:flex;justify-content:flex-end;padding:8px 14px 0}
+/* 노출 스위치 */
+.frame:not([data-hbtn-daily="1"]) #hb-daily{display:none}
+.frame:not([data-hbtn-reg="1"]) #hb-reg{display:none}
+.frame:not([data-pencil="hover"]):not([data-pencil="always"]) .row-in{display:none}
+.frame:not([data-uha-btn="1"]) #uha-in{display:none}
+.frame[data-nav-gone="1"] #nav-sales{display:none}
+.frame:not([data-nav-gone="1"]) #nav-note-gone{display:none}
+.frame[data-nav-gone="1"] #nav-note-keep{display:none}
+/* ── 콘솔 ── */
+.console{flex:0 0 340px;max-width:100%;background:#2b2c45;border-radius:14px;padding:16px;color:#dde;position:sticky;top:16px;max-height:calc(100vh - 36px);overflow:auto}
+.console h1{font-size:15px;color:#fff;margin-bottom:2px}
+.console .sub{font-size:11px;color:#99a;line-height:1.55;margin-bottom:12px}
+.csec{border-top:1px solid rgba(255,255,255,.09);padding:12px 0}
+.csec h2{font-size:11px;font-weight:800;color:#aab;letter-spacing:.4px;margin-bottom:9px}
+.pills{display:flex;flex-wrap:wrap;gap:6px}
+.pill{padding:7px 12px;border-radius:999px;border:1.5px solid rgba(255,255,255,.18);background:transparent;color:#dde;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
+.pill.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.crow{display:flex;align-items:center;gap:8px;margin:7px 0;font-size:12px}
+.crow label{flex:0 0 118px;color:#bbc}
+.crow .val{flex:0 0 46px;text-align:right;font-variant-numeric:tabular-nums;color:#fff;font-size:11.5px}
+.crow input[type=range]{flex:1;accent-color:var(--accent)}
+.crow select{flex:1;background:#1e1f33;color:#dde;border:1px solid rgba(255,255,255,.16);border-radius:7px;padding:5px 7px;font-family:inherit;font-size:12px}
+.crow input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px}
+pre{background:#1e1f33;border-radius:10px;padding:12px;font-size:11px;line-height:1.65;color:#cde;white-space:pre-wrap;word-break:break-all;font-family:'D2Coding',Consolas,monospace}
+#copy{margin-top:8px;width:100%;padding:10px;border:none;border-radius:10px;background:var(--accent);color:#fff;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit}
+.note{font-size:11px;color:#99a;line-height:1.6}
+.toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(80px);background:#1A1A2E;color:#fff;padding:11px 18px;border-radius:12px;font-size:13px;transition:transform .25s;z-index:9;box-shadow:0 8px 30px rgba(0,0,0,.4)}
+.toast.show{transform:translateX(-50%) translateY(0)}
+@media(max-width:1080px){.console{position:static;max-height:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="stagewrap">
+    <div class="frame" id="ph" data-hbtn-daily="0" data-hbtn-reg="0" data-pencil="off" data-uha-btn="0" data-nav-gone="0">
+      <!-- 간이 nav — 메뉴 제거 시뮬 -->
+      <div class="navbar">
+        <button class="nav-btn on">대시보드</button>
+        <button class="nav-btn">캘린더</button>
+        <button class="nav-btn" id="nav-sales">판매 현황</button>
+        <button class="nav-btn">콘텐츠 제작</button>
+        <span class="nav-note" id="nav-note-keep">← 현행 4메뉴</span>
+        <span class="nav-note" id="nav-note-gone">← 「판매 현황」 제거 후</span>
+      </div>
+      <div class="ttl">판매 실적</div>
+      <div class="gbox">
+        <div class="card">
+          <div class="ct"><span class="ct-bul"></span>프로그램 별 판매 추이
+            <span class="ct-right">
+              <button class="pm-fbtn" id="hb-daily" onclick="toast('기존 「실적 입력」 모달(openDailyInput)이 열립니다 — admin 전용')">실적 입력</button>
+              <button class="pm-fbtn" id="hb-reg" onclick="toast('기존 「상품 등록·변경」 모달(openTicketReg)이 열립니다')">상품 등록·변경</button>
+              <span class="swlab">판매중만<span class="sw" id="livesw" onclick="this.classList.toggle('on')"><span class="sw-k"></span></span></span>
+            </span>
+          </div>
+          <div class="grp-hd" style="--gtok:var(--accent)"><span class="bul"></span>공연 <span class="gc">4</span></div>
+          <table>
+            <colgroup><col style="width:11%"><col style="width:33%"><col style="width:17%"><col style="width:24%"><col style="width:15%"></colgroup>
+            <thead><tr><td style="padding-left:14px">일자</td><td>프로그램</td><td>판매율</td><td style="text-align:center">최근 7일 추이</td><td>장르</td></tr></thead>
+            <tbody>
+              <tr><td class="dt">9.3 목</td><td><div class="nm">브런치 콘서트 III &lt;현 위로 흐르는 계절&gt;<span class="row-in" onclick="event.stopPropagation();toast('이 공연이 미리 선택된 「실적 입력」이 열립니다')">✎ 입력</span></div><div class="venue">1일 1회 | 대극장</div></td><td class="rate"><b>32%</b> <span>(295/926)</span></td><td style="text-align:center"><span class="bars"><i style="height:8px"></i><i style="height:11px"></i><i style="height:9px"></i><i style="height:14px"></i><i style="height:12px"></i><i style="height:16px"></i><i style="height:20px"></i></span><span class="tsum">+50석</span></td><td><span class="gpill">클래식</span></td></tr>
+              <tr><td class="dt">9.18 금</td><td><div class="nm">뮤지컬 &lt;그날들&gt;<span class="row-in" onclick="event.stopPropagation();toast('이 공연이 미리 선택된 「실적 입력」이 열립니다')">✎ 입력</span></div><div class="venue">3일 4회 | 대극장</div></td><td class="rate"><b>27%</b> <span>(990/3,704)</span></td><td style="text-align:center"><span class="bars"><i style="height:10px"></i><i style="height:8px"></i><i style="height:13px"></i><i style="height:11px"></i><i style="height:15px"></i><i style="height:13px"></i><i style="height:19px"></i></span><span class="tsum">+46석</span></td><td><span class="gpill">뮤지컬</span></td></tr>
+              <tr><td class="dt">10.1 목</td><td><div class="nm">뮤지컬 &lt;달 샤베트&gt;<span class="row-in" onclick="event.stopPropagation();toast('이 공연이 미리 선택된 「실적 입력」이 열립니다')">✎ 입력</span></div><div class="venue">3일 6회 | 대극장</div></td><td class="rate"><b>17%</b> <span>(950/5,556)</span></td><td style="text-align:center"><span class="bars"><i style="height:7px"></i><i style="height:12px"></i><i style="height:10px"></i><i style="height:15px"></i><i style="height:13px"></i><i style="height:17px"></i><i style="height:21px"></i></span><span class="tsum">+57석</span></td><td><span class="gpill">어린이·가족</span></td></tr>
+              <tr class="past"><td class="dt">7.18 토</td><td><div class="nm">뮤지컬 &lt;영웅&gt;</div><div class="venue">2일 2회 | 대극장</div></td><td class="rate"><b>92%</b> <span>(1,701/1,852)</span></td><td style="text-align:center"><span class="endtxt">판매 종료</span></td><td><span class="gpill">뮤지컬</span></td></tr>
+            </tbody>
+          </table>
+          <div class="grp-hd" style="--gtok:var(--peach-text)"><span class="bul"></span>전시 <span class="gc">1</span></div>
+          <table>
+            <colgroup><col style="width:11%"><col style="width:33%"><col style="width:17%"><col style="width:24%"><col style="width:15%"></colgroup>
+            <thead><tr><td style="padding-left:14px">일자</td><td>프로그램</td><td>누적 관객수</td><td style="text-align:center">최근 7일 추이</td><td>장르</td></tr></thead>
+            <tbody>
+              <tr><td class="dt" style="color:var(--peach-text)">7.21 화<br>~11.1 일</td><td><div class="nm">GS칼텍스 예울마루 기획전시 &lt;숨: 쉬는 SUM&gt;<span class="row-in" onclick="event.stopPropagation();toast('이 전시가 미리 선택된 「실적 입력」(전시)이 열립니다')">✎ 입력</span></div><div class="venue">104일 | 7층 전시실</div></td><td class="rate"><b style="color:var(--peach-text)">155명</b></td><td style="text-align:center"><span class="bars"><i style="height:9px;background:var(--peach-light)"></i><i style="height:13px;background:var(--peach-light)"></i><i style="height:11px;background:var(--peach-light)"></i><i style="height:18px;background:var(--peach-text)"></i></span><span class="tsum" style="color:var(--peach-text)">+95명</span></td><td><span class="gpill" style="background:var(--peach-light);color:var(--peach-text)">시즌</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <!-- C안 대상 — 2×2 자동전환 상세 카드(미니어처) -->
+        <div class="uha">
+          <div class="ct"><span class="ct-bul"></span>뮤지컬 &lt;그날들&gt; <span style="font-weight:400;color:var(--dim);font-size:11px;margin-left:8px">공연일 9.18 · D-46 · ‹ 2 / 8 ›</span></div>
+          <div class="uha-kpi">
+            <div class="cell"><div class="lab">누적 판매석</div><div class="val">990석</div></div>
+            <div class="cell"><div class="lab">오픈석 · 회차 4</div><div class="val" style="color:var(--text)">3,704석</div></div>
+            <div class="cell"><div class="lab">목표 50% 대비</div><div class="val" style="color:var(--danger-btn)">−23.3%p</div></div>
+            <div class="cell"><div class="lab">판매 경과</div><div class="val" style="color:var(--text)">21일차</div></div>
+          </div>
+          <div class="uha-foot"><button class="ana-chip" id="uha-in" onclick="toast('이 프로그램이 미리 선택된 「실적 입력」이 열립니다')">오늘 실적 입력</button></div>
+        </div>
+      </div>
+    </div>
+    <div class="stagecap">🖱 프리셋을 눌러 4개 안을 오가며 비교 — 표 행에 마우스를 올리면 B안 연필이 보입니다(연필 노출 = hover일 때). 버튼을 실제로 눌러 열림 동작(토스트 시뮬)을 확인하세요. 「현행」 = 비교 기준(입력 진입 없음 · nav 4메뉴).</div>
+  </div>
+
+  <aside class="console">
+    <h1>입력 기능, 대시보드 안으로</h1>
+    <div class="sub">판매 현황 메뉴의 남은 두 입력구 — <b>실적 입력</b>(admin)·<b>상품 등록·변경</b> — 를 대시보드 「프로그램 별 판매 추이」에 편입하는 4안. 모달 자체는 기존 것(openDailyInput·openTicketReg) 재사용 = 진입구만 옮긴다. 부품 = 정본(.pm-fbtn·.ana-chip·.ry-spec-edit 문법)·신규 색 0.</div>
+    <div class="csec"><h2>① 배치 프리셋</h2><div class="pills" id="presets"></div></div>
+    <div class="csec"><h2>② 헤더 버튼 (A안 축)</h2>
+      <div class="crow"><label>[실적 입력] 노출</label><input type="checkbox" data-k="hbDaily"></div>
+      <div class="crow"><label>[상품 등록·변경] 노출</label><input type="checkbox" data-k="hbReg"></div>
+      <div class="crow"><label>부품</label><select data-k="btnComp"><option value="pm-fbtn">.pm-fbtn 글래스(정본 #12)</option><option value="ana-chip">.ana-chip 칩</option><option value="txtbtn">텍스트 링크</option></select></div>
+      <div class="crow"><label>버튼 세로 패딩</label><input type="range" min="3" max="10" step="1" data-k="bpy"><span class="val" id="v-bpy"></span></div>
+      <div class="crow"><label>버튼 글자</label><input type="range" min="10" max="13" step="0.5" data-k="bfs" list="fs-ladder"><span class="val" id="v-bfs"></span></div>
+      <datalist id="fs-ladder"><option value="11"></option><option value="12"></option><option value="13"></option></datalist>
+      <div class="crow"><label>버튼↔토글 간격</label><input type="range" min="4" max="16" step="1" data-k="hgap"><span class="val" id="v-hgap"></span></div>
+      <div class="crow"><label>순서</label><select data-k="order"><option value="btn-first">버튼들 → 판매중만</option><option value="sw-first">판매중만 → 버튼들</option></select></div>
+    </div>
+    <div class="csec"><h2>③ 행 연필 (B안 축)</h2>
+      <div class="crow"><label>노출</label><select data-k="pencil"><option value="off">없음</option><option value="hover">hover 리빌(.ry-spec-edit 문법)</option><option value="always">상시</option></select></div>
+      <div class="crow"><label>라벨</label><select data-k="plabel"><option value="✎ 입력">✎ 입력</option><option value="✎">✎ (기호만)</option><option value="입력">입력 (텍스트만)</option></select></div>
+      <div class="crow"><label>색 (팔레트 폐쇄)</label><select data-k="pcol"><option value="--dim">--dim (성격 연필과 동일)</option><option value="--accent">--accent</option><option value="--muted">--muted</option></select></div>
+      <div class="crow"><label>글자 크기</label><input type="range" min="10" max="14" step="0.5" data-k="pfs"><span class="val" id="v-pfs"></span></div>
+    </div>
+    <div class="csec"><h2>④ 상세 카드 버튼 (C안 축)</h2>
+      <div class="crow"><label>[오늘 실적 입력]</label><input type="checkbox" data-k="uhaBtn"></div>
+    </div>
+    <div class="csec"><h2>⑤ 메뉴 정리</h2>
+      <div class="crow"><label>nav 「판매 현황」 제거</label><input type="checkbox" data-k="navGone"></div>
+      <div class="note">제거는 <b>입력 편입 구현과 같은 커밋</b>에서 — 그 전에 지우면 실적 입력·상품 등록이 갈 곳이 없다. 실적 조회 몫은 이미 대시보드 표(판매중만 토글)가 흡수.</div>
+    </div>
+    <div class="csec"><h2>⑥ 선택값</h2><pre id="out"></pre><button id="copy">선택값 복사</button></div>
+    <div class="csec note"><h2>⑤′ 재현 한계 각주</h2>
+      · 모달 본체(openDailyInput 폼·배치 업로드)는 재현 생략 — 클릭 = 토스트로 「무엇이 열리는지」만 시뮬(모달은 기존 그대로 재사용이 전제).<br>
+      · 배경 항공사진·좌측 연간 실적 열·2×2 자동전환 모션은 생략(우측 열 발췌 재현). 표 데이터 = 목값.<br>
+      · 행 연필의 「프로그램 미리 선택」은 openDailyInput에 프리셋 인자 소폭 확장이 필요(모달 자체는 무변).<br>
+      · blur(유리)는 브라우저 지원에 따라 근사 렌더.</div>
+  </aside>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+var frame=document.getElementById('ph');
+var DEFAULTS={hbDaily:0,hbReg:0,btnComp:'pm-fbtn',bpy:6,bfs:12,hgap:8,order:'btn-first',pencil:'off',plabel:'✎ 입력',pcol:'--dim',pfs:12,uhaBtn:0,navGone:0};
+var PRESETS=[
+ {id:'p0',nm:'현행 (입력 진입 없음)',st:{}},
+ {id:'p1',nm:'A안 헤더 버튼 ★추천',st:{hbDaily:1,hbReg:1,navGone:1}},
+ {id:'p2',nm:'B안 행 연필 + 헤더 등록',st:{hbReg:1,pencil:'hover',navGone:1}},
+ {id:'p3',nm:'A+B 하이브리드',st:{hbDaily:1,hbReg:1,pencil:'hover',navGone:1}},
+ {id:'p4',nm:'C안 상세 카드 버튼',st:{hbReg:1,uhaBtn:1,navGone:1}}
+];
+var state=Object.assign({},DEFAULTS);
+function toast(m){var t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(function(){t.classList.remove('show');},2200);}
+function apply(){
+  frame.dataset.hbtnDaily=state.hbDaily?1:0;
+  frame.dataset.hbtnReg=state.hbReg?1:0;
+  frame.dataset.pencil=state.pencil;
+  frame.dataset.uhaBtn=state.uhaBtn?1:0;
+  frame.dataset.navGone=state.navGone?1:0;
+  frame.style.setProperty('--t-bpy',state.bpy+'px');
+  frame.style.setProperty('--t-bfs',state.bfs+'px');
+  frame.style.setProperty('--t-hgap',state.hgap+'px');
+  frame.style.setProperty('--t-pfs',state.pfs+'px');
+  frame.style.setProperty('--t-pcol','var('+state.pcol+')');
+  ['hb-daily','hb-reg'].forEach(function(id){var b=document.getElementById(id);b.className=(state.btnComp==='txtbtn')?'txtbtn':state.btnComp;});
+  document.querySelectorAll('.row-in').forEach(function(e){e.textContent=state.plabel;});
+  var right=document.querySelector('.ct-right');
+  var sw=right.querySelector('.swlab');
+  if(state.order==='sw-first')right.insertBefore(sw,right.firstChild);else right.appendChild(sw);
+  document.querySelectorAll('.console [data-k]').forEach(function(el){
+    var k=el.dataset.k;
+    if(el.type==='checkbox')el.checked=!!state[k];
+    else el.value=state[k];
+    var v=document.getElementById('v-'+k); if(v)v.textContent=state[k]+(el.type==='range'?'px':'');
+  });
+  buildOut();
+}
+function markPreset(id){document.querySelectorAll('#presets .pill').forEach(function(p){p.classList.toggle('on',p.dataset.id===id);});}
+var pw=document.getElementById('presets');
+PRESETS.forEach(function(p){
+  var b=document.createElement('button');b.className='pill';b.dataset.id=p.id;b.textContent=p.nm;
+  b.onclick=function(){state=Object.assign({},DEFAULTS,p.st);markPreset(p.id);apply();};
+  pw.appendChild(b);
+});
+document.querySelectorAll('.console [data-k]').forEach(function(el){
+  el.addEventListener('input',function(){
+    var k=el.dataset.k;
+    state[k]=(el.type==='checkbox')?(el.checked?1:0):(el.type==='range'?parseFloat(el.value):el.value);
+    markPreset('');apply();
+  });
+});
+function buildOut(){
+  var lines=['[입력 기능 대시보드 편입 — 선택값 260803]',''];
+  lines.push('헤더 [실적 입력]  : '+(state.hbDaily?'노출(admin 전용)':'없음')+'   [현행 없음]');
+  lines.push('헤더 [상품 등록·변경]: '+(state.hbReg?'노출(전체)':'없음')+'   [현행 없음]');
+  if(state.hbDaily||state.hbReg){
+    lines.push('버튼 부품        : '+(state.btnComp==='pm-fbtn'?'.pm-fbtn 글래스 = 계승(정본 #12)':(state.btnComp==='ana-chip'?'.ana-chip = 계승':'텍스트 링크 = 계승')));
+    lines.push('버튼 패딩Y/글자  : '+state.bpy+'px / '+state.bfs+'px'+([11,12,13].indexOf(state.bfs)>=0?' = 실존 사다리(계승)':' ⚠ 사다리 밖'));
+    lines.push('순서             : '+(state.order==='btn-first'?'버튼들 → 판매중만 토글':'판매중만 토글 → 버튼들')+' · 간격 '+state.hgap+'px');
+  }
+  lines.push('행 연필(B)       : '+(state.pencil==='off'?'없음':(state.pencil==='hover'?'hover 리빌(.ry-spec-edit 문법 계승)':'상시'))+(state.pencil!=='off'?' · 라벨 「'+state.plabel+'」 · var('+state.pcol+') '+state.pfs+'px':''));
+  lines.push('상세 카드 버튼(C): '+(state.uhaBtn?'[오늘 실적 입력] 노출(.ana-chip)':'없음'));
+  lines.push('nav 판매 현황    : '+(state.navGone?'제거(입력 편입과 같은 커밋)':'유지')+'   [현행 유지]');
+  lines.push('');
+  lines.push('구현 매핑: 헤더 버튼 = _railYrmCardTitle(.ct 우측, 판매중만 토글과 동일 절대배치 축)');
+  lines.push(' · 클릭 = openDailyInput() / openTicketReg() 기존 모달 그대로');
+  lines.push(' · 행 연필 = _railYrmPerfTable 프로그램 셀(.ry-spec-edit 문법) → openDailyInput(프로그램 프리셋 인자 확장)');
+  lines.push(' · 메뉴 제거 = MENUS sales 항목 삭제 + _salesMenuBuild 휴면 보존(복구 = MENUS 한 줄)');
+  lines.push('기틀: 신규 색 0 · 신규 컴포넌트 0(전부 정본 계승) — ⚠ 기틀 이탈 축 없음');
+  document.getElementById('out').textContent=lines.join('\n');
+}
+document.getElementById('copy').onclick=function(){
+  var t=document.getElementById('out').textContent;
+  function done(){toast('선택값을 복사했어요 — 채팅에 붙여넣으면 그대로 구현 스펙이 됩니다');}
+  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(t).then(done,fallback);else fallback();
+  function fallback(){var r=document.createRange();r.selectNodeContents(document.getElementById('out'));var s=getSelection();s.removeAllRanges();s.addRange(r);try{document.execCommand('copy');done();}catch(e){toast('복사 실패 — 출력을 드래그해 복사해주세요');}}
+};
+markPreset('p0');apply();
+</script>
+</body>
+</html>
