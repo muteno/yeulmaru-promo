@@ -56,7 +56,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # 1607 → 1605 = 전시 집계 골격 상시화(운영자 260729 "1일차도 집계 다 생기게") — 「데이터 부족」(#ccc)·「추이 데이터 부족」(#bbb) 텍스트 폐지 → 속빈 원 골격(토큰만) 대체 -2
 BASE_HEX_INDEX = 1605
 BASE_HEX_SIGNAGE = 2          # signage/index.html: #000·#333
-BASE_ROOT_INDEX = 2           # L14(기본 팔레트 32토큰) + L1322(뉴트럴·z·c1~c6 26토큰)
+BASE_ROOT_INDEX = 2           # L46(기본 팔레트 34토큰) + L1653(뉴트럴·z·c1~c6 27토큰) — 260803 실측 정정(구 표기 L14/32·L1322/26은 위치·개수 모두 stale)
 BASE_ROOT_SIGNAGE = 0
 # 고아 토큰(정의만 있고 var() 사용 0회) — 청산은 운영자 판단 대기(지시서 260703 §6-4)
 # 260704: --muted 청산(홍보 지도 대시보드 피드 빈상태에서 사용 시작) 13→12
