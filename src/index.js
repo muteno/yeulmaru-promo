@@ -2379,6 +2379,30 @@ var index_default = {
         }
       }
 
+      // === [260803] 고객 분석 AI 채팅 — 자유 질문 폴백 (admin 전용 · 수신물 = 집계 JSON뿐 = PII 0) ===
+      // 정형 질문(지역·연령·TOP)은 프론트 로컬 엔진(_memAiLocal)이 즉답 — 여기는 그 밖의 자유 질문만 온다.
+      // 키 없으면 503(no_api_key) → 프론트 안내 폴백(/api/content/blog 선례). ⚠ 반영은 wrangler deploy 별도.
+      if (url.pathname === "/api/mem-chat" && request.method === "POST") {
+        const aiAuth = await checkAdmin(request, env, token);
+        if (!aiAuth.admin) return json({ error: "Admin only (member stats)" }, env, 403);
+        if (!env.GEMINI_API_KEY && !env.ANTHROPIC_API_KEY && !env.ANTHROPIC_AUTH_TOKEN) return json({ error: "no_api_key", note: "GEMINI_API_KEY 또는 ANTHROPIC_* 미설정" }, env, 503);
+        let mb = {};
+        try { mb = await request.json(); } catch (e) {}
+        const mq = String(mb.q || "").trim().slice(0, 500);
+        if (!mq) return json({ error: "질문이 필요해요" }, env, 400);
+        let mstats = "{}";
+        try { mstats = JSON.stringify(mb.stats || {}); } catch (e) {}
+        if (mstats.length > 40000) return json({ error: "stats too large" }, env, 400);
+        const msys = "너는 예울마루(여수 예술의전당) 회원 통계 도우미다. 아래 회원 집계 JSON(개인정보 없음·인원수 집계뿐)만 근거로 한국어로 간결히(3문장 이내) 답한다. 숫자는 집계에서 정확히 취하고, 집계로 알 수 없는 것은 추정하지 말고 「집계에 없는 정보」라고 답한다.";
+        try {
+          const mtext = await llmText(env, msys, "회원 집계 JSON:\n" + mstats + "\n\n질문: " + mq, 700);
+          return json({ text: mtext }, env);
+        } catch (e) {
+          console.error("[mem-chat]", e);
+          return json({ error: String((e && e.message) || e) }, env, 502);
+        }
+      }
+
       // === [DB통합/이관] 운영 데이터 — 프로모 엑셀 "운영_*" 시트가 source of truth (Workbook API) ===
       // GET ?sheet=<name> → 운영_<name> 시트 {headers,rows,count}. GET (no param) → 운영_* 시트 목록.
       // POST {sheet,headers,rows} (admin) → 운영_<name> 시트 전체 교체. (dash push / 이관 / 일일입력 폼 공용)
