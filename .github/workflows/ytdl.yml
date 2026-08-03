@@ -1,34 +1,69 @@
 name: 링크 자료수집 영상 저장 (yt-dlp · repository_dispatch)
 
-# 앱(콘텐츠 제작 ▸ 링크 자료수집)이 repository_dispatch[ytdl]로 {d:{id,url,title}}를 던지면
+# 앱(콘텐츠 제작 ▸ 링크 자료수집)이 repository_dispatch[ytdl]로 {d:{id,url,title,q}}를 던지면
 # 러너가 yt-dlp로 영상을 받아 릴리스 ytdl-drops 자산(<id>.mp4)으로 올린다.
 # 앱은 /api/linkgrab/ytstat 폴링 → /api/linkgrab/ytfile(서명 URL 발급)로 브라우저가 직접 내려받는다.
-# 실패 시 <id>.err.txt 자산을 올려 앱이 실패를 표시. 매 실행 끝에 7일 지난 자산은 자동 정리.
-# ⚠ 운영 원칙(운영자 260721): 권리 보유·이용 허가 콘텐츠 전용 — 앱에서 동의 체크 후에만 요청 가능.
+# q = 화질(max·1080·720·480 · 기본 max) — 앱 화질 선택칩이 실어보낸다(260803).
+# 실패 시 <id>.err.txt 자산을 올려 앱이 **실패 사유를 그대로** 표시(260803 개정 — 구판은 원인과 무관하게
+# 「초대형(6GB 초과)」이라고만 떠서 운영자가 용량 문제로 오해했다. 실제 원인은 유튜브 봇 차단이었다).
+# 매 실행 끝에 7일 지난 자산은 자동 정리.
 
 on:
   repository_dispatch:
     types: [ytdl]
+  workflow_dispatch:            # 손 테스트용 — 봇 차단은 러너 IP에서만 재현돼 로컬 검증이 불가능하다(260803 실측)
+    inputs:
+      url: { description: '영상 주소', required: true }
+      q:   { description: '화질 max|1080|720|480', required: false, default: 'max' }
+      id:  { description: '자산 id(비우면 수동테스트용 고정값)', required: false, default: 'vmanualtest00000' }
 
 permissions:
   contents: write
 
 concurrency:
-  group: ytdl-${{ github.event.client_payload.d.id }}
+  group: ytdl-${{ github.event.client_payload.d.id || inputs.id }}
   cancel-in-progress: false
 
 jobs:
   fetch:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      VID_ID: ${{ github.event.client_payload.d.id }}
-      VID_URL: ${{ github.event.client_payload.d.url }}
+      VID_ID: ${{ github.event.client_payload.d.id || inputs.id }}
+      VID_URL: ${{ github.event.client_payload.d.url || inputs.url }}
+      VID_Q: ${{ github.event.client_payload.d.q || inputs.q || 'max' }}
       REPO: ${{ github.repository }}
+      MAXSIZE: 6000m
+      # 유튜브 쿠키(넷스케이프 형식 전문)를 리포 시크릿 YT_COOKIES에 넣어두면 봇 차단이 확실히 풀린다.
+      # 없어도 동작한다(아래 클라이언트 사다리로 최선을 다한다) — 있으면 성공률이 크게 오른다.
+      YT_COOKIES: ${{ secrets.YT_COOKIES }}
     steps:
-      - name: yt-dlp 설치
-        run: python3 -m pip install --quiet --upgrade yt-dlp
+      - name: yt-dlp · PO 토큰 공급자 설치
+        run: python3 -m pip install --quiet --upgrade yt-dlp bgutil-ytdlp-pot-provider
+
+      # 왜 필요한가(260803 실측): 러너 IP에서 yt-dlp가 「Sign in to confirm you're not a bot」으로 2초 만에 즉사했다.
+      #  · JS 런타임 없음 = nsig 복호 불가 → "some formats may be missing" 경고 + 포맷 누락
+      #  · GVS PO 토큰 없음 = 미디어 URL이 HTTP 403
+      # deno 하나로 두 축(JS 챌린지 공급자 + bgutil script-deno PO 토큰 공급자)이 동시에 켜진다.
+      - uses: denoland/setup-deno@v2
+        continue-on-error: true
+        with:
+          deno-version: v2.x
+
+      - name: PO 토큰 공급자 준비(deno 스크립트 모드)
+        continue-on-error: true          # 실패해도 다운로드는 그대로 시도한다(보강 장치일 뿐 = fail-soft)
+        run: |
+          set -e
+          git clone -q --depth 1 --branch 1.3.1 \
+            https://github.com/Brainicism/bgutil-ytdlp-pot-provider.git /tmp/bgutil
+          mkdir -p ~/bgutil-ytdlp-pot-provider
+          cp -r /tmp/bgutil/server ~/bgutil-ytdlp-pot-provider/
+          cd ~/bgutil-ytdlp-pot-provider/server
+          deno install --allow-scripts --quiet
+          # 사전 1회 호출 = 의존성 캐시 워밍업. 안 하면 첫 호출이 yt-dlp의 15초 타임아웃에 걸려
+          # 공급자가 통째로 '없음(unavailable)'으로 떨어진다(로컬 실측 260803).
+          deno run --allow-env --allow-net --allow-ffi --allow-write --allow-read src/generate_once.ts --version
 
       - name: 릴리스 보관함 준비 (ytdl-drops)
         run: |
@@ -41,16 +76,41 @@ jobs:
         run: |
           set +e
           mkdir -p out
-          # 주입 방지: URL·ID는 env 경유로만 인용. 1080p 이하 mp4 우선, 재생목록 통짜 금지.
-          # 상한 6GB = 러너 디스크 보호용 — 릴리스 자산 한계(2GB/파일)는 아래 자동 분할이 해결.
-          yt-dlp -f "bv*[ext=mp4][height<=1080]+ba[ext=m4a]/b[ext=mp4]/b" \
-            --merge-output-format mp4 --max-filesize 6000m --no-playlist \
-            -o "out/${VID_ID}.%(ext)s" "$VID_URL" 2> out/err.log
-          rc=$?
+          # 화질 → 포맷 선택자. mp4/m4a 우선, 없으면 아무 코덱이나 받아 --remux-video mp4 로 mp4 컨테이너 보장.
+          # (구판은 mp4·1080 고정이라 ⓐ 최고화질 VP9·AV1 판을 통째로 못 봤고 ⓑ 병합이 mkv로 떨어지면
+          #  아래 mv 가 .mp4 로 개명해 내보냈다 = 확장자가 거짓말하는 파일.)
+          case "$VID_Q" in
+            1080|720|480) FMT="bv*[ext=mp4][height<=${VID_Q}]+ba[ext=m4a]/bv*[height<=${VID_Q}]+ba/b[height<=${VID_Q}]/b" ;;
+            *)            FMT="bv*[ext=mp4]+ba[ext=m4a]/bv*+ba/b" ;;
+          esac
+          echo "화질=$VID_Q · 포맷=$FMT"
+
+          COOKIE_ARGS=""
+          if [ -n "$YT_COOKIES" ]; then printf '%s' "$YT_COOKIES" > /tmp/ck.txt; COOKIE_ARGS="--cookies /tmp/ck.txt"; fi
+
+          # 클라이언트 사다리 — 유튜브가 클라이언트별로 다르게 막는다(260803 실측: 기본=미디어 403 ·
+          # web_safari=봇 확인 · tv=DRM). 하나가 막혀도 다음이 뚫으면 되니 성공할 때까지 순서대로 시도한다.
+          : > out/err.log
+          rc=1
+          for CL in "" "web_safari" "mweb" "tv_simply" "android_vr"; do
+            if [ -n "$CL" ]; then EA="--extractor-args youtube:player_client=$CL"; else EA=""; fi
+            echo "--- 시도: client=${CL:-기본}" >> out/err.log
+            # shellcheck disable=SC2086
+            yt-dlp -f "$FMT" --merge-output-format mp4 --remux-video mp4 \
+              --max-filesize "$MAXSIZE" --no-playlist --retries 3 --fragment-retries 5 \
+              $EA $COOKIE_ARGS -o "out/${VID_ID}.%(ext)s" "$VID_URL" 2>> out/err.log
+            rc=$?
+            f=$(ls out/"${VID_ID}".* 2>/dev/null | grep -Ev "err|\.p[0-9]" | head -1)
+            if [ $rc -eq 0 ] && [ -n "$f" ]; then break; fi
+            rm -f out/"${VID_ID}".mp4 out/"${VID_ID}".mkv out/"${VID_ID}".webm out/"${VID_ID}".part 2>/dev/null
+          done
           set -e
+
           f=$(ls out/"${VID_ID}".* 2>/dev/null | grep -Ev "err|\.p[0-9]" | head -1)
           if [ $rc -ne 0 ] || [ -z "$f" ]; then
-            tail -c 800 out/err.log > "out/${VID_ID}.err.txt" 2>/dev/null || echo "다운로드 실패" > "out/${VID_ID}.err.txt"
+            # 앱이 그대로 보여줄 사유 = ERROR 줄 우선(사다리 로그에서 원인만 추림) + 꼬리 일부
+            { grep -a "^ERROR" out/err.log | tail -3; echo "---"; tail -c 400 out/err.log; } \
+              > "out/${VID_ID}.err.txt" 2>/dev/null || echo "다운로드 실패" > "out/${VID_ID}.err.txt"
             gh release upload ytdl-drops "out/${VID_ID}.err.txt" -R "$REPO" --clobber
             echo "::warning::yt-dlp 실패 — err 자산 업로드"
             exit 0
