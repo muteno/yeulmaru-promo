@@ -6928,7 +6928,7 @@ function _srailRenderInner(els){
   // [260724 운영자] 2×2 우하단 = 「사업 판매현황」 자동전환 — 상단 목록/드릴 분기와 독립으로 매 렌더 동기(biz 모드에서만 노출, 그 외 숨김·정지)
   try{ _srailUhaSync(actives); }catch(_e){ console.warn('[uha sync]',_e); }
   // [260803 운영자] 「기존에 진행한 공연들까지 다 뜨고, 체크 토글로 판매중만」 — 대시보드 표(#rail-yrm-list) 데이터에
-  //   지난(종료) 프로그램을 _past=1로 합류(실적 조회 흡수 1단계). 표에서만 노출·「판매중만」 토글(_ryLiveOnly)이 거른다 —
+  //   지난(종료) 프로그램을 _past=1로 합류(실적 조회 흡수 1단계). 표에서만 노출·「판매중」 토글(_ryLiveOnly)이 거른다 —
   //   회전 상세(_srailUhaSync 위)·캘린더 레일 카드(아래 actives 렌더)는 판매중 전용 그대로. 장소·판매 N일차 조인 = actives와 동일 문법.
   var pasts=[];
   try{
@@ -7439,7 +7439,7 @@ function _ryExRow(e){
 }
 function _railYrmTableHtml(actives){
   if(!actives)return '<div class="rail-yrm-empty">'+_ldHtml(14)+'불러오는 중</div>';
-  // [260803 운영자] 「판매중만」 체크 토글 — 켬(기본 · 260803 2차 「판매중만을 기본값으로」) = 판매중만(종전 표와 동일) · 끔 = 지난(종료) 프로그램까지 전체(실적 조회 흡수).
+  // [260803 운영자] 「판매중」 체크 토글 — 켬(기본 · 260803 2차 「판매중만을 기본값으로」) = 판매중만(종전 표와 동일) · 끔 = 지난(종료) 프로그램까지 전체(실적 조회 흡수).
   //   전체여도 판매중이 위(종전 시작일순 그대로), 지난 건 그 아래 종료일 오름차순(260803 2차) — 모니터링 축은 안 밀린다.
   if(_ryLiveOnly())actives=actives.filter(function(x){return !x._past;});
   var perfs=actives.filter(function(x){return x._kind!=='ex';});
@@ -7448,6 +7448,7 @@ function _railYrmTableHtml(actives){
   var gf=_bizmState.genreFilter||null;   // 장르 필터 계승(기존 판매현황 표 · [260803] 성격 필터 = 축 폐지)
   var keep=function(x){   // 필터 판정도 한 함수 — 공연·전시가 같은 축(장르 = genre)으로 걸러진다
     if(gf&&(x.genre||'기타')!==gf)return false;
+    if(!_ryThisYear(x))return false;   // [260804 운영자 「올해건만 나오게」] 올해 축 필터 — 전시도 _ryExRow 정규화 뒤라 공연과 같은 코드를 탄다
     return true;
   };
   perfs=perfs.filter(keep); exs=exs.filter(keep);
@@ -7471,10 +7472,27 @@ function _railYrmTableHtml(actives){
        +grp('교육','--green',edus,_railYrmPerfTable);
   return h;
 }
-// [260803 운영자] 「판매중만」 체크 토글 — 체크(기본 · 260803 2차 「판매중만을 기본값으로」) = 판매중만(종전 표와 동일),
+// [260804 운영자 「올해건만 나오게 해줘」] 표(#rail-yrm-list) 노출 축 = **올해(현재 연도)** 프로그램만.
+//   판매중 축을 흡수한 표에 지난 해(캡처 260804 = 2025년 12.21·12.24) 종료분까지 섞여 나오던 것을 자른다.
+//   판정 = **기간 겹침**(시작연도 ≤ 올해 ≤ 종료연도) — 연말↔연초에 걸친 프로그램(12.28~1.3)은 올해 몫으로 살린다(경계에서 통째로 사라지는 사고 방지).
+//   날짜가 **전무**한 행은 판정 불가라 남긴다 — 마스터 날짜 공백으로 status가 흔들리는 공연이 표에서 조용히 증발하지 않게(_salesBuild 'unknown' 방어와 같은 축).
+//   기준 연도는 렌더할 때마다 새로 읽는다 = 해가 바뀌면 자동으로 다음 해 축(고정 상수 없음).
+function _ryThisYear(x){
+  if(!x)return true;
+  var y=new Date().getFullYear();
+  var s=(x.startDate&&x.startDate.getFullYear)?x.startDate.getFullYear():null;
+  var e=(x.endDate&&x.endDate.getFullYear)?x.endDate.getFullYear():null;
+  if(s===null&&e===null)return true;   // 날짜 전무 = 남긴다
+  if(s===null)s=e; if(e===null)e=s;
+  if(e<s){var t=s;s=e;e=t;}            // 역전 입력 방어(시작>종료) — 겹침 판정이 뒤집히지 않게
+  return s<=y&&y<=e;
+}
+// [260803 운영자] 「판매중」 체크 토글 — 체크(기본 · 260803 2차 「판매중만을 기본값으로」 · 260804 「판매중이 기본값으로 켜진 거로」) = 판매중만(종전 표와 동일),
 //   해제 = 지난(종료) 프로그램까지 전체 노출(운영자 「기존에 진행한 공연들까지 다 뜨고」 — 실적 조회 흡수). 부품 = 정본 스위치 .sw/.sw-k 그대로(기틀 §2-3 「ON/OFF 토글 전부 이걸 재사용」) · 신규 색·토큰 0.
 //   상태 = 기기 기억(localStorage — 열 폭 ryColW와 같은 축 · 미저장 = 켬) + 메모리 폴백(프라이빗 모드) · 회전 상세·캘린더 레일 카드는 이 토글 무관(판매중 전용).
-var _RY_LIVE_KEY='ryLiveOnly', _ryLiveMem=null;
+//   [260804] 키를 ryLiveOnly → **ryLiveOnly2**로 올린다 — 코드 기본값은 260803부터 이미 켬이었는데, 그 전에 손으로 끈 기기는
+//   구 키에 '0'이 남아 있어 계속 꺼진 채로 열렸다(운영자 캡처 = OFF). 키를 새로 파야 「기본 = 켬」이 실제 화면에 선다. 구 키는 읽지 않는다.
+var _RY_LIVE_KEY='ryLiveOnly2', _ryLiveMem=null;
 function _ryLiveOnly(){ if(_ryLiveMem!==null)return _ryLiveMem; try{return localStorage.getItem(_RY_LIVE_KEY)!=='0';}catch(_e){return true;} }
 function _ryLiveToggle(){
   var v=!_ryLiveOnly(); _ryLiveMem=v;
@@ -7487,11 +7505,12 @@ function _ryLiveToggle(){
 }
 function _railYrmCardTitle(){
   // [260729 운영자] 구 '진행 중인 프로그램' 개명 → 「프로그램 별 판매 추이」 · 블릿(.ct-bul) = 좌 보드 두 카드와 같은 부품(강조색1)
-  // [260803 운영자] 우측 = 「판매중만」 체크 토글 — 절대배치(.bizm-card>.ct position:relative 기존 규칙) = 제목 흐름·이젤 기하 무접촉.
+  // [260803 운영자] 우측 = 「판매중」 체크 토글 — 절대배치(.bizm-card>.ct position:relative 기존 규칙) = 제목 흐름·이젤 기하 무접촉.
+  //   [260804 운영자 「판매중만 > 판매중」] 라벨에서 '만' 삭제 — 스위치가 이미 켬/끔을 말하므로 한정사가 겹쳤다(글자만 축소, 부품·자리·색 무접촉).
   var live=_ryLiveOnly();
   return '<span class="ct-bul"></span>프로그램 별 판매 추이'
-    +'<span class="ry-live-tg" role="switch" aria-checked="'+(live?'true':'false')+'" tabindex="0" onclick="_ryLiveToggle()" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click();}" title="체크 = 판매중 프로그램만 · 해제 = 지난(종료) 프로그램까지 전체" style="position:absolute;right:14px;top:10px;display:'+((typeof _ryDrill!=='undefined'&&_ryDrill.key)?'none':'inline-flex')+';align-items:center;gap:7px;cursor:pointer;user-select:none;font-size:11px;font-weight:700;color:var(--dim)">'
-    +'판매중만<span class="sw'+(live?' on':'')+'"><span class="sw-k"></span></span></span>';
+    +'<span class="ry-live-tg" role="switch" aria-checked="'+(live?'true':'false')+'" tabindex="0" onclick="_ryLiveToggle()" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click();}" title="체크 = 판매중 프로그램만 · 해제 = 올해 지난(종료) 프로그램까지" style="position:absolute;right:14px;top:10px;display:'+((typeof _ryDrill!=='undefined'&&_ryDrill.key)?'none':'inline-flex')+';align-items:center;gap:7px;cursor:pointer;user-select:none;font-size:11px;font-weight:700;color:var(--dim)">'
+    +'판매중<span class="sw'+(live?' on':'')+'"><span class="sw-k"></span></span></span>';
 }
 // ── [260801 운영자 · Q.38] 3열 숫자 세로선 보증 — 그룹 표 폭 통일(JS 폴백) ──────────────────────
 // 공연·전시·교육은 그룹(.ry-grp-bd)마다 별개 <table>이라, 3열 숫자(판매율 %·전시 누적 관객수)의 일의 자리
@@ -7674,7 +7693,7 @@ function _ryDrillOpen(want,silent){
 function _ryBackBtn(box,on){
   try{
     var ct=box&&box.parentNode&&box.parentNode.querySelector(':scope > .ct'); if(!ct)return;
-    var tg=ct.querySelector('.ry-live-tg'); if(tg)tg.style.display=on?'none':'';   // [260803] 상세 중엔 우측 「판매중만」 토글 숨김 — ‹(목록으로)와 같은 자리 겹침 방지
+    var tg=ct.querySelector('.ry-live-tg'); if(tg)tg.style.display=on?'none':'';   // [260803] 상세 중엔 우측 「판매중」 토글 숨김 — ‹(목록으로)와 같은 자리 겹침 방지
     var old=ct.querySelector('.modal-x'); if(old)old.parentNode.removeChild(old);
     if(!on)return;
     var b=document.createElement('button');
