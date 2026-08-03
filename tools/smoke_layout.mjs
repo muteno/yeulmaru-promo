@@ -45,19 +45,31 @@ const MEASURE = `(()=>{
     const box=document.querySelector(sel+' [data-bizmbox]');
     if(!box||box.offsetParent===null)return null;
     const r=box.getBoundingClientRect();
-    // [260803] 「흰 도형」 = 실제로 흰 게 그려진 것만. #rail-yrm-uha(회전 상세 슬롯)는 본문(#srail-uha-body)이
-    //   비면 자기 여백 4px만 있는 **투명** 껍데기라 흰 도형이 아니다 — 구판은 이걸 세어 우 목록 카드가 좌보다
-    //   18px 높이 끝난 상태를 Δ0으로 통과시켰다(운영자 260803 캡처 = 이 게이트의 사각). 이제 빈 슬롯은 제외한다.
-    const painted=e=>{
-      if(e.id!=='rail-yrm-uha')return true;
-      const b=e.querySelector('#srail-uha-body');
-      return b?b.children.length>0:true;
-    };
-    const cands=[...box.querySelectorAll('.bizm-card, .bizm-strip, [data-bizmfill], #rail-yrm-uha')]
-      .filter(e=>e.offsetParent!==null&&e.getBoundingClientRect().height>1&&painted(e));
-    const last=cands.length?cands.reduce((a,b)=>b.getBoundingClientRect().bottom>a.getBoundingClientRect().bottom?b:a):null;
+    // [260803 2차] 「흰 도형」 판정을 **클래스 목록 → 실제로 칠해졌는지**로 바꾼다(운영자 「다른 각 창도 넘어간 거 많음」).
+    //   구판 후보 = .bizm-card/.bizm-strip/[data-bizmfill]/#rail-yrm-uha 뿐이라 두 겹의 사각이 있었다:
+    //     ① 투명한 껍데기(#rail-yrm-uha 빈 슬롯 4px)를 흰 도형으로 셌다 → 우 카드가 18px 높이 끝나도 Δ0 통과(260803 1차).
+    //     ② 그 클래스가 없는 면(4면 고객 분석 = 인라인 스타일 카드)은 후보 0 → **아예 검사를 안 했다**(4면 좌 열이
+    //        이젤을 뚫고 유리 하단 테두리까지 내려온 Δ18을 못 잡음 — 운영자 실측 제보).
+    //   새 판정 = 배경 alpha≥.5 & 밝은(≥240) 요소 중 **조상 overflow로 잘리는 하단**(패딩박스 하단)이 가장 아래인 것.
+    //   = 눈에 보이는 흰색의 마지막 선. 스크롤 중인 목록 안 행·스크롤 박스 안 카드도 잘린 위치로 잡힌다.
+    const lightBg=e=>{const m=/^rgba?\\(([^)]+)\\)/.exec(getComputedStyle(e).backgroundColor);if(!m)return false;
+      const p=m[1].split(',').map(parseFloat), a=p.length>3?p[3]:1;
+      return a>=0.5&&p[0]>=240&&p[1]>=240&&p[2]>=240;};
+    const clipBottom=el=>{let b=el.getBoundingClientRect().bottom,n=el.parentElement;
+      while(n){const c=getComputedStyle(n);
+        if(/auto|scroll|hidden/.test(c.overflowY)){const rr=n.getBoundingClientRect();b=Math.min(b,rr.bottom-(parseFloat(c.borderBottomWidth)||0));}
+        if(n===box)break;n=n.parentElement;}
+      return b;};
+    let white=null;
+    box.querySelectorAll('*').forEach(e=>{
+      if(e.offsetParent===null)return;
+      const rr=e.getBoundingClientRect();
+      if(rr.height<2||rr.width<20||!lightBg(e))return;
+      const b=clipBottom(e);
+      if(b>r.top&&(white===null||b>white))white=b;
+    });
     return {top:+r.top.toFixed(1), bottom:+r.bottom.toFixed(1), innerBottom:+inner(box).toFixed(1),
-      white:last?+last.getBoundingClientRect().bottom.toFixed(1):null,
+      white:white===null?null:+white.toFixed(1),
       overflow:+(box.scrollHeight-box.clientHeight).toFixed(1)};
   };
   return {page:(window._bizmState||{}).page, wide:(typeof _bizBookWide==='function')?_bizBookWide():null, L:col('#biz-main'), R:col('#rail-yrm')};
@@ -85,19 +97,18 @@ function judge(tag, m, fails) {
   const dTop = Math.abs(m.L.top - m.R.top), dBot = Math.abs(m.L.bottom - m.R.bottom);
   if (dTop > TOL_LINE) fails.push(`${tag}: 유리박스 상단선 Δ${dTop.toFixed(1)}px (좌 ${m.L.top} / 우 ${m.R.top})`);
   if (dBot > TOL_LINE) fails.push(`${tag}: 유리박스 하단선 Δ${dBot.toFixed(1)}px (좌 ${m.L.bottom} / 우 ${m.R.bottom})`);
-  // 눈에 보이는 하단 = min(흰 도형 하단, 박스 안선) — 내용이 넘쳐 박스 안에서 스크롤되는 열은 안선에서 잘려 보이기 때문(260802d 정본)
-  const vis = c => (c.white == null ? null : Math.min(c.white, c.innerBottom));
-  const vL = vis(m.L), vR = vis(m.R);
-  if (vL != null && vR != null) {
-    const dW = Math.abs(vL - vR);
+  // [260803 2차] m.*.white = 이미 「눈에 보이는(잘린) 흰 하단」 — 그대로 비교한다.
+  //   구판은 min(흰, 안선)으로 깎아 봤는데, 그러면 **박스가 스크롤 중일 때 흰색이 유리 하단 여백(18)까지
+  //   내려온 것**(4면 좌 열 실측 1047 vs 안선 1029)이 안선으로 보정돼 사라졌다 = 운영자가 본 어긋남을 못 잡음.
+  if (m.L.white != null && m.R.white != null) {
+    const dW = Math.abs(m.L.white - m.R.white);
     if (dW > TOL_LINE) fails.push(`${tag}: 흰 카드 하단 수평선 Δ${dW.toFixed(1)}px (좌 ${m.L.white} / 우 ${m.R.white} · 안선 ${m.L.innerBottom})`);
   }
   for (const [side, c] of [['좌', m.L], ['우', m.R]]) {
     if (c.white == null) continue;
-    const gap = c.innerBottom - c.white;        // +: 빈 유리(불량) · −: 안선 아래로 계속됨
+    const gap = c.innerBottom - c.white;        // +: 빈 유리(불량) · −: 유리 하단 여백까지 흰색이 내려옴(불량)
     if (gap > TOL_GAP) fails.push(`${tag}: ${side} 흰 도형 아래 빈 유리 ${gap.toFixed(1)}px (안선 ${c.innerBottom} / 흰 ${c.white})`);
-    // 넘침은 박스 내부 스크롤이 정본 — 스크롤이 실제로 걸려 있으면 정상, 스크롤 없이 뚫고 나갔으면 잘림(불량)
-    if (gap < -TOL_GAP && c.overflow <= 1) fails.push(`${tag}: ${side} 흰 도형이 박스 밖으로 ${Math.abs(gap).toFixed(1)}px 넘침(내부 스크롤 없음 = 잘림)`);
+    if (gap < -TOL_GAP) fails.push(`${tag}: ${side} 흰 도형이 안선 아래로 ${Math.abs(gap).toFixed(1)}px 내려옴(유리 하단 여백 잠식 = 박스 스크롤 클립선까지 내려온 상태)`);
   }
 }
 

@@ -70,4 +70,19 @@ export const FEED_SCRIPT = `(()=>{
   //   「본문 없는 빈 슬롯 4px + 카드 여백 14가 우 흰 카드를 18px 밀어올리는」 실제 운영 화면 상태가
   //   스모크에서 재현되지 않았다(운영자 260803 캡처). 목데이터라 실API·PII 미접촉은 그대로.
   if(typeof _srailUhaSync==='function')_srailUhaSync(window._mockActives());
+  // [260803 2차] 4면(고객 분석) 좌 열 목데이터 — 이게 없으면 그 면은 「회원 데이터를 못 불러왔어요」 한 줄만 떠서
+  //   흰 카드가 아예 없다 = 게이트가 4면을 검사한다고 돌지만 실제로는 아무것도 못 잰다(운영자 「넘어간거 많음」).
+  //   값은 **완전 허구**(집계 모양만 재현: 주소1·주소2·연령대 3열) — 실 시트·PII 미접촉.
+  if(typeof _memState!=='undefined'){
+    var SIDO=[['전남광주통합특별시','여수시'],['전남광주통합특별시','순천시'],['전남광주통합특별시','광양시'],
+              ['전남광주통합특별시','광주 동구'],['서울특별시','강남구'],['경기도','성남시'],['부산광역시','해운대구']];
+    var AGES=['10세 미만','10대','20대','30대','40대','50대','60대','70대'];
+    var mrows=[]; var sd=7;
+    function rr(){ sd=(sd*1103515245+12345)&0x7fffffff; return sd/0x7fffffff; }
+    for(var mi=0;mi<520;mi++){
+      var g=SIDO[Math.floor(rr()*SIDO.length)];
+      mrows.push({'주소1':(rr()<0.04?'':g[0]),'주소2':g[1],'연령대':AGES[Math.floor(rr()*AGES.length)]});
+    }
+    window._memState={rows:mrows,ts:1,schemaWarn:''};
+  }
 })()`;
