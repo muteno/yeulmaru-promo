@@ -32,7 +32,7 @@
 <link rel="preload" as="image" href="image/bg-yeulmaru.webp" fetchpriority="high">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=DM+Serif+Display&display=swap" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.min.css" rel="stylesheet">
-<!-- PWA — 설치형 웹앱 (260704). 서비스워커는 의도적으로 미사용: 캐시 스테일(옛 index.html) 방지, 설치는 manifest만으로 동작 -->
+<!-- PWA — 설치형 웹앱 (260704). 서비스워커 = 260729 접속 안정용 도입(sw.js · HTML 네트워크 우선이라 스테일 없음, body 끝에서 등록) — 구 「의도적 미사용」 주석은 낡은 정보라 정정(Q39) -->
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#4A4DE7">
 <meta name="mobile-web-app-capable" content="yes">
@@ -2300,6 +2300,36 @@ body.ry-rzing,body.ry-rzing *{cursor:col-resize !important;user-select:none}
 ::-webkit-scrollbar-thumb:horizontal{background:rgba(0,0,0,.15)}   /* 가로 = 상시 표시 유지(구 정책 「가로는 상시 8px 발견성」 계승 — 가로바는 폭 토글 대상이 아니었어 시프트도 없다) */
 html::-webkit-scrollbar-thumb{background:rgba(0,0,0,.15)}
 [data-sbmove="1"]::-webkit-scrollbar-thumb{background:rgba(0,0,0,.28)}
+/* ═══ [Q39 260803 운영자 「노뮤트 에디터 기능 프로모 배선」] 입력칸 클립(복사·붙여넣기·지우개/되돌리기) ═══
+   원본 = nomute-editor viewer/nm-clip.css(운영자 260627~260803 계약) — 기하·상태 로직 계승, 색 = 이 레포 :root 토큰 재스킨(기틀 §3.5② · 신규 hex 0).
+   형태 축 = 정본 .icon-btn(원형 유리 아이콘 버튼)의 「입력칸 상단 테두리 걸침」 26px 소형판. 「버튼 내 SVG·이모지 금지」는 텍스트 라벨 버튼(.btn) 축 — 순수 아이콘 원형은 .icon-btn 정본 축(§2 #4·기존 #memo-btn 동형).
+   ⚠ .iobtn-edge에 backdrop-filter 금지 = 원본 계약(입력칸 위 오버레이 블러는 타이핑마다 재샘플 번쩍임 · 노뮤트 감사8인 260704) — 「blur 8px 추가」로 고치지 말 것. */
+.iobtn{position:absolute;top:8px;right:8px;width:30px;height:30px;display:grid;place-items:center;padding:0;color:var(--dim);background:var(--glass-surface);border:1px solid var(--border);border-radius:9px;cursor:pointer;z-index:2;transition:transform .12s,background .15s,color .15s,border-color .15s,opacity .15s;-webkit-tap-highlight-color:transparent}
+.iobtn:hover{background:var(--accent-light);color:var(--accent)}
+.iobtn:active{transform:scale(.98)}
+.iobtn.ok{background:var(--accent);color:var(--surface-solid);border-color:var(--accent)}
+.iobtn svg{display:block}
+.iobtn-edge{top:0;right:14px;transform:translateY(-50%);width:26px;height:26px;border-radius:50%;opacity:.78;background:var(--glass-surface);border-color:var(--border2);color:var(--dim);box-shadow:0 2px 8px rgba(0,0,0,0.04)}
+.iobtn-edge:hover{opacity:1;background:var(--accent-light);color:var(--accent);border-color:var(--accent-glow)}
+.iobtn-edge:active{transform:translateY(-50%) scale(.98);color:var(--accent);border-color:var(--accent-glow)}
+.iobtn-edge.ok{opacity:1;background:var(--glass-surface);color:var(--accent);border-color:var(--accent-glow)}
+.iobtn-edge svg{width:13px;height:13px}
+.iobtn-pp{right:46px}                          /* 붙여넣기 = 항상 노출 · 지우개 좌측 (가로 사다리 14/46/78 = 원본 계승) */
+.iobtn-erase{right:14px}                       /* 지우개 = 최우측 · 누르면 입력 비움 */
+.iobtn-off{opacity:.3;pointer-events:none}     /* 빈칸 = 지울 것 없음 → 흐리게·비활성 */
+.iobtn-undo{color:var(--text);border-color:var(--border2);opacity:1}   /* 지움 직후 ~10초 = 되돌리기(또렷한 픽토그램) */
+.iobtn-copy{right:46px}                        /* 지우개 없는 입력 = [복사 46 | 붙여넣기 14] */
+.iobtn-copy-e{right:78px}                      /* 지우개 동반 = [복사 78 | 붙여넣기 46 | 지우개 14] */
+.iobtn-hide{display:none}                      /* 내용 비면 복사 숨김(붙여넣기·지우개는 유지) */
+/* 붙여넣기 폴백 모달(readText 막힌 환경 = 길게 눌러 붙여넣기) — 원본 pastefb 골격에 정본 .u-backdrop/.u-pop 값 계승 · 버튼 = 정본 .btn 그대로 써서 별도 버튼 규칙 0 */
+.pastefb{border:none;outline:none;background:transparent;max-width:100vw;max-height:100dvh;width:auto;padding:0;margin:auto}
+.pastefb::backdrop{background:var(--backdrop);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
+.pastefb-box{width:min(360px,90vw);background:var(--glass-surface);border:1px solid var(--glass-bd);-webkit-backdrop-filter:blur(28px) saturate(160%);backdrop-filter:blur(28px) saturate(160%);border-radius:var(--r-pop);box-shadow:var(--elev);padding:16px;display:flex;flex-direction:column;gap:12px}
+.pastefb-msg{font-size:13px;color:var(--neutral-text);line-height:1.5}
+.pastefb-msg b{color:var(--accent)}
+.pastefb-ta{width:100%;box-sizing:border-box;min-height:90px;resize:none;padding:10px 14px;border:1.5px solid var(--border);border-radius:12px;background:var(--surface-solid);color:var(--text);font-family:inherit;font-size:14px;outline:none}
+.pastefb-ta:focus{border-color:var(--accent);box-shadow:0 0 0 4px var(--accent-glow)}   /* .modal input:focus 정본 문법 계승 */
+.pastefb-row{display:flex;gap:8px;justify-content:flex-end}
 </style>
   <!-- MSAL.js for Microsoft OAuth (OneDrive 폴더 트리) — 공식 docs 권장 이중 fallback -->
   <script src="https://alcdn.msauth.net/browser/2.35.0/js/msal-browser.min.js"></script>
@@ -28169,6 +28199,217 @@ document.getElementById('confirm-modal').addEventListener('click',e=>{if(e.targe
 </div>
 </div>
 </div>
+<!-- ═══ [Q39 260803 운영자 「노뮤트 에디터 기능 프로모 배선」] ① 입력칸 클립 ═══
+  원본 = nomute-editor viewer/nm-clip.js(운영자 260627~260803 계약: 캐럿 삽입 붙여넣기·지움/붙여넣기 공용 10초 되돌리기·아이콘 번쩍임 가드·비활성 칸 가드)
+       + nm-svg.js 아이콘 5상수 + ly.html 개량 clipPasteFallback(visualViewport 키보드 클램프판 — SSOT판보다 모바일 키보드에서 우수).
+  각색 2점(로직 무변경): ⓐ 이 앱은 입력칸 ~95%가 런타임 innerHTML 생성이라 에디터의 「생성처 수동 부착」 대신
+    초기 스윕 + MutationObserver + focusin 안전망 3층 자동부착(멱등 = el._clipBound). 새 입력칸 = 자동 편입, 빼려면 data-noclip 1속성.
+  ⓑ 플렉스 행 아이템은 래퍼가 지위 승계(에디터는 표면별 CSS 1줄로 풀던 축 — 자동부착이라 코드로 흡수).
+  면제 = _CLIP_EXEMPT_SEL(사유 필수·늘리면 주석 동반): .pin(자체 붙여넣기 분배 핸들러 실존)·password류(잠금 취지)·readonly/disabled(입력 불가)
+    ·.pw-folder-input(onpaste 차단 명문)·.inl-input(표 인라인 편집 = 셀 레이아웃)·inputmode 숫자(판매 그리드 등 값 입력 UI = 노뮤트 「숫자칩 면제」 동축)·data-noclip(명시 opt-out).
+  강제 = tools/check_wiring.py(모듈 골격·면제표·3층 배선 줄 실존 · pre-commit). -->
+<script>
+(function(){'use strict';
+var CHECK_SVG='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>';
+var COPY_SVG='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>';
+var PASTE_SVG='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>';
+var ERASE_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/></svg>';
+var UNDO_SVG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-5"/></svg>';
+var ERASE_UNDO_MS=10000;   // 지움 후 되돌리기 노출 시간(~10초)
+async function clipCopy(text,btn,after){   // 복사 → ✓ 피드백
+  try{ await navigator.clipboard.writeText(text||''); }catch(_e){}
+  btn.innerHTML=CHECK_SVG; btn._icon='check'; btn.classList.add('ok');   // _icon 갱신 = 'ok' 해제 후 refresh가 원아이콘 복원하게(번쩍 가드와 짝)
+  setTimeout(function(){ btn.classList.remove('ok'); after(); },1200);
+}
+async function clipPasteText(){   // 클립보드 텍스트 읽기(폴백 포함) — readText 우선 / 막힌 환경엔 '길게 눌러 붙여넣기' 폴백(노뮤트 통일 기틀 260628)
+  try{ if(navigator.clipboard&&navigator.clipboard.readText){ const t=await navigator.clipboard.readText(); if(t)return t; } }catch(_e){}
+  return await clipPasteFallback();
+}
+function clipPasteFallback(){   // ly.html 개량판 — dialog top-layer + visualViewport 키보드 클램프
+  return new Promise(function(resolve){
+    const ov=document.createElement('dialog'); ov.className='pastefb';
+    ov.innerHTML='<div class="pastefb-box"><div class="pastefb-msg">아래 칸을 <b>길게 눌러 “붙여넣기”</b> 하면 자동 반영돼요</div>'
+      +'<textarea class="pastefb-ta" placeholder="여기에 붙여넣기" autocapitalize="off" autocomplete="off" spellcheck="false"></textarea>'
+      +'<div class="pastefb-row"><button type="button" class="btn btn--sm btn--neutral pastefb-cancel">취소</button><button type="button" class="btn btn--sm btn--ghost pastefb-ok">적용</button></div></div>';
+    document.body.appendChild(ov);
+    const ta=ov.querySelector('.pastefb-ta'); let done=false;
+    const vvClamp=function(){   // 키보드 축소 visual viewport에 다이얼로그 맞춤(dialog top-layer는 키보드에 안 줄어듦 → 수동 클램프)
+      const vv=window.visualViewport; if(!vv||!ov.isConnected)return;
+      if(vv.height<window.innerHeight-60){
+        ov.style.maxHeight=Math.round(vv.height*0.92)+'px';
+        ov.style.marginTop=Math.round(vv.offsetTop+vv.height*0.04)+'px';
+      }else{ ov.style.maxHeight=''; ov.style.marginTop=''; }
+    };
+    if(window.visualViewport){ window.visualViewport.addEventListener('resize',vvClamp); window.visualViewport.addEventListener('scroll',vvClamp); }
+    const finish=function(v){ if(done)return; done=true; if(window.visualViewport){ window.visualViewport.removeEventListener('resize',vvClamp); window.visualViewport.removeEventListener('scroll',vvClamp); } try{ ov.close(); }catch(_e){} ov.remove(); resolve(v||null); };
+    ta.addEventListener('paste',function(){ setTimeout(function(){ if(ta.value)finish(ta.value); },30); });   // 붙여넣기 즉시 자동 반영
+    ov.querySelector('.pastefb-ok').onclick=function(){ finish(ta.value); };
+    ov.querySelector('.pastefb-cancel').onclick=function(){ finish(null); };
+    ov.addEventListener('cancel',function(e){ e.preventDefault(); finish(null); });   // ESC
+    ov.addEventListener('click',function(e){ if(e.target===ov)finish(null); });       // 백드롭 탭
+    try{ ov.showModal(); }catch(_e){ ov.setAttribute('open',''); }
+    setTimeout(function(){ try{ ta.focus(); }catch(_e){} },60);
+  });
+}
+function attachCopyPaste(el,withErase){   // 빈칸=붙여넣기 / 내용 있으면 [복사][붙여넣기](+지우개) · 지우개 = 비움→~10초 되돌리기 (노뮤트 정본 로직 그대로)
+  if(!el||el._clipBound)return; el._clipBound=true;   // 중복 부착 가드
+  var wrap=document.createElement('div'); wrap.style.position='relative'; wrap.classList.add('iowrap');
+  try{   // [프로모 각색 ⓑ] 플렉스 행 아이템 지위 승계 — 래퍼가 끼면 flex 아이템이 바뀌므로 grow/shrink를 이어받는다(.cb-foot 등)
+    var pcs=getComputedStyle(el.parentNode), ecs=getComputedStyle(el);
+    if(pcs.display.indexOf('flex')>-1){ wrap.style.flex=ecs.flex&&ecs.flex!=='0 1 auto'?ecs.flex:'1 1 auto'; wrap.style.minWidth='0'; if(ecs.alignSelf&&ecs.alignSelf!=='auto')wrap.style.alignSelf=ecs.alignSelf; }
+  }catch(_e){}
+  el.parentNode.insertBefore(wrap,el); wrap.appendChild(el);
+  var split=true;   // 붙여넣기 항상 유지 + 복사 별도(좌측)
+  var nBtn=(split?2:1)+(withErase?1:0);
+  el.style.paddingRight=(el.tagName!=='TEXTAREA')?(14+nBtn*32)+'px':'42px';   // 텍스트칸 = 버튼이 1행 위 테두리로 떠 안 겹침 → 42 유지
+  var btn=document.createElement('button'); btn.type='button'; btn.className='iobtn iobtn-edge'+(withErase?' iobtn-pp':''); wrap.appendChild(btn);
+  var copyB=null;
+  if(split){
+    copyB=document.createElement('button'); copyB.type='button'; copyB.className='iobtn iobtn-edge iobtn-copy'+(withErase?' iobtn-copy-e':'')+' iobtn-hide';
+    copyB.innerHTML=COPY_SVG; copyB.setAttribute('aria-label','복사'); copyB.title='복사';
+    copyB.onclick=function(ev){ ev.preventDefault(); clipCopy(el.value,copyB,refresh); };
+    wrap.appendChild(copyB);
+  }
+  var eraser=null,undoTimer=null,undoVal='',prog=false,armUndo=null;   // prog = 프로그램적 변경(지움/복원) = 되돌리기창 종료 트리거 아님
+  var setIcon=function(b,svg,key){ if(b._icon!==key){ b.innerHTML=svg; b._icon=key; } };   // 아이콘 동일하면 재대입 안 함 = 타이핑마다 SVG 파괴·재생성(번쩍거림) 차단
+  var refresh=function(){
+    var filled=(el.value||'').trim().length>0;
+    if(!btn.classList.contains('ok')){ setIcon(btn,PASTE_SVG,'paste'); btn.dataset.mode='paste'; btn.setAttribute('aria-label','붙여넣기'); btn.title='붙여넣기'; }
+    if(copyB&&!copyB.classList.contains('ok')){ setIcon(copyB,COPY_SVG,'copy'); copyB.classList.toggle('iobtn-hide',!filled); }
+    if(eraser)eraser.classList.toggle('iobtn-off',!filled&&!eraser.classList.contains('iobtn-undo'));
+  };
+  if(withErase){
+    eraser=document.createElement('button'); eraser.type='button'; eraser.className='iobtn iobtn-edge iobtn-erase';
+    eraser.innerHTML=ERASE_SVG; eraser.setAttribute('aria-label','입력 지우기'); eraser.title='입력 지우기';
+    var exitUndo=function(){
+      if(undoTimer){ clearTimeout(undoTimer); undoTimer=null; }
+      eraser.classList.remove('iobtn-undo'); eraser.innerHTML=ERASE_SVG;
+      eraser.setAttribute('aria-label','입력 지우기'); eraser.title='입력 지우기'; refresh();
+    };
+    armUndo=function(prev){   // 직전 입력(prev) 복원용 되돌리기 무장 — 지움·붙여넣기 공용
+      undoVal=prev;
+      eraser.classList.remove('iobtn-off'); eraser.classList.add('iobtn-undo');
+      eraser.innerHTML=UNDO_SVG; eraser.setAttribute('aria-label','되돌리기'); eraser.title='되돌리기 (직전 입력 복원)';
+      if(undoTimer)clearTimeout(undoTimer); undoTimer=setTimeout(exitUndo,ERASE_UNDO_MS);
+    };
+    eraser.onclick=function(ev){
+      ev.preventDefault();
+      if(el.disabled)return;   // 비활성 칸 우회 입력 차단
+      if(eraser.classList.contains('iobtn-undo')){   // 되돌리기 모드 = 직전 입력 복원
+        prog=true; el.value=undoVal; el.dispatchEvent(new Event('input',{bubbles:true})); prog=false;
+        try{ el.focus(); }catch(_e){} exitUndo(); return;
+      }
+      if(!(el.value||'').length)return;
+      var prev=el.value;
+      prog=true; el.value=''; el.dispatchEvent(new Event('input',{bubbles:true})); prog=false;
+      try{ el.focus(); }catch(_e){}
+      armUndo(prev);
+    };
+    el.addEventListener('input',function(){ if(!prog&&undoTimer)exitUndo(); });
+    wrap.appendChild(eraser);
+  }
+  btn.onclick=async function(ev){
+    ev.preventDefault();
+    if(el.disabled)return;   // 비활성 칸 우회 입력 차단
+    var selS=el.selectionStart,selE=el.selectionEnd;   // await 전 캐럿/선택 스냅
+    var t=await clipPasteText();
+    if(t){
+      var prev=el.value;
+      prog=true;
+      if(typeof el.setRangeText==='function'&&typeof selS==='number')el.setRangeText(t,selS,selE,'end');   // 캐럿/선택영역에 삽입(기존 보존) · 덮어쓰기 아님
+      else el.value+=t;   // 폴백(email형 등 selection 미지원) = 끝에 이어붙임
+      el.dispatchEvent(new Event('input',{bubbles:true})); prog=false;   // 수동 input 발화 = 각 칸의 oninput 동기 로직 그대로 작동
+      if(armUndo&&prev)armUndo(prev);   // 붙여넣기도 되돌리기 가능(직전 전체값 복원)
+    }
+    refresh();
+  };
+  el.addEventListener('input',refresh); refresh();
+}
+/* ── [프로모 각색 ⓐ] 3층 자동부착 — 초기 스윕 + MutationObserver + focusin 안전망 ── */
+var _CLIP_EXEMPT_SEL='.pin,.pw-folder-input,.inl-input,input[type="password"],[readonly],[disabled],[data-noclip],[inputmode="numeric"],[inputmode="decimal"]';
+function _clipEligible(el){
+  if(!el||el._clipBound||!el.tagName)return false;
+  if(el.tagName==='TEXTAREA'){ /* 전 textarea 대상 */ }
+  else if(el.tagName==='INPUT'){ var t=(el.getAttribute('type')||'text').toLowerCase(); if(t!=='text'&&t!=='url'&&t!=='search'&&t!=='email')return false; }
+  else return false;
+  try{ if(el.matches(_CLIP_EXEMPT_SEL)||el.closest('[data-noclip]'))return false; }catch(_e){}
+  if(el.classList.contains('pastefb-ta'))return false;   // 클립 폴백 자기 자신 제외(자기참조 차단 — 노뮤트 게이트 동축)
+  return true;
+}
+function _clipSweep(root){
+  if(!root||!root.querySelectorAll)return;
+  if(root.tagName&&(root.tagName==='INPUT'||root.tagName==='TEXTAREA')){ if(_clipEligible(root))attachCopyPaste(root,true); return; }
+  var els=root.querySelectorAll('input,textarea');
+  for(var i=0;i<els.length;i++){ if(_clipEligible(els[i]))attachCopyPaste(els[i],true); }
+}
+new MutationObserver(function(muts){
+  for(var m=0;m<muts.length;m++){
+    var add=muts[m].addedNodes;
+    for(var i=0;i<add.length;i++){ var n=add[i]; if(n.nodeType===1&&!n.classList.contains('iowrap'))_clipSweep(n); }   // iowrap 재삽입 이벤트는 스킵(부착이 유발한 변이)
+  }
+}).observe(document.body,{childList:true,subtree:true});
+document.addEventListener('focusin',function(e){   // 안전망 — 어떤 경로로든 놓친 칸도 첫 포커스에 부착(부착 = DOM 이동 = 포커스 유실 → 즉시 복원)
+  var el=e.target; if(!_clipEligible(el))return;
+  var sS=el.selectionStart,sE=el.selectionEnd;
+  attachCopyPaste(el,true);
+  try{ el.focus({preventScroll:true}); if(typeof sS==='number')el.setSelectionRange(sS,sE); }catch(_e){}
+});
+_clipSweep(document.body);   // 초기 스윕(정적 칸)
+window.attachCopyPaste=attachCopyPaste;   // 노뮤트 공용 API 계약 유지(수동 부착·withErase 선택 경로)
+window.nmClip={sweep:_clipSweep,eligible:_clipEligible};   // 테스트·수동 재스윕 훅
+})();
+</script>
+<!-- ═══ [Q39 260803 운영자] ② 동기화 생명선 ═══
+  원본 = nomute-editor viewer/nm-sync.js 3기능 중 ①·③ 이식. ② 로그인 만료 자가치유(/manifest.json redirect 프로브)는
+  CF Access 게이트웨이 전용 신호라 이 앱 인프라(GitHub Pages + PIN/MSAL 앱 내 인증)에 대응물 없음 = 비배선(사유 명기).
+  ① 비활성→활성 복귀 = window.nmRefresh 자동 호출 — 이 앱 정본 재동기 훅 = _checkForUpdates(「방식B: 폴링+뱃지·자동 리로드 X」 계약 유지 · 45s 폴링을 복귀 순간 즉시로 앞당김).
+  ③ 자기 문서 HEAD ETag/Last-Modified 대조 = 새 배포 감지 → 한가할 때만 location.reload() 자동 탑재(수동 재열기 불요).
+     · sw.js 무간섭 = fetch 리스너 「req.method !== 'GET'」 조기 통과(HEAD) → 항상 진짜 네트워크 응답(실측 · check_wiring이 그 줄 실존 감시).
+     · 리로드 안전 = sessionStorage 세션 생존 + 부트 세션복원 IIFE + mvView 뷰 복원 · _lockedAt 도장 시 잠금화면 = 유휴 잠금 설계 그대로.
+     · 한가 판정 busy() = 입력 포커스·contenteditable·열린 모달(.modal-bg.show/.confirm-bg.show/dialog[open]/z99999 고정 오버레이) → 작업 중 강제 이탈 0(감지는 다음 복귀로 이월).
+     · 경계(명시): 복귀 트리거뿐이라 탭을 한 번도 안 떠나는 화면은 다음 복귀·수동 새로고침까지 구코드 유지(에디터 원본과 동일 계약). -->
+<script>
+(function(){'use strict';
+var lastKick=0,bootTag=null,tagInflight=false;
+var TAG=function(r){ return (r&&(r.headers.get('etag')||r.headers.get('last-modified')))||''; };
+async function selfTag(){   // 자기 문서 HEAD — 부팅 기준값 채집·복귀 대조 공용(쿼리 제거 자기 자신 = ?qa 등과 무관하게 같은 파일)
+  try{ var r=await fetch(location.pathname,{method:'HEAD',cache:'no-store'}); return r.ok?TAG(r):null; }catch(_e){ return null; }
+}
+function busy(){   // 리로드 한가 판정 — 입력 중·모달 열림·페이지 자체 선언(nmSyncBusy) = 미룸
+  try{ if(typeof window.nmSyncBusy==='function'&&window.nmSyncBusy())return true; }catch(_e){}
+  var a=document.activeElement;
+  if(a&&(a.tagName==='INPUT'||a.tagName==='TEXTAREA'||a.isContentEditable))return true;
+  try{
+    if(document.querySelector('.modal-bg.show,.confirm-bg.show,dialog[open]'))return true;
+    var kids=document.body.children;   // createElement 직결 오버레이(완료 처리·취소 사유 등 = 클래스 없는 fixed z99999)
+    for(var i=0;i<kids.length;i++){ var st=kids[i].style; if(st&&st.position==='fixed'&&String(st.zIndex)==='99999')return true; }
+  }catch(_e){}
+  return false;
+}
+async function verCheck(){   // ③ 새 배포 자동 탑재 — 부팅 ETag 대비 변경 + 한가하면 새 코드 리로드
+  if(tagInflight||bootTag==null)return; tagInflight=true;
+  try{
+    var now=await selfTag();
+    if(now&&bootTag&&now!==bootTag){
+      if(busy()){ console.log('[배선-sync] 새 배포 감지 — 작업 중이라 이월(다음 복귀 때 재시도)'); return; }
+      console.log('[배선-sync] 새 배포 감지 — 자동 리로드로 신규 코드 탑재');   // 계측 — 조용한 리로드 금지
+      location.reload();
+    }
+  }finally{ tagInflight=false; }
+}
+function resumeNow(){   // ①+③ — 비활성→활성 전환의 단일 진입점(테스트 훅 겸용)
+  var t=Date.now(); if(t-lastKick<5e3)return; lastKick=t;   // 5s 코얼레싱 = vis/focus/pageshow 동시 발화 1회 처리
+  try{ if(typeof window.nmRefresh==='function')window.nmRefresh(); }catch(_e){}   // ① 복귀 즉시 데이터 신선도 확인(방식B 뱃지 축)
+  verCheck();                                                                     // ③ 새 코드 있으면(한가 시) 자동 탑재
+}
+document.addEventListener('visibilitychange',function(){ if(!document.hidden)resumeNow(); });
+window.addEventListener('focus',function(){ resumeNow(); });
+window.addEventListener('pageshow',function(e){ if(e.persisted){ lastKick=0; resumeNow(); } });   // bfcache 복귀 = vis 미발화 경로 · 가드 해제
+selfTag().then(function(t){ bootTag=t; });   // 부팅 기준값(실패 = null → 배포 감지 비활성 · ①은 무영향)
+if(typeof window.nmRefresh!=='function')window.nmRefresh=function(){ try{ if(typeof _checkForUpdates==='function')_checkForUpdates(); }catch(_e){} };   // 이 앱 정본 재동기 훅 = 방식B 즉시 확인(로그인 전·뱃지 표시 중 가드는 _checkForUpdates 자체 내장)
+window.nmSync={resumeNow:resumeNow,verCheck:verCheck,busy:busy};   // 테스트·페이지 위임 훅(에디터 계약 계승)
+})();
+</script>
 <!-- [접속 안정 260729] 서비스워커 = GitHub Pages 배포 순단·회선 불안정 때 마지막 정상 화면을 대신 내주는 폴백. HTML은 항상 네트워크 우선이라 업데이트는 그대로 반영된다. 등록 실패해도 앱 동작에는 영향 없음. 회수 방법은 sw.js 상단 주석 참조. -->
 <script>
 if('serviceWorker' in navigator){
