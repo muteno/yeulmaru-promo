@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>한글문서 편집 — 전후 (만지는 판) · 260803</title>
+<style>
+  /* 값은 index.html :root 계승(팔레트 폐쇄형) — 이 판은 일회성 스냅샷이라 check_design 비대상이지만 색은 그대로 쓴다 */
+  :root{
+    --accent:#4A4DE7; --accent-light:#E8E8FD; --accent-glow:rgba(74,77,231,0.15);
+    --peach-text:#D88455; --peach-light:#FBF0EC;
+    --bg:linear-gradient(135deg,#FDF6F3 0%,#F0EBF5 50%,#EBF0F8 100%);
+    --surface-solid:#fff; --glass-surface:rgba(255,255,255,.78); --glass-bd:rgba(255,255,255,0.55);
+    --glass-shadow:0 8px 32px rgba(74,77,231,0.08),0 2px 8px rgba(0,0,0,0.04);
+    --border:rgba(0,0,0,0.09); --text:#1A1A2E; --dim:#888; --neutral:#EEEDF3; --neutral-text:#6B6B7B;
+    --green:#1A6B3C; --danger-btn:#E24B4A; --r-btn:10px; --radius:16px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Pretendard","Apple SD Gothic Neo",sans-serif;font-size:14px;line-height:1.7;padding:28px 20px 64px}
+  .wrap{max-width:1120px;margin:0 auto}
+  h1{font-size:22px;margin:0 0 6px}
+  h2{font-size:16px;margin:34px 0 10px;padding-top:16px;border-top:1px solid var(--border)}
+  .dim{color:var(--dim);font-size:12.5px}
+  .card{background:var(--glass-surface);backdrop-filter:blur(8px);border:1px solid var(--glass-bd);box-shadow:var(--glass-shadow);border-radius:var(--radius);padding:18px;margin:12px 0}
+  .btn{font-family:inherit;font-weight:700;border:1px solid transparent;border-radius:var(--r-btn);cursor:pointer;padding:10px 20px;font-size:13px;background:var(--accent);color:#fff}
+  .btn.n{background:var(--neutral);color:var(--neutral-text)}
+  img{max-width:100%;display:block;border-radius:12px;border:1px solid var(--border);background:var(--surface-solid)}
+  /* 전후 슬라이더 — 두 스샷을 겹치고 손잡이로 가른다(만지는 판의 핵심) */
+  .ba{position:relative;overflow:hidden;border-radius:12px;border:1px solid var(--border);background:var(--surface-solid);touch-action:none}
+  .ba img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;border:0;border-radius:0}
+  .ba .a{position:relative;z-index:1}
+  .ba .b{z-index:2;clip-path:inset(0 0 0 var(--cut,50%))}
+  .ba .h{position:absolute;top:0;bottom:0;left:var(--cut,50%);width:2px;background:var(--accent);z-index:3;pointer-events:none}
+  .ba .h::after{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:30px;height:30px;border-radius:50%;background:var(--accent);box-shadow:0 2px 10px rgba(74,77,231,.4)}
+  .ba .lb{position:absolute;top:10px;z-index:4;font-size:11.5px;font-weight:700;padding:4px 10px;border-radius:999px;background:var(--glass-surface);border:1px solid var(--glass-bd);box-shadow:var(--glass-shadow)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+  table{border-collapse:collapse;width:100%;font-size:13px}
+  th,td{border:1px solid var(--border);padding:8px 10px;text-align:left;vertical-align:top}
+  th{background:var(--accent-light);font-weight:700}
+  code{background:var(--neutral);padding:1px 5px;border-radius:5px;font-size:12.5px}
+  .ok{color:var(--green);font-weight:700}
+  .drop{border:2px dashed var(--accent);border-radius:12px;background:var(--accent-light);padding:26px;text-align:center;cursor:pointer}
+  .drop.on{background:var(--peach-light);border-color:var(--peach-text)}
+  #stage{margin-top:14px;max-height:70vh;overflow:auto;background:var(--neutral);border-radius:12px;padding:14px;display:none;flex-direction:column;align-items:center;gap:14px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>콘텐츠 제작 ▸ 한글문서 편집 — 전후</h1>
+<p class="dim">운영자 260803 지시: “콘텐츠 제작에 한글문서 편집 — 문서 올리면 미리보기 띄우고, 원하는 방향 설명하면 변경. 안에 있는 oauth 사용, 수준은 opus 5.0 --effort medium.”<br>
+미리보기 렌더러 = <a href="https://github.com/DoHyun468/claw-hwp">claw-hwp</a>(MIT)의 rhwp WASM 이식본 · 편집 엔진 = 같은 저장소의 <code>hwp</code> 스킬을 GitHub Actions에서 <code>claude -p</code>로 구동.</p>
+
+<h2>① 메뉴 — 손잡이를 끌어 전/후를 가르세요</h2>
+<div class="card">
+  <div class="ba" id="ba1" style="aspect-ratio:1440/940">
+    <img class="a" src="1_메뉴_전.png" alt="전 — 콘텐츠 제작 드롭다운(한글문서 편집 없음)">
+    <img class="b" src="1_메뉴_후.png" alt="후 — 네이버 블로그 바로 아래 한글문서 편집 추가">
+    <div class="h"></div>
+    <div class="lb" style="left:12px">전 (8개 항목)</div>
+    <div class="lb" style="right:12px">후 (9개 · 한글문서 편집 추가)</div>
+  </div>
+  <p class="dim" style="margin:10px 0 0">항목 문법(itemCss·호버 알파·구분선)은 기존 <code>_contentMenuBuild</code> 그대로 — 새 색·새 형태 0. 자리 = 네이버 블로그 바로 아래(문서 계열 묶음).</p>
+</div>
+
+<h2>② 화면 3장</h2>
+<div class="grid">
+  <div class="card"><img src="2_빈상태.png" alt="빈 상태"><p class="dim" style="margin:8px 0 0"><b>빈 상태</b> — <code>.u-empty</code> 정본 컴포넌트. 끌어다 놓기 + [문서 고르기].</p></div>
+  <div class="card"><img src="3_미리보기.png" alt="미리보기"><p class="dim" style="margin:8px 0 0"><b>미리보기</b> — 실제 페이지 캔버스. 파일명·쪽수 + [원본]/[수정본] 칩 + 아래 지시 입력칸.</p></div>
+  <div class="card"><img src="4_모바일.png" alt="모바일 390px"><p class="dim" style="margin:8px 0 0"><b>모바일 390px</b> — 지시줄이 세로로 접히고 페이지는 폭에 맞춰 축소.</p></div>
+</div>
+
+<h2>③ 진짜로 만져보기 — 여기에 .hwp / .hwpx 를 떨어뜨리세요</h2>
+<div class="card">
+  <div class="drop" id="drop">
+    한글문서를 여기로 끌어다 놓거나 눌러서 고르세요<br>
+    <span class="dim">앱 안에서 도는 것과 <b>같은 렌더러</b>(<code>../../../hwp/viewer-core.js</code>)를 그대로 부릅니다 — 파일은 이 브라우저 밖으로 안 나갑니다.</span><br><br>
+    <button type="button" class="btn n" id="sample">샘플 문서로 바로 보기</button>
+  </div>
+  <input type="file" id="f" accept=".hwp,.hwpx" hidden>
+  <div id="stage"></div>
+  <p class="dim" id="msg" style="margin:10px 0 0"></p>
+</div>
+
+<h2>④ 배선 — 파일이 어디로 흐르나</h2>
+<div class="card">
+<table>
+<tr><th>단계</th><th>어디서</th><th>무엇</th></tr>
+<tr><td>미리보기</td><td>브라우저(온디바이스)</td><td><code>hwp/viewer-core.js</code> + <code>hwp/vendor/rhwp/*.wasm</code> — 서버로 안 보냄</td></tr>
+<tr><td>원본 올리기</td><td>Worker <code>/api/hwp/upload</code></td><td>시크릿 <code>GITHUB_PAT</code>으로 <code>drafts/hwp/&lt;id&gt;.in.&lt;ext&gt;</code> 커밋</td></tr>
+<tr><td>수정 트리거</td><td>Worker <code>/api/hwp/dispatch</code></td><td><code>repository_dispatch: hwp-edit</code></td></tr>
+<tr><td>수정 실행</td><td>Actions <code>hwp-edit.yml</code></td><td>claw-hwp <code>hwp</code> 스킬 설치 → <code>claude -p --model claude-opus-5 --effort medium</code>(구독 OAuth 5계정 체인)</td></tr>
+<tr><td>결과 알림</td><td><code>/api/blog/draft?id=</code></td><td>블로그 초안과 <b>같은 폴링 경로 재사용</b>(신설 0)</td></tr>
+<tr><td>결과 받기</td><td>Worker <code>/api/hwp/file</code></td><td><code>drafts/hwp/&lt;id&gt;.out.&lt;ext&gt;</code> 바이트 → 같은 뷰어로 [수정본] 렌더 → 내려받기</td></tr>
+<tr><td>회수</td><td>워크플로 끝</td><td>원본 즉시 삭제 · 원본 1시간/수정본 3일 지난 잔재 자동 정리</td></tr>
+</table>
+</div>
+
+<h2>⑤ 실측</h2>
+<div class="card">
+<table>
+<tr><th>항목</th><th>값</th></tr>
+<tr><td>렌더</td><td>샘플 A4 1쪽 — 페이지 794×1123px, 비율 <b>1.414</b>(A4 정합) · 잉크 픽셀 30,240 · 무대 안 클리핑 <span class="ok">없음</span></td></tr>
+<tr><td>가로 넘침(1440px)</td><td><span class="ok">없음</span> (모달 열기 전/후 동일)</td></tr>
+<tr><td>가로 넘침(390px)</td><td>문서 <b>기존</b> 헤더 <code>.nav-right</code> 넘침 그대로(전 635px / 후 642px = 로고 에셋 차 6px, 이 기능 기여 <b>0</b> — 모달이 만든 넘침 요소 0건 실측)</td></tr>
+<tr><td>JS 에러</td><td>전·후 동일(서비스워커 등록 경고 1건 = 기존)</td></tr>
+<tr><td>디자인 게이트</td><td>check_design <b>1590/1590</b>(신규 raw hex 0 · <code>:root</code> 무변) · check_refs ✓ · check_wiring ✓</td></tr>
+</table>
+</div>
+
+</div>
+<script type="module">
+const stage = document.getElementById('stage'), msg = document.getElementById('msg');
+const drop = document.getElementById('drop'), input = document.getElementById('f');
+let mod = null;
+async function viewer(){ if(!mod){ msg.textContent='렌더러 불러오는 중(WASM 4.5MB)'; mod = await import('../../../hwp/viewer-core.js'); } return mod; }
+async function show(bytes, name){
+  try{
+    const m = await viewer();
+    stage.style.display='flex'; stage.innerHTML='';
+    const r = m.renderHwp(stage, bytes);
+    msg.textContent = name + ' — ' + r.pageCount + '쪽';
+    new ResizeObserver(()=>{ try{ m.fitPages(stage); }catch(e){} }).observe(stage);
+  }catch(e){ msg.textContent = '열지 못했어요: ' + (e && e.message || e); }
+}
+async function take(file){
+  if(!/\.(hwp|hwpx)$/i.test(file.name)){ msg.textContent='.hwp / .hwpx 만 됩니다'; return; }
+  show(new Uint8Array(await file.arrayBuffer()), file.name);
+}
+drop.addEventListener('click', e => { if(e.target.id !== 'sample') input.click(); });
+input.addEventListener('change', e => { const f = e.target.files[0]; if(f) take(f); e.target.value=''; });
+['dragover','dragenter'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add('on'); }));
+drop.addEventListener('dragleave', () => drop.classList.remove('on'));
+drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('on'); const f = e.dataTransfer.files[0]; if(f) take(f); });
+document.getElementById('sample').addEventListener('click', async () => {
+  msg.textContent = '샘플 불러오는 중';
+  const r = await fetch('샘플_홍보계획.hwp');
+  show(new Uint8Array(await r.arrayBuffer()), '샘플_홍보계획.hwp');
+});
+// 전후 슬라이더 — 포인터로 가르기
+const ba = document.getElementById('ba1');
+const cut = e => { const r = ba.getBoundingClientRect(); const x = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)); ba.style.setProperty('--cut', (x*100).toFixed(1)+'%'); };
+let dragging = false;
+ba.addEventListener('pointerdown', e => { dragging = true; ba.setPointerCapture(e.pointerId); cut(e); });
+ba.addEventListener('pointermove', e => { if(dragging) cut(e); });
+ba.addEventListener('pointerup', () => dragging = false);
+</script>
+</body>
+</html>
