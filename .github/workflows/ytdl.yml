@@ -92,11 +92,15 @@ jobs:
           # web_safari=봇 확인 · tv=DRM). 하나가 막혀도 다음이 뚫으면 되니 성공할 때까지 순서대로 시도한다.
           : > out/err.log
           rc=1
+          LAST="android_vr"
           for CL in "" "web_safari" "mweb" "tv_simply" "android_vr"; do
             if [ -n "$CL" ]; then EA="--extractor-args youtube:player_client=$CL"; else EA=""; fi
+            # 마지막 회차만 -v — 실패 시 err.txt가 스스로 진단서가 된다(JS 런타임·PO 토큰 공급자가 실제로
+            # 켜졌는지, 어느 단계에서 막혔는지). 앞 회차까지 -v를 켜면 로그가 사유를 덮어버린다.
+            [ "$CL" = "$LAST" ] && VB="-v" || VB=""
             echo "--- 시도: client=${CL:-기본}" >> out/err.log
             # shellcheck disable=SC2086
-            yt-dlp -f "$FMT" --merge-output-format mp4 --remux-video mp4 \
+            yt-dlp $VB -f "$FMT" --merge-output-format mp4 --remux-video mp4 \
               --max-filesize "$MAXSIZE" --no-playlist --retries 3 --fragment-retries 5 \
               $EA $COOKIE_ARGS -o "out/${VID_ID}.%(ext)s" "$VID_URL" 2>> out/err.log
             rc=$?
@@ -109,7 +113,10 @@ jobs:
           f=$(ls out/"${VID_ID}".* 2>/dev/null | grep -Ev "err|\.p[0-9]" | head -1)
           if [ $rc -ne 0 ] || [ -z "$f" ]; then
             # 앱이 그대로 보여줄 사유 = ERROR 줄 우선(사다리 로그에서 원인만 추림) + 꼬리 일부
-            { grep -a "^ERROR" out/err.log | tail -3; echo "---"; tail -c 400 out/err.log; } \
+            { grep -a "^ERROR" out/err.log | sort -u | tail -3
+              echo "--- 진단"
+              grep -aE "JS runtimes|PO Token Providers|JS Challenge Providers" out/err.log | sort -u | tail -3
+              tail -c 300 out/err.log; } \
               > "out/${VID_ID}.err.txt" 2>/dev/null || echo "다운로드 실패" > "out/${VID_ID}.err.txt"
             gh release upload ytdl-drops "out/${VID_ID}.err.txt" -R "$REPO" --clobber
             echo "::warning::yt-dlp 실패 — err 자산 업로드"
