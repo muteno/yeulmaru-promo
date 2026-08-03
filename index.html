@@ -4611,7 +4611,8 @@ function _ddAdmin(btn){
     menu.innerHTML='<div style="padding:8px 14px 6px;font-size:11px;color:#999;font-weight:700">관리</div>'
       + items.map(function(it){ return _it('_ddCloseAll();adminRoute(\''+it[0]+'\')',it[1]); }).join('')
       + '<div style="height:1px;background:var(--border);margin:6px 10px"></div>'
-      + _it('_ddCloseAll();openLockSettings()','자동 잠금 시간');   // [260724 운영자] 시스템 설정 성격 = 관리 6개(데이터 화면)와 구분선으로 분리 · 향후 관련 설정 모이면 '시스템 설정' 그룹으로
+      + _it('_ddCloseAll();openLockSettings()','자동 잠금 시간')   // [260724 운영자] 시스템 설정 성격 = 관리 6개(데이터 화면)와 구분선으로 분리 · 향후 관련 설정 모이면 '시스템 설정' 그룹으로
+      + _it('_ddCloseAll();openYeulPersona()','예울이 페르소나');   // [260803 운영자] 루시봇 컨셉 — AI 답변 말투 카드 조정(기본 = 레포 persona/yeuli.md)
   });
 }
 function showLogoutModal(){
@@ -4836,6 +4837,31 @@ function openLockSettings(){
   el.innerHTML=html;
 }
 function closeLockSettings(){var el=document.getElementById('admin-panel');if(el)el.innerHTML='';}
+// [260803 운영자] 예울이 페르소나 조정 — 루시봇 카드 컨셉(카드 문장 = 곧 말투): 기본 = 레포 persona/yeuli.md(SSOT),
+//   여기 적으면 이 기기에서만 오버라이드(localStorage — AI 요청에 동봉되어 카드 대신 주입). 모달 골격 = openLockSettings 계승.
+function openYeulPersona(){
+  var cur=_yeulAiPersona();
+  var html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeYeulPersona)"><div class="modal" style="width:520px;position:relative">'
+    +'<button class="modal-x" onclick="closeYeulPersona()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;float:none;margin:0;z-index:10">✕</button>'
+    +'<div style="display:flex;align-items:center;margin-bottom:14px;gap:8px;padding-bottom:14px;padding-right:48px;border-bottom:1px solid var(--border)"><h3 style="margin:0;flex:1;text-align:left">예울이 페르소나</h3></div>'
+    +'<div style="font-size:12px;color:var(--dim);margin-bottom:12px;line-height:1.6">AI 답변(자유 질문)의 성격·말투 카드예요. <b>카드 문장이 곧 말투</b>가 됩니다(루시봇 방식).<br>비워두면 레포 카드(<b>persona/yeuli.md</b>)를 쓰고, 여기 적으면 <b>이 기기에서만</b> 이 내용이 우선해요. 규정·FAQ·집계 즉답에는 영향 없음.</div>'
+    +'<textarea id="yeul-persona-ta" maxlength="6000" placeholder="예: 너는 예울마루 도우미 예울이. 밝고 정중한 존댓말, 답은 2~6문장, 이모지는 아주 가끔." style="width:100%;height:220px;padding:10px 12px;border:1px solid var(--border2);border-radius:var(--r-btn);font-size:12.5px;font-family:inherit;resize:vertical;background:var(--surface-solid);color:var(--text)">'+_memEsc(cur)+'</textarea>'
+    +'<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">'
+    +'<button type="button" class="btn btn--neutral btn--md" onclick="_yeulPersonaSave(1)">비우기 — 레포 카드 사용</button>'
+    +'<button type="button" class="btn btn--primary btn--md" onclick="_yeulPersonaSave()">저장</button>'
+    +'</div></div></div>';
+  var el=document.getElementById('admin-panel');
+  if(!el){el=document.createElement('div');el.id='admin-panel';document.body.appendChild(el);}
+  el.innerHTML=html;
+}
+function closeYeulPersona(){var el=document.getElementById('admin-panel');if(el)el.innerHTML='';}
+function _yeulPersonaSave(clear){
+  var ta=document.getElementById('yeul-persona-ta');
+  var v=clear?'':String((ta&&ta.value)||'').trim();
+  try{ if(v)localStorage.setItem(_YEULAI_LS,v); else localStorage.removeItem(_YEULAI_LS); }catch(_e){}
+  if(typeof showToast==='function')showToast(v?'예울이 페르소나 저장 — 이 기기 전용':'페르소나 비움 — 레포 카드(persona/yeuli.md) 사용','success');
+  closeYeulPersona();
+}
 // 관리자 전역 토글 — 하단 펫(3마리 랜덤) 표시 on/off. POST /api/config(관리자·KV) → 전역 반영(⚠ Worker 배포 필요). 260711
 function _petToggle(on){
   _petsOn=!!on;
@@ -24243,13 +24269,48 @@ function _memOvMap(geo){
 // 2차 = 정형 밖 자유 질문만 /api/mem-chat(Worker llmText — 전송물 = 집계 JSON뿐, 이름·전화·상세주소 미전송).
 //   미배포(404)·키 없음(503)이면 안내 폴백 — 예울이 챗봇 /api/qa 미배포 폴백 선례 계승. Worker는 wrangler deploy 별도.
 // UI = 정본 챗봇 부품(.cb-body/.cb-msg/.cb-chip — 기틀 §2 #11) + 회원 조회 입력·accent 버튼 결 계승. 신규 색·클래스·raw hex 0.
+
+// === [260803 운영자] 예울이 AI — 전사 자유질문 공용 브레인 (루시봇 컨셉 이식: 페르소나 카드 + 깃 Actions claude -p 구독 OAuth) ===
+// 경로 = 이미 배포된 배선만 재사용(Worker 무변경): POST /api/blog/dispatch(payload.yeulchat=1 — Worker는 여분 키 그대로 통과)
+//   → nb-blog.yml yeulchat 분기(persona/yeuli.md 카드 원문 + 질문 → claude -p opus·high·5계정 폴오버) → drafts/yc*.json 커밋
+//   → GET /api/blog/draft?id= 폴링. 소요 30초~2분(Actions 큐) · 비용 0(구독 OAuth). 사용처 = FAB 예울이 미응답 폴백 + 고객 분석 채팅.
+// 페르소나 SSOT = persona/yeuli.md(카드 수정 = 말투 자동 추종). 앱 설정 「예울이 페르소나」(openYeulPersona)가 기기별 오버라이드.
+// ⚠ 산출물 drafts/yc*.json = 공개 레포 커밋(블로그 초안과 동일 축) — 민감 내용 질문 금지 · 워크플로가 3일 지난 산출물 자동 정리.
+var _YEULAI_LS='yeulai_persona';
+function _yeulAiPersona(){try{return String(localStorage.getItem(_YEULAI_LS)||'').slice(0,6000);}catch(_e){return '';}}
+async function _yeulAiAsk(q,ctx,onTick){
+  var id='yc'+Date.now()+'r'+Math.floor(Math.random()*1e4);
+  var d0=await api('POST','/api/blog/dispatch',{payload:{yeulchat:1,id:id,q:String(q||'').slice(0,800),persona:_yeulAiPersona(),ctx:String(ctx||'').slice(0,1200)}});
+  if(!d0||!d0.ok)throw new Error((d0&&d0.error)||'요청 실패');
+  var t0=Date.now();
+  while(Date.now()-t0<240000){
+    await new Promise(function(r){setTimeout(r,6000);});
+    if(onTick)try{onTick(Math.round((Date.now()-t0)/1000));}catch(_e){}
+    var d=null;
+    try{ d=await api('GET','/api/blog/draft?id='+encodeURIComponent(id)); }
+    catch(e){
+      var s=String(e&&e.message||e);
+      if(s.indexOf('404')===0)continue;                                        // 아직 미완 = 계속 폴링
+      if(s.indexOf('502')===0||s.indexOf('429')===0||/network|fetch/i.test(s))continue;   // 일시 장애 = 계속
+      throw e;                                                                 // 401/403/503 등 = 즉시 중단
+    }
+    if(d&&d.ready&&d.draft){
+      if(d.draft.ok===false)throw new Error(d.draft.error||'생성 실패');
+      var t=String(d.draft.text||'').trim();
+      if(!t)throw new Error('빈 응답');
+      return t;
+    }
+  }
+  throw new Error('시간 초과(4분) — Actions 큐가 밀렸을 수 있어요. 잠시 후 다시 물어봐 주세요');
+}
 var _memAiHist=[],_memAiBusy=false;
 var _MEM_AI_CHIPS=['여수 30대 회원 몇 명이야?','관내 비중은?','가장 많은 연령대 TOP3','거주지 TOP5 알려줘'];
 function _memAiCardHtml(sfx){
-  return '<div style="margin-top:24px;background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius);padding:13px 17px">'
-    +'<div style="font-size:14px;font-weight:800;margin-bottom:4px">AI 채팅 <span style="font-size:10.5px;color:var(--dim);font-weight:500">(회원 집계 질의응답 · 개인 식별 정보 미사용)</span></div>'
-    +'<div id="mem-ai-log-'+sfx+'" class="cb-body" style="max-height:236px;min-height:118px;overflow-y:auto;padding:8px 4px"></div>'
-    +'<div style="display:flex;gap:8px;margin-top:8px">'
+  // [260803 운영자 「얘 써줘 — 대화하는 느낌」] 헤더 = FAB 예울이 정본 부품(.cb-hdr/.cb-ava/.cb-titles) 그대로 — 아바타·이름·상태까지 동일 결
+  return '<div style="margin-top:24px;background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">'
+    +'<div class="cb-hdr"><div class="cb-ava"><img src="image/yeul.png" alt="" style="width:100%;height:100%;border-radius:50%;object-fit:cover"></div><div class="cb-titles"><div class="cb-title">예울이</div><div class="cb-sub">고객 분석 · 집계는 즉답 · 그 외 질문은 AI(30초~2분)</div></div></div>'
+    +'<div id="mem-ai-log-'+sfx+'" class="cb-body" style="max-height:236px;min-height:118px;overflow-y:auto;padding:12px 14px"></div>'
+    +'<div style="display:flex;gap:8px;padding:2px 14px 13px">'
     +'<input id="mem-ai-q-'+sfx+'" maxlength="200" placeholder="예: 순천 20대 회원 몇 명이야?" onkeydown="if(event.key===\'Enter\'&&!event.isComposing)_memAiSend(\''+sfx+'\')" style="flex:1;min-width:0;padding:9px 12px;border:1px solid var(--border2);border-radius:var(--r-btn);font-size:13px;font-family:inherit;background:var(--surface-solid);color:var(--text)">'
     +'<button type="button" onclick="_memAiSend(\''+sfx+'\')" style="flex:0 0 auto;padding:9px 16px;border:1.5px solid var(--accent);background:var(--accent);color:var(--surface-solid);border-radius:var(--r-btn);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">질문</button>'
     +'</div></div>';
@@ -24257,7 +24318,7 @@ function _memAiCardHtml(sfx){
 function _memAiPaint(sfx){
   var log=document.getElementById('mem-ai-log-'+sfx);if(!log)return;
   var h='';
-  if(!_memAiHist.length)h+='<div class="cb-msg bot">회원 집계에 대해 물어보세요 — 지역·연령대 인원, 비율, TOP 순위를 바로 세어 드려요.\n(집계 수치만 다루고 개인 정보는 보지 않아요)</div>'
+  if(!_memAiHist.length)h+='<div class="cb-msg bot">안녕하세요? 전 예울이예요 😊\n어떤 고객이 궁금하세요? 지역·연령대 인원, 비율, TOP 순위는 바로 세어 드려요.\n집계 밖 질문은 제가 생각해서 답해드려요 — 30초~2분쯤 걸려요!</div>'
     +'<div class="cb-chiprow">'+_MEM_AI_CHIPS.map(function(c){return '<button type="button" class="cb-chip" onclick="_memAiChip(\''+sfx+'\',this.textContent)">'+c+'</button>';}).join('')+'</div>';
   _memAiHist.forEach(function(m){h+=(m.u!==undefined)?'<div class="cb-msg user">'+_memEsc(m.u)+'</div>':'<div class="cb-msg bot">'+m.b+'</div>';});
   log.innerHTML=h;
@@ -24324,6 +24385,11 @@ function _memAiAges(q){
 function _memAiLocal(q,idx){
   var n=idx.n,GN3=['여수시','순천시','광양시'];
   if(/성별|남성|여성|남자|여자/.test(q))return '집계엔 성별 정보가 없어요 — 지역·연령대 인원만 답할 수 있어요.';
+  // [260803] 상담·아이디어 질문(늘리려면·어떻게·추천…)은 지역·연령 단어가 섞여 있어도 집계 즉답이 아니라 예울이 AI 몫 —
+  //   명시적 집계 의도(몇 명·비율·TOP…)가 같이 있을 때만 로컬이 답한다(「여수 30대」처럼 의도어 없는 단문은 집계로).
+  var wantCount=/몇\s*명|몇명|인원|숫자|명수|비율|퍼센트|%|얼마나|많아|많은|많이|적어|top|톱|상위|가장|제일|최다|총\s|전체|합계/i.test(q);
+  var advisory=/늘리|줄이|어떻게|어떡|방법|추천|전략|아이디어|하려면|해야|좋을까|어떨까|기획|홍보|이벤트/.test(q);
+  if(advisory&&!wantCount)return null;
   var regions=_memAiRegions(q,idx),ages=_memAiAges(q);
   var gwannae=/관내|여수.?순천.?광양/.test(q);
   var topM=q.match(/(?:top|톱|상위)\s*([0-9]+)/i);
@@ -24374,17 +24440,12 @@ function _memAiLocal(q,idx){
     return '총 회원은 '+_memAiFmt(n)+'명이에요 · 주소 미상 '+_memAiFmt(idx.unloc)+'명(지역 집계 제외) · 연령 미상 '+_memAiFmt(idx.age['미상']||0)+'명';
   return null;
 }
-// 자유 질문 폴백 — 전송 = 집계 JSON만(이름·전화·상세주소 없음 = 개인 식별 0)
-function _memAiStats(idx){
-  var cs=Object.keys(idx.byCity).sort(function(x,y){return idx.byCity[y]-idx.byCity[x];});
-  var city={},etc=0;
-  cs.forEach(function(c,i){if(i<30){var o={'합계':idx.byCity[c]},am=idx.cityAge[c]||{};Object.keys(am).forEach(function(a){o[a]=am[a];});city[c]=o;}else etc+=idx.byCity[c];});
-  return {'총회원':idx.n,'주소미상':idx.unloc,'연령대':idx.age,'시도':idx.bySido,'시군구_상위30_연령교차':city,'시군구_기타합':etc,'관내정의':'여수시·순천시·광양시 합'};
-}
-async function _memAiLLM(q){
-  var r=await api('POST','/api/mem-chat',{q:q,stats:_memAiStats(_memAiIdx())});
-  if(!r||!r.text)throw new Error('빈 응답');
-  return String(r.text);
+// 자유 질문 폴백 동봉용 집계 한 줄 요약 — 개인 식별 0(인원수뿐) · 공개 레포 커밋 축이라 최소만 동봉
+function _memAiCtx(idx){
+  var top=Object.keys(idx.byCity).sort(function(x,y){return idx.byCity[y]-idx.byCity[x];}).slice(0,5);
+  var ages=Object.keys(idx.age).sort(function(x,y){return idx.age[y]-idx.age[x];}).slice(0,4);
+  var gn=(idx.byCity['여수시']||0)+(idx.byCity['순천시']||0)+(idx.byCity['광양시']||0);
+  return '회원 집계 요약 — 총 '+idx.n+'명 · 관내(여수·순천·광양) '+gn+'명('+_memAiPct(gn,idx.n)+'%) · 거주지 상위 '+top.map(function(c){return c+' '+idx.byCity[c]+'명';}).join(', ')+' · 연령 상위 '+ages.map(function(a){return a+' '+idx.age[a]+'명';}).join(', ');
 }
 function _memAiSend(sfx){
   var inp=document.getElementById('mem-ai-q-'+sfx);if(!inp)return;
@@ -24396,13 +24457,11 @@ function _memAiSend(sfx){
   _memAiHist.push({u:q});
   var ans=null;try{ans=_memAiLocal(q,idx);}catch(e){console.warn('[mem-ai local]',e);}
   if(ans){_memAiHist.push({b:ans});_memAiPaintAll();return;}
-  var pend={b:_ldHtml(12)+'생각 중'};
+  var pend={b:_ldHtml(12)+'예울이가 생각 중이에요…'};   // [260803] 집계 밖 질문 = 예울이 AI(깃 Actions claude — _yeulAiAsk 공용 브레인)
   _memAiHist.push(pend);_memAiBusy=true;_memAiPaintAll();
-  _memAiLLM(q).then(function(t){pend.b=_memEsc(t).slice(0,4000);})
-    .catch(function(e){var s=String(e&&e.message||e);
-      pend.b=(s.indexOf('404')===0||s.indexOf('503')===0)
-        ?'자유 질문 AI는 서버 배포 전이에요 — 지금은 집계 질문에 바로 답해요. 예: 「여수 30대 몇 명?」 「거주지 TOP5」'
-        :'응답 실패: '+_memEsc(s.slice(0,90));})
+  _yeulAiAsk(q,_memAiCtx(idx),function(sec){pend.b=_ldHtml(12)+'예울이가 생각 중이에요… '+sec+'초';_memAiPaintAll();})
+    .then(function(t){pend.b=_memEsc(t).slice(0,4000);})
+    .catch(function(e){pend.b='죄송해요, 지금은 답을 못 가져왔어요 🙏 '+_memEsc(String(e&&e.message||e).slice(0,110));})
     .then(function(){_memAiBusy=false;_memAiPaintAll();});
 }
 
@@ -26877,7 +26936,7 @@ function _chatbotMount(){
   document.body.appendChild(fab);
   const win=document.createElement('div');
   win.id='cb-win';win.className='cb-win';
-  win.innerHTML='<div class="cb-hdr"><div class="cb-ava"><img src="image/yeul.png" alt="" style="width:100%;height:100%;border-radius:50%;object-fit:cover"></div><div class="cb-titles"><div class="cb-title">예울이</div><div class="cb-sub">자동응답 · 규정/프로그램 문의</div></div><button class="cb-close" onclick="_cbClear()" title="대화 지우기" style="font-size:15px">⟲</button><button class="cb-close" onclick="_cbToggle()">✕</button></div>'+
+  win.innerHTML='<div class="cb-hdr"><div class="cb-ava"><img src="image/yeul.png" alt="" style="width:100%;height:100%;border-radius:50%;object-fit:cover"></div><div class="cb-titles"><div class="cb-title">예울이</div><div class="cb-sub">자동응답 · 규정/프로그램 · 그 외엔 AI</div></div><button class="cb-close" onclick="_cbClear()" title="대화 지우기" style="font-size:15px">⟲</button><button class="cb-close" onclick="_cbToggle()">✕</button></div>'+
     '<div class="cb-body" id="cb-body"></div>'+
     '<div class="cb-foot"><input class="cb-in" id="cb-in" placeholder="궁금한 내용을 입력하세요" onkeydown="if(event.key===\'Enter\')_cbSend()"><button class="cb-send" onclick="_cbSend()"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg></button></div>';
   document.body.appendChild(win);
@@ -27136,19 +27195,18 @@ function _cbShowRule(r){
 function _cbRulesAnswer(q,qn){
   const done=function(rules){
     const res=_cbRulesSearch(rules,q);
-    if(res.clarify||!res.hits.length){
-      _cbBot(res.clarify
-        ?'음, 조금만 더 구체적으로 물어봐 주실래요? 🙂\n키워드가 있으면 바로 찾아드려요. 예를 들면 —'
-        :'그 내용은 규정에서 못 찾았어요 😢 다른 키워드로 다시 물어보시거나, 아래 예시처럼 질문해 보세요.');
+    if(res.clarify){
+      _cbBot('음, 조금만 더 구체적으로 물어봐 주실래요? 🙂\n키워드가 있으면 바로 찾아드려요. 예를 들면 —');
       _cbChips([
         {label:'경조 휴가는 며칠?',fn:function(){_cbAsk('경조 휴가는 며칠?');}},
         {label:'연차는 어떻게 생겨?',fn:function(){_cbAsk('연차는 어떻게 생겨?');}},
         {label:'출장비 지급 기준',fn:function(){_cbAsk('출장비 지급 기준');}},
         {label:'처음으로',fn:_cbHome,ghost:true}
       ]);
-      _cbLog('자유입력',q,'',res.clarify?'모호질문':'미응답');
+      _cbLog('자유입력',q,'','모호질문');
       return;
     }
+    if(!res.hits.length){_cbAiAnswer(q);return;}   // [260803 운영자] 규정·FAQ 미스 = 「미응답」 데드엔드 폐지 → 예울이 AI(전사 자유질문·_yeulAiAsk 공용 브레인)
     const best=res.hits[0];
     // [세분화 260611] 다항목 조항이면 되묻기 — 항목(자식 청크) 칩 제시 후 단정 답변
     {
@@ -27182,6 +27240,18 @@ function _cbRulesAnswer(q,qn){
   if(_cb.rules!==null){done(_cb.rules);return;}
   _cbTyping(true);
   _cbLoadRules().then(function(r){_cbTyping(false);done(r||[]);});
+}
+// [260803 운영자] 규칙 기반 미스 → 예울이 AI 폴백 — 루시봇 컨셉(persona/yeuli.md 카드 + 깃 Actions claude · 공용 _yeulAiAsk).
+//   결과·실패는 챗봇로그에 그대로 적재(기존 '미응답' 자리를 'AI답변'/'AI실패'가 대체).
+function _cbAiAnswer(q){
+  _cbBot('규정·FAQ에선 못 찾았어요. 제가 직접 생각해서 답해드릴게요 — 30초~2분쯤 걸려요 🙏');
+  const b=document.getElementById('cb-body');
+  const w=document.createElement('div');w.className='cb-msg bot';w.innerHTML=_ldHtml(12)+'예울이가 생각 중이에요…';
+  if(b){b.appendChild(w);_cbScroll();}
+  _yeulAiAsk(q,'',function(sec){w.innerHTML=_ldHtml(12)+'예울이가 생각 중이에요… '+sec+'초';})
+    .then(function(t){w.innerHTML=escapeHtml(String(t)).slice(0,4000);_cbScroll();_cbLog('AI답변',q,String(t).slice(0,80),'claude·yeulchat');})
+    .catch(function(e){w.innerHTML='죄송해요, 지금은 답을 못 가져왔어요 🙏 '+escapeHtml(String(e&&e.message||e).slice(0,110));_cbScroll();_cbLog('자유입력',q,'','AI실패');})
+    .then(function(){_cbChips([{label:'다른 질문',fn:function(){_cbPickCat('회사');}},{label:'처음으로',fn:_cbHome,ghost:true}]);});
 }
 function _cbSend(){
   const inp=document.getElementById('cb-in');
