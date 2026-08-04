@@ -6966,7 +6966,7 @@ function _bizmRepaint(){
     if(pair){ try{ _railYrmRender(); }catch(_e){} }
   });
 }
-// 전시 행 정규화 — 공연 막대·표가 쓰는 필드명으로 맞춘다(그리는 코드는 한 벌 = `_bizDrawSalesBars`·표 마크업 재사용).
+// 전시 행 정규화 — 공연 막대·표가 쓰는 필드명으로 맞춘다([260804] 그리기 = 누적범위 음영 `_bizDrawExhibFlow` · 필드 계약은 그대로).
 //   소스 = `_anaExhibBuild()`(전시마스터+전시일일 · 레일 6시트가 이미 받아 둔 캐시) · 여기서 새로 집계하지 않는다.
 //   ⚠ 전시엔 장르·오픈석·점유율 축이 없다 → 장르 자리 = 분야색 고정(`_col`) · 점유율 자리 = **목표관객 대비 달성률**.
 //   미로드면 null 반환(호출측이 로딩 화면) · 무료 전시는 판매현황 축 밖이라 분석 보드와 같은 규칙으로 제외.
@@ -6986,57 +6986,38 @@ function _bizExhibRows(year){
         paid:head,seat:goal,
         avg:(goal>0)?(head/goal*100):(parseFloat(e.occ)||0),
         _rev:(rev>0?rev:null),_sold:(head>0?head:null),
+        _dly:e.daily||[],   // [260804 운영자] 누적범위 그래프용 일일 누계 실측점(전시일일 · _anaExhibBuild가 이미 정렬해 둔 참조 전달 — 재집계 0)
         _st:(e.status==='active')?'active':((e.status==='notyet')?'planned':'ended')});
     });
   }catch(_e){ console.warn('[biz exhib rows]',_e); return []; }
   out.sort(function(a,b){ var ad=a.end?a.end.getTime():9e15,bd=b.end?b.end.getTime():9e15; if(ad!==bd)return ad-bd; return a.name<b.name?-1:1; });
   return out;
 }
-// [260806 운영자 「우 교육 판매현황 · 공연 처럼 연간으로」] 교육 반쪽 본문 = **평년 대비 수강생** 게이지.
-//   교육은 프로그램 단위 원천(시트)이 없다 — 있는 건 연간 정본 거울 `_YR.cats['교육']`뿐이라, 공연·전시가 사업별로
-//   그리는 자리를 교육에선 연간 지표(수강생·횟수·일수)로 잰다. 부품·기하 = 260805 전시 축적 게이지 그대로(신규 형태 0).
-//   ⚠ 과거 연도를 다른 소스로 재생성하지 않는다(라우터 경고 준수) — 거울을 **읽기만** 한다.
-//   ⚠ 그 해 수강생이 0(= 아직 집계 전 · 2026 실측)이면 게이지 대신 빈 상태 — 0% 막대는 「교육을 안 했다」로 읽힌다.
+// [260804 운영자 「교육도 세우고 · 무조건 당해년도만 · 해당 월에 콘텐츠를 세우셈」] 교육 반쪽 = **당해 연도 월별 일정 게이지**.
+//   구 260806 「연도별 수강생 가로 막대」(여러 해 겹침)는 철거 — 소스를 연간 거울(_YR)에서 **프로그램 시트(콘텐츠구분 예술교육 = t'a')**로
+//   바꿔, 선택 연도의 교육 프로그램을 공연과 같은 1월~12월 축 위 그 달 자리에 세운다.
+//   ⚠ 프로그램 **단위** 수강생 원천은 여전히 없다(있는 건 연간 거울 총계뿐 · 라우터 경고 축) → 막대 값을 창작하지 않고
+//     전부 「값 없음」 파선 게이지(공연 예정과 같은 문법)로 세운다 · 수강생 수치는 툴팁도 말하지 않는다(집계 전 명시).
 function _bizEduEmptyHtml(year){
   return '<div style="padding:34px 18px;text-align:center">'
-    +'<div style="font-size:13.5px;font-weight:700;color:var(--dim)">📭 '+year+'년 교육 데이터가 없어요</div>'
-    +'<div style="margin-top:8px;font-size:11.5px;color:var(--muted);line-height:1.7">프로그램 단위 교육 원천(시트)이 아직 없고,<br>연간 실적 거울에도 이 해 <b style="color:var(--green)">수강생</b> 집계가 없습니다.</div>'
+    +'<div style="font-size:13.5px;font-weight:700;color:var(--dim)">📭 '+year+'년 교육 프로그램이 없어요</div>'
+    +'<div style="margin-top:8px;font-size:11.5px;color:var(--muted);line-height:1.7">프로그램 시트에 <b style="color:var(--green)">예술교육</b>으로 등록되면<br>1월~12월 축의 그 달 자리에 표시됩니다.</div>'
     +'</div>';
 }
-// [260806 2차 운영자 「전시랑 교육은 가로 데이터로」 · 「바닥면에 날짜」] 교육 반쪽 = **연도별 수강생 가로 막대**.
-//   교육은 사업 단위 원천(시트)이 없다 — 있는 건 연간 정본 거울(`_YR.cats['교육']`)뿐이라, 공연·전시가 「사업 × 날짜」로 그리는
-//   자리를 교육에선 「연도 × 수강생」으로 그린다(그 축에선 **연도가 곧 날짜**다) = 바닥면 날짜 요구를 데이터 있는 그대로 충족.
-//   부품 = 같은 막대 함수(`_bizDrawSalesBars` dom='edu' · orient='h') 한 벌 = 신규 차트 0.
-//   ⚠ 값이 0인 해(집계 전·자료 없음)는 **막대 대신 빈 파선 자리** — 공연 「예정」과 같은 문법(0 막대는 「안 했다」로 읽힌다).
-//   ⚠ 과거 연도를 다른 소스로 재생성하지 않는다(라우터 경고 준수) — 거울을 읽기만 한다.
-function _bizEduYearRows(year){
-  var out=[], r=null;
-  try{ r=_yrRow('교육','인원'); }catch(_e){ return out; }
-  if(!r)return out;
-  var now=(new Date()).getFullYear(), col=_yrCss('--green')||'';
-  for(var y=year-5;y<=year;y++){
-    var yi=_YR.years.indexOf(y); if(yi<0)continue;
-    var v=Number(r.v[yi])||0, zero=!(v>0);
-    out.push({name:y+'년 수강생',_axl:String(y),genre:'교육',_col:col,
-      start:new Date(y,0,1),end:new Date(y,11,31),cnt:0,paid:zero?null:v,seat:0,avg:0,
-      _rev:null,_sold:zero?null:v,_st:zero?'planned':((y<now)?'ended':'active')});
-  }
+function _bizEduMonthRows(year){
+  var out=[], col=_yrCss('--green')||'';
+  var tdy=new Date(); tdy.setHours(0,0,0,0);
+  ((typeof PERFS!=='undefined'&&PERFS)||[]).forEach(function(p){
+    if(!p||p.t!=='a'||!p.s)return;
+    var sd=_salesDate(p.s); if(!sd||sd.getFullYear()!==year)return;
+    var ed=p.e?(_salesDate(p.e)||sd):sd;
+    var nm=String(p.f||p.n||'').trim(); if(!nm)return;
+    out.push({name:nm,genre:'교육',_col:col,start:sd,end:ed,cnt:0,paid:0,seat:0,avg:0,
+      _rev:null,_sold:null,   // 값 없음 = 파선 게이지(_bizDrawSalesBars dom='edu') — 수강생 창작 금지
+      _st:(ed<tdy)?'ended':((sd>tdy)?'planned':'active')});
+  });
+  out.sort(function(a,b){ return (a.start-b.start)||(a.name<b.name?-1:1); });
   return out;
-}
-// 각주 한 줄 = 선택 연도의 수강생·평년 대비·횟수·일수(구 게이지가 지던 정보를 높이 38px×2 없이 그대로 남긴다).
-function _bizEduFootHtml(year){
-  try{
-    var yi=_YR.years.indexOf(year); if(yi<0)return '';
-    var val=function(k){ var r=_yrRow('교육',k); return r?(Number(r.v[yi])||0):0; };
-    var base=[year-3,year-2,year-1], ri=_yrRow('교육','인원');
-    var hs=base.map(function(b){ var bi=_YR.years.indexOf(b); return (bi<0||!ri)?0:(Number(ri.v[bi])||0); });
-    var avg=hs.reduce(function(a,b){return a+b;},0)/base.length;   // 분모 3년 고정 = 260804 규칙(라벨이 약속한 「최근 3년 평균」과 어긋나지 않게)
-    var cur=val('인원'), pct=(avg>0)?Math.round(cur/avg*100):null;
-    var txt=(cur>0)
-      ? (year+' 수강생 '+cur.toLocaleString()+'명'+((pct!=null)?(' · 평년 대비 <b style="color:var(--green)">'+pct+'%</b>'):'')+' · 교육횟수 '+val('횟수').toLocaleString()+'회 · 교육일수 '+val('일수').toLocaleString()+'일')
-      : (year+' 집계 전'+((avg>0)?(' · 평년('+base.join('·')+') 수강생 '+Math.round(avg).toLocaleString()+'명'):''));
-    return '<div style="margin:2px 12px 6px;font-size:11px;color:var(--dim);text-align:right">'+txt+'</div>';
-  }catch(_e){ return ''; }
 }
 // ── [260804 운영자] y축 중략(≈) — 「매출이 너무 큰 게 하나 있어서 차트가 무너진다」 ────────────────
 //   대형 뮤지컬 1건(486백만)이 나머지 16건(0.9~66백만)을 다 눌러 8건이 2px 막대가 되던 형태 실측 → 적정선에서 축을 끊는다.
@@ -7097,115 +7078,89 @@ function _bizBreakShapes(brk,spans,ink,fill,cyc){
 // 사업별 판매현황 막대 — 값 = 매출(백만 원, 판매 축 있을 때) · 없으면 판매 고객(명) 폴백. 날짜순(list 정렬 계승).
 //   ⚠ 선택값의 「막대 라운드 6px」은 Plotly 2.27에 marker.cornerradius가 없어(2.28+ 기능) 미적용 — 기틀에 없는 값이라 임의 구현하지 않는다.
 //   축 글자·여백은 현행(10.5px) 유지 = 타이포·기하는 기틀 종속(운영자 260803 「내용만 만져라」).
-// [260805] dom = 'exhib'면 라벨만 전시 용어로(판매 고객→관람객 · 점유율→달성률 · 장르→분야). 그리는 규칙·기하는 100% 공용.
-// ── [260806 2차 운영자] 바닥면 = 날짜 · 상태 = 구획 박스 · 음영은 전부 동일 ────────────────────────
-//   지시: *"전시랑 교육은 가로 데이터로 하자"* · *"공연 전시 교육 모두 그 바닥면에 날짜가 없어. 기본 차트 구성을 좀 반영좀 해줘"* ·
-//        *"현재 진행중인 공연하고 아닌거하고 차트 음영 불투명도로 구분해놨는데 … 차트 영역에 박스를 구획해줘.
-//          그거를 바닥면에 만들 날짜를 기준으로 … 종료 전후가 나오면 되니까"* · *"진행 완료, 진행 예정(진행중) 구획은 박스로.
-//          강조부분이 이제 진행 예정에 들어가면 될듯. 차트 자체의 음영은 모두 동일하게"*.
-//   ① **바닥면 날짜**: 눈금 라벨에 그 사업의 날짜를 박는다(세로 = 「1.09 신년음악회」 · 가로 = 「1.09」, 이름은 막대 옆).
-//      ⚠ 좌표축 자체를 실시간 축(scattergl 시간축)으로 바꾸지는 않는다 — 운영자가 짚은 그대로 **특정 시점에 사업이 몰리면
-//        막대가 서로 겹쳐** 못 읽는다(1월에 미세스 다웃파이어 4회차가 같은 이틀에 몰리는 실제 분포). 균등 간격은 그대로 두고
-//        라벨만 날짜로 = 「적절히 상징적으로만 날짜를 써주면 됨」.
-//   ② **구획 박스**: 정렬이 날짜순이라 「오늘」 경계는 인덱스 하나로 떨어진다 → 그 자리를 파선으로 긋고 좌/우(가로면 위/아래)를
-//      옅은 박스 두 개로 나눈다(진행 완료 │ 진행·예정). 강조(peach 알파)는 운영자 지시대로 **진행·예정** 쪽.
-//      색 = 팔레트 토큰의 알파 변주만(기틀 §3.5② · `_yrHexA`·`--past-bg`) = 새 색 0.
-//   ③ **음영 통일**: 상태별 opacity(.55/1)·판매중 테두리 폐지 = 막대는 전부 같은 농도. 상태는 이제 박스가 말한다.
-//      값이 아예 없는 예정 건만 종전대로 빈 파선 자리(막대를 그릴 값이 없다는 표시 — 상태 표식이 아니다).
-//   ④ **가로 모드**(orient='h' · 전시·교육 반쪽): 축만 뒤집는다. 반쪽 카드는 폭이 좁아 세로 막대의 45° 이름표가 서로 겹치는데,
-//      가로면 행마다 이름을 통째로 쓸 수 있다. ⚠ y축 중략(≈)은 세로 전용 — 축을 뒤집으면 띠 기하가 x/y 반전이라 그대로 못 쓴다.
-//      반쪽 값 분포는 한 자릿수~두 자릿수(백만 원)라 중략 조건에 거의 닿지 않는다(2025·2026 실측 미발동).
-function _bizDrawSalesBars(divId,list,hgt,dom,orient){
+// ── [260804 운영자] 바닥축 = **1월~12월 실날짜** · 「오늘」 파선 폐지(음영만) · 게이지 막대 ────────────
+//   지시: *"키워드들 대각선으로 두지 말고 그냥 1월부터 12월로 · 특정 시기에 몰려있으면 몰려있게(차트가 거의 일자로
+//         게이지바처럼 위로 솟게) · 점선도 그냥 그 부분을 반투명하게 음영 표현하고 없애는 거로"*.
+//   ① 균등 간격 카테고리 축(45° 「MM.DD 이름」 눈금) 폐지 → x = 그 사업의 **실날짜 위치**(1월 1일~12월 31일 선형 축 ·
+//      눈금 = 달 첫날 「N월」). 몰린 시기는 몰린 대로 붙는다 — 완전 겹침(같은 날 복수 사업)만 막대폭×1.18 최소 간격으로
+//      민다(순서·몰림 보존). 이름 눈금이 없어졌으므로 사업명·정확한 일자는 툴팁이 진다(260806 2차 계승).
+//   ② 구획(진행 완료 │ 진행·예정) 경계 = 인덱스가 아니라 **오늘 날짜**(_bizYearZones) · 「오늘」 파선·라벨 제거 =
+//      반투명 음영 두 장만 남는다(운영자). 막대 농도 전부 동일(260806 2차) · 값 라벨은 큰 값 우선, 겹치면 생략(툴팁 폴백).
+//   ③ dom='edu' = 값 축 없는 **월별 일정 게이지** — 교육은 프로그램 단위 수강생 원천이 없어(연간 거울 총계뿐) 전 항목을
+//      「값 없음」 파선 문법으로 세운다(y축 숨김 · 툴팁 = 일정·집계 전 명시 · 수치 창작 0).
+//   ④ 구 orient='h'(가로 모드·전시/교육 반쪽)는 호출부 소멸로 폐지 — 전시는 누적범위 그래프(_bizDrawExhibFlow)로 이관.
+function _bizYearDays(y){ return Math.round((new Date(y+1,0,1)-new Date(y,0,1))/86400000); }
+function _bizXDay(d,y){ if(!d)return null; var t=(d-new Date(y,0,1))/86400000+1; return Math.max(0.5,Math.min(_bizYearDays(y)+0.5,t)); }   // 연 밖(이월 전시 등) = 축 가장자리 클램프
+function _bizMonthAxis(y,thin){   // thin = 반쪽 카드처럼 좁은 폭 — 짝수달 라벨만 생략(눈금 12개는 유지 = 격자 감각 보존)
+  var tv=[],tt=[],m;
+  for(m=0;m<12;m++){ tv.push(_bizXDay(new Date(y,m,1),y)); tt.push((thin&&m%2===1)?'':((m+1)+'월')); }
+  return {x0:-3,x1:_bizYearDays(y)+4,tickvals:tv,ticktext:tt};
+}
+// 진행 완료 │ 진행·예정 음영 — 경계 = 오늘 날짜(선택 연도가 통째로 과거/미래면 음영 한 장). 색 = 기존 토큰 알파 변주만(--past-bg · peach 0.09).
+function _bizYearZones(y,x0,x1,dim){
+  var t=new Date(); t.setHours(0,0,0,0);
+  var tx=(t<new Date(y,0,1))?x0:((t>new Date(y,11,31))?x1:_bizXDay(t,y));
+  var sh=[],an=[];
+  var box=function(a,b,f){ sh.push({type:'rect',xref:'x',yref:'paper',layer:'below',x0:a,x1:b,y0:0,y1:1,fillcolor:f,line:{width:0}}); };
+  var note=function(a,b,txt){ if(b-a<30)return; an.push({xref:'x',x:(a+b)/2,xanchor:'center',yref:'paper',y:.995,yanchor:'top',text:txt,showarrow:false,font:{size:9.5,color:dim},opacity:.85}); };   // 좁은 구획(연초·연말 며칠)엔 라벨 생략 — 음영 밖으로 삐져나오지 않게
+  if(tx>x0){ box(x0,tx,_yrCss('--past-bg')||'rgba(0,0,0,0.02)'); note(x0,tx,'진행 완료'); }
+  if(tx<x1){ box(tx,x1,_yrHexA(_yrCss('--peach-text'),0.09)); note(tx,x1,'진행·예정'); }   // 강조 = 진행·예정 쪽(운영자 260806)
+  return {shapes:sh,notes:an};
+}
+function _bizDrawSalesBars(divId,list,hgt,dom){
   if(!window.Plotly)return;
-  var EX=(dom==='exhib'), ED=(dom==='edu'), HZ=(orient==='h');
+  var ED=(dom==='edu');
   var div=document.getElementById(divId); if(!div)return;
   var rows=(list||[]).slice();
   if(!rows.length){ try{Plotly.purge(div);}catch(_e0){} return; }
-  var dim=_yrCss('--dim'), grid=_yrCss('--border');
+  var dim=_yrCss('--dim'), grid=_yrCss('--border'), Y=_bizmState.year;
   var hasRev=rows.some(function(g){return g._rev!=null&&g._rev>0;});
   // ⚠ 매출 미조인(_rev==null)은 **0이 아니라 null** — 0으로 떨어뜨리면 "0.0" 막대가 깔려 「하나도 안 팔렸다」로 읽힌다(평의회6).
-  //   null = Plotly가 막대를 안 그린다(이름 칸은 남아 「자료 없음」이 보인다) · 툴팁·표는 종전대로 '—'.
-  var valOf=function(g){ return hasRev?((g._rev!=null)?(g._rev/1e6):null):((g._sold!=null&&g._sold>0)?g._sold:g.paid); };
+  //   null = 막대 없음 → 아래 파선 자리(값 없음)가 그 사업의 자리를 지킨다(시간축엔 이름 눈금이 없어, 안 그리면 통째로 사라진다).
+  var valOf=function(g){ if(ED)return null; return hasRev?((g._rev!=null)?(g._rev/1e6):null):((g._sold!=null&&g._sold>0)?g._sold:(g.paid>0?g.paid:null)); };
   var unit=hasRev?'백만 원':'명';
-  // 이름 자르기 — 자르기 전에 **선택 연도 접두를 뗀다**. 한국 공연명은 변별자(Ⅰ/Ⅱ/Ⅲ·<작품명>)가 뒤에 붙는데
-  //   머리부터 자르면 「2026 브런치 …」가 4건 전부 같은 글자가 됐다(평의회7 실측). 연도는 카드 제목에 이미 있어 정보 손실 0.
-  var _ypfx=new RegExp('^'+_bizmState.year+'\\s*');
-  var cut=function(s,n){ s=String(s||'').replace(_ypfx,''); n=n||9; return (s.length>n)?(s.slice(0,n)+'…'):s; };
   var plan=function(g){ return g._st==='planned'; };
-  var _fix=EX?(_yrCss('--peach-text')||''):(ED?(_yrCss('--green')||''):'');
-  var gcol=function(g){ return g._col||_fix||_BIZ_GENRE_COLORS[g.genre||'기타']||_BIZ_GENRE_COLORS['기타']; };   // [260805] _col/_fix = 분야색 고정(전시·교육엔 장르 축이 없다)
-  var md=function(d){ return ('0'+(d.getMonth()+1)).slice(-2)+'.'+('0'+d.getDate()).slice(-2); };   // [260806 2차] MM.DD = 우 열 상세 표(01.09(금))와 같은 문법 · 한 자리 월(2.05)은 소수로 오독된다
+  var _fix=ED?(_yrCss('--green')||''):'';
+  var gcol=function(g){ return g._col||_fix||_BIZ_GENRE_COLORS[g.genre||'기타']||_BIZ_GENRE_COLORS['기타']; };   // [260805] _col/_fix = 분야색 고정(교육엔 장르 축이 없다)
+  var md=function(d){ return ('0'+(d.getMonth()+1)).slice(-2)+'.'+('0'+d.getDate()).slice(-2); };   // MM.DD = 우 열 상세 표(01.09(금))와 같은 문법
   var dOf=function(g){ return g.start||g.end||null; };
-  var today=new Date(); today.setHours(0,0,0,0);
-  var done=function(g){ var e=g.end||g.start; return !!(e&&e<today); };   // 종료 전/후 = **바닥면 날짜 기준**(운영자) — 상태 플래그가 없는 과거 운영대장 행도 같이 잡힌다
-  var stName=function(g){ return ED?(done(g)?'집계 완료':'집계 중'):(plan(g)?'예정':(g._st==='active'?(EX?'진행중':'판매중'):'종료')); };
-  var dTxt=function(g){ if(g._axl!==undefined)return String(g._axl)+'년';
-    var s=g.start,e=g.end; if(!s&&!e)return '-';
+  var stName=function(g){ return plan(g)?'예정':(g._st==='active'?(ED?'진행중':'판매중'):'종료'); };
+  var dTxt=function(g){ var s=g.start,e=g.end; if(!s&&!e)return '-';
     if(s&&e&&s.getTime()!==e.getTime())return md(s)+'~'+md(e);
     return md(e||s); };
-  // 바닥면 눈금 = 날짜(운영자 「바닥면에 날짜가 없어」) · 가로는 날짜만(이름은 막대 옆 텍스트로 간다)
-  var tickOf=function(g){
-    if(g._axl!==undefined)return String(g._axl);            // 교육 = 연도 축(사업 단위 원천이 없어 연도가 곧 날짜다)
-    var d=dOf(g); if(!d)return HZ?'':cut(g.name,9);
-    return HZ?md(d):(md(d)+' '+cut(g.name,7));
-  };
-  var vals=rows.map(valOf), tr2=null, n=Math.max(1,rows.length);
+  var wpx=div.clientWidth||720, plotSpan=Math.max(120,wpx-62);
+  var ax=_bizMonthAxis(Y,wpx<430);
+  var pxPerDay=plotSpan/(ax.x1-ax.x0);
+  var W=Math.min(8,Math.max(2.2,5/pxPerDay));   // 막대폭(일 단위) ≈ 화면 5px 게이지 — 반쪽 카드도 같은 시각 굵기(운영자 「거의 일자로」)
+  var xs=rows.map(function(g){ var d=dOf(g); return d?_bizXDay(d,Y):null; });
+  var order=xs.map(function(x,i){return i;}).sort(function(a,b){return (xs[a]==null?9e9:xs[a])-(xs[b]==null?9e9:xs[b]);});
+  var mgap=W*1.18, prevX=-1e9;
+  order.forEach(function(i){ if(xs[i]==null)return; if(xs[i]-prevX<mgap)xs[i]=prevX+mgap; prevX=xs[i]; });
+  var vals=rows.map(valOf), tr2=null;
   var vfmt=function(v){ return hasRev?((v>=100)?Math.round(v).toLocaleString():v.toFixed(1)):Math.round(v).toLocaleString(); };
-  var lab=rows.map(function(g){ var v=valOf(g); if(v==null)return '';
-    return (HZ&&g._axl===undefined)?(cut(g.name,11)+'  '+vfmt(v)):vfmt(v); });   // 가로 = 행마다 자리가 남는다 → 이름+값을 막대 옆에(세로는 이름이 눈금에 있으므로 값만) · 교육(_axl = 연도축)은 눈금이 곧 이름이라 값만
-  var idxs=rows.map(function(g,i){return i;});
-  var wpx=div.clientWidth||720, hpx=hgt;
-  var plotSpan=HZ?Math.max(80,hpx-46):Math.max(120,wpx-62);   // 카테고리 축이 놓이는 방향의 그림 길이
-  var slot=plotSpan/n, bw=HZ?Math.min(30,Math.max(5,slot-9)):Math.min(46,Math.max(6,slot-9));   // 막대 최대폭(세로 46·가로 30) · 간격 9(선택값)
-  var wid=Math.max(.08,Math.min(.94,bw/slot));
-  // [260804] 축 중략 — 그릴 자리만 접는다(값·라벨·툴팁은 실값). plotPx = 실제 그림 높이(위 18 · 아래 96 여백 제외) · 가로 모드는 미적용(위 ④)
-  var brk=HZ?null:_bizBarBreak(vals,Math.max(60,hgt-114));
-  var yv=brk?vals.map(function(v){return brk.map(v);}):vals;
-  var tr={type:'bar',
-    text:lab, textposition:'outside', cliponaxis:false, textfont:{size:9.5,color:dim},
-    marker:{color:rows.map(gcol),line:{width:0}},   // [260806 2차] 상태별 opacity·테두리 폐지 = 「차트 자체의 음영은 모두 동일하게」(운영자) · 상태는 구획 박스가 말한다
+  // [260804] 축 중략 — 그릴 자리만 접는다(값·라벨·툴팁은 실값). plotPx = 실제 그림 높이(위 18 · 아래 34 여백 제외 — 45° 이름축 폐지로 아래 여백 96→34)
+  var brk=ED?null:_bizBarBreak(vals,Math.max(60,hgt-52));
+  var yv=brk?vals.map(function(v){return v==null?null:brk.map(v);}):vals;
+  // 값 라벨 = 큰 값 우선 배치 — 몰린 구간에서 겹치면 작은 값 라벨을 생략(정확값은 툴팁). 간격 26px ≈ 4자 라벨(9.5px) + 숨구멍(1920 실측 — 34px는 15일 떨어진 38.3까지 지웠다).
+  var labs=rows.map(function(g,i){ return vals[i]==null?'':vfmt(vals[i]); });
+  var labGap=26/pxPerDay, placedX=[];
+  rows.map(function(g,i){return i;}).filter(function(i){return vals[i]!=null;})
+    .sort(function(a,b){return vals[b]-vals[a];})
+    .forEach(function(i){ var ok=placedX.every(function(p){return Math.abs(p-xs[i])>=labGap;}); if(ok)placedX.push(xs[i]); else labs[i]=''; });
+  var tr={type:'bar',x:xs,y:yv,width:W,
+    text:labs, textposition:'outside', cliponaxis:false, textfont:{size:9.5,color:dim},
+    marker:{color:rows.map(gcol),line:{width:0}},   // [260806 2차] 상태별 opacity·테두리 폐지 = 막대 농도 전부 동일 · 상태는 음영 구획이 말한다
     customdata:rows.map(function(g){return [g.name,g.genre||'-',Math.round((g._sold!=null&&g._sold>0)?g._sold:g.paid),(g._rev!=null?_bizMoney(g._rev):'—'),(g.avg||0).toFixed(1),stName(g),dTxt(g)];}),
-    hovertemplate:'<b>%{customdata[0]}</b><br>%{customdata[6]} · %{customdata[5]} · %{customdata[1]}<br>'   // [260806 2차] 눈금이 상징 날짜라 **정확한 일자는 툴팁**이 진다
-      +(ED?'수강생 %{customdata[2]:,}명<extra></extra>'
-          :((EX?'관람 ':'판매 ')+'%{customdata[2]:,}명<br>매출 %{customdata[3]}<br>'+(EX?'달성률 ':'점유율 ')+'%{customdata[4]}%<extra></extra>'))};
-  if(HZ){ tr.orientation='h'; tr.x=yv; tr.y=idxs; tr.width=wid; }
-  else  { tr.x=idxs; tr.y=yv; tr.width=wid; }   // 폭 = 데이터 단위(슬롯 1칸 대비) — 동명 사업이 한 칸으로 병합되지 않도록 좌표는 인덱스, 이름·날짜는 ticktext로 건다
+    hovertemplate:'<b>%{customdata[0]}</b><br>%{customdata[6]} · %{customdata[5]} · %{customdata[1]}<br>'   // 눈금엔 달만 남는다 → 사업명·정확한 일자는 툴팁이 진다
+      +'판매 %{customdata[2]:,}명<br>매출 %{customdata[3]}<br>점유율 %{customdata[4]}%<extra></extra>'};
   var vMax=Math.max.apply(null,vals.filter(function(v){return v!=null&&isFinite(v);}).concat([1]));
-  var catAx={tickmode:'array',tickvals:idxs,ticktext:rows.map(tickOf),tickfont:{size:10.5,color:dim},
-    range:HZ?[Math.max(0.6,n-0.4),-0.6]:[-0.6,Math.max(0.6,n-0.4)],   // 가로 = 위에서 아래로 시간 진행(첫 항목이 위)
-    fixedrange:true,zeroline:false,showgrid:false,automargin:false};
-  if(!HZ)catAx.tickangle=-45;
-  var valAx={title:{text:unit,font:{size:10.5,color:dim}},tickfont:{size:10.5,color:dim},gridcolor:grid,zeroline:false,fixedrange:true,rangemode:'tozero'};
-  if(HZ)valAx.range=[0,vMax*1.62];   // 막대 옆 「이름 값」 텍스트가 앉을 자리(cliponaxis:false라 잘리진 않지만 카드 밖으로 나가지 않게)
-  var lay=HZ
-    ?{height:hgt,margin:{l:50,r:12,t:14,b:32},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',showlegend:false,xaxis:valAx,yaxis:catAx}
-    :{height:hgt,margin:{l:52,r:10,t:18,b:96},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',showlegend:false,xaxis:catAx,yaxis:valAx};
-  // ── 구획 박스(진행 완료 │ 진행·예정) — 오늘 경계 = 마지막 「종료」 인덱스 뒤 반 칸 ──────────────
-  var bIdx=-1; rows.forEach(function(g,i){ if(done(g))bIdx=i; });
-  var A0=-0.6, A1=Math.max(0.6,n-0.4), cutAt=bIdx+0.5;
-  var zoneShapes=[], zoneNotes=[];
-  var pushZone=function(c0,c1,fill){
-    zoneShapes.push(HZ
-      ?{type:'rect',xref:'paper',yref:'y',layer:'below',x0:0,x1:1,y0:c0,y1:c1,fillcolor:fill,line:{width:0}}
-      :{type:'rect',xref:'x',yref:'paper',layer:'below',x0:c0,x1:c1,y0:0,y1:1,fillcolor:fill,line:{width:0}});
-  };
-  var pushNote=function(c0,c1,txt){
-    var mid=(c0+c1)/2;
-    zoneNotes.push(HZ
-      ?{xref:'paper',x:.995,xanchor:'right',yref:'y',y:mid,yanchor:'middle',text:txt,showarrow:false,font:{size:9.5,color:dim},opacity:.85}
-      :{xref:'x',x:mid,xanchor:'center',yref:'paper',y:.995,yanchor:'top',text:txt,showarrow:false,font:{size:9.5,color:dim},opacity:.85});
-  };
-  if(bIdx>=0){ pushZone(A0,Math.min(cutAt,A1),_yrCss('--past-bg')||'rgba(0,0,0,0.02)'); pushNote(A0,Math.min(cutAt,A1),'진행 완료'); }
-  if(bIdx<n-1){ pushZone(Math.max(cutAt,A0),A1,_yrHexA(_yrCss('--peach-text'),0.09)); pushNote(Math.max(cutAt,A0),A1,'진행·예정'); }   // 강조 = 진행·예정 쪽(운영자)
-  if(bIdx>=0&&bIdx<n-1){
-    zoneShapes.push(HZ
-      ?{type:'line',xref:'paper',yref:'y',layer:'below',x0:0,x1:1,y0:cutAt,y1:cutAt,line:{color:dim,width:1,dash:'dot'}}
-      :{type:'line',xref:'x',yref:'paper',layer:'below',x0:cutAt,x1:cutAt,y0:0,y1:1,line:{color:dim,width:1,dash:'dot'}});
-    zoneNotes.push(HZ   // 경계 표식 = 「오늘」 한 마디(운영자 「적절히 상징적으로만 날짜를」) · 세로는 그림 **위쪽**(축 근처에 두면 마지막 완료 막대에 가린다 · 1920 실측)
-      ?{xref:'paper',x:0,xanchor:'left',yref:'y',y:cutAt,yanchor:'middle',text:'오늘',showarrow:false,font:{size:9,color:dim},opacity:.85}
-      :{xref:'x',x:cutAt,xanchor:'center',yref:'paper',y:.995,yanchor:'top',text:'오늘',showarrow:false,font:{size:9,color:dim},opacity:.85});
-  }
-  lay.shapes=zoneShapes; lay.annotations=zoneNotes;
+  var xAx={tickmode:'array',tickvals:ax.tickvals,ticktext:ax.ticktext,tickfont:{size:10.5,color:dim},
+    range:[ax.x0,ax.x1],fixedrange:true,zeroline:false,showgrid:false,automargin:false};
+  var yAx=ED?{visible:false,range:[0,1],fixedrange:true}   // 교육 = 값 축 없음(일정 게이지) — 눈금 숨김이 정직 표기
+    :{title:{text:unit,font:{size:10.5,color:dim}},tickfont:{size:10.5,color:dim},gridcolor:grid,zeroline:false,fixedrange:true,rangemode:'tozero'};
+  var lay={height:hgt,margin:{l:ED?14:52,r:10,t:18,b:34},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',showlegend:false,xaxis:xAx,yaxis:yAx};
+  var zone=_bizYearZones(Y,ax.x0,ax.x1,dim);
+  lay.shapes=zone.shapes; lay.annotations=zone.notes;
   var note=(div.parentNode&&div.parentNode.querySelector)?div.parentNode.querySelector('[data-bizbrknote]'):null;
   if(brk){
     // 눈금 라벨 자릿수 = step의 소수 자리에 맞춘다(구판은 0.15 눈금에 "0.2"를 찍어 눈금선과 글자가 어긋났다 — 평의회3)
@@ -7227,31 +7182,92 @@ function _bizDrawSalesBars(divId,list,hgt,dom,orient){
     lay.yaxis.range=[0,brk.rng]; delete lay.yaxis.rangemode;
     // ≈ 표식 = **차트 전폭 1줄**(국제 관례). 축 옆 스텁으로 두면 끊을 축선이 없어 「≈ 80 = 약 80」으로 읽힌다(평의회7).
     var cyc=Math.max(2,Math.min(16,Math.round(plotSpan/28)));       // 파장 ≈28px(넓은 카드는 16주기 상한에 걸려 최대 ≈45px) — 폭이 달라져도 같은 기호로 보이게
-    lay.shapes=lay.shapes.concat(_bizBreakShapes(brk,[[A0,A1]],dim,_yrCss('--surface-solid'),cyc));
-    if(note)note.textContent=' · ≈ = 축 중략(길이 비교 불가)';   // 정직 표기 — 「값은 실수치」로 끝내면 그림도 믿어도 된다고 읽힌다
+    lay.shapes=lay.shapes.concat(_bizBreakShapes(brk,[[ax.x0,ax.x1]],dim,_yrCss('--surface-solid'),cyc));
+    if(note)note.textContent=' · ≈ = 축 중략(길이 비교 불가)';   // 정직 표기 — [260804] 부제 철거(운영자)로 각주 자리 자체가 없으면 조용히 생략
   } else if(note) note.textContent='';                           // 재그리기로 중략이 풀렸는데 각주만 남는 것 차단
-  // [260805] 예정(오픈 전) = 값이 없으니 **빈 파선 자리**로만. 파선은 Plotly 막대 테두리로 못 그려서(marker.line에 dash 없음)
-  //   도형으로 그리고, 그 자리에 **투명 채움 막대**를 겹쳐 호버(사업명·장르·상태)를 살린다.
-  var pidx=[],i2; for(i2=0;i2<rows.length;i2++)if(plan(rows[i2]))pidx.push(i2);
+  // [260805] 값이 없는 사업 = **빈 파선 자리**로만(예정 · 매출 미조인 · 교육 일정). 파선은 Plotly 막대 테두리로 못 그려서
+  //   (marker.line에 dash 없음) 도형으로 그리고, 그 자리에 **투명 채움 막대**를 겹쳐 호버(사업명·상태)를 살린다.
+  var pidx=[],i2; for(i2=0;i2<rows.length;i2++)if((ED||plan(rows[i2])||vals[i2]==null)&&xs[i2]!=null)pidx.push(i2);
   if(pidx.length){
-    var axTop=brk?brk.rng:(HZ?vMax*1.62:vMax*1.12);
-    var pY=axTop*(HZ?0.045:0.07), hw=wid/2;
-    var psh=pidx.map(function(i){ return HZ
-      ?{type:'rect',xref:'x',yref:'y',layer:'above',x0:0,x1:pY,y0:i-hw,y1:i+hw,fillcolor:'rgba(0,0,0,0)',line:{color:gcol(rows[i]),width:1.2,dash:'dash'}}
-      :{type:'rect',xref:'x',yref:'y',layer:'above',x0:i-hw,x1:i+hw,y0:0,y1:pY,fillcolor:'rgba(0,0,0,0)',line:{color:gcol(rows[i]),width:1.2,dash:'dash'}}; });
+    var axTop=brk?brk.rng:(ED?1:vMax*1.12);
+    var pY=ED?0.52:axTop*0.07, hw=W/2;   // 교육 = 반높이 게이지 세로선(운영자) · 값 축은 종전 7% 자리
+    var psh=pidx.map(function(i){ return {type:'rect',xref:'x',yref:'y',layer:'above',x0:xs[i]-hw,x1:xs[i]+hw,y0:0,y1:pY,fillcolor:'rgba(0,0,0,0)',line:{color:gcol(rows[i]),width:1.2,dash:'dash'}}; });
     lay.shapes=lay.shapes.concat(psh);
-    tr2={type:'bar',width:wid,marker:{color:'rgba(0,0,0,0)',line:{width:0}},showlegend:false,hoverinfo:'text',textposition:'none',
-      text:pidx.map(function(i){ return ED?(rows[i].name+'\n집계 전')
-        :(rows[i].name+'\n예정 · '+(rows[i].genre||'-')+'\n'+(EX?'전시 시작 전':'티켓 오픈 전')); })};
-    if(HZ){ tr2.orientation='h'; tr2.x=pidx.map(function(){return pY;}); tr2.y=pidx; }
-    else  { tr2.x=pidx; tr2.y=pidx.map(function(){return pY;}); }
+    tr2={type:'bar',width:W,marker:{color:'rgba(0,0,0,0)',line:{width:0}},showlegend:false,hoverinfo:'text',textposition:'none',
+      x:pidx.map(function(i){return xs[i];}),y:pidx.map(function(){return pY;}),
+      text:pidx.map(function(i){ var g=rows[i]; return ED?(g.name+'\n'+dTxt(g)+' · '+stName(g)+'\n수강생 집계 전')
+        :(g.name+'\n'+dTxt(g)+' · '+(g.genre||'-')+'\n'+(plan(g)?'예정 · 티켓 오픈 전':stName(g)+' · 자료 없음')); })};
   }
-  try{ Plotly.newPlot(div,tr2?[tr,tr2]:[tr],lay,{displayModeBar:false,responsive:true}); }catch(_e){ console.warn('[biz bars]',_e); }
+  try{ Plotly.newPlot(div,ED?(tr2?[tr2]:[]):(tr2?[tr,tr2]:[tr]),lay,{displayModeBar:false,responsive:true}); }catch(_e){ console.warn('[biz bars]',_e); }
+}
+// ── [260804 운영자] 기획 전시 = **세로 누적범위 음영 그래프** ────────────────────────────────
+//   지시: *"전시는 장기간이니까 누적범위 그래프로 · (전시간에 중첩될 수도 있음) · 꼭대기는 항상 최종인원 판매로
+//         (종료일에 해당하는 지점 꼭대기) · 가로그래프를 세로로 바꾸고 누적 범위 음영 그래프로 전환"*.
+//   전시 하나 = 시작일 0 → (전시일일 누계 실측점들) → 종료일 최종 인원으로 차오르는 음영 한 장(x = 공연과 같은 1월~12월 축).
+//   · 일일 누계가 없는 전시(마스터만 등재)는 시작 0 → 끝 최종의 직선 램프 — 두 실값 사이 연결선일 뿐 값 창작 아님.
+//   · 진행중 전시 = 마지막 실측일까지만 차오른다(최종 미확정 = 꼭대기도 지금까지 누계) · 예정 전시 = 공연과 같은 빈 파선 자리.
+//   · 색 = 분야색 --peach-text 선 + 같은 토큰 alpha 음영(_yrHexA · 기틀 §3.5②) — 겹치면 겹친 대로 비쳐 보인다(운영자).
+//   · 꼭대기 숫자(최종/현재 누계 명)만 라벨로 남긴다 — 이름·기간·달성률은 툴팁(공연 축과 같은 문법).
+function _bizDrawExhibFlow(divId,list,hgt){
+  if(!window.Plotly)return;
+  var div=document.getElementById(divId); if(!div)return;
+  var rows=(list||[]).slice();
+  if(!rows.length){ try{Plotly.purge(div);}catch(_e0){} return; }
+  var dim=_yrCss('--dim'), grid=_yrCss('--border'), pc=_yrCss('--peach-text')||'', Y=_bizmState.year;
+  var today=new Date(); today.setHours(0,0,0,0);
+  var wpx=div.clientWidth||360, ax=_bizMonthAxis(Y,wpx<430);
+  var md=function(d){ return ('0'+(d.getMonth()+1)).slice(-2)+'.'+('0'+d.getDate()).slice(-2); };
+  var pd=function(v){ var s=String(v||'').replace(/[^0-9]/g,''); return (s.length>=8)?new Date(+s.slice(0,4),+s.slice(4,6)-1,+s.slice(6,8)):null; };   // 기준일자(YYYYMMDD류) → Date(_anaExhibBuild _d8와 같은 문법)
+  var built=[],maxV=1;
+  rows.forEach(function(g){
+    var s=g.start||g.end, e=g.end||g.start; if(!s)return;
+    var head=(g._sold!=null&&g._sold>0)?g._sold:(g.paid>0?g.paid:0);
+    var pts=[];
+    (g._dly||[]).forEach(function(r){ var d=pd(r['기준일자']); if(!d)return;
+      var v=_salesNum(r['누계총인원']); if(!(v>0))v=_salesNum(r['누계유료']);
+      if(v!=null&&isFinite(v)&&v>=0)pts.push([d,v]); });
+    pts.sort(function(a,b){ return a[0]-b[0]; });
+    if(g._st==='planned'||(!pts.length&&!(head>0))){ built.push({g:g,plan:true,s:s,e:e}); return; }   // 예정·집계 전 = 파선 자리
+    var xy=[[_bizXDay(s,Y),0]];
+    pts.forEach(function(p){ var x=_bizXDay(p[0],Y); if(x>xy[xy.length-1][0])xy.push([x,p[1]]); else xy[xy.length-1][1]=Math.max(xy[xy.length-1][1],p[1]); });   // 같은 날 중복 실측 = 큰 누계만
+    if(g._st==='active'){ if(xy.length<2&&head>0)xy.push([_bizXDay((today<e?today:e),Y),head]); }   // 진행중·일일 없음 = 시작→오늘 램프(마스터 누계 실값)
+    else { var le=_bizXDay(e,Y), lastP=xy[xy.length-1], fin=Math.max(head,lastP[1]);   // 종료 = 꼭대기 항상 종료일·최종 인원(운영자)
+      if(le>lastP[0])xy.push([le,fin]); else lastP[1]=fin; }
+    if(xy.length<2){ built.push({g:g,plan:true,s:s,e:e}); return; }   // 점 하나뿐이면 범위를 그릴 수 없다 → 파선 자리
+    var peak=xy[xy.length-1];
+    built.push({g:g,xy:xy,peak:peak});
+    if(peak[1]>maxV)maxV=peak[1];
+  });
+  var yTop=maxV*1.22, data=[],notes=[],shapes=[];
+  var zone=_bizYearZones(Y,ax.x0,ax.x1,dim);
+  shapes=zone.shapes; notes=zone.notes;
+  var fill=_yrHexA(pc,0.18);
+  built.forEach(function(b){
+    var g=b.g;
+    if(b.plan){
+      var x0=_bizXDay(b.s,Y),x1=_bizXDay(b.e,Y);
+      if(x1-x0<2.4){ var c=(x0+x1)/2; x0=c-1.2; x1=c+1.2; }   // 하루짜리도 보이는 최소 폭
+      shapes.push({type:'rect',xref:'x',yref:'y',layer:'above',x0:x0,x1:x1,y0:0,y1:yTop*0.07,fillcolor:'rgba(0,0,0,0)',line:{color:pc,width:1.2,dash:'dash'}});
+      data.push({type:'scatter',mode:'markers',x:[(x0+x1)/2],y:[yTop*0.035],marker:{size:16,color:'rgba(0,0,0,0)'},showlegend:false,hoverinfo:'text',
+        text:g.name+'\n'+md(b.s)+'~'+md(b.e)+' · 예정\n전시 시작 전'});
+      return;
+    }
+    var st=(g._st==='active')?'진행중':'종료';
+    data.push({type:'scatter',mode:'lines',x:b.xy.map(function(p){return p[0];}),y:b.xy.map(function(p){return p[1];}),
+      fill:'tozeroy',fillcolor:fill,line:{color:pc,width:1.6},showlegend:false,hoverinfo:'text',hoveron:'points+fills',
+      text:g.name+'\n'+md(g.start||g.end)+'~'+md(g.end||g.start)+' · '+st+'\n누적 판매 '+Math.round(b.peak[1]).toLocaleString()+'명'+(g.seat>0?('\n달성률 '+(g.avg||0).toFixed(1)+'%'):'')});
+    notes.push({xref:'x',x:b.peak[0],xanchor:'center',yref:'y',y:b.peak[1],yanchor:'bottom',text:Math.round(b.peak[1]).toLocaleString(),showarrow:false,font:{size:9.5,color:dim}});   // 꼭대기 = 최종(종료)/현재(진행) 누계 명
+  });
+  var lay={height:hgt,margin:{l:46,r:10,t:18,b:30},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',showlegend:false,
+    xaxis:{tickmode:'array',tickvals:ax.tickvals,ticktext:ax.ticktext,tickfont:{size:10.5,color:dim},range:[ax.x0,ax.x1],fixedrange:true,zeroline:false,showgrid:false,automargin:false},
+    yaxis:{tickfont:{size:10.5,color:dim},gridcolor:grid,zeroline:false,fixedrange:true,range:[0,yTop]},   // 단위(명)는 카드 우상단 「(단위: 명)」이 말한다
+    shapes:shapes,annotations:notes};
+  try{ Plotly.newPlot(div,data,lay,{displayModeBar:false,responsive:true}); }catch(_e){ console.warn('[biz exflow]',_e); }
 }
 // ── [260806 운영자] 면 하단 반반 = 좌 전시 판매현황 │ 우 교육 판매현황 ─────────────────────────
 //   지시: *"여기 하단에 장르별 판매 축적 대신에, 반으로 갈라서, 좌 전시 판매현황 우 교육 판매현황 · 보이는건 공연 처럼 연간으로"*.
 //   구 260805 「분야 탭(공연/전시/교육)이 면 전체를 갈아치우는」 구조는 칩과 함께 철거하고, 전시·교육을 **공연 면 안에 상시**로 둔다
-//   = 세 분야가 한 화면에서 같이 읽힌다 · 탭 왕복 0. 그리는 부품은 전부 그때 확립한 것 그대로(막대 = _bizDrawSalesBars의 exhib 축).
+//   = 세 분야가 한 화면에서 같이 읽힌다 · 탭 왕복 0. [260804] 전시 반쪽 그리기는 누적범위 음영(_bizDrawExhibFlow)으로 교체.
 // 전시 원천(전시마스터·전시일일) 자체 확보 — 넓은 화면은 레일 6시트 플로우가 채우지만 좁은 화면·부팅 중엔 비어 있다.
 //   도착하면 그 면만 다시 그린다(중복 fetch 방지 = window._bizmExBusy · 260805 배선 계승).
 function _bizExhibEnsure(){
@@ -7275,8 +7291,9 @@ function _bizExhibEnsure(){
 function _bizHalfCard(ttl,sub,body){
   // 본문 칸 = 남는 세로를 먹고 그 안에서 가운데(줄이 늘어나도 막대·문구가 카드 위쪽에 몰리지 않는다).
   //   ⚠ min-height는 건드리지 않는다(flex 기본 auto 유지) = 내용이 줄어들 일이 없어 260805가 겪은 「걸면 안 넘침 → 해제」 진동과 무관.
+  // [260804 운영자] sub = 긴 설명이 아니라 **우상단 단위 표기**(「(단위: 명)」)만 — float:right = 상세 표 머리글 「(단위: 명)」과 같은 문법·같은 잉크(.sub --dim).
   return '<div class="bizm-card" style="flex:1 1 0;min-width:240px;margin-bottom:0;display:flex;flex-direction:column">'
-    +'<div class="ct" style="flex:0 0 auto">'+ttl+(sub?(' <span class="sub">'+sub+'</span>'):'')+'</div>'
+    +'<div class="ct" style="flex:0 0 auto">'+ttl+(sub?(' <span class="sub" style="float:right;margin-left:8px">'+sub+'</span>'):'')+'</div>'
     +'<div style="flex:1 1 auto;display:flex;flex-direction:column;justify-content:center">'+body+'</div></div>';
 }
 function _bizCompRender(el,half){
@@ -7367,10 +7384,10 @@ function _bizCompRender(el,half){
     });
     list.sort(function(a,b){return a.end-b.end;});
   }
-  // [260806 운영자 「하단에 장르별 판매 축적 대신 · 반으로 갈라서 좌 전시 판매현황 우 교육 판매현황」] ─────────
+  // [260806 운영자 「하단에 장르별 판매 축적 대신 · 반으로 갈라서 좌 전시 우 교육」] ─────────
   //   좌 열 마지막 카드 자리(구 시즌 추세 → 260805 장르별 축적)를 **전시 │ 교육 반반 줄**이 통째로 승계한다.
-  //   · 좌 반쪽 = 전시 — 위 공연 막대와 **같은 부품**(_bizDrawSalesBars의 exhib 축) · 선택 연도 · 진행중 테두리·종료 연함·예정 파선까지 같은 문법.
-  //   · 우 반쪽 = 교육 — 프로그램 단위 원천이 없어 연간 정본 거울(_YR)의 평년 대비 수강생 게이지, 그 해가 0이면 빈 상태.
+  //   · 좌 반쪽 = 기획 전시 — [260804] 세로 누적범위 음영(_bizDrawExhibFlow) · 선택 연도 · 예정 = 파선 자리(공연과 같은 문법).
+  //   · 우 반쪽 = 예술교육 — [260804] 당해 연도 프로그램 시트(t'a') 월별 일정 게이지(_bizDrawSalesBars dom='edu') · 없으면 빈 상태.
   //   ⚠ 자리 마킹(data-bizmfill)은 **줄(wrapper)에** 건다 — 두 카드는 flex 항목이라 줄 높이에 맞춰 같이 늘어난다
   //     = 두 흰 도형의 하단선이 서로 같고, 그 줄이 박스 안선까지 채워져 좌·우 열 계약(260802e)도 그대로 성립.
   //     카드마다 걸면 두 도형이 각자 늘어 하단선이 갈린다. cap(data-bizmcap)은 걸지 않는다 — 이 줄의 높이는
@@ -7384,16 +7401,18 @@ function _bizCompRender(el,half){
   } else if(!_exRows.length){
     _exBody='<div style="padding:34px 18px;text-align:center;color:var(--dim);font-size:12.5px">📭 '+_bizmState.year+'년 '+(_liveOnly?'진행중인 전시가 없어요':'전시 데이터가 없습니다')+'</div>';
   } else {
-    var _exRev=_exRows.some(function(g){return g._rev!=null&&g._rev>0;});
-    _exSub=(_exRev?'— 막대 = 매출(백만 원)':'— 막대 = 관람객(명)');   // 3상태 범례(테두리·연함·파선)는 위 공연 카드가 이미 말한다 — 반쪽 폭에서 되풀이하면 제목이 2줄이 돼 막대를 밀어낸다(1920 실측)
+    _exSub='(단위: 명)';   // [260804 운영자] 설명문(막대 = …) 철거 — 우상단 단위 표기 하나만(축 = 누적 판매 인원)
     _exBody='<div id="bizm-ex-chart" style="height:'+_BIZ_HALF_CH+'px;margin:0 4px 2px"></div>';
   }
-  // [260806 2차] 교육 = 연도별 수강생 가로 막대(사업 단위 원천이 없어 연도가 곧 날짜 축) · 그 해까지 값이 하나도 없으면 빈 상태
-  var _eduRows=_bizEduYearRows(_bizmState.year), _eduAny=_eduRows.some(function(g){return g._sold!=null;});
-  var _eduBody=_eduAny?('<div id="bizm-edu-chart" style="height:'+_BIZ_HALF_CH+'px;margin:0 4px 0"></div>'+_bizEduFootHtml(_bizmState.year)):_bizEduEmptyHtml(_bizmState.year);
+  // [260804 운영자] 교육 = **당해 연도만** · 프로그램 시트(예술교육)의 월별 일정 게이지(구 연도별 가로 막대 폐지 — 「무조건 당해년도만」)
+  var _eduRows=_bizEduMonthRows(_bizmState.year);
+  if(_liveOnly)_eduRows=_eduRows.filter(function(g){return g._st==='active';});   // 「판매중」 = 지금 진행중인 교육만(공연·전시와 같은 축)
+  var _eduAny=_eduRows.length>0;
+  var _eduBody=_eduAny?('<div id="bizm-edu-chart" style="height:'+_BIZ_HALF_CH+'px;margin:0 4px 0"></div>')
+    :(_liveOnly?('<div style="padding:34px 18px;text-align:center;color:var(--dim);font-size:12.5px">📭 진행중인 교육이 없어요</div>'):_bizEduEmptyHtml(_bizmState.year));
   var _split='<div'+((half===1)?' data-bizmfill':'')+' style="display:flex;gap:14px;align-items:stretch;flex-wrap:wrap">'
-    +_bizHalfCard(_bizmState.year+' 전시 판매현황',_exSub,_exBody)
-    +_bizHalfCard(_bizmState.year+' 교육 판매현황',(_eduRows.length?'— 막대 = 연도별 수강생(명 · 연간 실적 거울)':''),_eduBody)
+    +_bizHalfCard('기획 전시',_exSub,_exBody)
+    +_bizHalfCard('예술교육',(_eduAny?'(단위: 명)':''),_eduBody)
     +'</div>';
   // [260806 운영자] 「전체 ↔ 판매중」 토글 — 판매중 = 지금 팔고 있는 사업(_st==='active')만.
   //   ⚠ 거르는 자리는 **여기 한 곳**뿐이다 — KPI·막대·우 열 상세 표가 전부 이 list를 보므로, 세 곳이 어긋날 수 없다.
@@ -7406,7 +7425,7 @@ function _bizCompRender(el,half){
     h+='<div class="bizm-card"'+((half===2)?' data-bizmfill data-bizmcap':'')+' style="padding:34px 18px;text-align:center;color:var(--dim);font-size:13px;display:flex;align-items:center;justify-content:center">📭 '+(_liveOnly?'지금 판매중인 공연 사업이 없습니다':'해당 연도 데이터가 없습니다')+'</div>'
       +((half===2)?'':_split)+'</div>'+DOTS+'</div>';
     _bizmSwap(el,h);
-    if(half!==2)_bizEnsurePlotly(function(){ try{ if(_exRows&&_exRows.length)_bizDrawSalesBars('bizm-ex-chart',_exRows,_BIZ_HALF_CH,'exhib','h'); }catch(_e){} try{ if(_eduAny)_bizDrawSalesBars('bizm-edu-chart',_eduRows,_BIZ_HALF_CH,'edu','h'); }catch(_e){} try{_bizFitSeason();}catch(_e){} });
+    if(half!==2)_bizEnsurePlotly(function(){ try{ if(_exRows&&_exRows.length)_bizDrawExhibFlow('bizm-ex-chart',_exRows,_BIZ_HALF_CH); }catch(_e){} try{ if(_eduAny)_bizDrawSalesBars('bizm-edu-chart',_eduRows,_BIZ_HALF_CH,'edu'); }catch(_e){} try{_bizFitSeason();}catch(_e){} });
     return;
   }
   var _revTot=0,_soldTot=0,_hasRev=false;
@@ -7420,13 +7439,10 @@ function _bizCompRender(el,half){
   // [260801 운영자] 조각 5개 — 「담는 자리」만 half로 갈린다(카드 마크업·순서 문법은 종전 그대로 · 신규 부품 0)
   // [260803 운영자 선택값] KPI = 사업 수 · 평균 점유율 · 누적 매출 · 누적 판매 고객(역할색 3톤 + --c5 = 현행 축 계승 · 크기·형태는 기틀 .bizm-kpi 그대로)
   var _kpi='<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px">'+kc(_bizmState.year+' 사업 수',total+'건'+(_planN?'<span class="u" style="color:var(--dim);margin-left:6px">+예정 '+_planN+'</span>':''),'--accent')+kc('평균 점유율',avgAll.toFixed(1)+'%','--peach-text')+kc('누적 매출',_hasRev?_bizMoney(_revTot):'—','--green')+kc('누적 판매 고객',Math.round(_soldTot).toLocaleString()+'명','--c5')+'</div>';
-  // [260803 운영자 선택값] 좌 콘텐츠 = 월×점유율 산점 → **사업별 판매현황 막대**(값 = 매출 · 공연일순 · 45°/9자 · 판매중 테두리).
-  //   차트 자리(id·높이 430)는 종전 그대로 = 이젤/fit 엔진(_bizFitSeason의 'bizm-chart' 축) 무접촉.
-  // [260804] 각주(data-bizbrknote) = 축 중략(≈)이 걸렸을 때만 채워지는 자리. 부제 **둘째 칸**에 둔다 —
-  //   맨 끝에 두면 안 읽히고(평의회7), 문구가 길면 좁은 폭에서 제목이 2줄이 돼 차트 높이를 밀어낸다(평의회2 실측 1440px).
-  var _barSub=_hasRev?'— 막대 = 매출(백만 원)':'— 막대 = 판매 고객(명 · 매출 데이터 없음)';
-  var _barSub2=' · 색 = 장르 · 배경 = 진행 완료 │ 진행·예정'+(_planN?' · 파선 = 값 없음(예정)':'');   // [260806 2차] 상태 = 음영·테두리 → **구획 박스**(운영자) · 좁은 폭에서 카드 제목이 2줄이 되지 않게 짧게(1440px 실측 · 평의회2 축)
-  var _dist='<div class="bizm-card"><div class="ct">'+_bizmState.year+' 판매현황 <span class="sub">'+_barSub+'<span data-bizbrknote></span>'+_barSub2+'</span></div><div id="bizm-chart" style="height:430px;margin:0 4px 2px"></div></div>';
+  // [260803 운영자 선택값] 좌 콘텐츠 = **사업별 판매현황 막대**(값 = 매출 · 공연일순). 차트 자리(id·높이 430)는 종전 그대로 = 이젤/fit 엔진(_bizFitSeason의 'bizm-chart' 축) 무접촉.
+  // [260804 운영자] 제목 = 「기획 공연」 · 회색 설명문(막대 = … · ≈ 각주 · 색 = 장르 …) 전부 철거 — 축·음영이 자체로 말하고, 세부는 툴팁이 진다.
+  //   우상단 단위 표기 = y축 제목(백만 원/명)이 이미 있어 생략(전시·교육은 y축 제목이 없어 카드 우상단에 단다).
+  var _dist='<div class="bizm-card"><div class="ct">기획 공연</div><div id="bizm-chart" style="height:430px;margin:0 4px 2px"></div></div>';
   // [260802e] data-bizmfill = 마지막 흰 도형을 박스 안선(패딩 18 위)까지 늘리는 마킹(_srailAlignTop) — 행이 적어도(1월 2건 등) 흰 라인이 좌 열과 같은 하단선에서 끝난다(운영자 「없던 있든 흰색 라인 다 맞춰줘」)
   // [260803 운영자 「전체로 선택하면 화면이 넘어선다 → 목록 안에서 스크롤」] data-bizmcap = 상한도 안선에 고정(행이 많아도 박스·흰선을 **절대** 넘지 않음).
   //   스크롤러는 정본 .ry-grp-bd 그대로 계승(오버레이 스크롤바·호버 리빌·gutter 안정 — 이 열이 #rail-yrm 안이라 호버 규칙도 그대로 먹는다) = 신규 CSS 0.
@@ -7462,8 +7478,8 @@ function _bizCompRender(el,half){
   h+='</div>'+DOTS+'</div>';
   _bizmSwap(el,h);   // [260802] 프레임 유지·안쪽만 교체(1-2면 ↔ 3-4면 두 열 동시 넘김의 번쩍임 제거)
   _bizEnsurePlotly(function(){ try{ if(half!==2){_bizDrawSalesBars('bizm-chart', list, 430);} }catch(_e){console.warn('[bizm chart]',_e);}
-    try{ if(half!==2&&_exRows&&_exRows.length)_bizDrawSalesBars('bizm-ex-chart',_exRows,_BIZ_HALF_CH,'exhib','h'); }catch(_e){console.warn('[bizm ex chart]',_e);}   // [260806] 전시 반쪽 = 같은 그리기 함수의 exhib 축 · [260806 2차] 가로(운영자) · 높이 고정 = fit 흡수 대상 아님
-    try{ if(half!==2&&_eduAny)_bizDrawSalesBars('bizm-edu-chart',_eduRows,_BIZ_HALF_CH,'edu','h'); }catch(_e){console.warn('[bizm edu chart]',_e);}
+    try{ if(half!==2&&_exRows&&_exRows.length)_bizDrawExhibFlow('bizm-ex-chart',_exRows,_BIZ_HALF_CH); }catch(_e){console.warn('[bizm ex chart]',_e);}   // [260804] 전시 반쪽 = 세로 누적범위 음영(운영자) · 높이 고정 = fit 흡수 대상 아님
+    try{ if(half!==2&&_eduAny)_bizDrawSalesBars('bizm-edu-chart',_eduRows,_BIZ_HALF_CH,'edu'); }catch(_e){console.warn('[bizm edu chart]',_e);}   // [260804] 교육 반쪽 = 당해 연도 월별 일정 게이지(세로)
     try{_bizFitSeason();}catch(_e){}   // [260805] 인라인 시즌 추세 철거 → 그리기 호출도 같이 내림(모달 _bizDrawSeason()은 무접촉 = 인자 없는 기본 divId 'biz-season-chart')
     // [260804] fit이 차트를 줄인 뒤(430→180~) 실높이로 **한 번만** 다시 그린다 — 중략 기하는 그릴 때의 px 배분으로
     //   데이터 좌표에 구워지기 때문에, 430 기준으로 접어 놓고 198px에 표시하면 띠가 3px로 무너져 「목표선」처럼 보이고

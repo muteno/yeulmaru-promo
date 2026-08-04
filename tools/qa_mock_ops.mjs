@@ -68,12 +68,23 @@ export const INIT_SCRIPT = `(function(){
   window.__MOCK_EXM={rows:exM,headers:Object.keys(exM[0])};
   window.__MOCK_EXD={rows:exD,headers:Object.keys(exD[0])};
 
+  // [260804] 예술교육 프로그램 목 — 3면 예술교육 반쪽(당해 연도 월별 일정 게이지)이 빈 상태가 아니라
+  //   실제 차트를 그린 상태의 레이아웃 계약을 재도록 프로그램 시트에 t'a' 행을 준다(260805 전시 2시트 목과 같은 축).
+  //   형태만 재현(실데이터·PII 미접촉): 과거·진행·예정이 섞인 4건 — 공연축(t'c') 무접촉.
+  window.__MOCK_PROGRAMS={programs:[
+    {'프로그램ID':'QEDU1','풀네임':'예울마루 아카데미 봄학기','줄임말':'아카데미 봄','콘텐츠구분':'예술교육','시작일':'2026-03-10','종료일':'2026-06-25'},
+    {'프로그램ID':'QEDU2','풀네임':'청소년 해설 음악회','줄임말':'해설음악회','콘텐츠구분':'예술교육','시작일':'2026-04-08','종료일':'2026-04-08'},
+    {'프로그램ID':'QEDU3','풀네임':'어린이 여름 예술캠프','줄임말':'여름캠프','콘텐츠구분':'예술교육','시작일':'2026-07-29','종료일':'2026-08-22'},
+    {'프로그램ID':'QEDU4','풀네임':'예울마루 아카데미 가을학기','줄임말':'아카데미 가을','콘텐츠구분':'예술교육','시작일':'2026-09-02','종료일':'2026-11-27'}
+  ]};
+
   var real=null;
   function wrapped(method,path){
     var p=String(path||''), dp=decodeURIComponent(p);
     if(p.indexOf('/api/ops')===0&&dp.indexOf('세부운영관리대장')>=0)return Promise.resolve(window.__MOCK_OPS);
     if(p.indexOf('/api/ops')===0&&dp.indexOf('전시마스터')>=0)return Promise.resolve(window.__MOCK_EXM);
     if(p.indexOf('/api/ops')===0&&dp.indexOf('전시일일')>=0)return Promise.resolve(window.__MOCK_EXD);
+    if(p.indexOf('/api/programs')===0)return Promise.resolve(window.__MOCK_PROGRAMS);
     return real?real(method,path):Promise.resolve({rows:[],headers:[],programs:[]});
   }
   try{ Object.defineProperty(window,'_qaApi',{configurable:true,get:function(){return wrapped;},set:function(v){real=v;}}); }catch(e){}
