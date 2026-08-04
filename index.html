@@ -24940,20 +24940,40 @@ function _memOvRender(targetId){   // [260731 4차] targetId = 인라인 4면(me
     //   (실측 605px 박스: 거주지 카드 y=386인데 줄 가시영역은 맵이 다 먹음 = 운영자가 본 「묻힘」).
     //   → 264+284+24=572px까지 좌·우 유지 = 그 폭대에서 접힘 자체가 안 일어난다. 더 좁으면(폰) 종전처럼 접힘.
     //   넓은 화면(1920)에서는 둘 다 grow:1이라 폭 차이만 40 → 20px로 좁아질 뿐 배치·높이 무변경.
-    +'<div style="flex:1 1 260px;min-width:250px;background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius);padding:13px;display:flex;flex-direction:column'+(FIT?';overflow:hidden':'')+'"><div style="font-size:14px;font-weight:800;margin-bottom:4px">전국 분포 맵 <span style="font-size:10.5px;color:var(--dim);font-weight:500">(버블 = 회원수 비례)</span></div><div style="flex:1;'+(FIT?'position:relative;min-height:180px':'display:flex;align-items:center;min-height:0')+'">'+_memOvMap(geo,FIT)+'</div></div>'
-    +'<div style="flex:1 1 280px;min-width:250px;background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius);padding:13px 17px'+(FIT?';display:flex;flex-direction:column;overflow:hidden':'')+'">'+topHtml+ageHtml+'</div>'
+    // [260804] FIT에서 두 열에 max-height:100% — **flex-wrap:wrap 줄의 교차크기는 「내용 기준」**이라(단일 줄이라도
+    //   nowrap이 아니면 컨테이너 높이로 안 줄어든다) 열이 줄 상자(=안선까지)를 뚫고 내려간다. 실측 1440×900:
+    //   줄 523인데 열 589.5 = 예울이 입력줄이 안선 밖으로 잘렸다. 100% = 줄의 확정 높이 → 그 안에서 막대 카드가 신축.
+    //   비FIT(자연 흐름)은 줄 높이가 auto라 %가 무효 = 종전 그대로(회귀 0).
+    +'<div style="flex:1 1 260px;min-width:250px'+(FIT?';max-height:100%':'')+';background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius);padding:13px;display:flex;flex-direction:column'+(FIT?';overflow:hidden':'')+'"><div style="font-size:14px;font-weight:800;margin-bottom:4px">전국 분포 맵 <span style="font-size:10.5px;color:var(--dim);font-weight:500">(버블 = 회원수 비례)</span></div><div style="flex:1;'+(FIT?'position:relative;min-height:180px':'display:flex;align-items:center;min-height:0')+'">'+_memOvMap(geo,FIT)+'</div></div>'
+    // [260804 운영자 「예울이를 가로 차트 아래로 배선 · 지도는 아래 제한선까지」] 우 열 = [거주지·연령 막대] + [예울이] 세로 스택.
+    //   구판은 예울이가 **줄 밖 전폭 자리**를 먹어서 ① 맵이 그 위에서 끊기고(하단선까지 못 감) ② 예울이 오른쪽이 통째로 빈 유리였다.
+    //   → 예울이를 막대 카드 아래(우 열)로 옮기면 줄이 남는 높이를 전부 갖고, 맵은 align-items:stretch로 **같은 하단선(안선)**까지 늘어난다.
+    //   막대 = flex:1 1 auto(남는 몫 흡수) · 예울이 = flex:0 0 auto(고정) → 마지막 흰 도형 하단 = 줄 하단 = 안선(계약 ②③ 유지).
+    +'<div style="flex:1 1 280px;min-width:250px;min-height:0'+(FIT?';max-height:100%':'')+';display:flex;flex-direction:column">'
+    +'<div style="flex:1 1 auto;min-height:0;background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius);padding:13px 17px'+(FIT?';display:flex;flex-direction:column;overflow:hidden':'')+'">'+topHtml+ageHtml+'</div>'
+    +_memAiCardHtml(sfx,FIT,true)   // [260803 운영자] 고객 분석 AI 채팅(집계 질의응답) — 모달·4면 인라인 공용 / [260804] 3번째 인자 = 우 열 스택 모드
     +'</div>'
-    +_memAiCardHtml(sfx,FIT);   // [260803 운영자] 고객 분석 아래 AI 채팅(집계 질의응답) — 모달·4면 인라인 공용
+    +'</div>';
   _memAiPaint(sfx);
 }
+// [260804 운영자 「지도, 흰색 칸 안의 영역을 좀 더 활용해줘 — 여백이 많음」] 라벨 폭 근사(px) — viewBox 잘라내기용.
+//   한글 = 폰트크기 1.0배 · 숫자/영문 = 0.56배 · 가운뎃점 등 = 0.35배(웹폰트 실측 대신 근사 — 잘라내기 여유 pad 6이 오차를 흡수).
+function _memTxtW(s,fs){var w=0;s=String(s);for(var i=0;i<s.length;i++){var c=s.charCodeAt(i);w+=(c>0x2E80)?1:(c<0x0080?0.56:0.35);}return w*fs;}
 function _memOvMap(geo,fit){   // fit = 모달의 「창 높이 채움」 모드 — svg를 절대배치로 칸에 꽉 채운다(viewBox 비율 유지 축소 · 칸 높이를 안 밀어냄)
   // 남한 실루엣(대략 위경도 폴리곤 — 인지용 근사) + 제주 타원
   var outline=[[126.9,37.9],[126.68,37.78],[126.6,37.5],[126.4,37.1],[126.5,36.7],[126.15,36.7],[126.3,36.2],[126.5,36.0],[126.3,35.5],[126.4,35.0],[126.25,34.7],[126.5,34.3],[127.0,34.55],[127.35,34.45],[127.75,34.6],[128.1,34.85],[128.45,34.8],[128.9,34.95],[129.1,35.1],[129.3,35.35],[129.42,35.9],[129.48,36.1],[129.38,36.5],[129.42,37.1],[129.1,37.55],[128.8,38.05],[128.35,38.35],[127.7,38.32],[127.15,38.2]];
-  var d=outline.map(function(p,i){var xy=_memXY(p);return (i?'L':'M')+xy[0].toFixed(1)+' '+xy[1].toFixed(1);}).join('')+'Z';
-  var jj=_memXY([126.55,33.40]);
+  // [260804] 그린 것들의 실제 경계(bb) 누적 — 아래 viewBox를 이 경계로 잘라 「빈 여백」을 없앤다(그림·색·좌표계는 무변경).
+  var bb=[1e9,1e9,-1e9,-1e9];
+  var ext=function(x0,y0,x1,y1){if(x0<bb[0])bb[0]=x0;if(y0<bb[1])bb[1]=y0;if(x1>bb[2])bb[2]=x1;if(y1>bb[3])bb[3]=y1;};
+  var d=outline.map(function(p,i){var xy=_memXY(p);ext(xy[0],xy[1],xy[0],xy[1]);return (i?'L':'M')+xy[0].toFixed(1)+' '+xy[1].toFixed(1);}).join('')+'Z';
+  var jj=_memXY([126.55,33.40]);ext(jj[0]-26,jj[1]-10,jj[0]+26,jj[1]+10);
   var keys=Object.keys(geo);if(!keys.length)return '<div style="padding:30px;font-size:12px;color:var(--dim)">지역 데이터 없음</div>';
   var max=Math.max.apply(null,keys.map(function(k){return geo[k];}));
   var order=keys.sort(function(a,b){return geo[b]-geo[a];});
+  // [260804] 라벨 글자 = 12 → 9 유저단위(줄간 14 → 11). 아래 viewBox 잘라내기로 지도가 약 1.6배 확대되므로
+  //   12를 그대로 두면 **화면 실측 글자만** 12 → 20px로 튄다(모달 실측) = 카드 제목 14·막대 12보다 커진다.
+  //   9 × 확대배율 ≈ 13~15px = 앱 활자 사다리 안(종전 렌더 11.9px와 같은 결) — 그림은 커지고 글자는 제자리.
+  var LFS=9,LGAP=11;
   var bubbles=order.map(function(k,i){
     var ll=_MEM_GEO[k];if(!ll)return '';
     var xy=_memXY(ll),c=geo[k],r=2+Math.sqrt(c/max)*46;
@@ -24969,12 +24989,22 @@ function _memOvMap(geo,fit){   // fit = 모달의 「창 높이 채움」 모드
     //   「비율만큼 진하게」 + 「너무 옅어 안 보이면 안 되니 70% 하한」 = 알파를 최대치의 70~100% 구간에서만 램프.
     //   면 .21→.30 · 선 .406→.58(최대 = 기존 .13/.58 축 계승). 하한 0.7을 낮추면 대비↑·가독성↓(운영자 확정 0.7).
     var ra=0.7+0.3*(c/max),fo=(0.30*ra).toFixed(3),so=(0.58*ra).toFixed(3);
+    // [260804] 경계 누적 = 버블 원 + (그려질 때만) 라벨 2줄의 실제 글상자. 라벨은 anchor에 따라 좌/우로 뻗는다.
+    ext(xy[0]-r,xy[1]-r,xy[0]+r,xy[1]+r);
+    if(showLb){var tw=Math.max(_memTxtW(label,LFS),_memTxtW(geo[k].toLocaleString()+'명',LFS));
+      var tx0=(anchor==='start')?lx:(anchor==='end'?lx-tw:lx-tw/2);
+      ext(tx0,ly-LFS,tx0+tw,ly+LGAP+LFS*0.25);}   // 위 = baseline−글자크기(어센더) · 아래 = 둘째 줄 baseline + 내림선
     return '<circle cx="'+xy[0].toFixed(1)+'" cy="'+xy[1].toFixed(1)+'" r="'+r.toFixed(1)+'" fill="var(--accent)" opacity="'+fo+'"/>'
       +'<circle cx="'+xy[0].toFixed(1)+'" cy="'+xy[1].toFixed(1)+'" r="'+r.toFixed(1)+'" fill="none" stroke="var(--accent)" opacity="'+so+'" stroke-width="0.9"/>'
-      +(showLb?'<text x="'+lx.toFixed(1)+'" y="'+ly.toFixed(1)+'" text-anchor="'+anchor+'" font-size="12" font-weight="700" fill="var(--text)">'+_memEsc(label)+'</text>'
-      +'<text x="'+lx.toFixed(1)+'" y="'+(ly+14).toFixed(1)+'" text-anchor="'+anchor+'" font-size="12" fill="var(--dim)">'+geo[k].toLocaleString()+'명</text>':'');
+      +(showLb?'<text x="'+lx.toFixed(1)+'" y="'+ly.toFixed(1)+'" text-anchor="'+anchor+'" font-size="'+LFS+'" font-weight="700" fill="var(--text)">'+_memEsc(label)+'</text>'
+      +'<text x="'+lx.toFixed(1)+'" y="'+(ly+LGAP).toFixed(1)+'" text-anchor="'+anchor+'" font-size="'+LFS+'" fill="var(--dim)">'+geo[k].toLocaleString()+'명</text>':'');
   }).join('');
-  return '<svg viewBox="0 0 455 480" style="'+(fit?'position:absolute;inset:0;width:100%;height:100%':'width:100%;height:auto')+';display:block" role="img" aria-label="전국 고객 분포 버블맵">'
+  // [260804 운영자 「흰색 칸 안의 영역을 더 활용 — 여백이 많음」] viewBox = 고정 0 0 455 480 → **그린 것들의 경계 + 여유 6**.
+  //   구판 좌표계(455×480)는 위경도 격자를 그대로 담은 상자라 좌 107 / 우 131 / 위 52가 전부 빈칸이었다(실측) —
+  //   그 빈칸이 흰 카드 안 여백으로 그대로 보였다. 좌표·크기·색은 그대로 두고 **보는 창만** 그림에 맞춰 좁힌다
+  //   = 같은 칸에서 지도가 그만큼 크게 보인다(preserveAspectRatio 기본 = 비율 유지 · 잘림 0).
+  var VP=6,vb=[(bb[0]-VP).toFixed(1),(bb[1]-VP).toFixed(1),(bb[2]-bb[0]+VP*2).toFixed(1),(bb[3]-bb[1]+VP*2).toFixed(1)].join(' ');
+  return '<svg viewBox="'+vb+'" style="'+(fit?'position:absolute;inset:0;width:100%;height:100%':'width:100%;height:auto')+';display:block" role="img" aria-label="전국 고객 분포 버블맵">'
     +'<path d="'+d+'" fill="var(--accent)" opacity="0.08" stroke="var(--border2)" stroke-width="1"/>'
     +'<ellipse cx="'+jj[0].toFixed(1)+'" cy="'+jj[1].toFixed(1)+'" rx="26" ry="10" fill="var(--accent)" opacity="0.08" stroke="var(--border2)" stroke-width="1"/>'
     +bubbles+'</svg>';
@@ -25023,14 +25053,15 @@ async function _yeulAiAsk(q,ctx,onTick){
 }
 var _memAiHist=[],_memAiBusy=false;
 var _MEM_AI_CHIPS=['여수 30대 회원 몇 명이야?','관내 비중은?','가장 많은 연령대 TOP3','거주지 TOP5 알려줘'];
-function _memAiCardHtml(sfx,fit){
+function _memAiCardHtml(sfx,fit,col){
   // [260804 운영자] ① 헤더 띠(.cb-hdr = 아바타+이름+부제) **폐지** — 이름·상태는 대화 줄의 프로필(.cb-line .cb-ava)이 대신한다.
   //   ② 카드 폭 = 40%(min(100%,max(300px,40%))) — 40%가 300px보다 좁아지는 좁은 칸에선 300px, 칸이 그보다 좁으면 100%.
   //      → 어떤 폭에서도 겉 유리(이젤·모달) 안선을 **넘지 않는다**(운영자 「흰 창이 한계선을 넘어가면 안 됨」).
   //   ③ 로그 높이 한 단 축소(118~236 → 84~160) = 위 「거주지 TOP·연령대」 카드에 세로를 돌려준다.
-  // [260803 운영자 「대화는 저 네모 박스 안에서 — 더 안 넘어감」] fit(= 창 높이 채움 모드) = 카드 크기 고정(flex:0 0 auto),
-  //   로그는 창 높이 비례 고정칸 → 대화가 아무리 길어져도 상자·모달 기하가 안 변하고 상자 안에서만 스크롤한다.
-  return '<div style="margin-top:'+(fit?14:24)+'px;width:min(100%,max(300px,40%));background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden'+(fit?';flex:0 0 auto;display:flex;flex-direction:column':'')+'">'
+  // [260804 2차 운영자 「예울이를 가로 차트 아래로」] col = 우 열(막대 카드 아래) 스택 모드 — 폭은 **열이 이미 정한다**(=100%),
+  //   위 ②의 40% 축소는 「전폭 줄에 홀로 놓일 때」의 규약이라 열 안에서는 오히려 빈 유리를 만든다(적용 제외).
+  //   높이는 fit 여부와 무관하게 고정(flex:0 0 auto) = 막대 카드가 남는 몫을 갖고 예울이는 자기 크기만 쓴다.
+  return '<div style="margin-top:'+(fit?14:24)+'px;width:'+(col?'100%':'min(100%,max(300px,40%))')+';background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden'+((fit||col)?';flex:0 0 auto;display:flex;flex-direction:column':'')+'">'
     +'<div id="mem-ai-log-'+sfx+'" class="cb-body" style="'+(fit?'flex:0 0 auto;height:clamp(96px,16vh,190px)':'min-height:96px;max-height:190px')+';overflow-y:auto;padding:12px 14px"></div>'
     // 입력줄 = FAB 예울이 정본 부품(.cb-foot/.cb-in/.cb-send) 그대로 — 「질문」 글자 버튼 → 종이비행기 픽토그램(정본 svg 동일 path)
     +'<div class="cb-foot">'
