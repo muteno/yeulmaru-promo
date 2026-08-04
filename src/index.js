@@ -1096,19 +1096,28 @@ __name(opsWriteSheet, "opsWriteSheet");
 async function opsAppendRows(token, slug, rows){
   const name = opsSheetName(slug);
   const { driveId, itemId } = await findFile(token);
-  let vals = [];
+  // [260804 성능·확장] 이 함수가 usedRange에서 실제로 쓰는 건 **헤더 한 줄과 행수** 둘뿐인데
+  //   예전엔 시트 **전량**(values)을 받아왔다. 시트가 커질수록 append 한 번이 비싸져
+  //   운영_예매(4만 행) 반입이 **9,000행쯤에서 Worker 503**으로 죽었다(260804 실측 · 재시도 4회 소진).
+  //   → rowCount/columnCount 메타 + 1행 헤더만 읽는다. 이제 append 비용이 시트 크기와 무관하다.
+  let headerRow = [], usedRows = 0;
   try {
-    const ur = await graphGet(token, `${sheetPathFor(driveId, itemId, name)}/usedRange`);
-    vals = ur.values || [];
+    const meta = await graphGet(token, `${sheetPathFor(driveId, itemId, name)}/usedRange?$select=rowCount,columnCount`);
+    usedRows = meta.rowCount || 0;
+    const nCol = meta.columnCount || 0;
+    if (usedRows > 0 && nCol > 0) {
+      const hr = await graphGet(token, `${sheetPathFor(driveId, itemId, name)}/range(address='A1:${colLetter(nCol)}1')?$select=values`);
+      headerRow = (hr.values && hr.values[0]) ? hr.values[0] : [];
+    }
   } catch (e) {
     // [260724] 시트 자체가 없으면(ItemNotFound/404) 아래에서 신규 생성. 그 외 오류는 전파.
     if (!/ItemNotFound|Graph GET 404/.test(String((e && e.message) || e))) throw e;
-    vals = [];
+    usedRows = 0; headerRow = [];
   }
   // [260724] 미동기화(없거나 빈) 시트 → 넘어온 행들의 키로 시트를 만들고 헤더를 심은 뒤 이어붙인다.
   //   전시일일 등 최초 저장 시 append 전에 시트가 없어 Graph 404로 저장이 통째로 실패하던 문제 방지.
   //   (기계산출물 손편집 금지 원칙 유지 — 데이터가 아니라 '생성 코드'가 시트를 만들게 함.)
-  if (!vals.length) {
+  if (!usedRows || !headerRow.length) {
     if (!rows.length) return { ok: true, sheet: name, appended: 0, fromRow: 0, created: true };
     const newHeaders = [];
     const seenH = {};
@@ -1123,8 +1132,8 @@ async function opsAppendRows(token, slug, rows){
     await graphPatch(token, `${sheetPathFor(driveId, itemId, name)}/range(address='${nAddr}')`, { values: nData });
     return { ok: true, sheet: name, appended: nData.length, fromRow: nSr, created: true };
   }
-  const headers = vals[0].map((h) => String(h == null ? "" : h));
-  const nextRow = vals.length + 1;
+  const headers = headerRow.map((h) => String(h == null ? "" : h));
+  const nextRow = usedRows + 1;
   const lastCol = colLetter(headers.length);
   const data = rows.map((r) => headers.map((h) => { const v = r[h]; return (v === null || v === undefined) ? "" : String(v); }));
   const sr = nextRow, er = sr + data.length - 1;
@@ -2647,11 +2656,18 @@ var index_default = {
           if (sheet) {
             try {
               const opsName = opsSheetName(sheet);
-              // [보안 260710 분신술 HIGH-1] 회원 시트 = 소비자 PII 3만 행 — 클라 admin 게이트는 콘솔로 우회 가능하므로
-              //  서버가 강제한다(log 시트 GET 선례 계승). 응답은 no-store(브라우저 디스크 캐시 잔류 차단). ⚠ Cloudflare 재배포 필요.
+              // [보안 260710 분신술 HIGH-1 · 260804 예매 확대] PII 시트 = 서버가 admin을 강제한다.
+              //  클라 admin 게이트는 콘솔로 우회 가능하므로 여기서 막는다(log 시트 GET 선례 계승).
+              //  ⚠ 운영_예매(260804 신설) = 주문 4만 행에 주문자명·휴대폰·회원키가 들어있다. 이 목록에
+              //   안 넣으면 **앱 비번만으로 전량이 나간다** — 회원 시트와 같은 등급의 개인정보다.
+              //   PII 시트를 새로 만들면 반드시 여기에 추가할 것.
+              const PII_SHEETS = ["운영_회원", "운영_예매"];
+              if (PII_SHEETS.includes(opsName)) {
+                const piiAuth = await checkAdmin(request, env, token);
+                if (!piiAuth.admin) return json({ error: "Admin only (personal data)" }, env, 403);
+              }
+              // 응답은 no-store(브라우저 디스크 캐시 잔류 차단). ⚠ Cloudflare 재배포 필요.
               if (opsName === "운영_회원") {
-                const memAuth = await checkAdmin(request, env, token);
-                if (!memAuth.admin) return json({ error: "Admin only (member data)" }, env, 403);
                 // [성능 260711 운영자 "더 빠르게"] 3계층: isolate 인메모리(5분) → KV 전역(1시간, isolate 무관
                 //  = 첫 요청도 웜히트면 <1s) → Graph 청크(병렬 4). fresh=1 = 캐시 전부 우회 후 재적재.
                 //  KV 저장은 계정 내 암호화 저장(다른 시크릿과 동일 신뢰경계) · 응답은 계속 no-store(브라우저 잔류 차단).
@@ -2678,6 +2694,13 @@ var index_default = {
               //  다른 isolate가 방금 쓴 변경을 stale 캐시로 놓쳐 전체 재작성이 그 변경을 지우는 동시성 유실 창 축소.
               if (url.searchParams.get("fresh") === "1") delete opsCache[opsName];
               const { headers, rows } = await getOpsCached(token, opsName);
+              // PII 시트(운영_예매)는 회원 시트와 같이 no-store — 브라우저 디스크 캐시에 개인정보가 남지 않게.
+              if (PII_SHEETS.includes(opsName)) {
+                return new Response(JSON.stringify({ sheet, headers, rows, count: rows.length }), {
+                  status: 200,
+                  headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...corsHeaders(env) }
+                });
+              }
               return json({ sheet, headers, rows, count: rows.length }, env);
             } catch (e) {
               return json({ sheet, headers: [], rows: [], count: 0, note: "시트 없음 (미동기화)" }, env);
