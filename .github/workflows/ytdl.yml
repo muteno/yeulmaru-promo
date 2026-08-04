@@ -136,15 +136,32 @@ jobs:
             if [ $rc -eq 0 ] && [ -n "$f" ]; then break; fi
             rm -f out/"${VID_ID}".mp4 out/"${VID_ID}".mkv out/"${VID_ID}".webm out/"${VID_ID}".part 2>/dev/null
           done
-          # 유튜브 무쿠키 전패 → 쿠키 1회 재시도(기본 클라이언트). 여기까지 와서야 화질보다 '받는 것'이 우선이다.
+          # 유튜브 무쿠키 전패 → 쿠키 **사다리** 재시도. 여기까지 와서야 화질보다 '받는 것'이 우선이다.
+          #   ⚠ 구판은 기본 클라이언트 1회뿐이었는데 260804 실측에서 그게 부족한 게 드러났다:
+          #     쿠키로 봇 벽은 넘었지만 그 계정이 **SABR 스트리밍 실험**(yt-dlp #12482)에 편입돼
+          #     기본 클라이언트에선 "Only images are available" → "Requested format is not available".
+          #   SABR은 **계정 단위**라 클라이언트를 바꾸면 회피되는 경우가 있다 → 쿠키에도 사다리를 태운다.
+          #   tv·ios를 앞에 두는 이유 = SABR 미적용 보고가 가장 많은 축(무쿠키 사다리와 순서가 다른 이유).
           f=$(ls out/"${VID_ID}".* 2>/dev/null | grep -Ev "err|\.p[0-9]" | head -1)
           if { [ $rc -ne 0 ] || [ -z "$f" ]; } && [ "$IS_YT" = 1 ] && [ -n "$COOKIE_ARGS" ]; then
-            echo "--- 재시도: 쿠키(무쿠키 사다리 전패)" >> out/err.log
-            # shellcheck disable=SC2086
-            yt-dlp -f "$FMT" --merge-output-format mp4 --remux-video mp4 \
-              --max-filesize "$MAXSIZE" --no-playlist --retries 3 --fragment-retries 5 \
-              $COOKIE_ARGS -o "out/${VID_ID}.%(ext)s" "$VID_URL" 2>> out/err.log
-            rc=$?
+            #   ⚠ 260804 2차 실측 = tv·ios·기본·mweb·web_safari·android_vr 6종 전부 SABR. 그래서 yt-dlp가 아는
+            #     클라이언트 12종을 전수 조회해 **안 써본 6종**을 앞에 붙였다(구판 사다리는 절반만 훑고 있었다).
+            #     선두 = tv_downgraded — TVHTML5 **구버전(5.x)** + REQUIRE_AUTH. 구형 TV는 SABR을 못 하니
+            #     유튜브가 legacy(비-SABR) 포맷 주소를 그대로 준다 = 인증 세션에서 가장 유력한 회피축.
+            #     web_creator·tv_downgraded는 인증 필수라 **쿠키 사다리에서만** 의미가 있다(무쿠키 사다리엔 안 넣는다).
+            for CL in "tv_downgraded" "web_embedded" "web_creator" "android" "web_music" "web" "tv" "ios" "" "mweb" "web_safari" "android_vr"; do
+              if [ -n "$CL" ]; then EA="--extractor-args youtube:player_client=$CL"; else EA=""; fi
+              [ "$CL" = "android_vr" ] && VB="-v" || VB=""
+              echo "--- 재시도(쿠키): client=${CL:-기본}" >> out/err.log
+              # shellcheck disable=SC2086
+              yt-dlp $VB -f "$FMT" --merge-output-format mp4 --remux-video mp4 \
+                --max-filesize "$MAXSIZE" --no-playlist --retries 3 --fragment-retries 5 \
+                $EA $COOKIE_ARGS -o "out/${VID_ID}.%(ext)s" "$VID_URL" 2>> out/err.log
+              rc=$?
+              f=$(ls out/"${VID_ID}".* 2>/dev/null | grep -Ev "err|\.p[0-9]" | head -1)
+              if [ $rc -eq 0 ] && [ -n "$f" ]; then break; fi
+              rm -f out/"${VID_ID}".mp4 out/"${VID_ID}".mkv out/"${VID_ID}".webm out/"${VID_ID}".part 2>/dev/null
+            done
           fi
           set -e
 
@@ -152,6 +169,7 @@ jobs:
           if [ $rc -ne 0 ] || [ -z "$f" ]; then
             # 앱이 그대로 보여줄 사유 = ERROR 줄 우선(사다리 로그에서 원인만 추림) + 꼬리 일부
             { grep -a "^COOKIEFMT:" out/err.log | tail -1
+              grep -a -i "SABR\|streaming experiment" out/err.log | tail -1
               grep -a "^ERROR" out/err.log | sort -u | tail -3
               echo "--- 진단"
               grep -aE "JS runtimes|PO Token Providers|JS Challenge Providers" out/err.log | sort -u | tail -3

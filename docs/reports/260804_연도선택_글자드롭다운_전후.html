@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>260804 · 연도 선택 = 글자 트리거 + 드롭다운 · 판매중 = 글자 토글 — 전후</title>
+<style>
+/* ── 토큰 = index.html :root 2블록에서 값 복사(스냅샷 · 정본은 index.html) ───────────────── */
+:root{
+  --accent:#4A4DE7;--accent-light:#E8E8FD;--peach-text:#D88455;
+  --border:rgba(0,0,0,0.09);--border2:rgba(0,0,0,0.12);
+  --text:#1A1A2E;--dim:#888;--muted:#bbb;--neutral-text:#6B6B7B;
+  --surface-solid:#fff;--neutral:#EEEDF3;
+  --glass-surface:rgba(255,255,255,.78);--glass-menu:rgba(255,255,255,.45);--glass:rgba(255,255,255,.55);--glass-bd:var(--glass);
+  --glass-shadow:0 8px 32px rgba(74,77,231,0.08),0 2px 8px rgba(0,0,0,0.04);
+  --radius:16px;--radius-lg:20px;--past-bg:#F7F7FB;
+}
+*{box-sizing:border-box}
+body{margin:0;padding:26px 20px 60px;font-family:'Noto Sans KR','Malgun Gothic',system-ui,-apple-system,sans-serif;color:var(--text);
+  background:linear-gradient(135deg,#FDF6F3 0%,#F0EBF5 48%,#EBF0F8 100%);min-height:100vh}
+h1{font-size:19px;font-weight:800;margin:0 0 4px}
+.sub{font-size:12.5px;color:var(--neutral-text);line-height:1.65;margin:0 0 18px}
+.wrap{max-width:1360px;margin:0 auto}
+.ask{background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:20px;box-shadow:var(--glass-shadow)}
+.ask table{width:100%;border-collapse:collapse;font-size:12.5px}
+.ask td{padding:7px 8px;border-top:1px solid var(--border);vertical-align:top;line-height:1.6}
+.ask tr:first-child td{border-top:0}
+.ask td.q{width:44%;color:var(--neutral-text)}
+.ask td.a{font-weight:600}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+@media (max-width:1080px){.cols{grid-template-columns:1fr}}
+.col>.tag{font-size:11.5px;font-weight:800;letter-spacing:.04em;margin-bottom:8px;display:flex;align-items:center;gap:7px}
+.tag .dot{width:8px;height:8px;border-radius:50%}
+.tag.before .dot{background:var(--muted)}
+.tag.after .dot{background:var(--accent)}
+.note{font-size:11.5px;color:var(--neutral-text);line-height:1.65;margin-top:9px;padding-left:2px}
+
+/* ── 이젤 = 대시보드 우 열 유리박스(실물 프레임) ───────────────────────────────────────── */
+.easel{background:rgba(255,255,255,.15);backdrop-filter:blur(7px);border:1px solid rgba(255,255,255,.7);
+  border-radius:var(--radius-lg);box-shadow:var(--glass-shadow);padding:18px}
+.bizm-card{background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius);
+  box-shadow:0 2px 10px rgba(74,77,231,.04);overflow:visible}
+.ct{position:relative;padding:12px 14px 2px;font-size:13px;font-weight:700;display:flex;align-items:center;letter-spacing:-.01em}
+.ct-bul{display:inline-block;width:4px;height:14px;border-radius:2px;background:var(--accent);margin-right:8px}
+.ry-hd-tools{position:absolute;right:14px;top:12px;bottom:2px;display:inline-flex;align-items:center;gap:6px}   /* [260804 4차] 세로 범위 = 제목 콘텐츠 상자(패딩 안쪽) → 그 안에서 가운데 = 제목 글자와 같은 광학 축 */
+
+/* ── (전) 정본 칩 .ana-chip + 스위치 .sw/.sw-k — index.html L1748·L311 그대로 ──────────── */
+.ana-chip{padding:4px 11px;border-radius:7px;border:1.5px solid var(--glass-bd);background:var(--glass-surface);
+  backdrop-filter:blur(8px);box-shadow:var(--glass-shadow);color:var(--text);font-family:inherit;font-size:11px;
+  font-weight:600;cursor:pointer;transition:all .15s;white-space:nowrap}
+.ana-chip:hover{border-color:var(--accent);color:var(--accent)}
+.ana-chip.on{border-color:var(--accent);background:rgba(74,77,231,0.08);color:var(--accent)}
+.sw{width:46px;height:20px;border-radius:11px;background:#cfd3dc;position:relative;cursor:pointer;transition:background .2s;flex:0 0 auto;display:inline-block}
+.sw.on{background:var(--accent)}
+.sw-k{position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,0.25)}
+.sw.on .sw-k{left:28px}
+.sw::after{content:'OFF';position:absolute;right:6px;top:50%;transform:translateY(-50%);font-size:8.5px;font-weight:800;color:#80868f;letter-spacing:.2px;pointer-events:none;user-select:none}
+.sw.on::after{content:'ON';left:8px;right:auto;color:#fff}
+.old-tg{display:inline-flex;align-items:center;gap:7px;margin-left:2px;cursor:pointer;user-select:none;font-size:11px;font-weight:700;color:var(--dim)}
+
+/* ── (후) 신규 — index.html에 실제로 들어간 규칙 그대로 ──────────────────────────────── */
+.ry-yr-tg{display:inline-flex;align-items:center;gap:3px;border:0;background:none;padding:1px 4px;border-radius:7px;font-family:inherit;font-size:12px;font-weight:800;color:var(--accent);line-height:normal;cursor:pointer;transition:background .12s}
+.ry-yr-tg:hover{background:rgba(74,77,231,0.07)}
+.ry-yr-tg .cr{font-size:8.5px;font-weight:700;opacity:.7;transition:transform .2s cubic-bezier(.22,.61,.36,1)}
+.ry-yr-tg[aria-expanded="true"] .cr{transform:rotate(180deg)}
+.ry-hd-div{width:1px;height:12px;background:var(--border);flex:0 0 auto}
+.ry-live-tg{display:inline-flex;align-items:center;border:0;background:none;padding:1px 4px;border-radius:7px;font-family:inherit;font-size:12px;line-height:normal;cursor:pointer;user-select:none;transition:background .12s,color .15s}
+.ry-live-tg:hover{background:rgba(74,77,231,0.07)}
+.ry-live-tg[aria-checked="true"]{color:var(--accent);font-weight:800}
+.ry-live-tg[aria-checked="false"]{color:var(--dim);font-weight:600}
+.ry-yr-dd button{animation:fadeUp .26s cubic-bezier(.22,.61,.36,1) both}
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+
+/* 드롭다운 프레임 = _ddOpen의 .dd-menu/.dd-panel 인라인 값 그대로 */
+.dd-menu{position:absolute;z-index:40;background:var(--glass-menu);backdrop-filter:blur(9px) saturate(150%);
+  border:1px solid rgba(0,0,0,0.06);border-radius:14px;box-shadow:0 16px 48px rgba(74,77,231,0.18),0 4px 14px rgba(0,0,0,0.08);
+  overflow:hidden;transform-origin:top left;animation:acctDrop .22s cubic-bezier(.26,1.2,.5,1)}
+@keyframes acctDrop{from{opacity:0;transform:translateY(-10px) scale(.95)}to{opacity:1;transform:translateY(0) scale(1)}}
+.dd-panel{padding:6px}
+.dd-panel button{position:relative;display:block;width:100%;padding:8px 14px;border:0;background:none;text-align:left;
+  font-size:12.5px;border-radius:9px;cursor:pointer;font-family:inherit;white-space:nowrap;font-variant-numeric:tabular-nums;transition:background .12s}
+.dd-panel button:hover{background:rgba(74,77,231,0.07)}
+
+/* ── 표 = .ry-grp / .mv-tbl 계승(행 모양은 실물 축약 재현) ─────────────────────────────── */
+.ry-grp{overflow:hidden}
+.ry-grp-hd{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:800;color:var(--text);padding:14px 12px 8px}
+.ry-grp-hd::before{content:'';width:8px;height:8px;border-radius:50%;background:var(--gtok,var(--accent));flex-shrink:0}
+.rail-yrm-gc{font-weight:700;color:var(--dim);font-size:11px}
+.mv-tbl{width:100%;border-collapse:collapse;font-size:13px;white-space:nowrap}
+.mv-tbl thead td{padding:10px;color:var(--neutral-text);font-size:11.5px;font-weight:700;border-bottom:1px solid var(--border)}
+.mv-tbl tbody td{padding:13px 10px;border-bottom:1px solid var(--border);font-variant-numeric:tabular-nums}
+.mv-tbl tbody tr:last-child td{border-bottom:none}
+.c-date{color:var(--accent);font-weight:700;font-size:12.5px}
+.c-date.past{color:var(--muted)}
+.c-date.ex{color:var(--peach-text)}
+.c-nm{font-weight:700;font-size:13px}
+.c-sub{font-size:11.5px;color:var(--dim);font-weight:500;margin-top:4px}
+.c-oc{color:var(--accent);font-weight:800}
+.c-oc.ex{color:var(--peach-text)}
+.c-gn{font-weight:700;font-size:12.5px}
+.rail-yrm-empty{padding:22px 8px;text-align:center;color:var(--dim);font-size:12.5px}
+.mv-swipe{animation:bizPageR .42s cubic-bezier(.22,.61,.36,1)}
+.mv-swipe.rev{animation-name:bizPageL}
+@keyframes bizPageR{from{opacity:0;transform:translateX(38px)}to{opacity:1;transform:none}}
+@keyframes bizPageL{from{opacity:0;transform:translateX(-38px)}to{opacity:1;transform:none}}
+
+/* 로더 = .sk-sweep 빔 + olDots(통일 로더) */
+.sk-sweep{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.sk-sweep::after{content:'';position:absolute;top:0;bottom:0;left:0;width:34%;
+  background:linear-gradient(100deg,transparent 0%,rgba(255,255,255,.5) 50%,transparent 100%);
+  transform:translateX(-120%);animation:skSweep 1.5s ease-in-out infinite}
+@keyframes skSweep{to{transform:translateX(400%)}}
+@keyframes olDots{0%,100%{transform:translateY(0);opacity:.5}50%{transform:translateY(var(--ld-dy,-4.2px));opacity:1}}
+.ld-p i{display:block;width:3.4px;height:3.4px;border-radius:50%;background:currentColor;animation:olDots .8s cubic-bezier(0.4,0,0.2,1) infinite}
+.ld-p{display:inline-flex;align-items:center;line-height:0;vertical-align:-2px;gap:2px;margin-right:8px}
+
+.list{position:relative;min-height:318px}
+.ctl{background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;
+  margin:20px 0 0;display:flex;align-items:center;gap:14px;flex-wrap:wrap;font-size:12.5px;box-shadow:var(--glass-shadow)}
+.ctl b{font-size:12.5px}
+.foot{margin-top:22px;font-size:11.5px;color:var(--neutral-text);line-height:1.75;background:rgba(255,255,255,.55);
+  border:1px solid var(--border);border-radius:var(--radius);padding:13px 16px}
+.foot b{color:var(--text)}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;background:rgba(74,77,231,0.07);padding:1px 5px;border-radius:5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>연도 선택 = 글자 트리거 + 드롭다운 · 「판매중」 = 글자 토글 <span style="font-weight:600;color:var(--neutral-text);font-size:14px">— 260804 3차 전후</span></h1>
+  <p class="sub">대시보드 「판매 실적」 ▸ <b>프로그램 별 판매 추이</b> 카드 제목줄. 아래 두 카드는 <b>둘 다 실제로 눌린다</b> — 왼쪽이 지금까지, 오른쪽이 바뀐 것.</p>
+
+  <div class="ask">
+    <table>
+      <tr><td class="q">「2026만 보이게 하고, 글자로만 볼드체해서 강조색으로」</td><td class="a">칩 줄(2026·2025·2024·전체) 폐지 → <b>선택된 해 하나</b>만 테두리·배경 없는 글자로 (800 · <code>--accent</code>)</td></tr>
+      <tr><td class="q">「누르면 아래로 촤르륵 2025~ 뜨게」</td><td class="a">공용 드롭다운 <code>_ddOpen</code> 아래로 열림 + 항목이 <b>46ms씩 차례로</b> 내려앉음(기존 <code>fadeUp</code>)</td></tr>
+      <tr><td class="q">「구분선 넣어서 판매중 이것도 글자 자체가 on off 토글」</td><td class="a">세로 구분선(<code>--border</code>) + <code>.sw</code> pill 제거 → <b>「판매중」 글자가 곧 스위치</b> (켬 = 강조색·800 / 끔 = <code>--dim</code>·600)</td></tr>
+      <tr><td class="q">「좌측 헤더 타이틀이랑 광학 잉크 단위 수평 맞춰」(260804 4차)</td><td class="a">도구 묶음 세로 범위 = 제목의 <b>콘텐츠 상자</b>와 동일 + <code>line-height:normal</code>(제목과 같은 값) → <b>칠해진 글자 중심 Δ ≤ 0.25px</b>(4배 DPR 픽셀 실측 · 구 <code>top:4px</code>는 −7.38px)</td></tr>
+      <tr><td class="q">「고르면 촤르륵 자연스럽게 바뀐 다음, 오래걸려야 하면 로딩」</td><td class="a">표 교체 = 기존 책장 넘김(<code>.mv-swipe</code>)을 분야 그룹마다 <b>70ms씩</b> 밀어 순차로 · 로더는 <b>직전 렌더 실측이 170ms를 넘었을 때만</b></td></tr>
+    </table>
+  </div>
+
+  <div class="cols">
+    <div class="col">
+      <div class="tag before"><span class="dot"></span>전 (현행 main)</div>
+      <div class="easel">
+        <div class="bizm-card">
+          <div class="ct"><span class="ct-bul"></span>프로그램 별 판매 추이
+            <span class="ry-hd-tools" id="b-tools"></span>
+          </div>
+          <div class="list" id="b-list"></div>
+        </div>
+      </div>
+      <div class="note">칩 4개 + 스위치 pill이 제목줄 우측을 가득 채운다 · 연도는 <b>MAX 4개까지만</b> 세우고 나머지는 「전체」가 받았다.</div>
+    </div>
+
+    <div class="col">
+      <div class="tag after"><span class="dot"></span>후 (이 브랜치)</div>
+      <div class="easel">
+        <div class="bizm-card">
+          <div class="ct"><span class="ct-bul"></span>프로그램 별 판매 추이
+            <span class="ry-hd-tools" id="a-tools"></span>
+            <span id="a-dd"></span>
+          </div>
+          <div class="list" id="a-list"></div>
+        </div>
+      </div>
+      <div class="note">지금 보는 해 하나만 남는다 · 드롭다운이라 <b>연도 개수 제한이 사라졌다</b>(2024·2023…도 다 선다) · 지난 해를 고르면 「판매중」과 구분선은 함께 접힌다(지난 해엔 판매중이 없다 — 260804 2차 규약 유지).</div>
+    </div>
+  </div>
+
+  <div class="ctl">
+    <b>로딩 시연</b>
+    <label style="display:inline-flex;align-items:center;gap:8px;cursor:pointer">
+      <input type="checkbox" id="slow" style="width:15px;height:15px;accent-color:var(--accent);cursor:pointer">
+      느린 기기 재현 — 켜면 오른쪽 카드의 연도 전환에 <b>1.1초</b>가 걸린다(실물 판정 = 직전 렌더 실측 ≥170ms)
+    </label>
+    <span style="color:var(--neutral-text)">→ 켠 뒤 <b>2026 ▾</b>를 눌러 다른 해를 골라 보세요.</span>
+  </div>
+
+  <div class="foot">
+    <b>재현 한계 각주</b> — ① 표 행은 실물 8행을 4행으로 줄인 축약 재현(열 구성·색·굵기·간격은 정본 계승, 값은 예시). ② 드롭다운 프레임은 <code>_ddOpen</code>이 body에 붙이는 전면 오버레이 대신 카드 안 절대배치로 재현했다 — 유리·그림자·등장 커브(<code>acctDrop</code>)·항목 결은 같은 값. ③ 좌↔우 이젤 높이 맞춤(<code>_srailAlignTop</code>)·호버 pill(<code>.dd-pill</code>)·스크롤 gutter 보정은 이 시안에 없다(카드 하나만 떼어온 프레임이라 무관). ④ 로딩은 실물에선 <b>실측 기반</b>이라 빠른 기기에선 아예 안 뜬다 — 위 「느린 기기 재현」은 그 조건을 강제로 만든 것.
+    <br><b>신규 색·토큰 0</b> — 전부 <code>--accent</code>/<code>--dim</code>/<code>--border</code>/<code>--text</code> + 기존 인디고 알파(<code>rgba(74,77,231,0.07)</code>) 계승. 디자인 게이트 <code>python3 tools/check_design.py</code> = raw hex 1590/1590 무변 통과.
+  </div>
+</div>
+
+<script>
+/* 데모 데이터 — 실물 행 모양(일자·프로그램/장소·판매율·장르)만 축약 재현 */
+var DATA={
+  2026:{공연:[['9.3 목','브런치 콘서트 III &lt;현 위로 흐르는 계절&gt;','1일 1회 | 대극장','32%','(297/926)','클래식'],
+             ['9.12 토','조재혁 피아노 리사이틀','1일 1회 | 대극장','11%','(99/926)','클래식'],
+             ['9.18 금','뮤지컬 &lt;그날들&gt;','3일 4회 | 대극장','28%','(1,043/3,704)','뮤지컬'],
+             ['10.1 목','뮤지컬 &lt;달 샤베트&gt;','3일 6회 | 대극장','17%','(955/5,556)','어린이']],
+       전시:[['7.21 화<br>~11.1 일','GS칼텍스 예울마루 기획전시 &lt;숨: 쉼&gt;','104일 | 7층 전시실','225명','','시즌']]},
+  2025:{공연:[['4.11 금','예울마루 기획공연 &lt;봄의 제전&gt;','1일 1회 | 대극장','96%','(889/926)','클래식'],
+             ['6.20 금','뮤지컬 &lt;명성황후&gt;','3일 4회 | 대극장','88%','(3,259/3,704)','뮤지컬'],
+             ['9.5 금','서울시립교향악단 순회공연','1일 1회 | 대극장','91%','(843/926)','클래식']],
+       전시:[['3.4 화<br>~6.29 일','기획전시 &lt;바다가 된 사람들&gt;','118일 | 7층 전시실','9,214명','','시즌']]},
+  2024:{공연:[['5.17 금','창작뮤지컬 &lt;여수 밤바다&gt;','2일 3회 | 대극장','79%','(2,196/2,778)','뮤지컬'],
+             ['11.8 금','국립현대무용단 &lt;트리플 빌&gt;','1일 1회 | 대극장','84%','(778/926)','무용']],
+       전시:[]}
+};
+var YEARS=[2026,2025,2024], NOW=2026;
+
+function rows(list,unit){
+  if(!list.length)return '';
+  var h='<table class="mv-tbl"><thead><tr><td>일자</td><td>프로그램</td><td style="text-align:right">'+(unit||'판매율')+'</td><td style="text-align:right">장르</td></tr></thead><tbody>';
+  list.forEach(function(r){
+    var ex=(unit==='누적 관객수');
+    h+='<tr><td style="width:96px"><span class="c-date'+(ex?' ex':'')+'">'+r[0]+'</span></td>'
+      +'<td><div class="c-nm">'+r[1]+'</div><div class="c-sub">'+r[2]+'</div></td>'
+      +'<td style="text-align:right"><span class="c-oc'+(ex?' ex':'')+'">'+r[3]+'</span> <span style="color:var(--dim);font-size:11.5px">'+r[4]+'</span></td>'
+      +'<td style="text-align:right"><span class="c-gn">'+r[5]+'</span></td></tr>';
+  });
+  return h+'</tbody></table>';
+}
+function tableHtml(year,live){
+  var src=(year==='all')?null:DATA[year];
+  var perf=[],ex=[];
+  if(src){ perf=src.공연.slice(); ex=src.전시.slice(); }
+  else YEARS.forEach(function(y){ perf=perf.concat(DATA[y].공연); ex=ex.concat(DATA[y].전시); });
+  if(year===NOW&&!live){ perf=perf.concat(DATA[2025].공연.slice(0,2)); }   // 「판매중」 끔 = 지난 프로그램까지
+  if(!perf.length&&!ex.length)return '<div class="rail-yrm-empty">🎫 '+year+'년 프로그램이 없어요</div>';
+  var grp=function(lab,tok,arr,unit){
+    if(!arr.length)return '';
+    return '<section class="ry-grp" style="--gtok:var('+tok+')"><div class="ry-grp-hd">'+lab
+      +' <span class="rail-yrm-gc">'+arr.length+'</span></div><div>'+rows(arr,unit)+'</div></section>';
+  };
+  return grp('공연','--accent',perf)+grp('전시','--peach-text',ex,'누적 관객수');
+}
+function loadHtml(){
+  return '<div class="rail-yrm-empty" style="position:relative;min-height:140px;display:flex;align-items:center;justify-content:center">'
+    +'<div class="sk-sweep"></div><span style="position:relative;color:var(--accent);opacity:.75;font-size:13px;font-weight:600">'
+    +'<span class="ld-p"><i></i><i style="animation-delay:.128s"></i><i style="animation-delay:.256s"></i></span>불러오는 중</span></div>';
+}
+function flip(box,dir){
+  var gs=box.querySelectorAll('.ry-grp');
+  if(!gs.length){ gs=[box.firstElementChild||box]; }
+  for(var i=0;i<gs.length;i++){ var g=gs[i];
+    g.classList.remove('mv-swipe','rev'); void g.offsetWidth;
+    g.style.animationDelay=(i*70)+'ms'; g.classList.add('mv-swipe'); if(dir<0)g.classList.add('rev'); }
+}
+
+/* ── 전 ─────────────────────────────────────────────── */
+var B={year:NOW,live:true};
+function bPaint(){
+  var t=document.getElementById('b-tools'),h='';
+  YEARS.forEach(function(y){ h+='<button class="ana-chip'+(B.year===y?' on':'')+'" onclick="bYear('+y+')">'+y+'</button>'; });
+  h+='<button class="ana-chip'+(B.year==='all'?' on':'')+'" onclick="bYear(\'all\')">전체</button>';
+  if(B.year===NOW)h+='<span class="old-tg" onclick="bLive()">판매중<span class="sw'+(B.live?' on':'')+'"><span class="sw-k"></span></span></span>';
+  t.innerHTML=h;
+  document.getElementById('b-list').innerHTML=tableHtml(B.year,B.live);
+}
+function bYear(y){ B.year=y; bPaint(); }        /* 전 = 정지 교체(모션·로딩 없음) */
+function bLive(){ B.live=!B.live; bPaint(); }
+
+/* ── 후 ─────────────────────────────────────────────── */
+var A={year:NOW,live:true,open:false,seq:0};
+function aTools(){
+  var t=document.getElementById('a-tools');
+  t.innerHTML='<button type="button" class="ry-yr-tg" id="a-trig" aria-expanded="'+(A.open?'true':'false')+'" onclick="aMenu()">'
+      +(A.year==='all'?'전체':A.year)+'<span class="cr">▾</span></button>'
+    +(A.year===NOW?('<span class="ry-hd-div"></span>'
+      +'<button type="button" class="ry-live-tg" role="switch" aria-checked="'+(A.live?'true':'false')+'" onclick="aLive()">판매중</button>'):'');
+}
+function aMenu(){
+  if(A.open){ aClose(); return; }
+  A.open=true; aTools();
+  var trig=document.getElementById('a-trig'), ct=trig.closest('.ct');
+  var r=trig.getBoundingClientRect(), c=ct.getBoundingClientRect();
+  var items=YEARS.map(function(y){return {lab:String(y),val:y,on:A.year===y};});
+  items.push({lab:'전체',val:'all',on:A.year==='all'});
+  document.getElementById('a-dd').innerHTML='<div class="dd-menu" style="left:'+(r.left-c.left)+'px;top:'+(r.bottom-c.top+8)+'px;min-width:84px">'
+    +'<div class="dd-panel ry-yr-dd">'+items.map(function(it,i){
+      return '<button type="button" onclick="aPick(\''+it.val+'\')" style="animation-delay:'+(i*46)+'ms;'
+        +(it.on?'font-weight:800;color:var(--accent)':'font-weight:600;color:var(--text)')+'">'+it.lab+'</button>';
+    }).join('')+'</div></div>';
+}
+function aClose(){ A.open=false; document.getElementById('a-dd').innerHTML=''; aTools(); }
+function aPick(v){
+  var nv=(v==='all')?'all':parseInt(v,10), prev=A.year;
+  aClose();
+  if(nv===prev)return;
+  A.year=nv;
+  var older=(nv==='all'||prev==='all')?(nv==='all'):(nv<prev);
+  aRepaint(older?1:-1);
+}
+function aLive(){ A.live=!A.live; aRepaint(A.live?-1:1); }
+function aRepaint(dir){
+  var list=document.getElementById('a-list'), seq=++A.seq, slow=document.getElementById('slow').checked, lt=0;
+  aTools();   /* 제목줄은 누른 즉시 = 로딩 중에도 「내가 고른 해」가 머리글에 서 있다 */
+  var run=function(){
+    if(seq!==A.seq)return;
+    clearTimeout(lt);
+    list.innerHTML=tableHtml(A.year,A.live); flip(list,dir);
+  };
+  if(slow){ list.innerHTML=loadHtml(); setTimeout(run,1100); }        /* 직전이 느렸다 = 로더부터 */
+  else { lt=setTimeout(function(){ if(seq===A.seq)list.innerHTML=loadHtml(); },170);
+         requestAnimationFrame(function(){ requestAnimationFrame(run); }); }
+}
+document.addEventListener('click',function(e){ if(A.open&&!e.target.closest('#a-dd')&&!e.target.closest('#a-trig'))aClose(); });
+
+bPaint(); aTools(); document.getElementById('a-list').innerHTML=tableHtml(A.year,A.live);
+</script>
+</body>
+</html>
