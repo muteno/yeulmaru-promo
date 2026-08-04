@@ -55,7 +55,10 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # 1610 → 1607 = 보드 로딩 빔 스윕 통일(운영자 260723 "판매현황 빔 모션 사업현황·이런부분에도") — 판매/분석/연간실적 보드 로딩 문구 color:#888 → var(--accent) 계승 -3(캘린더·판매레일 .sk-sweep 레퍼런스 100% 이식 부수 청산)
 # 1607 → 1605 = 전시 집계 골격 상시화(운영자 260729 "1일차도 집계 다 생기게") — 「데이터 부족」(#ccc)·「추이 데이터 부족」(#bbb) 텍스트 폐지 → 속빈 원 골격(토큰만) 대체 -2
 # 1605 → 1590 = 예술성/사업성 축 전면 폐지(운영자 260803 "일괄 없애기") — 수익성별 버블 패널·목표차트 좌우 분할·매트릭스·KPI 2장·성격 pill/연필 삭제로 그 HTML 문자열 안 raw hex 15개 동반 청산(#E5484D·#4A4DE7 페어 등 · 신규 반입 0)
-BASE_HEX_INDEX = 1590
+# 1590 → 1578 = 캘린더 일괄 완료(운영자 260804) — 완료 결과 입력창을 단건·일괄 공용 `_completeResultPrompt`로
+#               뽑으며 그 안 인라인 리터럴을 토큰화 -12(#fff·#888·#555×3·#eee×3·#f5f5f5·#666·rgba 백드롭 → --surface-solid
+#               ·--dim·--neutral-text·--border·--backdrop, 버튼 2종은 정본 `.btn` 조합으로 교체). 신규 반입 0.
+BASE_HEX_INDEX = 1578
 BASE_HEX_SIGNAGE = 2          # signage/index.html: #000·#333
 BASE_ROOT_INDEX = 2           # L46(기본 팔레트 34토큰) + L1653(뉴트럴·z·c1~c6 27토큰) — 260803 실측 정정(구 표기 L14/32·L1322/26은 위치·개수 모두 stale)
 BASE_ROOT_SIGNAGE = 0
