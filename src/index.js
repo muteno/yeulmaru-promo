@@ -1096,19 +1096,28 @@ __name(opsWriteSheet, "opsWriteSheet");
 async function opsAppendRows(token, slug, rows){
   const name = opsSheetName(slug);
   const { driveId, itemId } = await findFile(token);
-  let vals = [];
+  // [260804 성능·확장] 이 함수가 usedRange에서 실제로 쓰는 건 **헤더 한 줄과 행수** 둘뿐인데
+  //   예전엔 시트 **전량**(values)을 받아왔다. 시트가 커질수록 append 한 번이 비싸져
+  //   운영_예매(4만 행) 반입이 **9,000행쯤에서 Worker 503**으로 죽었다(260804 실측 · 재시도 4회 소진).
+  //   → rowCount/columnCount 메타 + 1행 헤더만 읽는다. 이제 append 비용이 시트 크기와 무관하다.
+  let headerRow = [], usedRows = 0;
   try {
-    const ur = await graphGet(token, `${sheetPathFor(driveId, itemId, name)}/usedRange`);
-    vals = ur.values || [];
+    const meta = await graphGet(token, `${sheetPathFor(driveId, itemId, name)}/usedRange?$select=rowCount,columnCount`);
+    usedRows = meta.rowCount || 0;
+    const nCol = meta.columnCount || 0;
+    if (usedRows > 0 && nCol > 0) {
+      const hr = await graphGet(token, `${sheetPathFor(driveId, itemId, name)}/range(address='A1:${colLetter(nCol)}1')?$select=values`);
+      headerRow = (hr.values && hr.values[0]) ? hr.values[0] : [];
+    }
   } catch (e) {
     // [260724] 시트 자체가 없으면(ItemNotFound/404) 아래에서 신규 생성. 그 외 오류는 전파.
     if (!/ItemNotFound|Graph GET 404/.test(String((e && e.message) || e))) throw e;
-    vals = [];
+    usedRows = 0; headerRow = [];
   }
   // [260724] 미동기화(없거나 빈) 시트 → 넘어온 행들의 키로 시트를 만들고 헤더를 심은 뒤 이어붙인다.
   //   전시일일 등 최초 저장 시 append 전에 시트가 없어 Graph 404로 저장이 통째로 실패하던 문제 방지.
   //   (기계산출물 손편집 금지 원칙 유지 — 데이터가 아니라 '생성 코드'가 시트를 만들게 함.)
-  if (!vals.length) {
+  if (!usedRows || !headerRow.length) {
     if (!rows.length) return { ok: true, sheet: name, appended: 0, fromRow: 0, created: true };
     const newHeaders = [];
     const seenH = {};
@@ -1123,8 +1132,8 @@ async function opsAppendRows(token, slug, rows){
     await graphPatch(token, `${sheetPathFor(driveId, itemId, name)}/range(address='${nAddr}')`, { values: nData });
     return { ok: true, sheet: name, appended: nData.length, fromRow: nSr, created: true };
   }
-  const headers = vals[0].map((h) => String(h == null ? "" : h));
-  const nextRow = vals.length + 1;
+  const headers = headerRow.map((h) => String(h == null ? "" : h));
+  const nextRow = usedRows + 1;
   const lastCol = colLetter(headers.length);
   const data = rows.map((r) => headers.map((h) => { const v = r[h]; return (v === null || v === undefined) ? "" : String(v); }));
   const sr = nextRow, er = sr + data.length - 1;
