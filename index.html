@@ -1235,6 +1235,18 @@ table.promo-board-table th:last-child .col-resize-handle{display:none}
 .cb-chip:active{transform:scale(0.96)}
 .cb-chip.ghost{border-color:rgba(0,0,0,0.1);color:#888;box-shadow:none}
 .cb-chip.ghost:hover{background:rgba(0,0,0,0.04)}
+/* [260804 운영자 「문의하기는 강조색1, 불편사항 접수는 빨간색(팔레트에 있는색)으로 음영을 조금 넣어줘 불투명하게」]
+   첫 메뉴 2갈래 전용 결 — 기틀 §3.5③ 「약 = 옅은 배경 + 유채색 글자」 패턴(명도·글자색 이중단서).
+   **새 토큰·새 raw hex 0**(운영자 「신설하지 말고 기존 팔레트 활용」):
+     · 문의하기 = 강조색1의 정본 틴트 토큰 `--accent-light` 그대로.
+     · 불편사항 = 빨강 `--danger-btn`엔 틴트 사다리가 없어 **같은 토큰 alpha 변주**(§3.5② 정상 경로)를 씀.
+   「불투명하게」 = 유리(backdrop-filter + --glass-surface)를 이 두 칩에서만 끄고, alpha 틴트를
+   `--surface-solid` 위에 얹어 합성이 불투명해지게 한다(투명 알파를 그대로 두면 뒤 창이 비쳐 씻긴 색이 된다).
+   alpha .13 = `--accent-light`를 흰 위에서 역산한 농도 = 두 칩의 배경 명도를 같은 급으로 맞춘 값. */
+.cb-chip.cb-ask{background:var(--accent-light);border-color:rgba(74,77,231,.28);color:var(--accent);backdrop-filter:none;-webkit-backdrop-filter:none}
+.cb-chip.cb-ask:hover{background:linear-gradient(rgba(74,77,231,.20),rgba(74,77,231,.20)),var(--surface-solid)}
+.cb-chip.cb-qa{background:linear-gradient(rgba(226,75,74,.13),rgba(226,75,74,.13)),var(--surface-solid);border-color:rgba(226,75,74,.30);color:var(--danger-btn);backdrop-filter:none;-webkit-backdrop-filter:none}
+.cb-chip.cb-qa:hover{background:linear-gradient(rgba(226,75,74,.22),rgba(226,75,74,.22)),var(--surface-solid);box-shadow:0 3px 10px rgba(226,75,74,.18)}
 .cb-foot{display:flex;gap:8px;padding:11px 12px;border-top:1px solid rgba(0,0,0,0.05);flex-shrink:0;background:rgba(255,255,255,0.6)}
 .cb-in{flex:1;border:1.5px solid transparent;border-radius:999px;padding:9px 16px;font-size:13px;font-family:inherit;outline:none;background:#F2F2F8;transition:all .2s}
 .cb-in:focus{border-color:var(--accent);background:#fff;box-shadow:0 0 0 3px rgba(74,77,231,0.10)}
@@ -28713,7 +28725,7 @@ function _cbChips(items){
   const row=document.createElement('div');row.className='cb-chiprow';
   items.forEach(function(it){
     const c=document.createElement('button');
-    c.className='cb-chip'+(it.ghost?' ghost':'');c.textContent=it.label;c.onclick=it.fn;
+    c.className='cb-chip'+(it.ghost?' ghost':'')+(it.cls?' '+it.cls:'');c.textContent=it.label;c.onclick=it.fn;   // cls = 정본 .cb-chip 위 결 변형(첫 메뉴 cb-ask·cb-qa)
     row.appendChild(c);
   });
   b.appendChild(row);_cbScroll();
@@ -28727,9 +28739,10 @@ function _cbHome(first){
   //   첫 메뉴 = 2갈래 분기. **이 분기 자체가 컴플레인 판정**이라 키워드/AI 자동판정은 배선하지 않는다(운영자 확정) —
   //   사용자가 직접 고르므로 오탐 0. 문의하기 = 종전 2칩(회사 규정·프로그램)을 한 단 아래로 옮긴 것뿐 = 흐름 무변.
   //   불편사항 접수 = 종전 `.qa-fab`(260725 숨김·_qaMount return 유지) 대신 여기가 유일 창구 → _qaOpen 정본 모달 재사용.
+  //   결(260804 2차 운영자) = 문의하기 강조색1 · 불편사항 빨강, 둘 다 옅은 음영·불투명(.cb-ask/.cb-qa · CSS 주석 참조).
   _cbChips([
-    {label:'💬 문의하기',fn:_cbAskMenu},
-    {label:'📣 불편사항 접수',fn:_cbQaEntry}
+    {label:'💬 문의하기',cls:'cb-ask',fn:_cbAskMenu},
+    {label:'📣 불편사항 접수',cls:'cb-qa',fn:_cbQaEntry}
   ]);
 }
 // 문의하기 = 종전 첫 메뉴(회사 규정 질문 · 사업 프로그램 문의) — 칩·핸들러 그대로, 한 단만 내려왔다.
