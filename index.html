@@ -6339,7 +6339,7 @@ function _yrmRender(){
     +cell('연평균',avg.toLocaleString(),'--text')
     +cell('전년 대비',(dup?'+':'−')+Math.abs(dpct).toFixed(1)+'%',dup?'--green':'--danger')
     +'</div>';
-  h+='<div class="bizm-card"><div class="ct"><span class="ct-bul"></span>연도별 관람·수강 추이 <span class="sub">막대=실적 · 선=추세 (만명)</span></div><div id="yrm-chart" style="height:560px;margin:0 6px 6px;animation:fadeUp .45s ease"></div></div>';   // [260725 운영자] 높이 410→560 = 좌 보드를 우 레일 하단선까지 내리며 생긴 여백을 차트 확대로 흡수(카드 외벽 마진 0 6 6은 유지). Plotly layout.height도 pfx==='yrm'일 때만 560 — 모달(pfx='yr')은 410 그대로
+  h+='<div class="bizm-card"><div class="ct"><span class="ct-bul"></span>연도별 관람·수강 추이 <span class="sub">막대=실적 · 선=추세 · 점선=2026 예상 (만명)</span></div><div id="yrm-chart" style="height:560px;margin:0 6px 6px;animation:fadeUp .45s ease"></div></div>';   // [260725 운영자] 높이 410→560 = 좌 보드를 우 레일 하단선까지 내리며 생긴 여백을 차트 확대로 흡수(카드 외벽 마진 0 6 6은 유지). Plotly layout.height도 pfx==='yrm'일 때만 560 — 모달(pfx='yr')은 410 그대로
   h+='<div id="yrm-tbl"></div>';
   body.innerHTML=h;
   _yrmTable();
@@ -10526,6 +10526,22 @@ var _YR_RECENT=2025;   // 가장 최근 '완결' 취합본 — 각주에서만 �
 //   들어가는 축 = 표 열·누계·grand·막대·점 수치 = 운영자가 요청한 「2026까지·누계 포함」 그 자체.
 var _YR_PARTIAL=2026;
 function _yrFullN(){var ys=_YR.years;return (ys[ys.length-1]===_YR_PARTIAL)?ys.length-1:ys.length;}   // 완결 연도 개수(잠정 연도 앞까지)
+// [260804 3차 운영자] 2026 **연간 예상치** — 차트 점선 마킹 전용. 막대·표·누계(_YR)에는 절대 안 섞는다(실적 ≠ 예상).
+//   산식 = 운영자 지시 그대로. 표본은 전부 앱이 이미 쓰는 정본(운영_세부운영관리대장(정리) · 프로그램 관리 시트) 실측 — 새 가정 창작 0.
+//   ① 공연 60,181 = 상반기 실적 9,568 + 하반기 기획 17,261 + 대관 33,352
+//      · 하반기 기획 = 프로그램 시트 2026 하반기 라인업 **15건**에 각 장르의 「회차당 평균 발권유료」를 곱한 합.
+//        장르 벤치마크(원장 기획 2022~2025 실측) = 뮤지컬 627 · 어린이·가족 373 · 클래식 351 · 발레/연극 340 · 소극장급 210.
+//        회차 = 시트 「회차」 우선(8건), 빈칸은 공연일수 × 장르 회차/일(클래식 1.03 · 발레/연극 1.42 · 뮤지컬 1.64 · 어린이·가족 2.00).
+//        시트 장르 → 원장 장르1 대응: 뮤지컬(대형)·뮤지컬→뮤지컬 / 뮤지컬(어린이)→어린이·가족 / 연극·무용·인문학(발레)→발레/연극 / 시즌 기획·공백→클래식.
+//      · 대관 = (2025 총 관람 83,455 − 2025 기획 발권유료 35,809) × 70% = 47,646 × 0.7.
+//      ⚠ 기준 주의: 이 뺄셈은 **무료·초대 전량을 대관으로 몰아넣는다**(원장엔 무료 열이 없음). 원장 순수 대관(발권유료)은 27,635이고
+//        그 70%는 19,345 — 대신 그 경로로 가면 공연 예상이 46,173(발권유료 기준)이 되어 무료 포함인 다른 해 막대와 기준이 어긋난다.
+//        교차검증: 발권유료 46,173에 2025 실측 배율(83,455/63,444 = 1.315)을 곱하면 60,729 → 위 60,181과 **1% 이내 수렴**.
+//   ② 전시 24,147 = 2026 상반기 누적 8,049 × 3(운영자 가중치)
+//   ③ 교육 917 = 2025 실적과 동일 수준(운영자 지시)
+var _YR_FC={'공연':{v:60181,why:'상반기 실적 9,568 + 하반기 기획 17,261(라인업 15건×장르 벤치마크) + 대관 33,352(전년 70%)'},'전시':{v:24147,why:'상반기 누적 8,049 × 3'},'교육':{v:917,why:'2025년과 동일 수준'}};
+var _YR_FCW=1.5;   // [260804 3차 운영자 「2026 표기가 다른 곳보다 1.5배 더 너비가 커야 함 · 다른 곳 간격을 줄이면 될 듯」] 2026 칸 폭 배율(다른 해 = 1)
+var _YR_FCX=0.5;   // 넓힌 2026 칸 안에서 예상 점의 자리(연도 단위 오른쪽 오프셋) — 왼쪽 반 = 상반기 실적 막대, 오른쪽 반 = 예상
 function _yrBand(y,hl){   // 잠정(2026) 상시 강조 + 선택 하이라이트(선택 우선). 기존 토큰만.
   var recent=(y===_YR_PARTIAL),s='';
   if(hl)s+='background:var(--accent-light);';
@@ -10598,8 +10614,9 @@ function _yrDrawChart(first,pfx,stO){
   if(st.year==='all'){
     var annos=[];
     function _man(v){return (v/10000).toFixed(1);}   // [260723 운영자] 만명 단위(소수1) — 숫자만 표기 · 단위는 우상단에
+    var _fcOn=(st.metric==='인원'&&years[years.length-1]===_YR_PARTIAL);   // [260804 3차] 예상 마킹 = 관람·수강(인원) 지표에서만 — 횟수·일수·나눔은 예상 산식이 없다(없는 걸 그리지 않는다)
     var ordered=selCats.slice().sort(function(a,b){var ra=_yrRow(a,st.metric),rb=_yrRow(b,st.metric);return (rb?Math.max.apply(null,rb.v):0)-(ra?Math.max.apply(null,ra.v):0);});   // [260723 운영자] z-순서: 값 큰 분야 먼저(아래)→작은 분야 나중(위) = 낮은 수치가 안 가려짐
-    ordered.forEach(function(c){
+    ordered.forEach(function(c,_oi){
       var r=_yrRow(c,st.metric),vv=r?r.v.slice():[],hex=col[c];
       var vm=vv.map(function(v){return v/10000;});   // [260723 운영자] 만명 스케일 — 축·플롯·라벨 통일(눈금도 만명). hover는 customdata로 정확 명수.
       var _fn=Math.min(_yrFullN(),vv.length);   // [260804 2차] 완결 연도까지 = 최고·최저 콜아웃과 추세 곡선의 사정거리(잠정 2026은 막대·점 수치로만 등장)
@@ -10608,9 +10625,17 @@ function _yrDrawChart(first,pfx,stO){
       traces.push({type:'bar',name:c,x:years,y:vm,customdata:vv,marker:{color:hex,opacity:.14},hovertemplate:'%{x}년 '+c+'<br>%{customdata:,}명<extra></extra>',showlegend:false});   // [260723 운영자] 막대 = 얇고 옅은 보조(곡선이 주역)
       var _mo=_yrMono(years.slice(0,_fn),vm.slice(0,_fn),16);   // [260804 2차] 곡선 끝점 = 마지막 **완결** 연도. 잠정 반년치까지 이으면 급락해 「반토막 났다」로 읽힌다 — 집계 중인 걸 추세로 그리지 않는다.
       traces.push({type:'scatter',mode:'lines',name:c,x:_mo.x,y:_mo.y,line:{color:hex,width:2.6,shape:'linear'},fill:'tozeroy',fillcolor:_yrHexA(hex,.09),hoverinfo:'skip',showlegend:true});   // [260723 운영자] 곡선(단조 큐빅·왜곡0) + 아래 아주 옅은 area 음영 = 주역
-      traces.push({type:'scatter',mode:'markers+text',name:c+' 점',x:years,y:vm,customdata:vv,text:vv.map(function(v,idx){return (v>0&&idx!==pi&&idx!==vi)?_man(v):'';}),textposition:'top center',textfont:{color:hex,size:8.5},marker:{color:hex,size:5,line:{color:paper,width:1}},hovertemplate:'%{x}년 '+c+'<br>%{customdata:,}명<extra></extra>',showlegend:false,cliponaxis:false});   // [260723 운영자] 각 점 위 수치(만명·소수1) · 최고/최저는 콜아웃이 담당(중복 제거)
+      traces.push({type:'scatter',mode:'markers+text',name:c+' 점',x:years,y:vm,customdata:vv,text:vv.map(function(v,idx){return (v>0&&idx!==pi&&idx!==vi)?_man(v):'';}),textposition:vv.map(function(v,idx){return (idx===vv.length-1&&_oi===1)?'bottom center':'top center';}),textfont:{color:hex,size:8.5},marker:{color:hex,size:5,line:{color:paper,width:1}},hovertemplate:'%{x}년 '+c+'<br>%{customdata:,}명<extra></extra>',showlegend:false,cliponaxis:false});   // [260723 운영자] 각 점 위 수치(만명·소수1) · 최고/최저는 콜아웃이 담당(중복 제거) · [260804 3차] 마지막(잠정) 칸만 2등분야 라벨을 점 아래로 = 2026 「1.0(공연)」과 「0.8(전시)」가 8px 차라 겹쳐 읽히던 것 분리(다른 해는 종전 그대로)
       annos.push({x:years[pi],y:vm[pi],text:'최고 '+_man(vv[pi]),showarrow:true,arrowhead:0,arrowwidth:1,arrowcolor:hex,ax:0,ay:-24,font:{color:hex,size:9.5},bgcolor:paper,bordercolor:hex,borderwidth:1,borderpad:3});   // [260723 운영자·한수] 최고 콜아웃(만명) — 리더선으로 빼내 불투명 칩+드롭섀도
       if(vi>=0&&vi!==pi)annos.push({x:years[vi],y:vm[vi],text:'최저 '+_man(vv[vi]),showarrow:true,arrowhead:0,arrowwidth:1,arrowcolor:hex,ax:0,ay:28,font:{color:hex,size:9.5},bgcolor:paper,bordercolor:hex,borderwidth:1,borderpad:3});   // 최저 콜아웃(만명)
+      // [260804 3차 운영자 「공연·전시·교육 예상치를 점선으로 마킹」] 마지막 **완결** 연도 실적점 → 2026 예상점을 점선으로 잇는다.
+      //   기존 문법 계승: 점선 = 「아직 확정 아님」(근 4개년 추이선·레일 예측선과 같은 dash:'dot') · 색 = 그 분야 색 그대로 · 새 색·새 부품 0.
+      //   끝점만 속 빈 원(면=서피스·테두리=분야색)으로 실적 점(꽉 찬 원)과 구분하고, 값은 「예상 N.N」으로 적는다.
+      if(_fcOn&&_YR_FC[c]&&_fn>0){
+        var _fc=_YR_FC[c],_fy=_fc.v/10000,_fx=years[years.length-1]+_YR_FCX;
+        traces.push({type:'scatter',mode:'lines',name:c+' 예상선',x:[years[_fn-1],_fx],y:[vm[_fn-1],_fy],line:{color:hex,width:2,dash:'dot'},hoverinfo:'skip',showlegend:false});
+        traces.push({type:'scatter',mode:'markers+text',name:c+' 예상',x:[_fx],y:[_fy],customdata:[_fc.v],text:['예상 '+_man(_fc.v)],textposition:'top center',textfont:{color:hex,size:9},marker:{color:paper,size:7,line:{color:hex,width:2}},hovertemplate:'2026년 '+c+' 예상 %{customdata:,}명<extra>'+_fc.why+'</extra>',showlegend:false,cliponaxis:false});
+      }
     });
     // [260724 운영자 정정] 관람 추세선 = 공연선 실제 꼭짓점 원(2022→2025) 직결(운영자 "너가 준 시안대로 · 계 기준은 잘못된 방향"). 선분 끝점 = 공연 2022·2025(≈7.4→8.3만) · %·라벨은 계(전체 관람) 2021→2025 유지 · 박스 상단(값 라벨 위)
     if(pfx==='yrm'&&typeof _yrmTotRow==='function'){
@@ -10634,7 +10659,13 @@ function _yrDrawChart(first,pfx,stO){
     //   과하게 내려가 Plotly가 하단 마진을 그만큼 자동 확장한 탓. 좌우도 l56+r22=78px이 눈금값("10") 실폭보다 넉넉.
     //   → yrm만 t50→32 · l56→42 · r22→14 · b48→52 · 범례 -0.18→플롯 아래 22px 고정(_yrmLegY · 마진 52 안에 들어앉아 자동확장 0). 모달(pfx='yr')은 종전 값 그대로.
     // [260801 운영자 "차트 우측 공백 — 가로 여백 최대한"] x축 range 명시 = 데이터(2012~2025) 밖 유령 눈금(2026) 제거. autorange 패딩이 마지막 해 뒤로 빈 칸을 만들던 것 차단(±0.5 = 막대 반폭 0.2 + 콜아웃 여유).
-    layout={barmode:'overlay',height:(_m?560:410),margin:{t:(_m?32:34),r:(_m?14:22),b:(_m?52:48),l:(_m?42:56)},paper_bgcolor:paper,plot_bgcolor:paper,font:{family:'inherit',size:11,color:fc},xaxis:{dtick:1,gridcolor:transp,zeroline:false,tickangle:0,range:[years[0]-0.5,years[years.length-1]+0.5]},yaxis:{gridcolor:grid,zeroline:false,ticksuffix:'',rangemode:'tozero'},showlegend:true,legend:{orientation:'h',y:(_m?_yrmLegY(560):-0.18),yanchor:'top',x:0.5,xanchor:'center'},bargap:.6,annotations:annos};   // [260723 운영자] barmode overlay — 막대를 연도 중앙에 겹쳐 세워 곡선 점(마커)이 기둥 중앙에 정확히 얹힘(구 group=좌우 오프셋으로 점↔기둥 어긋남) · y축 만명 단위(÷10000)
+    // [260804 3차 운영자] 2026 칸만 폭 1.5배. x가 연도값이라 칸 폭 = 눈금 간격(1)인데, **오른쪽 끝을 0.5칸 더 열어**
+    //   마지막 칸(2026)을 1.5칸으로 만든다(왼쪽 경계 = 2025와의 중간 2025.5 고정 · 오른쪽 경계 2027.0). 넓어진 만큼 축 전체 단위 수가
+    //   15.0 → 15.5로 늘어 **다른 해 간격은 자동으로 좁아진다**(운영자 「다른 곳을 좀 더 간격을 줄이면 될 듯」 그대로).
+    //   그 오른쪽 반이 예상 점(_YR_FCX)의 자리 — 상반기 실적 막대(2026 눈금 자리)와 안 겹친다.
+    //   dtick:1 → tickvals 명시로 교체 = 늘린 범위 끝에 유령 눈금(2027)이 서지 않게(라벨은 실제 연도만).
+    var _xr1=years[years.length-1]+((_fcOn&&years[years.length-1]===_YR_PARTIAL)?(_YR_FCW-0.5):0.5);
+    layout={barmode:'overlay',height:(_m?560:410),margin:{t:(_m?32:34),r:(_m?14:22),b:(_m?52:48),l:(_m?42:56)},paper_bgcolor:paper,plot_bgcolor:paper,font:{family:'inherit',size:11,color:fc},xaxis:{tickmode:'array',tickvals:years,gridcolor:transp,zeroline:false,tickangle:0,range:[years[0]-0.5,_xr1]},yaxis:{gridcolor:grid,zeroline:false,ticksuffix:'',rangemode:'tozero'},showlegend:true,legend:{orientation:'h',y:(_m?_yrmLegY(560):-0.18),yanchor:'top',x:0.5,xanchor:'center'},bargap:.6,annotations:annos};   // [260723 운영자] barmode overlay — 막대를 연도 중앙에 겹쳐 세워 곡선 점(마커)이 기둥 중앙에 정확히 얹힘(구 group=좌우 오프셋으로 점↔기둥 어긋남) · y축 만명 단위(÷10000)
   }else{
     var yi=years.indexOf(st.year);
     var ys=selCats.map(function(c){var r=_yrRow(c,st.metric);return r?(r.v[yi]||0):0;});
@@ -10684,7 +10715,7 @@ function _yrRender(pfx){
   h+=_yrCard('연평균',pfx+'-k3','','--green');
   h+='<div class="bizm-kpi" style="--kpitok:var('+dtok+')"><div class="lab">전년 대비 (2025 vs 2024)</div><div class="val">'+darr+' <span id="'+pfx+'-k4">0</span>'+(dpct?'<span class="u">'+dpct+'</span>':'')+'</div></div>';   // [260723f Opus] 글래스 KPI 통일
   h+='</div>';
-  h+='<div class="bizm-card"><div class="ct">'+(st.year==='all'?('연도별 '+mLabel+' 추이'):(st.year+'년 분야별 '+mLabel))+' <span class="sub">— '+catTxt+(st.year==='all'?' · 막대=실적, 선=추세, 점선=평균':' · 선택 연도')+'</span></div><div id="'+pfx+'-chart" style="height:360px;margin:0 6px 6px;animation:fadeUp .45s ease"></div></div>';   // [260723f Opus] 차트 = 흰 서피스 카드 통일
+  h+='<div class="bizm-card"><div class="ct">'+(st.year==='all'?('연도별 '+mLabel+' 추이'):(st.year+'년 분야별 '+mLabel))+' <span class="sub">— '+catTxt+(st.year==='all'?(' · 막대=실적, 선=추세'+((st.metric==='인원')?', 점선=2026 예상':'')):' · 선택 연도')+'</span></div><div id="'+pfx+'-chart" style="height:360px;margin:0 6px 6px;animation:fadeUp .45s ease"></div></div>';   // [260723f Opus] 차트 = 흰 서피스 카드 통일
   var _navCss='width:28px;height:28px;border-radius:8px;border:1.5px solid var(--glass-bd);background:var(--glass-surface);color:var(--text);font-size:16px;font-weight:700;cursor:pointer;line-height:1;font-family:inherit;display:inline-flex;align-items:center;justify-content:center;box-shadow:var(--glass-shadow)';
   h+='<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin:2px 0 8px"><div style="font-size:13px;font-weight:700;color:var(--text)">전체 실적표 <span style="font-weight:400;color:var(--dim);font-size:11px">— 엑셀 원본 그대로 · 선택 연도 열 하이라이트 · 2025 최근 취합 강조</span></div><div style="display:flex;gap:6px;flex-shrink:0"><button type="button" onclick="_yrScrollTable(-1,\''+pfx+'\')" title="이전 연도들 보기" style="'+_navCss+'">‹</button><button type="button" onclick="_yrScrollTable(1,\''+pfx+'\')" title="다음 연도들 보기" style="'+_navCss+'">›</button></div></div>';   // [260723 운영자] 묻히는 연도 열 = 부제줄 우측 ◀▶로 가로 스크롤(데이터 안 가리는 위치)
   h+=_yrTable(pfx);
