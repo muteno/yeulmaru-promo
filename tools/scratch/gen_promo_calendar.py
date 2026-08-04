@@ -157,8 +157,8 @@ def console_script(rows):
     앱 자체 함수(_buildRecRow · _validateScheduleChange · api)를 그대로 쓴다 —
     위저드가 타는 경로와 동일(Worker→Graph→SharePoint). 새 저장 경로를 만들지 않는다."""
     items = ",\n".join(
-        '{d:"%s",t:"%s",p1:"%s",p2:"%s",f:"%s",prog:%s,ti:"%s",bo:"%s",mg:"%s"}'
-        % (dt, tm, p1, PLAT[p1][1], fmt, json.dumps(PROG[pk][0], ensure_ascii=False),
+        '{d:"%s",t:"%s",p1:"%s",p2:"%s",f:"%s",id:"%s",prog:%s,ti:"%s",bo:"%s",mg:"%s"}'
+        % (dt, tm, p1, PLAT[p1][1], fmt, PROG[pk][1], json.dumps(PROG[pk][0], ensure_ascii=False),
            title.replace('"', "'"), cont.replace('"', "'"), mgr)
         for (dt, tm, p1, fmt, pk, title, cont, mgr, msgs) in rows)
     return '''/* 예울마루 홍보 계획 %d건 일괄 신청 — 앱 탭(로그인 상태) 콘솔에 붙여넣기
@@ -177,10 +177,25 @@ def console_script(rows):
   if (miss.length) { console.error('앱 페이지에서 실행하세요. 없는 심볼:', miss); return; }
   if (!password)   { console.error('로그인 후 실행하세요 (password 비어 있음).'); return; }
 
+  /* 데이터 로딩 대기 — 로그인 직후엔 PERFS/records가 아직 비어 있다.
+     (260804 실패 원인: 이 대기가 없어서 22건 전부 「프로그램 못 찾음」으로 떨어졌다) */
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  for (let i = 0; i < 60; i++) {
+    const ready = (typeof _perfReady === 'undefined' || _perfReady) && PERFS && PERFS.length;
+    if (ready) break;
+    if (i === 0) console.log('프로그램 데이터 로딩 대기 중…');
+    await sleep(500);
+  }
+  if (!PERFS || !PERFS.length) { console.error('프로그램 목록이 비어 있습니다. 캘린더가 다 뜬 뒤 다시 실행하세요.'); return; }
+  console.log('프로그램 ' + PERFS.length + '건 · 기존 홍보기록 ' + records.length + '건 확인');
+
   const status = (userRole === 'admin') ? '예정' : '신청 중';
   const ok = [], ng = [];
   E.forEach((e, i) => {
-    if (!_findPerfByName(e.prog)) { ng.push({ '#': i + 1, 날짜: e.d, 사유: '프로그램 시트에서 못 찾음: ' + e.prog }); return; }
+    /* 프로그램ID 우선 매칭 — 이름은 바뀔 수 있어도 ID는 안 바뀐다. 못 찾으면 이름으로 폴백 */
+    const p = PERFS.find(x => String(x.id || '').trim() === e.id) || _findPerfByName(e.prog);
+    if (!p) { ng.push({ '#': i + 1, 날짜: e.d, 사유: '프로그램 못 찾음 (ID ' + e.id + ' / ' + e.prog + ')' }); return; }
+    e._p = p; e.prog = p.f || e.prog;          // 앱이 들고 있는 이름을 정본으로 사용
     const v = _validateScheduleChange(null, e.d, e.t, { action: 'submit', plat1: e.p1, applicant: e.mg, program: e.prog });
     if (!v.ok) { ng.push({ '#': i + 1, 날짜: e.d + ' ' + e.t, 제목: e.ti, 사유: v.reason }); return; }
     ok.push(e);
@@ -203,7 +218,7 @@ def console_script(rows):
   for (const e of ok) {
     const pw = {
       date: e.d, time: e.t, plat1: e.p1, plat2: e.p2, format: e.f,
-      programType: (_findPerfByName(e.prog) || {}).t || 'c', program: e.prog,
+      programType: (e._p || {}).t || 'c', program: e.prog,
       title: e.ti, applicant: e.mg, memo: '', folders: [],
       kakaoText: e.p1 === '카카오톡' ? e.bo : '', instaText: e.p1 === '인스타그램' ? e.bo : '',
       blogDirection: e.p1.indexOf('블로그') === 0 ? e.bo : '',
