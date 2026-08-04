@@ -2647,11 +2647,18 @@ var index_default = {
           if (sheet) {
             try {
               const opsName = opsSheetName(sheet);
-              // [보안 260710 분신술 HIGH-1] 회원 시트 = 소비자 PII 3만 행 — 클라 admin 게이트는 콘솔로 우회 가능하므로
-              //  서버가 강제한다(log 시트 GET 선례 계승). 응답은 no-store(브라우저 디스크 캐시 잔류 차단). ⚠ Cloudflare 재배포 필요.
+              // [보안 260710 분신술 HIGH-1 · 260804 예매 확대] PII 시트 = 서버가 admin을 강제한다.
+              //  클라 admin 게이트는 콘솔로 우회 가능하므로 여기서 막는다(log 시트 GET 선례 계승).
+              //  ⚠ 운영_예매(260804 신설) = 주문 4만 행에 주문자명·휴대폰·회원키가 들어있다. 이 목록에
+              //   안 넣으면 **앱 비번만으로 전량이 나간다** — 회원 시트와 같은 등급의 개인정보다.
+              //   PII 시트를 새로 만들면 반드시 여기에 추가할 것.
+              const PII_SHEETS = ["운영_회원", "운영_예매"];
+              if (PII_SHEETS.includes(opsName)) {
+                const piiAuth = await checkAdmin(request, env, token);
+                if (!piiAuth.admin) return json({ error: "Admin only (personal data)" }, env, 403);
+              }
+              // 응답은 no-store(브라우저 디스크 캐시 잔류 차단). ⚠ Cloudflare 재배포 필요.
               if (opsName === "운영_회원") {
-                const memAuth = await checkAdmin(request, env, token);
-                if (!memAuth.admin) return json({ error: "Admin only (member data)" }, env, 403);
                 // [성능 260711 운영자 "더 빠르게"] 3계층: isolate 인메모리(5분) → KV 전역(1시간, isolate 무관
                 //  = 첫 요청도 웜히트면 <1s) → Graph 청크(병렬 4). fresh=1 = 캐시 전부 우회 후 재적재.
                 //  KV 저장은 계정 내 암호화 저장(다른 시크릿과 동일 신뢰경계) · 응답은 계속 no-store(브라우저 잔류 차단).
@@ -2678,6 +2685,13 @@ var index_default = {
               //  다른 isolate가 방금 쓴 변경을 stale 캐시로 놓쳐 전체 재작성이 그 변경을 지우는 동시성 유실 창 축소.
               if (url.searchParams.get("fresh") === "1") delete opsCache[opsName];
               const { headers, rows } = await getOpsCached(token, opsName);
+              // PII 시트(운영_예매)는 회원 시트와 같이 no-store — 브라우저 디스크 캐시에 개인정보가 남지 않게.
+              if (PII_SHEETS.includes(opsName)) {
+                return new Response(JSON.stringify({ sheet, headers, rows, count: rows.length }), {
+                  status: 200,
+                  headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...corsHeaders(env) }
+                });
+              }
               return json({ sheet, headers, rows, count: rows.length }, env);
             } catch (e) {
               return json({ sheet, headers: [], rows: [], count: 0, note: "시트 없음 (미동기화)" }, env);
