@@ -8,6 +8,12 @@ const b = src.indexOf('// 시간 파싱:');
 if (a < 0 || b < 0) throw new Error('블록 못 찾음');
 
 let code = src.slice(a, b);
+// 블록 밖 헬퍼(제자리 = 앱 다른 구역)는 원본 정의를 그대로 떼어 붙인다 — 스텁 창작 금지(호이스팅으로 실앱에선 이미 보임)
+['function perfPlaceLabel(l){', 'function escapeHtml(s){'].forEach(sig => {
+  const i = src.indexOf(sig);
+  if (i < 0) throw new Error('헬퍼 못 찾음: ' + sig);
+  code += '\n' + src.slice(i, src.indexOf('\n', i));
+});
 // 외부 의존(_exSpans 소스·dk·PERFS)만 스텁으로 치환 — 판정 로직은 원본 그대로 둔다
 code = code.replace(/function _exSpans\(\)\{[\s\S]*?\n\}/, 'function _exSpans(){ return globalThis.__SPANS; }');
 code = code.replace(/function _exLineRefresh\(\)\{[\s\S]*?\n\}/, 'function _exLineRefresh(){}');
@@ -70,6 +76,30 @@ ok('지난 칸 진행중 → 색 유지 + opacity', eq(r, [G + ';opacity:.38', T
 // ⑩ 이미 끝난 전시 = 지난 칸이어도 진하게(예전 달 기록 보존)
 r = run([{ lane: L['장도'], s: '2026-03-27', e: '2026-06-21' }], '2026-05-01', true);
 ok('끝난 전시 → 지난 칸에도 진하게', eq(r, [P]), r);
+
+// ⑪ [260803] 줄에 실리는 이름(title) — 「선은 있는데 뭔지 모른다」의 해소분. 순서 = 화면 순서(위→아래)
+const title = (spans, day) => {
+  globalThis.__SPANS = spans;
+  const m = mod.renderExhibitBadge(day, false, false).match(/^<div title="([^"]*)"/);
+  return m ? m[1] : '';
+};
+let t = title([{ lane: L['7층'], n: '숨:쉬는 SUM', s: '2026-07-21', e: '2026-11-22' },
+               { lane: L['장도'], n: '김시재 개인전', s: '2026-08-15', e: '2026-08-23' }], '2026-08-20');
+ok('title = 위→아래 「전시실 · 전시명」', t === '7층 전시실 · 숨:쉬는 SUM / 장도 전시실 · 김시재 개인전', t);
+
+// ⑫ 소스가 겹쳐 이름이 풀네임↔약칭으로 갈려도 한 건으로 접힌다(먼저 온 정본 표기 유지)
+t = title([{ lane: L['7층'], n: 'GS칼텍스 예울마루 기획전시 <숨: 쉬는 SUM>', s: '2026-07-21', e: '2026-11-01' },
+           { lane: L['7층'], n: '숨:쉬는 SUM', s: '2026-07-21', e: '2026-11-22' }], '2026-08-20');
+ok('풀네임↔약칭 = 1건으로 접힘', t === '7층 전시실 · GS칼텍스 예울마루 기획전시 &lt;숨: 쉬는 SUM&gt;', t);   // 꺾쇠 = escapeHtml 통과분
+
+// ⑬ 같은 장소에 서로 다른 전시가 겹치면 줄은 1개여도 이름은 둘 다 남는다
+t = title([{ lane: L['장도'], n: '김효지 개인전', s: '2026-08-07', e: '2026-08-20' },
+           { lane: L['장도'], n: '김시재 개인전', s: '2026-08-15', e: '2026-08-23' }], '2026-08-18');
+ok('같은 장소 2건 = 줄 1 · 이름 2', t === '장도 전시실 · 김효지 개인전, 김시재 개인전', t);
+
+// ⑭ 이름이 없는 소스여도 줄은 그어진다(title은 전시실만)
+t = title([{ lane: L['7층'], s: '2026-07-21', e: '2026-11-01' }], '2026-08-20');
+ok('이름 없는 전시 → title = 전시실만', t === '7층 전시실', t);
 
 console.log(fail ? `\n실패 ${fail}건` : '\n전항목 통과');
 process.exit(fail ? 1 : 0);

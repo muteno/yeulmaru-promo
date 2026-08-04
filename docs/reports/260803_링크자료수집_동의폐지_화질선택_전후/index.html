@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>260803 링크 자료수집 — 동의 폐지 · 화질 선택 · 실패 사유 정직화 — 전후</title>
+<style>
+  :root{--accent:#4A4DE7;--text:#1A1A2E;--dim:#888;--border:rgba(0,0,0,0.09)}
+  body{margin:0;padding:34px 26px 60px;font-family:'Pretendard','Noto Sans KR',sans-serif;background:linear-gradient(135deg,#FDF6F3 0%,#F0EBF5 50%,#EBF0F8 100%);color:var(--text)}
+  h1{font-size:20px;margin:0 0 6px}
+  .sub{color:var(--dim);font-size:13px;margin-bottom:28px;line-height:1.7}
+  h2{font-size:15px;margin:34px 0 12px;display:flex;align-items:center;gap:8px}
+  h2::before{content:'';width:4px;height:16px;border-radius:2px;background:var(--accent)}
+  .pair{display:flex;gap:18px;flex-wrap:wrap}
+  figure{margin:0;flex:1 1 460px;min-width:320px}
+  figcaption{font-size:12.5px;font-weight:700;margin-bottom:8px}
+  figcaption .b{color:var(--dim)} figcaption .a{color:var(--accent)}
+  img{width:100%;height:auto;border-radius:16px;border:1px solid var(--border);box-shadow:0 8px 32px rgba(74,77,231,0.08);display:block}
+  .note{font-size:12.5px;color:var(--dim);line-height:1.7;margin-top:10px}
+  code{background:rgba(74,77,231,0.08);border-radius:4px;padding:1px 5px;font-size:12px}
+  pre{background:rgba(0,0,0,0.045);border-radius:10px;padding:12px 14px;font-size:11.5px;line-height:1.6;overflow-x:auto}
+</style>
+</head>
+<body>
+<h1>링크 자료수집 — 동의 절차 폐지 · 화질 선택 · 실패 사유 정직화 (260803)</h1>
+<div class="sub">운영자 지시: 「1) 동의 절차 없애줘 2) 용량이 크다고 안받아지는 경우가 있음 &gt; 해결해줘 3) 혹시 용량을 선택하게 할 수 있는지. (기본값은 최대로)」<br>
+증빙 = 앱의 진짜 UI 코드(<code>openLinkGrab</code>/<code>_lgRender</code>/<code>_lgYtReq</code>)를 헤드리스로 실구동해 캡처(마크업 재현 0) · 전 = 직전 커밋의 <code>index.html</code>, 후 = 이번 수정본.</div>
+
+<h2>① 동의 절차 폐지 + 화질 선택칩(기본 = 최고 화질)</h2>
+<div class="pair">
+  <figure><figcaption><span class="b">전 — 체크박스를 켜야 [저장]이 눌린다 · 화질 선택 없음(1080 고정)</span></figcaption><img src="전_동의체크_화질선택없음.png" alt="전"></figure>
+  <figure><figcaption><span class="a">후 — 체크박스 없음 · [최고 화질 ▾] 선택칩 신설</span></figcaption><img src="후_동의폐지_화질선택.png" alt="후"></figure>
+</div>
+<div class="note">화질 = 최고 화질(기본) / 1080p / 720p / 480p. 부품은 새로 만들지 않고 레포 정본 셀렉트 <code>.ana-sel</code>을 그대로 썼다(폭은 <code>.modal select{width:100%}</code> 전역을 인라인 <code>width:auto</code>로 상쇄 — <code>#lock-min-select</code> 선례 동일 문법).
+서버가 화질을 자산 id 해시에 함께 넣으므로 같은 영상도 화질별로 따로 변환·보관된다(안 넣으면 1080본이 「최고 화질」 요청에 재사용된다).
+동의 체크 폐지에 따라 죽은 CSS(<code>.lg-ring</code> 유도 링 953자)와 안내 문구(「권리 확인 동의 후」)도 함께 정리했다. 운영 원칙(권리 보유·이용 허가 콘텐츠 전용) 자체는 유지.</div>
+
+<h2>② 실패 사유 — 「6GB 초과」 오안내 → 진짜 원인</h2>
+<div class="pair">
+  <figure><figcaption><span class="b">전 — 원인과 무관하게 「초대형(6GB 초과) 여부를 확인해 주세요」</span></figcaption><img src="전_실패사유_6GB오안내.png" alt="전"></figure>
+  <figure><figcaption><span class="a">후 — 「유튜브가 서버 접속을 막았어요(봇 확인 요구)」</span></figcaption><img src="후_실패사유_봇차단명시.png" alt="후"></figure>
+</div>
+<div class="note">운영자가 본 ILLIT MV 실패의 <b>실제 원인</b>(러너 로그 · 릴리스 자산 <code>v4c20a248a2f682fa.err.txt</code> 실측):</div>
+<pre>ERROR: [youtube] bMhDJ0S0OBA: Sign in to confirm you're not a bot.
+WARNING: No supported JavaScript runtime could be found ...
+         YouTube extraction without a JS runtime has been deprecated, and some formats may be missing</pre>
+<div class="note">즉 용량 문제가 아니라 <b>유튜브가 GitHub Actions 러너 IP를 봇으로 차단</b>한 것이다(실행 시간 19초 = 즉사). 화면 문구가 언제나 「6GB 초과」를 지목해서 용량 문제로 읽혔다.
+→ 러너가 올린 <code>err.txt</code> 원문을 <code>/api/linkgrab/ytstat</code>이 <code>reason</code>으로 넘기고, 앱 <code>_lgYtReason()</code>이 사람 말로 옮긴다(봇 차단 · DRM · 연령 제한 · 비공개/삭제 · 용량 상한 · 화질 없음 · 라이브 진행 중). 모르는 사유는 <b>지어내지 않고 원문 앞부분을 그대로</b> 보여준다.</div>
+
+<h2>③ 다운로드 자체를 뚫기 위한 러너 보강</h2>
+<div class="note">
+· <b>JS 런타임(deno)</b> 설치 — nsig 복호 가능 → 「some formats may be missing」 해소.<br>
+· <b>PO 토큰 공급자</b>(<code>bgutil-ytdlp-pot-provider</code> deno 스크립트 모드) — GVS PO 토큰 없이는 미디어 URL이 HTTP 403이다. 사전 워밍업 1회를 넣었다(안 하면 첫 호출이 yt-dlp의 15초 타임아웃에 걸려 공급자가 통째로 '없음'으로 떨어진다 — 로컬 실측).<br>
+· <b>클라이언트 사다리</b> — 유튜브가 클라이언트별로 다르게 막는다(실측: 기본=미디어 403 · <code>web_safari</code>=봇 확인 · <code>tv</code>=DRM). 기본 → web_safari → mweb → tv_simply → android_vr 순으로 성공할 때까지 시도.<br>
+· <b>화질별 포맷 선택자 + <code>--remux-video mp4</code></b> — 구판은 mp4 고정이라 최고화질 VP9·AV1 판을 통째로 못 봤고, 병합이 mkv로 떨어지면 <code>.mp4</code>로 개명해 내보냈다(확장자가 거짓말하는 파일).<br>
+· <b>쿠키 escape hatch</b> — 리포 시크릿 <code>YT_COOKIES</code>가 있으면 자동으로 <code>--cookies</code>에 실린다(없어도 동작 = fail-soft). 봇 차단을 확실히 푸는 유일한 수단이라 남겨둔 손잡이.<br>
+· <code>workflow_dispatch</code> 추가 — 봇 차단은 러너 IP에서만 재현돼 로컬 검증이 불가능하다. 이제 손으로 러너에서 바로 돌려볼 수 있다.
+</div>
+
+<h2>게이트</h2>
+<div class="note">check_design 1590/1590 ✓ · check_refs ✓ · check_wiring ✓ · smoke_login PASS(JS 회귀 0) · smoke_layout PASS · ytdl.yml YAML 파싱 ✓</div>
+</body>
+</html>
