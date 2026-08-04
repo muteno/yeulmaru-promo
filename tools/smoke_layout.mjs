@@ -156,6 +156,16 @@ async function main() {
       await page.evaluate(`_bizmTo(${p})`);
       await page.waitForTimeout(1600);
       judge(`${p}면${p === 1 ? '(복귀)' : ''}`, await page.evaluate(MEASURE), fails);
+      // [260805] 3면 분야 축(공연/전시·교육) 신설 — 반반 면(좌 전시 / 우 교육)도 같은 이젤·흰 라인 계약을 진다.
+      //   왕복까지 재는 이유 = 분야를 오갈 때 한쪽 열만 다시 그려 두 열 하단선이 어긋나는 것이 이 구조의 대표 파손 모양.
+      if (p === 3 && await page.evaluate(`typeof _bizmSetDomain==='function'`)) {
+        await page.evaluate(`_bizmSetDomain('exhib')`);
+        await page.waitForTimeout(1700);
+        judge('3면(전시·교육)', await page.evaluate(MEASURE), fails);
+        await page.evaluate(`_bizmSetDomain('perf')`);
+        await page.waitForTimeout(1500);
+        judge('3면(공연 복귀)', await page.evaluate(MEASURE), fails);
+      }
     }
 
     const regressions = pageErrors.filter(e => /ReferenceError|SyntaxError|is not defined|is not a function/.test(e));
