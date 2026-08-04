@@ -6275,7 +6275,8 @@ function _srailPgOf(idx,id,name){ if(!idx)return null; return (id&&idx.byId[Stri
 // 캘린더·레일·필터·패널 로직 무수정 — 좌 보드 = openBusinessBoard 축약 인라인(_bizClean·_bizDrawChart 재사용) · 우 표 = _salesBuild+_anaSpark 재사용(재fetch 0).
 // F5 세션복원 = 부트 IIFE가 파싱 중 initApp 동기 호출 → 이 var들이 할당 전일 수 있어 initApp은 setTimeout(0)에서 _mvApply(분신술 4호 TDZ 전례 계승).
 var _mainView=(function(){try{return sessionStorage.getItem('mvView')==='cal'?'cal':'biz';}catch(_e){return 'biz';}})();   // [260723c 선택값] 상태 저장 = 이번 접속만(sessionStorage) · 새 접속 = 항상 사업 실적(운영자 「항상 메인」)
-var _bizmState={year:null,types:{},page:3,rdet:0,domain:'perf'};   // 인라인 보드 전용 상태(page: 좌 열이 그리는 면 · [260805 2차] rdet: 우 열이 「판매현황 상세」(3-2)인가 0|1 — 좌 면과 분리된 축 · [260805] domain: 3면 분야 축 perf|exhib|edu) — 모달(_bizState·_yrState 'yr')과 분리·공유는 _yrState뿐(동기 재렌더)
+var _bizmState={year:null,types:{},page:3,rdet:0,live:0};   // 인라인 보드 전용 상태(page: 좌 열이 그리는 면 · [260805 2차] rdet: 우 열이 「판매현황 상세」(3-2)인가 0|1 — 좌 면과 분리된 축 · [260806] live: 3면 「전체(0) ↔ 판매중(1)」 토글 — 구 domain(분야 축)은 칩 철거와 함께 폐지) — 모달(_bizState·_yrState 'yr')과 분리·공유는 _yrState뿐(동기 재렌더)
+var _BIZ_HALF_CH=230;   // [260806] 3면 하단 반반 줄의 전시 막대 높이 — 공연 막대(430)의 절반 급 · fit 흡수 대상이 아니라 고정값 하나면 된다
 //   [260805 2차 운영자] 첫 화면 = **3면(사업 결과 비교)** — 구 기본값 1(연간 실적)과 자리 교체(「이 페이지가 메인화면에 연간 실적이랑 교체되게」).
 function setMainView(v,skipFade){
   if(_mainView===v){_mvSync();return;}
@@ -6441,7 +6442,7 @@ function _srailTableHtml(perfs,exs){
 }
 // 좌측 사업현황(연간 누적 실적) 인라인 보드 — openBusinessBoard(_bizRender) 축약 계승: 필터(연도·기획/대관) + KPI 3 + 월×점유율 산점도(Plotly) + 공연 리스트 표.
 // 장르 벤치마크·시즌 추세 등 전체 분석 = 기존 모달(대시보드 ▸ 사업 결과 비교) 그대로 — 메인은 개요만. 색 = 토큰만(모달의 동결 회색 리터럴 대신 --past-bg·--border 대표 계승).
-function _bizmSetYear(y){_bizmState.year=parseInt(y,10);_bizmState.types={};_bizInlineRender();}
+function _bizmSetYear(y){ var n=parseInt(y,10); if(!isFinite(n)||n===_bizmState.year)return; _bizmState.year=n; _bizmState.types={}; _bizmRepaint(); }   // [260806] 좌만 그리던 것 → 좌·우 동시(우 열이 3-2 상세를 들고 있으면 그 표도 같은 해로) · 결 = 넘김과 같은 디졸브
 function _bizmToggleType(t){_bizmState.types[t]=!_bizmState.types[t];_bizInlineRender();}
 function _bizmSetRounds(b){_bizmState.rounds=b;_bizInlineRender();}
 function _bizmSetRunDays(b){_bizmState.rundays=b;_bizInlineRender();}
@@ -6562,14 +6563,14 @@ function _bizBookRender(){
   var cols=['biz-main'];
   if(wide){
     if(rightRedraw){ try{_railYrmRender();}catch(_e){console.warn('[book right]',_e);} cols.push('rail-yrm'); }   // 우 열은 그릴 면이 바뀔 때만 다시 그린다 = 「2는 고정」(판매 실적 회전·상세 그대로 유지)
-  } else _railYrmClear();   // 좁은 화면 = 우 열 없음 — 짝 면 후반이 남아 있으면 id 중복(bizm-genre 등)이 되므로 비운다
+  } else _railYrmClear();   // 좁은 화면 = 우 열 없음 — 짝 면 후반이 남아 있으면 id 중복(bizm-chart 등)이 되므로 비운다
   _bizmAnimate(cols);
 }
 function _railYrmClear(){   // 우 열 DOM 비우기 — 상세(#srail-uha)는 레일로 대피, 그 열이 들고 있던 차트만 purge
   _bizmState.rightId=null;
   var el=document.getElementById('rail-yrm'); if(!el||!el.childNodes.length)return;
   try{ var uha=document.getElementById('srail-uha'), rail=document.getElementById('sales-rail'); if(uha&&rail&&el.contains(uha))rail.appendChild(uha); }catch(_e){}
-  try{ if(window.Plotly)['#bizm-genre','#bizm-season'].forEach(function(s){var n=el.querySelector(s); if(n)Plotly.purge(n);}); }catch(_e){}
+  try{ if(window.Plotly)['#bizm-chart','#bizm-ex-chart','#yrm-chart'].forEach(function(s){var n=el.querySelector(s); if(n)Plotly.purge(n);}); }catch(_e){}   // [260806] 목록 = 현행 차트 id로 갱신(구 bizm-genre·bizm-season은 인라인에서 철거된 자리)
   el.innerHTML='';
 }
 function _bizmSlideSet(sl,dir){ _bizmState.dir=dir; _bizmState.page=sl.p; _bizmState.rdet=sl.d; _bizmFlip(); }   // [260805 2차] 슬라이드 한 칸 = (좌 면, 우 상세여부) 한 벌 — 두 축을 같이 세팅해야 _bizRightNeedsRedraw가 「바뀐 열만」을 정확히 짚는다
@@ -6625,7 +6626,7 @@ function _bizmFlip(){
   _bizmDotSync();
   _bizmDissolve(cols,_bizBookRender);
 }
-// [260805] 디졸브 3박자 본체를 **넘길 렌더러**와 분리 — 책 넘김(_bizmFlip)뿐 아니라 3면 분야 탭 전환(_bizmSetDomain)도
+// [260805] 디졸브 3박자 본체를 **넘길 렌더러**와 분리 — 책 넘김(_bizmFlip)뿐 아니라 3면 조작부 전환(_bizmRepaint — 연도·전체/판매중)도
 //   같은 결로 바뀌게. 타이밍·연타 가드·seq 취소·will-change 해제는 한 벌 그대로 공유한다(로직 복제 0).
 function _bizmDissolve(cols,render){
   var fr=_bizmDzFrames(cols);
@@ -6738,7 +6739,7 @@ function _bizInlineRender(){
   var el=document.getElementById('biz-main'); if(!el)return;
   if(typeof _mainView==='undefined'||_mainView!=='biz')return;
   if(typeof requestAnimationFrame==='function')requestAnimationFrame(function(){try{_srailAlignTop();}catch(_e){}});   // [260723 운영자] 좌 보드 렌더(innerHTML 반영) 후 우 판매현황 레일 높이 재캡 = 세로변 동일
-  try{if(window.Plotly)['#bizm-chart','#bizm-genre','#bizm-season','#yrm-chart'].forEach(function(s){var n=el.querySelector(s); if(n)Plotly.purge(n);});}catch(_e){}   // [260723 평의회4] innerHTML 파기 전 purge — 리스너·옵저버 누수 차단 · [260801 5차] 좌 열(el) 안으로 한정 = 짝 면에서 우 열이 들고 있는 차트 오폭 방지
+  try{if(window.Plotly)['#bizm-chart','#bizm-ex-chart','#bizm-genre','#bizm-season','#yrm-chart'].forEach(function(s){var n=el.querySelector(s); if(n)Plotly.purge(n);});}catch(_e){}   // [260723 평의회4] innerHTML 파기 전 purge — 리스너·옵저버 누수 차단 · [260801 5차] 좌 열(el) 안으로 한정 = 짝 면에서 우 열이 들고 있는 차트 오폭 방지
   // [260801 4차→5차] 책 4면 — 좌 열이 그리는 면 = 현재 면 그대로(넓은 화면에서 고정면 2만 좌 열이 안 그린다 · _bizLeftPage)
   var page=_bizLeftPage();
   var _pgTag='';   // [260723 운영자] 페이지 인디케이터 알약(1/2) 제거 — 하단 _bizmDots(‹ • • ›)로 일원화(헤더 우측 오버플로·중복 표기 해소). page 변수는 아래 분기에서 계속 사용
@@ -6795,81 +6796,66 @@ function _bizMoney(v,bare){
   if(v==null||!isFinite(v))return '—';
   return Math.round(v/1e4).toLocaleString()+(bare?'':'만');
 }
-// 장르별 판매 축적(평년 대비) — 평년 = 최근 3년(Y-3~Y-1) 각 연도 합의 평균 · 게이지 = 당해÷평년 · 파선 = 올해 경과율(온페이스 기준선).
-//   트랙·글자 전부 기존 토큰(--past-bg·--dim·--text)만, 막대색은 장르 동결맵(_BIZ_GENRE_COLORS) — 새 색 0.
-function _bizGenreAccumHtml(all,selTypes){
-  var Y=_bizmState.year, base=[Y-3,Y-2,Y-1];
-  var cur={},hist={};
-  (all||[]).forEach(function(r){
-    if(selTypes.indexOf(r._type)<0)return;
-    var g=r._genre||'기타';
-    if(r._year===Y)cur[g]=(cur[g]||0)+r._paid;
-    else if(base.indexOf(r._year)>=0){ var hg=hist[g]||(hist[g]={}); hg[r._year]=(hg[r._year]||0)+r._paid; }
-  });
-  var keys=Object.keys(_BIZ_GENRE_COLORS).filter(function(g){ return (cur[g]||0)>0||hist[g]; });
-  Object.keys(cur).forEach(function(g){ if(keys.indexOf(g)<0)keys.push(g); });
-  if(!keys.length)return '<div style="padding:22px 8px;text-align:center;color:var(--dim);font-size:12.5px">표시할 장르 데이터가 없습니다</div>';
-  var now=new Date(), ep=100;   // 경과율 — 지난 연도를 보고 있으면 100(이미 다 지났다) · 미래 연도면 0
-  if(Y===now.getFullYear()){ var y0=new Date(Y,0,1), y1=new Date(Y+1,0,1); ep=Math.max(0,Math.min(100,(now-y0)/(y1-y0)*100)); }
-  else if(Y>now.getFullYear())ep=0;
-  var h='<div style="padding:4px 10px 8px">';
-  keys.forEach(function(g){
-    var hy=hist[g]||{}, ys=Object.keys(hy);
-    // [260804] 분모 = **3년 고정**(자료 없는 해 = 0). 구판은 자료가 있는 해로만 나눠 「최근 3년 평균」이라는 라벨과 최대 3배 어긋났다
-    //   (예: 기타 장르가 2024 한 해만 548명이면 구판 평년 548 vs 라벨이 약속한 183 — 대비 %가 1/3로 눌린다 · 평의회6 실측).
-    var avg=ys.length?(ys.reduce(function(a,k){return a+hy[k];},0)/base.length):0;
-    var c=cur[g]||0, pct=(avg>0)?(c/avg*100):null;
-    var col=_BIZ_GENRE_COLORS[g]||_BIZ_GENRE_COLORS['기타'];
-    var w=(pct==null)?0:Math.max(0,Math.min(100,pct));
-    h+='<div style="margin:10px 0 0">'
-      +'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:5px">'
-        +'<span style="font-size:12.5px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+escapeHtml(g)+'</span>'
-        +'<span style="font-size:11.5px;color:var(--dim);white-space:nowrap;font-variant-numeric:tabular-nums">'+Math.round(c).toLocaleString()+'명'+((pct==null)?' · 평년 자료 없음':(' · <b style="color:'+col+'">'+Math.round(pct)+'%</b>'))+'</span>'
-      +'</div>'
-      +'<div style="position:relative;height:10px;border-radius:999px;background:var(--past-bg)">'
-        +'<div style="position:absolute;left:0;top:0;bottom:0;width:'+w.toFixed(1)+'%;background:'+col+';border-radius:999px;opacity:'+((pct==null)?'.2':'1')+'"></div>'
-        +'<div style="position:absolute;left:'+ep.toFixed(1)+'%;top:-3px;bottom:-3px;border-left:1px dashed var(--dim)"></div>'
-      +'</div>'
-    +'</div>';
-  });
-  h+='<div style="margin-top:12px;font-size:11px;color:var(--dim);text-align:right">평년 = '+base.join('·')+' 평균(자료 없는 해 = 0) · 파선 = 올해 '+Math.round(ep)+'% 경과</div></div>';
-  return h;
+// ── [260806 운영자] 3면 조작부 = 「연도 ▾ │ 전체·판매중」 토글 한 벌 ────────────────────────
+//   지시: *"공연 전시 교육 2026년 기획 자세히보기 이거 모두 삭제해주고 첨부와 같은 토글만 넣어줘"* +
+//        *"전체 > 판매중 > 전체 > 판매중 이렇게 토글되고 전체가 기본값"*.
+//   = 헤더 조작부 4종(분야 칩 3 · 연도 셀렉트 · 분류 체크 · 자세히 보기)을 전부 내리고, 우 열 표 머리(#rail-yrm)가
+//     이미 쓰는 **정본 도구 묶음** 한 벌만 남긴다 — `.ry-yr-tg`(연도 트리거) + `.ry-hd-div`(구분선) + `.ry-live-tg`(글자 토글)
+//     = 260804 3차 확립분 그대로 재사용 · 신규 부품·CSS·색 0.
+//   ⚠ 상태는 그 표 것(`_ryYearSelV`·`_ryLivePref`)과 **분리**한다 — 저 표는 「올해·판매중」이 기본인데 이 면은
+//     「선택 연도·전체」가 기본(운영자)이라, 한 상태를 공유하면 서로의 기본값을 덮어쓴다.
+//   ⚠ 분야 칩이 하던 일(공연·전시·교육 전환)은 이 면 하단 반반 카드가 **상시 표시**로 대신한다 = 잃는 축 0.
+//   ⚠ 분류(기획/대관)는 **UI만** 내린다 — 상태 기본값(기획 = 켬 · _bizCompRender)이 그대로라 화면 값은 종전과 동일.
+//   ⚠ 「자세히 보기」(openBusinessBoard) 진입로는 대시보드 세부메뉴·모바일 메뉴에 그대로 있다 = 모달 고아화 0.
+var _bizmYears=[];   // 이번 렌더가 그린 연도 목록 — 드롭다운은 클릭 시점에 이 값을 읽는다(목록 계산은 렌더가 이미 한다)
+function _bizmLiveOnly(){ return !!_bizmState.live; }   // 기본 false = 「전체」(운영자 「전체가 기본값」)
+function _bizmYearTrigger(){
+  var y=_bizmState.year;
+  return '<button type="button" class="ry-yr-tg" aria-haspopup="listbox" aria-expanded="false" onclick="_bizmYearMenu(this)"'
+    +' title="'+escapeHtml(y+'년 보는 중 — 눌러서 다른 연도 선택')+'">'+escapeHtml(String(y))+'<span class="cr" aria-hidden="true">▾</span></button>';
 }
-// ── [260805 운영자] 3면 분야 축(공연 / 전시 / 교육) ────────────────────────────────────────────
-//   지시: *"사업 결과 비교 - [공연] 이라고 따로 해줘야할듯. 강조색 1번으로. 2번 3번은 전시로"* →
-//        *"화면을 반으로 갈라서 한쪽은 전시, 한쪽은 교육. 둘다 연간 컨텐츠가 안많으니까"* →
-//        *"기존에 공연이 하나로 모두 차지하던 구간을 딱 절반으로 나눔. 두개의 흰색칸으로 좌우 나뉨"*.
-//   = 공연 = 두 유리박스 전부(종전) · 전시·교육 = 좌 박스 전시 / 우 박스 교육으로 반씩.
-//   색은 **이미 이 앱의 정본 분야색 그대로**다 — 1면 `_YR.cats` 토큰(`공연 --accent` · `전시 --peach-text` · `교육 --green`)이
-//   운영자가 말한 강조색 1·2·3(`--c1`·`--c2`·`--c3`)과 같은 값이라 새로 정할 게 없다(`--peach-text`=`--c2` · `--green`=`--c3`).
-var _BIZ_DOMAINS=[{k:'perf',l:'공연',tok:'--accent'},{k:'exhib',l:'전시',tok:'--peach-text'},{k:'edu',l:'교육',tok:'--green'}];
-function _bizmDomain(){ return (_bizmState.domain==='exhib'||_bizmState.domain==='edu')?_bizmState.domain:'perf'; }
-function _bizmDomTok(k){ for(var i=0;i<_BIZ_DOMAINS.length;i++)if(_BIZ_DOMAINS[i].k===k)return _BIZ_DOMAINS[i].tok; return '--accent'; }
-function _bizmSetDomain(k){
-  if(_bizmState.domain===k)return;
-  _bizmState.domain=k;
-  // [260805] 결 = 책 넘김과 같은 디졸브(260804 「번쩍이면서 바뀐다 → 최대한 자연스럽게 디졸빙」).
-  //   분야 전환도 두 열 내용이 통째로 갈리므로 넘김과 같은 사건이다 — 여기만 즉시 교체로 두면 탭만 번쩍인다.
+// 연도 드롭다운 — 공용 헬퍼 _ddOpen(기틀 §2 「드롭다운은 이걸로만 · 동시 1개 열림」) · 항목 결 = 우 열 연도 목록(_ryYearMenu)과 동일.
+//   ⚠ 「전체」 항목은 두지 않는다 — 이 면의 KPI·막대·전시/교육은 **한 해**를 전제로 계산한다(운영자 「공연 처럼 연간으로」).
+function _bizmYearMenu(btn){
+  if(!btn)return;
+  if(document.getElementById('dd-pop')&&btn.getAttribute('aria-expanded')==='true'){ _ddCloseAll(); btn.setAttribute('aria-expanded','false'); return; }   // 재클릭 = 닫기
+  var sel=_bizmState.year, ys=(_bizmYears&&_bizmYears.length)?_bizmYears:[sel];
+  btn.setAttribute('aria-expanded','true');
+  _ddOpen(btn,function(p){
+    p.classList.add('ry-yr-dd');
+    var css='display:block;width:100%;padding:8px 14px;border:0;background:none;text-align:left;font-size:12.5px;border-radius:9px;cursor:pointer;font-family:inherit;white-space:nowrap;font-variant-numeric:tabular-nums;transition:background .12s';
+    p.innerHTML=ys.map(function(y,i){
+      var on=(y===sel);
+      return '<button type="button" role="option" aria-selected="'+(on?'true':'false')+'" onclick="_bizmYearPick('+y+')"'
+        +' title="'+escapeHtml(y+'년 실적만 보기')+'" style="'+css+';animation-delay:'+(i*46)+'ms;'
+        +(on?'font-weight:800;color:var(--accent)':'font-weight:600;color:var(--text)')+'">'+escapeHtml(String(y))+'</button>';
+    }).join('');
+  },84);
+  var ov=document.getElementById('dd-pop');
+  if(ov)ov.addEventListener('click',function(){ btn.setAttribute('aria-expanded','false'); });
+  document.addEventListener('keydown',function(e){ if(e.key==='Escape'){ _ddCloseAll(); btn.setAttribute('aria-expanded','false'); } },{once:true});
+}
+function _bizmYearPick(y){ _ddCloseAll(); _bizmSetYear(y); }
+// 「전체 ↔ 판매중」 글자 토글 — 라벨이 **지금 보고 있는 상태**를 말한다(운영자 「전체 > 판매중 > 전체…」).
+//   색·굵기 이중단서는 부품(.ry-live-tg[aria-checked])이 이미 진다 = 좁혀 보는 중(판매중)만 강조색·800.
+function _bizmLiveTrigger(){
+  var on=_bizmLiveOnly();
+  return '<button type="button" class="ry-live-tg" role="switch" aria-checked="'+(on?'true':'false')+'" onclick="_bizmLiveToggle()"'
+    +' title="'+(on?'판매·진행중인 사업만 보는 중 — 눌러서 전체로':'전체(종료·예정 포함)를 보는 중 — 눌러서 판매중만')+'">'+(on?'판매중':'전체')+'</button>';
+}
+function _bizmLiveToggle(){ _bizmState.live=!_bizmState.live; _bizmRepaint(); }
+// 조작부 한 벌 — 좌 열 헤더 우측에만 놓는다(같은 상태를 두 열에 그리지 않는 종전 규약).
+function _bizmTools(){ return _bizmYearTrigger()+'<span class="ry-hd-div" aria-hidden="true"></span>'+_bizmLiveTrigger(); }
+// 좌·우 동시 갱신 — 이 면의 두 열은 **같은 목록**을 그린다(좌 = KPI·막대·전시/교육 · 우 = 판매현황 상세).
+//   조작부가 바뀌면 둘 다 다시 그려야 우 표가 옛 연도·옛 필터로 남지 않는다. 결 = 책 넘김과 같은 디졸브(_bizmDissolve 계승).
+function _bizmRepaint(){
   var pair=false; try{ pair=_bizRightIsDetail(); }catch(_e){}
-  var cols=['biz-main'].concat(pair?['rail-yrm']:[]);   // 짝 면 = 두 열 동시 갱신(우 열이 교육 반쪽을 든다)
+  var cols=['biz-main'].concat(pair?['rail-yrm']:[]);
   _bizmDissolve(cols,function(){
     _bizInlineRender();
     if(pair){ try{ _railYrmRender(); }catch(_e){} }
   });
 }
-// 분야 칩 = 정본 필터 칩 `.ana-chip`/`.ana-chip.on`(기틀 §2 인벤토리 · 표 연도 칩과 같은 부품) — 신규 부품·색·형태 0.
-//   ⚠ `.fbar-chip`(체크박스 동반)으로 먼저 만들었다가 되돌렸다 — 칩 안 14px 인풋 3개가 헤더를 밀어
-//   1600×900에서 헤더가 2줄이 되고 좌 유리박스 상단선이 우보다 28px 내려갔다(스모크 실측). `.ana-chip`은 글자만이라 안 밀린다.
-function _bizmDomChips(){
-  var cur=_bizmDomain();
-  return '<span style="display:inline-flex;gap:5px">'+_BIZ_DOMAINS.map(function(d){
-    return '<button type="button" class="ana-chip'+((cur===d.k)?' on':'')+'" onclick="_bizmSetDomain(\''+d.k+'\')" aria-pressed="'+((cur===d.k)?'true':'false')+'">'+d.l+'</button>';
-  }).join('')+'</span>';
-}
-// 「사업 결과 비교 · [공연]」 — 꼬리표만 그 분야색. `_bizmHead`의 제목 span이 이미 --accent라 공연은 같은 색으로 이어진다.
-function _bizmDomTag(k){ var d=null; _BIZ_DOMAINS.forEach(function(x){if(x.k===k)d=x;}); if(!d)return '';
-  return '<span style="color:var('+d.tok+')">['+d.l+']</span>'; }
-function _bizmDomTitle(k){ var t=_bizmDomTag(k); return t?('사업 결과 비교 <span style="color:var('+_bizmDomTok(k)+')">·</span> '+t):'사업 결과 비교'; }
 // 전시 행 정규화 — 공연 막대·표가 쓰는 필드명으로 맞춘다(그리는 코드는 한 벌 = `_bizDrawSalesBars`·표 마크업 재사용).
 //   소스 = `_anaExhibBuild()`(전시마스터+전시일일 · 레일 6시트가 이미 받아 둔 캐시) · 여기서 새로 집계하지 않는다.
 //   ⚠ 전시엔 장르·오픈석·점유율 축이 없다 → 장르 자리 = 분야색 고정(`_col`) · 점유율 자리 = **목표관객 대비 달성률**.
@@ -6896,61 +6882,55 @@ function _bizExhibRows(year){
   out.sort(function(a,b){ var ad=a.end?a.end.getTime():9e15,bd=b.end?b.end.getTime():9e15; if(ad!==bd)return ad-bd; return a.name<b.name?-1:1; });
   return out;
 }
-// [260805 운영자 선택값] 전시의 「장르별 축적」 자리 = **평년 대비 관람인원**(장르 축이 없으니 지표 축으로).
-//   소스 = 1면과 같은 `_YR.cats['전시']`(연간 정본 거울) — 공연 축적이 운영대장에서 장르별로 재는 것과 같은 문법을
-//   전시에선 연간 지표(관람인원·건수·일수)로 잰다. ⚠ 과거 연도는 여기서 재생성하지 않는다(라우터 경고 준수) — 읽기만 한다.
-function _bizExhibAccumHtml(year){
-  var pad='<div style="padding:22px 8px;text-align:center;color:var(--dim);font-size:12.5px">';
-  var yi=_YR.years.indexOf(year);
-  if(yi<0)return pad+'연간 거울(_YR)에 없는 연도입니다</div>';
-  var base=[year-3,year-2,year-1];
-  var now=new Date(), ep=100;                                  // 경과율 = 공연 축적과 같은 식(지난 해 100 · 미래 0)
+// [260806 운영자 「우 교육 판매현황 · 공연 처럼 연간으로」] 교육 반쪽 본문 = **평년 대비 수강생** 게이지.
+//   교육은 프로그램 단위 원천(시트)이 없다 — 있는 건 연간 정본 거울 `_YR.cats['교육']`뿐이라, 공연·전시가 사업별로
+//   그리는 자리를 교육에선 연간 지표(수강생·횟수·일수)로 잰다. 부품·기하 = 260805 전시 축적 게이지 그대로(신규 형태 0).
+//   ⚠ 과거 연도를 다른 소스로 재생성하지 않는다(라우터 경고 준수) — 거울을 **읽기만** 한다.
+//   ⚠ 그 해 수강생이 0(= 아직 집계 전 · 2026 실측)이면 게이지 대신 빈 상태 — 0% 막대는 「교육을 안 했다」로 읽힌다.
+function _bizEduHasYr(year){
+  try{ var yi=_YR.years.indexOf(year), r=_yrRow('교육','인원'); return (yi>=0&&r&&(Number(r.v[yi])||0)>0); }catch(_e){ return false; }
+}
+function _bizEduEmptyHtml(year){
+  return '<div style="padding:34px 18px;text-align:center">'
+    +'<div style="font-size:13.5px;font-weight:700;color:var(--dim)">📭 '+year+'년 교육 데이터가 없어요</div>'
+    +'<div style="margin-top:8px;font-size:11.5px;color:var(--muted);line-height:1.7">프로그램 단위 교육 원천(시트)이 아직 없고,<br>연간 실적 거울에도 이 해 <b style="color:var(--green)">수강생</b> 집계가 없습니다.</div>'
+    +'</div>';
+}
+function _bizEduAccumHtml(year){
+  if(!_bizEduHasYr(year))return _bizEduEmptyHtml(year);
+  var yi=_YR.years.indexOf(year), base=[year-3,year-2,year-1];
+  var now=new Date(), ep=100;                                  // 경과율 = 공연 막대와 같은 식(지난 해 100 · 미래 0)
   if(year===now.getFullYear()){ var y0=new Date(year,0,1),y1=new Date(year+1,0,1); ep=Math.max(0,Math.min(100,(now-y0)/(y1-y0)*100)); }
   else if(year>now.getFullYear())ep=0;
   var met=function(key){
-    var r=_yrRow('전시',key); if(!r)return null;
+    var r=_yrRow('교육',key); if(!r)return null;
     var cur=Number(r.v[yi])||0;
     var hs=base.map(function(b){ var bi=_YR.years.indexOf(b); return (bi<0)?null:(Number(r.v[bi])||0); }).filter(function(v){return v!=null;});
-    var avg=hs.length?(hs.reduce(function(a,b){return a+b;},0)/base.length):0;   // 분모 3년 고정 = 공연 축적과 같은 규칙(라벨과 어긋나지 않게)
+    var avg=hs.length?(hs.reduce(function(a,b){return a+b;},0)/base.length):0;   // 분모 3년 고정 = 260804 규칙(라벨이 약속한 「최근 3년 평균」과 어긋나지 않게)
     return {cur:cur,pct:(avg>0)?(cur/avg*100):null};
   };
-  // ⚠ 게이지는 **관람인원 하나**다(운영자 선택값 「평년 대비 관람인원」). 건수·일수를 게이지로 더 세웠다가 되돌렸다 —
-  //   전시 반쪽은 KPI·막대·축적·목록 **네 덩이**가 한 열에 들어가서, 게이지 3줄이면 낮은 화면(1366×768·1280×800)에서
-  //   표 자리가 80px 밑으로 내려가 상한 고정(cap)이 아예 안 걸린다 = 흰 도형이 유리 여백을 18px 먹는다(스모크 실측).
-  //   두 지표는 각주 한 줄로 내렸다 — 값은 그대로 보이고 높이는 38px×2를 안 먹는다.
   var m0=met('인원');
-  if(!m0)return pad+'전시 연간 지표를 찾을 수 없습니다</div>';
+  if(!m0)return _bizEduEmptyHtml(year);
   var w=(m0.pct==null)?0:Math.max(0,Math.min(100,m0.pct));
   var h='<div style="padding:2px 10px 6px">'
     +'<div style="margin:7px 0 0">'
       +'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:4px">'
-        +'<span style="font-size:12.5px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">관람인원</span>'
-        +'<span style="font-size:11.5px;color:var(--dim);white-space:nowrap;font-variant-numeric:tabular-nums">'+m0.cur.toLocaleString()+'명'+((m0.pct==null)?' · 평년 자료 없음':(' · <b style="color:var(--peach-text)">'+Math.round(m0.pct)+'%</b>'))+'</span>'
+        +'<span style="font-size:12.5px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">수강생</span>'
+        +'<span style="font-size:11.5px;color:var(--dim);white-space:nowrap;font-variant-numeric:tabular-nums">'+m0.cur.toLocaleString()+'명'+((m0.pct==null)?' · 평년 자료 없음':(' · <b style="color:var(--green)">'+Math.round(m0.pct)+'%</b>'))+'</span>'
       +'</div>'
       +'<div style="position:relative;height:9px;border-radius:999px;background:var(--past-bg)">'
-        +'<div style="position:absolute;left:0;top:0;bottom:0;width:'+w.toFixed(1)+'%;background:var(--peach-text);border-radius:999px;opacity:'+((m0.pct==null)?'.2':'1')+'"></div>'
+        +'<div style="position:absolute;left:0;top:0;bottom:0;width:'+w.toFixed(1)+'%;background:var(--green);border-radius:999px;opacity:'+((m0.pct==null)?'.2':'1')+'"></div>'
         +'<div style="position:absolute;left:'+ep.toFixed(1)+'%;top:-3px;bottom:-3px;border-left:1px dashed var(--dim)"></div>'
       +'</div>'
     +'</div>';
   var sub=[];
   ['횟수','일수'].forEach(function(k){
     var m=met(k); if(!m)return;
-    sub.push((k==='횟수'?'전시건수 ':'전시일수 ')+m.cur.toLocaleString()+(k==='횟수'?'건':'일')+((m.pct==null)?'':(' <b style="color:var(--peach-text)">'+Math.round(m.pct)+'%</b>')));
+    sub.push((k==='횟수'?'교육횟수 ':'교육일수 ')+m.cur.toLocaleString()+(k==='횟수'?'회':'일')+((m.pct==null)?'':(' <b style="color:var(--green)">'+Math.round(m.pct)+'%</b>')));
   });
   if(sub.length)h+='<div style="margin-top:8px;font-size:11px;color:var(--dim);text-align:right">'+sub.join(' · ')+'</div>';
   h+='<div style="margin-top:4px;font-size:11px;color:var(--dim);text-align:right">평년 = '+base.join('·')+' 평균(연간 실적 거울) · 파선 = 올해 '+Math.round(ep)+'% 경과</div></div>';
   return h;
-}
-// [260805 운영자] 교육 반쪽 = *"현재 교육 데이터가 없어요 라고만 표기"*.
-//   실제로 앱에 프로그램 단위 교육 원천이 없다(`_railYrmFrame` 주석 「교육은 아직 actives에 흘러들어오는 소스가 없어
-//   평소엔 렌더되지 않는다」와 같은 사실) — 연간 합계(`_YR.cats['교육']`)만 있고 그건 1면이 이미 보여 준다.
-//   빈 상태 문법 = 이 면의 기존 빈 상태(📭 + --dim)와 동일 · data-bizmfill+cap = 흰 도형 하단선을 좌 열과 같은 안선에 고정.
-function _bizEduPanelHtml(){
-  return '<div class="bizm-card" data-bizmfill data-bizmcap style="display:flex;align-items:center;justify-content:center;text-align:center">'
-    +'<div style="padding:40px 18px">'
-      +'<div style="font-size:13.5px;font-weight:700;color:var(--dim)">📭 현재 교육 데이터가 없어요</div>'
-      +'<div style="margin-top:8px;font-size:11.5px;color:var(--muted);line-height:1.7">프로그램 단위 교육 원천(시트)이 아직 없습니다.<br>연도별 교육 횟수·수강생은 <b style="color:var(--green)">연간 실적</b> 면에 있어요.</div>'
-    +'</div></div>';
 }
 // ── [260804 운영자] y축 중략(≈) — 「매출이 너무 큰 게 하나 있어서 차트가 무너진다」 ────────────────
 //   대형 뮤지컬 1건(486백만)이 나머지 16건(0.9~66백만)을 다 눌러 8건이 2px 막대가 되던 형태 실측 → 적정선에서 축을 끊는다.
@@ -7091,107 +7071,43 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
   }
   try{ Plotly.newPlot(div,tr2?[tr,tr2]:[tr],lay,{displayModeBar:false,responsive:true}); }catch(_e){ console.warn('[biz bars]',_e); }
 }
-// ── [260805 운영자] 전시·교육 반반 면 ────────────────────────────────────────────────────────
-//   *"기존에 공연이 하나로 모두 차지하던 구간을 딱 절반으로 나눔. 두개의 흰색칸으로 좌우 나뉨. 표기되는 내용은 동일"*
-//   → 좌 유리박스 = 전시(공연과 같은 목업: KPI·막대·축적·목록 한 벌) · 우 유리박스 = 교육(원천 없음 표기).
-//   공연 면(`_bizCompRender` 본체)은 **무접촉** = 회귀 0 · 부품·색·규약 전부 그 면 것을 그대로 쓴다.
-function _bizExhibEduRender(el,half){
-  if(!el)return;
-  half=half||0;
-  var DOTS=(half===2)?'':(_bizmDots()+_bizmPageNav());
-  var TTL=(half===2)?_bizmDomTag('edu'):_bizmDomTitle('exhib');           // 우 박스는 분야 꼬리표만(좌와 「사업 결과 비교」 이중 표기 방지 = 260802e 규약 계승)
-  var SUB=(half===2)?'· 프로그램 단위 원천 없음':'· 전시마스터 · 전시일일';
-  var RETRY=(half===2)?'_railYrmRender()':'_bizInlineRender()';
-  var tgtId=el.id;
-  if(typeof requestAnimationFrame==='function')requestAnimationFrame(function(){try{_srailAlignTop();}catch(_e){}});
-  // 우 박스 = 교육 = 데이터 의존 0 → 로딩·실패 경로 없이 바로 그린다
-  if(half===2){ _bizmSwap(el,'<div style="position:relative">'+_bizmHead('',TTL,SUB)+_BIZM_BOX+_bizEduPanelHtml()+'</div>'+DOTS+'</div>'); return; }   // 조작부(분야 칩·연도)는 좌 열에만 = 공연 면과 같은 규약(같은 상태를 두 번 그리지 않는다)
-  var rows=_bizExhibRows(_bizmState.year);
-  if(rows===null){   // 전시 캐시(전시마스터·전시일일) 미도착 — 레일 6시트가 채우지만 좁은 화면·부팅 중엔 자체 확보
-    _bizmSwap(el,'<div style="position:relative">'+_bizmHead(_bizmDomChips(),TTL,SUB)+_BIZM_BOX+'<div style="position:relative;height:100%;min-height:300px"><div class="sk-sweep" aria-hidden="true"></div><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--peach-text);opacity:.75;font-size:14px;font-weight:600">'+_ldHtml(16)+'전시 데이터 불러오는 중</div></div>'+'</div>'+DOTS+'</div>');
-    if(!window._bizmExBusy){
-      window._bizmExBusy=1;
-      var _need=function(n,c){ try{ return (_anaState&&_anaState[c])?Promise.resolve(_anaState[c]):api('GET','/api/ops?sheet='+encodeURIComponent(n)).catch(function(e){console.warn('[bizm '+n+']',e);return null;}); }catch(_e){ return Promise.resolve(null); } };
-      Promise.all([_need('전시일일','_exDaily'),_need('전시마스터','_exMaster')]).then(function(res){
-        window._bizmExBusy=0;
-        try{ if(res[0])_anaState._exDaily=res[0]; if(res[1])_anaState._exMaster=res[1]; }catch(_e){}
-        if(!(res[1]&&_anaState&&_anaState._exMaster)){ var b=document.getElementById(tgtId);
-          if(b&&_mainView==='biz'&&_bizLeftPage()===3)b.innerHTML='<div style="position:relative">'+_bizmHead(_bizmDomChips(),TTL,SUB)+_BIZM_BOX+'<div style="text-align:center;padding:50px;color:var(--danger);font-size:13px">전시 데이터를 못 불러왔어요 <button class="ana-chip" onclick="'+RETRY+'" style="margin-left:8px">다시 시도</button></div>'+'</div>'+DOTS+'</div>';
-          return; }
-        _bizInlineRender();
-        try{ if(_bizRightIsDetail())_railYrmRender(); }catch(_e){}
-      });
-    }
-    return;
-  }
-  // 연도 목록 = 전시 자료가 있는 해 ∪ 지금 고른 해(분야를 오갈 때 연도가 튀지 않게 — 연도 상태는 공연과 공유)
-  var yset={}; try{ _anaExhibBuild().forEach(function(e){ if(e.free)return; var y=e.year||(_salesDate(e.시작일)?_salesDate(e.시작일).getFullYear():null); if(y)yset[y]=1; }); }catch(_e){}
-  if(_bizmState.year)yset[_bizmState.year]=1;
-  var years=Object.keys(yset).map(Number).sort(function(a,b){return b-a;});
-  if(_bizmState.year===null||years.indexOf(_bizmState.year)<0)_bizmState.year=years.length?years[0]:(new Date()).getFullYear();
-  var right=_bizmDomChips()+'<select class="ana-sel" onchange="_bizmSetYear(this.value)">'+years.map(function(y){return '<option value="'+y+'"'+(y===_bizmState.year?' selected':'')+'>'+y+'년</option>';}).join('')+'</select>';
-  var h='<div style="position:relative">'+_bizmHead(right,TTL,SUB)+_BIZM_BOX;
-  if(!rows.length){ h+='<div class="bizm-card" data-bizmfill data-bizmcap style="display:flex;align-items:center;justify-content:center"><div style="text-align:center;padding:40px 18px;color:var(--dim);font-size:13px">📭 '+_bizmState.year+'년 전시 데이터가 없습니다</div></div>'; h+='</div>'+DOTS+'</div>'; _bizmSwap(el,h); return; }
-  var kc=function(lab,val,tk){return '<div class="bizm-kpi" style="--kpitok:var('+(tk||'--accent')+')"><div class="lab">'+lab+'</div><div class="val">'+val+'</div></div>';};
-  var _fin=rows.filter(function(g){return g._st!=='planned';}), _planN=rows.length-_fin.length;
-  var _revTot=0,_hasRev=false,_headTot=0,_rateN=0,_rateS=0;
-  _fin.forEach(function(g){
-    if(g._rev!=null&&g._rev>0){_revTot+=g._rev;_hasRev=true;}
-    _headTot+=(g._sold!=null&&g._sold>0)?g._sold:g.paid;
-    if(g.seat>0){_rateS+=g.avg;_rateN++;}                       // 달성률 평균 = 목표가 있는 전시만(목표 없는 건 분모가 없다)
+// ── [260806 운영자] 면 하단 반반 = 좌 전시 판매현황 │ 우 교육 판매현황 ─────────────────────────
+//   지시: *"여기 하단에 장르별 판매 축적 대신에, 반으로 갈라서, 좌 전시 판매현황 우 교육 판매현황 · 보이는건 공연 처럼 연간으로"*.
+//   구 260805 「분야 탭(공연/전시/교육)이 면 전체를 갈아치우는」 구조는 칩과 함께 철거하고, 전시·교육을 **공연 면 안에 상시**로 둔다
+//   = 세 분야가 한 화면에서 같이 읽힌다 · 탭 왕복 0. 그리는 부품은 전부 그때 확립한 것 그대로(막대 = _bizDrawSalesBars의 exhib 축).
+// 전시 원천(전시마스터·전시일일) 자체 확보 — 넓은 화면은 레일 6시트 플로우가 채우지만 좁은 화면·부팅 중엔 비어 있다.
+//   도착하면 그 면만 다시 그린다(중복 fetch 방지 = window._bizmExBusy · 260805 배선 계승).
+function _bizExhibEnsure(){
+  if(window._bizmExBusy)return;
+  window._bizmExBusy=1;
+  // 전시 캐시는 분석 보드와 **공유 그릇**(_anaState)에 담긴다 — 레일이 숨는 폭(≤1200)에선 그 그릇 자체가 아직 없어서
+  //   받아 온 시트를 넣을 데가 없었다(구 260805 경로의 잠복 결함 = 좁은 화면 전시 반쪽이 로딩에서 안 벗어난다 · 1100 실측).
+  //   초기값은 레일(_srailInit)이 쓰는 그것과 **같은 한 벌**로 만든다(값 이원화 금지).
+  if(typeof _anaState==='undefined'||!_anaState)_anaState={screen:1,cat:'공연',genre:'전체',year:null,drillName:null,xstep:3,cmp:{tray:[],bars:false}};
+  var _need=function(n,c){ try{ return (typeof _anaState!=='undefined'&&_anaState&&_anaState[c])?Promise.resolve(_anaState[c]):api('GET','/api/ops?sheet='+encodeURIComponent(n)).catch(function(e){console.warn('[bizm '+n+']',e);return null;}); }catch(_e){ return Promise.resolve(null); } };
+  Promise.all([_need('전시일일','_exDaily'),_need('전시마스터','_exMaster')]).then(function(res){
+    window._bizmExBusy=0;
+    try{ if(res[0])_anaState._exDaily=res[0]; if(res[1])_anaState._exMaster=res[1]; }catch(_e){}
+    if(!(res[1]&&typeof _anaState!=='undefined'&&_anaState&&_anaState._exMaster))return;   // 못 받으면 반쪽이 「불러오지 못했어요」로 남는다(면 전체는 공연 축이라 멀쩡하다)
+    if(typeof _mainView!=='undefined'&&_mainView==='biz'&&_bizLeftPage()===3){ _bizInlineRender(); try{ if(_bizRightIsDetail())_railYrmRender(); }catch(_e){} }
   });
-  var _kpi='<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px">'
-    +kc(_bizmState.year+' 전시 수',_fin.length+'건'+(_planN?'<span class="u" style="color:var(--dim);margin-left:6px">+예정 '+_planN+'</span>':''),'--peach-text')
-    +kc('평균 달성률',(_rateN?(_rateS/_rateN).toFixed(1):'—')+(_rateN?'%':''),'--accent')
-    +kc('누적 매출',_hasRev?_bizMoney(_revTot):'—','--green')
-    +kc('누적 관람객',Math.round(_headTot).toLocaleString()+'명','--c5')+'</div>';
-  var _barSub=_hasRev?'— 막대 = 매출(백만 원)':'— 막대 = 관람객(명 · 매출 데이터 없음)';
-  var _barSub2=' · 색 = 전시 · 테두리 = 진행중 · 연함 = 종료'+(_planN?' · 파선 = 예정':'');
-  var _dist='<div class="bizm-card"><div class="ct">'+_bizmState.year+' 전시현황 <span class="sub">'+_barSub+'<span data-bizbrknote></span>'+_barSub2+'</span></div><div id="bizm-chart" style="height:300px;margin:0 4px 2px"></div></div>';
-  var _bench='<div class="bizm-card"><div class="ct">평년 대비 관람인원 <span class="sub">— 평년(최근 3년 '+String(_bizmState.year-3).slice(2)+'~'+String(_bizmState.year-1).slice(2)+' 평균) 대비 '+_bizmState.year+' 누적 · 파선 = 올해 경과</span></div>'
-    +'<div id="bizm-genre" style="margin:0 4px 2px;overflow:hidden">'+_bizExhibAccumHtml(_bizmState.year)+'</div></div>';
-  // 표 = 공연 목록 표와 같은 마크업·같은 색 규칙 · 열 이름만 전시 용어(오픈석→목표관객 · 점유율→달성률 · 회차→운영일수)
-  var _tbl='<div data-bizmfill data-bizmcap style="border:1px solid var(--border);border-radius:12px;background:var(--surface-solid);display:flex;flex-direction:column;overflow:hidden"><div class="ry-grp-bd" style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="color:var(--dim);font-size:12px;text-align:left">';
-  // [260805 운영자] 단위 머리글 = 공연 표와 **같은 문법**을 전시 용어로만(운영일수 = 일 · 관람객·목표관객 = 명 · 달성률 = % · 매출 = 만원). 한쪽만 달면 두 표가 어긋난다.
-  //   운영일수(일) = 공연 표 회차(회) 자리의 짝 — 공연 쪽에 회차 단위를 달면서 같이 단다.
-  [['전시기간',''],['전시명',''],['상태',''],['운영일수','일'],['관람객','명'],['목표관객','명'],['달성률','%'],['매출','만원']].forEach(function(c,i){_tbl+='<td style="padding:8px 12px;position:sticky;top:0;z-index:1;background:var(--surface-solid);box-shadow:inset 0 -2px 0 var(--border);vertical-align:top;'+(i>=3?'text-align:right;':'')+(i===0?'padding-left:14px;':'')+(i===7?'padding-right:14px;':'')+'white-space:nowrap">'+c[0]+(c[1]?'<div style="font-size:10.5px;font-weight:400;margin-top:2px">(단위: '+c[1]+')</div>':'')+'</td>';});
-  _tbl+='</tr></thead><tbody>';
-  var WD=['일','월','화','수','목','금','토'];
-  var df=function(d){return ('0'+(d.getMonth()+1)).slice(-2)+'.'+('0'+d.getDate()).slice(-2)+'('+WD[d.getDay()]+')';};
-  var stL={active:'진행중',planned:'예정',ended:'종료'};
-  rows.forEach(function(g,idx){
-    var dr=(!g.start||!g.end)?'—':((g.start.getTime()===g.end.getTime())?df(g.end):df(g.start)+'~'+df(g.end));
-    var head=(g._sold!=null&&g._sold>0)?g._sold:g.paid;
-    _tbl+='<tr style="border-bottom:1px solid var(--border);'+(idx%2===1?'background:var(--past-bg);':'')+'">'
-      +'<td style="padding:7px 12px;padding-left:14px;white-space:nowrap;color:var(--neutral-text)">'+dr+'</td>'
-      +'<td style="padding:7px 12px;font-weight:600;color:var(--text)">'+escapeHtml(g.name)+'</td>'
-      +'<td style="padding:7px 12px;color:var(--neutral-text);white-space:nowrap">'+(stL[g._st]||'—')+'</td>'
-      +'<td style="padding:7px 12px;text-align:right;color:var(--neutral-text)">'+(g.cnt>0?g.cnt:'—')+'</td>'
-      +'<td style="padding:7px 12px;text-align:right;color:var(--peach-text);font-weight:600;font-variant-numeric:tabular-nums">'+((g._st==='planned')?'<span style="color:var(--muted);font-weight:500">시작 전</span>':Math.round(head).toLocaleString())+'</td>'
-      +'<td style="padding:7px 12px;text-align:right;color:var(--dim);font-variant-numeric:tabular-nums">'+(g.seat>0?Math.round(g.seat).toLocaleString():'—')+'</td>'
-      +'<td style="padding:7px 12px;text-align:right;color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums">'+((g._st==='planned'||!(g.seat>0))?'—':g.avg.toFixed(1))+'</td>'
-      +'<td style="padding:7px 12px;padding-right:14px;text-align:right;color:var(--green);font-weight:600;font-variant-numeric:tabular-nums">'+((g._rev!=null&&g._rev>0)?_bizMoney(g._rev,true):'—')+'</td>'   // [260805] 단위는 머리글이 말한다 = 숫자만(bare)
-      +'</tr>';
-  });
-  _tbl+='</tbody></table></div></div>';
-  h+=_kpi+_dist+_bench+_tbl+(half===0?_bizEduPanelHtml():'');   // 좁은 화면(한 열) = 전시 아래에 교육 칸을 이어 붙인다(반반 대신 위아래)
-  h+='</div>'+DOTS+'</div>';
-  _bizmSwap(el,h);
-  _bizEnsurePlotly(function(){
-    try{ _bizDrawSalesBars('bizm-chart',rows,300,'exhib'); }catch(_e){console.warn('[bizm exhib chart]',_e);}
-    try{_bizFitSeason();}catch(_e){}
-    try{ var _c=document.getElementById('bizm-chart');
-      if(_c&&_c.offsetParent!==null){ var _z2=(typeof _bizZ==='function')?_bizZ():1, _rh=Math.round(_c.getBoundingClientRect().height/_z2);
-        if(_rh>60&&Math.abs(_rh-300)>20)_bizDrawSalesBars('bizm-chart',rows,_rh,'exhib'); } }catch(_e){}   // fit이 높이를 바꿨으면 그 높이로 한 번만 다시(공연 면과 같은 규약 — 중략 기하가 그릴 때 px에 구워지므로)
-  });
+}
+// 반쪽 카드 껍데기 — 정본 `.bizm-card`(제목 .ct + 부제 .sub) 그대로 · 반반 배치만 인라인(flex 항목).
+//   margin-bottom:0 = 두 카드 하단선을 서로 맞춘다(정본 `:last-child` 규칙은 줄 안 **마지막** 카드에만 걸리므로 명시).
+//   min-width = 좁은 화면(한 열·모바일)에서 두 카드가 자연스럽게 위아래로 접히는 지점(줄에 flex-wrap).
+function _bizHalfCard(ttl,sub,body){
+  // 본문 칸 = 남는 세로를 먹고 그 안에서 가운데(줄이 늘어나도 막대·문구가 카드 위쪽에 몰리지 않는다).
+  //   ⚠ min-height는 건드리지 않는다(flex 기본 auto 유지) = 내용이 줄어들 일이 없어 260805가 겪은 「걸면 안 넘침 → 해제」 진동과 무관.
+  return '<div class="bizm-card" style="flex:1 1 0;min-width:240px;margin-bottom:0;display:flex;flex-direction:column">'
+    +'<div class="ct" style="flex:0 0 auto">'+ttl+(sub?(' <span class="sub">'+sub+'</span>'):'')+'</div>'
+    +'<div style="flex:1 1 auto;display:flex;flex-direction:column;justify-content:center">'+body+'</div></div>';
 }
 function _bizCompRender(el,half){
   if(!el)return;
-  if(_bizmDomain()!=='perf'){ return _bizExhibEduRender(el,half); }   // [260805] 분야 축 = 전시·교육이면 반반 면으로 (공연 경로 무접촉)
   half=half||0;
-  var L=(half!==2);                                    // L = 전반(3-1) 담당 열 = 조작부(연도·분류·자세히 보기) 소유 열
+  var L=(half!==2);                                    // L = 전반(3-1) 담당 열 = 조작부(연도 ▾ │ 전체·판매중) 소유 열
   var DOTS=(half===2)?'':(_bizmDots()+_bizmPageNav());   // 우 열엔 점줄 없음(_railYrmFrame과 동일 규약)
-  var TTL=(half===2)?'':_bizmDomTitle('perf');          // [260802e] 같은 제목 이중 표기 = 좌에만(운영자) — 우 열은 부제만(아래 SUB가 라벨 역할) · [260805] 「사업 결과 비교 · [공연]」 꼬리표(강조색1)
+  var TTL=(half===2)?'':'사업 결과 비교';               // [260802e] 같은 제목 이중 표기 = 좌에만(운영자) — 우 열은 부제만(아래 SUB가 라벨 역할) · [260806] 「· [공연]」 꼬리표 철거 = 분야 칩과 한 벌이던 표식인데(260805) 이제 한 면이 공연·전시·교육을 같이 그린다
   var SUB=(half===2)?'판매현황 상세':' · 연간 누적 실적 (운영대장)';   // [260805 운영자] 우 열 = 목록 단독(장르별 축적이 좌 하단으로 이동) → 라벨에서 「장르별 판매 축적」 제거
   var RETRY=(half===2)?'_railYrmRender()':'_bizInlineRender()';
   var tgtId=el.id;
@@ -7215,8 +7131,10 @@ function _bizCompRender(el,half){
   var all=_bizClean();
   if(!all.length){ _bizmSwap(el,'<div style="position:relative">'+_bizmHead('',TTL,SUB)+_BIZM_BOX+'<div style="text-align:center;padding:50px;color:var(--dim)">📭 표시할 운영 데이터가 없습니다</div>'+'</div>'+DOTS+'</div>'); return; }
   var years=Array.from(new Set(all.map(function(r){return r._year;}))).sort(function(a,b){return b-a;});
+  _bizmYears=years;   // [260806] 연도 드롭다운(_bizmYearMenu)이 클릭 시점에 읽는 목록 — 계산은 여기 한 번뿐(값 이원화 금지)
   var thisY=(new Date()).getFullYear();
   if(_bizmState.year===null||years.indexOf(_bizmState.year)<0)_bizmState.year=(years.indexOf(thisY)>=0)?thisY:years[0];
+  var _liveOnly=_bizmLiveOnly();   // [260806] 「전체 ↔ 판매중」 — 공연 목록·전시 반쪽이 같이 쓰므로 연도 확정 직후에 한 번만 읽는다
   var yearAll=all.filter(function(r){return r._year===_bizmState.year;});
   var types=Array.from(new Set(yearAll.map(function(r){return r._type;}).filter(Boolean)));
   types.sort(function(a,b){return _BIZ_TYPE_ORDER.indexOf(a)-_BIZ_TYPE_ORDER.indexOf(b);});
@@ -7228,12 +7146,7 @@ function _bizCompRender(el,half){
   var gmap={};
   yrRecs.forEach(function(r){ if(!gmap[r._name])gmap[r._name]={name:r._name,occs:[],paid:0,seat:0,cnt:0,start:r._date,end:r._date,genre:r._genre,type:r._type}; var g=gmap[r._name]; g.occs.push(r._occ); g.paid+=r._paid; g.seat+=r._seat; g.cnt++; if(r._date<g.start)g.start=r._date; if(r._date>g.end)g.end=r._date; });
   var list=Object.keys(gmap).map(function(k){var g=gmap[k];g.avg=g.occs.reduce(function(a,b){return a+b;},0)/g.occs.length;return g;}).sort(function(a,b){return a.end-b.end;});
-  var right='';
-  if(L){   // 조작부(분야·연도·분류·자세히 보기) = 전반 열 헤더에만 — 두 열에 겹쳐 두면 같은 상태를 두 번 그리게 된다
-    right=_bizmDomChips()+'<select class="ana-sel" onchange="_bizmSetYear(this.value)">'+years.map(function(y){return '<option value="'+y+'"'+(y===_bizmState.year?' selected':'')+'>'+y+'년</option>';}).join('')+'</select>';
-    types.forEach(function(t){ var on=!!_bizmState.types[t]; var only=selTypes.length===1&&on; right+='<label class="fbar-chip'+(on?' on':'')+(only?' lock':'')+'" style="padding:5px 11px"><input type="checkbox" '+(on?'checked':'')+(only?' disabled':'')+' onchange="_bizmToggleType(\''+_anaEsc(t)+'\')">'+escapeHtml(t)+'</label>'; });   // [260723 평의회4] onchange 이스케이프 = 정본 _anaEsc(따옴표만 치환하던 약식 관례 경화)
-    right+='<button class="ana-chip" onclick="openBusinessBoard()" title="장르 벤치마크·시즌 추세까지 — 사업 결과 비교 크게 보기">자세히 보기</button>';   // [260731 4차] 세부메뉴가 인라인 면 이동으로 바뀌며 잃은 전체 모달 진입로 보전(기존 .ana-chip 부품)
-  }
+  var right=L?_bizmTools():'';   // [260806 운영자] 조작부 = 「연도 ▾ │ 전체·판매중」 한 벌만(분야 칩·연도 셀렉트·분류 체크·자세히 보기 철거) · 전반 열 헤더에만 = 같은 상태를 두 열에 그리지 않는다
   var h='<div style="position:relative">'+_bizmHead(right,TTL,SUB)+_BIZM_BOX;   // [260731 4차] 3면 이름 = 세부메뉴와 동일어(구 기본값 '사업 현황')
   var kc=function(lab,val,tk){return '<div class="bizm-kpi" style="--kpitok:var('+(tk||'--accent')+')"><div class="lab">'+lab+'</div><div class="val">'+val+'</div></div>';};   // [260723f Opus] 글래스 KPI 통일(1·2면 동일 시각언어)
   // [260803 운영자 선택값] 판매 축(일일입력·공연마스터) 조인 — 매출·판매 고객·상태. 6시트 미로드(좁은 화면)면 null → 운영대장 축만으로 그린다(폴백 명시).
@@ -7277,7 +7190,45 @@ function _bizCompRender(el,half){
     });
     list.sort(function(a,b){return a.end-b.end;});
   }
-  if(!list.length){ h+='<div style="text-align:center;padding:40px;color:var(--dim)">해당 연도/분류 데이터가 없습니다</div>'+'</div>'+DOTS+'</div>'; _bizmSwap(el,h); return; }
+  // [260806 운영자 「하단에 장르별 판매 축적 대신 · 반으로 갈라서 좌 전시 판매현황 우 교육 판매현황」] ─────────
+  //   좌 열 마지막 카드 자리(구 시즌 추세 → 260805 장르별 축적)를 **전시 │ 교육 반반 줄**이 통째로 승계한다.
+  //   · 좌 반쪽 = 전시 — 위 공연 막대와 **같은 부품**(_bizDrawSalesBars의 exhib 축) · 선택 연도 · 진행중 테두리·종료 연함·예정 파선까지 같은 문법.
+  //   · 우 반쪽 = 교육 — 프로그램 단위 원천이 없어 연간 정본 거울(_YR)의 평년 대비 수강생 게이지, 그 해가 0이면 빈 상태.
+  //   ⚠ 자리 마킹(data-bizmfill)은 **줄(wrapper)에** 건다 — 두 카드는 flex 항목이라 줄 높이에 맞춰 같이 늘어난다
+  //     = 두 흰 도형의 하단선이 서로 같고, 그 줄이 박스 안선까지 채워져 좌·우 열 계약(260802e)도 그대로 성립.
+  //     카드마다 걸면 두 도형이 각자 늘어 하단선이 갈린다. cap(data-bizmcap)은 걸지 않는다 — 이 줄의 높이는
+  //     막대 차트(고정)+게이지(자연 높이)라 예측 가능하고, 남는 몫은 위 판매현황 차트가 _bizFitSeason으로 흡수한다.
+  var _exRows=_bizExhibRows(_bizmState.year);
+  if(_exRows===null)_bizExhibEnsure();                                        // 캐시 미도착(좁은 화면·부팅 중) = 자체 확보 후 이 면만 다시 그린다
+  else if(_liveOnly)_exRows=_exRows.filter(function(g){return g._st==='active';});   // 「판매중」 = 공연과 같은 축(전시는 진행중)
+  var _exSub='',_exBody;
+  if(_exRows===null){
+    _exBody='<div style="position:relative;min-height:150px"><div class="sk-sweep" aria-hidden="true"></div><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--peach-text);opacity:.75;font-size:12.5px;font-weight:600">'+_ldHtml(14)+'전시 데이터 불러오는 중</div></div>';
+  } else if(!_exRows.length){
+    _exBody='<div style="padding:34px 18px;text-align:center;color:var(--dim);font-size:12.5px">📭 '+_bizmState.year+'년 '+(_liveOnly?'진행중인 전시가 없어요':'전시 데이터가 없습니다')+'</div>';
+  } else {
+    var _exRev=_exRows.some(function(g){return g._rev!=null&&g._rev>0;});
+    _exSub=(_exRev?'— 막대 = 매출(백만 원)':'— 막대 = 관람객(명)');   // 3상태 범례(테두리·연함·파선)는 위 공연 카드가 이미 말한다 — 반쪽 폭에서 되풀이하면 제목이 2줄이 돼 막대를 밀어낸다(1920 실측)
+    _exBody='<div id="bizm-ex-chart" style="height:'+_BIZ_HALF_CH+'px;margin:0 4px 2px"></div>';
+  }
+  var _split='<div'+((half===1)?' data-bizmfill':'')+' style="display:flex;gap:14px;align-items:stretch;flex-wrap:wrap">'
+    +_bizHalfCard(_bizmState.year+' 전시 판매현황',_exSub,_exBody)
+    +_bizHalfCard(_bizmState.year+' 교육 판매현황',(_bizEduHasYr(_bizmState.year)?'— 연간 실적(수강생) · 평년(최근 3년) 대비':''),_bizEduAccumHtml(_bizmState.year))
+    +'</div>';
+  // [260806 운영자] 「전체 ↔ 판매중」 토글 — 판매중 = 지금 팔고 있는 사업(_st==='active')만.
+  //   ⚠ 거르는 자리는 **여기 한 곳**뿐이다 — KPI·막대·우 열 상세 표가 전부 이 list를 보므로, 세 곳이 어긋날 수 없다.
+  if(_liveOnly)list=list.filter(function(g){return g._st==='active';});
+  // [260806] 공연이 0건이어도 **전시·교육 반반 줄은 남긴다** — 세 분야는 서로 다른 축이라, 공연 목록이 비었다고
+  //   전시 진행분까지 화면에서 사라지면 「전시도 없다」로 읽힌다(판매중 토글 켠 상태의 실측 모양).
+  if(!list.length){
+    //   ⚠ 우 열(상세 표 자리)은 이 카드가 **그 열의 마지막 흰 도형**이 된다 → fill+cap으로 안선까지 채운다
+    //     (짧은 흰 카드를 그대로 두면 좌·우 흰 라인 계약이 깨진다 = 스모크 계약③ 위반).
+    h+='<div class="bizm-card"'+((half===2)?' data-bizmfill data-bizmcap':'')+' style="padding:34px 18px;text-align:center;color:var(--dim);font-size:13px;display:flex;align-items:center;justify-content:center">📭 '+(_liveOnly?'지금 판매중인 공연 사업이 없습니다':'해당 연도 데이터가 없습니다')+'</div>'
+      +((half===2)?'':_split)+'</div>'+DOTS+'</div>';
+    _bizmSwap(el,h);
+    if(half!==2)_bizEnsurePlotly(function(){ try{ if(_exRows&&_exRows.length)_bizDrawSalesBars('bizm-ex-chart',_exRows,_BIZ_HALF_CH,'exhib'); }catch(_e){} try{_bizFitSeason();}catch(_e){} });
+    return;
+  }
   var _revTot=0,_soldTot=0,_hasRev=false;
   list.forEach(function(g){
     if(g._rev!=null&&g._rev>0){_revTot+=g._rev;_hasRev=true;}
@@ -7296,16 +7247,6 @@ function _bizCompRender(el,half){
   var _barSub=_hasRev?'— 막대 = 매출(백만 원)':'— 막대 = 판매 고객(명 · 매출 데이터 없음)';
   var _barSub2=' · 색 = 장르 · 테두리 = 판매중 · 연함 = 종료'+(_planN?' · 파선 = 예정':'');   // [260805] 3상태 범례 — 좁은 폭에서 카드 제목이 2줄이 되지 않게 짧게(1440px 실측 · 평의회2 축)
   var _dist='<div class="bizm-card"><div class="ct">'+_bizmState.year+' 판매현황 <span class="sub">'+_barSub+'<span data-bizbrknote></span>'+_barSub2+'</span></div><div id="bizm-chart" style="height:430px;margin:0 4px 2px"></div></div>';
-  // [260803 운영자 선택값] 우 카드1 = 장르 벤치마크 → **장르별 판매 축적(평년 대비)** · 평년 = 최근 3년 평균(23~25) · 연 경과 파선 · 라벨 명+%
-  // [260805 운영자 「장르별 축적을 좌측 하단부로 완전히 크기를 대체」] 자리 = 우 열 첫 카드 → **좌 열 마지막 카드**(구 시즌 추세 자리를 통째로 승계).
-  //   시즌 추세는 인라인에서 내려가고 전체 모달(자세히 보기 = openBusinessBoard)에 그대로 남는다 = 잃는 정보 0.
-  //   data-bizmfill(좌 열일 때만) = 판매현황 차트가 상한(560)에 닿고도 몫이 남는 큰 화면(2560×1440 실측 187px)에서
-  //   마지막 흰 도형을 안선까지 늘리는 안전망 — 구 시즌 카드가 달고 있던 그 마킹 그대로(신규 규약 0).
-  //   ⚠ 이 카드를 세로 flex(게이지 가운데 정렬)로 두는 시안은 폐기 — flex 아이템은 max-height가 걸리면 **줄어든다**.
-  //   그러면 _srailAlignTop의 넘침 흡수 판정(`scrollHeight > 안선−자기상단`)이 「걸면 안 넘침 → 해제 → 다시 넘침」으로
-  //   진동해 멱등이 깨진다(1440×820 실측 = 좌 흰 도형이 안선 아래 53px). 블록 레이아웃 유지 = 남는 몫은 카드 아래 여백.
-  var _bench='<div class="bizm-card"'+((half===1)?' data-bizmfill':'')+'><div class="ct">장르별 판매 축적 <span class="sub">— 평년(최근 3년 '+String(_bizmState.year-3).slice(2)+'~'+String(_bizmState.year-1).slice(2)+' 평균) 대비 '+_bizmState.year+' 누적 · 파선 = 올해 경과</span></div>'   // [260804] 연도 고정 문구('23~25') → 선택 연도 기준 계산(카드 머리말과 카드 안 각주가 서로 다른 해를 말하던 것 · 평의회6)
-    +'<div id="bizm-genre" style="margin:0 4px 2px;overflow:hidden">'+_bizGenreAccumHtml(all,selTypes)+'</div></div>';
   // [260802e] data-bizmfill = 마지막 흰 도형을 박스 안선(패딩 18 위)까지 늘리는 마킹(_srailAlignTop) — 행이 적어도(1월 2건 등) 흰 라인이 좌 열과 같은 하단선에서 끝난다(운영자 「없던 있든 흰색 라인 다 맞춰줘」)
   // [260803 운영자 「전체로 선택하면 화면이 넘어선다 → 목록 안에서 스크롤」] data-bizmcap = 상한도 안선에 고정(행이 많아도 박스·흰선을 **절대** 넘지 않음).
   //   스크롤러는 정본 .ry-grp-bd 그대로 계승(오버레이 스크롤바·호버 리빌·gutter 안정 — 이 열이 #rail-yrm 안이라 호버 규칙도 그대로 먹는다) = 신규 CSS 0.
@@ -7334,13 +7275,15 @@ function _bizCompRender(el,half){
       +'</tr>';
   });
   _tbl+='</tbody></table></div></div>';   // 스크롤러(.ry-grp-bd) + 흰 카드(data-bizmfill·cap) 두 겹을 닫는다
-  // [260805 운영자] 배분 = 3-1(좌) KPI·판매현황·**장르별 축적** / 3-2(우) **목록 표 단독**(박스 전면 = data-bizmfill+cap이 안선까지 채운다)
-  //   좌 열 마지막 흰 도형 = 축적 카드(자연 높이) → 남는 몫은 _bizFitSeason이 판매현황 차트를 키워 흡수한다(구 시즌 카드가 지던 역할).
-  //   half 0(좁은 화면 한 열) = 같은 순서 그대로(KPI→판매현황→축적→표)
-  h+=(half===1)?(_kpi+_dist+_bench):(half===2)?_tbl:(_kpi+_dist+_bench+_tbl);
+  // [260806 운영자] 배분 = 3-1(좌) KPI·판매현황·**전시│교육 반반** / 3-2(우) **목록 표 단독**(박스 전면 = data-bizmfill+cap이 안선까지 채운다)
+  //   좌 열 마지막 흰 도형 = 반반 줄(자연 높이) → 남는 몫은 _bizFitSeason이 판매현황 차트를 키워 흡수한다(구 축적 카드가 지던 역할).
+  //   half 0(좁은 화면 한 열) = 같은 순서 그대로(KPI→판매현황→전시│교육→표) · 폭이 좁으면 반반 줄이 위아래로 접힌다(flex-wrap)
+  h+=(half===1)?(_kpi+_dist+_split):(half===2)?_tbl:(_kpi+_dist+_split+_tbl);
   h+='</div>'+DOTS+'</div>';
   _bizmSwap(el,h);   // [260802] 프레임 유지·안쪽만 교체(1-2면 ↔ 3-4면 두 열 동시 넘김의 번쩍임 제거)
-  _bizEnsurePlotly(function(){ try{ if(half!==2){_bizDrawSalesBars('bizm-chart', list, 430);} }catch(_e){console.warn('[bizm chart]',_e);} try{_bizFitSeason();}catch(_e){}   // [260805] 인라인 시즌 추세 철거 → 그리기 호출도 같이 내림(모달 _bizDrawSeason()은 무접촉 = 인자 없는 기본 divId 'biz-season-chart')
+  _bizEnsurePlotly(function(){ try{ if(half!==2){_bizDrawSalesBars('bizm-chart', list, 430);} }catch(_e){console.warn('[bizm chart]',_e);}
+    try{ if(half!==2&&_exRows&&_exRows.length)_bizDrawSalesBars('bizm-ex-chart',_exRows,_BIZ_HALF_CH,'exhib'); }catch(_e){console.warn('[bizm ex chart]',_e);}   // [260806] 전시 반쪽 = 같은 그리기 함수의 exhib 축(높이 고정 = fit 흡수 대상 아님)
+    try{_bizFitSeason();}catch(_e){}   // [260805] 인라인 시즌 추세 철거 → 그리기 호출도 같이 내림(모달 _bizDrawSeason()은 무접촉 = 인자 없는 기본 divId 'biz-season-chart')
     // [260804] fit이 차트를 줄인 뒤(430→180~) 실높이로 **한 번만** 다시 그린다 — 중략 기하는 그릴 때의 px 배분으로
     //   데이터 좌표에 구워지기 때문에, 430 기준으로 접어 놓고 198px에 표시하면 띠가 3px로 무너져 「목표선」처럼 보이고
     //   「짧은 차트는 안 끊는다(plotPx<170)」 가드도 무력화된다(평의회7 실측 1920×780). 높이는 안 바꾸므로 fit 재진입 없음.
@@ -8724,7 +8667,7 @@ function _railYrmRender(){
   //   예외 = 짝 면(n-1/n-2)일 때만 그 면 후반이 우 열을 차지한다(두 열 동시 넘김) · 짝 면 해제 시 다시 판매 실적으로 복귀.
   var pair=_bizRightIsDetail();   // [260805 2차] 우 열 내용은 좌 면이 아니라 rdet가 정한다(엇갈림 넘김)
   _bizmState.rightId=_bizRightId();
-  try{if(window.Plotly)['#bizm-genre','#bizm-season'].forEach(function(s){var n=el.querySelector(s); if(n)Plotly.purge(n);});}catch(_e){}   // 우 열이 들고 있던 차트만 purge(노드 지정 = 좌 열 동명 id 무접촉) — 리스너·옵저버 누수 차단
+  try{if(window.Plotly)['#bizm-chart','#bizm-ex-chart','#yrm-chart'].forEach(function(s){var n=el.querySelector(s); if(n)Plotly.purge(n);});}catch(_e){}   // [260806] 현행 차트 id로 갱신 · 우 열이 들고 있던 차트만 purge(노드 지정 = 좌 열 동명 id 무접촉) — 리스너·옵저버 누수 차단
   if(pair){ try{ _bizCompRender(el,2); }catch(_e){ console.warn('[rail-yrm pair]',_e); } }   // [260802] 구 `el.innerHTML=''` 선지우기 폐지 — 프레임(유리)이 살아 있어야 _bizmSwap이 안쪽만 갈아끼운다(#rail-yrm-uha 슬롯은 아래에서 재확보)
   else { try{ _bizmSwap(el,_railYrmFrame()); }catch(_e){ console.warn('[rail-yrm]',_e); } try{ _ryGrpEqualize(); }catch(_e){} }   // [260801 Q.38] 최초 틀 구축 직후에도 그룹 표 폭 통일
   // [260802] 프레임 유지 교체(_bizmSwap)는 열을 비우지 않으므로, 짝 면에서 만들어 둔 숨김 슬롯이 「판매 실적」 복귀 시 틀 안 슬롯과 겹칠 수 있다 → 첫 개(틀 안 = 문서 순서상 앞)만 남기고 정리(id 유일성 보존).

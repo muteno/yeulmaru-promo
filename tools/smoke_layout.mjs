@@ -176,12 +176,13 @@ async function main() {
       await page.evaluate(`_bizmTo(${i})`);
       await settle(page);
       judge(`슬라이드${i}(${SL[i - 1]})${i === 1 ? ' 복귀' : ''}`, await page.evaluate(MEASURE), fails);
-      // [260805] 3면 분야 축(공연/전시·교육) — 반반 면(좌 전시 / 우 교육)도 같은 이젤·흰 라인 계약을 진다.
-      //   왕복까지 재는 이유 = 분야를 오갈 때 한쪽 열만 다시 그려 두 열 하단선이 어긋나는 것이 이 구조의 대표 파손 모양.
-      //   [260805 2차] 분야 칩은 3면이 **좌 열**일 때만 뜨므로(조작부 = 좌 열 소유) 그 슬라이드에서만 왕복한다.
-      if (SL[i - 1].startsWith('3|') && await page.evaluate(`typeof _bizmSetDomain==='function'`)) {
-        for (const [d, lab] of [['exhib', '전시·교육'], ['perf', '공연 복귀']]) {
-          await page.evaluate(`_bizmSetDomain('${d}')`);
+      // [260806] 3면 조작부 = 「전체 ↔ 판매중」 토글 — 거른 목록(행·막대가 확 줄거나 0건)에서도 같은 이젤·흰 라인 계약을 진다.
+      //   왕복까지 재는 이유 = 토글 한 번에 두 열이 같이 다시 그려지는데, 한쪽만 갱신되면 두 열 하단선이 어긋난다(이 구조의 대표 파손 모양).
+      //   [260805 2차] 조작부는 3면이 **좌 열**일 때만 뜨므로(조작부 = 좌 열 소유) 그 슬라이드에서만 왕복한다.
+      //   [260806] 구 분야 칩(_bizmSetDomain) 왕복은 칩 철거와 함께 폐지 — 전시·교육은 이제 이 면 하단 반반 카드로 상시 표시된다.
+      if (SL[i - 1].startsWith('3|') && await page.evaluate(`typeof _bizmLiveToggle==='function'`)) {
+        for (const lab of ['판매중', '전체 복귀']) {
+          await page.evaluate(`_bizmLiveToggle()`);
           await settle(page);
           judge(`슬라이드${i}(${lab})`, await page.evaluate(MEASURE), fails);
         }
