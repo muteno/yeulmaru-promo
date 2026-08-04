@@ -2841,6 +2841,7 @@ const MENUS=[
   {label:'대시보드',id:'biz'},   // [260723 운영자] 좌측 mv-seg 분리 토글 폐지 → 대시보드(사업 실적) 메인 전환. 클릭 = setMainView('biz') · 호버 = 세부(연간 실적·사업 결과 비교·연간 일정·회원 분포)
   {label:'캘린더',id:'cal'},   // 클릭 = setMainView('cal') · 호버 = 세부(홍보 신청·온라인/오프라인 홍보 현황 — 구 '홍보 신청·확인' 대메뉴 흡수)
   // [260803 운영자] {label:'판매 현황',id:'sales'} 폐지 — 세부 이관: 실적 조회 → 대시보드 ▸ 판매 실적 바로 아래 · 실적 입력 → 대시보드 세부 맨 아래(관리자) · 상품 등록·변경 = 제거(openTicketReg 휴면 보존). 롤백 = 이 줄 복구 + buildNav sales 분기 2곳 + _qaDeepLink ids/alias + _salesMenuBuild 재연결.
+  {label:'AI 홍보',id:'aipromo'},   // [260804 운영자] 상단 대메뉴 신설. 클릭 = openPromoCheck() 풀스크린 모달 — _mainView(biz|cal 2값) 무접촉이 계약(platform 분기와 같은 문법). 롤백 = 이 줄 + buildNav aipromo 분기 2곳
   {label:'콘텐츠 제작',id:'content'},   // [260710 운영자] PLAY ZONE 좌측으로 스위치 · [260729 운영자] PLAY ZONE 세부메뉴(도화지·에니어그램) 전부 흡수 → 대메뉴 통합
   // [260731 운영자 2차] 「회원 관리」 대메뉴 폐지 → 대메뉴 4종. 회원 분포(구 '회원 기본 개요') = 대시보드 세부로 이동(_bizMenuBuild, admin만).
   //   회원 조회(표)는 나가는 문을 잃지 않게 회원 분포 모달 헤더의 [회원 조회] 버튼으로 진입(양방향 — 구 회원 조회 ▸ 기본 개요 버튼의 짝).
@@ -4993,6 +4994,7 @@ function buildNav(){
       if(m.id==='content'){_ddOpen(b,_contentMenuBuild,210,'content');return;}
       if(m.id==='annual'){openAnnualCalendar();return;}
       if(m.id==='admin'){openAdminPanel();return;}
+      if(m.id==='aipromo'){openPromoCheck();return;}   // [260804] 화면 전환 아님 — 보드를 연다(platform과 동일)
       if(m.id==='platform'){openPlatformBoard();return;}
       if(m.id==='playzone'){_ddOpen(b,_playzoneMenuBuild,210,'playzone');return;}   // [260803] sales 분기 제거 — 판매 현황 대메뉴 폐지(세부는 _bizMenuBuild로 이관)
       document.querySelectorAll('.nav-btn').forEach(x=>x.classList.remove('on'));b.classList.add('on');
@@ -19397,6 +19399,117 @@ function _findPerfByName(name){ name=String(name||'').trim(); if(!name)return nu
 // [정규화] 프로그램명 → 공연ID (프로그램 시트 공연ID 컬럼). '기타'/미등록은 빈값
 function _recPerfId(name){ var p=_findPerfByName(name); return (p&&p.id)||''; }
 // 카카오/문자 2일연속·중복 (관리자 포함 전 경로). ignoreRowIndex=자기 자신(이동/변경 원본) 제외
+// ===== 홍보 점검 (260804 운영자 「AI 홍보」 대메뉴 지시 + 9인 적대적 평의회 확정 명세) =====
+// 진입 = 상단 대메뉴 클릭 → 풀스크린 모달(openPlatformBoard 골격 계승).
+//   ⚠ _mainView(biz|cal)는 **건드리지 않는다** — 2값 이진 CSS 모드라(.biz-mode 토글) 3번째 값을 넣으면
+//     캘린더 그리드·펫·날짜 패널이 이 면 위에 겹쳐 그려지고 F5 복원도 biz로 삼켜진다(평의회 blocker).
+//   같은 문법 선례 = buildNav의 platform 분기(대메뉴인데 화면 전환이 아니라 보드를 연다).
+// 판정 범위 = **오늘 이후**(평의회 결정4-A) — 과거 위반은 조치 불가라 소거 못 하는 경보가 된다.
+function _pcDaysTo(iso){
+  if(!iso)return null;
+  var a=new Date(_pcT()+'T00:00:00'), b=new Date(iso+'T00:00:00');
+  if(isNaN(b))return null;
+  return Math.round((b-a)/86400000);
+}
+function _pcT(){ return (typeof getTodayKey==='function')?getTodayKey():new Date().toISOString().slice(0,10); }
+// 진단 스캔 — 순수 계산(서버 호출 0). PERFS·records·APPLY_SETTINGS만 읽는다.
+function _promoCheckScan(){
+  var today=_pcT(), rows=_slotRows(), perfs=(typeof PERFS!=='undefined'&&PERFS)?PERFS:[];
+  var future=rows.filter(function(r){return getRecDateKey(r)>=today;});
+  var out={a0:[],a5:[],a2:[],adj:[],hyg:[],stat:{}};
+  // A0 — 홍보 불가 상태(_promoOn=false)인데 판매시작이 임박. 앱이 신청 자체를 막으므로 사람이 프로그램 시트를 고쳐야 한다.
+  //      평의회 최대 값: 오늘 5건 발화하고 전부 실제 조치가 필요한 건이다.
+  perfs.forEach(function(p){
+    if(_promoOn(p))return;
+    var d=_pcDaysTo(p.ss);
+    if(d===null||d<0||d>60)return;
+    out.a0.push({p:p,d:d});
+  });
+  out.a0.sort(function(a,b){return a.d-b.d;});
+  // A5 — 티켓오픈 D-3 이내: 그날 카톡 자리가 비었는지 사실만 표시(K3 선점 규칙은 평의회가 삭제)
+  perfs.forEach(function(p){
+    if(!_promoOn(p))return;
+    var d=_pcDaysTo(p.ss);
+    if(d===null||d<0||d>3)return;
+    var taken=rows.some(function(r){return getRecDateKey(r)===p.ss&&platShort(r['플랫폼 1'])==='카카오';});
+    out.a5.push({p:p,d:d,taken:taken});
+  });
+  // A2 — 판매종료(=마감) D-14 이내인데 앞으로 남은 계획 0
+  perfs.forEach(function(p){
+    if(!_promoOn(p))return;
+    var end=p.se||p.e, d=_pcDaysTo(end);
+    if(d===null||d<0||d>14)return;
+    var left=future.filter(function(r){return String(r['프로그램']||'').trim()===String(p.f||'').trim();}).length;
+    if(!left)out.a2.push({p:p,d:d,end:end});
+  });
+  out.a2.sort(function(a,b){return a.d-b.d;});
+  // 연일 발송(K2/S2) — 차단 아님. 오늘 이후 건만 본다.
+  var seen={};
+  future.forEach(function(r){
+    var ps=platShort(r['플랫폼 1']); if(ps!=='카카오'&&ps!=='문자')return;
+    var adj=_promoAdjacentDays(r['플랫폼 1'],getRecDateKey(r),r._rowIndex);
+    adj.forEach(function(a){
+      var k=[getRecDateKey(r),a.date].sort().join('~')+'|'+ps;
+      if(seen[k])return; seen[k]=1;
+      out.adj.push({ps:ps,a:getRecDateKey(r),b:a.date,t1:r['콘텐츠 제목']||'',t2:a.rec['콘텐츠 제목']||''});
+    });
+  });
+  out.adj.sort(function(x,y){return x.a<y.a?-1:1;});
+  // 데이터 위생 — v1이 LLM 없이 잡을 수 있는 실제 결함
+  var byShort={};
+  perfs.forEach(function(p){ var n=String(p.n||'').trim(); if(!n)return; (byShort[n]=byShort[n]||[]).push(p); });
+  Object.keys(byShort).forEach(function(n){
+    if(byShort[n].length<2)return;
+    out.hyg.push({k:'줄임말 중복',v:'「'+n+'」 '+byShort[n].length+'건 — 이름으로 찾으면 항상 앞의 것만 잡혀 뒤 공연 홍보가 막힙니다',
+      sub:byShort[n].map(function(p){return p.f;}).join(' / ')});
+  });
+  var ym=(typeof getApplyMonths==='function')?getApplyMonths():[];
+  if(ym.length&&ym.indexOf(today.substring(0,7))<0&&ym.every(function(v){return v<today.substring(0,7);}))
+    out.hyg.push({k:'접수월 낡음',v:'접수월이 '+ym.join(', ')+' — 지금은 '+today.substring(0,7)+'입니다',
+      sub:'당월은 자동 허용되지만 그 다음 달부터는 일반 사용자가 신청할 수 없습니다(관리자는 예외)'});
+  var noJoin=future.filter(function(r){return !_findPerfByName(r['프로그램']);}).length;
+  if(noJoin)out.hyg.push({k:'프로그램 미조인',v:'앞으로 잡힌 계획 중 '+noJoin+'건이 프로그램 시트와 안 맞습니다',sub:'홍보창·마감 판정에서 빠집니다'});
+  out.stat={open:perfs.filter(function(p){return _promoOn(p)&&_pcDaysTo(p.se||p.e)>=0;}).length, future:future.length, rows:rows.length};
+  return out;
+}
+function closePromoCheck(){ var el=document.getElementById('promo-check'); if(el)el.innerHTML=''; }
+function openPromoCheck(){
+  // 4중 데이터 게이트 — 「진단 0건」과 「입력 0건」은 절대 같은 모양이면 안 된다(평의회 blocker)
+  var notReady=(typeof _perfReady!=='undefined'&&!_perfReady)||typeof PERFS==='undefined'||!PERFS||!PERFS.length||typeof records==='undefined'||!records;
+  var el=document.getElementById('promo-check');
+  if(!el){ el=document.createElement('div'); el.id='promo-check'; document.body.appendChild(el); }
+  var body;
+  if(notReady){
+    body='<div class="u-empty" style="padding:48px 20px;text-align:center">📡 데이터를 아직 못 불러왔어요<br>'
+       + '<button class="btn btn--neutral btn--sm" style="margin-top:12px" onclick="closePromoCheck();openPromoCheck()">다시 시도</button></div>';
+  }else{
+    var s=_promoCheckScan(), h=[];
+    var card=function(t,sub,inner){ return '<div class="bizm-card" style="padding:14px 16px"><div style="font-size:14px;font-weight:800">'+t
+      +(sub?'<span style="font-size:11.5px;font-weight:600;color:var(--neutral-text);margin-left:8px">'+sub+'</span>':'')+'</div>'+inner+'</div>'; };
+    var row=function(lead,main,sub,hot){ return '<div style="display:flex;gap:10px;align-items:baseline;padding:7px 0;border-top:1px solid var(--border)">'
+      +'<span style="font-size:12px;font-weight:800;white-space:nowrap;font-variant-numeric:tabular-nums;color:'+(hot?'var(--danger-btn)':'var(--neutral-text)')+'">'+lead+'</span>'
+      +'<span style="flex:1;font-size:13px;min-width:0">'+main+(sub?'<span style="display:block;font-size:11.5px;color:var(--dim)">'+sub+'</span>':'')+'</span></div>'; };
+    if(s.a0.length)h.push(card('홍보를 못 여는데 판매가 임박했어요','프로그램 시트에서 홍보시작일·홍보노출을 채워야 신청이 열립니다',
+      s.a0.map(function(x,i){return row('D-'+x.d, escapeHtml(x.p.f||''), '판매시작 '+(x.p.ss||'')+' · 지금은 홍보 신청 자체가 막혀 있습니다', i===0);}).join('')));
+    if(s.a5.length)h.push(card('티켓오픈이 코앞이에요','',
+      s.a5.map(function(x,i){return row('D-'+x.d, escapeHtml(x.p.f||''), '오픈 '+(x.p.ss||'')+' · 그날 카카오톡 자리 '+(x.taken?'이미 있음':'비어 있음'), i===0&&!x.taken);}).join('')));
+    if(s.a2.length)h.push(card('마감이 가까운데 남은 계획이 없어요','',
+      s.a2.map(function(x,i){return row('D-'+x.d, escapeHtml(x.p.f||''), '판매종료 '+(x.end||''), i===0);}).join('')));
+    if(s.adj.length)h.push(card('연일 발송','차단하지는 않습니다 — 피하고 싶으시면 하루 옮기세요',
+      s.adj.map(function(x){return row(x.ps, escapeHtml(x.a)+' → '+escapeHtml(x.b), escapeHtml((x.t1||'')+' / '+(x.t2||'')), false);}).join('')));
+    if(s.hyg.length)h.push(card('데이터 손질이 필요해요','',
+      s.hyg.map(function(x){return row(x.k, escapeHtml(x.v), escapeHtml(x.sub||''), false);}).join('')));
+    var stat='<div style="font-size:12.5px;color:var(--neutral-text);padding:10px 2px">홍보창이 열린 공연 <b>'+s.stat.open
+      +'</b>개 · 앞으로 잡힌 계획 <b>'+s.stat.future+'</b>건 · 전체 홍보기록 '+s.stat.rows+'건</div>';
+    body=(h.length?h.join(''):'<div class="u-empty" style="padding:44px 20px;text-align:center">📭 지금 손볼 게 없어요</div>')+stat;
+  }
+  el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closePromoCheck)">'
+    + '<div class="modal" style="width:min(760px,94vw);max-height:88vh;display:flex;flex-direction:column;overflow:hidden">'
+    + '<button class="modal-x" onclick="closePromoCheck()" title="닫기">×</button>'
+    + '<div style="font-size:17px;font-weight:800;padding:2px 0 10px">AI 홍보 · 점검</div>'
+    + '<div style="overflow:auto;flex:1;min-height:0">'+body+'</div></div></div>';
+}
+
 // === 발송 슬롯 규칙 엔진 (260804 운영자 확정 + 9인 평의회) ===
 // 고정 규칙(끌 수 없음) = 카카오톡 하루 1회 · 문자 하루 1회. 연일 회피는 여기서 차단하지 않는다(경고 축).
 // role-blind 순수 함수 — canApplyOnDate/canApplyAtTime과 달리 admin도 예외 없이 통과시키지 않는다.
