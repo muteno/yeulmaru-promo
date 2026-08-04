@@ -39,17 +39,30 @@ const LIMIT = Number((process.argv.find((a) => a.startsWith('--limit=')) || '').
 
 // Graph 쓰기는 400행/2 PATCH라 40,429행을 한 POST에 넣으면 subrequest 한도를 넘는다 → 배치로 쪼갠다.
 //   첫 배치 = 전체 교체(시트 재생성 = 멱등), 이후 = append.
-const BATCH = 2000;
+// [260804 실측] 2000행 POST = Graph PATCH 503(UnknownError). opsWriteSheet가 내부에서 400행씩 끊는데
+//   그 위에 또 5덩이를 얹으니 한 요청이 너무 길어진다. 500행이면 내부 2덩이 = 한 요청이 짧게 끝난다.
+const BATCH = Number(process.env.BOOKING_BATCH || 500);
+const RETRY = 4;   // Graph 503/429는 일시 장애가 잦다 — 지수 백오프로 흡수(실패를 실패로 남기되 성급히 포기하지 않는다)
 
 const HDR = ['대표티켓번호', '판매순번', '주문상태', '판매일', '상품명', '이용일시', '장소명',
   '총매수', '최종정상매수', '주문자명', '휴대폰번호', '금액', '발권상태', '회원여부', '판매처',
   '주문일시', '공연ID', '장르1', '회원키'];
 
-async function call(method, p, body) {
+async function call(method, p, body, retry = 0) {
   const headers = { 'Content-Type': 'application/json', 'X-App-Password': PW };
   if (PIN) headers['X-Sub-Admin-PIN'] = PIN;
   const r = await fetch(API + p, { method, headers, body: body ? JSON.stringify(body) : undefined });
-  if (!r.ok) throw new Error(`${method} ${p} → ${r.status}: ${(await r.text()).slice(0, 300)}`);
+  if (!r.ok) {
+    const txt = (await r.text()).slice(0, 300);
+    // Graph 503/429/500는 일시 장애가 잦다(실측: 2000행 배치에서 503 UnknownError). 백오프 후 재시도.
+    if (retry < RETRY && (r.status >= 500 || r.status === 429)) {
+      const wait = 2 ** (retry + 1) * 1000;
+      console.log(`    ↻ ${r.status} — ${wait / 1000}s 뒤 재시도 (${retry + 1}/${RETRY})`);
+      await new Promise((z) => setTimeout(z, wait));
+      return call(method, p, body, retry + 1);
+    }
+    throw new Error(`${method} ${p} → ${r.status}: ${txt}`);
+  }
   return r.json();
 }
 const getSheet = (s) => call('GET', `/api/ops?sheet=${encodeURIComponent(s)}&fresh=1`);
@@ -60,11 +73,21 @@ if (!XLS_PW) { console.error('✗ XLS_PW(엑셀 열기암호) 환경변수가 �
 // 파싱은 파이썬 쪽 라이브러리(msoffcrypto+openpyxl)가 정본이라 그대로 쓴다 — 여기서 재구현하지 않는다.
 const PY = path.join(process.cwd(), 'tools', 'booking_extract.py');
 if (!fs.existsSync(PY)) { console.error(`✗ 추출기 없음: ${PY}`); process.exit(1); }
-console.log('주문 원장 추출 중… (211파일 복호화+병합, 수 분 걸립니다)');
-const raw = execFileSync('python3', [PY, ZIP], {
-  env: { ...process.env, XLS_PW }, maxBuffer: 1024 * 1024 * 512, encoding: 'utf8',
-});
-const orders = JSON.parse(raw);
+// 추출은 211파일 복호화라 수 분 걸린다 — BOOKING_CACHE를 주면 결과를 재사용한다(반입 재시도·중단 복구용).
+//   캐시는 PII라 리포 밖(스크래치패드 등)에 두고, 끝나면 지운다.
+const CACHE = process.env.BOOKING_CACHE || '';
+let orders;
+if (CACHE && fs.existsSync(CACHE)) {
+  console.log(`추출 캐시 사용: ${CACHE}`);
+  orders = JSON.parse(fs.readFileSync(CACHE, 'utf8'));
+} else {
+  console.log('주문 원장 추출 중… (211파일 복호화+병합, 수 분 걸립니다)');
+  const raw = execFileSync('python3', [PY, ZIP], {
+    env: { ...process.env, XLS_PW }, maxBuffer: 1024 * 1024 * 512, encoding: 'utf8',
+  });
+  orders = JSON.parse(raw);
+  if (CACHE) { fs.writeFileSync(CACHE, JSON.stringify(orders)); console.log(`추출 캐시 저장: ${CACHE}`); }
+}
 console.log(`추출 완료: 고유 주문 ${orders.length.toLocaleString()}행`);
 
 // ── 공연 해석 (대장 = 회차 단위 장르의 정본)
@@ -148,14 +171,29 @@ console.log(`\n반입 대상 ${rows.length.toLocaleString()}행 · ${HDR.length}
 if (DRY) { console.log('--dry: 시트 무접촉 종료'); process.exit(0); }
 if (!PIN) { console.error('✗ YM_PIN(관리자 PIN) 환경변수가 필요합니다'); process.exit(1); }
 
+// ⚠ [260804 실측 · 데이터 유실 사고를 여기서 잡았다] append를 연달아 쏘면 **앞 배치를 덮어쓴다**.
+//   opsAppendRows는 usedRange를 읽어 붙일 자리를 정하는데, Graph 쓰기가 eventual consistency라
+//   직전 배치가 아직 안 보이면 **같은 fromRow를 다시 계산**한다(실측: 배치2·배치3이 둘 다 fromRow 502
+//   → 1,500행을 넣었는데 시트엔 1,000행). 그래서 배치마다 「실제로 안착했는가」를 확인하고 넘어간다.
+const total = Math.ceil(rows.length / BATCH);
+async function settled(expect) {
+  for (let t = 0; t < 30; t++) {
+    await new Promise((z) => setTimeout(z, 3000));
+    try { const s = await getSheet(SHEET); if (s.count >= expect) return s.count; } catch (e) {}
+  }
+  return -1;
+}
 for (let i = 0; i < rows.length; i += BATCH) {
   const slice = rows.slice(i, i + BATCH);
   const first = i === 0;
-  // 첫 배치 = 전체 교체(= 재실행해도 누적 오염 없음 · 멱등) · 이후 = append
-  const res = await call('POST', '/api/ops', first
-    ? { sheet: SHEET, headers: HDR, rows: slice }
+  const n = Math.floor(i / BATCH) + 1;
+  await call('POST', '/api/ops', first
+    ? { sheet: SHEET, headers: HDR, rows: slice }              // 첫 배치 = 전체 교체(= 재실행 멱등)
     : { sheet: SHEET, mode: 'append', rows: slice });
-  console.log(`  배치 ${Math.floor(i / BATCH) + 1}/${Math.ceil(rows.length / BATCH)} (${first ? '교체' : 'append'}) → ${JSON.stringify(res).slice(0, 120)}`);
+  const want = i + slice.length;
+  const got = await settled(want);
+  if (got < 0) { console.error(`✗ 배치 ${n}/${total} 안착 확인 실패(기대 ${want}행) — 중단. 라이브 확인 후 재실행하라(첫 배치가 전체 교체라 안전).`); process.exit(1); }
+  console.log(`  배치 ${n}/${total} (${first ? '교체' : 'append'}) → ${got.toLocaleString()}행 안착`);
 }
 
 // [260804 실측 · ledger_2026h1_ingest 전례] Graph 쓰기는 eventual consistency — 즉시 조회가 옛 값을 줄 수 있다.
