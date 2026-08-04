@@ -2507,6 +2507,84 @@ var index_default = {
         }
       }
 
+      // === 콘텐츠 제작 ▸ 오피스문서 편집 (260805 운영자) — 한글문서 편집(/api/hwp/*)의 오피스판 미러 ===
+      // 편집 엔진 = GitHub Actions(office-edit.yml)의 OfficeCLI(iOfficeAI/OfficeCLI · Apache-2.0) + claude -p.
+      // 흐름·인증·시크릿 전부 hwp 와 동일(신설 0): upload(원본 커밋) → dispatch(office-edit) → [Actions 수정 후 커밋]
+      // → /api/blog/draft 폴링(공용) → file(결과 바이트). 다른 건 확장자 3종과 drafts/office/ 경로뿐.
+      if (url.pathname.startsWith("/api/office/")) {
+        const cfg = ghBlogCfg(env);
+        if (!cfg.pat) return json({ error: "no_github_pat", note: "Worker에 GITHUB_PAT 시크릿 미설정" }, env, 503);
+        const ghHdr = { "Authorization": "Bearer " + cfg.pat, "Accept": "application/vnd.github+json", "User-Agent": "yeulmaru-promo-worker" };
+        const ofcId = (v) => String(v || "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 64);
+        // 확장자 화이트리스트 — hwp(2종 폴백)와 달리 3종이라 미일치 = null → 400 거절. 경로 조작 차단 동일.
+        const ofcExt = (n) => { const m = String(n || "").match(/\.(docx|xlsx|pptx)$/i); return m ? m[1].toLowerCase() : null; };
+
+        if (url.pathname === "/api/office/upload" && request.method === "POST") {
+          let b = {};
+          try { b = await request.json(); } catch (e) {}
+          const id = ofcId(b.id);
+          const ext = ofcExt(b.name);
+          const b64 = String(b.b64 || "").replace(/\s/g, "");
+          if (!id) return json({ error: "id required" }, env, 400);
+          if (!ext) return json({ error: "워드·엑셀·PPT(.docx·.xlsx·.pptx)만 올릴 수 있어요" }, env, 400);
+          if (!b64) return json({ error: "빈 파일이에요" }, env, 400);
+          if (b64.length > 12e6) return json({ error: "문서가 너무 커요(8MB 이하)" }, env, 413);
+          const path = `drafts/office/${id}.in.${ext}`;
+          try {
+            const gr = await fetch(`https://api.github.com/repos/${cfg.repo}/contents/${path}`, {
+              method: "PUT",
+              headers: { ...ghHdr, "Content-Type": "application/json" },
+              body: JSON.stringify({ message: `chore(office): ${id} 원본 [skip ci]`, content: b64, branch: cfg.branch })
+            });
+            if (!gr.ok) return json({ error: gr.status === 401 || gr.status === 403 ? "github_denied" : "upload_failed", status: gr.status, note: (await gr.text()).slice(0, 200) }, env, 502);
+            return json({ ok: true, id, path }, env);
+          } catch (e) {
+            return json({ error: String((e && e.message) || e) }, env, 502);
+          }
+        }
+
+        // 트리거 — 전용 event_type(office-edit)이라 블로그(nb-blog)·한글문서(hwp-edit) 큐에 안 막힌다.
+        if (url.pathname === "/api/office/dispatch" && request.method === "POST") {
+          let b = {};
+          try { b = await request.json(); } catch (e) {}
+          const id = ofcId(b.id);
+          const ext = ofcExt(b.name);
+          if (!id) return json({ error: "id required" }, env, 400);
+          if (!ext) return json({ error: "워드·엑셀·PPT(.docx·.xlsx·.pptx)만 고칠 수 있어요" }, env, 400);
+          const inner = { id, name: String(b.name || "문서").slice(0, 160), ext, ask: String(b.ask || "").slice(0, 4000) };
+          try {
+            const gr = await fetch(`https://api.github.com/repos/${cfg.repo}/dispatches`, {
+              method: "POST",
+              headers: { ...ghHdr, "Content-Type": "application/json" },
+              body: JSON.stringify({ event_type: "office-edit", client_payload: { d: inner } })
+            });
+            if (gr.ok) return json({ ok: true, id }, env);
+            return json({ error: gr.status === 401 || gr.status === 403 ? "github_denied" : "dispatch_failed", status: gr.status, note: (await gr.text()).slice(0, 200) }, env, 502);
+          } catch (e) {
+            return json({ error: String((e && e.message) || e) }, env, 502);
+          }
+        }
+
+        // 결과 바이트 — 1MB 넘는 파일도 오게 raw 미디어타입(hwp 와 동일). 확장자는 원본과 같으므로 3종 순회.
+        if (url.pathname === "/api/office/file" && request.method === "GET") {
+          const id = ofcId(url.searchParams.get("id"));
+          if (!id) return json({ error: "id required" }, env, 400);
+          for (const ext of ["docx", "xlsx", "pptx"]) {
+            try {
+              const gr = await fetch(`https://api.github.com/repos/${cfg.repo}/contents/drafts/office/${id}.out.${ext}?ref=${encodeURIComponent(cfg.branch)}&t=${Date.now()}`, {
+                headers: { ...ghHdr, "Accept": "application/vnd.github.raw" }
+              });
+              if (gr.status === 404) continue;
+              if (!gr.ok) return json({ error: "github " + gr.status }, env, 502);
+              return new Response(gr.body, { headers: { "Content-Type": "application/octet-stream", ...corsHeaders(env) } });
+            } catch (e) {
+              return json({ error: String((e && e.message) || e) }, env, 502);
+            }
+          }
+          return json({ error: "not_ready" }, env, 404);
+        }
+      }
+
       const token = await getToken(env);
 
       // 홍보기록
