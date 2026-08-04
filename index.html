@@ -21139,42 +21139,43 @@ function openPanel(dateObj,recs){
   _panelRailReflow();
   var _pKey=dk(dateObj);
   var _pHol=(window._holidays&&_holidays[_pKey])||'';
-  var _pPerfs=((typeof getPerfs==='function')?getPerfs(dateObj):[]).filter(function(p){return p.t!=='e';});
+  // [260804 운영자 「맨 위에 대관 일정도 안보여도됨. 아래에 보일거니까 / 교육실 대관같은것도 전시 포함
+  //   일괄 프로그램은 아래로 가야해 대관이면 대관일정」]
+  //   → 그날 프로그램의 자리는 **아래 「기획/대관」 2섹션 하나뿐**. 머리말 띠(panel-hdr-labels)는 공휴일만 남긴다.
+  //   구판은 같은 프로그램을 머리말 띠와 아래 섹션에 두 번 그렸고(중복), 교육실 대관은 띠에만 있어 아래엔 없었다.
+  //   목록 만드는 코드는 그대로 살려 **아래 섹션의 소스로 승계**한다 = 「내리는」 것이지 새로 만드는 게 아니다(손실 0).
+  // ⚠ 이 승계가 필수인 이유: 아래 섹션은 종전에 PERFS(+판매중 o===1)만 봐서 ① 구글 캘린더 대관(GCAL_RENTALS는
+  //   정본 PERFS에 안 싣는다 — 260801 결정) ② 판매기간이 끝난 당일 공연(o=0) ③ 교육실 대관이 통째로 빠져 있었다.
+  //   띠만 지우면 그 3종이 화면에서 사라진다 → 소스를 띠가 쓰던 getPerfs·getExhibitStatus·getEduRooms로 통일한다.
+  var _pDay=((typeof getPerfs==='function')?getPerfs(dateObj):[]);   // PERFS 당일분 + 구글 캘린더 대관(_perfDedupDay 완료)
   // [260803 운영자 「선은 있는데 이게 뭔지를 알 수가 없음」] 셀 하단 전시 라인이 그어진 날 = 그 전시를 여기에도 줄로 세운다.
   //   소스 = 라인과 같은 getExhibitStatus 1출처 → 「줄은 있는데 패널엔 없다」가 구조적으로 불가능(둘이 어긋날 수 없음).
   //   장기 전시라 매일 뜨는 게 정상(라인도 매일 그어진다). 캘린더 셀 배지는 종전대로 전시 제외 = 셀에서의 표현은 라인 하나로 유지.
-  //   위 filter가 t==='e'를 걷어낸 뒤 여기서 합류시키므로 프로그램 시트 전시가 두 줄로 겹치지 않는다(같은 전시는 getExhibitStatus가 이미 1건으로 접음).
+  //   [260804] 구판은 getPerfs의 t==='e'를 통째로 걷어내고 여기서만 채웠는데, 그러면 정본 전시가 들고 있는
+  //   **상세 링크(u)와 기간(s·e)** 이 버려져 아래 섹션의 「N일차」를 못 센다 → 정본 전시를 남기고,
+  //   전시마스터·구글 캘린더에만 있는 전시를 **이름 기준으로 없는 것만** 덧붙인다(두 줄 겹침은 그대로 방지).
   try{
+    var _exSeen={};
+    _pDay.forEach(function(p){ if(p&&p.t==='e')_exSeen[_gcNorm(p.f||p.n)]=1; });
     getExhibitStatus(dateObj).forEach(function(x){
       if(!x)return;
       var _plc=_EX_SPACE[x.lane].id;
-      (x.names.length?x.names:['전시 진행 중']).forEach(function(nm){ _pPerfs.push({t:'e',f:nm,n:nm,l:_plc,_ex:1}); });
+      (x.names.length?x.names:['전시 진행 중']).forEach(function(nm){
+        var _k=_gcNorm(nm); if(_k&&_exSeen[_k])return; if(_k)_exSeen[_k]=1;
+        _pDay.push({t:'e',f:nm,n:nm,l:_plc,_ex:1,s:x.s,e:''});   // s = 그 레인 전시의 시작일(일차 계산용) · e 없음 = 진행 중
+      });
     });
   }catch(_e){}
   // [260801 운영자] 출력 순서 = 공연 → 전시 → 교육 → 대관 → 교육실(맨 아래 별도 합류).
   //   구분 글자(perfBadgeKind)로만 줄 세운다 — 표기와 순서가 한 출처라 둘이 어긋날 수 없다.
   //   셋업·리허설(준비 상태)은 운영자 지정 목록 밖 → 지정분 뒤, 교육실 앞. 같은 구분끼리는 원래 순서 유지(안정 정렬).
+  //   [260804] 섹션이 갈린 뒤에도 이 축은 유효 — 기획 섹션 안(공연→전시→교육) · 대관 섹션 안(대관→셋업→리허설) 순서를 정한다.
   var _PK_ORDER=['공연','전시','교육','대관','셋업','리허설'];
-  _pPerfs.sort(function(a,b){
+  _pDay.sort(function(a,b){
     var ia=_PK_ORDER.indexOf(perfBadgeKind(a)),ib=_PK_ORDER.indexOf(perfBadgeKind(b));
     return (ia<0?_PK_ORDER.length:ia)-(ib<0?_PK_ORDER.length:ib);
   });
-  // [260731 운영자 2차] 그날 일정 = 3열(구분 | 제목 | 장소) 격자 1행 1건. 색은 perfBadge* 공용 함수 계승(셀과 동일),
-  // 구분은 패널에서만 풀어쓰기, 제목은 CSS 말줄임(잘린 전체 이름은 title 툴팁).
-  var _pLabels=(_pHol?'<span class="panel-hdr-hol">'+escapeHtml(_pHol)+'</span>':'')+_pPerfs.map(function(p){
-    var _nm=escapeHtml(p.f||p.n);
-    return '<span class="panel-hdr-prog"><span class="panel-hdr-kind" style="color:'+perfBadgeBg(p)+'">'+perfBadgeKind(p)+'</span>'+
-      '<span class="panel-hdr-nm" title="'+_nm+'">'+_nm+'</span>'+
-      '<span class="panel-hdr-place">'+escapeHtml(perfPlaceLabel(p.l))+'</span></span>';
-  }).join('');
-  // [260801 운영자] 교육실 대관 — 같은 3열 격자에 이어 붙인다(구분 「교육실」 | 신청내용 | 방). 캘린더 셀엔 안 나간다.
-  _pLabels+=getEduRooms(_pKey).map(function(r){
-    var _en=escapeHtml(r.n||r.g||'대관');
-    var _et=escapeHtml([r.n,r.g,r.t,r.l].filter(Boolean).join(' · '));   // 잘린 제목·시간·단체명은 툴팁으로(3열 격자는 넓히지 않는다)
-    return '<span class="panel-hdr-prog"><span class="panel-hdr-kind" style="color:var(--c5)">교육실</span>'+
-      '<span class="panel-hdr-nm" title="'+_et+'">'+_en+'</span>'+
-      '<span class="panel-hdr-place">'+escapeHtml(r.l)+'</span></span>';
-  }).join('');
+  var _pLabels=(_pHol?'<span class="panel-hdr-hol">'+escapeHtml(_pHol)+'</span>':'');
   var h='<div class="panel-hdr"><div style="flex:1;min-width:0"><div class="panel-date"><span class="panel-yr">'+dateObj.getFullYear()+'년</span>'+(dateObj.getMonth()+1)+'월 '+dateObj.getDate()+'일<span class="panel-dow">'+dn+'요일</span></div>'+(_pLabels?'<div class="panel-hdr-labels">'+_pLabels+'</div>':'')+'</div><button class="panel-close" onclick="closePanel()">✕</button></div><div class="panel-body">';
   var dKey=dk(dateObj);
   // === 카페/장도 운영시간 (서비스 안내 — 본문 맨 위 고정) ===
@@ -21260,26 +21261,45 @@ function openPanel(dateObj,recs){
   });}
   if(userRole==='admin')h+='<button class="add-btn" onclick="openAdminWizard(\''+dk(dateObj)+'\')">+ 새 콘텐츠 등록</button>';
   // === 프로그램 (공연/전시) 섹션 (아래, 토글 가능, 기본 펼침) ===
-  var perfs=getPerfs(dateObj);
   // (260803) 여기 있던 `var exh=getExhibitStatus(...)`는 호출만 하고 아무 데도 안 쓰는 死변수였다 —
   //   전시는 이 함수 위쪽 「그날 일정」 합류분이 담당(같은 함수를 두 번 도는 오해 방지).
+  // (260804) 옆에 있던 `var perfs=getPerfs(dateObj)`도 같은 死변수였다 — 아무 데도 안 쓰는데 무거운 호출을
+  //   한 번 더 돌리고 있었다. 이제 그날 목록은 위 _pDay 하나(같은 함수를 두 번 도는 낭비 제거).
   var now=new Date();now.setHours(0,0,0,0);
   var ref=new Date(dateObj);ref.setHours(0,0,0,0);
-  // [260804 운영자 「당일 건만 나오면 될듯」] 이 패널 = 「그 날짜의 상세」다. 그래서 그 날짜에 **실제로 진행 중인**
-  //   프로그램만 남긴다(시작일 ≤ 기준일 ≤ 종료일). 구판은 종료일만 봐서(pe>=ref) 아직 시작도 안 한 하반기 건이
-  //   D-47…D-131로 줄줄이 딸려 왔다 = 그 날과 무관한 목록이 패널을 채움(운영자 캡처). 시작일 조건 하나를 더해 좁힌다.
-  //   (260611) 예술교육·대관도 포함 — 기존 공연/전시만 필터해 화요살롱 등이 패널에서 누락됐던 건 그대로 계승.
-  //   s·e 중 하나라도 없으면 그 날에 놓을 수 없으므로 제외(구판은 e만 보고 실었으나 dd가 NaN→'종료'로 새던 자리).
-  function _openOnDay(kind){
-    return PERFS.filter(function(p){
-      if(p.o!==1||p.t!==kind||!p.s||!p.e)return false;
-      var ps=new Date(p.s);ps.setHours(0,0,0,0);
-      var pe=new Date(p.e);pe.setHours(0,0,0,0);
-      return ps<=ref&&ref<=pe;
-    });
-  }
-  var openPerfs=_openOnDay('c'),openExh=_openOnDay('e'),openEdu=_openOnDay('a'),openRent=_openOnDay('r');
+  // [260804 운영자 「당일 건만 나오면 될듯」] 이 패널 = 「그 날짜의 상세」다 → 그날 진행 중인 건만.
+  //   소스 = 위 머리말 띠가 쓰던 _pDay(getPerfs 당일분 + 구글 캘린더 대관 + 전시)를 그대로 승계했다.
+  //   getPerfs가 이미 `k>=p.s && k<=p.e`(그날 진행 중)로 걸러 오므로 여기서 날짜를 다시 볼 필요가 없다.
+  //   구판은 PERFS를 종료일만 보고(pe>=ref) 다시 훑어서 아직 시작도 안 한 하반기 건이 D-47…D-131로 딸려 왔고,
+  //   판매중(o===1) 조건까지 걸려 있어 「당일 공연인데 판매기간이 끝난 건」은 오히려 빠졌다 — 둘 다 여기서 해소된다.
+  var openPerfs=[],openExh=[],openEdu=[],openRent=[];
+  _pDay.forEach(function(p){
+    if(!p)return;
+    if(p.t==='e')openExh.push(p); else if(p.t==='a')openEdu.push(p);
+    else if(p.t==='r')openRent.push(p); else openPerfs.push(p);
+  });
+  // [260804 운영자 「교육실 대관같은것도 … 대관이면 대관일정」] 교육실 대관 = 성격이 대관이니 대관 목록 뒤에 붙인다
+  //   (종전엔 머리말 띠에만 있어 아래 섹션엔 아예 없었다). 대관 row 부품을 **100% 그대로** 태운다 —
+  //   전용 마크업을 새로 쓰면 같은 색이라도 raw hex가 늘어 디자인 게이트에 걸린다(실측 1590→1594 FAIL).
+  //   교육실은 프로그램(PERFS)이 아니라 신청 CSV·구글 캘린더 산출이라 링크·기간이 없다 → s·e 비움 = _dayLabel이 'D-Day'.
+  //   신청 시간은 **장소 줄에 붙인다**(우측 배지 자리에 두면 '09:00-13:00,13:00-17:00'처럼 길어 제목을 밀어낸다 — 실측).
+  ((typeof getEduRooms==='function')?getEduRooms(_pKey):[]).forEach(function(r){
+    var _nm=r.n||r.g||'대관';
+    openRent.push({t:'r',_eduRoom:1,f:_nm,n:_nm,u:'',s:'',e:'',
+      l:[r.l||'장소 미정',r.t].filter(Boolean).join(' · ')});
+  });
   var progTotal=openPerfs.length+openExh.length+openEdu.length+openRent.length;
+  // [260804 운영자 「제안도 ㄱㄱ」] 당일만 남기니 배지가 전부 'D-Day' 고정 = 정보량 0이었고, 다일 공연은
+  //   2일차·3일차에도 'D-Day'로 나와 사실과도 어긋났다(dd 판정이 기간 안이면 무조건 0). 전시 행이 **이미 쓰던**
+  //   「N일차」 표기를 다일 건에 그대로 재사용한다 — 신규 표기·색·부품 0. 하루짜리는 종전대로 'D-Day'.
+  function _dayLabel(p){
+    if(!p||!p.s)return 'D-Day';
+    var sd=new Date(p.s);sd.setHours(0,0,0,0);
+    var ed=p.e?new Date(p.e):null;if(ed)ed.setHours(0,0,0,0);
+    if(!p._ex&&!(ed&&ed>sd))return 'D-Day';   // 하루짜리(또는 종료일 미상의 비전시) = D-Day
+    var n=Math.floor((ref-sd)/86400000)+1;
+    return (n>0?n:1)+'일차';
+  }
   // [260731 운영자] 프로그램 일정 = 「기획 / 대관」 2개 섹션으로 갈라 본다(둘 다 기본 펼침).
   //   기획 = 공연·전시·예술교육(t c/e/a) · 대관 = t==='r'. 프로그램 관리 화면의 기획/대관 구분(_pgKind)과 같은 축.
   //   행 마크업·색은 기존 그대로 계승 — 섹션 껍데기(.panel-prog-*)만 2벌로 늘렸다(신규 디자인 0).
@@ -21293,10 +21313,7 @@ function openPanel(dateObj,recs){
     var _pClsR=(_panelRentOpen&&!_pAnimate)?' open':'';
     var hPlan='',hRent='',h0=h;h='';   // h0 = 섹션 앞까지 확정분 / h = 행 임시 버퍼
     openPerfs.forEach(function(perf){
-      var sd=new Date(perf.s);sd.setHours(0,0,0,0);
-      var ed=new Date(perf.e);ed.setHours(0,0,0,0);
-      var dd=(ref>=sd&&ref<=ed)?0:Math.round((sd-ref)/86400000);
-      var ddText=dd===0?'D-Day':dd>0?'D-'+dd:'종료';
+      var ddText=_dayLabel(perf);
       var hasUrl=!!perf.u;
       // ★ style 속성은 한 번만 — clickAttr에서 style 제거하고 메인 style에 cursor 합침
       var clickAttr=hasUrl?' onclick="openPerfUrl(\''+escapeHtml(perf.u).replace(/'/g,'\\\'')+'\',\''+escapeHtml(perf.f).replace(/'/g,'\\\'')+'\')" title="클릭하면 공연 페이지로 이동"':'';
@@ -21314,9 +21331,7 @@ function openPanel(dateObj,recs){
     openExh.forEach(function(x){
       var eName=x.f||x.n;
       var eVenue=x.l||'장소 미정';
-      var eStart=new Date(x.s);
-      eStart.setHours(0,0,0,0);
-      var dayNum=Math.floor((ref-eStart)/86400000)+1;
+      var eDayText=_dayLabel(x);   // [260804] 전시가 쓰던 「N일차」 = 이제 공용 _dayLabel 1출처(공연·대관과 같은 규칙)
       var eHasUrl=!!x.u;
       var eClickAttr=eHasUrl?' onclick="openPerfUrl(\''+escapeHtml(x.u).replace(/'/g,'\\\'')+'\',\''+escapeHtml(eName).replace(/'/g,'\\\'')+'\')" title="클릭하면 전시 페이지로 이동"':'';
       var eCursorStyle=eHasUrl?'cursor:pointer;':'';
@@ -21325,7 +21340,7 @@ function openPanel(dateObj,recs){
       h+='<div'+eClickAttr+exhCtxAttr+' class="panel-perf-row" data-perf-name="'+escapeHtml(eName)+'" style="'+eCursorStyle+'display:flex;align-items:center;padding:10px 12px;background:rgba(240,196,184,0.15);border-radius:10px;margin-bottom:6px;gap:10px;transition:background .15s">';
       h+='<span style="display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;border-radius:50%;font-size:8px;font-weight:700;background:#F0C4B8;color:#333;flex-shrink:0">전</span>';
       h+='<div style="flex:1;min-width:0;overflow:hidden"><div style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+eNameWithArrow+'</div><div style="font-size:10px;color:var(--dim);margin-top:1px">'+escapeHtml(eVenue)+'</div></div>';
-      h+='<span style="font-size:11px;font-weight:600;color:#C08070;white-space:nowrap;flex-shrink:0">'+dayNum+'일차</span>';
+      h+='<span style="font-size:11px;font-weight:600;color:#C08070;white-space:nowrap;flex-shrink:0">'+eDayText+'</span>';
       h+='</div>';
     });
     hPlan+=h;h='';   // 여기까지 = 공연·전시 row (기획 섹션 확정분)
@@ -21334,18 +21349,15 @@ function openPanel(dateObj,recs){
     [[openEdu,'교','#2E9E5B','rgba(46,158,91,0.13)','p'],[openRent,'대','#8a8f9c','rgba(140,143,156,0.13)','r']].forEach(function(cfg){
       h='';
       cfg[0].forEach(function(perf){
-        var sd=new Date(perf.s);sd.setHours(0,0,0,0);
-        var ed=new Date(perf.e);ed.setHours(0,0,0,0);
-        var dd=(ref>=sd&&ref<=ed)?0:Math.round((sd-ref)/86400000);
-        var ddText=dd===0?'D-Day':dd>0?'D-'+dd:'종료';
+        var ddText=_dayLabel(perf);
         var hasUrl=!!perf.u;
         var clickAttr=hasUrl?' onclick="openPerfUrl(\''+escapeHtml(perf.u).replace(/'/g,'\\\'')+'\',\''+escapeHtml(perf.f).replace(/'/g,'\\\'')+'\')" title="클릭하면 상세 페이지로 이동"':'';
         var cursorStyle=hasUrl?'cursor:pointer;':'';
         var venueP=perf.l||'장소 미정';
         var nameWithArrow=escapeHtml(perf.f)+(hasUrl?' <span style="font-size:9px;color:'+cfg[2]+';font-weight:500;margin-left:2px">↗</span>':'');
         h+='<div'+clickAttr+' oncontextmenu="onPerfContextMenu(event,this);return false;" class="panel-perf-row" data-perf-name="'+escapeHtml(perf.f)+'" style="'+cursorStyle+'display:flex;align-items:center;padding:10px 12px;background:'+cfg[3]+';border-radius:10px;margin-bottom:6px;gap:10px;transition:background .15s">';
-        h+='<span style="display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;border-radius:50%;font-size:8px;font-weight:700;background:'+cfg[2]+';color:#fff;flex-shrink:0">'+cfg[1]+'</span>';
-        h+='<div style="flex:1;min-width:0;overflow:hidden"><div style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+nameWithArrow+'</div><div style="font-size:10px;color:var(--dim);margin-top:1px">'+escapeHtml(venueP)+'</div></div>';
+        h+='<span style="display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;border-radius:50%;font-size:8px;font-weight:700;background:'+cfg[2]+';color:#fff;flex-shrink:0">'+(perf._eduRoom?'실':cfg[1])+'</span>';
+        h+='<div style="flex:1;min-width:0;overflow:hidden"><div style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+nameWithArrow+'</div><div style="font-size:10px;color:var(--dim);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+escapeHtml(venueP)+'">'+escapeHtml(venueP)+'</div></div>';
         h+='<span style="font-size:11px;font-weight:600;color:'+cfg[2]+';white-space:nowrap;flex-shrink:0">'+ddText+'</span>';
         h+='</div>';
       });
@@ -21358,9 +21370,10 @@ function openPanel(dateObj,recs){
       h+='<div class="panel-prog-head" onclick="togglePanelPrograms(\'p\')"><span class="panel-prog-arrow'+_pClsP+'" id="panel-prog-arrow">▶</span><span class="panel-prog-title">기획 프로그램 일정</span><span class="panel-prog-cnt">'+planCnt+'</span></div>';
       h+='<div class="panel-prog-body'+_pClsP+'" id="panel-prog-body">'+hPlan+'</div></div>';
     }
-    if(openRent.length>0){
+    var rentCnt=openRent.length;   // [260804] 교육실 대관은 위에서 openRent에 합류시켰다 = 이 카운트에 이미 포함
+    if(rentCnt>0){
       h+='<div class="panel-prog-wrap">';
-      h+='<div class="panel-prog-head" onclick="togglePanelPrograms(\'r\')"><span class="panel-prog-arrow'+_pClsR+'" id="panel-prog-arrow-r">▶</span><span class="panel-prog-title">대관 프로그램 일정</span><span class="panel-prog-cnt">'+openRent.length+'</span></div>';
+      h+='<div class="panel-prog-head" onclick="togglePanelPrograms(\'r\')"><span class="panel-prog-arrow'+_pClsR+'" id="panel-prog-arrow-r">▶</span><span class="panel-prog-title">대관 프로그램 일정</span><span class="panel-prog-cnt">'+rentCnt+'</span></div>';
       h+='<div class="panel-prog-body'+_pClsR+'" id="panel-prog-body-r">'+hRent+'</div></div>';
     }
   }
