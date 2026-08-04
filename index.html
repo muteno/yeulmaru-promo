@@ -16035,7 +16035,7 @@ async function _batchSubmit(){
   var jobs=[];
   _batchState.rows.forEach(function(r){ if(!r.checked)return; r.plats.forEach(function(pl){ jobs.push({program:r.program,programType:r.programType,programEnd:r.programEnd,date:r.date,time:r.time,plat1:pl,content:String(r.content||'').trim()}); }); });
   var errs=[];
-  jobs.forEach(function(j){ var v=_validateScheduleChange(null,j.date,j.time,{action:'submit',plat1:j.plat1,program:j.program,applicant:''}); if(!v.ok)errs.push(j.program+'('+j.plat1+'): '+v.reason); });
+  jobs.forEach(function(j){ var v=_validateScheduleChange(null,j.date,j.time,{action:'submit',plat1:j.plat1,plat2:j.plat2,program:j.program,applicant:''}); if(!v.ok)errs.push(j.program+'('+j.plat1+'): '+v.reason); });
   if(errs.length){ showToast('등록 불가 — '+errs.length+'건:\n'+errs.slice(0,6).join('\n'),'error'); return; }
   // 순차 본문 입력: 각 건마다 위저드 본문 단계(플랫폼별 형식)를 순차로 띄우고, 제출 시 다음 건으로.
   _pwBatchQueue=jobs.slice(); _pwBatchTotal=jobs.length;
@@ -17026,7 +17026,7 @@ function _buildRecRow(pwData, status, no, draftFlag){
 }
 async function submitPromoRequest(){
   // ===== 신청 직전 재검증 (통합 게이트: 접수/홍보시간대/제외/담당자/판매기간/카카오문자) =====
-  const _v=_validateScheduleChange(null,_pwData.date,_pwData.time,{action:'submit',plat1:_pwData.plat1,applicant:_pwData.applicant,program:_pwData.program});
+  const _v=_validateScheduleChange(null,_pwData.date,_pwData.time,{action:'submit',plat1:_pwData.plat1,plat2:_pwData.plat2,applicant:_pwData.applicant,program:_pwData.program});
   if(!_v.ok){showToast('신청 불가: '+_v.reason,'error');return;}
   showOverlayLoad();
   try{
@@ -19397,8 +19397,83 @@ function _findPerfByName(name){ name=String(name||'').trim(); if(!name)return nu
 // [정규화] 프로그램명 → 공연ID (프로그램 시트 공연ID 컬럼). '기타'/미등록은 빈값
 function _recPerfId(name){ var p=_findPerfByName(name); return (p&&p.id)||''; }
 // 카카오/문자 2일연속·중복 (관리자 포함 전 경로). ignoreRowIndex=자기 자신(이동/변경 원본) 제외
-function _kakaoSmsConflict(plat1, dateKey, applicant, ignoreRowIndex){
-  return null;  // (260611) 카카오 2일 연속·문자 중복 제한 전면 폐지 — 사용자 지시. 호출부는 null 통과로 무해
+// === 발송 슬롯 규칙 엔진 (260804 운영자 확정 + 9인 평의회) ===
+// 고정 규칙(끌 수 없음) = 카카오톡 하루 1회 · 문자 하루 1회. 연일 회피는 여기서 차단하지 않는다(경고 축).
+// role-blind 순수 함수 — canApplyOnDate/canApplyAtTime과 달리 admin도 예외 없이 통과시키지 않는다.
+//   (그 두 함수는 첫 줄이 admin 조기반환이라, 주 사용자인 운영자에게는 판정이 아예 안 돈다)
+//
+// 슬롯 점유 모집단 — 한 곳에서만 정의한다. K1·S1·연일 경고·홍보 점검 진단이 전부 이 배열 하나만 본다.
+//   취소·반려·보류는 자리를 안 잡는다: 실측 records 137행 중 취소가 31건(22.6%)이라,
+//   이 필터가 없으면 「하루 2회」 위반 4건이 전부 오탐이 된다(2026-05-29는 2건 모두 취소 = 실제 발송 0건).
+function _slotRows(){
+  return (records||[]).filter(function(r){
+    if(!r||r._isSpecial)return false;        // 담당자 특별일정(휴무·출장)은 발송이 아니다
+    if(_isDraftRec(r))return false;          // 임시저장은 아직 신청이 아니다
+    var st=String(r['진행 상태']||'').trim();
+    return st==='신청 중'||st==='예정'||st==='완료';
+  });
+}
+// 슬롯 키 — 카톡 = (날짜 × 카카오) · 문자 = (날짜 × 문자 × 수신자군)
+//   문자만 수신자군으로 쪼개는 근거(평의회 실측): 같은 날 문자 2건인 3일 중 2일이 「전체 + 타겟」 조합이고
+//   둘 다 '완료' = 사고가 아니라 정착된 운영 방식. 쪼개지 않으면 정상 운영이 첫날부터 위반으로 뜬다.
+//   날짜는 반드시 getRecDateKey(연/월/일 정수 3열) — r['날짜']는 Excel 시리얼이라 ISO와 영원히 안 맞는다.
+//   플랫폼은 platShort — '기타' 자유입력이 플랫폼 1 열에 그대로 저장되는 경로가 있어 문자열 동등 비교는 못 쓴다.
+function _slotKeyOf(plat1, plat2, dateKey){
+  var ps=platShort(plat1);
+  if(ps!=='카카오'&&ps!=='문자')return null;   // 인스타·블로그·B2B는 하루 여러 건 가능
+  if(ps!=='문자')return dateKey+'|'+ps;
+  var grp=(plat2==null)?'*':String(plat2||'').trim();   // '*' = 수신자군 미상 → 아래에서 아무 문자와도 충돌(엄격)
+  return dateKey+'|문자|'+grp;
+}
+function _slotSameKey(a,b){
+  if(!a||!b)return false;
+  if(a===b)return true;
+  var pa=a.split('|'), pb=b.split('|');
+  if(pa[0]!==pb[0]||pa[1]!==pb[1])return false;
+  if(pa[1]!=='문자')return false;
+  return pa[2]==='*'||pb[2]==='*';   // 수신자군을 모르면 같은 날 문자 아무거나와 충돌로 본다(모르면 막는 쪽)
+}
+// K1/S1 판정 — 위반이면 사람이 읽는 문자열, 아니면 null. (반환 계약 = _kakaoSmsConflict 구판과 동일)
+function _promoSlotConflict(plat1, plat2, dateKey, ignoreRowIndex){
+  var key=_slotKeyOf(plat1, plat2, dateKey);
+  if(!key||!dateKey)return null;
+  var hit=null;
+  _slotRows().forEach(function(r){
+    if(hit)return;
+    if(ignoreRowIndex!=null&&r._rowIndex===ignoreRowIndex)return;
+    if(_slotSameKey(key,_slotKeyOf(r['플랫폼 1'],r['플랫폼 2'],getRecDateKey(r))))hit=r;
+  });
+  if(!hit)return null;
+  var nm=(platShort(plat1)==='카카오')?'카카오톡':'문자';
+  var who=String(hit['콘텐츠 제목']||hit['프로그램']||'').trim();
+  var grp=String(hit['플랫폼 2']||'').trim();
+  return nm+'은 하루 1건이에요 — '+dateKey+'에 이미 「'+(who||'다른 건')+'」'
+       + ((nm==='문자'&&grp&&grp!=='-')?('('+grp+')'):'') + '이 잡혀 있어요';
+}
+// 연일 발송 — 차단하지 않고 사실만 돌려준다(운영자 「가능은 하지만 피하는」). 홍보 점검 화면 경고용.
+function _promoAdjacentDays(plat1, dateKey, ignoreRowIndex){
+  var ps=platShort(plat1); if(ps!=='카카오'&&ps!=='문자'||!dateKey)return [];
+  var out=[];
+  [-1,1].forEach(function(off){
+    var d=new Date(dateKey+'T00:00:00'); d.setDate(d.getDate()+off);
+    var k=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+    _slotRows().forEach(function(r){
+      if(ignoreRowIndex!=null&&r._rowIndex===ignoreRowIndex)return;
+      if(getRecDateKey(r)===k&&platShort(r['플랫폼 1'])===ps)out.push({date:k,rec:r});
+    });
+  });
+  return out;
+}
+// [260804 평의회] 260611의 전면 폐지(`return null`)를 되살리되 규칙을 바꿨다.
+//   구판 = 카톡 2일 연속 차단 + 문자 담당자 중복 → 폐지 사유는 「막힘」이 아니라 **「에러 문구조차 없이 무반응」**(위 260701 주석).
+//   신판 = 카톡·문자 각각 하루 1회만 차단(운영자 「고정·끌 수 없음」) · 연일은 _promoAdjacentDays로 분리해 경고 축으로.
+//   반환 계약(문자열|null) 무변 → 호출부 3곳 무수정으로 되살아나고, 문자열은 호출부가 토스트로 띄우므로 무반응 재발이 원리적으로 없다.
+//   plat2(수신자군)는 선택 인자 — 안 넘어오면 '모르면 막는 쪽'으로 판정한다.
+function _kakaoSmsConflict(plat1, dateKey, applicant, ignoreRowIndex, plat2){
+  return _promoSlotConflict(plat1, (arguments.length>4?plat2:null), dateKey, ignoreRowIndex);
+}
+function _kakaoSmsConflictLegacy(plat1, dateKey, applicant, ignoreRowIndex){
+  return null;  // (260611) 구판 본문 보존 — 롤백 참조용. 호출 없음.
   if(plat1!=='카카오톡'&&plat1!=='문자')return null;
   var isKakao=(plat1==='카카오톡'); var checkDates=[dateKey];
   // [버그수정] 2일 연속 제한은 전날·다음날 양쪽 검사 (기존엔 전날만 검사해 기존 신청 하루 전으로 우회 가능했음)
@@ -19441,7 +19516,11 @@ function _validateScheduleChange(rec, newDate, newTime, opts){
     if(perf.ps && newDate<perf.ps)return {ok:false, reason:'홍보 시작('+perf.ps+') 전이라 홍보할 수 없어요'};
     if(_ppe && newDate>_ppe)return {ok:false, reason:'홍보 종료('+_ppe+') 후라 홍보할 수 없어요'};
   }
-  var kc=_kakaoSmsConflict(opts.plat1, newDate, opts.applicant, opts.ignoreRowIndex);
+  // [260804] plat2(수신자군)까지 넘긴다 — 문자 「전체 1 + 타겟 1」이 같은 날 공존하는 정착 운영을 위반으로 잡지 않게.
+  //   opts.plat2가 없으면 5번째 인자 자체를 안 넘겨 구판 경로(모르면 막는 쪽)로 떨어진다.
+  var kc=(opts.plat2!==undefined)
+    ? _kakaoSmsConflict(opts.plat1, newDate, opts.applicant, opts.ignoreRowIndex, opts.plat2)
+    : _kakaoSmsConflict(opts.plat1, newDate, opts.applicant, opts.ignoreRowIndex);
   if(kc)return {ok:false, reason:kc};
   return {ok:true};
 }
