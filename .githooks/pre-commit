@@ -23,6 +23,17 @@ if [ -f "$ROOT/tools/check_wiring.py" ]; then
     exit 1
   }
 fi
+# 연간 실적(_YR) 정합 게이트 (260804) — index.html 변경 시만.
+# 잡는 것 = 연도 열은 늘렸는데 누계(sum)·계·grand를 안 고친 자리(260804 실사고: 2026 열은 있는데 누계는 ~2025 그대로 ·
+# 화면상 무증상이라 운영자가 눈으로 잡아냈다). 값 판단은 안 한다 — 파생값 산수만 본다(네트워크·LLM 0).
+if [ -f "$ROOT/tools/build_annual_yr.mjs" ] && command -v node >/dev/null 2>&1; then
+  if git diff --cached --name-only | grep -q '^index\.html$'; then
+    node "$ROOT/tools/build_annual_yr.mjs" || {
+      echo "[pre-commit] _YR 정합 위반 — 연간 실적 누계·계·grand가 값과 안 맞음. 'node tools/build_annual_yr.mjs --recalc' 후 커밋." >&2
+      exit 1
+    }
+  fi
+fi
 # 로그인 스모크 게이트 (index.html 변경 시만 실행 · 회귀 발생기=23k 단일파일 로그인흐름 차단)
 # fail-soft: node·playwright-core·chromium 미탐지 = 스크립트가 SKIP(차단 안 함). 진짜 로그인 파손만 exit 1.
 if [ -f "$ROOT/tools/smoke_login.mjs" ] && command -v node >/dev/null 2>&1; then
