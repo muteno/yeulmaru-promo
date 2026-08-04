@@ -3,12 +3,16 @@
 """
 디자인 기틀 게이트 — 디자인 드리프트 3층 방어의 공용 검사기 (stdlib only, 260703)
 
-검사 4종 (baseline 래칫 — "지금보다 나빠지지만 마라"):
+검사 6종 (baseline 래칫 — "지금보다 나빠지지만 마라"):
   ① raw hex 총량: index.html ≤ BASE_HEX_INDEX, signage/*.html 합 ≤ BASE_HEX_SIGNAGE
      (새 색은 반드시 :root 토큰으로. 기존 raw hex 청산은 언제든 환영 → baseline 하향 갱신)
   ② :root 블록 수: index.html == 2, signage == 0 (블록 추가/삭제 = 구조 변경 → 운영자 승인 필요)
   ③ 새 고아 토큰 금지: :root에 정의됐는데 var() 사용 0회인 토큰이 baseline 13개 밖에서 늘면 실패
   ④ 새 이중 정의 금지: 같은 토큰이 두 :root 블록에 중복 정의되면 실패 (--kakao 1건만 기존 허용)
+  ⑤ 텍스트 대비(WCAG AA 4.5:1): 같은 {} 블록에 color·background가 **둘 다 리터럴 hex**인 쌍만 채점.
+     4.5:1 미달 쌍이 BASE_LOWCONTRAST를 넘으면 실패. (260804 impeccable 8인 평의회 선별이식 ②)
+  ⑥ 레이아웃 유발 transition(잰크): transition 값에 width/height/padding/margin이 들어간 선언 수가
+     BASE_LAYOUT_TRANS를 넘으면 실패. (같은 평의회 선별이식 ①)
 
 baseline 갱신 규칙: 실측치가 늘어난 정당한 사유(PR·운영자 승인)가 있으면 숫자를 갱신하고
 반드시 아래 주석에 사유를 남긴다. 원인 불명 증가는 운영자 보고 후 진행.
@@ -72,6 +76,81 @@ BASE_ORPHANS = {
 }
 # 이중 정의 — :root L27 #C8900A vs L1331 #F5B400(CSS는 후자 승). 청산 대기(지시서 §6-1)
 BASE_DUP = {'--kakao'}
+
+# ── ⑤ 텍스트 대비(WCAG AA) · ⑥ 잰크 전이 — 260804 「impeccable 적용점」 8인 평의회 선별이식 ─────────
+# 왜 = 이 레포 게이트·훅 전체를 grep해도 `contrast|wcag|4.5|luminance`가 **0히트**였다. ①~④는 전부
+#   「색이 토큰으로 정의됐나」를 묻고 「그 색을 사람이 읽을 수 있나」는 한 번도 안 묻는다 — 축 자체가 없었다.
+#   실측 = 전경 토큰 `--dim #888` 3.32:1(210곳)·`--muted #bbb` 1.80:1(58곳)·`--peach-text #D88455` 2.67:1,
+#   유채 채움 위 흰 글자 `#fff on --kakao #F5B400` = 1.84:1. 지금은 게이트가 illegibility를 보증하고 있다.
+# 임계값 원천 = WCAG 2.x AA(본문 4.5:1) = 국제 표준 상수 · 디자인 토큰 아님 = 「새 값 창작 금지」 무저촉.
+#   판정 알고리즘은 외부 디텍터 pbakaus/impeccable `cli/engine/rules/checks.mjs` `low-contrast` 룰과 같은 축이나
+#   **그쪽 설치·훅·스킬·23커맨드는 미도입** — 평의회 실측상 59룰 통째 적용 시 두 레포 경고 690건 중 574건(83.2%)이
+#   글래스(`.pm-fbtn` 운영자 260704 확정)·브랜드 인디고(`--accent` = 기틀 §0① 불변) 등 **정본**이라 위양성이고,
+#   colorize/bolder/delight/overdrive 커맨드는 디자인 창작 = 지침 [3] 정면 위반이다.
+# 위양성 3겹 = ⓐ **같은 {} 블록에 둘 다 리터럴 hex**인 쌍만(공존 확정분만 채점 = 토큰 크로스곱 추정 배제)
+#   ⓑ **하드 0 금지 = 래칫** — pre-commit이 staged 무관하게 무조건 도는 구조라 「위반 0」 기준은 docs 커밋까지 막는다
+#   ⓒ **signage 제외** — 사이니지는 관객용 대형 디스플레이라 기준이 다르고, 실측상 같은블록 리터럴 쌍이 0이며
+#      `.status`(#333 · opacity:.3)는 관객에게 안 보이게 한 **의도적** 디버그 각인이다(운영자 판단 대기 = 대상 밖).
+# 청산 방향 = 미달 쌍은 전부 raw hex라 검사 ①(raw hex 총량)이 이미 줄이라고 미는 그 부채다 — 두 검사가 같은 방향.
+# 260804 실측 스냅샷 — 줄이면 그만큼 하향 갱신하라(래칫 · 사유 주석 필수는 ①과 동문)
+BASE_LOWCONTRAST_INDEX = 49   # index.html 같은블록 리터럴 쌍 95 중 4.5:1 미달 49
+                              # 최악 = #ddd on #fff 1.36 · #C08070 on #F0C4B8 2.03 · #9aa3b2 on #eef0f5 2.23 · #fff on #22c55e 2.28
+BASE_LAYOUT_TRANS_INDEX = 15  # index.html — FLIP 모프 4 · 아코디언 2 · 게이지 폭 5 · 기타 4(주석 줄 제외)
+BASE_LAYOUT_TRANS_SIGNAGE = 0 # signage — 현재 0(잰크는 사이니지도 동일 기준 = 대형 화면일수록 리플로가 비싸다)
+
+CONTRAST_MIN = 4.5            # WCAG 2.x AA 본문 기준(국제 표준 상수)
+BLOCK_RE = re.compile(r'\{([^{}]*)\}')
+FG_RE = re.compile(r'(?<!-)\bcolor\s*:\s*(#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{3})\b)')
+BG_RE = re.compile(r'\bbackground(?:-color)?\s*:\s*(#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{3})\b)')
+TRANS_RE = re.compile(r'transition(?:-property)?\s*:\s*([^;{}"\'<>]+)')
+TRANS_PROP_RE = re.compile(r'\b(?:max-|min-)?(?:width|height|padding|margin)\b')
+
+
+def _srgb_lum(hexstr):
+    """WCAG 상대휘도 — sRGB 채널을 선형화해 가중합."""
+    h = hexstr.lstrip('#')
+    if len(h) == 3:
+        h = ''.join(c * 2 for c in h)
+    ch = []
+    for i in (0, 2, 4):
+        c = int(h[i:i + 2], 16) / 255.0
+        ch.append(c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4)
+    return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2]
+
+
+def _contrast(fg, bg):
+    a, b = _srgb_lum(fg), _srgb_lum(bg)
+    hi, lo = max(a, b), min(a, b)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+def _lowcontrast_pairs(src):
+    """같은 {} 블록에 color·background가 둘 다 리터럴 hex인 쌍 중 AA 미달분 → [(비율, fg, bg, 줄)]."""
+    out = []
+    for m in BLOCK_RE.finditer(src):
+        blk = m.group(1)
+        fg, bg = FG_RE.search(blk), BG_RE.search(blk)
+        if not (fg and bg):
+            continue
+        ratio = _contrast(fg.group(1), bg.group(1))
+        if ratio < CONTRAST_MIN:
+            out.append((ratio, fg.group(1), bg.group(1), src.count('\n', 0, m.start()) + 1))
+    return out
+
+
+def _layout_transitions(src):
+    """레이아웃 유발 transition 선언 줄번호(주석 줄 제외)."""
+    lines = src.splitlines()
+    out = []
+    for m in TRANS_RE.finditer(src):
+        if not TRANS_PROP_RE.search(m.group(1)):
+            continue
+        ln = src.count('\n', 0, m.start()) + 1
+        head = lines[ln - 1].lstrip() if ln <= len(lines) else ''
+        if head.startswith(('//', '*', '/*')):
+            continue
+        out.append(ln)
+    return out
 
 # raw hex: #3/4/6/8자리, HTML 엔티티(&#...)·단어 연속은 제외. 대소문자 무관(카운트는 normalize)
 HEX_RE = re.compile(r'(?<![&\w])#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{4}|[0-9a-fA-F]{3})\b')
@@ -138,6 +217,32 @@ def main():
         fails.append('새 이중 정의 토큰: %s — 같은 토큰을 두 :root에 정의하면 어느 값이 이길지 모른다.'
                      % ', '.join(new_dups))
 
+    # ⑤ 텍스트 대비(WCAG AA 4.5:1) — index.html만(사이니지 = 기준 상이·대상 밖 · 위 주석 ⓒ)
+    lc = _lowcontrast_pairs(idx)
+    if len(lc) > BASE_LOWCONTRAST_INDEX:
+        worst = ', '.join('%s on %s %.2f:1(L%d)' % (f, b, r, l) for r, f, b, l in sorted(lc)[:4])
+        fails.append('대비 AA(4.5:1) 미달 쌍 증가(index.html): %d → %d (+%d). 현행 최악 4건(방금 추가분은 diff로 대조) = %s. '
+                     '전경·배경 중 하나를 정본 토큰(--text 15.96:1 · --neutral-text 4.90:1 · --accent 5.60:1)으로 올려라.'
+                     % (BASE_LOWCONTRAST_INDEX, len(lc), len(lc) - BASE_LOWCONTRAST_INDEX, worst))
+    elif len(lc) < BASE_LOWCONTRAST_INDEX:
+        infos.append('대비 AA 미달 쌍 감소: %d → %d — 청산 성과. BASE_LOWCONTRAST_INDEX 하향 갱신 권장(사유 주석 필수).'
+                     % (BASE_LOWCONTRAST_INDEX, len(lc)))
+
+    # ⑥ 레이아웃 유발 transition(잰크) — 프레임마다 리플로. transform/opacity는 합성 전용이라 무비용
+    lt_idx, lt_sig = _layout_transitions(idx), _layout_transitions(sig_all)
+    if len(lt_idx) > BASE_LAYOUT_TRANS_INDEX:
+        fails.append('잰크 전이 증가(index.html): %d → %d (+%d). transition은 transform/opacity로 — '
+                     'width/height/padding/margin 전이는 프레임마다 리플로를 강제한다. '
+                     '현행 전건 줄(이 중 방금 추가분을 diff로 대조): %s'
+                     % (BASE_LAYOUT_TRANS_INDEX, len(lt_idx), len(lt_idx) - BASE_LAYOUT_TRANS_INDEX,
+                        ','.join(map(str, lt_idx))))
+    elif len(lt_idx) < BASE_LAYOUT_TRANS_INDEX:
+        infos.append('잰크 전이 감소(index.html): %d → %d — 청산 성과. BASE_LAYOUT_TRANS_INDEX 하향 갱신 권장.'
+                     % (BASE_LAYOUT_TRANS_INDEX, len(lt_idx)))
+    if len(lt_sig) > BASE_LAYOUT_TRANS_SIGNAGE:
+        fails.append('잰크 전이 증가(signage): %d → %d. 사이니지도 동일 기준(대형 화면일수록 리플로가 비싸다).'
+                     % (BASE_LAYOUT_TRANS_SIGNAGE, len(lt_sig)))
+
     # ── 리포트 ────────────────────────────────────────────────────────────
     if fails:
         print('✗ 디자인 기틀 위반 %d건 — docs/디자인기틀.md 참조' % len(fails), file=sys.stderr)
@@ -146,9 +251,12 @@ def main():
         print('  (정당한 변경이면: 운영자 승인 → tools/check_design.py baseline 갱신+사유 주석)', file=sys.stderr)
         return 1
 
-    print('✓ 디자인 기틀 통과 — raw hex index=%d/%d signage=%d/%d · :root %d/%d · 고아 %d(기존) · 이중정의 %d(기존)'
+    print('✓ 디자인 기틀 통과 — raw hex index=%d/%d signage=%d/%d · :root %d/%d · 고아 %d(기존) · 이중정의 %d(기존) '
+          '· 대비 AA미달 %d/%d · 잰크 전이 %d/%d(sig %d/%d)'
           % (hex_idx, BASE_HEX_INDEX, hex_sig, BASE_HEX_SIGNAGE,
-             len(roots_idx), n_root_sig, len(orphans), len(dups)))
+             len(roots_idx), n_root_sig, len(orphans), len(dups),
+             len(lc), BASE_LOWCONTRAST_INDEX,
+             len(lt_idx), BASE_LAYOUT_TRANS_INDEX, len(lt_sig), BASE_LAYOUT_TRANS_SIGNAGE))
     for i in infos:
         print('  ℹ ' + i)
     return 0
