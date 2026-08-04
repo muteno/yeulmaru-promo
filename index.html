@@ -2949,9 +2949,16 @@ function _perfDedupDay(list){
 var _EX_SPACE=[{id:'7층',c:'#006B3C'},{id:'장도',c:'#E84393'},{id:'야외',c:'var(--accent)'}];
 var _EX_MAXLANE=3;
 var _EX_DIM='rgba(0,0,0,0.04)';
-// 줄 순서(위→아래) = 야외·7층·장도. 야외는 쓰는 달이 드물어 「있는 날만」 맨 위에 한 줄 더 얹는다
-//   → 7층·장도 두 줄의 높이는 야외 유무와 무관하게 고정(운영자 2줄 체계 보존 · 안 쓰는 날 빈 자리 0).
-var _EX_ORDER=[2,0,1];
+// [260803 운영자 2차] 야외 자리 = 「초록(7층)은 그대로 두고 파란(야외)이 아래로 — 장도쪽이니까」.
+//   운영자 모형 = **윗 전시선 = 7층(실내·위층) · 아랫 전시선 = 밖(장도·야외)**. 그래서 야외는 장도와 같은 아랫자리를 쓴다
+//   (장도 우선 — 장도 전시가 있는 날은 아랫줄이 장도 것이다). 색이 달라 아랫줄이 분홍이면 장도, 파랑이면 야외로 읽힌다.
+//   셋이 동시에 열리는 날(희귀)만 남는 하나가 맨 위에 한 줄 더 붙는다 — 7층·장도의 자리를 밀지 않기 위해서다.
+function _exOrder(st){
+  var low=st[1]?1:(st[2]?2:1);          // 아랫 전시선 주인 = 장도 우선, 없으면 야외(둘 다 없으면 장도 자리를 투명하게 지킨다)
+  var o=[0,low];                        // [윗줄 = 7층, 아랫줄]
+  if(st[1]&&st[2])o.unshift(2);         // 장도·야외 동시 = 야외를 맨 위 한 줄로(7층·장도 자리 무변)
+  return o;
+}
 function _exLaneOf(name,place){
   var s=String(place||'')+' '+String(name||'');
   if(s.indexOf('장도')>-1)return 1;
@@ -3011,8 +3018,8 @@ return by;
 function renderExhibitBadge(d,nm,past){
 if(nm)return'';
 var st=getExhibitStatus(d);
-var order=_EX_ORDER.slice();
-while(order.length&&!st[order[0]])order.shift();   // 맨 윗자리부터 빈 곳은 접는다 — 야외 없는 날 = 7층·장도 2줄 체계 그대로
+var order=_exOrder(st);
+while(order.length&&!st[order[0]])order.shift();   // 맨 윗자리부터 빈 곳은 접는다 — 7층 전시가 없는 날 = 윗 전시선 자체가 없다
 // [260803 운영자] 줄에 마우스를 올리면 「어느 전시실 · 무슨 전시」가 뜬다(네이티브 title = 앱 곳곳에서 쓰는 방식 그대로, 신규 부품 0).
 // 같은 내용이 날짜 패널 「그날 일정」에도 줄로 뜬다(둘 다 getExhibitStatus 1출처).
 var tip=order.map(function(ln){ var x=st[ln]; if(!x)return''; return perfPlaceLabel(_EX_SPACE[ln].id)+(x.names.length?' · '+x.names.join(', '):''); }).filter(Boolean).join(' / ');
