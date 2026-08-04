@@ -6760,6 +6760,60 @@ function _bizmDots(){
   //   보정값은 즉시 반영이 정본 = 흔들림 0. (같은 축 전례 = 260802b 「높이 글라이드 철회」 — 기하 보정에 애니 금지)
   return '<div id="bizm-dots-row" style="display:flex;justify-content:center;margin:16px 0 2px"><span class="bizm-pgctl" role="group" aria-label="대시보드 책 넘김"><button class="nav" type="button" aria-label="이전 면" onclick="_bizmGo(-1)">‹</button><span class="dots">'+dots+'</span><button class="nav" type="button" aria-label="다음 면" onclick="_bizmGo(1)">›</button></span></div>';
 }
+/* [260806 운영자 「마우스로 스크롤하면 슬라이더가 넘어가게 · 지금 손으로만 만져야 된다 · 방향에 따라」]
+   대시보드 위 휠 = 책 넘김 — 위 점줄(‹ • • ›)의 **손 안 대는 짝**. 새 UI·새 모션 0(기존 _bizmGo·디졸브 그대로 재사용).
+   문법은 캘린더 월 휠(_calWheel)을 그대로 옮긴 것 = 이 레포에 이미 있는 결(260731 도입):
+     ① 안쪽 스크롤 영역이 아직 남았으면 그쪽이 먼저 ② 페이지 스크롤 여지가 있으면 가장자리까지는 페이지가 먼저
+     ③ 관성 스크롤 연타 방지(1제스처 = 1칸) ④ 트랙패드 미세 스크롤(누적 40 미만)은 무시.
+   아래로 = 다음 칸(› 방향) · 위로 = 이전 칸(‹ 방향). 스코프 = 책이 놓인 두 열 영역(#main-area·#sales-rail) —
+   보드 바깥 여백에서 굴려도 같은 칸으로 넘어간다(biz 모드에선 이 두 통 안에 대시보드 말고 보이는 게 없다 — 캘린더·요일바·펫은 display:none).
+   모달·사이드패널·상단 nav는 리스너 밖이라 무접촉이고, 캘린더 모드는 _calWheel의 월 축이 그대로 맡는다(둘은 서로 배타). */
+var _bizWheelAcc=0,_bizWheelT=0,_bizWheelRst=null;
+var _BIZ_WHEEL_CD=_BIZM_DZ_OUT+_BIZM_DZ_IN;   // 쿨다운 = 디졸브 한 벌(180+300) — 넘김이 끝난 뒤 다음 칸(캘린더 420과 같은 축, 값만 이 화면의 전환 시간에 맞춤)
+function _bizWheelScrollable(node){
+  for(var el=node;el&&el!==document.body;el=el.parentElement){
+    if(el.id==='main-area'||el.id==='sales-rail')return null;   // 리스너가 걸린 통 자체는 스크롤 컨테이너가 아니다(둘 다 overflow 기본값) — 여기까지 오면 양보 대상 없음
+    if(el.scrollHeight-el.clientHeight>2){
+      var ov=getComputedStyle(el).overflowY;
+      if(ov==='auto'||ov==='scroll')return el;
+    }
+  }
+  return null;
+}
+function _bizWheel(e){
+  if(e.ctrlKey||e.metaKey)return;                                     // 브라우저 확대 제스처는 그대로
+  var app=document.getElementById('app');
+  if(!app||!app.classList.contains('biz-mode'))return;                // 캘린더 모드 = 월 축(_calWheel)
+  if(Math.abs(e.deltaY)<=Math.abs(e.deltaX))return;                   // 가로 스크롤 제스처는 통과
+  // deltaY 단위 정규화 — 크로미움은 항상 픽셀(deltaMode 0)이지만 파이어폭스는 **줄 단위**(deltaMode 1 · 한 칸 ≈ 3)로 준다.
+  //   그대로 누적하면 아래 40 문턱을 넘는 데 14칸이 필요해 「휠을 굴려도 안 넘어간다」가 된다(_calWheel엔 없는 보정 — 그쪽은 검증된 경로라 무접촉).
+  var dy=e.deltaY*(e.deltaMode===1?16:(e.deltaMode===2?100:1));
+  var dir=dy>0?1:-1;
+  var sc=_bizWheelScrollable(e.target);                               // 표·상세 등 자체 스크롤 영역이 아직 남았으면 양보
+  if(sc&&(dir>0?sc.scrollTop<sc.scrollHeight-sc.clientHeight-1:sc.scrollTop>1))return;
+  var doc=document.documentElement,room=doc.scrollHeight-doc.clientHeight;
+  if(room>4){                                                          // 페이지 스크롤 여지(좁은 화면·낮은 창)가 있으면 가장자리까지는 페이지가 먼저
+    var y=window.scrollY||doc.scrollTop;
+    if(dir>0?y<room-1:y>1){_bizWheelAcc=0;return;}
+  }
+  e.preventDefault();
+  var now=(e.timeStamp||0);
+  if(now-_bizWheelT<_BIZ_WHEEL_CD)return;                             // 관성 스크롤 연타 방지(1제스처 = 1칸)
+  if(_bizWheelAcc*dir<0)_bizWheelAcc=0;                               // 방향 바뀌면 누적 초기화
+  _bizWheelAcc+=dy;
+  if(_bizWheelRst)clearTimeout(_bizWheelRst);
+  _bizWheelRst=setTimeout(function(){_bizWheelAcc=0;},220);
+  if(Math.abs(_bizWheelAcc)<40)return;                                // 트랙패드 미세 스크롤은 무시
+  _bizWheelAcc=0;_bizWheelT=now;
+  _bizmGo(dir);
+}
+function _bizWheelInit(){
+  ['main-area','sales-rail'].forEach(function(id){   // 좌·우 두 통 다 = 어느 쪽에 마우스를 두고 굴려도 같은 칸으로 넘어간다(정적 마크업이라 보드 재렌더에도 리스너 유지)
+    var el=document.getElementById(id);
+    if(el&&!el._bizWheelOn){el.addEventListener('wheel',_bizWheel,{passive:false});el._bizWheelOn=1;}
+  });
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',_bizWheelInit);else _bizWheelInit();
 function _bizmHead(right,title,sub){
   return '<div data-bizmhead style="display:flex;align-items:center;gap:10px;min-height:47px;padding:1px 18px 0;background:rgba(255,255,255,.9);backdrop-filter:blur(11px);-webkit-backdrop-filter:blur(11px);border:1px solid var(--glass-border);border-bottom:1px solid rgba(0,0,0,.07);border-radius:var(--radius-lg) var(--radius-lg) 0 0;box-shadow:inset 0 1px 0 rgba(255,255,255,.6);overflow:hidden">'   // [260723f Opus] 상단 흰 하이라이트(유리 입체감)
     +(title===''?'':'<span style="font-size:14.5px;font-weight:800;color:var(--accent);white-space:nowrap;letter-spacing:-.01em;flex-shrink:0">'+(title||'사업 현황')+'</span>')   // [260802e] title='' = 제목 생략(짝 면 우 열 — 좌와 같은 「사업 결과 비교」 이중 표기 방지, 운영자 「같은 내용이면 좌측에만」) · undefined/미지정은 종전 폴백 그대로
