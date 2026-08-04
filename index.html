@@ -18745,12 +18745,12 @@ function adminRoute(id){
 //  - 자동_낮에만 (boolean, 09:00~18:00 외 자동 차단 — 260611 9-6 통일, default true)
 //  - 자동_일요일 (boolean, 일요일 자동 차단, default true)
 //  - 자동_휴무 (boolean, 담당자 휴무일 자동 차단, default false)
-let APPLY_SETTINGS={접수ON:false,접수월:[],자동_낮에만:true,자동_일요일:true,자동_휴무:false,이메일알림:false};
+let APPLY_SETTINGS={접수ON:false,접수월:[],자동_낮에만:true,자동_일요일:true,자동_휴무:false,이메일알림:false,AI_연일회피:false};
 let APPLY_SETTINGS_ROWS={};
 let APPLY_EXCLUSIONS=[]; // [{rowIndex, date, start, end}]
 
 // 자동 키 default 값
-const APPLY_AUTO_DEFAULTS={'자동_낮에만':true,'자동_일요일':true,'자동_휴무':false,'이메일알림':false};
+const APPLY_AUTO_DEFAULTS={'자동_낮에만':true,'자동_일요일':true,'자동_휴무':false,'이메일알림':false,'AI_연일회피':false};
 
 // === 접수월 헬퍼 — 배열/단수 둘 다 정규화 (구버전 데이터 호환) ===
 function getApplyMonths(){
@@ -18782,7 +18782,7 @@ async function loadApplySettings(){
   try{
     const d=await api('GET','/api/sheet/applysettings');
     // default 값으로 초기화
-    APPLY_SETTINGS={접수ON:false,접수월:[],자동_낮에만:APPLY_AUTO_DEFAULTS['자동_낮에만'],자동_일요일:APPLY_AUTO_DEFAULTS['자동_일요일'],자동_휴무:APPLY_AUTO_DEFAULTS['자동_휴무'],이메일알림:APPLY_AUTO_DEFAULTS['이메일알림']};
+    APPLY_SETTINGS={접수ON:false,접수월:[],자동_낮에만:APPLY_AUTO_DEFAULTS['자동_낮에만'],자동_일요일:APPLY_AUTO_DEFAULTS['자동_일요일'],자동_휴무:APPLY_AUTO_DEFAULTS['자동_휴무'],이메일알림:APPLY_AUTO_DEFAULTS['이메일알림'],AI_연일회피:APPLY_AUTO_DEFAULTS['AI_연일회피']};
     APPLY_SETTINGS_ROWS={};
     APPLY_EXCLUSIONS=[];
     (d.rows||[]).forEach(function(r){
@@ -18804,7 +18804,11 @@ async function loadApplySettings(){
           start:(parts[1]||'').trim(),
           end:(parts[2]||'').trim()
         });
-      }else if(k==='자동_낮에만'||k==='자동_일요일'||k==='자동_휴무'){
+      }else if(k==='자동_낮에만'||k==='자동_일요일'||k==='자동_휴무'||k==='이메일알림'||k.indexOf('AI_')===0){
+        // [260804 평의회 blocker] `이메일알림`이 이 체인에 **없었다** — 기본값(APPLY_AUTO_DEFAULTS)·초기화·토글 UI는 있는데
+        //   파서만 빠져서 ⓐ 매 리로드 false 복귀 ⓑ APPLY_SETTINGS_ROWS.이메일알림 미충전 →
+        //   setApplyAuto가 행 번호를 몰라 토글할 때마다 시트에 **새 행을 POST**(중복 행 증식). 라이브에서 이미 쌓이는 중이었다.
+        //   AI_* 접두를 함께 열어 홍보 점검 옵션(AI_연일회피)이 같은 사고를 반복하지 않게 한다.
         APPLY_SETTINGS[k]=(v==='true'||v==='TRUE'||v==='1');
         APPLY_SETTINGS_ROWS[k]=r._rowIndex;
       }
@@ -18907,6 +18911,10 @@ function renderApplySettings(loadOk){
     html+='<label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;user-select:none"><input type="checkbox" '+(APPLY_SETTINGS['자동_낮에만']?'checked':'')+' onchange="setApplyAuto(\'자동_낮에만\',this.checked)" style="margin:0;cursor:pointer;accent-color:var(--accent)">낮에만 (9~18시)</label>';
     html+='<label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;user-select:none"><input type="checkbox" '+(APPLY_SETTINGS['자동_일요일']?'checked':'')+' onchange="setApplyAuto(\'자동_일요일\',this.checked)" style="margin:0;cursor:pointer;accent-color:var(--accent)">화-토</label>';
     html+='<label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;user-select:none"><input type="checkbox" '+(APPLY_SETTINGS['자동_휴무']?'checked':'')+' onchange="setApplyAuto(\'자동_휴무\',this.checked)" style="margin:0;cursor:pointer;accent-color:var(--accent)">휴무</label>';
+    // [260804] 홍보 점검 옵션 — 새 패널을 만들지 않고 기존 자동 옵션 줄에 얹는다(admin 게이트가 이미 여기에 있다).
+    //   기본 OFF(평의회 추천) — 과거 연일 5건은 이미 '완료'라 못 지우는 경고다. 켠 채로 내면 첫 화면이 「빨간 역사책」이 된다.
+    //   차단이 아니라 「AI 홍보 ▸ 점검」 화면의 경고 표시 여부만 바꾼다. 카톡·문자 하루 1회(고정)는 이것과 무관하게 항상 차단.
+    html+='<label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;user-select:none" title="카카오톡·문자를 이틀 연속 보내면 홍보 점검 화면에 경고로 띄웁니다(차단 아님)"><input type="checkbox" '+(APPLY_SETTINGS['AI_연일회피']?'checked':'')+' onchange="setApplyAuto(\'AI_연일회피\',this.checked)" style="margin:0;cursor:pointer;accent-color:var(--accent)">연일 발송 경고</label>';
     html+='</div>';
     html+='</div>';
     // 알림 설정 (이메일 = 향후 큐잉 발송용 · 기본 off · 앱 내 메시지함은 항상 동작)
@@ -19544,9 +19552,10 @@ function _promoCheckScan(){
     if(!left)out.a2.push({p:p,d:d,end:end});
   });
   out.a2.sort(function(a,b){return a.d-b.d;});
-  // 연일 발송(K2/S2) — 차단 아님. 오늘 이후 건만 본다.
+  // 연일 발송(K2/S2) — 차단 아님. 오늘 이후 건만 본다. 옵션(AI_연일회피)이 꺼져 있으면 아예 안 센다.
   var seen={};
-  future.forEach(function(r){
+  var adjOn=!!(typeof APPLY_SETTINGS!=='undefined'&&APPLY_SETTINGS&&APPLY_SETTINGS['AI_연일회피']);
+  (adjOn?future:[]).forEach(function(r){
     var ps=platShort(r['플랫폼 1']); if(ps!=='카카오'&&ps!=='문자')return;
     var adj=_promoAdjacentDays(r['플랫폼 1'],getRecDateKey(r),r._rowIndex);
     adj.forEach(function(a){
