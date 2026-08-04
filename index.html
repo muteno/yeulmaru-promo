@@ -6589,6 +6589,55 @@ function _bizGenreAccumHtml(all,selTypes){
   h+='<div style="margin-top:12px;font-size:11px;color:var(--dim);text-align:right">평년 = '+base.join('·')+' 평균 · 파선 = 올해 '+Math.round(ep)+'% 경과</div></div>';
   return h;
 }
+// ── [260804 운영자] y축 중략(≈) — 「매출이 너무 큰 게 하나 있어서 차트가 무너진다」 ────────────────
+//   대형 뮤지컬 1건(486백만)이 나머지 16건(0.9~66백만)을 다 눌러 8건이 2px 막대가 되던 형태 실측 → 적정선에서 축을 끊는다.
+//   ⚠ 값은 손대지 않는다 — 접는 건 **그리는 자리(y)** 뿐이고 눈금·막대 라벨·툴팁은 전부 실값 그대로다.
+//   판정 = 위에서부터 「바로 아래 값의 2배 이상」인 것만 이상치로 흡수(최대 n/6건 · 본체 5건 이상 잔존 · 최대÷본체 ≥ 2.5).
+//   하나라도 조건 미달이면 null = 현행 그대로 그린다(고른 분포·짧은 차트 = 회귀 0).
+function _bizNiceStep(v){   // 눈금 한 칸 = 1·1.5·2·2.5·3·4·5·6·8·10 사다리(기존 차트 관행 계승 — 새 수치축 창작 아님)
+  if(!(v>0))return 1;
+  var e=Math.pow(10,Math.floor(Math.log(v)/Math.LN10)),n=[1,1.5,2,2.5,3,4,5,6,8,10],i;
+  for(i=0;i<n.length;i++)if(n[i]*e>=v-1e-9)return n[i]*e;
+  return 10*e;
+}
+function _bizBarBreak(vals,plotPx){
+  var pos=vals.filter(function(v){return v>0&&isFinite(v);}).sort(function(a,b){return b-a;});
+  if(pos.length<6||plotPx<170)return null;                       // 표본이 적거나(비교 의미 없음) 차트가 짧으면 안 끊는다
+  var cap=Math.max(1,Math.floor(pos.length/6)),k=0;
+  while(k<cap&&(pos.length-k)>4&&pos[k]>=pos[k+1]*2)k++;
+  if(!k)return null;
+  var body=pos[k],oMin=pos[k-1],oMax=pos[0];
+  if(!(body>0)||oMax<body*2.5)return null;
+  var step=_bizNiceStep(body/4),B=step*4;                        // 본체 상한 = 눈금 4칸(사다리 값이라 눈금이 늘 깔끔)
+  var bodyPx=Math.round(plotPx*0.70),gapPx=11,labPx=18,topPx=plotPx-bodyPx-gapPx-labPx;   // 본체 70% · 중략 띠 11 · 압축 구간 · 값 라벨 자리 18
+  if(topPx<26)return null;
+  var u=B/bodyPx;                                                // 데이터/px 환산(축 전체를 px 배분대로 잡는다)
+  return {B:B,step:step,n:k,oMin:oMin,oMax:oMax,
+    lo:B,hi:(bodyPx+gapPx)*u,top:(bodyPx+gapPx+topPx)*u,rng:plotPx*u,
+    map:function(v){
+      if(!(v>this.B))return v;                                   // 본체 = 손 안 댐(실값 = 실높이)
+      if(!(this.oMax>this.oMin))return this.top;
+      return Math.max(this.hi,this.hi+(0.18+0.82*(v-this.oMin)/(this.oMax-this.oMin))*(this.top-this.hi));
+    }};
+}
+function _bizWavePts(x0,x1,y,amp,cyc){   // ≈의 한 획(물결) — 데이터 좌표 점열
+  var n=Math.max(10,cyc*10),a=[],i,t;
+  for(i=0;i<=n;i++){ t=i/n; a.push((x0+(x1-x0)*t).toFixed(4)+' '+(y+amp*Math.sin(t*cyc*2*Math.PI)).toFixed(4)); }
+  return a;
+}
+//   spans = [[x0,x1],…] (잘린 막대들 + y축 왼쪽 끝). 흰 띠로 도형을 끊고 그 위아래 가장자리에 물결 2줄 = ≈.
+//   색 = 기존 토큰만(띠 = --surface-solid 카드 바탕 · 물결 = --dim) — 신규 hex 0.
+function _bizBreakShapes(brk,spans,ink,fill){
+  var sh=[],mid=(brk.lo+brk.hi)/2,h=(brk.hi-brk.lo);
+  spans.forEach(function(sp){
+    var up=_bizWavePts(sp[0],sp[1],mid+h*0.24,h*0.20,2),dn=_bizWavePts(sp[0],sp[1],mid-h*0.24,h*0.20,2);
+    if(fill)sh.push({type:'path',xref:'x',yref:'y',layer:'above',line:{width:0},fillcolor:fill,
+      path:'M '+up.join(' L ')+' L '+dn.slice().reverse().join(' L ')+' Z'});
+    sh.push({type:'path',xref:'x',yref:'y',layer:'above',line:{color:ink,width:1.1},path:'M '+up.join(' L ')});
+    sh.push({type:'path',xref:'x',yref:'y',layer:'above',line:{color:ink,width:1.1},path:'M '+dn.join(' L ')});
+  });
+  return sh;
+}
 // 사업별 판매현황 막대 — 값 = 매출(백만 원, 판매 축 있을 때) · 없으면 판매 고객(명) 폴백. 공연일순(list 정렬 계승) · 라벨 9자 · 45°.
 //   ⚠ 선택값의 「막대 라운드 6px」은 Plotly 2.27에 marker.cornerradius가 없어(2.28+ 기능) 미적용 — 기틀에 없는 값이라 임의 구현하지 않는다.
 //   축 글자·여백은 현행(10.5px) 유지 = 타이포·기하는 기틀 종속(운영자 260803 「내용만 만져라」).
@@ -6606,8 +6655,11 @@ function _bizDrawSalesBars(divId,list,hgt){
   var wpx=div.clientWidth||720, plotW=Math.max(120,wpx-62), n=Math.max(1,rows.length), slot=plotW/n;
   var bw=Math.min(46,Math.max(6,slot-9));                      // 막대 최대폭 46 · 간격 9(선택값)
   var idxs=rows.map(function(g,i){return i;});
+  // [260804] 축 중략 — 그릴 자리만 접는다(값·라벨·툴팁은 실값). plotPx = 실제 그림 높이(위 18 · 아래 96 여백 제외)
+  var brk=_bizBarBreak(vals,Math.max(60,hgt-114));
+  var yv=brk?vals.map(function(v){return brk.map(v);}):vals;
   var tr={type:'bar',
-    x:idxs, y:vals, width:Math.max(.08,Math.min(.94,bw/slot)),   // 폭 = 데이터 단위(슬롯 1칸 대비) — 동명 사업이 한 칸으로 병합되지 않도록 x는 인덱스, 이름은 ticktext로 건다
+    x:idxs, y:yv, width:Math.max(.08,Math.min(.94,bw/slot)),   // 폭 = 데이터 단위(슬롯 1칸 대비) — 동명 사업이 한 칸으로 병합되지 않도록 x는 인덱스, 이름은 ticktext로 건다
     text:lab, textposition:'outside', cliponaxis:false, textfont:{size:9.5,color:dim},
     marker:{color:rows.map(function(g){return _BIZ_GENRE_COLORS[g.genre||'기타']||_BIZ_GENRE_COLORS['기타'];}),
             line:{width:rows.map(function(g){return live(g)?1.6:0;}),color:rows.map(function(){return stroke||'rgba(0,0,0,0)';})}},
@@ -6616,6 +6668,21 @@ function _bizDrawSalesBars(divId,list,hgt){
   var lay={height:hgt,margin:{l:52,r:10,t:18,b:96},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',showlegend:false,
     xaxis:{tickmode:'array',tickvals:idxs,ticktext:rows.map(function(g){return cut(g.name);}),tickangle:-45,tickfont:{size:10.5,color:dim},range:[-0.6,Math.max(0.6,n-0.4)],fixedrange:true,zeroline:false,showgrid:false,automargin:false},
     yaxis:{title:{text:(hasRev?'백만 원':'명'),font:{size:10.5,color:dim}},tickfont:{size:10.5,color:dim},gridcolor:grid,zeroline:false,fixedrange:true,rangemode:'tozero'}};
+  if(brk){
+    var axn=function(v){ return hasRev?((v>=100)?Math.round(v).toLocaleString():String(Math.round(v*10)/10)):Math.round(v).toLocaleString(); };
+    var tv=[],tt=[],ti;
+    for(ti=0;ti<=4;ti++){ tv.push(brk.step*ti); tt.push(axn(brk.step*ti)); }
+    tv.push(brk.top); tt.push(axn(brk.oMax));                    // 중략 위 = 최댓값 눈금 하나(압축 구간의 기준자)
+    lay.yaxis.tickmode='array'; lay.yaxis.tickvals=tv; lay.yaxis.ticktext=tt;
+    lay.yaxis.range=[0,brk.rng]; delete lay.yaxis.rangemode;
+    var p2u=(n+0.2)/plotW;                                       // 1px → x 데이터 단위
+    var bwv=Math.max(.08,Math.min(.94,bw/slot))*0.62;
+    var spans=[[-0.6+5*p2u,-0.6+Math.min(0.9/p2u,21)*p2u]];      // ① y축 왼쪽 끝 안쪽 5px(눈금 글자와 안 겹치게) · 폭 16px
+    vals.forEach(function(v,i){ if(v>brk.B)spans.push([i-bwv,i+bwv]); });   // ② 잘린 막대마다
+    lay.shapes=_bizBreakShapes(brk,spans,dim||'rgba(0,0,0,.45)',_yrCss('--surface-solid'));
+    var note=div.parentNode&&div.parentNode.querySelector?div.parentNode.querySelector('[data-bizbrknote]'):null;
+    if(note)note.textContent=' · ≈ 위 = 축 중략(상위 '+brk.n+'건 압축 · 눈금·값은 실수치)';   // 정직 표기 — 접힌 축을 말없이 두지 않는다
+  }
   try{ Plotly.newPlot(div,[tr],lay,{displayModeBar:false,responsive:true}); }catch(_e){ console.warn('[biz bars]',_e); }
 }
 function _bizCompRender(el,half){
@@ -6685,7 +6752,7 @@ function _bizCompRender(el,half){
   // [260803 운영자 선택값] 좌 콘텐츠 = 월×점유율 산점 → **사업별 판매현황 막대**(값 = 매출 · 공연일순 · 45°/9자 · 판매중 테두리).
   //   차트 자리(id·높이 430)는 종전 그대로 = 이젤/fit 엔진(_bizFitSeason의 'bizm-chart' 축) 무접촉.
   var _barSub=_hasRev?'— 막대 = 사업별 매출(백만 원) · 색 = 장르 · 테두리 = 판매중':'— 막대 = 사업별 판매 고객(명 · 매출 데이터 없음) · 색 = 장르';
-  var _dist='<div class="bizm-card"><div class="ct">'+_bizmState.year+' 판매현황 <span class="sub">'+_barSub+'</span></div><div id="bizm-chart" style="height:430px;margin:0 4px 2px"></div></div>';
+  var _dist='<div class="bizm-card"><div class="ct">'+_bizmState.year+' 판매현황 <span class="sub">'+_barSub+'<span data-bizbrknote></span></span></div><div id="bizm-chart" style="height:430px;margin:0 4px 2px"></div></div>';   // [260804] data-bizbrknote = 축 중략(≈)이 걸렸을 때만 채워지는 각주 자리(_bizDrawSalesBars)
   // [260803 운영자 선택값] 우 카드1 = 장르 벤치마크 → **장르별 판매 축적(평년 대비)** · 평년 = 최근 3년 평균(23~25) · 연 경과 파선 · 라벨 명+%
   var _bench='<div class="bizm-card"><div class="ct">장르별 판매 축적 <span class="sub">— 평년(최근 3년 23~25 평균) 대비 '+_bizmState.year+' 누적 · 파선 = 올해 경과</span></div>'
     +'<div id="bizm-genre" style="margin:0 4px 2px;overflow:hidden">'+_bizGenreAccumHtml(all,selTypes)+'</div></div>';
