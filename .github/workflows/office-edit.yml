@@ -1,0 +1,183 @@
+name: 앱 오피스문서 편집 (claude -p · repository_dispatch)
+
+# 앱(index.html ▸ 콘텐츠 제작 ▸ 오피스문서 편집)이 Worker /api/office/dispatch 로 던지면
+# claude -p(구독 OAuth 5계정 체인)가 OfficeCLI 로 문서를 고쳐 결과를 커밋한다.
+# 구조·계약 = hwp-edit.yml 미러(한글문서 편집의 오피스판) — 다른 건 편집 엔진과 확장자뿐.
+#
+#  입력 : drafts/office/<id>.in.<ext>   (Worker /api/office/upload 가 미리 커밋 · ext = docx|xlsx|pptx)
+#  출력 : drafts/office/<id>.out.<ext>  (앱이 /api/office/file 로 수령)
+#         drafts/<id>.json              (앱 폴링 = 블로그·한글문서와 같은 /api/blog/draft 경로 재사용)
+#
+# 모델: claude-opus-5 · --effort medium (hwp-edit.yml 과 동일 — 운영자 260803 지시 계승).
+# 편집 엔진: https://github.com/iOfficeAI/OfficeCLI (Apache-2.0) — AI 에이전트용 오피스 CLI(.NET 자체포함
+#   단일 바이너리 · 의존성 0). npm 으로 버전 핀 설치하고, 에이전트용 SKILL.md 는 `officecli skills claude` 로
+#   설치해 워크디렉토리 프로젝트 스킬로 복사한다(스킬만 설치 — 바이너리 재다운로드 없음 260805 실측.
+#   ⚠️ `officecli install claude` 는 쓰지 마라 — 핀 안 된 최신 바이너리를 ~/.local/bin 에 하나 더 깐다).
+# ⚠️ 상주(resident) 모드: officecli 는 편집을 메모리에 들고 있다가 close/유휴 때 디스크에 쓴다(260805 실측)
+#   — 결과 검사 전 `officecli close` 강제 플러시가 필수다(이중 close 무해 실측).
+
+on:
+  repository_dispatch:
+    types: [office-edit]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: office-edit
+  cancel-in-progress: false
+
+env:
+  OFFICECLI_VERSION: '1.0.143'   # 편집 엔진 고정 버전 — 업스트림이 깨지면 여기만 내린다(hwp-edit.yml 의 CLAW_HWP_REF 와 같은 축)
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15   # 에이전트 왕복(문서 읽기 → 편집 → 검증) 여유 + 프론트 폴 한도(12분)보다 길게
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code
+      - name: OfficeCLI 준비 (버전 핀 + 스킬 복사)
+        run: |
+          set -e
+          npm install -g "@officecli/officecli@${OFFICECLI_VERSION}"
+          officecli --version
+          mkdir -p "$RUNNER_TEMP/officework/.claude/skills"
+          officecli skills claude
+          cp -r "$HOME/.claude/skills/officecli" "$RUNNER_TEMP/officework/.claude/skills/officecli"
+          test -f "$RUNNER_TEMP/officework/.claude/skills/officecli/SKILL.md"
+          echo "OfficeCLI 준비 완료"
+      - name: 문서 수정 (claude -p)
+        uses: actions/github-script@v7
+        env:
+          # 계정 선택 = ACTIVE_ACCOUNT 부터 체인 순환(shared/claude_failover.js) — hwp-edit.yml 과 같은 시크릿 세트.
+          ACTIVE_ACCOUNT: ${{ vars.ACTIVE_ACCOUNT || 'EMS1130G' }}
+          ACC_EMS1130G: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN_EMS1130G }}
+          ACC_EMS1130N: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN_EMS1130N }}
+          ACC_MUTENO: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN_MUTENO }}
+          ACC_MUTENONA: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN_MUTENONA }}
+          ACC_NOMUTEFB: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN_NOMUTEFB }}
+        with:
+          retries: 3
+          script: |
+            const { execFileSync } = require('child_process');
+            const fs = require('fs');
+            const path = require('path');
+            const _cp = context.payload.client_payload || {};
+            const p = (_cp && typeof _cp.d === 'object' && _cp.d) ? _cp.d : _cp;
+            const id = String(p.id || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 80) || ('x' + Date.now());
+            const ext = ((String(p.ext || '').toLowerCase().match(/^(docx|xlsx|pptx)$/) || [])[1]) || '';
+            const ask = String(p.ask || '').slice(0, 4000).trim();
+            const docName = String(p.name || ('문서.' + (ext || 'docx'))).slice(0, 160);
+            const work = path.join(process.env.RUNNER_TEMP, 'officework');
+            const inRepo = 'drafts/office/' + id + '.in.' + ext;
+
+            fs.mkdirSync('drafts/office', { recursive: true });
+            const fail = (msg) => {
+              fs.writeFileSync('drafts/' + id + '.json', JSON.stringify({ id, mode: 'office', ok: false, error: String(msg).slice(0, 600), ts: new Date().toISOString() }));
+            };
+
+            // ---- 원본 확보 (업로드 커밋과의 레이스 대비 — 없으면 리베이스 후 재시도) ----
+            let srcBuf = null;
+            if (ext) {
+              for (let i = 0; i < 4 && !srcBuf; i++) {
+                if (fs.existsSync(inRepo)) { srcBuf = fs.readFileSync(inRepo); break; }
+                try { execFileSync('git', ['pull', '--rebase', 'origin', 'main'], { stdio: 'ignore' }); } catch (e) {}
+              }
+            }
+
+            if (!ext) { fail('지원하지 않는 형식이에요(.docx·.xlsx·.pptx)'); }
+            else if (!ask) { fail('수정 요청이 비어 있어요'); }
+            else if (!srcBuf) { fail('원본 문서를 찾지 못했어요(' + inRepo + ')'); }
+            else {
+              const target = path.join(work, 'input.' + ext);
+              fs.writeFileSync(target, srcBuf);
+              const outPath = path.join(work, 'output.' + ext);
+              const skill = path.join(work, '.claude', 'skills', 'officecli');
+
+              // ---- 프롬프트 — 도구를 쓰는 편집 작업이라 hwp-edit 와 같은 계약, 엔진 절만 officecli 로 ----
+              let prompt = '';
+              prompt += '너는 오피스 문서(.docx/.xlsx/.pptx)를 다루는 편집 담당이다. 아래 문서를 사용자의 요청대로 고쳐서 저장해라.\n\n';
+              prompt += '# 파일\n';
+              prompt += '- 원본: ' + target + ' (원래 파일 이름 「' + docName + '」)\n';
+              prompt += '- 결과: ' + outPath + ' — 반드시 이 경로에 저장한다(형식은 원본과 같은 .' + ext + ' 유지, 포맷 변환 금지).\n';
+              prompt += '- 편집 도구: `officecli` CLI(설치 완료 · PATH 등록됨). 사용법 = ' + skill + '/SKILL.md 의 「officecli」 스킬.\n\n';
+              prompt += '# 사용자 요청\n' + ask + '\n\n';
+              prompt += '# 작업 순서\n';
+              prompt += '1. 먼저 ' + skill + '/SKILL.md 를 읽고 이 포맷(.' + ext + ')의 편집 경로를 확인한다. 속성·경로 문법이 불확실하면 추측하지 말고 `officecli help ' + ext + ' <element>` 를 실행해 확인한다.\n';
+              prompt += '2. `officecli view ' + target + ' outline` · `officecli view ' + target + ' text` 등으로 문서의 실제 내용·구조를 확인한다. 원본을 안 보고 고치지 마라.\n';
+              prompt += '3. 원본을 ' + outPath + ' 로 복사한 뒤 그 사본에만 편집을 적용한다(원본 파일은 그대로 둔다).\n';
+              prompt += '4. 편집이 끝나면 반드시 `officecli close ' + outPath + '` 를 실행한다 — officecli 는 편집을 메모리(상주 모드)에 들고 있어 close 해야 디스크에 저장된다.\n';
+              prompt += '5. close 후 결과 파일을 다시 열어 요청이 실제로 반영됐는지 확인한다. 반영이 안 됐으면 다른 명령으로 다시 시도한다(표 안의 값은 문단 편집이 아니라 셀 경로가 필요할 수 있다).\n\n';
+              prompt += '# 규칙\n';
+              prompt += '- 요청한 부분만 고친다. 서식·표·이미지·수식·여백 등 나머지는 건드리지 않는다.\n';
+              prompt += '- 문서에 없는 사실(날짜·금액·이름)을 지어내지 않는다. 요청이 모호하면 가장 보수적으로 해석한다.\n';
+              prompt += '- 인터넷 검색·외부 전송은 하지 않는다. 문서 내용을 이 작업 밖으로 내보내지 않는다.\n';
+              prompt += '- 마지막 줄에 「===SUMMARY===」 를 쓰고 그 다음 줄에 무엇을 바꿨는지 한국어 한 문장으로 적는다(예: 예산을 오천만원으로, 기간을 9월까지로 고쳤어요).\n';
+
+              const args = ['-p', '--model', 'claude-opus-5', '--effort', 'medium', '--max-turns', '40',
+                            '--allowedTools', 'Bash,Read,Write,Edit,Glob,Grep,Skill'];
+              const { runClaudeWithFailover } = require(path.join(process.env.GITHUB_WORKSPACE, 'shared/claude_failover.js'));
+              const _r = runClaudeWithFailover({ args, input: prompt, cwd: work });
+              const raw = _r.ok ? String(_r.raw || '') : '';
+              let summary = '';
+              const m = raw.split(/^===SUMMARY===\s*$/m);
+              if (m.length > 1) summary = String(m[m.length - 1] || '').trim().split('\n')[0].slice(0, 200);
+              if (!summary) summary = raw.trim().split('\n').filter(Boolean).pop() || '';
+
+              // ---- 상주 모드 강제 플러시(안전판) — 에이전트가 close 를 빼먹어도 디스크로 내린다(이중 close 무해 실측) ----
+              try { execFileSync('officecli', ['close', outPath], { stdio: 'ignore' }); } catch (e) {}
+
+              // ---- 결과 확인 → 커밋 ----
+              if (!fs.existsSync(outPath) || fs.statSync(outPath).size < 512) {
+                fail(_r.ok ? ('수정본이 만들어지지 않았어요' + (summary ? ' — ' + summary : '')) : (_r.error || '실행 실패'));
+              } else {
+                const outRepo = 'drafts/office/' + id + '.out.' + ext;
+                fs.copyFileSync(outPath, outRepo);
+                const outName = docName.replace(/(\.(docx|xlsx|pptx))$/i, '') + '_수정본.' + ext;
+                fs.writeFileSync('drafts/' + id + '.json', JSON.stringify({
+                  id, mode: 'office', ok: true, name: outName, path: outRepo,
+                  bytes: fs.statSync(outRepo).size, summary, ts: new Date().toISOString()
+                }));
+              }
+            }
+
+            // ---- 원본 회수 + 묵은 산출물 정리 (id 안의 타임스탬프 기준 — checkout mtime 은 신뢰 불가) ----
+            try { if (fs.existsSync(inRepo)) fs.unlinkSync(inRepo); } catch (e) {}
+            try {
+              const now = Date.now();
+              for (const f of fs.readdirSync('drafts/office')) {
+                const mm = f.match(/^of(\d+)\.(in|out)\./);
+                if (!mm) continue;
+                // 원본(.in)은 1시간 · 수정본(.out)은 3일 뒤 회수 — 남의 문서가 레포에 오래 남지 않게(hwp 와 동일).
+                const ttl = (mm[2] === 'in') ? 3600e3 : 3 * 86400e3;
+                if (now - Number(mm[1]) > ttl) { try { fs.unlinkSync(path.join('drafts/office', f)); } catch (e) {} }
+              }
+              for (const f of fs.readdirSync('drafts')) {
+                const mm = f.match(/^of(\d+)\.json$/);
+                if (mm && f !== id + '.json' && now - Number(mm[1]) > 3 * 86400e3) { try { fs.unlinkSync(path.join('drafts', f)); } catch (e) {} }
+              }
+            } catch (e) {}
+
+            execFileSync('git', ['config', 'user.name', 'github-actions[bot]']);
+            execFileSync('git', ['config', 'user.email', '41898282+github-actions[bot]@users.noreply.github.com']);
+            execFileSync('git', ['add', '-A', 'drafts']);
+            execFileSync('git', ['commit', '-m', 'chore(office): ' + id + ' [skip ci]']);
+            let pushed = false;
+            for (let i = 0; i < 6; i++) {
+              try { execFileSync('git', ['push', 'origin', 'HEAD:main']); pushed = true; break; }
+              catch (e) { try { execFileSync('git', ['pull', '--rebase', 'origin', 'main']); } catch (e2) {} }
+            }
+            if (!pushed) core.setFailed('push 실패');
+
+      # 활성 계정이 이번 런에 쿼터로 폴오버됐으면 누적 → 다음 계정으로 자동 전진(hwp-edit.yml 과 같은 축).
+      - name: 활성 계정 자동 승격(쿼터 누적 시)
+        if: always()
+        env:
+          GH_VARS_TOKEN: ${{ secrets.GH_VARS_TOKEN }}
+          ACTIVE_ACCOUNT: ${{ vars.ACTIVE_ACCOUNT || 'EMS1130G' }}
+        run: python3 shared/account_failover.py
