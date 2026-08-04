@@ -280,12 +280,14 @@ button#cpbtn:active{transform:translateY(1px)}
     새 저장 경로를 만들지 않는다. 인증도 <strong>지금 로그인한 본인 세션</strong>(<code>password</code> + <code>subAdminPin</code>)을 쓴다.</p>
   <ol style="font-size:13.2px;margin:8px 0 8px 18px">
     <li><strong>앱에 로그인한 탭</strong>에서 <code>F12</code> → Console</li>
-    <li>아래 [복사] → 콘솔에 붙여넣고 Enter → <strong>검증 결과만 표로 뜬다(아무것도 저장 안 됨)</strong></li>
-    <li>표가 맞으면 첫 줄 <code>const DRY = true;</code> 를 <strong><code>false</code></strong> 로 바꿔 다시 실행 → 22건 등록 + 캘린더 자동 갱신</li>
+    <li>아래 [복사] → 콘솔에 붙여넣고 <code>Enter</code> → 검증 표가 뜨고
+      <strong>「22건을 지금 등록할까요?」 팝업</strong> → <strong>[확인]</strong> → 등록 + 캘린더 자동 갱신</li>
   </ol>
+  <p style="font-size:13px;margin:0 0 8px"><strong>[취소]를 누르면 아무것도 저장되지 않는다</strong> — 검증만 보고 물러날 수 있다.
+    그 팝업이 <u>사람이 누르는 유일한 발화점</u>이다.</p>
   <div class="stop" style="margin:10px 0">
-    <div class="wt">⚠ 두 번 실행하면 두 번 들어간다</div>
-    <p style="font-size:13px;margin:0"><strong>중복 검사는 없다.</strong> <code>DRY=false</code>로 성공한 뒤 다시 돌리면 같은 건이 하나 더 생긴다.
+    <div class="wt">⚠ 두 번 [확인]하면 두 번 들어간다</div>
+    <p style="font-size:13px;margin:0">등록 자체에 <strong>중복 차단은 없다</strong>(팝업이 「같은 프로그램·제목이 이미 N건 있다」고 알려주기만 한다).
       중간에 실패하면 <strong>그 자리에서 멈추고</strong> 「앞의 N건은 이미 등록됐다」를 찍으므로,
       고쳐서 다시 돌릴 땐 <strong>이미 들어간 N건을 <code>E</code> 배열에서 지우고</strong> 실행할 것.</p>
   </div>
@@ -295,10 +297,11 @@ button#cpbtn:active{transform:translateY(1px)}
     <span style="font-size:11.5px;color:var(--dim)">파일 사본 = <code>tools/scratch/apply_promo_calendar.js</code></span>
   </div>
   <pre id="cs">/* 예울마루 홍보 계획 22건 일괄 신청 — 앱 탭(로그인 상태) 콘솔에 붙여넣기
-   ⚠ DRY=true = 검증만 하고 아무것도 저장하지 않음. 실제로 넣으려면 DRY를 false로.
+   붙여넣고 Enter → 검증 표가 뜨고 「등록할까요?」 팝업 → [확인]을 눌러야 저장된다.
+   [취소]하면 아무것도 저장되지 않는다. (검증만 하고 끝내려면 ASK를 false로)
    앱 자체 함수(_validateScheduleChange · _buildRecRow · api)를 그대로 사용 = 위저드와 같은 경로. */
 (async () =&gt; {
-  const DRY = true;                       // ←←← 실제 등록하려면 false
+  const ASK = true;                       // false = 검증만 하고 종료(저장 안 함)
 
   const E = [
 {d:&quot;2026-08-05&quot;,t:&quot;11:00&quot;,p1:&quot;카카오톡&quot;,p2:&quot;-&quot;,f:&quot;이미지&quot;,prog:&quot;조재혁 피아노 리사이틀&quot;,ti:&quot;조기예매 25% 마감 D-3&quot;,bo:&quot;8/8(토) 마감 · R 60,000→45,000 / S 40,000→30,000&quot;,mg:&quot;황세웅&quot;},
@@ -343,7 +346,14 @@ button#cpbtn:active{transform:translateY(1px)}
   if (ng.length) console.table(ng);
   console.table(ok.map(e =&gt; ({ 날짜: e.d, 시간: e.t, 플랫폼: e.p1, 프로그램: e.prog, 제목: e.ti, 게시: e.mg })));
   if (!ok.length) { console.warn(&#x27;등록할 게 없습니다.&#x27;); return; }
-  if (DRY) { console.warn(&#x27;DRY RUN — 저장 안 함. 위 DRY를 false로 바꾸고 다시 실행하세요.&#x27;); return; }
+  if (!ASK) { console.warn(&#x27;검증만 하고 종료 — 저장 안 함.&#x27;); return; }
+  const dup = records.filter(r =&gt; ok.some(e =&gt; String(r[&#x27;프로그램&#x27;] || &#x27;&#x27;) === e.prog &amp;&amp; String(r[&#x27;콘텐츠 제목&#x27;] || &#x27;&#x27;) === e.ti)).length;
+  if (!confirm(&#x27;예울마루 홍보 계획 &#x27; + ok.length + &#x27;건을 지금 등록할까요?\n\n&#x27;
+      + &#x27;진행 상태: &#x27; + status + &#x27;\n&#x27;
+      + (dup ? &#x27;\u26a0 같은 프로그램·제목이 이미 &#x27; + dup + &#x27;건 있습니다(중복 등록될 수 있음)\n&#x27; : &#x27;&#x27;)
+      + &#x27;\n[확인] = 등록  /  [취소] = 아무것도 저장 안 함&#x27;)) {
+    console.warn(&#x27;취소됨 — 저장 안 함.&#x27;); return;
+  }
 
   let n = 0;
   for (const e of ok) {

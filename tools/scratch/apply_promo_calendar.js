@@ -1,8 +1,9 @@
 /* 예울마루 홍보 계획 22건 일괄 신청 — 앱 탭(로그인 상태) 콘솔에 붙여넣기
-   ⚠ DRY=true = 검증만 하고 아무것도 저장하지 않음. 실제로 넣으려면 DRY를 false로.
+   붙여넣고 Enter → 검증 표가 뜨고 「등록할까요?」 팝업 → [확인]을 눌러야 저장된다.
+   [취소]하면 아무것도 저장되지 않는다. (검증만 하고 끝내려면 ASK를 false로)
    앱 자체 함수(_validateScheduleChange · _buildRecRow · api)를 그대로 사용 = 위저드와 같은 경로. */
 (async () => {
-  const DRY = true;                       // ←←← 실제 등록하려면 false
+  const ASK = true;                       // false = 검증만 하고 종료(저장 안 함)
 
   const E = [
 {d:"2026-08-05",t:"11:00",p1:"카카오톡",p2:"-",f:"이미지",prog:"조재혁 피아노 리사이틀",ti:"조기예매 25% 마감 D-3",bo:"8/8(토) 마감 · R 60,000→45,000 / S 40,000→30,000",mg:"황세웅"},
@@ -47,7 +48,14 @@
   if (ng.length) console.table(ng);
   console.table(ok.map(e => ({ 날짜: e.d, 시간: e.t, 플랫폼: e.p1, 프로그램: e.prog, 제목: e.ti, 게시: e.mg })));
   if (!ok.length) { console.warn('등록할 게 없습니다.'); return; }
-  if (DRY) { console.warn('DRY RUN — 저장 안 함. 위 DRY를 false로 바꾸고 다시 실행하세요.'); return; }
+  if (!ASK) { console.warn('검증만 하고 종료 — 저장 안 함.'); return; }
+  const dup = records.filter(r => ok.some(e => String(r['프로그램'] || '') === e.prog && String(r['콘텐츠 제목'] || '') === e.ti)).length;
+  if (!confirm('예울마루 홍보 계획 ' + ok.length + '건을 지금 등록할까요?\n\n'
+      + '진행 상태: ' + status + '\n'
+      + (dup ? '\u26a0 같은 프로그램·제목이 이미 ' + dup + '건 있습니다(중복 등록될 수 있음)\n' : '')
+      + '\n[확인] = 등록  /  [취소] = 아무것도 저장 안 함')) {
+    console.warn('취소됨 — 저장 안 함.'); return;
+  }
 
   let n = 0;
   for (const e of ok) {
