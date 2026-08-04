@@ -6543,15 +6543,20 @@ function _bizmDotSync(){   // 하단 점 점등만 즉시 반영(내용 디졸�
 function _bizmReduceMotion(){ try{ return !!(window.matchMedia&&window.matchMedia('(prefers-reduced-motion:reduce)').matches); }catch(_e){ return false; } }
 function _bizmFlip(){
   var cols=['biz-main'].concat(_bizRightNeedsRedraw()?['rail-yrm']:[]);
-  var fr=_bizmDzFrames(cols);
   _bizmDotSync();
-  if(!fr.length||_bizmReduceMotion()){ _bizBookRender(); return; }   // 프레임 없음(첫 렌더)·감속선호 = 종전 즉시 교체(회귀 0)
+  _bizmDissolve(cols,_bizBookRender);
+}
+// [260805] 디졸브 3박자 본체를 **넘길 렌더러**와 분리 — 책 넘김(_bizmFlip)뿐 아니라 3면 분야 탭 전환(_bizmSetDomain)도
+//   같은 결로 바뀌게. 타이밍·연타 가드·seq 취소·will-change 해제는 한 벌 그대로 공유한다(로직 복제 0).
+function _bizmDissolve(cols,render){
+  var fr=_bizmDzFrames(cols);
+  if(!fr.length||_bizmReduceMotion()){ render(); return; }   // 프레임 없음(첫 렌더)·감속선호 = 종전 즉시 교체(회귀 0)
   if(_bizmDzT){ clearTimeout(_bizmDzT); _bizmDzT=null; }              // 연타 = 앞 디졸브 취소, 마지막 면으로 한 번만 넘어간다
   var seq=++_bizmDzSeq;
   fr.forEach(function(t){ t.classList.add('bizm-dz','out'); });
   _bizmDzT=setTimeout(function(){
     _bizmDzT=null;
-    try{ _bizBookRender(); }catch(_e){ console.warn('[book dissolve]',_e); }
+    try{ render(); }catch(_e){ console.warn('[book dissolve]',_e); }
     // 교체 후 다시 잡는다 — _bizmSwap이 프레임을 재사용하면 같은 노드(클래스 유지), 통째 교체로 폴백했으면 새 노드(클래스 없음).
     // 어느 쪽이든 out을 보장해 두면(= opacity 0에서 출발) 다음 프레임에 해제하는 순간 동일하게 올라온다.
     var fr2=_bizmDzFrames(cols);
@@ -6757,10 +6762,16 @@ var _BIZ_DOMAINS=[{k:'perf',l:'공연',tok:'--accent'},{k:'exhib',l:'전시',tok
 function _bizmDomain(){ return (_bizmState.domain==='exhib'||_bizmState.domain==='edu')?_bizmState.domain:'perf'; }
 function _bizmDomTok(k){ for(var i=0;i<_BIZ_DOMAINS.length;i++)if(_BIZ_DOMAINS[i].k===k)return _BIZ_DOMAINS[i].tok; return '--accent'; }
 function _bizmSetDomain(k){
-  if(_bizmDomain()===k&&_bizmState.domain===k)return;
+  if(_bizmState.domain===k)return;
   _bizmState.domain=k;
-  _bizInlineRender();
-  try{ if(_bizBookWide()&&_bizPageIsPair(_bizmState.page||1))_railYrmRender(); }catch(_e){}   // 짝 면 = 두 열 동시 갱신(7323줄 동기 규약과 같은 축)
+  // [260805] 결 = 책 넘김과 같은 디졸브(260804 「번쩍이면서 바뀐다 → 최대한 자연스럽게 디졸빙」).
+  //   분야 전환도 두 열 내용이 통째로 갈리므로 넘김과 같은 사건이다 — 여기만 즉시 교체로 두면 탭만 번쩍인다.
+  var pair=false; try{ pair=_bizBookWide()&&_bizPageIsPair(_bizmState.page||1); }catch(_e){}
+  var cols=['biz-main'].concat(pair?['rail-yrm']:[]);   // 짝 면 = 두 열 동시 갱신(우 열이 교육 반쪽을 든다)
+  _bizmDissolve(cols,function(){
+    _bizInlineRender();
+    if(pair){ try{ _railYrmRender(); }catch(_e){} }
+  });
 }
 // 분야 칩 = 정본 필터 칩 `.ana-chip`/`.ana-chip.on`(기틀 §2 인벤토리 · 표 연도 칩과 같은 부품) — 신규 부품·색·형태 0.
 //   ⚠ `.fbar-chip`(체크박스 동반)으로 먼저 만들었다가 되돌렸다 — 칩 안 14px 인풋 3개가 헤더를 밀어
