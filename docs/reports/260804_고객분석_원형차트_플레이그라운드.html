@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>260804 고객 분석 — 원형(도넛) 차트 시안 플레이그라운드</title>
+<style>
+/* ── 토큰 사본(값 SSOT = index.html :root · 실측 발췌 · 창작 0) ───────────────── */
+:root{
+  --accent:#4A4DE7;--accent-light:#E8E8FD;--accent-glow:rgba(74,77,231,0.15);
+  --peach:#F0C4B8;--peach-light:#FBF0EC;--peach-text:#D88455;
+  --surface-solid:#fff;
+  --glass-surface:rgba(255,255,255,.78);--glass-bd:rgba(255,255,255,0.55);
+  --glass-shadow:0 8px 32px rgba(74,77,231,0.08),0 2px 8px rgba(0,0,0,0.04);
+  --border:rgba(0,0,0,0.09);--border2:rgba(0,0,0,0.12);
+  --text:#1A1A2E;--dim:#888;--muted:#bbb;--neutral-text:#6B6B7B;
+  --neutral:#EEEDF3;--neutral-d:#E1DFEC;
+  --past-bg:rgba(0,0,0,0.02);
+  --c1:#4A4DE7;--c2:#D88455;--c3:#1A6B3C;--c4:#C02872;--c5:#2D8AB3;--c6:#F5B400;
+  --radius:16px;--r-btn:10px;
+}
+*{box-sizing:border-box}
+body{font-family:'Pretendard','Apple SD Gothic Neo',-apple-system,sans-serif;margin:0;background:#F4F3F9;color:var(--text);line-height:1.6}
+.wrap{max-width:1280px;margin:0 auto;padding:26px 22px 80px}
+h1{font-size:20px;margin:0 0 4px}
+.lead{font-size:13px;color:var(--dim);margin:0 0 18px}
+h2{font-size:15px;margin:26px 0 9px}
+.ask{background:var(--peach-light);border:1px solid var(--peach);border-radius:var(--r-btn);padding:13px 16px;font-size:12.5px;margin-bottom:20px}
+.ask b{color:var(--peach-text)}
+.ask ul{margin:7px 0 0;padding-left:18px}
+.ask li{margin:3px 0}
+/* ── 조작판 = 정본 .pm-fbtn 글래스 버튼 결 계승(기틀 §2 #12) ─────────────────── */
+.ctl{display:flex;gap:22px;flex-wrap:wrap;align-items:center;background:var(--glass-surface);border:1px solid var(--glass-bd);box-shadow:var(--glass-shadow);border-radius:var(--radius);padding:13px 16px;margin-bottom:18px;position:sticky;top:8px;z-index:5;backdrop-filter:blur(8px)}
+.grp{display:flex;gap:7px;align-items:center}
+.grp>i{font-style:normal;font-size:11.5px;color:var(--neutral-text);font-weight:700;margin-right:2px}
+.fbtn{background:var(--glass-surface);border:1px solid var(--glass-bd);box-shadow:var(--glass-shadow);color:var(--text);border-radius:var(--r-btn);padding:7px 13px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit}
+.fbtn.on{background:var(--accent);border-color:var(--accent);color:#fff}
+/* ── 실물 재현 프레임 = 4면 이젤(유리 박스) 안 우 열 ────────────────────────── */
+.stage{display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start}
+.easel{background:linear-gradient(140deg,#EDEAF7,#F6F2F4);border-radius:22px;padding:18px;box-shadow:var(--glass-shadow)}
+.board{background:rgba(255,255,255,0.55);border:1px solid var(--glass-bd);border-radius:var(--radius);padding:16px;backdrop-filter:blur(10px);display:flex;gap:24px}
+.mapstub{width:300px;background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius);padding:13px;display:flex;flex-direction:column}
+.mapstub .ct{font-size:14px;font-weight:800;margin-bottom:4px}
+.mapstub .fill{flex:1;display:grid;place-items:center;color:var(--muted);font-size:12px;background:repeating-linear-gradient(135deg,rgba(74,77,231,.045) 0 9px,transparent 9px 18px);border-radius:10px}
+.col{width:440px;display:flex;flex-direction:column}
+.card{background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius);padding:13px 17px;overflow:hidden;display:flex;flex-direction:column}
+.ct{font-size:14px;font-weight:800;text-align:left}
+.ct span{font-size:10.5px;color:var(--dim);font-weight:500}
+.sub{font-size:11.5px;color:var(--dim);font-weight:600;margin:0 0 8px;line-height:1.5}
+.sub b{color:var(--accent)}
+/* 막대(현행 정본 사본 — index.html _memOvRender bar 발췌) */
+.bar{display:flex;align-items:center;gap:9px;flex:1 1 17px;min-height:17px;max-height:36px}
+.bar i{flex:0 0 78px;font-size:12px;font-weight:600;text-align:right;font-style:normal;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar u{flex:1;align-self:stretch;display:flex;flex-direction:column;justify-content:center;padding:2px 0;text-decoration:none}
+.bar u>span{flex:0 1 18px;min-height:6px;background:var(--past-bg);border-radius:3.5px;overflow:hidden;display:block}
+.bar u>span>b{display:block;height:100%;border-radius:3.5px;background:var(--peach-text);opacity:.5}
+.bar.hi u>span>b{background:var(--accent);opacity:.79}
+.bar em{flex:0 0 86px;font-size:11px;color:var(--dim);font-style:normal;font-variant-numeric:tabular-nums;text-align:left}
+/* 도넛 + 범례 */
+.sect{display:flex;gap:12px;align-items:center;min-height:0}
+.sect>svg{flex:0 0 auto}
+.lgd{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:2px}
+.lg{display:flex;align-items:center;gap:7px;font-size:11.5px;line-height:1.35}
+.lg .chip{flex:0 0 auto;width:9px;height:9px;border-radius:3px}
+.lg i{font-style:normal;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1 1 auto;min-width:0}
+.lg em{font-style:normal;color:var(--dim);font-variant-numeric:tabular-nums;flex:0 0 auto}
+.aistub{margin-top:14px;background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius);padding:14px;flex:0 0 auto;color:var(--muted);font-size:12px;text-align:center}
+.note{font-size:12px;color:var(--neutral-text);background:#fff;border:1px solid var(--border);border-radius:var(--r-btn);padding:12px 14px;margin-top:14px;max-width:760px}
+.note b{color:var(--text)}
+.meas{font-size:11.5px;color:var(--dim);margin-top:8px;font-variant-numeric:tabular-nums}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>고객 분석 — 「차트를 원형으로」 시안</h1>
+<p class="lead">운영자 260804 「일단 차트가 저 공간에 가득차게 해줘. 차트를 원형으로 하는게 더 맞는듯」 · 대상 = 4면·모달 우 열의 <b>거주지 TOP 6 / 연령대 분포</b> 카드.</p>
+
+<div class="ask" style="background:var(--accent-light);border-color:var(--accent)">
+  <b style="color:var(--accent)">✅ 운영자 확정 260804 — 「B 도넛 2개」 + 「순위 강조 계승」 배색</b><br>
+  이 시안으로 승인받아 <code>index.html</code> <code>_memOvRender</code>에 반영 완료(기틀 §2 #15 등재). 아래는 승인 근거 기록.
+</div>
+
+<div class="ask">
+  <b>⚠️ 기틀 §3 묻고-편입 — 승인이 필요한 이유</b>
+  <ul>
+    <li><b>왜 필요한가</b>: 원형(도넛) 차트는 <b>정본 컴포넌트 14종에 없다</b>. 새 형태라 임의로 만들면 §3 위반이라 시안으로 여쭙는다.</li>
+    <li><b>가장 가까운 기존 후보</b>: ① 현행 <b>가로 막대</b>(이 카드의 정본) ② `.dot-ring`(원형 진행 링 — 저장 완료 표시용이라 <b>다계열 비율 표현 불가</b>). 둘 다 「원형 비율 차트」를 대신하지 못한다.</li>
+    <li><b>색은 새로 안 만든다</b>: 아래 두 배색 다 기존 토큰만 — 순위 강조(현행 계승 `--accent`/`--peach-text` alpha 변주 = §3.5②) 또는 카테고리 6색(`--c1~--c6`, 기틀 §0③ 「임의 다중 시리즈」 전용 팔레트 · 주색 겹침 회피로 c2부터).</li>
+    <li><b>연령대는 6색을 못 쓴다</b>(구간 9~10개 &gt; 6색) → 연령대는 <b>항상 단일 색상 명도 사다리</b>(§3.5③ 비색 단서 = 명도)로 그렸다.</li>
+  </ul>
+</div>
+
+<div class="ctl">
+  <div class="grp"><i>형태</i>
+    <button class="fbtn" data-k="form" data-v="bar">A 현행 막대</button>
+    <button class="fbtn on" data-k="form" data-v="donut2">B 도넛 2개</button>
+    <button class="fbtn" data-k="form" data-v="mix">C 거주지만 도넛</button>
+  </div>
+  <div class="grp"><i>거주지 배색</i>
+    <button class="fbtn on" data-k="pal" data-v="rank">순위 강조(현행 계승)</button>
+    <button class="fbtn" data-k="pal" data-v="cpal">카테고리 6색</button>
+  </div>
+  <div class="grp"><i>칸 높이</i>
+    <button class="fbtn on" data-k="h" data-v="453">1920×1080 (453px)</button>
+    <button class="fbtn" data-k="h" data-v="302">1440×900 (302px)</button>
+  </div>
+</div>
+
+<div class="stage">
+  <div class="easel">
+    <div class="board" id="board">
+      <div class="mapstub" id="mapstub"><div class="ct">전국 분포 맵 <span>(버블 = 회원수 비례)</span></div><div class="fill">지도 자리(260804 머지분 — 이 시안의 대상 아님)</div></div>
+      <div class="col">
+        <div class="card" id="card"></div>
+        <div class="aistub">예울이 카드 자리 (260804 머지분)</div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="meas" id="meas"></div>
+
+<div class="note">
+  <b>값 = 형태 재현용 합성치</b>(실 집계 아님 · 비율만 실화면과 비슷하게 잡았다) — 이 시안은 <b>모양</b>을 고르기 위한 것이고,
+  고르신 안을 <code>index.html</code>에 넣을 때는 당연히 실집계(<code>_memState</code>)로 그린다.<br>
+  <b>도넛이 「TOP 6」에 성립하려면</b>: TOP 6은 전체의 일부라 원만 그리면 합이 100%가 아니다 → <b>「그 외」 조각</b>(중립 회색)을 넣어
+  원이 실제로 전체가 되게 했다. 없는 값을 지어내지 않고 남는 몫을 그대로 보여주는 쪽.
+</div>
+</div>
+
+<script>
+// 합성 표본(형태 재현 전용 · 실 집계 아님) — 비율만 실화면 결과 비슷하게
+var TOTAL=29752;
+var CITY=[['여수시',14772],['순천시',6496],['광양시',2959],['광주시',1066],['서울시',996],['고흥군',242]];
+var AGE=[['10대',695],['20대',4278],['30대',8922],['40대',8838],['50대',4406],['60대',1377],['70대',216],['80대',11],['미상',1009]];
+var CPAL=['var(--c2)','var(--c3)','var(--c4)','var(--c5)','var(--c6)','var(--c1)'];
+var S={form:'donut2',pal:'rank',h:'453'};
+var fmt=function(n){return n.toLocaleString();};
+var pct=function(c){return (c/TOTAL*100).toFixed(1);};
+
+// ── 색 규칙(신규 색 0) ────────────────────────────────────────────────────────
+// 순위 강조 = 현행 막대 규약 계승: 1·2위 --accent / 3위~ --peach-text · 이웃 구별은 같은 토큰 alpha 사다리(§3.5②③)
+function rankPaint(i,n){
+  if(i<2)return {c:'var(--accent)',o:(i===0?0.79:0.62)};
+  var t=(i-2)/Math.max(1,n-3);                  // 3위~꼴찌 = .56 → .26
+  return {c:'var(--peach-text)',o:+(0.56-0.30*t).toFixed(3)};
+}
+function seqPaint(i,n){                          // 순서형(연령대) = 단일 색 명도 사다리
+  var t=i/Math.max(1,n-1);
+  return {c:'var(--peach-text)',o:+(0.62-0.38*t).toFixed(3)};
+}
+
+// ── 도넛(정본 부품 없음 = 이 시안이 여쭙는 새 형태) ──────────────────────────
+function arc(cx,cy,R,r,a0,a1){
+  var p=function(rad,a){return [(cx+rad*Math.cos(a)).toFixed(2),(cy+rad*Math.sin(a)).toFixed(2)];};
+  var big=(a1-a0)>Math.PI?1:0,A=p(R,a0),B=p(R,a1),C=p(r,a1),D=p(r,a0);
+  return 'M'+A+'A'+R+' '+R+' 0 '+big+' 1 '+B+'L'+C+'A'+r+' '+r+' 0 '+big+' 0 '+D+'Z';
+}
+function donut(items,D,center){
+  var R=D/2,ri=R*0.60,tot=items.reduce(function(s,x){return s+x.v;},0),a=-Math.PI/2,s='';
+  items.forEach(function(x){
+    var a1=a+(x.v/tot)*Math.PI*2;
+    s+='<path d="'+arc(R,R,R-1,ri,a,a1)+'" fill="'+x.c+'" opacity="'+x.o+'" stroke="var(--surface-solid)" stroke-width="1.6"/>';
+    a=a1;
+  });
+  s+='<text x="'+R+'" y="'+(R-2)+'" text-anchor="middle" font-size="'+(D*0.135).toFixed(1)+'" font-weight="800" fill="var(--accent)">'+center[0]+'</text>';
+  s+='<text x="'+R+'" y="'+(R+D*0.115)+'" text-anchor="middle" font-size="'+(D*0.072).toFixed(1)+'" fill="var(--dim)">'+center[1]+'</text>';
+  return '<svg width="'+D+'" height="'+D+'" viewBox="0 0 '+D+' '+D+'" role="img">'+s+'</svg>';
+}
+function legend(items){
+  return '<div class="lgd">'+items.map(function(x){
+    return '<div class="lg"><span class="chip" style="background:'+x.c+';opacity:'+x.o+'"></span><i>'+x.label+'</i>'
+      +'<em>'+fmt(x.v)+'명 · '+pct(x.v)+'%</em></div>';
+  }).join('')+'</div>';
+}
+function bars(items,maxV){
+  return items.map(function(x){
+    var w=Math.max(2,x.v/maxV*100);
+    return '<div class="bar'+(x.hi?' hi':'')+'"><i>'+x.label+'</i><u><span><b style="width:'+w+'%"></b></span></u>'
+      +'<em>'+fmt(x.v)+'명 · '+pct(x.v)+'%</em></div>';
+  }).join('');
+}
+
+function cityItems(){
+  var top=CITY.slice(), rest=TOTAL-top.reduce(function(s,x){return s+x[1];},0);
+  var arr=top.map(function(t,i){
+    var p=(S.pal==='cpal')?{c:CPAL[i],o:0.85}:rankPaint(i,top.length+1);
+    return {label:t[0],v:t[1],c:p.c,o:p.o,hi:i<2};
+  });
+  arr.push({label:'그 외 지역',v:rest,c:'var(--neutral-d)',o:1,hi:false});
+  return arr;
+}
+function ageItems(){
+  var top2={},srt=AGE.filter(function(a){return a[0]!=='미상';}).slice().sort(function(a,b){return b[1]-a[1];}).slice(0,2);
+  srt.forEach(function(a){top2[a[0]]=1;});
+  return AGE.map(function(a,i){
+    var p=top2[a[0]]?{c:'var(--accent)',o:(a[1]===srt[0][1]?0.79:0.62)}:seqPaint(i,AGE.length);
+    return {label:a[0],v:a[1],c:p.c,o:p.o,hi:!!top2[a[0]]};
+  });
+}
+
+function render(){
+  var H=+S.h, card=document.getElementById('card'), items=cityItems(), ages=ageItems();
+  card.style.height=H+'px';   // 카드 = index.html 실측 높이 · 겉(board·col)은 내용에 맞춰 자란다(높이 못박으면 카드가 잘린다)
+  var ttl='<div class="ct">거주지 TOP 6 <span>(시 기준 · 전국 · 구는 시로 합산)</span></div>'
+    +'<div class="sub">관내(여수·순천·광양) <b>81.4%</b> · 24,227명 <span style="color:var(--muted)">|</span> 여수 14,772 · 순천 6,496 · 광양 2,959</div>';
+  var ttl2='<div class="ct" style="margin:'+(S.form==='bar'?12:10)+'px 0 6px">연령대 분포 <span>(생년월일 기준 · 만나이 근사)</span></div>';
+  var h='';
+  if(S.form==='bar'){
+    h=ttl+'<div style="display:flex;flex-direction:column;flex:6 1 auto">'+bars(items.slice(0,6),CITY[0][1])+'</div>'
+      +ttl2+'<div style="display:flex;flex-direction:column;flex:9 1 auto">'+bars(ages,8922)+'</div>';
+  }else{
+    // 도넛 지름 = 그 절(節)에 남는 세로에 맞춘다 = 「저 공간에 가득」
+    var head=68, head2=30, avail=H-26-head-head2, half=S.form==='donut2'?avail/2:avail*0.52;
+    var D1=Math.max(96,Math.min(half-6,180));
+    h=ttl+'<div class="sect" style="flex:0 0 auto;height:'+(half)+'px">'+donut(items,D1,['81.4%','관내 비중'])+legend(items)+'</div>';
+    if(S.form==='donut2'){
+      var D2=Math.max(96,Math.min(half-6,180));
+      h+=ttl2+'<div class="sect" style="flex:0 0 auto;height:'+(half)+'px">'+donut(ages,D2,['30대','최다 연령대'])+legend(ages)+'</div>';
+    }else{
+      h+=ttl2+'<div style="display:flex;flex-direction:column;flex:1 1 auto;min-height:0">'+bars(ages,8922)+'</div>';
+    }
+  }
+  card.innerHTML=h;
+  document.getElementById('meas').textContent='카드 실측 = 440 × '+H+'px (index.html 실측치) · 형태 '+S.form+' · 거주지 배색 '+S.pal;
+}
+document.querySelectorAll('.fbtn').forEach(function(b){
+  b.onclick=function(){
+    S[b.dataset.k]=b.dataset.v;
+    document.querySelectorAll('.fbtn[data-k="'+b.dataset.k+'"]').forEach(function(x){x.classList.toggle('on',x===b);});
+    render();
+  };
+});
+render();
+</script>
+</body>
+</html>
