@@ -2931,7 +2931,8 @@ function _exSpans(){
   try{ (pf||[]).forEach(function(p){ if(p&&p.t==='e'&&p.s&&p.e)out.push({lane:_exLaneOf(p.f||p.n,p.l),n:(p.f||p.n||''),s:p.s,e:p.e}); }); }catch(_e){}
   try{ ((mo&&mo.rows)||[]).forEach(function(r){ var s=excelSerialToISO(r['시작일']),e=excelSerialToISO(r['종료일']); if(s&&e)out.push({lane:_exLaneOf(r['전시명'],''),n:String(r['전시명']||''),s:s,e:e}); }); }catch(_e){}
   // 구글 캘린더 전시(전시 공간 태그) — 정본과 중복된 건 제외(정본 우선)
-  try{ var dup=(typeof _gcDupSet==='function')?_gcDupSet():{}; gx.forEach(function(r){ if(!dup[r.id])out.push({lane:r.lane,n:(r.n||''),s:r.s,e:r.e}); }); }catch(_e){}
+  //   [260804] kind = 구글 캘린더 제목의 [기획]/[대관] 태그. 시트 정본·전시마스터에서 온 건 빈값 = 기획 취급(종전 그대로).
+  try{ var dup=(typeof _gcDupSet==='function')?_gcDupSet():{}; gx.forEach(function(r){ if(!dup[r.id])out.push({lane:r.lane,n:(r.n||''),s:r.s,e:r.e,kind:r.kind||''}); }); }catch(_e){}
   _exSpanCache=out;_exSpanPerfs=pf;_exSpanMaster=mo;_exSpanGcN=gx.length;
   return out;
 }
@@ -2956,12 +2957,15 @@ _exSpans().forEach(function(x){
   if(k<x.s||k>x.e)return;
   var ln=x.lane|0; if(ln<0||ln>=_EX_MAXLANE)return;
   var cur=by[ln];
-  if(!cur){ cur=by[ln]={lane:ln,s:x.s,live:x.e>=today,names:[],_keys:[]}; }   // 아직 안 끝난 전시 = 진행중(지난 날짜는 흐리게 = 진행률 표시)
+  if(!cur){ cur=by[ln]={lane:ln,s:x.s,live:x.e>=today,names:[],items:[],_keys:[]}; }   // 아직 안 끝난 전시 = 진행중(지난 날짜는 흐리게 = 진행률 표시)
   else { if(x.s<cur.s)cur.s=x.s; if(x.e>=today)cur.live=true; }
   var nm=String(x.n||'').trim(); if(!nm)return;
   var key=_nrm(nm); if(!key)return;
   for(var i=0;i<cur._keys.length;i++){ var q=cur._keys[i]; if(q===key||q.indexOf(key)>-1||key.indexOf(q)>-1)return; }
-  cur._keys.push(key);cur.names.push(nm);
+  // [260804] names = 종전 그대로(줄 title·기존 소비처 무접촉) · items = 같은 순서의 건별 정보(구분·그 건의 시작일).
+  //   레인 단위로 이름만 합치던 구조라 「이 전시가 기획인지 대관인지」가 사라졌다 = 김시재 개인전(대관)이 기획으로 보이던 원인.
+  //   cur.s는 레인 최소 시작일(줄 렌더 계약)이라 건별 일차 계산에는 it.s를 쓴다.
+  cur._keys.push(key);cur.names.push(nm);cur.items.push({n:nm,kind:x.kind||'',s:x.s});
 });
 return by;
 }
@@ -20232,7 +20236,7 @@ var GCAL_RENTALS=[],GCAL_EXHIBS=[],GCAL_EDU=[],_gcalLoaded={},_gcalBusy=false,_g
 // [260801 운영자] 「대관만 늦게 뜬다」 3종 수정 — ① 대기열(요청 중 달 넘김 = 그냥 버려져 그 달이 영영 안 뜨던 구멍)
 //   ② 부팅 동시 출발(initApp — 구: loadData 완료 뒤 render 안에서야 출발 = 직렬 한 겹) ③ localStorage 캐시(F5마다 처음부터 받던 것)
 //   대관은 정본(PERFS·프로그램 시트)에 없는 외부 피드라 캐시도 여기 따로 둔다 — 정본 캐시와 섞지 않는다.
-var GCAL_LS='_gcal_v3';   // [260801] 리허설룸 = 교육실 레일 분리 + 제목 보정표 = 구 캐시는 옛 장소·이름을 들고 있어 키를 올려 버린다 (구: v2 — 260731 4차 파싱 규칙 변경)
+var GCAL_LS='_gcal_v4';   // [260804] 전시 항목에 구분(기획/대관) 신설 = 구 캐시엔 그 값이 없어 대관 전시가 기획으로 보인다 → 키를 올려 버린다 (구: v3 = 260801 리허설룸 분리·제목 보정표 / v2 = 260731 4차 파싱 규칙)
 function _gcalWin(year,month){ var f=new Date(Date.UTC(year,month-2,1)),t=new Date(Date.UTC(year,month+1,0)); return [f.toISOString().slice(0,10),t.toISOString().slice(0,10)]; }   // 요청 창 = 그 달 ±1달(월 넘김 프리페치)
 function _gcalPersist(){
   try{
@@ -20455,7 +20459,12 @@ function loadRentals(year,month){
       if(p.drop)return;                                    // 공사·점검류 = 공연 아님(운영자 「공사는 지워도 돼」)
       if(p.isEx){                                          // 전시 공간 = 배지 아니라 셀 하단 라인
         var xid='gx:'+uid;
-        if(!seenX[xid]){seenX[xid]=1;GCAL_EXHIBS.push({id:xid,n:p.name,lane:p.lane,s:s,e:e});ch=true;}
+        // [260804 운영자 「김시재 개인전으로 등록된거 대관이니까 대관으로 따로 빼주고 db단부터 반영하는거임」]
+        //   구분(기획/대관)을 여기서부터 실어 보낸다. 시트(정본)는 이미 이 건을 대관으로 적고 있다 —
+        //   src/index.js gcalSyncPrograms가 `p.kind!=='대관'`이면 건너뛰고, 쓰는 행의 콘텐츠구분은 "대관" 고정이다.
+        //   그런데 화면 쪽은 전시 공간(장도·7층)이면 구분을 버리고 전시 통으로만 보내 「대관인데 기획 전시로 보이는」 어긋남이 났다.
+        //   ⚠ GCAL_RENTALS에는 넣지 않는다 — 전시 공간은 셀 배지가 아니라 하단 라인이 담당(260801 운영자 결정) · 넣으면 배지가 되살아난다.
+        if(!seenX[xid]){seenX[xid]=1;GCAL_EXHIBS.push({id:xid,n:p.name,lane:p.lane,s:s,e:e,kind:p.kind||''});ch=true;}
         return;
       }
       if(p.edu){                                           // [260801 운영자] 리허설룸 = 교육실 대관 개념 장소 → 셀 배지 0, 날짜 패널 「교육실」 줄로만
@@ -21193,12 +21202,19 @@ function openPanel(dateObj,recs){
   try{
     var _exSeen={};
     _pDay.forEach(function(p){ if(p&&p.t==='e')_exSeen[_gcNorm(p.f||p.n)]=1; });
+    // [260804 운영자 「김시재 개인전으로 등록된거 대관이니까 대관으로 따로 빼주고 db단부터 반영하는거임」]
+    //   구분이 「대관」인 전시는 t='r'로 실어 **대관 프로그램 일정** 섹션에 담는다(기획 섹션에서 빠진다).
+    //   시트(정본)가 이미 이 건을 대관으로 적고 있으니(src/index.js — 콘텐츠구분 "대관" 고정) 화면이 정본을 따르는 것.
+    //   달력 셀 하단 전시 라인은 무접촉 — 장도 전시실을 실제로 점유하는 건 사실이고, 그 줄은 260803 운영자 지시로 넣은 것이다.
     getExhibitStatus(dateObj).forEach(function(x){
       if(!x)return;
       var _plc=_EX_SPACE[x.lane].id;
-      (x.names.length?x.names:['전시 진행 중']).forEach(function(nm){
-        var _k=_gcNorm(nm); if(_k&&_exSeen[_k])return; if(_k)_exSeen[_k]=1;
-        _pDay.push({t:'e',f:nm,n:nm,l:_plc,_ex:1,s:x.s,e:''});   // s = 그 레인 전시의 시작일(일차 계산용) · e 없음 = 진행 중
+      // items = 건별(이름·구분·시작일). 구 캐시·구 소스로 items가 비면 names로 떨어진다(구분 미상 = 종전대로 전시).
+      var _items=(x.items&&x.items.length)?x.items
+        :(x.names.length?x.names.map(function(nm){return {n:nm,kind:'',s:x.s};}):[{n:'전시 진행 중',kind:'',s:x.s}]);
+      _items.forEach(function(it){
+        var _k=_gcNorm(it.n); if(_k&&_exSeen[_k])return; if(_k)_exSeen[_k]=1;
+        _pDay.push({t:(it.kind==='대관'?'r':'e'),f:it.n,n:it.n,l:_plc,_ex:1,s:it.s||x.s,e:''});   // _ex = 기간 건 → 「N일차」 · e 없음 = 진행 중
       });
     });
   }catch(_e){}
@@ -21359,7 +21375,8 @@ function openPanel(dateObj,recs){
       // ★ style 속성은 한 번만 — clickAttr에서 style 제거하고 메인 style에 cursor 합침
       var clickAttr=hasUrl?' onclick="openPerfUrl(\''+escapeHtml(perf.u).replace(/'/g,'\\\'')+'\',\''+escapeHtml(perf.f).replace(/'/g,'\\\'')+'\')" title="클릭하면 공연 페이지로 이동"':'';
       var cursorStyle=hasUrl?'cursor:pointer;':'';
-      var venueP=perf.l||'장소 미정';
+      // [260804] 정본 표기로 맞춘다 — 구글 캘린더 공간 태그는 '7층'·'장도'로 짧게 들어온다(머리말 띠가 쓰던 perfPlaceLabel 계승).
+      var venueP=perfPlaceLabel(perf.l)||'장소 미정';
       var nameWithArrow=escapeHtml(perf.f)+(hasUrl?' <span style="font-size:9px;color:var(--accent);font-weight:500;margin-left:2px">↗</span>':'');
       // 전시 row와 100% 동일 구조 — 색깔/라벨/onclick만 다름
       var perfCtxAttr=' oncontextmenu="onPerfContextMenu(event,this);return false;"';
@@ -21371,7 +21388,7 @@ function openPanel(dateObj,recs){
     });
     openExh.forEach(function(x){
       var eName=x.f||x.n;
-      var eVenue=x.l||'장소 미정';
+      var eVenue=perfPlaceLabel(x.l)||'장소 미정';   // [260804] '7층'·'장도' → 정본 표기(perfPlaceLabel 계승)
       var eDayText=_dayLabel(x);   // [260804] 전시가 쓰던 「N일차」 = 이제 공용 _dayLabel 1출처(공연·대관과 같은 규칙)
       var eHasUrl=!!x.u;
       var eClickAttr=eHasUrl?' onclick="openPerfUrl(\''+escapeHtml(x.u).replace(/'/g,'\\\'')+'\',\''+escapeHtml(eName).replace(/'/g,'\\\'')+'\')" title="클릭하면 전시 페이지로 이동"':'';
@@ -21394,7 +21411,8 @@ function openPanel(dateObj,recs){
         var hasUrl=!!perf.u;
         var clickAttr=hasUrl?' onclick="openPerfUrl(\''+escapeHtml(perf.u).replace(/'/g,'\\\'')+'\',\''+escapeHtml(perf.f).replace(/'/g,'\\\'')+'\')" title="클릭하면 상세 페이지로 이동"':'';
         var cursorStyle=hasUrl?'cursor:pointer;':'';
-        var venueP=perf.l||'장소 미정';
+        // [260804] '7층'·'장도' → 정본 표기. 교육실 줄의 l은 「주제 · 시간」이라 이 변환에 안 걸린다(무해).
+        var venueP=perfPlaceLabel(perf.l)||'장소 미정';
         var nameWithArrow=escapeHtml(perf.f)+(hasUrl?' <span style="font-size:9px;color:'+cfg[2]+';font-weight:500;margin-left:2px">↗</span>':'');
         h+='<div'+clickAttr+' oncontextmenu="onPerfContextMenu(event,this);return false;" class="panel-perf-row" data-perf-name="'+escapeHtml(perf.f)+'" style="'+cursorStyle+'display:flex;align-items:center;padding:10px 12px;background:'+cfg[3]+';border-radius:10px;margin-bottom:6px;gap:10px;transition:background .15s">';
         h+='<span style="display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;border-radius:50%;font-size:8px;font-weight:700;background:'+cfg[2]+';color:#fff;flex-shrink:0">'+(perf._eduRoom?'실':cfg[1])+'</span>';
