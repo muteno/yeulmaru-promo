@@ -2145,6 +2145,17 @@ table.promo-board-table thead th:last-child{border-top-right-radius:11px}
 #app.biz-mode #sales-rail .srail-leg{display:none}   /* 범례 = 카드 차트 전용 — 표 모드에선 숨김 */
 #app.biz-mode .nav-mnav{opacity:.82;pointer-events:none}   /* 월 네비 = 캘린더 축 — 클릭 차단(pointer-events:none 유지 = [260723 평의회3] 유령 월변경 방지) · 딤 .45→.82(운영자 260723 "7 2026 밝게") */
 #sales-rail{transition:opacity .25s ease}
+/* [260804 운영자 「최대화면이 아닌 곳에서는 슬라이드가 왔다갔다 — 비율로 고정」] 좌 열 1:1 비율 잠금 ──
+   증상 = 창을 줄인 상태에서 면을 넘기면 하단 슬라이더 바(#bizm-dots-row)가 좌우로 튄다(1280×760 실측 스윙 21.2px).
+   정체 = `#main-area`는 flex 아이템인데 `min-width:auto`(기본)라 **내용의 min-content 밑으로 못 줄어든다**.
+     1면(전체 실적표 = 연도 7열 + 누계)은 min-content가 자기 몫(50%)보다 넓어서 열이 42.5px 부풀고,
+     `flex-shrink:0`인 우 레일(50% 고정)을 그만큼 오른쪽으로 밀어 문서가 가로로 넘쳤다(1280 화면에 1322.5px).
+     3·4면은 안 넘쳐 정확히 50:50 → 면마다 **펼침 폭·중심이 달라진다** = 그 중심에 맞춰 미는 바가 왔다갔다.
+     전체화면(1920·1600·1440)은 1면도 50% 안에 들어가 스윙 0 → 「전체화면에선 상관없다」와 실측 일치.
+   조치 = min-width:0 = 「좌:우 = 1:1 비율」이 폭에 관계없이 항상 성립. 넘치는 표는 종전대로 자기 통(overflow-x:auto)
+     안에서 가로 스크롤한다(정본 = _yrmTable의 표 감싸개). 실측: 1220~1920 전 구간 바 스윙 0.0px · 문서 가로 넘침도 0.
+   biz(대시보드) 모드로만 한정 = 캘린더 모드(레일 숨김·전체 폭)는 종전 거동 그대로(회귀 0). */
+#app.biz-mode #main-area{min-width:0}
 @media(max-width:1200px){#sales-rail{display:none}}
 /* [260731 운영자] 캘린더 모드 = 판매 레일 없음 — 「캘린더 누를 때 사업 판매현황이 있을 필요가 없다」.
    260708 판매 레일 도입(PR 139) 이전 화면 복원: 캘린더가 전체 폭을 쓰고, 날짜 클릭 시 우측 360px 사이드바(#panel)가 살아나며 캘린더가 그만큼 밀린다(_panelRailReflow).
@@ -2164,10 +2175,24 @@ table.promo-board-table thead th:last-child{border-top-right-radius:11px}
 /* [260802 운영자] 「오로지 내용부분만 촤르르 아주 자연스럽게 고프레임으로」 — 넘김 동안만 합성 레이어로 승격(will-change).
    클래스가 .42s 뒤 제거되므로(_bizmAnimate) 평소엔 레이어를 물지 않는다 = 상시 메모리 부담 0.
    프레임(유리) 노드 자체는 _bizmSwap이 유지 — 이 애니는 그 '안'에서만 돈다(transform·opacity = 페인트 없는 속성). */
-.bizm-flip{overflow:hidden}
-.bizm-flip>*{animation:bizPageR .42s cubic-bezier(.22,.61,.36,1);will-change:transform,opacity}
-.bizm-flip.rev>*{animation-name:bizPageL}
-@media (prefers-reduced-motion:reduce){.bizm-flip>*{animation:none}}
+/* ── [260804 운영자 「다음 페이지로 전환될 때 번쩍인다 · 최대한 자연스럽게 디졸빙 · 내용이 차라리 없어도
+      디졸빙해서 넘어간 다음에 기다리게 하는 게 낫다」] 책 넘김 결 = 슬라이드-인 → **디졸브** ──────────────
+   번쩍임의 정체(프레임 실측 45ms 간격): 구판은 `_bizmSwap`이 내용을 **한 프레임에 통째로** 갈고,
+     새 내용만 `bizPageR`(x38px + opacity 0→1)로 들어왔다 → 옛 내용은 **사라지는 과정이 없다**.
+     그 한 프레임에 유리 안이 비어 배경 사진이 그대로 비치면서 화면이 확 밝아진다 = 「번쩍」.
+   새 결 = ① 지금 내용을 .18s에 걸쳐 지우고(out) → ② 그 상태(opacity 0)에서 교체 → ③ .30s에 걸쳐 새 내용을 올린다.
+     밝기가 계단이 아니라 경사로 오르내리므로 번쩍임이 없다. 운영자 단서대로 **비어 있는 동안은 그냥 기다린다**
+     (로딩 중이어도 디졸브는 이미 끝나 있다 = 「디졸빙해서 넘어간 다음에 기다리게」).
+   기하 무접촉 원칙(260802b 「높이 글라이드 철회」와 같은 축): 애니 대상 = **opacity 뿐**. 레이아웃·높이·정렬을
+     건드리는 속성은 하나도 안 쓴다 → `_srailAlignTop`(이젤 고정)이 과도기 값을 재는 사고가 원천적으로 불가능.
+   붙는 곳은 종전과 동일(글래스 헤더 [data-bizmhead] · 유리박스 [data-bizmbox]의 **자식**) = 겉 유리 프레임은 제자리.
+   구 `.bizm-flip`(x축 슬라이드)은 폐지 — 되돌리려면 `_bizmAnimate`에서 이 클래스 대신 .bizm-flip을 다시 걸면 된다.
+   신규 색·토큰 0 · 이징은 기존 계승(cubic-bezier(.22,.61,.36,1)). */
+.bizm-dz>*{transition:opacity .30s cubic-bezier(.22,.61,.36,1);will-change:opacity}
+.bizm-dz.out>*{opacity:0;transition-duration:.18s;transition-timing-function:ease-in}
+@keyframes bizmDissIn{from{opacity:0}to{opacity:1}}   /* 늦게 도착한 데이터가 로딩 자리를 대신할 때(=디졸브 밖 교체)도 같은 결로 올라온다 */
+.bizm-dzin>*{animation:bizmDissIn .30s cubic-bezier(.22,.61,.36,1);will-change:opacity}
+@media (prefers-reduced-motion:reduce){.bizm-dz>*{transition:none}.bizm-dzin>*{animation:none}}
 /* [260723 운영자] 메인 토글(홍보 캘린더 ↔ 연간 실적) 촤르륵 슬라이드 — 좌측 콘텐츠만 이동, 우측 판매현황 레일은 고정. bizPage 키프레임 계승 */
 .mv-swipe{animation:bizPageR .42s cubic-bezier(.22,.61,.36,1)}
 .mv-swipe.rev{animation-name:bizPageL}
@@ -6445,14 +6470,21 @@ function _bizVisPages(){   // 지금 화면에 떠 있는 면들(하단 점 점�
   var lp=_bizLeftPage(); if(!_bizBookWide())return [lp];
   return _bizPageIsPair(lp)?[lp]:[lp,2];
 }
+// [260804] 우 열이 이번 넘김에 실제로 다시 그려지는가 — _bizBookRender와 **같은 판정**을 디졸브(_bizmFlip)가 미리 쓰려고 분리.
+//   두 곳이 어긋나면 「고정면(2)인데 우 열이 같이 흐려짐」 = 260801 「고정면 유지 열은 애니 0」 계약 위반이 되므로 식은 하나만 둔다.
+function _bizRightNeedsRedraw(){
+  if(!_bizBookWide())return false;
+  var rid=_bizRightId(_bizmState.page||1), el=document.getElementById('rail-yrm');
+  return (rid!==_bizmState.rightId||!el||!el.childNodes.length);
+}
 function _bizBookRender(){
   var wide=_bizBookWide();
   if(wide&&_bizPageKind(_bizmState.page||1)==='pin')_bizmState.page=1;   // 고정면은 좌 열이 그리지 않는다(좁은 화면에서 2면 보다 넓어진 경우 보정)
+  var rightRedraw=_bizRightNeedsRedraw();   // ⚠ _bizInlineRender 전에 재야 한다 — 렌더가 _bizmState.rightId를 갱신하면 판정이 뒤집힌다
   _bizInlineRender();
   var cols=['biz-main'];
   if(wide){
-    var rid=_bizRightId(_bizmState.page||1), el=document.getElementById('rail-yrm');
-    if(rid!==_bizmState.rightId||!el||!el.childNodes.length){ try{_railYrmRender();}catch(_e){console.warn('[book right]',_e);} cols.push('rail-yrm'); }   // 우 열은 그릴 면이 바뀔 때만 다시 그린다 = 「2는 고정」(판매 실적 회전·상세 그대로 유지)
+    if(rightRedraw){ try{_railYrmRender();}catch(_e){console.warn('[book right]',_e);} cols.push('rail-yrm'); }   // 우 열은 그릴 면이 바뀔 때만 다시 그린다 = 「2는 고정」(판매 실적 회전·상세 그대로 유지)
   } else _railYrmClear();   // 좁은 화면 = 우 열 없음 — 짝 면 후반이 남아 있으면 id 중복(bizm-genre 등)이 되므로 비운다
   _bizmAnimate(cols);
 }
@@ -6467,29 +6499,67 @@ function _bizmGo(d){
   var N=_bizBookN(), p=_bizmState.page||1;
   if(_bizBookWide()){ var seq=_bizLeftSeq(), i=seq.indexOf(_bizLeftPage()); if(i<0)i=0; i=(i+d)%seq.length; if(i<0)i+=seq.length; p=seq[i]; }   // 좌 열만 차례로(고정면 2는 건너뛴다) · 짝 면이면 그때만 우 열도 같이 넘어간다
   else { p+=d; if(p<1)p=N; if(p>N)p=1; }
-  _bizmState.dir=d; _bizmState.page=p; _bizBookRender();
+  _bizmState.dir=d; _bizmState.page=p; _bizmFlip();
 }
-function _bizmTo(p){ var N=_bizBookN(); if(p<1||p>N)return; if(_bizBookWide()&&_bizPageKind(p)==='pin')return; var cur=_bizmState.page||1; if(cur===p)return; _bizmState.dir=(p>cur)?1:-1; _bizmState.page=p; _bizBookRender(); }   // 넓은 화면에서 고정면 점은 무동작(판매 실적은 늘 우측에 떠 있다)
+function _bizmTo(p){ var N=_bizBookN(); if(p<1||p>N)return; if(_bizBookWide()&&_bizPageKind(p)==='pin')return; var cur=_bizmState.page||1; if(cur===p)return; _bizmState.dir=(p>cur)?1:-1; _bizmState.page=p; _bizmFlip(); }   // 넓은 화면에서 고정면 점은 무동작(판매 실적은 늘 우측에 떠 있다)
 // 특정 면으로 책 넘김(biz 모드 진입 포함). 넓은 화면은 그 면이 속한 펼침이 열린다.
 // [260731 5차] 세부메뉴는 팝업(모달) 진입으로 되돌아가 여기를 부르지 않음 — 딥링크·롤백용으로 남겨둠(_bizMenuBuild 주석 참조).
 function _bizBookGo(p){
   var cur=_bizmState.page||1; if(cur!==p){ _bizmState.dir=(p>cur)?1:-1; _bizmState.page=p; }
   if(typeof _mainView!=='undefined'&&_mainView!=='biz'&&typeof setMainView==='function'){ setMainView('biz'); return; }   // 면을 먼저 세팅 → 모드 전환 렌더(_mvApply)가 그 면을 바로 그린다(이중 렌더·애니 중복 방지 — 페이블 검수 7)
-  _bizBookRender();
+  _bizmFlip();
+}
+// ── [260804 운영자 「번쩍이면서 바뀐다 → 최대한 자연스럽게 디졸빙」] 책 넘김 = 디졸브 3박자 ─────────────
+//   ① 지금 내용을 .18s에 지운다(out) → ② opacity 0인 채로 교체(_bizBookRender) → ③ .30s에 새 내용을 올린다.
+//   구판은 ①이 아예 없어서(교체 = 한 프레임) 유리 안이 순간 비며 배경이 그대로 비쳤다 = 「번쩍」.
+//   설계 제약(꼭 지킬 것): **opacity만** 만진다. 높이·정렬을 건드리면 260802b(높이 글라이드)에서 겪은
+//     「_srailAlignTop이 과도기 값을 재서 박제」가 재발한다. 교체 시점의 기하는 구판과 100% 동일하다.
+//   점 점등은 기다리지 않고 **즉시** 갱신(_bizmDotSync) = 클릭 반응은 그대로 0ms로 느껴진다.
+//   대상 열 = 이번에 실제로 다시 그려지는 열만(_bizRightNeedsRedraw) → 고정면(2 판매 실적)은 흐려지지 않는다.
+var _BIZM_DZ_OUT=180, _BIZM_DZ_IN=300, _bizmDzT=null, _bizmDzSeq=0;   // _bizmDzSeq = 연타 토큰 — 늦게 도착한 앞 회차의 뒷정리가 새 회차의 페이드인을 끊지 못하게
+function _bizmDzFrames(cols){   // 디졸브가 붙는 곳 = 각 열의 글래스 헤더·유리박스(프레임 자체는 안 흐려지고 그 자식만)
+  var fr=[];
+  cols.forEach(function(id){
+    var el=document.getElementById(id); if(!el||el.offsetParent===null)return;
+    ['[data-bizmhead]','[data-bizmbox]'].forEach(function(sel){ var t=el.querySelector(sel); if(t)fr.push(t); });
+  });
+  return fr;
+}
+function _bizmDotSync(){   // 하단 점 점등만 즉시 반영(내용 디졸브를 기다리지 않는 클릭 피드백) — 마크업·클래스는 _bizmDots 정본 그대로
+  try{
+    var vis=_bizVisPages(), ds=document.querySelectorAll('#bizm-dots-row .bizm-pgctl .dot');
+    for(var i=0;i<ds.length;i++){ var on=vis.indexOf(i+1)>=0; ds[i].classList.toggle('on',on); ds[i].setAttribute('aria-pressed',on); }
+  }catch(_e){}
+}
+function _bizmReduceMotion(){ try{ return !!(window.matchMedia&&window.matchMedia('(prefers-reduced-motion:reduce)').matches); }catch(_e){ return false; } }
+function _bizmFlip(){
+  var cols=['biz-main'].concat(_bizRightNeedsRedraw()?['rail-yrm']:[]);
+  var fr=_bizmDzFrames(cols);
+  _bizmDotSync();
+  if(!fr.length||_bizmReduceMotion()){ _bizBookRender(); return; }   // 프레임 없음(첫 렌더)·감속선호 = 종전 즉시 교체(회귀 0)
+  if(_bizmDzT){ clearTimeout(_bizmDzT); _bizmDzT=null; }              // 연타 = 앞 디졸브 취소, 마지막 면으로 한 번만 넘어간다
+  var seq=++_bizmDzSeq;
+  fr.forEach(function(t){ t.classList.add('bizm-dz','out'); });
+  _bizmDzT=setTimeout(function(){
+    _bizmDzT=null;
+    try{ _bizBookRender(); }catch(_e){ console.warn('[book dissolve]',_e); }
+    // 교체 후 다시 잡는다 — _bizmSwap이 프레임을 재사용하면 같은 노드(클래스 유지), 통째 교체로 폴백했으면 새 노드(클래스 없음).
+    // 어느 쪽이든 out을 보장해 두면(= opacity 0에서 출발) 다음 프레임에 해제하는 순간 동일하게 올라온다.
+    var fr2=_bizmDzFrames(cols);
+    fr2.forEach(function(t){ t.classList.add('bizm-dz','out'); });
+    requestAnimationFrame(function(){ requestAnimationFrame(function(){
+      if(seq!==_bizmDzSeq)return;                                     // 그 사이 새 넘김이 시작됐다 = 이 회차는 여기서 손 뗀다(새 회차가 out을 쥐고 있다)
+      fr2.forEach(function(t){ t.classList.remove('out'); });
+      setTimeout(function(){ if(seq!==_bizmDzSeq)return; fr2.forEach(function(t){ t.classList.remove('bizm-dz','out'); }); },_BIZM_DZ_IN+80);   // will-change 잔류 방지(평소엔 레이어 0)
+    }); });
+  },_BIZM_DZ_OUT);
 }
 // [260801 운영자] 책넘김 = 「겉 유리 프레임(글래스 헤더·블러 박스)은 제자리, 그 안 내용만 촤르르」 — 구 통째 슬라이드(.bizm-page, 프레임까지 미끄러짐) 대체.
 //   cols = 이번에 실제로 바뀐 열만(고정면 유지 열은 애니 0 = 흔들림 없음).
+// [260804] 결(x축 슬라이드 .bizm-flip)은 디졸브(_bizmFlip)로 이관 — 여기 남은 일은 **넘김 뒤 기하 재계산 1패스**뿐이다.
+//   그래서 이 함수는 애니를 걸지 않는다(디졸브가 이미 걸어 둔 것을 덮어써 이중 페이드가 나던 축 제거).
+//   창 크기 변화로 부르는 _bizBookRender(L6129 리사이즈)는 디졸브를 안 거치므로 종전대로 즉시 교체 = 회귀 0.
 function _bizmAnimate(cols){
-  (cols||['biz-main','rail-yrm']).forEach(function(id){
-    var el=document.getElementById(id); if(!el||el.offsetParent===null)return;
-    var rev=((_bizmState.dir||1)<0);
-    ['[data-bizmhead]','[data-bizmbox]'].forEach(function(sel){
-      var t=el.querySelector(sel); if(!t)return;
-      t.classList.remove('bizm-flip','rev'); void t.offsetWidth;
-      t.classList.add('bizm-flip'); if(rev)t.classList.add('rev');
-      setTimeout(function(){ t.classList.remove('bizm-flip','rev'); },480);   // overflow:hidden 잔류 방지(행 호버 팝오버·내부 스크롤 원복) — .42s 애니 + 여유
-    });
-  });
   // [260802b] 넘김이 끝난 뒤 기하 재계산 1패스 — _srailAlignTop은 렌더 직후 rAF 한 번만 돌아서, 그 순간의 값이
   //   과도기(애니·차트 늦은 그리기 등)면 잘못 잡힌 높이가 **그대로 박힌다**(운영자 실측: 3면 갔다 오면 1-2면 유리박스가 화면 아래까지).
   //   애니가 끝난 뒤 한 번 더 재면 그런 과도기 값이 스스로 풀린다(값 계산은 정본 그대로 · 새 규칙 0).
@@ -6526,6 +6596,17 @@ function _bizmSwap(el,html){
   //   헤더가 내용 높이(22px대)로 붕괴 → 박스 상단이 면마다 25px씩 밀려 「블러 칸 틀어짐」의 원인①이었다(운영자 실측 캡처).
   //   _srailAlignTop이 헤더 minHeight를 쓰는 일은 없으므로 잔재 청소 대상이 아니다.
   try{ oB.style.minHeight=''; oB.style.maxHeight=''; oB.style.transition=''; oH.style.height=''; }catch(_e){}
+  // [260804] 디졸브 **밖**에서 일어나는 교체(= 로딩 자리를 늦게 도착한 데이터가 대신할 때)도 같은 결로 올라오게 한다.
+  //   책 넘김 디졸브 중(.bizm-dz)이면 그쪽이 이미 opacity를 쥐고 있으므로 건드리지 않는다(이중 페이드 방지).
+  //   운영자 단서 「디졸빙해서 넘어간 다음에 기다리게 하는 게 낫다」 = 기다린 끝에 나타나는 내용도 번쩍이지 않아야 한다.
+  try{
+    [oH,oB].forEach(function(t){
+      if(t.classList.contains('bizm-dz'))return;
+      t.classList.remove('bizm-dzin'); void t.offsetWidth;   // 연속 교체 시 애니 재시작(리플로우 1회 = 기존 _bizmAnimate와 같은 관용구)
+      t.classList.add('bizm-dzin');
+      setTimeout(function(){ t.classList.remove('bizm-dzin'); },380);   // will-change 잔류 방지(.30s 애니 + 여유)
+    });
+  }catch(_e){}
   return true;
 }
 function _bizmPageNav(){ return ''; }   // [260723f] 절대배치 ‹›(구 srail-cbtn) 폐지 — 페이지 컨트롤은 헤더 우측 _bizmDots로 통합(‹ • • ›)
