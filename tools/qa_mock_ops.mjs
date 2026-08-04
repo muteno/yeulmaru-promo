@@ -37,10 +37,39 @@ export const INIT_SCRIPT = `(function(){
   window.__MOCK_OPS={rows:rows,headers:Object.keys(rows[0])};
 
   // ?qa 목 API 훅 — 페이지가 function _qaApi(){}로 재선언해도 setter가 원본을 품고 getter가 래퍼를 준다
+  // [260805] 3면 분야 축(공연/전시·교육) 신설 — 전시 반쪽의 레이아웃 계약을 재려면 전시 원천 2시트가 있어야 한다.
+  //   형태만 재현(실데이터·PII 미접촉): 연도별 전시 + 2026 진행중/종료/예정 3상태 · 목표관객 유/무 · 매출 유/무.
+  var exM=[],exD=[];
+  (function(){
+    var NM=['봄 소장품전','여름 기획전 <빛의 결>','가을 사진전','겨울 공예전','신진작가 초대전'];
+    var id=0;
+    for(var y=2022;y<=2026;y++){
+      var n=(y===2026)?4:5;
+      for(var i=0;i<n;i++){
+        id++;
+        var eid='EXM'+id, mm=2+i*2, goal=(i===3)?'':String(1200+Math.round(rnd()*2600));
+        var tot=Math.round(600+rnd()*2400), paid=Math.round(tot*(0.55+rnd()*0.35));
+        var st=(y<2026)?'종료':((i===0)?'종료':((i===1)?'진행중':((i===2)?'진행중':'예정')));
+        if(y===2026&&st==='예정'){ tot=0; paid=0; }
+        exM.push({'전시ID':eid,'전시명':y+' '+NM[i],'연도':y,'상태':st,'무료여부':'',
+          '목표관객':goal,'목표금액':'','최종유료':String(paid),'최종무료':String(tot-paid),
+          '최종총인원':String(tot),'최종매출':(i%2===0?String(tot*7000):''),
+          '시작일':y+'-'+('0'+mm).slice(-2)+'-05','종료일':y+'-'+('0'+Math.min(12,mm+2)).slice(-2)+'-24',
+          '운영일수':String(40+Math.round(rnd()*30)),'최종점유율':''});
+        if(tot>0)exD.push({'전시ID':eid,'전시명':y+' '+NM[i],'기준일자':String(y)+('0'+mm).slice(-2)+'20',
+          '누계유료':String(paid),'누계무료':String(tot-paid),'누계총인원':String(tot),'누계금액':'','점유율':''});
+      }
+    }
+  })();
+  window.__MOCK_EXM={rows:exM,headers:Object.keys(exM[0])};
+  window.__MOCK_EXD={rows:exD,headers:Object.keys(exD[0])};
+
   var real=null;
   function wrapped(method,path){
-    var p=String(path||'');
-    if(p.indexOf('/api/ops')===0&&decodeURIComponent(p).indexOf('세부운영관리대장')>=0)return Promise.resolve(window.__MOCK_OPS);
+    var p=String(path||''), dp=decodeURIComponent(p);
+    if(p.indexOf('/api/ops')===0&&dp.indexOf('세부운영관리대장')>=0)return Promise.resolve(window.__MOCK_OPS);
+    if(p.indexOf('/api/ops')===0&&dp.indexOf('전시마스터')>=0)return Promise.resolve(window.__MOCK_EXM);
+    if(p.indexOf('/api/ops')===0&&dp.indexOf('전시일일')>=0)return Promise.resolve(window.__MOCK_EXD);
     return real?real(method,path):Promise.resolve({rows:[],headers:[],programs:[]});
   }
   try{ Object.defineProperty(window,'_qaApi',{configurable:true,get:function(){return wrapped;},set:function(v){real=v;}}); }catch(e){}
@@ -76,6 +105,8 @@ export const INIT_SCRIPT = `(function(){
 export const FEED_SCRIPT = `(()=>{
   if(typeof _bizState!=='undefined'&&_bizState)_bizState.raw=window.__MOCK_OPS;
   if(typeof _salesState!=='undefined'&&_salesState){ _salesState.ops=window.__MOCK_OPS; _salesState._opsIdx=null; }
+  // [260805] 전시 캐시 = 레일 6시트 플로우가 채우는 자리(_anaState._exMaster/_exDaily)를 목값으로 선점 — 3면 전시 반쪽이 로딩 화면에 머물지 않게
+  if(typeof _anaState!=='undefined'&&_anaState){ _anaState._exMaster=window.__MOCK_EXM; _anaState._exDaily=window.__MOCK_EXD; }
   if(typeof _railYrmSync==='function')_railYrmSync(window._mockActives());
   // [260803] 실앱 _srailRender와 같은 순서로 회전 상세(우하단 2×2)까지 켠다 — 이 배선이 빠져 있어서
   //   「본문 없는 빈 슬롯 4px + 카드 여백 14가 우 흰 카드를 18px 밀어올리는」 실제 운영 화면 상태가

@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>260805 사업 결과 비교(3면) — 장르별 판매 축적 좌 하단 이동 · 우 열 목록 단독 전후</title>
+<style>
+  body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;max-width:1000px;margin:30px auto;padding:0 20px;color:#1A1A2E;line-height:1.6}
+  h1{font-size:20px} h2{font-size:16px;margin-top:30px}
+  img{max-width:100%;border:1px solid rgba(0,0,0,0.12);border-radius:12px;display:block;margin:10px 0}
+  .dim{color:#888;font-size:12.5px} code{background:rgba(74,77,231,0.08);padding:1px 5px;border-radius:5px;font-size:12px}
+  table{border-collapse:collapse;font-size:13px;margin:10px 0} td,th{border:1px solid rgba(0,0,0,0.12);padding:6px 10px;text-align:left}
+</style>
+</head>
+<body>
+<h1>260805 — 3면(사업 결과 비교): 장르별 판매 축적을 좌 하단으로 · 우 열은 목록 단독</h1>
+<p class="dim">지시(운영자): <b>「장르별 축적을 좌측 하단부로 완전히 크기를 대체해주고, 지금 우측을 그냥 리스트업 쭉 해당 크기 내에서 나오게 해줄래?」</b></p>
+<p class="dim">화면 = QA 진입로(<code>?qa=admin</code>) + 레이아웃 스모크와 같은 목데이터(<code>tools/qa_mock_ops.mjs</code>) · 실데이터·PII 미접촉. 1920×1080.</p>
+
+<h2>전 — 좌: KPI·판매현황·시즌 추세 / 우: 장르별 축적 + 목록</h2>
+<img src="260805_3면_장르축적_좌하단_전.png" alt="전: 좌 열 하단이 시즌(연도)별 장르 점유율 추세, 우 열 상단이 장르별 판매 축적">
+
+<h2>후 — 좌: KPI·판매현황·<b>장르별 축적</b> / 우: <b>목록 단독</b>(박스 전면)</h2>
+<img src="260805_3면_장르축적_좌하단_후.png" alt="후: 좌 열 하단이 장르별 판매 축적, 우 열은 판매현황 상세 목록만 전면">
+
+<h2>바뀐 것</h2>
+<table>
+<tr><th>자리</th><th>전</th><th>후</th></tr>
+<tr><td>좌 열(3-1)</td><td>KPI · 판매현황 막대 · 시즌(연도)별 장르 점유율 추세</td><td>KPI · 판매현황 막대 · <b>장르별 판매 축적</b></td></tr>
+<tr><td>우 열(3-2)</td><td>장르별 판매 축적 · 판매현황 상세 목록</td><td><b>판매현황 상세 목록 단독</b>(박스 안선까지 전면)</td></tr>
+<tr><td>우 열 라벨</td><td>장르별 판매 축적 · 판매현황 상세</td><td>판매현황 상세</td></tr>
+<tr><td>시즌 추세</td><td>인라인 3면 좌 하단</td><td>인라인에서 내림 → <b>전체 모달 「자세히 보기」(<code>openBusinessBoard</code>)에 그대로 존치</b> = 잃는 정보 0</td></tr>
+</table>
+
+<h2>배선(신규 부품 0 · 기존 규약 승계)</h2>
+<ul>
+<li>축적 카드가 좌 열 <b>마지막 흰 도형</b>이 되므로 구 시즌 카드의 <code>data-bizmfill</code> 마킹을 그대로 승계(좌 열일 때만).</li>
+<li><code>_bizFitSeason</code> 좌 열 흡수 차트 = <code>['bizm-season','bizm-chart']</code> → <code>['bizm-chart']</code>. 남는/모자란 몫은 판매현황 막대가 흡수(1920×1080 실측 430→387px).</li>
+<li>우 열 목록은 종전 <code>data-bizmfill data-bizmcap</code> 그대로 — 이제 박스의 유일한 카드라 상단~안선 전체를 차지하고, 행이 많으면 그 안에서 스크롤.</li>
+<li>인라인 <code>_bizDrawSeason('bizm-season',…)</code> 호출 철거. 모달의 인자 없는 <code>_bizDrawSeason()</code>(<code>biz-season-chart</code>)은 무접촉.</li>
+<li>좁은 화면(≤1200, 한 열) = 같은 순서 유지(KPI → 판매현황 → 축적 → 표).</li>
+</ul>
+
+<h2>폐기한 시안 — 축적 카드 세로 flex(게이지 가운데 정렬)</h2>
+<p class="dim">큰 화면에서 카드가 늘어날 때 생기는 아래 여백을 위·아래로 나누려 했으나, <b>flex 아이템은 <code>max-height</code>가 걸리면 줄어든다</b>.
+그러면 <code>_srailAlignTop</code>의 넘침 흡수 판정(<code>scrollHeight &gt; 안선−자기상단</code>)이 「걸면 안 넘침 → 해제 → 다시 넘침」으로 진동해 멱등이 깨진다
+— 1440×820 실측 = 좌 흰 도형이 안선 아래 <b>53.1px</b>(스모크 FAIL). 블록 레이아웃 유지로 되돌렸다.</p>
+
+<h2>큰 화면(2560×1440) — 막대가 상한(560)에 닿은 뒤 남는 몫은 축적 카드가 흡수</h2>
+<img src="260805_3면_장르축적_좌하단_후_2560.png" alt="2560×1440: 판매현황 막대 560px 상한 · 축적 카드가 안선까지 늘어 좌·우 하단선 일치">
+<p class="dim">막대 560px(상한) · 남는 187px은 <code>data-bizmfill</code>이 축적 카드를 안선까지 늘려 흡수 → 좌·우 흰 하단선 Δ0.1px.</p>
+
+<h2>검증</h2>
+<ul>
+<li><code>tools/smoke_layout.mjs</code> — <b>PASS</b>: 2560×1440 · 1920×1080 · 1600×900 · 1512×982 · 1440×820.</li>
+<li>1366×768 · 1280×800 = FAIL이지만 <b>이 변경 이전(main)과 수치까지 동일</b>(우 흰 도형이 안선 아래 18.0px) = 기존 부채, 이번 회귀 아님.</li>
+<li><code>check_design</code> 1590/1590 · :root 2/0 · <code>check_refs</code> · <code>check_wiring</code> 전부 통과. 새 raw hex·새 토큰·새 컴포넌트 0.</li>
+</ul>
+</body>
+</html>
