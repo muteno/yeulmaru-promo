@@ -71,7 +71,13 @@ const INIT = `(function(){
   try{ Object.defineProperty(window,'_qaApi',{configurable:true,get:function(){return wrapped;},set:function(v){real=v;}}); }catch(e){}
 })();`;
 
+// 프로그램 시트(PERFS) 스텁 — 예정(오픈 전) 사업. ⚠ `let PERFS`는 window 속성이 아니라 **전역 렉시컬 바인딩**이라
+//   window.PERFS 주입으로는 안 덮인다 → 아래 FEED에서 **맨몸 대입**(PERFS = …)으로 그 바인딩을 갈아 끼운다.
+const PERFS_STUB = DATA.shows.filter(s => s.status === '예정')
+  .map(s => ({ s: s.date, e: s.dateEnd, n: s.name, f: s.name, t: 'c', g: s.gu || '', g2: s.genre || '', rc: 1, id: '' }));
+
 const FEED = `(()=>{
+  try{ PERFS = ${JSON.stringify(PERFS_STUB)}; }catch(e){ console.warn('PERFS stub', e); }
   if(typeof _bizState!=='undefined'&&_bizState)_bizState.raw=window.__MOCK_OPS;
   if(typeof _salesState!=='undefined'&&_salesState){ _salesState.ops=window.__MOCK_OPS; _salesState._opsIdx=null;
     _salesState.daily={rows:[]}; _salesState.master={rows:[]}; }
@@ -122,7 +128,8 @@ async function main() {
       const xt=[...d.querySelectorAll('.xaxislayer-above text')].map(t=>t.textContent);
       let sx=null; try{ sx=Object.keys(_bizSalesIdx(_bizmState.year)||{}).length; }catch(e){ sx='ERR '+e.message; }
       const kpi=[...document.querySelectorAll('#biz-main .bizm-kpi')].map(k=>k.textContent.trim());
-      return {bars, ticks, shapes, h:d.getBoundingClientRect().height, nx:xt.length, xt:xt.slice(-6), sx, kpi};
+      const ct=document.querySelector('#biz-main .bizm-card .ct'); const ctH=ct?Math.round(ct.getBoundingClientRect().height):0;
+      return {bars, ticks, shapes, h:Math.round(d.getBoundingClientRect().height), nx:xt.length, ctH, kpi};
     })()`);
     console.log(JSON.stringify(probe));
     if (errs.length) console.log('PAGE ERRORS: ' + errs.slice(0, 5).join(' | '));
