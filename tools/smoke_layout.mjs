@@ -90,6 +90,20 @@ const STABILITY = `(()=>{
   return [...seen];
 })()`;
 
+// [260805 2차] 고정 sleep → **기하가 멎을 때까지** 대기. 좌 열이 1면(연간 실적)인 슬라이드는 Plotly 차트가 늦게 그려져
+//   고정 대기가 과도기를 재는 일이 있었다(간헐 FAIL — 실제 파손이 아니라 하네스 타이밍). 두 번 연속 같은 스냅 = 정착.
+const SNAP = `(()=>{const q=s=>{const e=document.querySelector(s);if(!e)return 'x';const b=e.getBoundingClientRect();return b.top.toFixed(0)+','+b.bottom.toFixed(0);};
+  return q('#biz-main [data-bizmbox]')+'|'+q('#rail-yrm [data-bizmbox]')+'|'+q('#biz-main [data-bizmfill]')+'|'+q('#rail-yrm [data-bizmfill]');})()`;
+async function settle(page, min = 800, max = 8000) {
+  await page.waitForTimeout(min);
+  let prev = null, t = 0;
+  while (t < max) {
+    const s = await page.evaluate(SNAP);
+    if (s === prev) return;
+    prev = s; await page.waitForTimeout(250); t += 250;
+  }
+}
+
 function judge(tag, m, fails) {
   if (!m || !m.L) return;                       // 그 면에 좌 박스가 없다(좁은 화면 등) = 검사 대상 아님
   if (m.wide === false) return;                 // 좁은 화면(≤1200) = 이젤 계약 비적용(자연 높이)
@@ -144,27 +158,33 @@ async function main() {
     await page.waitForSelector('#biz-main [data-bizmbox]', { timeout: 20000 });
     await page.waitForTimeout(2000);
 
-    judge('1면(판매 실적 빈 데이터)', await page.evaluate(MEASURE), fails);
+    judge('슬라이드1(빈 데이터)', await page.evaluate(MEASURE), fails);
     await page.evaluate(FEED_SCRIPT);
-    await page.waitForTimeout(900);
-    judge('1면(데이터 있음)', await page.evaluate(MEASURE), fails);
+    await settle(page);
+    judge('슬라이드1(데이터 있음)', await page.evaluate(MEASURE), fails);
 
     const states = await page.evaluate(STABILITY);
-    if (states.length > 1) fails.push(`1면: 재계산 12회에 기하가 흔들림(상태 ${states.length}개) — ${states.join(' / ')}`);
+    if (states.length > 1) fails.push(`슬라이드1: 재계산 12회에 기하가 흔들림(상태 ${states.length}개) — ${states.join(' / ')}`);
 
-    for (const p of [3, 4, 1]) {
-      await page.evaluate(`_bizmTo(${p})`);
-      await page.waitForTimeout(1600);
-      judge(`${p}면${p === 1 ? '(복귀)' : ''}`, await page.evaluate(MEASURE), fails);
-      // [260805] 3면 분야 축(공연/전시·교육) 신설 — 반반 면(좌 전시 / 우 교육)도 같은 이젤·흰 라인 계약을 진다.
+    // ── [260805 2차] 넘김 = 「슬라이드」(좌 면 | 우 열 조합) — `_bizmTo` 인자는 **면 번호가 아니라 슬라이드 자리**다 ──
+    //   좌·우가 한 칸씩 엇갈려 넘어가므로 면이 아니라 **조합마다** 이젤·흰 라인 계약이 따로 성립해야 한다
+    //   (같은 「판매현황 상세」 우 열이 좌 사업 결과 비교·연간 실적·고객 분석과 차례로 짝을 이룬다).
+    //   → 슬라이드 전부를 돈 뒤 1번으로 복귀(왕복 회귀). 차례표가 늘어나면 이 루프는 자동으로 따라간다.
+    const SL = await page.evaluate(`_bizSlides().map(function(s){return s.p+(s.d?'|상세':'|판매실적');})`);
+    const seq = []; for (let i = 2; i <= SL.length; i++) seq.push(i); seq.push(1);
+    for (const i of seq) {
+      await page.evaluate(`_bizmTo(${i})`);
+      await settle(page);
+      judge(`슬라이드${i}(${SL[i - 1]})${i === 1 ? ' 복귀' : ''}`, await page.evaluate(MEASURE), fails);
+      // [260805] 3면 분야 축(공연/전시·교육) — 반반 면(좌 전시 / 우 교육)도 같은 이젤·흰 라인 계약을 진다.
       //   왕복까지 재는 이유 = 분야를 오갈 때 한쪽 열만 다시 그려 두 열 하단선이 어긋나는 것이 이 구조의 대표 파손 모양.
-      if (p === 3 && await page.evaluate(`typeof _bizmSetDomain==='function'`)) {
-        await page.evaluate(`_bizmSetDomain('exhib')`);
-        await page.waitForTimeout(1700);
-        judge('3면(전시·교육)', await page.evaluate(MEASURE), fails);
-        await page.evaluate(`_bizmSetDomain('perf')`);
-        await page.waitForTimeout(1500);
-        judge('3면(공연 복귀)', await page.evaluate(MEASURE), fails);
+      //   [260805 2차] 분야 칩은 3면이 **좌 열**일 때만 뜨므로(조작부 = 좌 열 소유) 그 슬라이드에서만 왕복한다.
+      if (SL[i - 1].startsWith('3|') && await page.evaluate(`typeof _bizmSetDomain==='function'`)) {
+        for (const [d, lab] of [['exhib', '전시·교육'], ['perf', '공연 복귀']]) {
+          await page.evaluate(`_bizmSetDomain('${d}')`);
+          await settle(page);
+          judge(`슬라이드${i}(${lab})`, await page.evaluate(MEASURE), fails);
+        }
       }
     }
 
