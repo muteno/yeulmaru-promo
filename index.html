@@ -21136,11 +21136,20 @@ function openPanel(dateObj,recs){
   //   전시는 이 함수 위쪽 「그날 일정」 합류분이 담당(같은 함수를 두 번 도는 오해 방지).
   var now=new Date();now.setHours(0,0,0,0);
   var ref=new Date(dateObj);ref.setHours(0,0,0,0);
-  var openPerfs=PERFS.filter(function(p){if(p.o!==1||p.t!=='c')return false;var pe=new Date(p.e);pe.setHours(0,0,0,0);return pe>=ref;});
-  var openExh=PERFS.filter(function(p){if(p.o!==1||p.t!=='e')return false;var pe=new Date(p.e);pe.setHours(0,0,0,0);return pe>=ref;});
-  // (260611) 예술교육·대관도 포함 — 기존 공연/전시만 필터해 화요살롱 등이 패널에서 누락됐음
-  var openEdu=PERFS.filter(function(p){if(p.o!==1||p.t!=='a')return false;var pe=new Date(p.e);pe.setHours(0,0,0,0);return pe>=ref;});
-  var openRent=PERFS.filter(function(p){if(p.o!==1||p.t!=='r')return false;var pe=new Date(p.e);pe.setHours(0,0,0,0);return pe>=ref;});
+  // [260804 운영자 「당일 건만 나오면 될듯」] 이 패널 = 「그 날짜의 상세」다. 그래서 그 날짜에 **실제로 진행 중인**
+  //   프로그램만 남긴다(시작일 ≤ 기준일 ≤ 종료일). 구판은 종료일만 봐서(pe>=ref) 아직 시작도 안 한 하반기 건이
+  //   D-47…D-131로 줄줄이 딸려 왔다 = 그 날과 무관한 목록이 패널을 채움(운영자 캡처). 시작일 조건 하나를 더해 좁힌다.
+  //   (260611) 예술교육·대관도 포함 — 기존 공연/전시만 필터해 화요살롱 등이 패널에서 누락됐던 건 그대로 계승.
+  //   s·e 중 하나라도 없으면 그 날에 놓을 수 없으므로 제외(구판은 e만 보고 실었으나 dd가 NaN→'종료'로 새던 자리).
+  function _openOnDay(kind){
+    return PERFS.filter(function(p){
+      if(p.o!==1||p.t!==kind||!p.s||!p.e)return false;
+      var ps=new Date(p.s);ps.setHours(0,0,0,0);
+      var pe=new Date(p.e);pe.setHours(0,0,0,0);
+      return ps<=ref&&ref<=pe;
+    });
+  }
+  var openPerfs=_openOnDay('c'),openExh=_openOnDay('e'),openEdu=_openOnDay('a'),openRent=_openOnDay('r');
   var progTotal=openPerfs.length+openExh.length+openEdu.length+openRent.length;
   // [260731 운영자] 프로그램 일정 = 「기획 / 대관」 2개 섹션으로 갈라 본다(둘 다 기본 펼침).
   //   기획 = 공연·전시·예술교육(t c/e/a) · 대관 = t==='r'. 프로그램 관리 화면의 기획/대관 구분(_pgKind)과 같은 축.
