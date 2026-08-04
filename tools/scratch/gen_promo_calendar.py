@@ -53,12 +53,12 @@ E = [
     ("2026-09-03", "15:00", "인스타그램",   "이미지", "CHJ", "영화관 대신 공연장 ② %할인 3종", "춘자씨 50%(초·중·고) · 트리플빌/피아노 30%",     "심희은"),
     ("2026-09-16", "11:00", "카카오톡",     "이미지", "GND", "공연 D-2",                    "9/18~20 4회차 · 10년 만의 재방문",                 "황세웅"),
     ("2026-09-24", "15:00", "인스타그램",   "이미지", "TRP", "10월, 여수에서만 (희소성 묶음)", "트리플 빌 + 피아노 & 피아노 · 학생 30%",         "심희은"),
-    ("2026-09-24", "16:00", "블로그·맘카페", "이미지", "TRP", "10월, 여수에서만 — 롱폼",     "국립 단체 지역투어 + 해외 아티스트 내한",           "심희은"),
+    ("2026-09-24", "16:00", "블로그·맘카페", "텍스트", "TRP", "10월, 여수에서만 — 롱폼",     "국립 단체 지역투어 + 해외 아티스트 내한",           "심희은"),
     ("2026-10-06", "14:00", "인스타그램",   "영상",   "CHJ", "공연 D-3 릴스",               "10/9~10 · 가족 관람 소구",                        "심희은"),
-    ("2026-10-08", "16:00", "블로그·맘카페", "이미지", "TRP", "윌리엄 포사이스 심화",        "서울 CJ토월 10/2~4 직후 · 검색 유입용",            "심희은"),
+    ("2026-10-08", "16:00", "블로그·맘카페", "텍스트", "TRP", "윌리엄 포사이스 심화",        "서울 CJ토월 10/2~4 직후 · 검색 유입용",            "심희은"),
     ("2026-10-16", "15:00", "인스타그램",   "이미지", "C18", "시대악기로 듣는 18세기",       "제목 그대로 = 바로크의 정점 → 고전의 새벽 · 소극장",  "심희은"),
     ("2026-10-21", "14:00", "인스타그램",   "영상",   "PNP", "20년 전 아비뇽의 재회",       "babx × Adrien M & Claire B · 2023 초연",          "심희은"),
-    ("2026-10-21", "16:00", "블로그·맘카페", "이미지", "PNP", "미디어아트 롱폼",             "아르떼 컨택 연계 · 검색 유입용",                   "심희은"),
+    ("2026-10-21", "16:00", "블로그·맘카페", "텍스트", "PNP", "미디어아트 롱폼",             "아르떼 컨택 연계 · 검색 유입용",                   "심희은"),
 ]
 
 # ── 공연일·티켓오픈 마커 ──
@@ -152,6 +152,93 @@ def month_grid(y, m, byday):
     return "".join(out)
 
 
+def console_script(rows):
+    """앱 탭 콘솔에 붙여넣는 일괄 신청 스크립트.
+    앱 자체 함수(_buildRecRow · _validateScheduleChange · api)를 그대로 쓴다 —
+    위저드가 타는 경로와 동일(Worker→Graph→SharePoint). 새 저장 경로를 만들지 않는다."""
+    items = ",\n".join(
+        '{d:"%s",t:"%s",p1:"%s",p2:"%s",f:"%s",id:"%s",prog:%s,ti:"%s",bo:"%s",mg:"%s"}'
+        % (dt, tm, p1, PLAT[p1][1], fmt, PROG[pk][1], json.dumps(PROG[pk][0], ensure_ascii=False),
+           title.replace('"', "'"), cont.replace('"', "'"), mgr)
+        for (dt, tm, p1, fmt, pk, title, cont, mgr, msgs) in rows)
+    return '''/* 예울마루 홍보 계획 %d건 일괄 신청 — 앱 탭(로그인 상태) 콘솔에 붙여넣기
+   붙여넣고 Enter → 검증 표가 뜨고 「등록할까요?」 팝업 → [확인]을 눌러야 저장된다.
+   [취소]하면 아무것도 저장되지 않는다. (검증만 하고 끝내려면 ASK를 false로)
+   앱 자체 함수(_validateScheduleChange · _buildRecRow · api)를 그대로 사용 = 위저드와 같은 경로. */
+(async () => {
+  const ASK = true;                       // false = 검증만 하고 종료(저장 안 함)
+
+  const E = [
+%s
+  ];
+
+  const miss = ['api','_buildRecRow','_validateScheduleChange','_findPerfByName','records','userRole','syncReload','password']
+    .filter(n => { try { return typeof eval(n) === 'undefined'; } catch (e) { return true; } });
+  if (miss.length) { console.error('앱 페이지에서 실행하세요. 없는 심볼:', miss); return; }
+  if (!password)   { console.error('로그인 후 실행하세요 (password 비어 있음).'); return; }
+
+  /* 데이터 로딩 대기 — 로그인 직후엔 PERFS/records가 아직 비어 있다.
+     (260804 실패 원인: 이 대기가 없어서 22건 전부 「프로그램 못 찾음」으로 떨어졌다) */
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  for (let i = 0; i < 60; i++) {
+    const ready = (typeof _perfReady === 'undefined' || _perfReady) && PERFS && PERFS.length;
+    if (ready) break;
+    if (i === 0) console.log('프로그램 데이터 로딩 대기 중…');
+    await sleep(500);
+  }
+  if (!PERFS || !PERFS.length) { console.error('프로그램 목록이 비어 있습니다. 캘린더가 다 뜬 뒤 다시 실행하세요.'); return; }
+  console.log('프로그램 ' + PERFS.length + '건 · 기존 홍보기록 ' + records.length + '건 확인');
+
+  const status = (userRole === 'admin') ? '예정' : '신청 중';
+  const ok = [], ng = [];
+  E.forEach((e, i) => {
+    /* 프로그램ID 우선 매칭 — 이름은 바뀔 수 있어도 ID는 안 바뀐다. 못 찾으면 이름으로 폴백 */
+    const p = PERFS.find(x => String(x.id || '').trim() === e.id) || _findPerfByName(e.prog);
+    if (!p) { ng.push({ '#': i + 1, 날짜: e.d, 사유: '프로그램 못 찾음 (ID ' + e.id + ' / ' + e.prog + ')' }); return; }
+    e._p = p; e.prog = p.f || e.prog;          // 앱이 들고 있는 이름을 정본으로 사용
+    const v = _validateScheduleChange(null, e.d, e.t, { action: 'submit', plat1: e.p1, applicant: e.mg, program: e.prog });
+    if (!v.ok) { ng.push({ '#': i + 1, 날짜: e.d + ' ' + e.t, 제목: e.ti, 사유: v.reason }); return; }
+    ok.push(e);
+  });
+  console.log('%%c[홍보계획] 검증 %%d/%%d 통과 · 실패 %%d · 진행상태=%%s',
+    'font-weight:bold', ok.length, E.length, ng.length, status);
+  if (ng.length) console.table(ng);
+  console.table(ok.map(e => ({ 날짜: e.d, 시간: e.t, 플랫폼: e.p1, 프로그램: e.prog, 제목: e.ti, 게시: e.mg })));
+  if (!ok.length) { console.warn('등록할 게 없습니다.'); return; }
+  if (!ASK) { console.warn('검증만 하고 종료 — 저장 안 함.'); return; }
+  const dup = records.filter(r => ok.some(e => String(r['프로그램'] || '') === e.prog && String(r['콘텐츠 제목'] || '') === e.ti)).length;
+  if (!confirm('예울마루 홍보 계획 ' + ok.length + '건을 지금 등록할까요?\\n\\n'
+      + '진행 상태: ' + status + '\\n'
+      + (dup ? '\\u26a0 같은 프로그램·제목이 이미 ' + dup + '건 있습니다(중복 등록될 수 있음)\\n' : '')
+      + '\\n[확인] = 등록  /  [취소] = 아무것도 저장 안 함')) {
+    console.warn('취소됨 — 저장 안 함.'); return;
+  }
+
+  let n = 0;
+  for (const e of ok) {
+    const pw = {
+      date: e.d, time: e.t, plat1: e.p1, plat2: e.p2, format: e.f,
+      programType: (e._p || {}).t || 'c', program: e.prog,
+      title: e.ti, applicant: e.mg, memo: '', folders: [],
+      kakaoText: e.p1 === '카카오톡' ? e.bo : '', instaText: e.p1 === '인스타그램' ? e.bo : '',
+      blogDirection: e.p1.indexOf('블로그') === 0 ? e.bo : '',
+      b2bIntraText: '', b2bLink: '', smsBody: '', freeText: '', intent: '', customPlatform: ''
+    };
+    try {
+      await api('POST', '/api/records', { values: _buildRecRow(pw, status, records.length + 1 + n, false) });
+      n++; console.log('  ' + n + '/' + ok.length + ' \\u2713 ' + e.d + ' ' + e.t + ' [' + e.p1 + '] ' + e.ti);
+    } catch (err) {
+      console.error('  \\u2717 ' + e.d + ' ' + e.t + ' ' + e.ti + ' \\u2014 ' + err.message);
+      console.warn('여기서 중단합니다. 앞의 ' + n + '건은 이미 등록됐습니다.'); break;
+    }
+    await new Promise(r => setTimeout(r, 300));
+  }
+  await syncReload(n);
+  console.log('%%c완료 — ' + n + '건 등록. 캘린더를 확인하세요.', 'font-weight:bold;color:#1A6B3C');
+})();
+''' % (len(rows), items)
+
+
 def build():
     rows, bad = validate()
     byday = {}
@@ -176,8 +263,12 @@ def build():
                PLAT[p1][0], html.escape(p1), html.escape(PLAT[p1][1]), html.escape(fmt),
                html.escape(full), html.escape(title), html.escape(cont), html.escape(mgr), ok))
 
+    js = console_script(rows)
+    open("tools/scratch/apply_promo_calendar.js", "w", encoding="utf-8").write(js)
+
     tpl = open("tools/scratch/promo_calendar_tpl.html", encoding="utf-8").read()
     out = (tpl.replace("{{CAL}}", cal)
+              .replace("{{SCRIPT}}", html.escape(js))
               .replace("{{ROWS}}", "".join(trs))
               .replace("{{N}}", str(len(rows)))
               .replace("{{BAD}}", str(bad))
