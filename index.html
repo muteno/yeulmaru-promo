@@ -898,7 +898,11 @@ button{font-family:inherit;cursor:pointer}
 /* [260801 운영자] 연도 = 「2026년 8월 29일 토요일」. 요일(.panel-dow)과 같은 급(13px/600/--dim)이고
    날짜와의 여백도 같은 8px — 좌우 대칭(연도 margin-right = 요일 margin-left). 값 복제 없이 규칙만 뒤집는다. */
 .panel-yr{font-size:13px;font-weight:600;margin-right:8px;color:var(--dim)}
-.panel-hdr-hol{font-size:13px;font-weight:600;color:#D64545}
+/* [260804 운영자] 공휴일·기념일 = 요일 바로 오른쪽, 같은 급(13px/600)·같은 여백(8px = .panel-dow margin-left와 한 값).
+   종전엔 아래 .panel-hdr-labels 줄로 떨어져 그날만 본문이 14px+줄높이만큼 밀렸다 — 그 밀림을 없애려고 날짜 줄로 올린 것.
+   날짜 줄이 좁은 폭에서 두 줄로 접히면 밀림이 되살아나므로 줄바꿈을 막고, 넘치면 말줄임(전체 이름은 title). */
+.panel-date{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.panel-hdr-hol{font-size:13px;font-weight:600;color:#D64545;margin-left:8px}
 /* [260731 운영자 2차] 그날 일정 = 「n행 3열」로 함께 움직이는 격자 — 구분 | 제목 | 장소.
    표(테이블)·테두리는 쓰지 않는다: 바깥 grid + 각 행 display:contents 로 열만 공유(마크업은 div/span 그대로).
    · 1열 구분 = 「공연·교육·대관·셋업」 글자만(운영자 260731 3차 — 알약/버튼 형태 폐지).
@@ -914,7 +918,6 @@ button{font-family:inherit;cursor:pointer}
    행 높이는 가장 큰 글자(13px 제목)가 잡고, 12.5·11px 열은 baseline 정렬이라 같은 줄 위에 그대로 앉는다. */
 .panel-hdr-labels{margin-top:14px;display:grid;grid-template-columns:40px minmax(0,1fr) auto;column-gap:8px;row-gap:0;line-height:2;align-items:baseline}
 .panel-hdr-labels>span{margin-left:0}
-.panel-hdr-hol{grid-column:1/-1}
 .panel-hdr-prog{display:contents}
 .panel-hdr-kind{justify-self:start;font-size:12.5px;font-weight:700;white-space:nowrap}
 .panel-hdr-nm{font-size:13px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -21336,8 +21339,14 @@ function openPanel(dateObj,recs){
     var ia=_PK_ORDER.indexOf(perfBadgeKind(a)),ib=_PK_ORDER.indexOf(perfBadgeKind(b));
     return (ia<0?_PK_ORDER.length:ia)-(ib<0?_PK_ORDER.length:ib);
   });
-  var _pLabels=(_pHol?'<span class="panel-hdr-hol">'+escapeHtml(_pHol)+'</span>':'');
-  var h='<div class="panel-hdr"><div style="flex:1;min-width:0"><div class="panel-date"><span class="panel-yr">'+dateObj.getFullYear()+'년</span>'+(dateObj.getMonth()+1)+'월 '+dateObj.getDate()+'일<span class="panel-dow">'+dn+'요일</span></div>'+(_pLabels?'<div class="panel-hdr-labels">'+_pLabels+'</div>':'')+'</div><button class="panel-close" onclick="closePanel()">✕</button></div><div class="panel-body">';
+  // [260804 운영자 「기념일이나 공휴일같은거, 요일 우측에 요일 좌우 동일한 간격으로 표시하게 해줘. 형태는 동일하게.
+  //   그게 있을때는 전체적으로 아래로 밀려서 그걸 방지하려는거임」]
+  //   공휴일은 종전에 날짜 줄 **아래 별도 줄**(.panel-hdr-labels · margin-top:14px)로 붙어, 그날만 본문 전체가 밀렸다.
+  //   → 날짜 줄 안, 요일 바로 오른쪽으로 옮긴다. 간격은 요일이 쓰는 것과 같은 8px(.panel-dow margin-left와 한 값).
+  //   형태(13px/600)도 요일과 같은 급 그대로 — 색만 종전 빨강 유지(.panel-hdr-hol). 신규 부품·색 0.
+  //   이로써 .panel-hdr-labels 줄은 더 이상 만들어지지 않는다 = 공휴일 유무로 본문 시작선이 흔들리지 않는다.
+  var _pHolHtml=(_pHol?'<span class="panel-hdr-hol">'+escapeHtml(_pHol)+'</span>':'');
+  var h='<div class="panel-hdr"><div style="flex:1;min-width:0"><div class="panel-date"><span class="panel-yr">'+dateObj.getFullYear()+'년</span>'+(dateObj.getMonth()+1)+'월 '+dateObj.getDate()+'일<span class="panel-dow">'+dn+'요일</span>'+_pHolHtml+'</div></div><button class="panel-close" onclick="closePanel()">✕</button></div><div class="panel-body">';
   var dKey=dk(dateObj);
   // === 카페/장도 운영시간 (서비스 안내 — 본문 맨 위 고정) ===
   var _cfRaw=((window._cafeHours&&_cafeHours[dKey])||'').toString().trim();
