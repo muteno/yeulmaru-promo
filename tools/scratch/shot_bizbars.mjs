@@ -35,7 +35,9 @@ const pushRow = (y, m, d, name, genre, seat, paid) => opsRows.push({
   '상태': '', '사업구분': '공연', '티켓구분': '유료', '기본좌석': seat, '발권유료': paid,
   '년도': y, '월': m, '일': d, '공연구분': '기획', '장르1': genre, '공연명': name, '수익성': ''
 });
-DATA.shows.filter(s => s.paid > 0).forEach(s => {
+// ⚠ 운영대장은 **공연이 끝난 뒤** 남기는 기록이라 판매중 사업의 행이 없다(실측: 260730 스냅샷 2026년 = 1월 2건뿐).
+//    현실과 같은 형태로 재현해야 「판매중 합류(∪)」가 검증된다 — 종료분만 대장에 넣는다.
+DATA.shows.filter(s => s.paid > 0 && s.status === '종료').forEach(s => {
   const [y, m, d] = s.date.split('-').map(Number);
   const nd = Math.max(1, Math.round((new Date(s.dateEnd) - new Date(s.date)) / 86400000) + 1);
   for (let i = 0; i < nd; i++) {
@@ -51,12 +53,15 @@ let sd = 11; const rnd = () => (sd = (sd * 1103515245 + 12345) & 0x7fffffff) / 0
 }));
 
 // 판매 축(일일입력·공연마스터 조인 결과 = _salesBuild 산출물) 스텁 — 매출·판매좌석·상태만
+const D26 = s => new Date(s + 'T00:00:00');
 const salesRows = process.env.NOREV ? [] : DATA.shows.filter(s => s.paid > 0)
-  .map(s => ({ name: s.name, money: s.rev, seats: s.paid, status: s.status === '판매중' ? 'active' : 'ended' }));
+  .map(s => ({ name: s.name, money: s.rev, seats: s.paid, occ: s.occ, totalOpen: s.open, _rcEst: 1, genre: s.genre,
+    startDate: D26(s.date), endDate: D26(s.dateEnd), status: s.status === '판매중' ? 'active' : 'ended' }));
 
 const INIT = `(function(){
   window.__MOCK_OPS=${JSON.stringify({ rows: opsRows, headers: Object.keys(opsRows[0]) })};
-  window.__MOCK_SALES=${JSON.stringify(salesRows)};
+  // ⚠ JSON 직렬화가 Date를 문자열로 바꾼다 — 실제 _salesBuild는 Date 객체를 준다. 브라우저에서 되살려야 실물과 같은 형태가 된다.
+  window.__MOCK_SALES=${JSON.stringify(salesRows)}.map(function(p){ p.startDate=new Date(p.startDate); p.endDate=new Date(p.endDate); return p; });
   var real=null;
   function wrapped(method,path){
     var p=String(path||'');
@@ -87,7 +92,9 @@ async function main() {
       const u = new NodeURL(route.request().url());
       if (u.hostname === 'app.local') {
         let p = decodeURIComponent(u.pathname); if (p === '/') p = '/index.html';
-        try { return route.fulfill({ status: 200, body: readFileSync(join(ROOT, p)), contentType: MIME[extname(p)] || 'application/octet-stream' }); }
+        // IDX=<경로> = 비교용 다른 index.html 판을 서빙(전/후 같은 데이터로 재기 위함)
+        const f = (p === '/index.html' && process.env.IDX) ? process.env.IDX : join(ROOT, p);
+        try { return route.fulfill({ status: 200, body: readFileSync(f), contentType: MIME[extname(p)] || 'application/octet-stream' }); }
         catch { return route.fulfill({ status: 404, body: 'nf' }); }
       }
       if (u.hostname === 'cdn.plot.ly') {
@@ -112,7 +119,10 @@ async function main() {
       const bars=[...d.querySelectorAll('.barlayer .point path')].map(p=>{const b=p.getBBox();return +b.height.toFixed(1);});
       const ticks=[...d.querySelectorAll('.yaxislayer-above text, .yaxislayer text')].map(t=>t.textContent);
       const shapes=d.querySelectorAll('.shapelayer path').length;
-      return {bars, ticks, shapes, h:d.getBoundingClientRect().height};
+      const xt=[...d.querySelectorAll('.xaxislayer-above text')].map(t=>t.textContent);
+      let sx=null; try{ sx=Object.keys(_bizSalesIdx(_bizmState.year)||{}).length; }catch(e){ sx='ERR '+e.message; }
+      const kpi=[...document.querySelectorAll('#biz-main .bizm-kpi')].map(k=>k.textContent.trim());
+      return {bars, ticks, shapes, h:d.getBoundingClientRect().height, nx:xt.length, xt:xt.slice(-6), sx, kpi};
     })()`);
     console.log(JSON.stringify(probe));
     if (errs.length) console.log('PAGE ERRORS: ' + errs.slice(0, 5).join(' | '));
