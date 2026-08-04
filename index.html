@@ -6344,11 +6344,12 @@ function _yrmTable(){
   var rowOf=function(cat){ if(cat==='계')return _yrmTotRow(); var rs=_YR.cats[cat].rows,r=null; rs.forEach(function(x){if(x.key==='인원')r=x;}); return r; };
   var h='<div class="bizm-card" data-bizmfill><div class="ct" style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px 8px"><span><span class="ct-bul"></span>전체 실적표</span>'   // [260802f] data-bizmfill = 좌 열 마지막 흰 도형 — 차트가 최대(560)에 닿아도 남는 몫을 이 카드가 흡수(우 「판매 실적」 카드와 같은 규약) → 큰 화면(2560×1440)에서도 좌·우 흰 라인 Δ0
     +'<span class="bizm-yrnav"><button type="button" aria-label="이전 연도" onclick="_yrmWin(-1)"'+(s<=0?' disabled':'')+'>‹</button>'+cols[0]+'~'+cols[cols.length-1]+'<button type="button" aria-label="다음 연도" onclick="_yrmWin(1)"'+(s>=max?' disabled':'')+'>›</button><span class="sub" style="margin-left:2px">· 인원 기준</span></span></div>';
-  h+='<div style="padding:0 14px 12px;overflow-x:auto"><table class="bizm-ctbl"><thead><tr><td>구분</td>'+cols.map(function(y){return '<td'+(y===_YR_RECENT?' style="color:var(--accent)"':'')+'>'+y+'</td>';}).join('')+'<td style="color:var(--accent)">누계</td></tr></thead><tbody>';
+  h+='<div style="padding:0 14px 12px;overflow-x:auto"><table class="bizm-ctbl"><thead><tr><td>구분</td>'+cols.map(function(y){return '<td'+(y===_YR_RECENT?' style="color:var(--accent)"':'')+'>'+y+'</td>';}).join('')+'<td style="color:var(--dim)">26 잠정</td><td style="color:var(--accent)">누계</td></tr></thead><tbody>';   // [260804] 26 잠정 = _YR q(상반기 확보분) — 연도 창(cols)과 별도 고정 열
   cats.forEach(function(c){
     var r=rowOf(c[0]);
     h+='<tr'+(c[0]==='계'?' class="sum"':'')+'><td class="cat" style="color:var('+c[1]+')">'+c[0]+'</td>'
       +cols.map(function(y){var yi=years.indexOf(y);return '<td'+(y===_YR_RECENT?' style="font-weight:700"':'')+'>'+_yrFmt(r.v[yi])+'</td>';}).join('')
+      +'<td style="color:var(--dim)">'+_yrFmt(r.q)+'</td>'
       +'<td class="tot" style="color:var('+c[1]+')">'+_yrFmt(r.sum)+'</td></tr>';
   });
   h+='</tbody></table></div></div>';
@@ -6507,7 +6508,7 @@ function _bizInlineRender(){
     // [260723g 운영자 시안] 누적 총 = 헤더 우측(히어로 박스 폐지) · 부제 = 기간 · 본문 = 컴팩트(_yrmRender)
     var _grand='<span style="font-size:11.5px;color:var(--neutral-text);font-weight:600;white-space:nowrap">누적 <b style="color:var(--accent);font-size:14px;font-weight:800;font-variant-numeric:tabular-nums">'+_YR.grand.toLocaleString()+'명</b></span>';   // [260723 운영자] 「누적 3,690,031명」 — 실수치 + 숫자·명까지 강조색('총' 삭제)
     _bizmSwap(el,'<div style="position:relative">'
-      +_bizmHead(_grand+_pgTag,'연간 실적',' 2012~2026.1Q')
+      +_bizmHead(_grand+_pgTag,'연간 실적',' 2012~2026 상반기(잠정)')
       +_BIZM_BOX+'<div id="yrm-body"></div>'+'</div>'+_bizmDots()
       +_bizmPageNav()+'</div>');   // [260802] 프레임 유지·안쪽만 교체
     _yrmRender();
@@ -10320,7 +10321,7 @@ function _bizRender(){
   _bizEnsurePlotly(function(){ _bizDrawChart(list, selTypes.length>1); _bizDrawGenreBench(); _bizDrawSeason(); _accordionize('biz-body'); });
 }
 // ============================================================
-// 연간 실적 (사업 현황) — 예울마루(망마·장도) 2012~2026.1Q 연간 실적 표를 '그대로' 살린 보드.
+// 연간 실적 (사업 현황) — 예울마루(망마·장도) 2012~2026 상반기(잠정) 연간 실적 표를 '그대로' 살린 보드.
 //   진입 = nav 「대시보드 ▸ 연간 실적」(260731 재편 — 구 '사업 현황' 대메뉴 id=bizstatus 폐지) · 모바일 더보기 시트. 데이터 = 아래 _YR 상수(엑셀 원본 무손실).
 //   골격 = openBusinessBoard/_bizRender 100% 계승(모달·.fbar-chip·Plotly·KPI 카드·표) · 색은 팔레트 토큰만
 //   (Plotly는 CSS var()를 못 읽어 getComputedStyle로 런타임 해석 → 소스 raw hex 0, 게이트 총량 동결 유지).
@@ -10328,17 +10329,21 @@ function _bizRender(){
 // ============================================================
 var _YR={
   years:[2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024,2025],
+  // [260804 운영자 「2026 지금 되어있는 것까지 배선」] q = 2026 상반기 잠정치(완결 취합본이 나오면 그 값으로 교체):
+  //   공연 = 운영_세부운영관리대장(정리) 2026년 1~6월 확보분 · 발권유료 기준(무료·초대 미포함 — 원장에 무료 열이 없어 취합본(무료 포함 관람인원)과 기준이 다름을 각주에 명시).
+  //     내역 = 신년음악회 1회 + 미세스 다웃파이어 4회 + 인터파크 최종정산 편입 16회차(브런치Ⅰ·실내악4·100층집6·편한음악·피터와늑대·브런치Ⅱ·헬로오페라2) · 8 Seasons(5/7)·노인의 꿈(6/13) 자료 미수집.
+  //   전시 = 전시마스터 2026년 5건 누적 총인원(진행중 2건 포함) · 교육·장도 = 집계 전 0 · 누계(sum)·grand = ~2025 취합 누적 유지(잠정 미포함).
   cats:{
     '공연':{tok:'--accent',rows:[
-      {sub:'공연횟수',key:'횟수',v:[85,169,162,180,151,131,124,154,61,141,184,200,187,178],q:0,sum:2107},
-      {sub:'공연일수',key:'일수',v:[77,143,145,154,127,111,99,116,51,99,128,128,121,124],q:0,sum:1623},
-      {sub:'관람인원',key:'인원',v:[57418,101534,73021,74875,77070,67004,66864,78506,17769,38543,74322,81048,78662,83455],q:0,sum:970091},
+      {sub:'공연횟수',key:'횟수',v:[85,169,162,180,151,131,124,154,61,141,184,200,187,178],q:21,sum:2107},
+      {sub:'공연일수',key:'일수',v:[77,143,145,154,127,111,99,116,51,99,128,128,121,124],q:16,sum:1623},
+      {sub:'관람인원',key:'인원',v:[57418,101534,73021,74875,77070,67004,66864,78506,17769,38543,74322,81048,78662,83455],q:9568,sum:970091},
       {sub:'문화나눔',key:'나눔',v:[1102,1347,697,592,513,624,430,612,0,0,2700,129,2078,1258],q:0,sum:12082}
     ]},
     '전시':{tok:'--peach-text',rows:[
-      {sub:'전시건수',key:'횟수',v:[9,9,10,10,13,12,11,16,16,23,22,14,15,18],q:0,sum:198},
-      {sub:'전시일수',key:'일수',v:[149,251,260,246,279,261,269,273,301,335,299,241,235,258],q:0,sum:3657},
-      {sub:'관람인원',key:'인원',v:[26090,35537,33122,31484,28432,23629,19477,76734,35287,46679,59582,32455,25508,26785],q:0,sum:500801},
+      {sub:'전시건수',key:'횟수',v:[9,9,10,10,13,12,11,16,16,23,22,14,15,18],q:5,sum:198},
+      {sub:'전시일수',key:'일수',v:[149,251,260,246,279,261,269,273,301,335,299,241,235,258],q:203,sum:3657},
+      {sub:'관람인원',key:'인원',v:[26090,35537,33122,31484,28432,23629,19477,76734,35287,46679,59582,32455,25508,26785],q:8049,sum:500801},
       {sub:'문화나눔',key:'나눔',v:[430,4381,1151,652,839,961,1062,856,264,0,0,125,6206,27569],q:0,sum:44496}
     ]},
     '교육':{tok:'--green',rows:[
@@ -10349,9 +10354,9 @@ var _YR={
     ]}
   },
   total:[
-    {sub:'횟수',key:'횟수',v:[94,241,344,328,329,356,387,417,141,423,472,472,396,427],q:0,sum:4827},
-    {sub:'일수',key:'일수',v:[226,438,472,453,487,459,482,510,386,586,560,474,455,515],q:0,sum:6503},
-    {sub:'인원',key:'인원',v:[83508,137357,106602,106739,106432,92849,89001,158259,53459,87033,144923,120019,108368,111157],q:0,sum:1505706},
+    {sub:'횟수',key:'횟수',v:[94,241,344,328,329,356,387,417,141,423,472,472,396,427],q:26,sum:4827},
+    {sub:'일수',key:'일수',v:[226,438,472,453,487,459,482,510,386,586,560,474,455,515],q:219,sum:6503},
+    {sub:'인원',key:'인원',v:[83508,137357,106602,106739,106432,92849,89001,158259,53459,87033,144923,120019,108368,111157],q:17617,sum:1505706},
     {sub:'나눔인원',key:'나눔',v:[1532,5728,1848,1244,1352,1585,1492,1468,264,0,11760,4403,10858,28894],q:0,sum:72428}
   ],
   jangdo:{v:[null,null,null,null,null,null,null,161690,288200,334913,405124,374039,336036,284323],sum:2184325},
@@ -10380,7 +10385,7 @@ function openYearBoard(){
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeYearBoard)">'
     +'<div class="modal" style="width:96vw;max-width:1200px;height:92vh;max-height:92vh;padding:0;position:relative;display:flex;flex-direction:column;overflow:hidden">'
     +'<button class="modal-x" onclick="closeYearBoard()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;z-index:10">✕</button>'
-    +'<div style="padding:18px 24px;border-bottom:1px solid var(--border);font-size:16px;font-weight:800;display:flex;align-items:center;gap:8px;flex-shrink:0"><span>연간 실적</span><span style="font-size:11px;color:var(--muted);font-weight:500">· 예울마루(망마·장도) 2012 ~ 2026.1Q</span></div>'
+    +'<div style="padding:18px 24px;border-bottom:1px solid var(--border);font-size:16px;font-weight:800;display:flex;align-items:center;gap:8px;flex-shrink:0"><span>연간 실적</span><span style="font-size:11px;color:var(--muted);font-weight:500">· 예울마루(망마·장도) 2012 ~ 2026 상반기(잠정)</span></div>'
     +'<div id="yr-body" style="flex:1;overflow:auto;padding:20px 24px;min-width:0"></div>'
     +'</div></div>';
   _yrState.esc=function(e){if(e.key==='Escape')closeYearBoard();};
@@ -10391,7 +10396,7 @@ function closeYearBoard(){if(_yrState.esc)document.removeEventListener('keydown'
 function _yrCard(label,id,suf,tok){
   return '<div class="bizm-kpi" style="--kpitok:var('+(tok||'--accent')+')"><div class="lab">'+label+'</div><div class="val"><span id="'+id+'">0</span>'+(suf?'<span class="u">'+suf+'</span>':'')+'</div></div>';   // [260723f Opus] 글래스 KPI + 역할색 액센트 바
 }
-var _YR_RECENT=2025;   // 가장 최근 취합본(2026 1분기는 집계 전 0) — 상시 옅은 강조 열
+var _YR_RECENT=2025;   // 가장 최근 '완결' 취합본 — 상시 옅은 강조 열(2026 열은 상반기 잠정치라 강조 비대상, 260804)
 function _yrBand(y,hl){   // 최근(2025) 상시 강조 + 선택 하이라이트(선택 우선). 기존 토큰만.
   var recent=(y===_YR_RECENT),s='';
   if(hl)s+='background:var(--accent-light);';
@@ -10407,7 +10412,7 @@ function _yrTable(pfx){
   h+='<thead><tr style="background:var(--past-bg);color:var(--neutral-text);font-size:11px;font-weight:700">';
   h+='<td colspan="2" style="'+thCss+'text-align:left;position:sticky;left:0;background:var(--past-bg)">구분</td>';
   years.forEach(function(y){var hl=(st.year===y),recent=(y===_YR_RECENT);h+='<td style="'+thCss+'text-align:right;'+_yrBand(y,hl)+((hl||recent)?'color:var(--accent);':'')+'">'+y+(recent?'<br><span style="font-size:9px;font-weight:700;color:var(--accent)">최근 취합</span>':'')+'</td>';});
-  h+='<td style="'+thCss+'text-align:right">2026<br>1분기</td><td style="'+thCss+'text-align:right;color:var(--accent)">누계</td></tr></thead><tbody>';
+  h+='<td style="'+thCss+'text-align:right">2026<br><span style="font-size:9px;font-weight:700;color:var(--dim)">상반기 잠정</span></td><td style="'+thCss+'text-align:right;color:var(--accent)">누계</td></tr></thead><tbody>';
   ['공연','전시','교육','계'].forEach(function(cat){
     var rows=(cat==='계')?_YR.total:_YR.cats[cat].rows;
     var dim=(cat!=='계'&&!st.cats[cat]);
@@ -10417,7 +10422,7 @@ function _yrTable(pfx){
       if(ri===0)h+='<td rowspan="'+rows.length+'" style="'+tdCss+'font-weight:800;color:var('+tok+');vertical-align:middle;text-align:center;border-right:1px solid var(--border);position:sticky;left:0;background:var(--surface-solid)">'+cat+'</td>';
       h+='<td style="'+tdCss+'color:var(--neutral-text);text-align:left;position:sticky;left:34px;background:var(--surface-solid)">'+r.sub+'</td>';
       years.forEach(function(y,yi){var hl=(st.year===y);h+='<td style="'+tdCss+'text-align:right;font-variant-numeric:tabular-nums;'+_yrBand(y,hl)+(hl?'font-weight:700;color:var(--accent)':'')+'">'+_yrFmt(r.v[yi])+'</td>';});
-      h+='<td style="'+tdCss+'text-align:right;color:var(--muted)">'+_yrFmt(r.q)+'</td>';
+      h+='<td style="'+tdCss+'text-align:right;color:var(--dim);font-variant-numeric:tabular-nums">'+_yrFmt(r.q)+'</td>';   // [260804] 2026 잠정 열 — 값이 채워져 muted→dim 승급(잠정이라 본색 아님)
       h+='<td style="'+tdCss+'text-align:right;font-weight:800;color:var('+tok+');font-variant-numeric:tabular-nums">'+_yrFmt(r.sum)+'</td>';
       h+='</tr>';
     });
@@ -10426,7 +10431,7 @@ function _yrTable(pfx){
   years.forEach(function(y,yi){var hl=(st.year===y);h+='<td style="'+tdCss+'text-align:right;font-variant-numeric:tabular-nums;'+_yrBand(y,hl)+(hl?'color:var(--accent)':'')+'">'+_yrFmt(_YR.jangdo.v[yi])+'</td>';});
   h+='<td style="'+tdCss+'"></td><td style="'+tdCss+'text-align:right;font-weight:800;color:var(--c5);font-variant-numeric:tabular-nums">'+_yrFmt(_YR.jangdo.sum)+'</td></tr>';
   h+='</tbody></table></div>';
-  h+='<div style="font-size:11px;color:var(--dim);line-height:1.7">※ 문화나눔 인원은 관람인원 숫자에 포함되어 있음<br>※ 단위: 회, 일, 명 · ~2026년 1분기는 집계 전(0) · <b style="color:var(--accent)">2025</b>년이 가장 최근 취합본<br>※ 예울마루(망마/장도) 공연·전시 등 관람객 및 장도 방문객 합계(~2025년 누적) = <b style="color:var(--accent)">3,690,031</b> 명</div>';
+  h+='<div style="font-size:11px;color:var(--dim);line-height:1.7">※ 문화나눔 인원은 관람인원 숫자에 포함되어 있음<br>※ 단위: 회, 일, 명 · 2026 상반기 = 잠정치(공연 = 운영DB 발권유료 1~6월 확보분·무료 미포함 · 전시 = 전시DB 누적 총인원 · 교육·장도 집계 전) · <b style="color:var(--accent)">2025</b>년이 가장 최근 취합본 · 누계 열 = ~2025 취합 누적(잠정 미포함)<br>※ 예울마루(망마/장도) 공연·전시 등 관람객 및 장도 방문객 합계(~2025년 누적) = <b style="color:var(--accent)">3,690,031</b> 명</div>';
   return h;
 }
 function _yrMono(xs,ys,seg){   // [260723 운영자] 단조 큐빅(Fritsch–Carlson) — 부드러운 곡선이되 실측점을 위/아래로 절대 초과하지 않음(spline overshoot=봉우리 과장 제거 · 왜곡 0)
