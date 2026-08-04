@@ -6604,7 +6604,7 @@ function _bizGenreAccumHtml(all,selTypes){
 //   ⚠ 문턱·연쇄 규칙(「바로 아래 값의 2배」)은 폐기 — 평의회3 실측: 3위가 67.25→67.26으로 0.02 움직이면 전 막대가 반토막 나고,
 //     대형 뮤지컬이 2편이면 규칙이 조용히 꺼져 원래 문제로 되돌아갔다. 이 차트는 매일 갱신되므로 어제 화면과 비교되는 게 우선이다.
 //   조건 미달이면 null = 현행 그대로 그린다(고른 분포·짧은 차트·음수 포함 = 회귀 0).
-function _bizNiceStep(v){   // 눈금 한 칸 = 1·1.5·2·2.5·3·4·5·6·8·10 사다리(기존 차트 관행 계승 — 새 수치축 창작 아님)
+function _bizNiceStep(v){   // 눈금 한 칸 = 1·1.5·2·2.5·3·4·5·6·8·10 사다리(사람이 읽는 눈금 값 — 색·토큰 축과 무관한 수치 규칙이라 기틀 대상 아님)
   if(!(v>0))return 1;
   var e=Math.pow(10,Math.floor(Math.log(v)/Math.LN10)),n=[1,1.5,2,2.5,3,4,5,6,8,10],i;
   for(i=0;i<n.length;i++)if(n[i]*e>=v-1e-9)return n[i]*e;
@@ -6613,25 +6613,26 @@ function _bizNiceStep(v){   // 눈금 한 칸 = 1·1.5·2·2.5·3·4·5·6·8·1
 function _bizBarBreak(vals,plotPx){
   if(vals.some(function(v){return v<0;}))return null;            // 음수(환불 정산 등) = range 고정이 값을 잘라 먹는다 → 중략 포기
   var pos=vals.filter(function(v){return v>0&&isFinite(v);}).sort(function(a,b){return b-a;});
-  if(pos.length<6||plotPx<120)return null;                       // 표본이 적거나(비교 의미 없음) 차트가 너무 짧으면 안 끊는다
-  // 띠·라벨 자리는 **높이에 비례**시킨다 — 상수로 박으면 fit이 차트를 줄인 화면(1400×860 = 278px)에서 자리가 모자라
-  //   중략이 통째로 꺼지고, 정작 뭉개짐이 제일 심한 그 화면이 구제되지 않는다.
-  var bodyPx=Math.round(plotPx*0.70),
-      gapPx=Math.max(6,Math.min(11,Math.round(plotPx*0.035))),
-      labPx=Math.max(10,Math.min(18,Math.round(plotPx*0.058))),
-      topPx=plotPx-bodyPx-gapPx-labPx;                           // 본체 70% · 중략 띠 · 압축 구간 · 값 라벨 자리
+  if(pos.length<6||plotPx<100)return null;                       // 표본이 적거나(비교 의미 없음) 차트가 너무 짧으면 안 끊는다
+  // 띠·라벨 자리·본체 비율은 **높이에 비례**시킨다 — 상수로 박으면 fit이 차트를 줄인 화면(1280×800·1600×820 등)에서
+  //   자리가 모자라 중략이 통째로 꺼지고, 정작 뭉개짐이 제일 심한 그 화면이 구제되지 않는다(평의회4 실측).
+  var bodyPx=Math.round(plotPx*(plotPx>=200?0.70:0.62)),
+      gapPx=Math.max(5,Math.min(11,Math.round(plotPx*0.035))),
+      labPx=Math.max(9,Math.min(18,Math.round(plotPx*0.058))),
+      topPx=plotPx-bodyPx-gapPx-labPx;                           // 본체 62~70% · 중략 띠 · 압축 구간 · 값 라벨 자리
   if(topPx<22)return null;
   var q=pos[Math.floor(pos.length*0.2)],step=_bizNiceStep(q/4),B=step*4;                  // 순위 기반 = 값이 흔들려도 B가 안 뛴다(절벽 없음)
   var cnt=function(b){ var c=0,i; for(i=0;i<pos.length;i++){ if(pos[i]>b)c++; else break; } return c; };
   var k=cnt(B),u=B/bodyPx;
-  if(k<pos.length&&(B-pos[k])<14*u){ B=step*5; u=B/bodyPx; k=cnt(B); }   // 본체 최대막대가 B에 붙으면 그 값 라벨이 ≈띠에 먹힌다 → 눈금 한 칸 올림
+  while(k<pos.length&&(B-pos[k])<14*u&&B<step*8){ B+=step; u=B/bodyPx; k=cnt(B); }   // 본체 최대막대가 B에 붙으면 그 값 라벨이 ≈띠에 먹힌다 → 눈금을 한 칸씩 올려 띄운다(한 번만 올리면 다시 붙는 분포가 있다)
   if(!k||pos[0]<B*2||(pos.length-k)<5)return null;
+  if(pos[k-1]<B*1.25)return null;   // 잘릴 값 중 **최소**가 B에 붙어 있으면 = 끊을 「빈 구간」이 없는 연속 분포 → 접지 않는다(이 게이트가 없으면 순위 규칙이 이상치 없는 완만한 분포에도 발동한다 · 평의회5 실측 오발동 n=100에서 69% → 계수 1.25에서 0%)
   return {B:B,step:step,nt:Math.round(B/step),n:k,cuts:pos.slice(0,k),oMin:pos[k-1],oMax:pos[0],u:u,
     lo:B,hi:(bodyPx+gapPx)*u,top:(bodyPx+gapPx+topPx)*u,rng:plotPx*u,
     map:function(v){
       if(!(v>this.B))return v;                                   // 본체 = 손 안 댐(실값 = 실높이)
       if(!(this.oMax>this.oMin))return this.top;
-      return this.hi+(0.06+0.94*(v-this.oMin)/(this.oMax-this.oMin))*(this.top-this.hi);   // 하한 .06 = 띠 위 4px만 띄운다(구 .18은 오독을 49%까지 키웠다)
+      return this.hi+(0.12+0.88*(v-this.oMin)/(this.oMax-this.oMin))*(this.top-this.hi);   // 하한 .12 = 띠 위로 조금만 띄운다(구 .18은 오독을 49%까지 키웠고, .06은 잘린 최소값 눈금이 B 눈금에 붙어 지워졌다)
     }};
 }
 function _bizWavePts(x0,x1,y,amp,cyc){   // ≈의 한 획(물결) — 데이터 좌표 점열. cyc = 주기 수(폭에 비례해 파장을 일정하게)
@@ -6700,13 +6701,14 @@ function _bizDrawSalesBars(divId,list,hgt){
     var asc=brk.cuts.slice().reverse();
     asc.forEach(function(v,ci){
       var isTop=(ci===asc.length-1), py=pxOf(v);
-      if(isTop&&py-lastPx<12&&tv.length>brk.nt+1){ tv.pop(); tt.pop(); }   // 최댓값과 겹치면 바로 아래 눈금을 뺀다
-      if(isTop||py-lastPx>=14){ tv.push(brk.map(v)); tt.push(axn(v)); lastPx=py; }
+      // 간격 기준 18px = 눈금 글상자(12px) + 여백 6 — 14로 재면 라벨끼리 3px까지 붙는다(평의회4 실측)
+      if(isTop&&py-lastPx<18&&tv.length>brk.nt+1){ tv.pop(); tt.pop(); }   // 최댓값과 겹치면 바로 아래 눈금을 뺀다
+      if(isTop||py-lastPx>=18){ tv.push(brk.map(v)); tt.push(axn(v)); lastPx=py; }
     });
     lay.yaxis.tickmode='array'; lay.yaxis.tickvals=tv; lay.yaxis.ticktext=tt;
     lay.yaxis.range=[0,brk.rng]; delete lay.yaxis.rangemode;
     // ≈ 표식 = **차트 전폭 1줄**(국제 관례). 축 옆 스텁으로 두면 끊을 축선이 없어 「≈ 80 = 약 80」으로 읽힌다(평의회7).
-    var cyc=Math.max(2,Math.min(16,Math.round(plotW/28)));       // 파장 ≈28px 고정 — 폭이 달라도 같은 기호로 보이게
+    var cyc=Math.max(2,Math.min(16,Math.round(plotW/28)));       // 파장 ≈28px(넓은 카드는 16주기 상한에 걸려 최대 ≈45px) — 폭이 달라져도 같은 기호로 보이게
     lay.shapes=_bizBreakShapes(brk,[[-0.6,Math.max(0.6,n-0.4)]],dim,_yrCss('--surface-solid'),cyc);
     if(note)note.textContent=' · ≈ = 축 중략(위 구간 길이 비교 불가)';   // 정직 표기 — 「값은 실수치」로 끝내면 그림도 믿어도 된다고 읽힌다
   } else if(note) note.textContent='';                           // 재그리기로 중략이 풀렸는데 각주만 남는 것 차단
