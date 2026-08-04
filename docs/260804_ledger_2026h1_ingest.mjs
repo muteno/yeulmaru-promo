@@ -75,6 +75,10 @@ if (!PIN) { console.error('✗ YM_PIN(관리자 PIN) 환경변수가 필요합�
 const res = await call('POST', '/api/ops', { sheet: SHEET, mode: 'append', rows });
 console.log('append 응답:', JSON.stringify(res));
 
+// [260804 실행 실측] Graph 워크북 쓰기는 즉시 조회에 안 잡힐 수 있다(eventual consistency) —
+//   본 반입 실행 시 append ok(fromRow 2190) 직후 fresh GET이 옛 값(2188행)을 반환, ~12초 뒤 2204행 정상 확인.
+//   재사용 시 아래 검증이 불일치로 끝나면 10~20초 뒤 fresh GET으로 재확인부터 할 것(중복 append 금지 — 멱등 가드가 걸러준다).
+await new Promise(r => setTimeout(r, 15000));
 const after = await call('GET', `/api/ops?sheet=${encodeURIComponent(SHEET)}&fresh=1`);
 const after26 = after.rows.filter(r => String(r['년도']).trim() === '2026');
 const paidSum = after26.reduce((a, r) => a + (parseInt(r['발권유료'], 10) || 0), 0);
