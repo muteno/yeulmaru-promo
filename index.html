@@ -5800,7 +5800,9 @@ function _bizFitSeason(){
     // 열 = [흡수 차트들(뒤→앞 순서)] · 마지막 흰 도형 = 그 박스에서 가장 아래 있는 카드/표
     // [260803 선택값] 우 열(#rail-yrm)은 흡수 차트를 두지 않는다 — 장르 카드가 Plotly 차트에서 HTML 게이지(자연 높이)로 바뀌었고,
     //   남는 몫은 마지막 흰 도형인 상세 표가 data-bizmfill+cap 으로 안선에 정확히 물린다. 여기 두면 게이지 카드만 늘어나 흰 공백이 생긴다.
-    [['#biz-main',['bizm-season','bizm-chart']]].forEach(function(pair){
+    // [260805] 좌 열 흡수 차트 = 판매현황 하나(구 'bizm-season'은 인라인에서 철거 — 그 자리를 장르별 축적 카드가 승계).
+    //   마지막 흰 도형 = 축적 카드(자연 높이·Plotly 아님)라 남는/모자란 몫은 전부 이 차트가 진다.
+    [['#biz-main',['bizm-chart']]].forEach(function(pair){
       var bx=document.querySelector(pair[0]+' [data-bizmbox]');
       if(!bx||bx.offsetParent===null||!bx.style.height)return;
       var chs=pair[1].map(function(id){return document.getElementById(id);}).filter(function(c){return c&&c.offsetParent!==null&&bx.contains(c);});
@@ -6875,7 +6877,7 @@ function _bizCompRender(el,half){
   var L=(half!==2);                                    // L = 전반(3-1) 담당 열 = 조작부(연도·분류·자세히 보기) 소유 열
   var DOTS=(half===2)?'':(_bizmDots()+_bizmPageNav());   // 우 열엔 점줄 없음(_railYrmFrame과 동일 규약)
   var TTL=(half===2)?'':'사업 결과 비교';               // [260802e] 같은 제목 이중 표기 = 좌에만(운영자) — 우 열은 부제만(아래 SUB가 라벨 역할)
-  var SUB=(half===2)?'장르별 판매 축적 · 판매현황 상세':' · 연간 누적 실적 (운영대장)';   // [260803 선택값] 우 열 카드 교체에 맞춘 라벨(장르 벤치마크·시즌 추세 → 축적·상세)
+  var SUB=(half===2)?'판매현황 상세':' · 연간 누적 실적 (운영대장)';   // [260805 운영자] 우 열 = 목록 단독(장르별 축적이 좌 하단으로 이동) → 라벨에서 「장르별 판매 축적」 제거
   var RETRY=(half===2)?'_railYrmRender()':'_bizInlineRender()';
   var tgtId=el.id;
   if(typeof requestAnimationFrame==='function')requestAnimationFrame(function(){try{_srailAlignTop();}catch(_e){}});
@@ -6980,9 +6982,15 @@ function _bizCompRender(el,half){
   var _barSub2=' · 색 = 장르 · 테두리 = 판매중 · 연함 = 종료'+(_planN?' · 파선 = 예정':'');   // [260805] 3상태 범례 — 좁은 폭에서 카드 제목이 2줄이 되지 않게 짧게(1440px 실측 · 평의회2 축)
   var _dist='<div class="bizm-card"><div class="ct">'+_bizmState.year+' 판매현황 <span class="sub">'+_barSub+'<span data-bizbrknote></span>'+_barSub2+'</span></div><div id="bizm-chart" style="height:430px;margin:0 4px 2px"></div></div>';
   // [260803 운영자 선택값] 우 카드1 = 장르 벤치마크 → **장르별 판매 축적(평년 대비)** · 평년 = 최근 3년 평균(23~25) · 연 경과 파선 · 라벨 명+%
-  var _bench='<div class="bizm-card"><div class="ct">장르별 판매 축적 <span class="sub">— 평년(최근 3년 '+String(_bizmState.year-3).slice(2)+'~'+String(_bizmState.year-1).slice(2)+' 평균) 대비 '+_bizmState.year+' 누적 · 파선 = 올해 경과</span></div>'   // [260804] 연도 고정 문구('23~25') → 선택 연도 기준 계산(카드 머리말과 카드 안 각주가 서로 다른 해를 말하던 것 · 평의회6)
+  // [260805 운영자 「장르별 축적을 좌측 하단부로 완전히 크기를 대체」] 자리 = 우 열 첫 카드 → **좌 열 마지막 카드**(구 시즌 추세 자리를 통째로 승계).
+  //   시즌 추세는 인라인에서 내려가고 전체 모달(자세히 보기 = openBusinessBoard)에 그대로 남는다 = 잃는 정보 0.
+  //   data-bizmfill(좌 열일 때만) = 판매현황 차트가 상한(560)에 닿고도 몫이 남는 큰 화면(2560×1440 실측 187px)에서
+  //   마지막 흰 도형을 안선까지 늘리는 안전망 — 구 시즌 카드가 달고 있던 그 마킹 그대로(신규 규약 0).
+  //   ⚠ 이 카드를 세로 flex(게이지 가운데 정렬)로 두는 시안은 폐기 — flex 아이템은 max-height가 걸리면 **줄어든다**.
+  //   그러면 _srailAlignTop의 넘침 흡수 판정(`scrollHeight > 안선−자기상단`)이 「걸면 안 넘침 → 해제 → 다시 넘침」으로
+  //   진동해 멱등이 깨진다(1440×820 실측 = 좌 흰 도형이 안선 아래 53px). 블록 레이아웃 유지 = 남는 몫은 카드 아래 여백.
+  var _bench='<div class="bizm-card"'+((half===1)?' data-bizmfill':'')+'><div class="ct">장르별 판매 축적 <span class="sub">— 평년(최근 3년 '+String(_bizmState.year-3).slice(2)+'~'+String(_bizmState.year-1).slice(2)+' 평균) 대비 '+_bizmState.year+' 누적 · 파선 = 올해 경과</span></div>'   // [260804] 연도 고정 문구('23~25') → 선택 연도 기준 계산(카드 머리말과 카드 안 각주가 서로 다른 해를 말하던 것 · 평의회6)
     +'<div id="bizm-genre" style="margin:0 4px 2px;overflow:hidden">'+_bizGenreAccumHtml(all,selTypes)+'</div></div>';
-  var _season='<div class="bizm-card" data-bizmfill><div class="ct">시즌(연도)별 장르 점유율 추세 <span class="sub">— 장르별 연평균 점유율 · 큰점='+_bizmState.year+'년 · 위 분류/필터 반영</span></div><div id="bizm-season" style="height:300px;margin:0 4px 2px"></div></div>';   // [260802f] data-bizmfill = 3면 좌 열 마지막 흰 도형(차트 최대 도달 후 잔여 흡수 · 1면 전체 실적표와 같은 규약)
   // [260802e] data-bizmfill = 마지막 흰 도형을 박스 안선(패딩 18 위)까지 늘리는 마킹(_srailAlignTop) — 행이 적어도(1월 2건 등) 흰 라인이 좌 열과 같은 하단선에서 끝난다(운영자 「없던 있든 흰색 라인 다 맞춰줘」)
   // [260803 운영자 「전체로 선택하면 화면이 넘어선다 → 목록 안에서 스크롤」] data-bizmcap = 상한도 안선에 고정(행이 많아도 박스·흰선을 **절대** 넘지 않음).
   //   스크롤러는 정본 .ry-grp-bd 그대로 계승(오버레이 스크롤바·호버 리빌·gutter 안정 — 이 열이 #rail-yrm 안이라 호버 규칙도 그대로 먹는다) = 신규 CSS 0.
@@ -7007,12 +7015,13 @@ function _bizCompRender(el,half){
       +'</tr>';
   });
   _tbl+='</tbody></table></div></div>';   // 스크롤러(.ry-grp-bd) + 흰 카드(data-bizmfill·cap) 두 겹을 닫는다
-  // 배분 = 3-1(좌) KPI·월×점유율·시즌 추세 / 3-2(우) 장르 벤치마크·공연 목록 표 — 두 열 높이가 엇비슷하게 갈리는 조합(차트 430+300 ↔ 300+표)
-  //   half 0(좁은 화면 한 열) = 자르기 전 순서 그대로(KPI→분포→벤치마크→시즌→표) = 회귀 0
-  h+=(half===1)?(_kpi+_dist+_season):(half===2)?(_bench+_tbl):(_kpi+_dist+_bench+_season+_tbl);
+  // [260805 운영자] 배분 = 3-1(좌) KPI·판매현황·**장르별 축적** / 3-2(우) **목록 표 단독**(박스 전면 = data-bizmfill+cap이 안선까지 채운다)
+  //   좌 열 마지막 흰 도형 = 축적 카드(자연 높이) → 남는 몫은 _bizFitSeason이 판매현황 차트를 키워 흡수한다(구 시즌 카드가 지던 역할).
+  //   half 0(좁은 화면 한 열) = 같은 순서 그대로(KPI→판매현황→축적→표)
+  h+=(half===1)?(_kpi+_dist+_bench):(half===2)?_tbl:(_kpi+_dist+_bench+_tbl);
   h+='</div>'+DOTS+'</div>';
   _bizmSwap(el,h);   // [260802] 프레임 유지·안쪽만 교체(1-2면 ↔ 3-4면 두 열 동시 넘김의 번쩍임 제거)
-  _bizEnsurePlotly(function(){ try{ if(half!==2){_bizDrawSalesBars('bizm-chart', list, 430); _bizDrawSeason('bizm-season',_bizmState);} }catch(_e){console.warn('[bizm chart]',_e);} try{_bizFitSeason();}catch(_e){}
+  _bizEnsurePlotly(function(){ try{ if(half!==2){_bizDrawSalesBars('bizm-chart', list, 430);} }catch(_e){console.warn('[bizm chart]',_e);} try{_bizFitSeason();}catch(_e){}   // [260805] 인라인 시즌 추세 철거 → 그리기 호출도 같이 내림(모달 _bizDrawSeason()은 무접촉 = 인자 없는 기본 divId 'biz-season-chart')
     // [260804] fit이 차트를 줄인 뒤(430→180~) 실높이로 **한 번만** 다시 그린다 — 중략 기하는 그릴 때의 px 배분으로
     //   데이터 좌표에 구워지기 때문에, 430 기준으로 접어 놓고 198px에 표시하면 띠가 3px로 무너져 「목표선」처럼 보이고
     //   「짧은 차트는 안 끊는다(plotPx<170)」 가드도 무력화된다(평의회7 실측 1920×780). 높이는 안 바꾸므로 fit 재진입 없음.
