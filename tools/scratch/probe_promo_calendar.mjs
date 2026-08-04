@@ -15,12 +15,16 @@ for (const [w,h,tag] of [[1280,900,'desktop'],[430,932,'phone']]){
     evs:document.querySelectorAll('.ev').length,
     rows:document.querySelectorAll('tbody tr').length,
     ng:document.querySelectorAll('.ng').length,
-    // 셀 밖으로 삐져나온 이벤트 뱃지 있나
     spill:[...document.querySelectorAll('.cell')].filter(c=>c.scrollHeight>c.clientHeight+1).length,
+    scriptLen:(document.getElementById('cs')||{textContent:''}).textContent.length,
+    entries:((document.getElementById('cs')||{textContent:''}).textContent.match(/\{d:"/g)||[]).length,
   }));
   console.log(tag, JSON.stringify(m));
-  await p.screenshot({path:`${process.env.SP}/cal_${tag}.png`,fullPage:false});
-  if(tag==='desktop'){ await p.locator('.cals').screenshot({path:`${process.env.SP}/cal_grid.png`}); }
+  // 복사 버튼 실클릭
+  await p.locator('#cpbtn').click();
+  await p.waitForTimeout(300);
+  console.log(tag,'복사버튼 메시지 =', JSON.stringify(await p.locator('#cpmsg').textContent()));
+  if(tag==='desktop') await p.locator('#cs').scrollIntoViewIfNeeded(), await p.screenshot({path:`${process.env.SP}/cal_script.png`});
   await p.close();
 }
 await b.close();
