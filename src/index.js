@@ -1950,6 +1950,112 @@ async function runExternalOcr(env, b64, mime) {
 }
 __name(runExternalOcr, "runExternalOcr");
 
+// ── 콘텐츠 제작 ▸ 로고 제작 ────────────────────────────────────────────────────
+// 프롬프트 로직 = Nutlope/logocreator(app/api/generate-logo) 이식 — 매체 문장 → 로고 형태 → 스타일 →
+// 글자 처리 → 색 → 배경 → 금지목록 순으로 쌓는 구조를 그대로 계승.
+// ⚠ 엔진만 갈음: 원본은 Together AI(FLUX.2-pro / google flash-image)를 쓰고 새 API 키를 요구하지만,
+//   이 레포는 이미 Worker 시크릿 GEMINI_API_KEY 하나로 OCR·분석을 돌린다(docs/KEYS.md §2).
+//   원본도 「글자가 들어가는 로고」는 google flash-image 계열로 보내므로 = 같은 계열 모델 · 새 시크릿 0.
+const LOGO_TYPES = {
+  "icon-name": "a combination mark: one distinctive icon paired with the company name set directly beneath it",
+  wordmark: "a wordmark: the company name itself is the logo, drawn as custom lettering with no separate icon",
+  monogram: "a monogram / lettermark built only from the company's initials",
+  emblem: "an emblem: the company name locked inside a badge or crest shape",
+  icon: "a standalone icon mark",
+  abstract: "an abstract mark: a distinctive non-representational symbol"
+};
+const LOGO_STYLES = {
+  minimal: "Minimal - the fewest possible shapes, generous negative space, no ornament",
+  geometric: "Geometric - precise circles, triangles and rectangles laid out on a clear grid",
+  gradient: "Gradient - smooth colour transitions across the mark, modern and polished",
+  luxury: "Luxury - refined elegant proportions, thin confident strokes, premium feel",
+  retro: "Retro - vintage badge sensibility, warm nostalgic shapes, classic proportions",
+  mascot: "Mascot - a friendly character illustration as the mark, clean and approachable",
+  handdrawn: "Hand-drawn - organic brush and ink strokes with a crafted, human feel",
+  dimensional: "3D - dimensional rendering with soft depth, subtle highlights and shadow"
+};
+// 색 이름 = 예울마루 브랜드 팔레트(index.html _CPAL = :root --c1~--c6) 그대로. 모델은 hex보다 이름에 잘 붙어서 둘 다 준다.
+const LOGO_HEX_NAMES = {
+  "#4A4DE7": "indigo blue", "#D88455": "warm salmon", "#1A6B3C": "deep green",
+  "#C02872": "magenta", "#2D8AB3": "cyan blue", "#F5B400": "golden yellow"
+};
+
+function buildLogoPrompt(b) {
+  const name = String(b.name || "").trim().slice(0, 80);
+  const type = LOGO_TYPES[b.type] ? b.type : "icon-name";
+  const style = LOGO_STYLES[b.style] ? b.style : "minimal";
+  const polished = style === "gradient" || style === "dimensional";
+  const hasText = type !== "icon" && type !== "abstract";
+  const color = String(b.color || "auto").trim();
+  const L = [];
+  L.push(polished
+    ? "A modern, polished brand logo with smooth, clean rendering, centred on a plain background."
+    : "A flat 2D vector brand logo built from solid-colour shapes with crisp, clean edges, centred on a plain background.");
+  L.push("Design it as " + LOGO_TYPES[type] + ".");
+  L.push("Visual direction - " + LOGO_STYLES[style] + ".");
+  if (!hasText) {
+    L.push("Render it as a purely graphic symbol with no lettering: no letters and no numbers anywhere in the image.");
+    if (name) L.push("The symbol should evoke: " + name + ".");
+  } else if (type === "monogram") {
+    L.push('Build it only from the initials of "' + name + '" - no other words.');
+  } else {
+    L.push('Set the company name "' + name + '" as clean, evenly-spaced lettering, spelled exactly like that with no extra or missing characters.');
+    // 한글 이름이 기본값인 레포라 명시 — 안 적으면 모델이 로마자로 바꿔 쓰거나 없는 글자를 지어낸다.
+    if (/[가-힣]/.test(name)) L.push("The name is written in Korean Hangul: draw every syllable block correctly and legibly, do not substitute Latin letters and do not invent glyphs.");
+  }
+  const tagline = String(b.tagline || "").trim().slice(0, 80);
+  if (tagline && hasText) L.push('Place the short tagline "' + tagline + '" beneath the name in much smaller lettering.');
+  if (color === "mono") {
+    L.push("Draw the entire logo in one single solid near-black shade on a white background - strictly monochrome.");
+  } else if (color === "auto" || !color) {
+    L.push("Choose one confident brand palette of at most two colours.");
+  } else {
+    const nm = LOGO_HEX_NAMES[color.toUpperCase()];
+    L.push("Use " + color + (nm ? " (" + nm + ")" : "") + " as the dominant brand colour of the mark"
+      + (polished ? ", allowing tonal depth within that colour" : ", as a flat solid fill") + ".");
+  }
+  L.push("Background: one perfectly even, flat, single-colour field - no vignette, no gradient, no shadow, no texture, no border.");
+  L.push("Show the logo alone: no mockup, no business card, no signage, no watermark, no caption, no colour swatches, no multiple variations in one image.");
+  const extra = String(b.extra || "").trim().slice(0, 300);
+  if (extra) L.push("Additional direction from the client: " + extra);
+  return L.join(" ");
+}
+__name(buildLogoPrompt, "buildLogoPrompt");
+
+// 프롬프트 → 로고 이미지(base64). 모델은 후보를 순서대로 시도 — 프리뷰 모델명이 바뀌어도 앱이 안 죽게.
+async function generateLogoImage(env, b) {
+  const models = [];
+  if (env.LOGO_MODEL) models.push(String(env.LOGO_MODEL));
+  models.push("gemini-3.1-flash-image", "gemini-2.5-flash-image");
+  const prompt = buildLogoPrompt(b);
+  const body = {
+    contents: [{ role: "user", parts: [{ text: prompt }] }],
+    generationConfig: { responseModalities: ["TEXT", "IMAGE"], imageConfig: { aspectRatio: "1:1" } }
+  };
+  let lastErr = null;
+  for (const m of models) {
+    const url2 = "https://generativelanguage.googleapis.com/v1beta/models/" + m + ":generateContent?key=" + encodeURIComponent(env.GEMINI_API_KEY);
+    let resp;
+    try {
+      resp = await fetch(url2, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    } catch (e) { lastErr = e; continue; }
+    if (!resp.ok) {
+      lastErr = new Error("Gemini Image " + resp.status + ": " + (await resp.text()).slice(0, 300));
+      if (resp.status === 404 || resp.status === 400) continue;   // 모델명 미지원 = 다음 후보로
+      throw lastErr;
+    }
+    const data = await resp.json();
+    const parts = ((((data.candidates || [])[0] || {}).content) || {}).parts || [];
+    for (const p of parts) {
+      const inl = p.inlineData || p.inline_data;
+      if (inl && inl.data) return { image: inl.data, mime: inl.mimeType || inl.mime_type || "image/png", model: m, prompt };
+    }
+    lastErr = new Error("이미지가 오지 않았어요 — " + (parts.map((p) => p.text || "").join(" ").trim().slice(0, 200) || "빈 응답"));
+  }
+  throw lastErr || new Error("logo_generation_failed");
+}
+__name(generateLogoImage, "generateLogoImage");
+
 // OCR 원문 텍스트 → 육하원칙 JSON (LLM: Gemini 우선/Claude).
 async function structurePromoText(env, rawText) {
   const system = "당신은 공연·전시 홍보물에서 OCR로 추출한 한국어 텍스트를 받아 사실 정보를 정확히 정리하는 도우미입니다. " +
@@ -2249,6 +2355,23 @@ var index_default = {
           return json({ info }, env);
         } catch (e) {
           console.error("[content/structure]", e);
+          return json({ error: String((e && e.message) || e) }, env, 502);
+        }
+      }
+
+      // === ③ 로고 제작 — 이름·형태·스타일·색 → 로고 이미지 (Gemini 이미지 생성) ===
+      // 인증은 위 전역 게이트(X-App-Password)가 이미 통과시킨 사용자만 — 이미지 생성은 유료 호출이라 공개면 안 된다.
+      if (url.pathname === "/api/content/logo" && request.method === "POST") {
+        if (!env.GEMINI_API_KEY) return json({ error: "no_api_key", note: "GEMINI_API_KEY 미설정" }, env, 503);
+        let bb = {};
+        try { bb = await request.json(); } catch (e) {}
+        const lname = String(bb.name || "").trim();
+        const ltype = String(bb.type || "");
+        if (!lname && ltype !== "icon" && ltype !== "abstract") return json({ error: "로고에 넣을 이름이 필요해요" }, env, 400);
+        try {
+          return json(await generateLogoImage(env, bb), env);
+        } catch (e) {
+          console.error("[content/logo]", e);
           return json({ error: String((e && e.message) || e) }, env, 502);
         }
       }
