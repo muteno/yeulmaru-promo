@@ -16,6 +16,7 @@
 - **앱 도메인 상세** = `docs/앱지침.md`.
 - **동시 편집 주의(다중 세션)** = 커밋·푸시·머지 직전 `git fetch origin main` 필수. main force-push 금지, 머지는 PR로, 머지된 브랜치에 새 커밋 금지.
 - **데이터 안전** = SharePoint 마스터(xlsm) 직접 편집 금지 — 시트 데이터는 앱 모달/Worker API로만. Worker(`src/index.js`)는 **main 머지 시 자동 배포**(`.github/workflows/deploy-worker.yml` — `src/index.js`·`wrangler.toml` 변경 감지 → `wrangler deploy`). 260803 실측 = 최근 30회 전부 성공. ⚠ 구 문구 「wrangler deploy 별도 필요」는 이 워크플로 신설 전 이야기 — 그대로 두면 세션마다 운영자에게 불필요한 수동 배포를 시킨다(실제로 시켰다).
+- **빌드 큐 = 손댈 것 없음(260804 실측 · 이식 금지 명문)** = 이 레포 프론트는 **GitHub Pages**(`pages-build-deployment` · CF Pages 아님). Pages 빌드 **120런 실측 = 큐 대기 0초 전건**(빌드 26~250s·평균 40s · 피크 60분 창 15빌드), 밀린 이력 0 — 정기 봇 커밋 축이 **없고**(워크플로 6종 전부 dispatch성) 시트 데이터는 Worker API 경유라 빌드와 무관하다. ⚠ nomute-editor의 `[CF-Pages-Skip]` 코얼레싱·`check_pages_skip`·`check_coalesce_pair`를 **이식하지 마라** — CF 전용 토큰이라 GitHub Pages엔 대응물이 없고, 유일한 GitHub 토큰 `[skip ci]`는 Actions 스킵 = 발화 반경 정반대다. GitHub Pages는 **앞 빌드가 끝나기 전 새 커밋이 오면 앞 빌드를 자동 취소**해 최신만 배포한다(실측 = 간격 24s인 #1300만 `cancelled` · 간격 36~58s 6건은 전건 `success`) = 코얼레싱이 플랫폼 내장. **정기 봇 커밋 축을 신설할 때만** 짝 규칙 적용 — 화면이 fetch하는 산출 JSON은 빌드 우회 서빙(Worker API)을 함께 배선(nomute `check_coalesce_pair` 원칙).
 - **작업 이력(append-only)** = `docs/작업이력.md`.
 - **시크릿 인벤토리·회전 절차(값 없음·이름/위치/회전만)** = `docs/KEYS.md`.
 
