@@ -13766,7 +13766,9 @@ async function openMsgBox(){
         const reasonFs = _hasT ? '12px' : (isImp ? '14px' : '12px');
         const reasonFw = _hasT ? '500' : (isImp ? '700' : '600');
         const reasonCol = isImp ? '#C0392B' : '#333';
-        html += '<div style="font-size:'+reasonFs+';font-weight:'+reasonFw+';color:'+reasonCol+';margin-bottom:6px;line-height:1.4">'+escapeHtml(m.reason)+'</div>';
+        // [260804] 줄바꿈 보존 — 불편사항 접수 본문이 reason에 실리면서 여러 줄이 한 줄로 뭉개지던 것 방지.
+        //   결·색·크기 무접촉(속성 2개 추가) · '불편사항 관리' 표의 내용 칸과 같은 규약(white-space:pre-wrap;word-break:break-word).
+        html += '<div style="font-size:'+reasonFs+';font-weight:'+reasonFw+';color:'+reasonCol+';margin-bottom:6px;line-height:1.4;white-space:pre-wrap;word-break:break-word">'+escapeHtml(m.reason)+'</div>';
       }
       if(m.before && m.after){
         html += '<div style="font-size:11px;color:#666;margin-bottom:4px">'+escapeHtml(m.before)+' → <strong style="color:#333">'+escapeHtml(m.after)+'</strong></div>';
@@ -28990,10 +28992,15 @@ async function _qaSubmit(){
       var _nm=(_admins[_i]['담당자']||'').trim();
       if(!_nm||_nm===_me)continue;
       _targets++;
+      // [260804 운영자 「내용 꽂히게」] 종전엔 본문이 refSummary 50자 컷 + 11px 최흐림 결(참조요약 자리)이라
+      //   메시지함만 보고는 무슨 불편인지 알 수 없어 매번 '불편사항 관리'를 열어야 했다.
+      //   → title에 머리말, reason에 **접수 본문**(500자)을 실어 12px 본문 결로 올린다(정본 렌더 분기 그대로 사용:
+      //   title 있으면 reason이 12px/500 = 본문 자리). 토스트도 mt-sub(2줄 클램프)로 본문 미리보기가 뜬다.
       try{ var _r=await pushMessage({recipient:_nm,type:'중요',trigger:'불편사항 접수',
+        title:'🗣️ 불편사항이 접수됐어요',
         before:payload.user,after:payload.category,
-        reason:'🗣️ 불편사항이 접수됐어요',
-        refNo:payload.id,refSummary:'['+payload.category+'] '+payload.content.slice(0,50)});
+        reason:payload.content.slice(0,500),
+        refNo:payload.id,refSummary:'눌러서 「불편사항 관리」에서 열기'});
         if(_r)_sent++; else _failed++; }catch(_pe){_failed++;}
     }
     // 관측성(분신술 M1): 예전엔 실패를 통째로 삼켜 유실을 아무도 몰랐음 → 콘솔에 결과 남김
@@ -29157,10 +29164,39 @@ function _cbHome(first){
   _cb.cat=null;
   _cbClearChips();
   _cbBot(first?'안녕하세요? 전 예울이예요 😊\n어떤 문의가 있어 오셨나요?':'무엇이 더 궁금하세요?');
+  // [260804 운영자 「예울이 첫 메뉴에 문의하기·불편사항 접수 두 개 · 불편사항만 나한테 오게」]
+  //   첫 메뉴 = 2갈래 분기. **이 분기 자체가 컴플레인 판정**이라 키워드/AI 자동판정은 배선하지 않는다(운영자 확정) —
+  //   사용자가 직접 고르므로 오탐 0. 문의하기 = 종전 2칩(회사 규정·프로그램)을 한 단 아래로 옮긴 것뿐 = 흐름 무변.
+  //   불편사항 접수 = 종전 `.qa-fab`(260725 숨김·_qaMount return 유지) 대신 여기가 유일 창구 → _qaOpen 정본 모달 재사용.
   _cbChips([
-    {label:'🏢 회사 규정 질문',fn:function(){_cbPickCat('회사');}},
-    {label:'🎭 사업 프로그램 문의',fn:function(){_cbPickCat('프로그램');}}
+    {label:'💬 문의하기',fn:_cbAskMenu},
+    {label:'📣 불편사항 접수',fn:_cbQaEntry}
   ]);
+}
+// 문의하기 = 종전 첫 메뉴(회사 규정 질문 · 사업 프로그램 문의) — 칩·핸들러 그대로, 한 단만 내려왔다.
+function _cbAskMenu(){
+  _cbClearChips();
+  _cbUser('문의하기');
+  _cbReply(function(){
+    _cbBot('어떤 문의인가요? 아래에서 고르거나 바로 입력해도 돼요 🙂');
+    _cbChips([
+      {label:'🏢 회사 규정 질문',fn:function(){_cbPickCat('회사');}},
+      {label:'🎭 사업 프로그램 문의',fn:function(){_cbPickCat('프로그램');}},
+      {label:'처음으로',fn:_cbHome,ghost:true}
+    ]);
+  });
+}
+// 불편사항 접수 = 정본 접수 모달(_qaOpen) 호출. 제출(_qaSubmit)이 '불편사항' 시트 적재 + 관리자 전원 메시지함 알림까지 한다.
+function _cbQaEntry(){
+  _cbClearChips();
+  _cbUser('불편사항 접수');
+  _cbBot('불편하셨던 점을 접수 창에 적어주세요. 담당자에게 바로 전달할게요 🙏');
+  _cbChips([{label:'처음으로',fn:_cbHome,ghost:true}]);
+  _cbLog('불편사항-진입','불편사항 접수','','');
+  // 접수 모달(z 9600)이 대화창(z 96)을 덮으므로 대화창은 먼저 접는다 — 모달을 처음 클릭하는 순간
+  //   바깥클릭 리스너(_chatbotMount)가 대화창을 갑자기 닫아버리는 것을 막는다. 대화 기록은 남아 다시 열면 이어진다.
+  try{ var _w=document.getElementById('cb-win'); if(_w){ _w.classList.remove('show'); _cb.open=false; } }catch(_e){}
+  _qaOpen();
 }
 async function _cbLoadFaq(){
   if(_cb.faq!==null)return _cb.faq;
