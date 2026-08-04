@@ -1463,11 +1463,68 @@ function isoToSerial(iso) {   // 'YYYY-MM-DD' → 엑셀 날짜 일련번호(189
 }
 __name(isoToSerial, "isoToSerial");
 
+// ═══ [260804 운영자] 「여수음악제 원래 하나로 합쳐놨는데. 이게 캘린더에만 반영이되었나봐.
+//     db단에도 하나로 대관 공연이 합쳐져야되거든?」 ═══
+//   진단: 병합·보정이 **프런트에만** 있었다. 시트 쓰기 경로는 원본 제목을 그대로 써서 같은 일정이 시트엔 2행으로 남았다.
+//   아래 2층을 이식해 캘린더와 시트를 같은 결과로 맞춘다.
+//   ⚠ 쌍둥이 계약 — 표·규칙은 index.html의 _GC_TITLE_FIX/_gcTitleFix/_gcNorm/_gcSubsumeDay와 같은 규격이다.
+//     한쪽만 고치면 시트 이름과 캘린더 이름이 갈린다(중복 판정 실패) → 고칠 땐 반드시 양쪽 같이.
+//   ※ index.html의 _GC_FIX(날짜 **하루 단위** drop/rename)는 이식하지 않았다 — 시트 한 행 = 일정 전체(시작~종료)라
+//     「그 날 하루만 지우기」가 행 모델에 안 맞는다(기간을 쪼개야 함). 접기만으로도 여수음악제는 1행이 된다.
+var GCAL_TITLE_FIX = [
+  { raw: "[대][기획]LG피아노", title: "[대][기획]LG피아노 26일 셋업 27일 공연" },
+  { raw: "[대][대관]여수음악제 특별공연 19:30", title: "[대][대관]여수예총 여수음악제 특별공연 19:30" },
+  { raw: "[대][대관]에코국제음악제 영재원오케스트라 공연 19:30", title: "[대][대관]여수 에코국제음악제 19:30" },
+  { raw: "[대][대관]여수영재원오케스트라 정기연주회 17:00", title: "[대][대관]여수영재오케스트라 정기연주회 17:00" },
+  { raw: "[리1][대관]영재오케스트라 연습 13:00~17:00", title: "[리1][대관]여수영재오케스트라" },
+  { raw: "[리1,2][대관] 전남학생예술교육페스티벌 대기실", title: "[리1,2][대관]전남학생교육페스티벌 대기실" },
+  { raw: "'[야외][기획]입주작가전 '안민환'", title: "[야외][기획]창작스튜디오 입주작가전 안민환" }
+];
+
+function gcalNorm(s) { return String(s || "").replace(/[\s·\-_~,.'"()\[\]:<>〈〉《》「」『』【】]/g, "").toLowerCase(); }
+__name(gcalNorm, "gcalNorm");
+
+function gcalTitleFix(title) {
+  const k = gcalNorm(title);
+  for (let i = 0; i < GCAL_TITLE_FIX.length; i++) if (gcalNorm(GCAL_TITLE_FIX[i].raw) === k) return GCAL_TITLE_FIX[i].title;
+  return title;
+}
+__name(gcalTitleFix, "gcalTitleFix");
+
+// 「본 일정 + 그 하위 일정」이 겹치는 기간에 함께 오면 본 일정만 남긴다(프런트 _gcSubsumeDay의 시트판).
+//   프런트는 「같은 날」이 단위지만 시트 한 행은 일정 전체(s~e)라 여기선 **기간이 겹치는지**로 본다.
+//   판정 = 정규화 이름이 다른 항목의 이름을 통째로 품을 때만(더 짧은 쪽 = 본 일정). 조금이라도 어긋나면 남남 = 둘 다 남긴다(오제거 0).
+//   3자 미만 이름은 포함 판정이 위험해 제외 — 프런트의 「3자 미만 제외」 계약 계승.
+//   실데이터: 「여수음악제」(대극장 8/29~30) ⊂ 「여수음악제 임산부를위한음악회」(소극장 8/30) → 뒤엣것이 접힌다 = 1행.
+function gcalSubsume(want) {
+  const ids = Object.keys(want);
+  if (ids.length < 2) return want;
+  const out = {};
+  for (const id of ids) {
+    const a = want[id], ka = gcalNorm(a.name);
+    let covered = false;
+    if (ka.length >= 3) {
+      for (const other of ids) {
+        if (other === id) continue;
+        const b = want[other], kb = gcalNorm(b.name);
+        if (kb.length < 3 || kb.length >= ka.length) continue;   // 더 짧은 쪽만 「본 일정」 후보
+        if (ka.indexOf(kb) < 0) continue;                        // 이름을 통째로 품지 않으면 남남
+        if (a.s > b.e || b.s > a.e) continue;                    // 기간이 안 겹치면 남남
+        covered = true; break;
+      }
+    }
+    if (!covered) out[id] = a;
+  }
+  return out;
+}
+__name(gcalSubsume, "gcalSubsume");
+
 // 제목 → {name, kind, place, drop} — 프런트 _gcParse의 '행 정보'용 축약본.
 // ⚠ 쌍둥이: 태그 규격([공간][구분])·공간 표기·제외 규칙·이름 절단 경계는 index.html의 _gcParse/_GC_PLACE/_GC_DROP과 같은 규격이다
 //   (한쪽만 고치면 시트 이름과 캘린더 이름이 갈린다 = 중복 판정 실패). 셋업 판정은 담을 열이 없어 여기선 안 한다.
+//   [260804] 제목 보정(gcalTitleFix)을 파싱 **앞**에 태운다 — 캘린더와 같은 순서(보정 → 파싱 → 접기).
 function gcalParseRow(title) {
-  let raw = String(title || "").replace(/^['"\s]+/, ""), tags = [], rest = raw, m;
+  let raw = String(gcalTitleFix(title) || "").replace(/^['"\s]+/, ""), tags = [], rest = raw, m;
   while ((m = rest.match(/^\s*\[([^\]]*)\]/))) { tags.push(m[1].trim()); rest = rest.slice(m[0].length); }
   rest = rest.trim();
   let kindTag = "", placeTag = "";
@@ -1500,7 +1557,7 @@ async function gcalSyncPrograms(env, token, opts) {
     if (!grp[uid]) { grp[uid] = { title: x.title || "", place: x.place || "", days: [] }; order.push(uid); }
     grp[uid].days.push(x.d);
   });
-  const want = {};
+  let want = {};   // [260804] 아래에서 gcalSubsume로 갈아끼운다(하위 일정 접기) → const 불가
   for (const uid of order) {
     const g = grp[uid];
     g.days.sort();
@@ -1510,6 +1567,10 @@ async function gcalSyncPrograms(env, token, opts) {
     if (p.kind !== "대관") continue;          // [기획] = 사람이 정본에 등록하는 몫(운영자 「기획은 이미 등록된 게 우선」)
     want["R" + s.slice(2).replace(/-/g, "") + "_" + gcalHash4(uid)] = { name: p.name, place: p.place || g.place || "", s, e };
   }
+  // [260804 운영자 「db단에도 하나로 대관 공연이 합쳐져야되거든?」] 본 일정에 흡수되는 하위 일정을 여기서 접는다.
+  //   순서 = 캘린더와 같다(제목 보정 → 파싱 → 접기). 접힌 건은 want에서 빠지므로, 이미 시트에 있던 그 행은
+  //   아래 「want에 없는 우리 행 = removed」 규칙에 걸려 지워진다 = 2행 → 1행.
+  want = gcalSubsume(want);
   // 시트 현황 — 우리 소유(R 접두) 행만 집계
   const { headers, rows } = await handleGetSheet(token, SP.programSheetName);
   const idOf = (r) => String(r["프로그램ID"] != null ? r["프로그램ID"] : (r["공연ID"] || "")).trim();
