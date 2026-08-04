@@ -24881,7 +24881,8 @@ function _memOvRender(targetId){   // [260731 4차] targetId = 인라인 4면(me
     if(s1&&ct){var kk=s1+'|'+ct;sgg[kk]=(sgg[kk]||0)+1;}
     var a=String(r['연령대']||'').trim()||'미상';age[a]=(age[a]||0)+1;
   });
-  var top5=Object.keys(sgg).map(function(k){return [k,sgg[k]];}).sort(function(a,b){return b[1]-a[1];}).slice(0,6);
+  // [260804 운영자 「위에 도시도 top 5까지만 표기하고, 그 외에는 그 외로」] 6 → 5. 6번째부터는 아래 도넛의 「그 외·미상」 조각으로 합류한다.
+  var top5=Object.keys(sgg).map(function(k){return [k,sgg[k]];}).sort(function(a,b){return b[1]-a[1];}).slice(0,5);
   var jgj=sido['전남광주통합특별시']||0;
   // [260731 운영자] 관내 = 여수·순천·광양 3시(홍보 거점 _PROMO_GEO와 동일 기준) — 검색·필터 없이 열자마자 보이게 KPI 고정.
   //   집계 = 시 단위(_memCityName) 기준 합산(시도 표기 흔들려도 잡히게 · 동명 시 없음).
@@ -24928,10 +24929,12 @@ function _memOvRender(targetId){   // [260731 4차] targetId = 인라인 4면(me
         :'<path d="'+arcD(49,30,a,a1)+'" fill="'+x.c+'" opacity="'+x.o+'" stroke="'+SLICE_GAP+'" stroke-width="1.6"/>';
       a=a1;
     });
-    // 칸에 맞춰 지름이 정해진다(height:100% + 1:1) = 「저 공간에 가득」. **min-height를 두지 않는다** —
+    // 칸에 맞춰 지름이 정해진다(height + 1:1) = 「저 공간에 가득」. **min-height를 두지 않는다** —
     //   낮은 칸(1366×768 = 절당 42px)에서 최소치가 칸보다 크면 그림이 칸 밖으로 나가 제목을 덮는다(실측으로 잡음).
-    return '<svg viewBox="0 0 100 100" role="img" aria-label="'+_memEsc(sub)+' 도넛 차트" style="flex:0 0 auto;'
-      +(FIT?'height:100%;aspect-ratio:1;max-height:186px':'width:150px;height:150px')+'">'+s
+    // [260804 2차 운영자 「각 차트 크기 80%로 줄여줘」] 100% → 80%(최대치 186 → 149도 같은 8할) · 남는 8할 밖 세로는
+    //   가운데 정렬로 위아래 균등, 가로로 비는 몫은 옆 범례가 가져간다(= 아래 2열 배치의 재원).
+    return '<svg viewBox="0 0 100 100" role="img" aria-label="'+_memEsc(sub)+' 도넛 차트" style="flex:0 0 auto;align-self:center;'
+      +(FIT?'height:80%;aspect-ratio:1;max-height:149px':'width:120px;height:120px')+'">'+s
       +'<text x="50" y="49.5" text-anchor="middle" font-size="13" font-weight="800" fill="var(--accent)">'+_memEsc(mid)+'</text>'
       +'<text x="50" y="59" text-anchor="middle" font-size="7" fill="var(--dim)">'+_memEsc(sub)+'</text></svg>';
   };
@@ -24941,13 +24944,25 @@ function _memOvRender(targetId){   // [260731 4차] targetId = 인라인 4면(me
   //   ⚠ 겹침 사고: 초판은 겉(절·범례)에 `overflow`가 없어서, 줄 합이 칸을 넘으면 flex 항목이 **박스 밖으로 그려져**
   //     제목·옆 절 위에 겹쳐 찍혔다(1366×768 실측). 그래서 절·범례 **둘 다** overflow:hidden이 필수다.
   //   `safe center` = 남으면 가운데, 넘치면 위부터(가운데 정렬이 위쪽을 잘라먹는 것 차단) · 미지원 구브라우저는 값 무시 = 위부터.
+  // [260804 2차 운영자] ① 「옆에 선택지가 많잖아 — 2열로 배치」 = 칸이 넓으면 2열, 좁으면 1열(grid auto-fit).
+  //     `minmax(max(168px,46%),1fr)` = 한 칸 최소 168px **이면서** 46% → 3열은 46%×3>100%라 절대 안 생기고,
+  //     칸이 365px보다 좁으면 168px이 이겨 1열로 되돌아간다(1920 실측 범례폭 252 = 1열 · 운영자 넓은 화면 = 2열).
+  //   ② 「옆에 수치랑 좀 붙여줘」 = 이름 칸을 64px로 고정하고 수치를 바로 뒤에 붙인다(구판은 수치를 오른쪽 끝까지
+  //     밀어 이름과 한참 떨어져 있었다). 열 안에서 수치 시작점이 같아 세로로도 줄이 맞는다.
+  //   ③ 「수치도 그 색(스포티파이 블랙) 유지 · 상위 1,2는 강조색」 = 수치 `--dim` → `--text`(본문 잉크) · 1·2위는 이름·수치 다 `--accent`.
+  //     둘 다 기존 토큰(신규 색 0) · 조각 색과 같은 축이라 「강조 = 인디고」가 도넛·범례에서 한 몸으로 읽힌다.
   var legend=function(items){
-    return '<div style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;justify-content:safe center'+(FIT?';min-height:0;overflow:hidden':'')+'">'
+    return '<div style="flex:1 1 auto;min-width:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(max(168px,46%),1fr));column-gap:14px;align-content:safe center'
+      // 행 높이 = 화면 높이 비례 클램프(AI 로그 `clamp(96px,16vh,190px)` 선례 계승). `1fr`로 두면 큰 화면에서
+      //   행이 칸 높이를 나눠 갖느라 **줄끼리 멀찍이 흩어져** 한 덩어리로 안 읽힌다(2560×1440 실측 행간 175px).
+      //   묶어 놓고 남는 세로는 align-content:center가 위아래로 똑같이 흘린다 = 도넛과 같은 높이에 앉는다.
+      +(FIT?';min-height:0;overflow:hidden;grid-auto-rows:clamp(11px,1.4vh,21px)':'')+'">'
       +items.map(function(x){
-        return '<div style="display:flex;align-items:center;gap:7px;'+(FIT?'flex:1 1 15px;min-height:11px;max-height:20px;overflow:hidden':'')+';line-height:1.35">'
+        var ink=x.hi?'var(--accent)':'var(--text)';
+        return '<div style="display:flex;align-items:center;gap:6px;min-width:0;overflow:hidden;line-height:1.25">'
           +'<span style="flex:0 0 auto;width:9px;height:9px;border-radius:3px;background:'+x.c+';opacity:'+x.o+'"></span>'
-          +'<span style="flex:1 1 auto;min-width:0;font-size:11.5px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+_memEsc(x.label)+'</span>'
-          +'<span style="flex:0 0 auto;font-size:11px;color:var(--dim);font-variant-numeric:tabular-nums">'+x.v.toLocaleString()+'명 · '+pct(x.v)+'%</span></div>';
+          +'<span style="flex:0 0 64px;font-size:11.5px;font-weight:700;color:'+ink+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+_memEsc(x.label)+'</span>'
+          +'<span style="flex:0 1 auto;font-size:11px;font-weight:600;color:'+ink+';font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+x.v.toLocaleString()+'명 · '+pct(x.v)+'%</span></div>';
       }).join('')+'</div>';
   };
   // FIT = align-items:**stretch** — 범례가 절 높이만큼 늘어나야 그 안에서 줄이 조여진다.
@@ -24955,18 +24970,26 @@ function _memOvRender(targetId){   // [260731 4차] targetId = 인라인 4면(me
   var sect=function(inner){return '<div style="display:flex;gap:12px;'+(FIT?'align-items:stretch;flex:1 1 0;min-height:0;overflow:hidden':'align-items:center;margin-top:6px')+'">'+inner+'</div>';};
   // 거주지 = TOP N + 「그 외·미상」 — TOP N만 그리면 원의 합이 전체가 아니라 원형이 성립하지 않는다(없는 값을 지어내지 않고 남는 몫을 그대로 보여준다).
   var topSum=top5.reduce(function(s,t){return s+t[1];},0);
-  var cityItems=top5.map(function(t,i){var p=rankPaint(i,top5.length);return {label:t[0].split('|')[1],v:t[1],c:p[0],o:p[1]};});
-  if(n-topSum>0)cityItems.push({label:'그 외·미상',v:n-topSum,c:'var(--neutral-d)',o:1});
+  var cityItems=top5.map(function(t,i){var p=rankPaint(i,top5.length);return {label:t[0].split('|')[1],v:t[1],c:p[0],o:p[1],hi:i<2};});
+  if(n-topSum>0)cityItems.push({label:'그 외·미상',v:n-topSum,c:'var(--neutral-d)',o:1,hi:false});
   var topHtml='<div style="font-size:14px;font-weight:800;margin-bottom:6px;text-align:left">거주지 TOP '+top5.length+' <span style="font-size:10.5px;color:var(--dim);font-weight:500">(시 기준 · 전국 · 구는 시로 합산)</span></div>'
     // [260731 운영자] 관내 3시 합계 한 줄 — 검색·필터 없이 열자마자 보이게 고정(KPI 자리는 안 뺏음 = 관내가 메인 지표는 아님)
     +'<div style="font-size:11.5px;color:var(--dim);font-weight:600;margin:0 0 8px;line-height:1.5">관내(여수·순천·광양) <b style="color:var(--accent);font-variant-numeric:tabular-nums">'+pct(gn)+'%</b> · '+gn.toLocaleString()+'명 <span style="color:var(--muted)">|</span> 여수 '+gn3[0].toLocaleString()+' · 순천 '+gn3[1].toLocaleString()+' · 광양 '+gn3[2].toLocaleString()+'</div>'
     +sect(donut(cityItems,pct(gn)+'%','관내 비중')+legend(cityItems));
   var ageTop2={};ages.filter(function(x){return x[0]!=='미상';}).slice().sort(function(a,b){return b[1]-a[1];}).slice(0,2).forEach(function(a,i){ageTop2[a[0]]=i+1;});   // '미상'은 의미 구간이 아니라 강조 대상에서 제외(최다 연령대 KPI 기준과 동일)
   // 연령대는 구간이 9~10개라 카테고리 6색이 모자란다(운영자 확인 완료) → 최다 2개만 인디고, 나머지는 **나이순 명도 사다리**(순서형 데이터의 정본 표기).
-  var ageItems=ages.map(function(a,i){
+  // [260804 2차 운영자 「70대 80대는 기타로 넣어줘 — 그러면 좀 덜 빽빽할 거고」] 70대 이상은 한 조각 「70대 이상」으로 합산.
+  //   실측 표본 기준 둘 합쳐 0.7%대라 조각이 실오라기처럼 보이던 구간 — 합치면 조각·범례가 각각 한 줄 줄어든다.
+  //   '미상'은 나이 구간이 아니라 **없는 값**이라 합치지 않는다(합치면 「고령층 N명」으로 잘못 읽힌다).
+  var AGE_TAIL=/^(7|8|9)0대$|^100세/;
+  var ageDisp=[],tail=0;
+  ages.forEach(function(a){ if(AGE_TAIL.test(a[0]))tail+=a[1]; else ageDisp.push(a); });
+  if(tail>0){var uk=ageDisp.filter(function(a){return a[0]==='미상';})[0];   // 「70대 이상」은 미상 앞(나이순 끝자리)에 꽂는다
+    if(uk){ageDisp.splice(ageDisp.indexOf(uk),0,['70대 이상',tail]);}else{ageDisp.push(['70대 이상',tail]);}}
+  var ageItems=ageDisp.map(function(a,i){
     var p=ageTop2[a[0]]?['var(--accent)',ageTop2[a[0]]===1?0.79:0.62]
-      :['var(--peach-text)',+(0.62-0.38*(i/Math.max(1,ages.length-1))).toFixed(3)];
-    return {label:a[0],v:a[1],c:p[0],o:p[1]};
+      :['var(--peach-text)',+(0.62-0.38*(i/Math.max(1,ageDisp.length-1))).toFixed(3)];
+    return {label:a[0],v:a[1],c:p[0],o:p[1],hi:!!ageTop2[a[0]]};
   });
   var ageHtml='<div style="font-size:14px;font-weight:800;margin:'+(FIT?10:16)+'px 0 6px;text-align:left">연령대 분포 <span style="font-size:10.5px;color:var(--dim);font-weight:500">(생년월일 기준 · 만나이 근사)</span></div>'
     +sect(donut(ageItems,(topAge?topAge[0]:'—'),'최다 연령대')+legend(ageItems));
@@ -25002,7 +25025,9 @@ function _memOvRender(targetId){   // [260731 4차] targetId = 인라인 4면(me
     //   → 예울이를 막대 카드 아래(우 열)로 옮기면 줄이 남는 높이를 전부 갖고, 맵은 align-items:stretch로 **같은 하단선(안선)**까지 늘어난다.
     //   막대 = flex:1 1 auto(남는 몫 흡수) · 예울이 = flex:0 0 auto(고정) → 마지막 흰 도형 하단 = 줄 하단 = 안선(계약 ②③ 유지).
     +'<div style="flex:1 1 280px;min-width:250px;min-height:0'+(FIT?';max-height:100%':'')+';display:flex;flex-direction:column">'
-    +'<div style="flex:1 1 auto;min-height:0;background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius);padding:13px 17px'+(FIT?';display:flex;flex-direction:column;overflow:hidden':'')+'">'+topHtml+ageHtml+'</div>'
+    // [260804 2차 운영자 「좌측에 여백 더 주고, 타이틀도 그 여백에 맞춰서 우측으로」] 좌 안쪽 여백 17 → 26.
+    //   제목·부제·도넛이 **전부 이 패딩 안**이라 한 값만 올리면 넷이 같은 선으로 함께 밀린다(제목 따로 미는 매직 오프셋 0).
+    +'<div style="flex:1 1 auto;min-height:0;background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius);padding:13px 17px 13px 26px'+(FIT?';display:flex;flex-direction:column;overflow:hidden':'')+'">'+topHtml+ageHtml+'</div>'
     +_memAiCardHtml(sfx,FIT,true)   // [260803 운영자] 고객 분석 AI 채팅(집계 질의응답) — 모달·4면 인라인 공용 / [260804] 3번째 인자 = 우 열 스택 모드
     +'</div>'
     +'</div>';
