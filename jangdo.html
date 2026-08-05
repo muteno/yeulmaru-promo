@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>장도 입도 가능 시간</title>
+<!--
+  [260805 장도 위젯] 공식 홈페이지(yeulmaru.org 「장도 입도가능 시간 안내」 글) 최상단 iframe 임베드용 독립 페이지.
+  · 데이터 = Worker 공개 라우트 /api/public/jangdo (운영_장도 시트 → 날짜·입도가능시간 두 열만) — 앱 캘린더 패널과 같은 원천.
+  · 색·수치 = docs/디자인기틀.md §1 팔레트 값 그대로(신규 색 0). 독립 배포 페이지라 index.html :root를 못 물어
+    값을 인라인한다 — signage/index.html 선례(기틀 §1 각주 「:root 없음」 축)와 같은 독립 페이지 축.
+    매핑: #4A4DE7=--accent · #E8E8FD=--accent-light · rgba(74,77,231,.15)=--accent-glow · #1A1A2E=--text · #888=--dim
+    · #bbb=--muted · rgba(0,0,0,.09)=--border · #fff=--surface-solid · #FDF6F3=--peach-bg · #1A6B3C=--green
+    · #E24B4A=--danger-btn · 16px=--radius · 10px=--r-btn · 그림자=--glass-shadow. green/danger 알파 배경 = 같은 토큰 alpha 변주(기틀 §3.5②).
+  · 임베드: <iframe src="https://promo.yeulmaru.org/jangdo.html" style="width:100%;max-width:760px;height:320px;border:0;display:block;margin:0 auto;" title="장도 입도 가능 시간" loading="lazy" scrolling="no"></iframe>
+  · 시연·플레이그라운드용 목주입 훅 = window.__JANGDO_MOCK (rows 배열) — 실배포 홈페이지 경로에선 미정의라 무동작.
+-->
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{background:transparent}
+  body{font-family:'Noto Sans KR','Apple SD Gothic Neo','Malgun Gothic',system-ui,sans-serif;color:#1A1A2E;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:720px;margin:0 auto;padding:10px 12px}
+  .hd{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin:0 2px 8px}
+  .hd b{font-size:16px;font-weight:800;letter-spacing:-.2px}
+  .hd span{font-size:12px;color:#888}
+  .card{background:#fff;border:1px solid rgba(0,0,0,.09);border-radius:16px;box-shadow:0 8px 32px rgba(74,77,231,.08),0 2px 8px rgba(0,0,0,.04);padding:16px 18px}
+  .dsel{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+  .dsel button{font:inherit;font-size:13px;font-weight:700;padding:6px 14px;border-radius:10px;border:1px solid rgba(0,0,0,.09);background:#fff;color:#1A1A2E;cursor:pointer}
+  .dsel button:hover{background:#E8E8FD}
+  .dsel button.on{background:#4A4DE7;border-color:#4A4DE7;color:#fff}
+  .dsel input{font:inherit;font-size:13px;font-weight:600;padding:5px 10px;border-radius:10px;border:1px solid rgba(0,0,0,.09);color:#1A1A2E;background:#fff}
+  .dsel input:focus{outline:none;border-color:#4A4DE7;box-shadow:0 0 0 3px rgba(74,77,231,.15)}
+  .dlab{font-size:13px;font-weight:700;color:#888;margin-bottom:4px}
+  .dlab em{font-style:normal;color:#4A4DE7}
+  .times{display:flex;align-items:baseline;gap:6px 14px;flex-wrap:wrap;min-height:38px}
+  .times .t{font-size:27px;font-weight:800;letter-spacing:-.5px;white-space:nowrap;font-variant-numeric:tabular-nums}
+  .times .none{font-size:15px;font-weight:600;color:#888;align-self:center}
+  .pill{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:700;padding:5px 12px;border-radius:999px;margin-top:10px}
+  .pill i{width:8px;height:8px;border-radius:50%;flex:none}
+  .pill.ok{color:#1A6B3C;background:rgba(26,107,60,.10)}.pill.ok i{background:#1A6B3C}
+  .pill.no{color:#E24B4A;background:rgba(226,75,74,.10)}.pill.no i{background:#E24B4A}
+  .pill.off{color:#888;background:rgba(0,0,0,.05)}.pill.off i{background:#bbb}
+  .note{font-size:12px;line-height:1.55;color:#888;background:#FDF6F3;border-radius:10px;padding:8px 12px;margin-top:12px}
+  .ft{font-size:11px;color:#bbb;text-align:right;margin:6px 4px 0}
+  .ld i{display:inline-block;width:5px;height:5px;border-radius:50%;background:#888;margin-right:3px;animation:ld 1s cubic-bezier(0.4,0,0.2,1) infinite}
+  .ld i:nth-child(2){animation-delay:.15s}.ld i:nth-child(3){animation-delay:.3s}
+  @keyframes ld{0%,100%{opacity:.25}50%{opacity:1}}
+  @media (max-width:480px){.times .t{font-size:22px}.card{padding:14px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hd"><b>장도 입도 가능 시간</b><span>날짜를 선택하면 그날의 통행 가능 시간을 보여드려요</span></div>
+  <div class="card">
+    <div class="dsel">
+      <button type="button" id="btnToday" onclick="pick(0)">오늘</button>
+      <button type="button" id="btnTmrw" onclick="pick(1)">내일</button>
+      <label for="dInput" style="position:absolute;left:-9999px">날짜 선택</label>
+      <input type="date" id="dInput" onchange="pickDate(this.value)">
+    </div>
+    <div id="body" aria-live="polite">
+      <div class="dlab ld"><i></i><i></i><i></i> 불러오는 중</div>
+      <div class="times"><span class="none">&nbsp;</span></div>
+    </div>
+    <div class="note">위 시간 외에는 진섬다리가 물에 잠겨 장도 출입이 불가합니다. 캘린더에 명시된 시간에만 입장해 주세요.</div>
+  </div>
+  <div class="ft" id="ft"></div>
+</div>
+<script>
+'use strict';
+var API='https://yeulmaru-promo-api.yeulmarumaster.workers.dev/api/public/jangdo';
+var MAP={},MIN='',MAX='',SEL='',TRIES=0;
+
+/* KST 현재 — 방문자 기기 시간대와 무관하게 Asia/Seoul 기준(Intl) */
+function kstNow(){
+  var p=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).formatToParts(new Date());
+  var g=function(t){for(var i=0;i<p.length;i++)if(p[i].type===t)return p[i].value;return''};
+  var hh=g('hour');if(hh==='24')hh='00';
+  return {ymd:g('year')+'-'+g('month')+'-'+g('day'),min:parseInt(hh,10)*60+parseInt(g('minute'),10)};
+}
+function ymdAdd(ymd,n){var a=ymd.split('-');var d=new Date(Date.UTC(+a[0],+a[1]-1,+a[2]+n));return d.toISOString().slice(0,10)}
+function ymdLabel(ymd){var a=ymd.split('-');var d=new Date(Date.UTC(+a[0],+a[1]-1,+a[2]));return (+a[1])+'월 '+(+a[2])+'일 ('+['일','월','화','수','목','금','토'][d.getUTCDay()]+')'}
+function fmtMin(m){return Math.floor(m/60)+':'+('0'+(m%60)).slice(-2)}
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+
+/* "6:00~8:32, 10:32~20:31" → [[360,512],[632,1231]] · 형식 밖 텍스트(통제 공지 등)는 null = 원문 그대로 표시 */
+function parseRanges(t){
+  if(!t)return null;
+  var segs=t.split(/[,·]/),out=[];
+  for(var i=0;i<segs.length;i++){
+    var m=segs[i].trim().match(/^(\d{1,2})\s*:\s*(\d{2})\s*[~∼–-]\s*(\d{1,2})\s*:\s*(\d{2})$/);
+    if(!m)return null;
+    out.push([+m[1]*60+ +m[2],+m[3]*60+ +m[4]]);
+  }
+  return out.length?out:null;
+}
+
+function render(){
+  var now=kstNow(),el=document.getElementById('body');
+  document.getElementById('btnToday').className=(SEL===now.ymd)?'on':'';
+  document.getElementById('btnTmrw').className=(SEL===ymdAdd(now.ymd,1))?'on':'';
+  var inp=document.getElementById('dInput');if(inp.value!==SEL)inp.value=SEL;
+  var raw=MAP[SEL],lab='<div class="dlab">'+ymdLabel(SEL)+(SEL===now.ymd?' · <em>오늘</em>':(SEL===ymdAdd(now.ymd,1)?' · 내일':''))+'</div>';
+  if(raw===undefined){
+    el.innerHTML=lab+'<div class="times"><span class="none">이 날짜의 입도 시간이 아직 등록되지 않았어요</span></div>';
+    return;
+  }
+  var ranges=parseRanges(raw),h=lab+'<div class="times">';
+  if(ranges){for(var i=0;i<ranges.length;i++)h+='<span class="t">'+fmtMin(ranges[i][0])+' ~ '+fmtMin(ranges[i][1])+'</span>';}
+  else h+='<span class="t" style="font-size:19px">'+esc(raw||'-')+'</span>';
+  h+='</div>';
+  if(SEL===now.ymd&&ranges){
+    var st=null;
+    for(var j=0;j<ranges.length;j++){
+      if(now.min>=ranges[j][0]&&now.min<ranges[j][1]){st='<span class="pill ok"><i></i>지금 입도 가능 · '+fmtMin(ranges[j][1])+'까지</span>';break}
+      if(now.min<ranges[j][0]){st='<span class="pill no"><i></i>지금은 입도 불가 · 다음 입도 '+fmtMin(ranges[j][0])+'부터</span>';break}
+    }
+    h+=st||'<span class="pill off"><i></i>오늘 입도 시간이 종료됐어요</span>';
+  }
+  el.innerHTML=h;
+}
+function pick(n){SEL=ymdAdd(kstNow().ymd,n);render()}
+function pickDate(v){if(v){SEL=v;render()}}
+
+function ingest(rows){
+  for(var i=0;i<rows.length;i++){
+    var d=String(rows[i].d||'').trim();
+    if(!d)continue;
+    /* 시트가 2026-8-5식으로 와도 키를 맞춘다(제로패딩 정규화) */
+    var a=d.split('-');if(a.length===3)d=a[0]+'-'+('0'+a[1]).slice(-2)+'-'+('0'+a[2]).slice(-2);
+    MAP[d]=String(rows[i].t||'').trim();
+    if(!MIN||d<MIN)MIN=d;if(!MAX||d>MAX)MAX=d;
+  }
+  var inp=document.getElementById('dInput');
+  if(MIN)inp.min=MIN;if(MAX)inp.max=MAX;
+  document.getElementById('ft').textContent='예울마루 운영 데이터 기준'+(MAX?' · '+MAX.replace(/-/g,'.')+'까지 등록':'');
+  SEL=kstNow().ymd;render();
+  setInterval(render,30000);   /* 「지금 입도 가능」 상태 30초 갱신 */
+}
+function fail(){
+  TRIES++;
+  if(TRIES<=3){setTimeout(load,8000);return}
+  document.getElementById('body').innerHTML='<div class="times"><span class="none">시간 정보를 불러오지 못했어요 — 아래 캘린더 이미지를 확인해 주세요</span></div>';
+}
+function load(){
+  fetch(API).then(function(r){if(!r.ok)throw 0;return r.json()}).then(function(j){
+    if(j&&j.ok&&j.rows&&j.rows.length)ingest(j.rows);else fail();
+  }).catch(fail);
+}
+if(window.__JANGDO_MOCK)ingest(window.__JANGDO_MOCK);else load();
+</script>
+</body>
+</html>

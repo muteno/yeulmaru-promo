@@ -2256,6 +2256,40 @@ var index_default = {
         }
       }
 
+      // === [260805 장도 위젯] 공개 읽기 전용 — 홈페이지(yeulmaru.org 「장도 입도가능 시간 안내」 글) 임베드용 ===
+      // 반환 = 운영_장도의 날짜·입도가능시간 **두 열만**(열 화이트리스트 — 시트에 열이 늘어나도 새 열은 안 나간다).
+      // 이미 홈페이지에 월별 캘린더 이미지로 공개 중인 정보(개인정보 0)라 인증 게이트 앞 배치가 의도다(/api/auth류 선례).
+      // 캐시 3층: CDN·브라우저 10분(Cache-Control) → KV 1시간(콜드 isolate 보호) → isolate 5분(getOpsCached)
+      //  — 홈페이지 방문 트래픽이 Graph를 안 때린다. 시트 갱신 반영 = 최대 ~70분(조수 시간표 = 월 단위 선입력이라 충분) · 즉시 = ?fresh=1.
+      if (url.pathname === "/api/public/jangdo" && request.method === "GET") {
+        try {
+          const KV_KEY = "jangdo-public:v1";
+          const fresh = url.searchParams.get("fresh") === "1";
+          let out = null;
+          if (!fresh) { try { const kv = await env.ops_kv.get(KV_KEY); if (kv) out = JSON.parse(kv); } catch (e) {} }
+          if (!out) {
+            const token = await getToken(env);
+            const opsName = opsSheetName("장도");
+            if (fresh) delete opsCache[opsName];
+            const { rows } = await getOpsCached(token, opsName);
+            const list = [];
+            for (const r of rows) {
+              const d = String(r["날짜"] || "").trim();
+              if (d) list.push({ d, t: String(r["입도가능시간"] || "").trim() });
+            }
+            out = { rows: list };
+            try { await env.ops_kv.put(KV_KEY, JSON.stringify(out), { expirationTtl: 3600 }); } catch (e) {}
+          }
+          return new Response(JSON.stringify({ ok: true, count: out.rows.length, rows: out.rows }), {
+            status: 200,
+            headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=600", ...corsHeaders(env) }
+          });
+        } catch (e) {
+          console.error("[public/jangdo]", e);
+          return json({ ok: false, error: "unavailable" }, env, 503);
+        }
+      }
+
       const pw = request.headers.get("X-App-Password");
       const role = roleOf(pw, env);
       if (!role) return json({ error: "Unauthorized" }, env, 401);
