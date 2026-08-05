@@ -2619,6 +2619,81 @@ var index_default = {
         }
       }
 
+      // === 콘텐츠 제작 ▸ 문서 → 마크다운 (260805 운영자) — 오피스문서 편집(/api/office/*)의 변환판 미러 ===
+      // 변환 엔진 = GitHub Actions(anydoc-convert.yml)의 firecrawl/anydoc(MIT · 네이티브 Rust NAPI = 브라우저 불가).
+      // 흐름·인증·시크릿 전부 office 와 동일(신설 0): upload(원본 커밋) → dispatch(anydoc-convert) → [Actions 변환 후 커밋]
+      // → /api/blog/draft 폴링(공용) → file(마크다운 텍스트). 다른 건 확장자 21종과 결과가 .md 텍스트라는 점뿐.
+      if (url.pathname.startsWith("/api/anydoc/")) {
+        const cfg = ghBlogCfg(env);
+        if (!cfg.pat) return json({ error: "no_github_pat", note: "Worker에 GITHUB_PAT 시크릿 미설정" }, env, 503);
+        const ghHdr = { "Authorization": "Bearer " + cfg.pat, "Accept": "application/vnd.github+json", "User-Agent": "yeulmaru-promo-worker" };
+        const adId = (v) => String(v || "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 64);
+        // 확장자 화이트리스트 = anydoc README 지원표 21종(프런트 _DM_EXT 와 같은 목록). 미일치 = null → 400 거절(경로 조작 차단).
+        const adExt = (n) => { const m = String(n || "").match(/\.(doc|docx|docm|ppt|pps|pot|pptx|pptm|ppsx|ppsm|xls|xlsx|xlsm|xlsb|odt|ods|odp|rtf|epub|csv|pdf)$/i); return m ? m[1].toLowerCase() : null; };
+
+        if (url.pathname === "/api/anydoc/upload" && request.method === "POST") {
+          let b = {};
+          try { b = await request.json(); } catch (e) {}
+          const id = adId(b.id);
+          const ext = adExt(b.name);
+          const b64 = String(b.b64 || "").replace(/\s/g, "");
+          if (!id) return json({ error: "id required" }, env, 400);
+          if (!ext) return json({ error: "지원하지 않는 형식이에요(워드·PPT·엑셀·오픈도큐먼트·RTF·EPUB·CSV·PDF)" }, env, 400);
+          if (!b64) return json({ error: "빈 파일이에요" }, env, 400);
+          if (b64.length > 12e6) return json({ error: "문서가 너무 커요(8MB 이하)" }, env, 413);
+          const path = `drafts/anydoc/${id}.in.${ext}`;
+          try {
+            const gr = await fetch(`https://api.github.com/repos/${cfg.repo}/contents/${path}`, {
+              method: "PUT",
+              headers: { ...ghHdr, "Content-Type": "application/json" },
+              body: JSON.stringify({ message: `chore(anydoc): ${id} 원본 [skip ci]`, content: b64, branch: cfg.branch })
+            });
+            if (!gr.ok) return json({ error: gr.status === 401 || gr.status === 403 ? "github_denied" : "upload_failed", status: gr.status, note: (await gr.text()).slice(0, 200) }, env, 502);
+            return json({ ok: true, id, path }, env);
+          } catch (e) {
+            return json({ error: String((e && e.message) || e) }, env, 502);
+          }
+        }
+
+        // 트리거 — 전용 event_type(anydoc-convert)이라 블로그(nb-blog)·한글문서(hwp-edit)·오피스(office-edit) 큐에 안 막힌다.
+        if (url.pathname === "/api/anydoc/dispatch" && request.method === "POST") {
+          let b = {};
+          try { b = await request.json(); } catch (e) {}
+          const id = adId(b.id);
+          const ext = adExt(b.name);
+          if (!id) return json({ error: "id required" }, env, 400);
+          if (!ext) return json({ error: "지원하지 않는 형식이에요(워드·PPT·엑셀·오픈도큐먼트·RTF·EPUB·CSV·PDF)" }, env, 400);
+          const inner = { id, name: String(b.name || "문서").slice(0, 160), ext };   // 변환은 지시가 없다 = ask 없음(office 와 유일한 payload 차이)
+          try {
+            const gr = await fetch(`https://api.github.com/repos/${cfg.repo}/dispatches`, {
+              method: "POST",
+              headers: { ...ghHdr, "Content-Type": "application/json" },
+              body: JSON.stringify({ event_type: "anydoc-convert", client_payload: { d: inner } })
+            });
+            if (gr.ok) return json({ ok: true, id }, env);
+            return json({ error: gr.status === 401 || gr.status === 403 ? "github_denied" : "dispatch_failed", status: gr.status, note: (await gr.text()).slice(0, 200) }, env, 502);
+          } catch (e) {
+            return json({ error: String((e && e.message) || e) }, env, 502);
+          }
+        }
+
+        // 결과 마크다운 — 1MB 넘어도 오게 raw 미디어타입(hwp·office 와 동일). 결과 확장자는 언제나 .md 하나.
+        if (url.pathname === "/api/anydoc/file" && request.method === "GET") {
+          const id = adId(url.searchParams.get("id"));
+          if (!id) return json({ error: "id required" }, env, 400);
+          try {
+            const gr = await fetch(`https://api.github.com/repos/${cfg.repo}/contents/drafts/anydoc/${id}.out.md?ref=${encodeURIComponent(cfg.branch)}&t=${Date.now()}`, {
+              headers: { ...ghHdr, "Accept": "application/vnd.github.raw" }
+            });
+            if (gr.status === 404) return json({ error: "not_ready" }, env, 404);
+            if (!gr.ok) return json({ error: "github " + gr.status }, env, 502);
+            return new Response(gr.body, { headers: { "Content-Type": "text/markdown; charset=utf-8", ...corsHeaders(env) } });
+          } catch (e) {
+            return json({ error: String((e && e.message) || e) }, env, 502);
+          }
+        }
+      }
+
       const token = await getToken(env);
 
       // 홍보기록
