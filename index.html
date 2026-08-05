@@ -3367,6 +3367,9 @@ let selected=null,editing=null,panelOpen=false,activeFilters=[],activePrograms=[
 //   ⚠ 선언만 여기로 올린 것 = renderCal→_evSelPaint가 읽으므로, F5 세션복원이 부트 IIFE에서
 //   initApp을 「파싱 중」 동기 호출하는 경로(같은 파일 _salesState TDZ 전례)에 물리지 않게 하려는 것.
 let _evSel=new Set();   // 선택된 records._rowIndex
+// [260805] 카카오 76자 AI 문구 제안 상태 — 본체 로직은 아래 `_pwAiRun`~`_pwAiPick` 절.
+//   ⚠ 선언만 여기로 올린 것 = 위 _evSel과 같은 이유(파싱 중 동기 호출 경로의 TDZ 회피).
+let _pwAi={busy:false,items:[],err:'',src:'',ocr:'',over:0,open:false,gen:0};
 
 // PIN
 const pins=document.querySelectorAll('.pin');
@@ -16277,6 +16280,7 @@ function openPromoWizard(prefillDate, batchJob){
     applicant:'',               // 게시자
     memo:''                     // 추가 요청 (비고)
   };
+  _pwAiReset();   // 새 신청 = AI 문구 제안도 백지에서(앞 건의 후보가 다음 공연에 남지 않게)
   document.getElementById('pw-acts').innerHTML='<button class="m-btn cancel" id="pw-back" onclick="promoBack()">이전</button><button class="m-btn save" id="pw-next" onclick="promoNext()">다음</button>';
   document.getElementById('promo-wizard').classList.add('show');
   // [배치 순차] 프로그램·날짜·플랫폼·제목 프리필 → 본문 입력(Step4)부터 시작. 제출 시 다음 건으로.
@@ -16823,6 +16827,7 @@ async function closePromoWizard(force){
   function _doClose(){
     if(_pwMode==='edit'){_pwMode='request';_pwEditTarget=null;_pwSelectedSteps=[];_pwSelectedIdx=0;_pwOriginalRec=null;}
     if(_pwBatchQueue!=null){ _pwBatchQueue=null; _pwBatchTotal=0; try{syncReload();}catch(e){} }  // 배치 순차 중단 — 이미 등록된 건은 반영
+    _pwAiReset();   // 🔒 공용 PC — AI 문구 제안은 닫으면 전멸(다음 사용자에게 남의 공연 문구가 안 남게) + 세대 가드 증가
     document.getElementById('promo-wizard').classList.remove('show');
     document.getElementById('pw-acts').innerHTML='<button class="m-btn cancel" id="pw-back" onclick="promoBack()">이전</button><button class="m-btn save" id="pw-next" onclick="promoNext()">다음</button>';
   }
@@ -18327,7 +18332,8 @@ function renderPwSubDetail(body,next){
       html+=_pwKakaoLabelBar();
       html+='<textarea id="pw-kakao-text" maxlength="76" rows="4" oninput="pwCharCount(\'pw-kakao-text\',\'pw-kakao-count\',76)" placeholder="30자 이상 76자까지 입력해 주세요" style="width:100%;padding:10px 14px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:12px;font-size:13px;outline:none;box-sizing:border-box;resize:vertical;font-family:inherit;line-height:1.5">'+escapeHtml(_pwData.kakaoText)+'</textarea>';
       html+='<div style="display:flex;justify-content:flex-end;margin-top:6px"><span id="pw-kakao-count" style="font-size:11px;color:#888">'+(_pwData.kakaoText||'').length+' / 76</span></div>';
-      body.innerHTML=html;next.textContent='다음';return;
+      html+='<div id="pw-ai-box"></div>';
+      body.innerHTML=html;next.textContent='다음';_pwAiPaint();return;   /* 이 step으로 되돌아와도 이미 받은 제안이 남아 있게 */
     }
     // 인스타그램 — 본문 틀
     if(p1==='인스타그램'){
@@ -18379,8 +18385,115 @@ var _PW_EMOJIS=['😊','😄','😍','🥰','😉','😎','🤩','🙂','😆','
 function _pwKakaoLabelBar(){
   return '<div style="display:flex;justify-content:space-between;align-items:center;margin:14px 0 4px">'+
     '<label style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">본문<span style="color:var(--peach);margin-left:3px">*</span></label>'+
+    '<div style="display:flex;gap:6px;align-items:center">'+
+    /* 신규 버튼 = 기틀 §2 #1 `.btn` 조합 · 라벨은 텍스트만(버튼 내 이모지 금지). 옆 이모지 버튼은 동결 부채라 그대로 둔다. */
+    '<button type="button" class="btn btn--ghost btn--sm" id="pw-ai-btn" onclick="_pwAiRun()" title="공연 상세 링크를 읽어 문구 후보를 만들어요">AI 문구 제안</button>'+
     '<button type="button" class="pw-emoji-btn" onclick="_pwEmojiToggle(event)" title="이모지 넣기" style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;background:#FFF7E6;border:1px solid rgba(240,180,80,0.45);border-radius:8px;font-size:11px;cursor:pointer;font-family:inherit;color:#B8860B">😊 이모지</button>'+
-    '</div>';
+    '</div></div>';
+}
+
+// === 카카오 76자 문구 AI 제안 (260805) ===
+// 프로그램 상세 링크(프로그램 시트 K열 URL) → Worker가 페이지 본문 + 포스터·상세 이미지 OCR → LLM이 76자 후보 5개.
+// 🔒 공용 PC 원칙(블로그 도우미·카드 제작과 동일): 결과는 인메모리만 — 서버·깃 무저장, 위저드를 닫으면 전멸.
+// 상태 `_pwAi` 선언은 위쪽 상태 절(`_evSel` 옆) — TDZ 회피. 여기로 내리지 마라.
+function _pwAiReset(){_pwAi={busy:false,items:[],err:'',src:'',ocr:'',over:0,open:false,gen:_pwAi.gen+1};}
+// 선택된 프로그램의 상세 링크 — PERFS의 풀네임(f)이 _pwData.program과 같은 축(프로그램 step이 p.f로 저장)
+function _pwAiUrl(){
+  var pg=String(_pwData.program||'').trim();
+  if(!pg)return'';
+  var hit=(typeof PERFS!=='undefined'?PERFS:[]).filter(function(p){return p.f===pg;})[0];
+  return hit?String(hit.u||'').trim():'';
+}
+async function _pwAiRun(){
+  if(_pwAi.busy)return;
+  var url=_pwAiUrl();
+  if(!url){
+    var pg=String(_pwData.program||'').trim();
+    showToast(pg?('「'+pg+'」에 상세 링크가 없어요 · 프로그램 관리에서 URL을 넣어주세요'):'프로그램을 먼저 골라주세요','error');
+    return;
+  }
+  var gen=_pwAi.gen;                       // 🔒 세대 가드 — 응답이 늦게 와도 닫힌/새 위저드 화면은 안 건드린다
+  _pwAi.busy=true;_pwAi.open=true;_pwAi.err='';_pwAiPaint();
+  try{
+    var r=await api('POST','/api/content/kakao',{url:url,program:_pwData.program,title:_pwData.title,date:_pwData.date,count:5});
+    if(gen!==_pwAi.gen)return;
+    _pwAi.busy=false;
+    _pwAi.items=(r&&r.items)||[];_pwAi.over=(r&&r.over)||0;_pwAi.src=(r&&r.source)||url;_pwAi.ocr=String((r&&r.ocrText)||'');
+    if(!_pwAi.items.length)_pwAi.err='문구를 만들지 못했어요 · 다시 시도해 주세요';
+    _pwAiPaint();
+  }catch(e){
+    if(gen!==_pwAi.gen)return;
+    _pwAi.busy=false;
+    var m=String((e&&e.message)||e);
+    if(m.indexOf('no_api_key')>-1||m.indexOf('503')>-1)_pwAi.err='AI가 아직 연결되지 않았어요 (Worker 키 확인)';
+    else if(m.indexOf('no_ocr_provider')>-1)_pwAi.err='OCR 엔진이 설정되지 않았어요 (Worker 키 확인)';
+    else _pwAi.err=m;
+    _pwAiPaint();
+  }
+}
+function _pwAiPaint(){
+  var box=document.getElementById('pw-ai-box');
+  if(!box)return;
+  if(!_pwAi.open){box.innerHTML='';return;}
+  var h='<div class="u-surface" style="margin-top:10px;padding:12px 13px">';
+  h+='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px">';
+  h+='<span style="font-size:11px;font-weight:700;color:var(--neutral-text);letter-spacing:.3px">상세 링크를 읽어 만든 제안</span>';
+  h+='<button type="button" class="btn btn--ghost btn--sm" onclick="_pwAiClose()">닫기</button>';
+  h+='</div>';
+  if(_pwAi.busy){
+    /* 로딩 문구 표준 = dots 픽토그램 + `~중`(말줄임 점 금지) */
+    h+='<div style="display:flex;align-items:center;font-size:12.5px;color:var(--accent);padding:8px 2px">'+_ldHtml(14)+'상세 링크와 포스터를 읽는 중</div>';
+    h+='<div style="font-size:11px;color:var(--dim);padding:0 2px 4px">포스터·상세페이지 OCR까지 하느라 20~40초쯤 걸려요</div>';
+  }else if(_pwAi.err){
+    h+='<div style="font-size:12.5px;color:var(--danger);padding:6px 2px 8px">'+escapeHtml(_pwAi.err)+'</div>';
+    h+='<button type="button" class="btn btn--neutral btn--sm" onclick="_pwAiRun()">다시 시도</button>';
+  }else{
+    h+=_kkoCardsHtml(_pwAi.items,'이 문구 쓰기','_pwAiPick');
+    h+=_kkoSourceHtml(_pwAi);
+  }
+  h+='</div>';
+  box.innerHTML=h;
+}
+// 후보 카드 · 근거 표기 = 위저드 패널과 「카카오 메세지 설계」 모달이 **공용**(한 벌만 고치면 둘 다 바뀐다).
+//   버튼 라벨·핸들러만 갈리므로 인자로 받는다 — 넣기(위저드) / 복사(설계 모달).
+function _kkoCardsHtml(items,actLabel,actFn){
+  var h='<div style="display:flex;flex-direction:column;gap:7px">';
+  (items||[]).forEach(function(it,i){
+    var over=it.len>76;
+    h+='<div style="border:1px solid var(--border);border-radius:var(--r-btn);padding:9px 11px;background:var(--surface-solid)">';
+    h+='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:5px">';
+    h+='<span style="font-size:10.5px;font-weight:700;color:var(--accent)">'+escapeHtml(it.tone||('후보 '+(i+1)))+'</span>';
+    h+='<span style="font-size:10.5px;color:'+(over?'var(--danger)':'var(--dim)')+';font-variant-numeric:tabular-nums">'+it.len+' / 76</span>';
+    h+='</div>';
+    h+='<div style="font-size:13px;line-height:1.55;color:var(--text);white-space:pre-wrap;word-break:break-all">'+escapeHtml(it.text)+'</div>';
+    h+='<div style="display:flex;justify-content:flex-end;margin-top:7px">';
+    h+='<button type="button" class="btn btn--primary btn--sm" onclick="'+actFn+'('+i+')">'+escapeHtml(actLabel)+'</button>';
+    h+='</div></div>';
+  });
+  return h+'</div>';
+}
+/* 근거 공개 — 사람이 「무엇을 읽고 쓴 문구인지」 확인하고 사실을 대조할 수 있어야 한다(추측 금지 축) */
+function _kkoSourceHtml(st){
+  var h='';
+  if(st.ocr){
+    h+='<details style="margin-top:9px"><summary style="font-size:11px;color:var(--dim);cursor:pointer">읽은 원문 보기</summary>';
+    h+='<div style="margin-top:6px;max-height:150px;overflow:auto;font-size:11px;line-height:1.5;color:var(--neutral-text);white-space:pre-wrap;word-break:break-all">'+escapeHtml(String(st.ocr).slice(0,4000))+'</div></details>';
+  }
+  if(st.src)h+='<div style="font-size:10.5px;color:var(--muted);margin-top:7px;word-break:break-all">출처 '+escapeHtml(st.src)+'</div>';
+  h+='<div style="font-size:10.5px;color:var(--dim);margin-top:5px">AI가 쓴 초안이에요 · 사실(일시·장소·가격)은 꼭 직접 확인해 주세요'+(st.over?(' · 76자를 넘어 버린 후보 '+st.over+'개'):'')+'</div>';
+  return h;
+}
+function _pwAiClose(){_pwAi.open=false;_pwAiPaint();}
+function _pwAiPick(i){
+  var it=_pwAi.items[i];if(!it)return;
+  var ta=document.getElementById('pw-kakao-text');if(!ta)return;
+  var max=parseInt(ta.getAttribute('maxlength'))||76;
+  if(it.text.length>max){showToast('이 후보는 '+max+'자를 넘어요','error');return;}
+  ta.value=it.text;
+  _pwData.kakaoText=ta.value;
+  ta.focus();try{ta.setSelectionRange(ta.value.length,ta.value.length);}catch(e){}
+  if(typeof pwCharCount==='function')pwCharCount('pw-kakao-text','pw-kakao-count',max);
+  showToast('문구를 넣었어요 · 그대로 쓰거나 고쳐 주세요','success');
 }
 function _pwEmojiToggle(ev){
   if(ev)ev.stopPropagation();
@@ -18429,6 +18542,7 @@ function renderPwSubText(body,next){
     html+=_pwKakaoLabelBar();
     html+='<textarea id="pw-kakao-text" maxlength="76" rows="4" oninput="pwCharCount(\'pw-kakao-text\',\'pw-kakao-count\',76)" placeholder="30자 이상 76자까지 입력해 주세요" style="width:100%;padding:10px 14px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:12px;font-size:13px;outline:none;box-sizing:border-box;resize:vertical;font-family:inherit;line-height:1.5">'+escapeHtml(_pwData.kakaoText)+'</textarea>';
     html+='<div style="display:flex;justify-content:flex-end;margin-top:6px"><span id="pw-kakao-count" style="font-size:11px;color:#888">'+(_pwData.kakaoText||'').length+' / 76</span></div>';
+    html+='<div id="pw-ai-box"></div>';
   }else if(p1==='인스타그램'){
     const tpl=_pwData.instaText||getInstaTemplate();
     html+='<div class="pw-question">인스타그램 본문을 작성해주세요</div>';
@@ -18474,6 +18588,7 @@ function renderPwSubBlog(body,next){
   html+=pwFolderInputs();
   body.innerHTML=html;
   next.textContent='다음';
+  _pwAiPaint();   /* 카카오 갈래로 그려졌을 때만 #pw-ai-box가 있다 — 없으면 no-op */
 }
 
 // === Step 4 — B2B 인트라넷 c) 링크 ===
@@ -23990,6 +24105,7 @@ function _contentMenuBuild(menu){
   menu.innerHTML='<div style="padding:8px 14px 6px;font-size:11px;color:var(--dim);font-weight:700">콘텐츠 제작</div>'
     +'<button type="button" onclick="_ddCloseAll();openCardMaker()" style="'+itemCss+'"'+hov+'>카드 제작</button>'   /* [260803 운영자] 사진 첨부 → 비율 안 확대·이동 절삭 + 문구 → PNG 내려받기 (nomute-editor 카드뉴스 이식 — apps/comp/card_news.py 기하 정본) */
     +'<button type="button" onclick="_ddCloseAll();openLogoMaker()" style="'+itemCss+'"'+hov+'>로고 제작</button>'   /* [260804 운영자] 이름·형태·느낌·색 → 로고 PNG (Nutlope/logocreator 프롬프트 로직 이식 · 엔진 = 기존 GEMINI_API_KEY) */
+    +'<button type="button" onclick="_ddCloseAll();openKakaoDesigner()" style="'+itemCss+'"'+hov+'>카카오 메세지 설계</button>'   /* [260805 운영자] 공연 고르면 상세 링크 → 포스터 OCR → 카카오 76자 문구 후보 (홍보 신청 위저드 [AI 문구 제안]과 같은 엔진·같은 후보 카드) */
     +'<button type="button" onclick="_ddCloseAll();openNaverBlogTool()" style="'+itemCss+'"'+hov+'>네이버 블로그</button>'
     +'<button type="button" onclick="_ddCloseAll();openHwpEditor()" style="'+itemCss+'"'+hov+'>한글문서 편집</button>'   /* [260803 운영자] 문서 올림 → 미리보기 → 말로 수정 (claw-hwp 이식 — hwp/NOTICE.md) */
     +'<button type="button" onclick="_ddCloseAll();openOfficeEditor()" style="'+itemCss+'"'+hov+'>오피스문서 편집</button>'   /* [260805 운영자] 워드·엑셀·PPT 올림 → 말로 수정 → 내려받기 (iOfficeAI/OfficeCLI — office-edit.yml 러너 편집) */
@@ -30081,6 +30197,176 @@ function _lmDownload(){
   }catch(e){
     showToast('로고를 저장하지 못했어요 — '+String((e&&e.message)||e).slice(0,60),'error');
   }
+}
+
+// ============================================================
+// 콘텐츠 제작 ▸ 카카오 메세지 설계 (km-*) — 운영자 260805
+//  공연을 고르면 그 프로그램의 상세 링크(프로그램 시트 K열 URL)를 서버가 열어 ①페이지 본문 ②포스터·상세페이지 OCR을
+//  읽고, LLM이 카카오 76자 이하 문구 후보를 만든다. 후보를 복사해 어디든 쓴다.
+//  ⚠ 홍보 신청 위저드의 [AI 문구 제안]과 **같은 엔진·같은 후보 카드**다(Worker `/api/content/kakao` · `_kkoCardsHtml`).
+//    다른 건 진입점과 마무리뿐 — 위저드는 76자 칸에 「넣기」, 여기는 「복사」. 후보 모양을 바꾸려면 `_kkoCardsHtml` 한 벌만 고친다.
+//  셸 = openLogoMaker(lm-*) 골격 계승 — 좌 결과 / 우 입력 2열. **레이아웃 CSS(.lm-wrap/.lm-col)를 그대로 재사용**하고
+//    새 클래스를 만들지 않는다(오피스문서 편집이 hw-* 레이아웃을 공용한 것과 같은 판단 · 기틀 §2 「새 CSS 클래스 남발 금지」).
+//  🔒 공용 PC 원칙(카드 제작·로고 제작과 동일): 결과는 인메모리만 — 서버·깃 무저장, 닫으면 전멸.
+// ============================================================
+var _kmState=null;
+var _KM_TONES=[['','자동 (톤 섞어서)'],['정보 전달','정보 전달 중심'],['감성','감성적으로'],['초대·권유','초대·권유형'],['궁금증 유발','궁금증 유발'],['예매·마감','예매·마감 강조']];
+function _kmDefault(){return {busy:false,program:'',url:'',tone:'',extra:'',items:[],err:'',src:'',ocr:'',over:0,escHandler:null};}
+// 상세 링크가 있는 프로그램만 고를 수 있다 — 링크가 없으면 읽을 것이 없다(빈 목록이면 그 사실을 말한다).
+function _kmPerfs(){
+  return (typeof PERFS!=='undefined'?PERFS:[]).filter(function(p){return p&&p.f&&String(p.u||'').trim();});
+}
+function openKakaoDesigner(){
+  var el=document.getElementById('km-board');
+  if(!el){el=document.createElement('div');el.id='km-board';document.body.appendChild(el);}
+  try{if(_kmState&&_kmState.escHandler)document.removeEventListener('keydown',_kmState.escHandler);}catch(_e){}
+  _kmState=_kmDefault();   // 🔒 매번 새로 — 이전 사용자의 공연·문구를 복원하지 않는다(로고 제작 동일 계약)
+  el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeKakaoDesigner)">'
+    +'<div class="modal" style="width:96vw;max-width:1080px;height:92vh;max-height:92vh;padding:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:var(--surface-solid)">'
+    +'<button class="modal-x" onclick="closeKakaoDesigner()" title="닫기" style="position:absolute;top:14px;right:22px;z-index:10">✕</button>'
+    +'<div style="padding:18px 24px;border-bottom:1px solid var(--border);font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px">💬 <span>카카오 메세지 설계</span>'
+      +'<span style="font-size:11.5px;font-weight:600;color:var(--dim)">공연 상세 링크를 읽어 76자 문구를 만들어요</span></div>'
+    +'<div style="flex:1;min-height:0;padding:18px 24px 20px">'
+      +'<div class="lm-wrap">'
+        +'<div class="lm-col">'
+          +'<div class="nb-col-head">문구 후보</div>'
+          +'<div id="km-out"></div>'
+        +'</div>'
+        +'<div class="lm-col">'
+          +'<div class="ve-sec first"><span class="n">1</span>공연 고르기 <span class="sub">상세 링크가 있는 프로그램만</span></div>'
+          +'<select id="km-prog" class="nb-input" onchange="_kmPick(this.value)"></select>'
+          +'<div id="km-url" style="font-size:11px;color:var(--dim);margin-top:7px;word-break:break-all;line-height:1.6"></div>'
+          +'<div class="ve-sec"><span class="n">2</span>톤 <span class="sub">선택 · 비우면 5가지 톤을 섞어서</span></div>'
+          +'<div class="nb-chiprow" id="km-tones"></div>'
+          +'<div class="ve-sec"><span class="n">3</span>덧붙일 말 <span class="sub">선택 · 꼭 넣을 내용이나 피할 표현</span></div>'
+          +'<textarea id="km-extra" class="nb-textarea" style="min-height:70px" maxlength="300" placeholder="예) 브런치 패키지를 꼭 넣어주세요 / 「완벽한」 같은 표현은 빼주세요" oninput="_kmSet(\'extra\',this.value)"></textarea>'
+          +'<div class="lm-foot">'
+            +'<button type="button" class="btn btn--primary btn--md" id="km-go" onclick="_kmGo()">문구 만들기</button>'
+            +'<button type="button" class="btn btn--neutral btn--sm" onclick="_kmReset()">처음부터</button>'
+            +'<span class="ve-val" id="km-note"></span>'
+          +'</div>'
+        +'</div>'
+      +'</div>'
+    +'</div>'
+    +'</div></div>';
+  _kmState.escHandler=function(e){if(e.key==='Escape')closeKakaoDesigner();};
+  document.addEventListener('keydown',_kmState.escHandler);
+  _kmRender();
+}
+function closeKakaoDesigner(){
+  if(_kmState&&_kmState.escHandler)document.removeEventListener('keydown',_kmState.escHandler);
+  _kmState=_kmDefault();   // 🔒 공연·문구 전부 폐기(인메모리만 썼으므로 참조만 끊으면 끝)
+  var el=document.getElementById('km-board');if(el)el.innerHTML='';
+}
+function _kmReset(){
+  if(!_kmState)return;
+  var e=document.getElementById('km-extra');if(e)e.value='';
+  var keep=_kmState.escHandler; _kmState=_kmDefault(); _kmState.escHandler=keep;
+  _kmRender();
+}
+function _kmSet(k,v){if(_kmState)_kmState[k]=v;}   // 텍스트 입력은 매 글자 재그리지 않는다(포커스 유지)
+function _kmPick(v){
+  if(!_kmState)return;
+  var hit=_kmPerfs().filter(function(p){return p.f===v;})[0];
+  _kmState.program=v; _kmState.url=hit?String(hit.u||'').trim():'';
+  _kmRender();
+}
+function _kmTone(v){if(_kmState){_kmState.tone=v;_kmRender();}}
+
+function _kmRender(){
+  var s=_kmState; if(!s)return;
+  var list=_kmPerfs();
+  var sel=document.getElementById('km-prog');
+  if(sel){
+    sel.innerHTML=list.length
+      ? '<option value="">공연을 골라 주세요</option>'+list.map(function(p){
+          return '<option value="'+escapeHtml(p.f)+'"'+(s.program===p.f?' selected':'')+'>'+escapeHtml(p.f)+'</option>';
+        }).join('')
+      : '<option value="">상세 링크가 있는 프로그램이 없어요</option>';
+    sel.disabled=!list.length;
+  }
+  var u=document.getElementById('km-url');
+  if(u)u.innerHTML=s.url?('읽을 링크 '+escapeHtml(s.url))
+    :(list.length?'':'프로그램 관리에서 URL(예매·상세 링크)을 넣으면 여기에 나와요');
+  var t=document.getElementById('km-tones');
+  if(t)t.innerHTML=_KM_TONES.map(function(x){
+    return '<button type="button" class="nb-chip'+(s.tone===x[0]?' on':'')+'" onclick="_kmTone(\''+x[0]+'\')">'+escapeHtml(x[1])+'</button>';
+  }).join('');
+  var go=document.getElementById('km-go');
+  if(go){
+    _btnBusy(go,s.busy,s.busy?'만드는 중':'문구 만들기');   // 정본 버튼 busy 공용(기틀 §2 #13) = dots 픽토그램 + `~중`
+    if(!s.busy)go.disabled=!s.url;                          // 공연 미선택 = 읽을 링크가 없다
+    /* `.btn`엔 `:disabled` 규약이 없어 비활성이 활성처럼 보인다 — 앱 다른 비활성 버튼과 같은 인라인 흐리기(신규 CSS 0) */
+    go.style.opacity=go.disabled?'.45':'';
+    go.style.cursor=go.disabled?'not-allowed':'';
+  }
+  var note=document.getElementById('km-note');
+  if(note)note.textContent=s.items.length?(s.items.length+'개'):'';
+  _kmOut();
+}
+function _kmOut(){
+  var box=document.getElementById('km-out'); if(!box)return;
+  var s=_kmState;
+  if(s.busy){
+    /* 로딩 문구 표준 = dots 픽토그램 + `~중`(말줄임 점 금지) */
+    box.innerHTML='<div style="display:flex;align-items:center;font-size:12.5px;color:var(--accent);padding:8px 2px">'+_ldHtml(14)+'상세 링크와 포스터를 읽는 중</div>'
+      +'<div style="font-size:11px;color:var(--dim);padding:0 2px">포스터·상세페이지 OCR까지 하느라 20~40초쯤 걸려요</div>';
+    return;
+  }
+  if(s.err){
+    box.innerHTML='<div style="font-size:12.5px;color:var(--danger);padding:6px 2px 10px;line-height:1.6">'+escapeHtml(s.err)+'</div>'
+      +'<button type="button" class="btn btn--neutral btn--sm" onclick="_kmGo()">다시 시도</button>';
+    return;
+  }
+  if(!s.items.length){
+    box.innerHTML='<div class="u-empty"><div class="ico">💬</div><div class="msg">공연을 고르고 [문구 만들기]를 눌러 주세요</div>'
+      +'<div style="font-size:12px;color:var(--dim);line-height:1.7">그 공연의 상세 링크를 열어 포스터까지 읽고<br>카카오 76자에 맞는 문구 5개를 만들어요</div></div>';
+    return;
+  }
+  box.innerHTML=_kkoCardsHtml(s.items,'복사','_kmCopy')+_kkoSourceHtml(s);
+}
+async function _kmGo(){
+  var s=_kmState; if(!s||s.busy)return;
+  if(!s.url){showToast('상세 링크가 있는 공연을 골라 주세요','error');return;}
+  s.busy=true; s.err=''; s.items=[]; _kmRender();
+  var _st=_kmState;   // 🔒 세대 가드 — 응답이 늦게 와도 닫힌/새로 연 화면은 안 건드린다
+  try{
+    var r=await api('POST','/api/content/kakao',{url:s.url,program:s.program,extra:_kmAsk(),count:5});
+    if(_st!==_kmState)return;
+    s.busy=false;
+    s.items=(r&&r.items)||[]; s.over=(r&&r.over)||0; s.src=(r&&r.source)||s.url; s.ocr=String((r&&r.ocrText)||'');
+    if(!s.items.length)s.err='문구를 만들지 못했어요 · 다시 시도해 주세요';
+    _kmRender();
+  }catch(e){
+    if(_st!==_kmState)return;
+    s.busy=false;
+    var m=String((e&&e.message)||e);
+    if(m.indexOf('no_api_key')>-1||m.indexOf('503')>-1)s.err='AI가 아직 연결되지 않았어요 (Worker 키 확인)';
+    else if(m.indexOf('no_ocr_provider')>-1)s.err='OCR 엔진이 설정되지 않았어요 (Worker 키 확인)';
+    else s.err=m;
+    _kmRender();
+  }
+}
+// 톤 칩 + 덧붙일 말 → 서버의 `담당자 요청` 한 줄(엔드포인트 계약 그대로 · 서버 프롬프트를 안 건드린다)
+function _kmAsk(){
+  var s=_kmState,p=[];
+  if(s.tone)p.push('톤은 '+s.tone+' 쪽으로 맞춰 주세요');
+  if(String(s.extra||'').trim())p.push(String(s.extra).trim());
+  return p.join(' / ');
+}
+function _kmCopy(i){
+  var it=_kmState&&_kmState.items[i]; if(!it)return;
+  var done=function(){showToast('문구를 복사했어요 ('+it.len+'자)','success');};
+  try{
+    if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(it.text).then(done,function(){_kmCopyFb(it.text,done);});}
+    else _kmCopyFb(it.text,done);
+  }catch(e){_kmCopyFb(it.text,done);}
+}
+function _kmCopyFb(txt,done){   // 클립보드 API가 막힌 브라우저 폴백 — 앱 다른 복사부와 같은 수법
+  try{
+    var ta=document.createElement('textarea');ta.value=txt;ta.style.cssText='position:fixed;left:-9999px;top:0';
+    document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);done();
+  }catch(e){showToast('복사하지 못했어요 — 문구를 직접 선택해 주세요','error');}
 }
 
 // ============================================================
