@@ -6906,6 +6906,100 @@ function _bizMoney(v,bare){
   if(v==null||!isFinite(v))return '—';
   return Math.round(v/1e4).toLocaleString()+(bare?'':'만');
 }
+// ── [260807 운영자] 판매현황 상세 「일시」 표기 — 0 없는 M/D · 요일 없음 · 범위는 '-' ──────────────
+//   지시: *"1/24-25 이렇게 갈게 (요일은 뺄게)"* · *"12/24-25"* · *"월이 넘어가는 케이스가 있을때는. 12/24-1/3"*.
+//   = 같은 달이면 뒤쪽 월을 생략(일만 잇는다) · 달이 바뀌면 양쪽 다 적는다. 구 표기(`01.24(토)~01.25(일)` 19자)
+//     대비 절반 이하로 줄어든 폭은 그대로 공연명 칸이 가져간다(운영자 「확보된 만큼 공연명을 좌측으로」).
+//   ⚠ **앞자리 맞춤**(운영자 「1/24랑 12/24랑 앞에 십의자리수때문에 정렬이 안맞는데 … 앞에 0이 있다고 가정하고
+//     세로선 배치를 광학 잉크단위로」) = 맨 앞 월을 **두 자리 폭의 오른쪽 정렬 상자**에 담는다. 그러면 한 자리 월은
+//     저절로 한 칸 들여써지고(=「앞에 0이 있다고 가정」) **슬래시와 그 뒤가 전부 한 세로선**에 선다.
+//     폭 `2ch` = 숫자 '0' 두 자(ch의 정의) — 숨은 '0' 글자를 앞에 끼우는 방식과 자리는 같고, **폰트가 tabular
+//     숫자를 지원하든 안 하든**(구현 폰트 Pretendard 미설치 폴백까지) 어긋나지 않는다. 잉크 0 · 읽히는 글자 0.
+//     ⚠ `ch`는 **이 레포 최초 도입 단위**다 — 고정폭 상자 관용구 자체는 기존(`.pw-summary .lbl{min-width:70px}` ~L1542 ·
+//       `_accBar`의 `flex:0 0 42px` ~L8132)이고, px 대신 **폰트 상대**로 잡은 변형이다. px로 잡으면 서체가 바뀔 때
+//       글자폭을 못 따라가 어긋난다(숨은 0 시안이 `11` 커닝에서 0.97px 어긋난 것과 같은 실패). 색·토큰 신설 0.
+//     min-width라 혹시 두 자리가 2ch보다 넓은 서체를 만나도 겹치지 않고 그 행만 자연폭으로 물러선다(무해 열화).
+function _bizMD(d){ return (d.getMonth()+1)+'/'+d.getDate(); }
+function _bizDateCell(s,e,single){
+  var head=single?e:s;
+  var tail=single?String(e.getDate())
+    :((s.getMonth()===e.getMonth()&&s.getFullYear()===e.getFullYear())?s.getDate()+'-'+e.getDate():s.getDate()+'-'+_bizMD(e));
+  return '<span style="display:inline-block;min-width:2ch;text-align:right">'+(head.getMonth()+1)+'</span>/'+tail;
+}
+// ── [260807 운영자] 공연명 앞 대/소 원형 배지 = 「어느 극장인가」 ────────────────────────────────
+//   '대'·'소' 한 글자 표기 = 이 레포 정본 축약(_GC_PLACE 「대→대극장 · 소→소극장」) 그대로.
+//   소스 사다리 — **아는 것과 미루어 아는 것을 구분해서** 단다(지침 [2] 「추측 금지 · 못 확인하면 미확인」):
+//     ① 프로그램 시트 장소(PERFS.l) = 사람이 적어 둔 값 → **확정**(장르 사다리 _pgRow.g2와 같은 우선 규약)
+//     ② 없으면 운영대장 **회차당 기본좌석**(총오픈석÷회차) → **추정**. 운영대장엔 장소 열이 아예 없어 이게 유일한 단서다.
+//        실측 분포(운영대장 2,188행): 216~306 무리(302가 486행으로 최빈 = 소극장 정원)와 400~1021 무리가
+//        **307~399 빈 구간을 사이에 두고** 갈린다 → 경계 350 = 그 빈 구간 한가운데(한 데이터 값에 붙인 임계가 아니다).
+//        ⚠ 이 임계의 **정본은 아직 없다** — 프로그램 시트와 조인되는 4건은 전부 대극장이라 소 가지는 미검증이다.
+//        그래서 추정분은 배지 툴팁이 「추정 · 회차당 N석」이라고 **스스로 밝힌다**(화면이 사실로 우기지 않게).
+//     ③ 좌석이 없거나 실측 최대 극장값(1021)을 넘으면(야외 1,300~12,000) **배지 없음** — 두 극장 중 하나라고
+//        말할 근거가 없는 자리에 배지를 달지 않는다.
+var _BIZ_HALL_SMALL_MAX=350, _BIZ_HALL_BIG_MAX=1021, _bizHallIdx=null, _bizHallIdxSrc=null;
+// 정규화 이름 → [{장소, 연도}] 인덱스. **PERFS 배열이 통째로 갈릴 때만** 다시 만든다(loadPrograms가 새 배열을 대입).
+//   행마다 PERFS를 훑으면 O(행수×PERFS)라 시트가 자라면 렌더가 늘어진다(PERFS 300 = 렌더당 52.8ms 실측) —
+//   같은 레포 _bizSalesIdx와 같은 규약으로 한 번만 만들고 재사용한다.
+function _bizHallMap(){
+  var P=(typeof PERFS!=='undefined'&&PERFS)?PERFS:null;
+  if(!P||!P.length)return null;
+  if(_bizHallIdx&&_bizHallIdxSrc===P)return _bizHallIdx;
+  var m={};
+  P.forEach(function(p){
+    if(!p||p.t!=='c'||!p.l)return;
+    var d=_salesDate(p.s), y=(d&&d.getFullYear)?d.getFullYear():null;
+    [p.f,p.n].forEach(function(nm){ var k=_uName(nm||''); if(!k)return; (m[k]=m[k]||[]).push({l:String(p.l),y:y}); });
+  });
+  _bizHallIdx=m; _bizHallIdxSrc=P; return m;
+}
+function _bizHallOf(g){
+  try{
+    // ⚠ 프로그램 시트가 아직 안 왔으면 **추정 배지도 그리지 않는다**(빈 자리만 유지).
+    //   그리면 시트 도착 뒤 좌석 추정이 시트 장소로 뒤집혀 **글자가 대↔소로 바뀌는 게 눈에 보인다**(실측).
+    //   「없다가 생긴다」는 정상 로딩으로 읽히지만 「틀렸다가 고쳐진다」는 화면이 거짓말을 한 것이다.
+    if(typeof _perfReady!=='undefined'&&!_perfReady)return null;
+    var m=_bizHallMap(), un=_uName(g&&g.name||'');
+    var hit=(m&&un)?m[un]:null;
+    if(hit&&hit.length){
+      // ⚠ **연도 가드** — 시리즈물(브런치 콘서트 Ⅰ~Ⅳ·헬로!오페라·호두까기 인형)은 해마다 같은 이름으로 돌아온다.
+      //   가드가 없으면 다른 해 편성의 장소를 이 해 행에 **확정으로** 달아 버린다(추정과 달리 자기 고지가 없어 최악).
+      //   같은 레포 _bizSalesIdx의 「재연 오매칭 방어」와 같은 축. 연도를 모르는 쪽은 통과시킨다(정보 없음 ≠ 불일치).
+      var gy=(g&&g.end&&g.end.getFullYear)?g.end.getFullYear():null, c=null, i;
+      for(i=0;i<hit.length;i++){ if(gy==null||hit[i].y==null||hit[i].y===gy){ c=hit[i]; break; } }
+      if(c){
+        var big=c.l.indexOf('대극장')>=0, sml=c.l.indexOf('소극장')>=0;
+        // 시트가 「대극장도 소극장도 아니다」라고 말하면(7층 전시실·야외 등) 그 말을 믿고 **배지를 안 단다** —
+        //   정본이 있는데 좌석으로 되짚는 건 정본을 무시하는 것이다. 둘 다 적힌 병기도 판정 불가로 본다.
+        return (big&&!sml)?{h:'대',est:0,per:0}:((sml&&!big)?{h:'소',est:0,per:0}:null);
+      }
+    }
+  }catch(_e){}
+  var per=(g&&g.cnt>0&&g.seat>0)?Math.round(g.seat/g.cnt):0;
+  if(!per||per>_BIZ_HALL_BIG_MAX)return null;
+  return {h:(per<=_BIZ_HALL_SMALL_MAX)?'소':'대',est:1,per:per};
+}
+// 형태 = **`_batchBadge`(~L16293) 자구 그대로 계승** — 16px 원 · 9px/700 · 이름과 5px · 표 셀 안 · 말줄임 제목 앞.
+//   조건이 같은 자리(그쪽 본문 12.5px · 여기 13px)라 크기를 새로 잡을 이유가 없다 = **값 변경 0**.
+//   (그 배지도 캘린더 셀 배지 ~L3318에서 온 것 — 같은 계보의 표 셀판이다.)
+//   두 상태 구분은 기틀 §3.5③대로 **색 하나에 안 맡긴다**: 대 = 진한 채움 + 흰 글자(5.99:1) / 소 = 옅은 채움 +
+//     유채색 글자(4.96:1) — 같은 인디고 축의 명도·글자색 이중단서, 둘 다 WCAG AA 통과, 팔레트 밖 색 반입 0.
+//   ⚠ 같은 앱 캘린더에 **원형 '대' = 대관** 배지가 이미 있다(perfBadgeLb ~L3271). 화면이 다르고 색축도 다르지만
+//     (대관 = --c5 시안블루 · 여기 = --accent 인디고), 한 글자가 두 뜻이라 title/aria-label로 뜻을 못 박는다.
+var _BIZ_HALL_BADGE_W=16, _BIZ_HALL_BADGE_GAP=5;   // 제목 칸 좌패딩(12+배지폭+간격)이 이 두 값을 읽는다 — 값 이원화 금지
+function _bizHallBadge(x){
+  // ⚠ **절대 배치**(칸 좌패딩이 자리를 낸다) — 인라인 flex 래퍼로 감싸면 표 복사가 행마다 4줄로 쪼개져
+  //   14행 선택이 55줄로 붙는다(엑셀 붙여넣기 파손 · 실측). 배지를 흐름 밖으로 빼면 칸이 순수 텍스트 한 줄이라
+  //   복사가 14줄로 복원되고, 「자리는 있고 잉크만 없는」 미상 행 규약도 좌패딩이 그대로 진다(빈 배지 불요).
+  if(!x||!x.h)return '';
+  var big=(x.h==='대');
+  //   aria-label은 **짧게** — 배지 라벨이 셀 접근성 이름에 흡수돼 스크린리더가 매 행 앞에 이걸 먼저 읽는다.
+  //   긴 근거 문장은 title(호버)에만 둔다.
+  var lab=(big?'대극장':'소극장')+(x.est?' 추정':''),
+      tip=(big?'대극장':'소극장')+(x.est?(' (추정 · 회차당 '+x.per.toLocaleString()+'석 — 운영대장에 장소 열이 없어 좌석으로 미룬 값)'):'');
+  return '<span title="'+escapeHtml(tip)+'" aria-label="'+escapeHtml(lab)+'" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);display:inline-flex;align-items:center;justify-content:center;min-width:'+_BIZ_HALL_BADGE_W+'px;height:'+_BIZ_HALL_BADGE_W+'px;border-radius:50%;font-size:9px;font-weight:700;line-height:1;'
+    +(big?'background:var(--accent);color:var(--surface-solid)':'background:var(--accent-light);color:var(--accent)')+'">'+x.h+'</span>';
+}
 // ── [260806 운영자] 3면 조작부 = 「연도 ▾ │ 전체·판매중」 토글 한 벌 ────────────────────────
 //   지시: *"공연 전시 교육 2026년 기획 자세히보기 이거 모두 삭제해주고 첨부와 같은 토글만 넣어줘"* +
 //        *"전체 > 판매중 > 전체 > 판매중 이렇게 토글되고 전체가 기본값"*.
@@ -7122,7 +7216,11 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
   var plan=function(g){ return g._st==='planned'; };
   var _fix=ED?(_yrCss('--green')||''):'';
   var gcol=function(g){ return g._col||_fix||_BIZ_GENRE_COLORS[g.genre||'기타']||_BIZ_GENRE_COLORS['기타']; };   // [260805] _col/_fix = 분야색 고정(교육엔 장르 축이 없다)
-  var md=function(d){ return ('0'+(d.getMonth()+1)).slice(-2)+'.'+('0'+d.getDate()).slice(-2); };   // MM.DD = 우 열 상세 표(01.09(금))와 같은 문법
+  // 축 라벨 = `MM.DD`(선행 0 유지 — 한 자리 월 `2.05`는 소수로 오독된다, 260806b 실측 후 교정).
+  // ⚠ [260807] 구 주석 「우 열 상세 표(01.09(금))와 같은 문법」은 **더 이상 사실이 아니다** — 그 표는 운영자 지시로
+  //   `M/D`(요일 없음·범위 `-`)로 갈렸다(_bizDateCell). 두 표기는 지금 **의도적으로 다르다**: 여기는 45° 눈금이라
+  //   자릿수가 흔들리면 라벨이 어긋나 보이고, 표는 세로선 정렬이 목적이라 상자로 잡는다. 한쪽에 맞춰 「통일」하지 마라.
+  var md=function(d){ return ('0'+(d.getMonth()+1)).slice(-2)+'.'+('0'+d.getDate()).slice(-2); };
   var dOf=function(g){ return g.start||g.end||null; };
   var stName=function(g){ return plan(g)?'예정':(g._st==='active'?(ED?'진행중':'판매중'):'종료'); };
   var dTxt=function(g){ var s=g.start,e=g.end; if(!s&&!e)return '-';
@@ -7452,20 +7550,49 @@ function _bizCompRender(el,half){
   //   회차만 빼면 「단위를 적는 열/안 적는 열」이 갈려 원래 고치려던 어긋남이 그대로 남는다(운영자 「회차도 넣어버려」).
   //   아랫줄로 내리는 이유 = 이름 뒤에 붙이면 열이 가로로 자라 좁은 우 열에서 가로 스크롤이 생긴다. 세로는 머리글 한 줄분(≈14px)만 자란다.
   //   잉크·크기 = 머리글 색(--dim) 상속 + 10.5px(차트 눈금과 같은 급) — 신규 토큰·색 0.
-  [['공연일',''],['공연명',''],['장르',''],['회차','회'],['판매 고객','명'],['오픈석','명'],['점유율','%'],['매출','만원']].forEach(function(c,i){_tbl+='<td style="padding:8px 12px;position:sticky;top:0;z-index:1;background:var(--surface-solid);box-shadow:inset 0 -2px 0 var(--border);vertical-align:top;'+(i>=3?'text-align:right;':'')+(i===0?'padding-left:14px;':'')+(i===7?'padding-right:14px;':'')+'white-space:nowrap">'+c[0]+(c[1]?'<div style="font-size:10.5px;font-weight:400;margin-top:2px">(단위: '+c[1]+')</div>':'')+'</td>';});
+  // [260807 운영자] 열 구성 개정 — 「공연일→일시」·「판매 고객→유료 관객」(이름) · **회차 열 폐지 → 오픈석 값에 괄호 병기**
+  //   (`3,704(4)` = 오픈석(회차) · 그래서 이 열 머리글 단위가 「명」 → 「명, 회」로 늘어난다).
+  //   회차를 없앤 폭 + 일시가 줄어든 폭은 전부 **공연명**이 가져간다 = 제목이 1행 안에서 최대한 길게 보인다.
+  //   장르는 구 회차 자리까지 밀어 **우측 정렬**(운영자 「장르가 회차랑 거의 맞먹는 수준으로 우측으로」) — 이 열부터
+  //   오른쪽 끝까지가 한 덩어리로 오른쪽 정렬이라, 제목 칸의 오른쪽 경계선이 한 줄로 선다.
+  //   ⚠ 공연명 머리글은 **배지 폭만큼 들여쓴다**(12+16+5=33) — 머리글이 배지에 붙으면 아래 제목 글자들과 한 줄이
+  //     안 맞는다. 열의 세로선은 「눈에 띄는 글자」(제목)를 기준으로 세운다 = 체크박스 목록과 같은 정렬 규약.
+  //     이래야 260801 운영자 규약(「머리글 첫 글자와 값 첫 글자가 한 세로선에서 시작」 ~L8410)이 실제로 성립한다(실측 Δ0).
+  //   ⚠ 단위 문자열은 이 네 열이 **한 템플릿**(`'(단위: '+c[1]+')'`)에서 뽑아 쓰는 공용 조각이다 — 운영자 원문의
+  //     `(단위 : 명, 회)`(콜론 앞 공백)를 오픈석에만 넣으면 형제 3열(유료 관객·점유율·매출)과 어긋난다.
+  //     레포 실측 `(단위: ` 3건 / `(단위 :` 0건 → **관례 계승**. 원문 표기로 되돌리려면 네 열을 같이 바꾼다.
+  var _nameHdPad=12+_BIZ_HALL_BADGE_W+_BIZ_HALL_BADGE_GAP;
+  [['일시',''],['공연명',''],['장르',''],['유료 관객','명'],['오픈석','명, 회'],['점유율','%'],['매출','만원']].forEach(function(c,i){_tbl+='<td style="padding:8px 12px;position:sticky;top:0;z-index:1;background:var(--surface-solid);box-shadow:inset 0 -2px 0 var(--border);vertical-align:top;'+(i>=2?'text-align:right;':'')+(i===0?'padding-left:14px;':'')+(i===1?'padding-left:'+_nameHdPad+'px;':'')+(i===6?'padding-right:14px;':'')+'white-space:nowrap">'+c[0]+(c[1]?'<div style="font-size:10.5px;font-weight:400;margin-top:2px">(단위: '+c[1]+')</div>':'')+'</td>';});
   _tbl+='</tr></thead><tbody>';
-  var WD=['일','월','화','수','목','금','토'];
-  var df=function(d){return ('0'+(d.getMonth()+1)).slice(-2)+'.'+('0'+d.getDate()).slice(-2)+'('+WD[d.getDay()]+')';};
+  // 오픈석 칸은 `3,892(4)` 한 덩어리를 오른쪽 정렬한다 → 회차 자릿수가 섞이면 **좌석 숫자 끝자리가 어긋난다**
+  //   (1자리 ↔ 2자리에서 7.2px = 숫자 한 자 · 실데이터 1,307공연 중 10회 이상 13건). 괄호를 **가장 긴 회차 폭의
+  //   왼쪽 정렬 상자**에 담아 좌석 쪽 오른쪽 끝을 다시 한 줄로 세운다 — 일시 칸의 2ch 상자와 같은 관용구.
+  //   ⚠ 표 안 최대 자릿수가 1이면(99% 뷰) 상자를 아예 걸지 않는다 = 그 경우 폭 변화 0·마크업 종전 동일.
+  //   ⚠ `ch` = 레포 최초 단위(위 _bizDateCell 주석 참조) · 신규 색·토큰 0.
+  var _cntW=Math.max.apply(null,list.map(function(g){return String(g.cnt).length;}));
+  var _cntBox=(_cntW>1)?('display:inline-block;min-width:'+(_cntW+2)+'ch;text-align:left;'):'';
   list.forEach(function(g,idx){
-    var dr=(g.cnt===1||g.start.getTime()===g.end.getTime())?df(g.end):df(g.start)+'~'+df(g.end);
+    // 단일일 판정 = **날짜가 같은가**만 본다. 구판의 `g.cnt===1 ||` 는 회차 1인데 기간이 이틀 이상인 행
+    //   (판매 축·예정 행: 회차 열 공란 → cnt 1로 낙하)에서 **시작일을 통째로 지웠다**(1/24~1/25가 `01.25`로만 표기).
+    //   운영대장 행은 cnt 1이면 날짜도 하나라 이 절이 애초에 무용 = 회귀 0, 갭만 닫힌다.
+    var dr=_bizDateCell(g.start,g.end,g.start.getTime()===g.end.getTime());
     _tbl+='<tr style="border-bottom:1px solid var(--border);'+(idx%2===1?'background:var(--past-bg);':'')+'">'
-      +'<td style="padding:7px 12px;padding-left:14px;white-space:nowrap;color:var(--neutral-text)">'+dr+'</td>'
-      +'<td style="padding:7px 12px;font-weight:600;color:var(--text)">'+escapeHtml(g.name)+'</td>'
-      +'<td style="padding:7px 12px;color:var(--neutral-text);white-space:nowrap">'+escapeHtml(g.genre||'-')+'</td>'
-      +'<td style="padding:7px 12px;text-align:right;color:var(--neutral-text)">'+g.cnt+'</td>'
+      +'<td style="padding:7px 12px;padding-left:14px;white-space:nowrap;color:var(--neutral-text);font-variant-numeric:tabular-nums">'+dr+'</td>'
+      // 제목 = **무조건 1행**(운영자) — max-width:0 + width:100%로 「남는 폭 전부, 그러나 다른 열은 안 밀침」이 되고,
+      //   넘치는 만큼만 말줄임(…)으로 잘린다. 말줄임은 **칸 자체**에 건다(래퍼 div 금지 — 인라인 flex 래퍼는 표 복사를
+      //   행마다 4줄로 쪼갠다 · 실측 14행→55줄). 배지는 흐름 밖(절대 배치)이고 그 자리는 좌패딩 33이 낸다.
+      +'<td style="padding:7px 12px 7px '+_nameHdPad+'px;max-width:0;width:100%;position:relative;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;color:var(--text)" title="'+escapeHtml(g.name)+'">'
+      +_bizHallBadge(_bizHallOf(g))+escapeHtml(g.name)+'</td>'
+      +'<td style="padding:7px 12px;text-align:right;color:var(--neutral-text);white-space:nowrap">'+escapeHtml(g.genre||'-')+'</td>'
       // [260805] 예정(오픈 전) 행 = 실적 칸을 0으로 채우지 않고 「오픈 전」·「—」로 — 0은 「안 팔렸다」로 읽힌다
       +'<td style="padding:7px 12px;text-align:right;color:var(--peach-text);font-weight:600;font-variant-numeric:tabular-nums">'+(g._st==='planned'?'<span style="color:var(--muted);font-weight:500">오픈 전</span>':Math.round((g._sold!=null&&g._sold>0)?g._sold:g.paid).toLocaleString())+'</td>'
-      +'<td style="padding:7px 12px;text-align:right;color:var(--dim);font-variant-numeric:tabular-nums">'+(g.seat>0?Math.round(g.seat).toLocaleString():'—')+'</td>'
+      // 오픈석(회차) — 부차 정보임은 **괄호가 말한다**(잉크로 더 내리지 않는다).
+      //   ⚠ 대비 이력: 회차 값은 구 독립 열에서 `--neutral-text` **5.23:1**(AA 통과)이었고, 이 열로 옮기며 열 잉크
+      //     `--dim` **3.54:1**(제브라 행 3.40:1 · AA 미달)로 **내려간다**. 더 흐린 `--muted` 시안은 **1.92:1**이라
+      //     기각했다. 지금 값 = 오픈석 숫자와 **같은 가독 수준**(이 열 전체가 원래 --dim = §6-5 그레이 축 부채 안) —
+      //     회차만 더 진하게 하면 부값이 주값보다 진해져 위계가 뒤집힌다. 열 전체를 올리는 건 이 지시 밖 = 운영자 판단.
+      //   게이트 ⑤는 리터럴 hex 쌍만 채점해 var() 조합을 못 본다 → 통과 여부는 근거가 못 된다(손으로 계산한 값).
+      +'<td style="padding:7px 12px;text-align:right;color:var(--dim);white-space:nowrap;font-variant-numeric:tabular-nums">'+(g.seat>0?Math.round(g.seat).toLocaleString():'—')+(_cntBox?('<span style="'+_cntBox+'">('+g.cnt+')</span>'):('('+g.cnt+')'))+'</td>'
       +'<td style="padding:7px 12px;text-align:right;color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums">'+(g._st==='planned'?'—':g.avg.toFixed(1))+'</td>'
       +'<td style="padding:7px 12px;padding-right:14px;text-align:right;color:var(--green);font-weight:600;font-variant-numeric:tabular-nums">'+((g._rev!=null&&g._rev>0)?_bizMoney(g._rev,true):'—')+'</td>'   // [260803 선택값] 열: 매출 = 표시(진행바·최근 7일 = 끔) · [260805] 단위는 머리글이 말한다 = 숫자만(bare)
       +'</tr>';
