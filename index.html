@@ -20220,7 +20220,12 @@ function openPromoCheck(){
        + '<button class="btn btn--neutral btn--sm" style="margin-top:12px" onclick="closePromoCheck();openPromoCheck()">다시 시도</button></div>';
   }else{
     var s=_promoCheckScan(), h=[];
-    var card=function(t,sub,inner){ return '<div class="bizm-card" style="padding:14px 16px"><div style="font-size:14px;font-weight:800">'+t
+    // [260805 운영자] 카드 사이 간격 = 정본 `.bizm-card` margin-bottom 14 → **21**(지시 「지금의 +50%」 · 14×1.5).
+    //   마지막 카드에도 그대로 걸려 「카드↔카드」와 「마지막 카드↔집계줄」이 **같은 21**로 선다(간격 항상 일정).
+    //   인라인으로 두는 이유 = 이 모달만의 값. 전역 `.bizm-card`(L2298)를 건드리면 대시보드 이젤 하단선 계약
+    //   (tools/smoke_layout.mjs ①~③)이 좌·우 열 전부에서 흔들린다.
+    // 제목 잉크 = `var(--accent)`(강조색1 · 운영자 260805) — 흰 카드 위 6.0:1(WCAG AA 통과) · 신규 hex 0.
+    var card=function(t,sub,inner){ return '<div class="bizm-card" style="padding:14px 16px;margin-bottom:21px"><div style="font-size:14px;font-weight:800;color:var(--accent)">'+t
       +(sub?'<span style="font-size:11.5px;font-weight:600;color:var(--neutral-text);margin-left:8px">'+sub+'</span>':'')+'</div>'+inner+'</div>'; };
     var row=function(lead,main,sub,hot){ return '<div style="display:flex;gap:10px;align-items:baseline;padding:7px 0;border-top:1px solid var(--border)">'
       +'<span style="font-size:12px;font-weight:800;white-space:nowrap;font-variant-numeric:tabular-nums;color:'+(hot?'var(--danger-btn)':'var(--neutral-text)')+'">'+lead+'</span>'
@@ -20241,8 +20246,14 @@ function openPromoCheck(){
   }
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closePromoCheck)">'
     + '<div class="modal" style="width:min(760px,94vw);max-height:88vh;display:flex;flex-direction:column;overflow:hidden">'
-    + '<button class="modal-x" onclick="closePromoCheck()" title="닫기">×</button>'
-    + '<div style="font-size:17px;font-weight:800;padding:2px 0 10px">AI 홍보 · 점검</div>'
+    // [260805 운영자 「우측 상단에 x로 · 디자인 정본따르게」] 머리줄 = X + 제목을 **한 덩이(블록)로 묶는다**.
+    //   원인: 이 모달은 `display:flex`라 정본 `.modal-x{float:right}`(L1126)가 **flex 항목에선 무효** — 그래서
+    //   X가 제목 위 좌측에 세로로 쌓였다. 묶음 div는 flex 항목 = BFC라 그 안에서 float가 되살아나고,
+    //   자리는 정본 계산(`margin:-8px -8px 0 0` + sticky)이 그대로 낸다 = 일반 모달과 **같은 우상단 21/29px**.
+    //   좌표 하드코딩(`.pw-modal .modal-x` L1525식 absolute) 대신 이 방식을 쓰는 이유 = 모바일 `.modal{padding:18px}`
+    //   (L418)에서도 정본이 자동으로 따라온다(고정 px면 그 화면만 어긋난다).
+    + '<div><button class="modal-x" onclick="closePromoCheck()" title="닫기">×</button>'
+    + '<div style="font-size:17px;font-weight:800;padding:2px 0 10px">AI 홍보 · 점검</div></div>'
     + '<div style="overflow:auto;flex:1;min-height:0">'+body+'</div></div></div>';
 }
 
@@ -24218,7 +24229,9 @@ function _bnavMore(){
   let h='<div class="bn-sheet">';
   const add=function(emo,label,fnStr){h+='<button class="bn-sheet-item" onclick="this.closest(\'.bn-sheet-bg\').remove();'+fnStr+'"><span class="emo">'+emo+'</span>'+label+'</button>';};
   add('📝','네이버 블로그 글쓰기','openNaverBlogTool()');
-  add('🎯','로고 제작','openLogoMaker()');   // [260804 운영자] 데스크톱 「콘텐츠 제작」 드롭다운과 같은 진입점 — 좁은 폭에서도 닿게
+  // [260805 운영자] 「로고 제작」 메뉴 숨김 — 데스크톱 드롭다운(_contentMenuBuild)과 같이 내림. 롤백 = 이 줄 주석 해제.
+  //   숨김일 뿐 제거가 아니다: openLogoMaker()·_lm* 함수와 .lm-* CSS는 그대로 살아있다(.lm-wrap·.lm-col은 「카카오 메세지 설계」가 공용 — 지우면 그쪽이 깨진다).
+  // add('🎯','로고 제작','openLogoMaker()');   // [260804 운영자] 데스크톱 「콘텐츠 제작」 드롭다운과 같은 진입점 — 좁은 폭에서도 닿게
   add('🔗','링크 자료수집','openLinkGrab()');
   add('🧩','플랫폼 현황','openPlatformBoard()');
   add('⇄','대시보드 화면 (메인)','setMainView(\'biz\')');   // [260723 평의회3 HIGH] 좁은 폭 토글 숨김 시에도 메인 복귀 경로 보장
@@ -24314,7 +24327,8 @@ function _contentMenuBuild(menu){
   var hov=' onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'"';
   menu.innerHTML='<div style="padding:8px 14px 6px;font-size:11px;color:var(--dim);font-weight:700">콘텐츠 제작</div>'
     +'<button type="button" onclick="_ddCloseAll();openCardMaker()" style="'+itemCss+'"'+hov+'>카드 제작</button>'   /* [260803 운영자] 사진 첨부 → 비율 안 확대·이동 절삭 + 문구 → PNG 내려받기 (nomute-editor 카드뉴스 이식 — apps/comp/card_news.py 기하 정본) */
-    +'<button type="button" onclick="_ddCloseAll();openLogoMaker()" style="'+itemCss+'"'+hov+'>로고 제작</button>'   /* [260804 운영자] 이름·형태·느낌·색 → 로고 PNG (Nutlope/logocreator 프롬프트 로직 이식 · 엔진 = 기존 GEMINI_API_KEY) */
+    // [260805 운영자] 「로고 제작」 메뉴 숨김 — 모바일 「더보기」 시트(_bnavMore)와 같이 내림. 롤백 = 아래 줄 주석 해제(양쪽 다).
+    // +'<button type="button" onclick="_ddCloseAll();openLogoMaker()" style="'+itemCss+'"'+hov+'>로고 제작</button>'   /* [260804 운영자] 이름·형태·느낌·색 → 로고 PNG (Nutlope/logocreator 프롬프트 로직 이식 · 엔진 = 기존 GEMINI_API_KEY) */
     +'<button type="button" onclick="_ddCloseAll();openKakaoDesigner()" style="'+itemCss+'"'+hov+'>카카오 메세지 설계</button>'   /* [260805 운영자] 공연 고르면 상세 링크 → 포스터 OCR → 카카오 76자 문구 후보 (홍보 신청 위저드 [AI 문구 제안]과 같은 엔진·같은 후보 카드) */
     +'<button type="button" onclick="_ddCloseAll();openNaverBlogTool()" style="'+itemCss+'"'+hov+'>네이버 블로그</button>'
     +'<button type="button" onclick="_ddCloseAll();openHwpEditor()" style="'+itemCss+'"'+hov+'>한글문서 편집</button>'   /* [260803 운영자] 문서 올림 → 미리보기 → 말로 수정 (claw-hwp 이식 — hwp/NOTICE.md) */
