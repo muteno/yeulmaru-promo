@@ -6906,6 +6906,69 @@ function _bizMoney(v,bare){
   if(v==null||!isFinite(v))return '—';
   return Math.round(v/1e4).toLocaleString()+(bare?'':'만');
 }
+// ── [260807 운영자] 판매현황 상세 「일시」 표기 — 0 없는 M/D · 요일 없음 · 범위는 '-' ──────────────
+//   지시: *"1/24-25 이렇게 갈게 (요일은 뺄게)"* · *"12/24-25"* · *"월이 넘어가는 케이스가 있을때는. 12/24-1/3"*.
+//   = 같은 달이면 뒤쪽 월을 생략(일만 잇는다) · 달이 바뀌면 양쪽 다 적는다. 구 표기(`01.24(토)~01.25(일)` 19자)
+//     대비 절반 이하로 줄어든 폭은 그대로 공연명 칸이 가져간다(운영자 「확보된 만큼 공연명을 좌측으로」).
+//   ⚠ **앞자리 맞춤**(운영자 「1/24랑 12/24랑 앞에 십의자리수때문에 정렬이 안맞는데 … 앞에 0이 있다고 가정하고
+//     세로선 배치를 광학 잉크단위로」) = 맨 앞 월을 **두 자리 폭의 오른쪽 정렬 상자**에 담는다. 그러면 한 자리 월은
+//     저절로 한 칸 들여써지고(=「앞에 0이 있다고 가정」) **슬래시와 그 뒤가 전부 한 세로선**에 선다.
+//     폭 `2ch` = 숫자 '0' 두 자(ch의 정의) — 숨은 '0' 글자를 앞에 끼우는 방식과 자리는 같고, **폰트가 tabular
+//     숫자를 지원하든 안 하든**(구현 폰트 Pretendard 미설치 폴백까지) 어긋나지 않는다. 잉크 0 · 읽히는 글자 0.
+//     min-width라 혹시 두 자리가 2ch보다 넓은 서체를 만나도 겹치지 않고 그 행만 자연폭으로 물러선다(무해 열화).
+function _bizMD(d){ return (d.getMonth()+1)+'/'+d.getDate(); }
+function _bizDateCell(s,e,single){
+  var head=single?e:s;
+  var tail=single?String(e.getDate())
+    :((s.getMonth()===e.getMonth()&&s.getFullYear()===e.getFullYear())?s.getDate()+'-'+e.getDate():s.getDate()+'-'+_bizMD(e));
+  return '<span style="display:inline-block;min-width:2ch;text-align:right">'+(head.getMonth()+1)+'</span>/'+tail;
+}
+// ── [260807 운영자] 공연명 앞 대/소 원형 배지 = 「어느 극장인가」 ────────────────────────────────
+//   '대'·'소' 한 글자 표기 = 이 레포 정본 축약(_GC_PLACE 「대→대극장 · 소→소극장」) 그대로.
+//   소스 사다리 — **아는 것과 미루어 아는 것을 구분해서** 단다(지침 [2] 「추측 금지 · 못 확인하면 미확인」):
+//     ① 프로그램 시트 장소(PERFS.l) = 사람이 적어 둔 값 → **확정**(장르 사다리 _pgRow.g2와 같은 우선 규약)
+//     ② 없으면 운영대장 **회차당 기본좌석**(총오픈석÷회차) → **추정**. 운영대장엔 장소 열이 아예 없어 이게 유일한 단서다.
+//        실측 분포(운영대장 2,188행): 216~306 무리(302가 486행으로 최빈 = 소극장 정원)와 400~1021 무리가
+//        **307~399 빈 구간을 사이에 두고** 갈린다 → 경계 350 = 그 빈 구간 한가운데(한 데이터 값에 붙인 임계가 아니다).
+//        ⚠ 이 임계의 **정본은 아직 없다** — 프로그램 시트와 조인되는 4건은 전부 대극장이라 소 가지는 미검증이다.
+//        그래서 추정분은 배지 툴팁이 「추정 · 회차당 N석」이라고 **스스로 밝힌다**(화면이 사실로 우기지 않게).
+//     ③ 좌석이 없거나 실측 최대 극장값(1021)을 넘으면(야외 1,300~12,000) **배지 없음** — 두 극장 중 하나라고
+//        말할 근거가 없는 자리에 배지를 달지 않는다.
+var _BIZ_HALL_SMALL_MAX=350, _BIZ_HALL_BIG_MAX=1021;
+function _bizHallOf(g){
+  try{
+    var un=_uName(g&&g.name||''), pl='';
+    if(un&&typeof PERFS!=='undefined'&&PERFS&&PERFS.length){
+      PERFS.some(function(p){
+        if(!p||p.t!=='c'||!p.l)return false;
+        if(_uName(p.f||'')===un||_uName(p.n||'')===un){ pl=String(p.l); return true; }
+        return false;
+      });
+    }
+    if(pl.indexOf('소극장')>=0)return {h:'소',est:0,per:0};
+    if(pl.indexOf('대극장')>=0)return {h:'대',est:0,per:0};
+  }catch(_e){}
+  var per=(g&&g.cnt>0&&g.seat>0)?Math.round(g.seat/g.cnt):0;
+  if(!per||per>_BIZ_HALL_BIG_MAX)return null;
+  return {h:(per<=_BIZ_HALL_SMALL_MAX)?'소':'대',est:1,per:per};
+}
+// 형태 = 캘린더 셀의 공연 원형 배지(index.html ~L3318 — 16px 원 · 이름 앞 · 이름과 5px)를 계승. 신규 클래스·색 0.
+//   ⚠ 계승분 = **형태·자리·간격**. 글자 크기·굵기는 이 표의 본문(13px)에 맞춰 8px/600 → 9.5px/700로 키웠다
+//     (캘린더 원본은 옆 글자가 9px이라 8px이 맞는 자리다 · 13px 옆에서 8px은 읽히지 않는다 — 값 변경 1건 명시).
+//   두 상태 구분은 기틀 §3.5③대로 **색 하나에 안 맡긴다**: 대 = 진한 채움 + 흰 글자(5.99:1) / 소 = 옅은 채움 +
+//     유채색 글자(4.96:1) — 같은 인디고 축의 명도·글자색 이중단서, 둘 다 WCAG AA 통과, 팔레트 밖 색 반입 0.
+//   ⚠ 같은 앱 캘린더에 **원형 '대' = 대관** 배지가 이미 있다(perfBadgeLb ~L3271). 화면이 다르고 색축도 다르지만
+//     (대관 = --c5 시안블루 · 여기 = --accent 인디고), 한 글자가 두 뜻이라 title/aria-label로 뜻을 못 박는다.
+var _BIZ_HALL_BADGE_W=16, _BIZ_HALL_BADGE_GAP=5;   // 제목 열 머리글 들여쓰기(=배지폭+간격)가 이 두 값을 읽는다 — 값 이원화 금지
+function _bizHallBadge(x){
+  var base='flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;width:'+_BIZ_HALL_BADGE_W+'px;height:'+_BIZ_HALL_BADGE_W+'px;border-radius:50%;font-size:9.5px;font-weight:700;line-height:1;';
+  // 극장을 모르는 행 = 배지를 **빼는 게 아니라 빈 자리로 남긴다**. 빼면 그 행만 제목이 21px 왼쪽으로 튀어나가
+  //   1행 제목 열의 세로선이 무너진다(야외 공연 행 실측). 일시 칸의 「앞자리 0 자리」와 같은 규약 = 잉크는 없고 자리는 있다.
+  if(!x||!x.h)return '<span aria-hidden="true" style="'+base+'visibility:hidden"></span>';
+  var big=(x.h==='대'), nm=(big?'대극장':'소극장')+(x.est?(' (추정 · 회차당 '+x.per.toLocaleString()+'석 — 운영대장에 장소 열이 없어 좌석으로 미룬 값)'):'');
+  return '<span title="'+escapeHtml(nm)+'" aria-label="'+escapeHtml(nm)+'" style="'+base
+    +(big?'background:var(--accent);color:var(--surface-solid)':'background:var(--accent-light);color:var(--accent)')+'">'+x.h+'</span>';
+}
 // ── [260806 운영자] 3면 조작부 = 「연도 ▾ │ 전체·판매중」 토글 한 벌 ────────────────────────
 //   지시: *"공연 전시 교육 2026년 기획 자세히보기 이거 모두 삭제해주고 첨부와 같은 토글만 넣어줘"* +
 //        *"전체 > 판매중 > 전체 > 판매중 이렇게 토글되고 전체가 기본값"*.
@@ -7452,20 +7515,29 @@ function _bizCompRender(el,half){
   //   회차만 빼면 「단위를 적는 열/안 적는 열」이 갈려 원래 고치려던 어긋남이 그대로 남는다(운영자 「회차도 넣어버려」).
   //   아랫줄로 내리는 이유 = 이름 뒤에 붙이면 열이 가로로 자라 좁은 우 열에서 가로 스크롤이 생긴다. 세로는 머리글 한 줄분(≈14px)만 자란다.
   //   잉크·크기 = 머리글 색(--dim) 상속 + 10.5px(차트 눈금과 같은 급) — 신규 토큰·색 0.
-  [['공연일',''],['공연명',''],['장르',''],['회차','회'],['판매 고객','명'],['오픈석','명'],['점유율','%'],['매출','만원']].forEach(function(c,i){_tbl+='<td style="padding:8px 12px;position:sticky;top:0;z-index:1;background:var(--surface-solid);box-shadow:inset 0 -2px 0 var(--border);vertical-align:top;'+(i>=3?'text-align:right;':'')+(i===0?'padding-left:14px;':'')+(i===7?'padding-right:14px;':'')+'white-space:nowrap">'+c[0]+(c[1]?'<div style="font-size:10.5px;font-weight:400;margin-top:2px">(단위: '+c[1]+')</div>':'')+'</td>';});
+  // [260807 운영자] 열 구성 개정 — 「공연일→일시」·「판매 고객→유료 관객」(이름) · **회차 열 폐지 → 오픈석 값에 괄호 병기**
+  //   (`3,704(4)` = 오픈석(회차) · 그래서 이 열 머리글 단위가 「명」 → 「명, 회」로 늘어난다).
+  //   회차를 없앤 폭 + 일시가 줄어든 폭은 전부 **공연명**이 가져간다 = 제목이 1행 안에서 최대한 길게 보인다.
+  //   장르는 구 회차 자리까지 밀어 **우측 정렬**(운영자 「장르가 회차랑 거의 맞먹는 수준으로 우측으로」) — 이 열부터
+  //   오른쪽 끝까지가 한 덩어리로 오른쪽 정렬이라, 제목 칸의 오른쪽 경계선이 한 줄로 선다.
+  //   ⚠ 공연명 머리글은 **배지 폭만큼 들여쓴다**(12+16+5=33) — 머리글이 배지에 붙으면 아래 제목 글자들과 한 줄이
+  //     안 맞는다. 열의 세로선은 「눈에 띄는 글자」(제목)를 기준으로 세운다 = 체크박스 목록과 같은 정렬 규약.
+  var _nameHdPad=12+_BIZ_HALL_BADGE_W+_BIZ_HALL_BADGE_GAP;
+  [['일시',''],['공연명',''],['장르',''],['유료 관객','명'],['오픈석','명, 회'],['점유율','%'],['매출','만원']].forEach(function(c,i){_tbl+='<td style="padding:8px 12px;position:sticky;top:0;z-index:1;background:var(--surface-solid);box-shadow:inset 0 -2px 0 var(--border);vertical-align:top;'+(i>=2?'text-align:right;':'')+(i===0?'padding-left:14px;':'')+(i===1?'padding-left:'+_nameHdPad+'px;':'')+(i===6?'padding-right:14px;':'')+'white-space:nowrap">'+c[0]+(c[1]?'<div style="font-size:10.5px;font-weight:400;margin-top:2px">(단위: '+c[1]+')</div>':'')+'</td>';});
   _tbl+='</tr></thead><tbody>';
-  var WD=['일','월','화','수','목','금','토'];
-  var df=function(d){return ('0'+(d.getMonth()+1)).slice(-2)+'.'+('0'+d.getDate()).slice(-2)+'('+WD[d.getDay()]+')';};
   list.forEach(function(g,idx){
-    var dr=(g.cnt===1||g.start.getTime()===g.end.getTime())?df(g.end):df(g.start)+'~'+df(g.end);
+    var dr=_bizDateCell(g.start,g.end,(g.cnt===1||g.start.getTime()===g.end.getTime()));
     _tbl+='<tr style="border-bottom:1px solid var(--border);'+(idx%2===1?'background:var(--past-bg);':'')+'">'
-      +'<td style="padding:7px 12px;padding-left:14px;white-space:nowrap;color:var(--neutral-text)">'+dr+'</td>'
-      +'<td style="padding:7px 12px;font-weight:600;color:var(--text)">'+escapeHtml(g.name)+'</td>'
-      +'<td style="padding:7px 12px;color:var(--neutral-text);white-space:nowrap">'+escapeHtml(g.genre||'-')+'</td>'
-      +'<td style="padding:7px 12px;text-align:right;color:var(--neutral-text)">'+g.cnt+'</td>'
+      +'<td style="padding:7px 12px;padding-left:14px;white-space:nowrap;color:var(--neutral-text);font-variant-numeric:tabular-nums">'+dr+'</td>'
+      // 제목 = **무조건 1행**(운영자) — max-width:0 + width:100%로 「남는 폭 전부, 그러나 다른 열은 안 밀침」이 되고,
+      //   넘치는 만큼만 말줄임(…)으로 잘린다. 배지·제목은 flex 한 줄(min-width:0 = 제목이 줄어들 수 있어야 …이 걸린다).
+      +'<td style="padding:7px 12px;max-width:0;width:100%" title="'+escapeHtml(g.name)+'"><div style="display:flex;align-items:center;gap:'+_BIZ_HALL_BADGE_GAP+'px;min-width:0">'+_bizHallBadge(_bizHallOf(g))
+      +'<span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;color:var(--text)">'+escapeHtml(g.name)+'</span></div></td>'
+      +'<td style="padding:7px 12px;text-align:right;color:var(--neutral-text);white-space:nowrap">'+escapeHtml(g.genre||'-')+'</td>'
       // [260805] 예정(오픈 전) 행 = 실적 칸을 0으로 채우지 않고 「오픈 전」·「—」로 — 0은 「안 팔렸다」로 읽힌다
       +'<td style="padding:7px 12px;text-align:right;color:var(--peach-text);font-weight:600;font-variant-numeric:tabular-nums">'+(g._st==='planned'?'<span style="color:var(--muted);font-weight:500">오픈 전</span>':Math.round((g._sold!=null&&g._sold>0)?g._sold:g.paid).toLocaleString())+'</td>'
-      +'<td style="padding:7px 12px;text-align:right;color:var(--dim);font-variant-numeric:tabular-nums">'+(g.seat>0?Math.round(g.seat).toLocaleString():'—')+'</td>'
+      // 오픈석(회차) — 괄호 안 회차는 한 급 흐린 잉크(--muted)로 부차 정보임을 말한다(구 독립 열의 위계 계승 · 중립 사다리 안)
+      +'<td style="padding:7px 12px;text-align:right;color:var(--dim);font-variant-numeric:tabular-nums">'+(g.seat>0?Math.round(g.seat).toLocaleString():'—')+'<span style="color:var(--muted)">('+g.cnt+')</span></td>'
       +'<td style="padding:7px 12px;text-align:right;color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums">'+(g._st==='planned'?'—':g.avg.toFixed(1))+'</td>'
       +'<td style="padding:7px 12px;padding-right:14px;text-align:right;color:var(--green);font-weight:600;font-variant-numeric:tabular-nums">'+((g._rev!=null&&g._rev>0)?_bizMoney(g._rev,true):'—')+'</td>'   // [260803 선택값] 열: 매출 = 표시(진행바·최근 7일 = 끔) · [260805] 단위는 머리글이 말한다 = 숫자만(bare)
       +'</tr>';
