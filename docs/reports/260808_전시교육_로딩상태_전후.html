@@ -1,0 +1,113 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>3면 전시│교육 반반 — 첫 로딩 상태 전후 (260808)</title>
+<style>*{box-sizing:border-box}
+:root{--accent:#4A4DE7;--accent-light:#E8E8FD;--peach-text:#D88455;
+--bg:linear-gradient(135deg,#FDF6F3 0%,#F0EBF5 50%,#EBF0F8 100%);--surface-solid:#fff;
+--glass:rgba(255,255,255,0.55);--glass-surface:rgba(255,255,255,.78);--glass-bd:var(--glass);
+--glass-shadow:0 8px 32px rgba(74,77,231,0.08),0 2px 8px rgba(0,0,0,0.04);
+--border:rgba(0,0,0,0.09);--text:#1A1A2E;--dim:#888;--muted:#bbb;--neutral:#EEEDF3;--neutral-text:#6B6B7B;
+--green:#1A6B3C;--danger-btn:#E24B4A;--radius:16px;--radius-lg:20px}
+body{margin:0;background:var(--bg);color:var(--text);font-family:'Pretendard',-apple-system,BlinkMacSystemFont,system-ui,sans-serif;line-height:1.6}
+.wrap{max-width:1180px;margin:0 auto;padding:30px 20px 70px}
+h1{font-size:22px;margin:0 0 6px;letter-spacing:-.3px}
+.lead{color:var(--neutral-text);font-size:13px;margin:0 0 20px}
+section{background:var(--glass-surface);border:1px solid var(--glass-bd);border-radius:var(--radius-lg);box-shadow:var(--glass-shadow);padding:18px 20px 22px;margin:0 0 18px}
+section>h2{margin:0 0 4px;font-size:14px;font-weight:800;color:var(--accent);display:flex;align-items:center;gap:8px}
+section>h2::before{content:"";width:4px;height:14px;border-radius:2px;background:var(--accent)}
+section>.desc{margin:0 0 14px;font-size:12px;color:var(--neutral-text)}
+.ba{display:grid;grid-template-columns:1fr;gap:14px}
+.card{background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.card>.hd{font-size:11.5px;font-weight:800;letter-spacing:.3px;padding:8px 12px;border-bottom:1px solid var(--border)}
+.hd.b{color:var(--danger-btn)}.hd.a{color:var(--green)}
+.card img{display:block;width:100%}
+table{width:100%;border-collapse:collapse;font-size:12px;background:var(--surface-solid);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+th,td{padding:7px 9px;border-top:1px solid var(--border);text-align:left;vertical-align:top}
+th{background:var(--neutral);color:var(--neutral-text);font-size:11px;font-weight:700;border-top:0;white-space:nowrap}
+td.c{text-align:center;white-space:nowrap}
+td.k{white-space:nowrap;font-weight:700;color:var(--accent);font-variant-numeric:tabular-nums}
+.ok{color:var(--green);font-weight:800}
+.no{color:var(--danger-btn);font-weight:800}
+ul{margin:8px 0 0;padding-left:18px;font-size:12.5px}li{margin:3px 0}
+code{background:var(--neutral);padding:1px 5px;border-radius:5px;font-size:11.5px}
+.warn{border-left:3px solid var(--peach-text);background:var(--surface-solid);border-radius:0 12px 12px 0;padding:10px 14px;font-size:12.5px;margin-top:12px}
+</style></head><body><div class="wrap">
+<h1>3면 「기획 전시 │ 예술교육」 반반 — <b style="color:var(--accent)">첫 로딩 상태</b> 전후</h1>
+<p class="lead">대시보드 3면 좌 열 하단 반반 줄(<code>_bizCompRender</code>) · 운영자 지시 260808
+「전시랑 교육 부분이 처음에 로딩될 때 오류처럼 나온다 · 바로 못 받아오면 로딩처럼 뜨게」 ·
+화면 = 결정적 목데이터(<code>tools/qa_mock_ops.mjs</code>) <code>?qa=admin</code> 경로 + 목 API 지연 셔틀 · 실API·실데이터·PII 미접촉.</p>
+
+<section>
+<h2>1. 무엇이 문제였나 — 「아직 안 왔다」와 「진짜 0건」을 구분하지 않았다</h2>
+<p class="desc">두 반쪽의 소스는 서로 다르고 도착 시각도 다르다. 교육 반쪽은 도착 여부를 아예 묻지 않아, 안 온 상태를 <b>없는 상태</b>로 단정했다.</p>
+<table>
+<tr><th style="width:74px">반쪽</th><th style="width:150px">소스</th><th style="width:38%">전 — 미도착일 때 화면</th><th>후</th></tr>
+<tr><td><b>기획 전시</b></td><td><code>_anaState._exMaster</code><br>(전시마스터·전시일일)</td>
+  <td>로딩 스윕 <span class="ok">있음</span> — 다만 <b>fetch가 실패해도 로딩이 그대로 남아</b> 영원히 「불러오는 중」</td>
+  <td>미도착 = 로딩 유지 · <b>실패 = 실패 카드 + 「다시 시도」</b></td></tr>
+<tr><td><b>예술교육</b></td><td><code>PERFS</code>(프로그램 시트)</td>
+  <td class="no">📭 2026년 교육 프로그램이 없어요<br>+ 「프로그램 시트에 예술교육으로 등록되면…」 안내문</td>
+  <td>전시와 <b>같은 로더 부품</b> — <code>교육 데이터 불러오는 중</code></td></tr>
+</table>
+<div class="warn"><b>왜 사람 눈에 「오류」로 읽혔나</b> — 📭 + 「등록되면 …에 표시됩니다」는 <b>운영자가 시트에 뭘 안 넣었다</b>는 뜻의 문장이다.
+데이터가 오는 중일 뿐인데 화면이 「네가 등록을 안 했다」라고 말하고 있었다.</div>
+</section>
+
+<section>
+<h2>2. 전후 — 교육 반쪽 (부팅 후 ≈2.0초 · 1920×1080)</h2>
+<p class="desc">같은 타임라인 지점에서 잡은 두 컷. 전시는 이미 도착해 그려졌고, 교육(PERFS)은 아직 오는 중인 순간이다.
+재현 조건 = 프로그램 시트 3.2s / 운영대장·전시 2시트 0.9s (프로그램 시트가 가장 큰 시트라 실제로 늦게 오는 순서).</p>
+<div class="ba">
+<div class="card"><div class="hd b">전 (before) — 「📭 2026년 교육 프로그램이 없어요」가 1.68s~3.66s 동안 노출</div><img src="260808_전시교육_로딩상태_교육_전.png" alt="개정 전 — 교육 반쪽이 빈 상태 문구를 띄운다"></div>
+<div class="card"><div class="hd a">후 (after) — 「교육 데이터 불러오는 중」(.sk-sweep 빔 + 점 픽토그램)</div><img src="260808_전시교육_로딩상태_교육_후.png" alt="개정 후 — 교육 반쪽이 로딩 상태를 띄운다"></div>
+</div>
+<p class="desc" style="margin:12px 0 0">도착 뒤(≈3.6s)는 전·후가 동일하다 — 월별 일정 게이지 ①②③④.</p>
+<div class="card" style="margin-top:8px"><div class="hd a">후 — 프로그램 시트 도착 뒤(회귀 0)</div><img src="260808_전시교육_로딩상태_도착후.png" alt="도착 뒤 교육 게이지"></div>
+</section>
+
+<section>
+<h2>3. 전후 — 전시 반쪽이 <b>못 받아온</b> 경우</h2>
+<p class="desc">전시 원천 2시트가 실패하는 조건(각 fetch가 <code>.catch → null</code>). 구판은 실패해도 <code>_bizExhibEnsure</code>가 조용히 빠져나가
+로더가 그대로 남았다 — 코드 주석엔 「불러오지 못했어요로 남는다」라고 적혀 있었지만 <b>그 상태가 실제로는 없었다</b>.</p>
+<div class="ba">
+<div class="card"><div class="hd b">전 (before) — 추적 7초 내내 스윕만 도는 무한 로딩</div><img src="260808_전시교육_로딩상태_전시실패_전.png" alt="개정 전 — 전시 반쪽 무한 로딩"></div>
+<div class="card"><div class="hd a">후 (after) — 실패 카드 + 「다시 시도」(정본 실패 문법 계승)</div><img src="260808_전시교육_로딩상태_전시실패_후.png" alt="개정 후 — 전시 반쪽 실패 카드"></div>
+</div>
+<div class="warn">⚠ <b>무한 fetch 고리 방어</b> — 실패 → 재렌더 → 재확보 → 실패 …가 되지 않게, 실패 딱지(<code>window._bizmExFail</code>)가 서 있으면
+자동 재확보를 멈춘다. 재확보는 「다시 시도」를 누를 때만. 실측 호출 수 = 전시마스터·전시일일 각 <b>2회</b>(레일 6시트 1 + 반쪽 자체 확보 1)로 유한.</div>
+</section>
+
+<section>
+<h2>4. 손댄 자리 — 5곳(전부 기존 부품 계승 · 신규 디자인 0)</h2>
+<table>
+<tr><th style="width:230px">자리</th><th>내용</th></tr>
+<tr><td class="k">_bizEduMonthRows()</td><td><code>!_perfReady</code>면 <b>null 반환</b> — 전시 반쪽(<code>_bizExhibRows</code>)과 같은 「미로드 = null」 계약으로 통일.
+  판매 레일이 이미 지는 규약과 같은 축(<code>_perfReady</code> 게이트 · 「master 도착 전에는 '없어요' 확정 금지」).</td></tr>
+<tr><td class="k">_bizHalfLoad() 신설</td><td>반반 카드 <b>공용 로더</b> — 구 전시 반쪽 인라인 문자열을 그대로 뽑았다(마크업 동일 = 전시 쪽 회귀 0).
+  기틀 §2-13 로딩 표준: <code>.sk-sweep</code> 빔 + <code>_ldHtml(14)</code> + 「~중」(말줄임 점 금지).
+  잉크만 분야색으로 갈린다 — 전시 <code>var(--peach-text)</code> · 교육 <code>var(--green)</code>. <b>신규 색·신규 토큰 0.</b></td></tr>
+<tr><td class="k">_bizHalfFail() 신설</td><td>반반 카드 <b>공용 실패 카드</b> — 이 파일의 정본 실패 문법 계승(<code>var(--danger)</code> 문구 + <code>.ana-chip</code> 「다시 시도」 ·
+  <code>_bizCompRender</code> 운영대장 실패 경로와 같은 부품).</td></tr>
+<tr><td class="k">_bizExhibEnsure()</td><td>못 받으면 <code>window._bizmExFail=1</code>을 세우고 <b>그 면을 다시 그린다</b>(구판은 딱지 없이 return = 무한 로딩).
+  받으면 딱지를 걷는다. 호출측은 딱지가 서 있으면 자동 재확보를 멈춘다.</td></tr>
+<tr><td class="k">initApp() loadPrograms .then</td><td>프로그램 시트 도착 = 교육 반쪽의 <b>유일한 해제 신호</b>라, 레일 재렌더 경로가 안 탔을 때만 <code>_bizInlineRender()</code>를 보탠다(이중 렌더 0).</td></tr>
+</table>
+</section>
+
+<section>
+<h2>5. 검증 — 실측 전건 통과</h2>
+<table>
+<tr><th style="width:230px">게이트</th><th>결과</th></tr>
+<tr><td class="k">python3 tools/check_design.py</td><td class="ok">PASS — raw hex 1578/1578 · :root 2/0 · 고아 9(기존) · 이중정의 1(기존) (증가 0)</td></tr>
+<tr><td class="k">npm run check</td><td class="ok">PASS — check_refs · _YR 정합(연도 2012~2026 · 누계 1,523,323)</td></tr>
+<tr><td class="k">npm run smoke:layout (1920×1080)</td><td class="ok">PASS — 이젤·흰 라인 계약 유지(박스 Δ0 · 흰 카드 하단 Δ0 · 안선 밀착 · 흔들림 0)</td></tr>
+<tr><td class="k">node tools/smoke_layout.mjs 1366 768</td><td class="ok">PASS — 좁은 폭도 동일</td></tr>
+<tr><td class="k">npm run smoke</td><td class="ok">PASS — 로그인 렌더·핵심 함수·JS 회귀 0</td></tr>
+<tr><td class="k">헤드리스 pageerror</td><td class="ok">0건 — 전 시나리오(교육 레이스·전시 실패·정상)</td></tr>
+</table>
+<div class="warn"><b>재현 하네스 각주</b> — 목 API에 지연/실패를 씌우는 셔틀은 <b>세션 스크래치패드에만</b> 있다(리포 미반입).
+리포 게이트(<code>tools/smoke_layout.mjs</code>)는 <code>FEED_SCRIPT</code>가 <code>_perfReady</code>·전시 캐시를 <b>선점</b>해 채우므로
+이 레이스 구간을 애초에 지나가지 않는다 — 그래서 이 결함이 게이트를 통과한 채 살아 있었다.</div>
+</section>
+
+</div></body></html>

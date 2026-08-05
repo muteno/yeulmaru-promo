@@ -4523,6 +4523,10 @@ async function initApp(){
     try{_ycSync();}catch(_e){}          // [260731e] 프로그램 시트 도착 = 연간 일정 타임라인 자동 재생성(스냅샷 → 실데이터)
     // 판매 레일이 PERFS보다 먼저 그려졌으면 재렌더 — 프로그램 시트 폴백 카드(마스터 미등록 판매중 공연) 누락 방지
     if(typeof _salesState!=='undefined'&&_salesState&&_salesState.daily&&_salesState.master&&!_srailBusy){try{_srailRender();}catch(_e){}}
+    // [260808] 프로그램 시트 도착 = 3면 **예술교육 반쪽의 로딩 해제 신호** — 그 반쪽의 유일한 소스가 PERFS인데
+    //   도착을 알리는 자리가 여기뿐이다(전시 반쪽은 _bizExhibEnsure .then이 같은 역할을 진다).
+    //   위 _srailRender 경로가 이미 3면을 다시 그렸으면(그 안에서 _bizInlineRender 호출) 여기선 건너뛴다 = 이중 렌더 0.
+    else if(typeof _mainView!=='undefined'&&_mainView==='biz'&&_bizLeftPage()===3){try{_bizInlineRender();}catch(_e){console.warn('[initApp bizm edu]',_e);}}
   }).catch(function(e){console.warn('[initApp loadPrograms]',e);});
   Promise.all([
     _pPrograms,
@@ -5563,7 +5567,7 @@ function _salesBuild(){
     var _pgRow=_pgFind(rid,name);
     // [260710 운영자] 운영대장 장르1이 비면 프로그램 시트 N열 「구분」 폴백('기타' 소멸) — 기존 장르1 값은 그대로 우선(회귀 0)
     // [260729 운영자] 사다리 최상단에 프로그램 관리 「장르」 주관식(_pgRow.g2) 합류 — 성격(pr)과 같은 규칙: 사람이 직접 지정한 값이 자동 조인보다 우선.
-    var genre=(_pgRow&&_pgRow.g2)?_pgRow.g2:((_gOps&&_gOps.genre)?_gOps.genre:((_pgRow&&_pgRow.g)||''));
+    var genre=_bizGenreKey((_pgRow&&_pgRow.g2)?_pgRow.g2:((_gOps&&_gOps.genre)?_gOps.genre:((_pgRow&&_pgRow.g)||'')),name);   // [260807-4] 어린이·가족 우선 + 시트 표기 정규화(쌍둥이 3루프 동일)
     // 공연 기간(회차 추정의 소스) — 분모 계산보다 먼저 확정한다(260729 순서 교정 · 종전엔 분모 뒤에 있어 회차 추정에 못 쓰였다).
     var startDate=m?m.시작:(ops&&ops.first?ops.first:null);
     var endDate=m?m.종료:(ops&&ops.last?ops.last:null);
@@ -5665,7 +5669,7 @@ function _salesBuild(){
     var dateStr2='';
     if(mm.ID&&rounds[mm.ID])dateStr2=_salesFmtDates(rounds[mm.ID]);
     else if(start2){var ws2=['일','월','화','수','목','금','토'];dateStr2=(start2.getMonth()+1)+'.'+start2.getDate()+'('+ws2[start2.getDay()]+')';}
-    var genre2=(_pgRow2&&_pgRow2.g2)?_pgRow2.g2:(opsF?opsF.genre:'');   // [260729 운영자] 프로그램 관리 「장르」 주관식 우선(본 루프와 쌍둥이 규칙)
+    var genre2=_bizGenreKey((_pgRow2&&_pgRow2.g2)?_pgRow2.g2:(opsF?opsF.genre:''),nm);   // [260729 운영자] 프로그램 관리 「장르」 주관식 우선(본 루프와 쌍둥이 규칙) · [260807-4] 어린이·가족 우선 + 정규화
     var _g2=_takeGroup(nm, (mm&&mm.ID)||''); var gs2=(_g2&&_g2.seat)||0, gm2=(_g2&&_g2.money)||0, gc2=(_g2&&_g2.cnt)||0;   // [단체] 개인 0인 판매중 공연에도 단체 유입 반영 → noData(집계 전) 해제
     perfs.push({name:nm,seats:gs2,money:gm2,diff:null,occ:(totalOpen2>0?Math.max(0,Math.min(gs2/totalOpen2*100,100)):0),totalOpen:totalOpen2,dday:dday2,dateStr:dateStr2,목표:mm.목표||50,_tgtSrc:(mm.목표입력?'sheet':'def'),startDate:start2,endDate:mm.종료||null,status:'active',genre:genre2,gubun:(opsF?opsF.gubun:''),enriched:false,spark:[],deltaPP:null,source:'master',saleStart:(mm.티켓오픈||null),noData:(gs2>0?false:true),groupSeats:gs2,groupMoney:gm2,groupCnt:gc2,_mid:(mm.ID||''),_openSrc:(_rs2Ok?'sum':(_xN2?'xN':(mm.총오픈석?'fixed':'est'))),_roundsN:((mm.ID&&rounds[mm.ID])?rounds[mm.ID].length:0),_rcEst:_rc2,_rcSrc:(_rcK2>0?'data':(_rc2>1?'span':'')),_daysN:((mm.ID&&rounds[mm.ID])?_salesDayN(rounds[mm.ID]):((opsF&&opsF.dayN)||0))});
   });
@@ -5694,7 +5698,7 @@ function _salesBuild(){
     var dday3=start3?Math.round((start3-today)/86400000):null;
     var dateStr3='';
     if(start3){var ws3=['일','월','화','수','목','금','토'];dateStr3=(start3.getMonth()+1)+'.'+start3.getDate()+'('+ws3[start3.getDay()]+')';}
-    var genre3=(pg&&pg.g2)?pg.g2:(opsP?opsP.genre:'');   // [260729 운영자] 프로그램 관리 「장르」 주관식 우선(위 두 루프와 쌍둥이 규칙 · 여기선 pg 자체가 프로그램 시트 행)
+    var genre3=_bizGenreKey((pg&&pg.g2)?pg.g2:(opsP?opsP.genre:''),nm3);   // [260729 운영자] 프로그램 관리 「장르」 주관식 우선(위 두 루프와 쌍둥이 규칙 · 여기선 pg 자체가 프로그램 시트 행) · [260807-4] 어린이·가족 우선 + 정규화
     seenNames[_uName(nm3)]=1;   // 프로그램 시트 안 동명 중복 방어
     var _g3=_takeGroup(nm3, (pg&&pg.id)||''); var gs3=(_g3&&_g3.seat)||0, gm3=(_g3&&_g3.money)||0, gc3=(_g3&&_g3.cnt)||0;   // [단체] 개인 0인 신규오픈 공연에도 단체 유입 반영
     perfs.push({name:nm3,seats:gs3,money:gm3,diff:null,occ:(totalOpen3>0?Math.max(0,Math.min(gs3/totalOpen3*100,100)):0),totalOpen:totalOpen3,dday:dday3,dateStr:dateStr3,목표:50,_tgtSrc:'def',startDate:start3,endDate:_salesDate(until)||null,status:'active',genre:genre3,gubun:(opsP?opsP.gubun:''),enriched:false,spark:[],deltaPP:null,source:'program',saleStart:(_salesDate(pg.ss)||null),noData:(gs3>0?false:true),groupSeats:gs3,groupMoney:gm3,groupCnt:gc3,_roundsN:0,_rcEst:_rc3,_rcSrc:(_rcK3>0?'data':(_rc3>1?'span':'')),_daysN:((opsP&&opsP.dayN)||_salesSpanDays(start3,end3))});   // [260725] 회차·일수 축 = 위 두 루프와 동일 탑재(「N일 N회」 표기가 프로그램 시트 폴백 카드에서만 비던 갭) · [260729] 일수도 공연기간(end3)에서 — 종전엔 endDate(판매종료일) 폴백이라 「113일」이 찍혔다
@@ -5714,7 +5718,7 @@ function _salesBuild(){
     // [분신술 점3] 운영대장 미매칭(opsG 없음)이면 날짜 전무 → 영구 'active'·평균 모수 오염 방지: status는 과거 소급 가정 'ended', noData:true(부정확한 fallback occ를 평균에서 제외). 매칭되면 정상 판정.
     var statusG=(endG&&endG<today)?'ended':((startG&&today<startG)?'notyet':(opsG?'active':'ended'));
     _gConsumed[nm]=1; seenNames[_uName(nm)]=1;
-    perfs.push({name:nm,seats:g.seat,money:g.money,diff:null,occ:Math.max(0,(openG>0?Math.min(g.seat/openG*100,100):0)),totalOpen:openG,dday:ddayG,dateStr:dateStrG,목표:50,startDate:startG,endDate:endG,status:statusG,genre:(opsG?opsG.genre:''),gubun:(opsG?opsG.gubun:''),enriched:!!opsG,spark:[],deltaPP:null,source:(opsG?'fallback':'group'),saleStart:null,noData:(opsG?false:true),groupSeats:g.seat,groupMoney:g.money,groupCnt:g.cnt,_mid:((opsG&&opsG.id)?opsG.id:'')});
+    perfs.push({name:nm,seats:g.seat,money:g.money,diff:null,occ:Math.max(0,(openG>0?Math.min(g.seat/openG*100,100):0)),totalOpen:openG,dday:ddayG,dateStr:dateStrG,목표:50,startDate:startG,endDate:endG,status:statusG,genre:_bizGenreKey(opsG?opsG.genre:'',nm),gubun:(opsG?opsG.gubun:''),enriched:!!opsG,spark:[],deltaPP:null,source:(opsG?'fallback':'group'),saleStart:null,noData:(opsG?false:true),groupSeats:g.seat,groupMoney:g.money,groupCnt:g.cnt,_mid:((opsG&&opsG.id)?opsG.id:'')});
   });
   return perfs;
 }
@@ -7065,6 +7069,17 @@ function _bizmRepaint(){
     if(pair){ try{ _railYrmRender(); }catch(_e){} }
   });
 }
+// [260805 운영자 「캘린더에 전시마다 테마색 있는데 항상 링킹되게(색깔이)」] 전시 색 = **캘린더 전시선과 같은 정본**.
+//   캘린더 전시선 색의 SSOT = `_EX_SPACE`(7층·장도·야외 공간색) + 판정 `_exLaneOf(이름,장소)` — 그 둘을 그대로 부른다
+//   = 두 화면이 같은 함수를 지나므로 색이 갈릴 수 없다(값 복사 0 · 신규 hex 0).
+//   ⚠ 야외 칩은 `var(--accent)` 표기라 Plotly에 그대로 못 준다(CSS var 미해석) → 런타임 해석값으로 환산.
+function _bizExCol(name,place){
+  try{
+    var c=String((_EX_SPACE[_exLaneOf(name,place)]||{}).c||'');
+    var m=c.match(/^var\((--[\w-]+)\)$/);
+    return (m?(_yrCss(m[1])||''):c)||(_yrCss('--peach-text')||'');
+  }catch(_e){ return _yrCss('--peach-text')||''; }
+}
 // 전시 행 정규화 — 공연 막대·표가 쓰는 필드명으로 맞춘다([260804] 그리기 = 누적범위 음영 `_bizDrawExhibFlow` · 필드 계약은 그대로).
 //   소스 = `_anaExhibBuild()`(전시마스터+전시일일 · 레일 6시트가 이미 받아 둔 캐시) · 여기서 새로 집계하지 않는다.
 //   ⚠ 전시엔 장르·오픈석·점유율 축이 없다 → 장르 자리 = 분야색 고정(`_col`) · 점유율 자리 = **목표관객 대비 달성률**.
@@ -7080,7 +7095,7 @@ function _bizExhibRows(year){
       if(y!==year)return;
       var paid=_salesNum(e.최종유료)||0, tot=_salesNum(e.최종총인원)||0, goal=_salesNum(e.목표관객)||0, rev=_salesNum(e.최종매출)||0;
       var head=tot||paid;
-      out.push({name:e.name,genre:'전시',_col:(_yrCss('--peach-text')||''),   // ⚠ Plotly는 CSS var()를 못 읽는다(모달 차트와 같은 규약) → 토큰을 런타임 해석한 값으로 넘긴다 = 소스 raw hex 0
+      out.push({name:e.name,genre:'전시',_col:_bizExCol(e.name,''),   // [260805 운영자] 색 = **캘린더 전시선과 같은 것**(_EX_SPACE·_exLaneOf 정본 공유) · ⚠ Plotly는 CSS var()를 못 읽어 런타임 해석값으로 넘긴다 = 소스 raw hex 0
         start:sd||ed||null,end:ed||sd||null,cnt:_salesNum(e.운영일수)||0,
         paid:head,seat:goal,
         avg:(goal>0)?(head/goal*100):(parseFloat(e.occ)||0),
@@ -7096,13 +7111,13 @@ function _bizExhibRows(year){
   try{
     if(typeof EXHIB_DAILY_2026!=='undefined'&&EXHIB_DAILY_2026&&EXHIB_DAILY_2026.year===year){
       var _mHave=out.map(function(g){return _uName(g.name||'');});
-      var _mCol=(_yrCss('--peach-text')||''), _mTdy=new Date(); _mTdy.setHours(0,0,0,0);
+      var _mTdy=new Date(); _mTdy.setHours(0,0,0,0);
       (EXHIB_DAILY_2026.list||[]).forEach(function(m){
         if(m.free)return;                                        // 무료 = 판매 축 밖(_anaExhibBuild 규칙 계승)
         var k=_uName(m.name||''); if(!k)return;
         if(_mHave.some(function(h){ return h===k||(k.length>=6&&h.indexOf(k)>=0); }))return;
         var sd=_salesDate(m.start), ed=_salesDate(m.end);
-        out.push({name:m.name,genre:'전시',_col:_mCol,
+        out.push({name:m.name,genre:'전시',_col:_bizExCol(m.name,''),
           start:sd||ed||null,end:ed||sd||null,cnt:m.days||0,
           paid:(m.tot||m.paid||0),seat:0,avg:0,                  // 목표관객 축 없음(거울엔 목표 「매출」뿐) → 달성률 생략
           _rev:((m.rev>0)?m.rev:null),_sold:((m.tot>0)?m.tot:null),
@@ -7126,6 +7141,14 @@ function _bizEduEmptyHtml(year){
     +'</div>';
 }
 function _bizEduMonthRows(year){
+  // [260808 운영자 「전시랑 교육이 처음 로딩될 때 오류처럼 나온다 · 바로 못 받아오면 로딩처럼」]
+  //   ⚠ **프로그램 시트 미도착 = 「없어요」 확정 금지**(로딩 유지) — 이 반쪽의 유일한 소스가 PERFS인데
+  //   구판은 「아직 안 왔다」와 「진짜 0건」을 구분하지 않아, 부팅 중 PERFS가 운영대장보다 늦게 오는 창에서
+  //   「📭 2026년 교육 프로그램이 없어요」가 2초가량 떴다(실측 재현: 프로그램 3.2s / 운영·전시 0.9s → 1.68~3.66s 노출).
+  //   같은 규약이 이미 판매 레일에 있다(_perfReady 게이트 ~L8105 「master 도착 전에는 '없어요' 확정 금지」)
+  //   · 반환 계약도 전시 반쪽과 같은 축으로 맞춘다(_bizExhibRows: 미로드 = null → 호출측이 로딩 화면).
+  //   ⚠ _perfReady는 loadPrograms가 **실패해도** true가 된다(.catch 후 .then) = 무한 로딩 아님.
+  if(typeof _perfReady!=='undefined'&&!_perfReady)return null;
   var out=[], col=_yrCss('--green')||'';
   var tdy=new Date(); tdy.setHours(0,0,0,0);
   ((typeof PERFS!=='undefined'&&PERFS)||[]).forEach(function(p){
@@ -7213,6 +7236,7 @@ function _bizBreakShapes(brk,spans,ink,fill,cyc){
 //   ③ dom='edu' = 값 축 없는 **월별 일정 게이지** — 교육은 프로그램 단위 수강생 원천이 없어(연간 거울 총계뿐) 전 항목을
 //      「값 없음」 파선 문법으로 세운다(y축 숨김 · 툴팁 = 일정·집계 전 명시 · 수치 창작 0).
 //   ④ 구 orient='h'(가로 모드·전시/교육 반쪽)는 호출부 소멸로 폐지 — 전시는 누적범위 그래프(_bizDrawExhibFlow)로 이관.
+var _ED_YMAX=400;   // [260805 운영자 「예술교육은 단위를 일단 100부터 400까지로」] 교육 값 축 상한 — 눈금 100·200·300·400
 function _bizYearDays(y){ return Math.round((new Date(y+1,0,1)-new Date(y,0,1))/86400000); }
 function _bizXDay(d,y){ if(!d)return null; var t=(d-new Date(y,0,1))/86400000+1; return Math.max(0.5,Math.min(_bizYearDays(y)+0.5,t)); }   // 연 밖(이월 전시 등) = 축 가장자리 클램프
 function _bizMonthAxis(y,thin){   // thin = 반쪽 카드처럼 좁은 폭 — 짝수달 라벨만 생략(눈금 12개는 유지 = 격자 감각 보존)
@@ -7220,15 +7244,30 @@ function _bizMonthAxis(y,thin){   // thin = 반쪽 카드처럼 좁은 폭 — �
   for(m=0;m<12;m++){ tv.push(_bizXDay(new Date(y,m,1),y)); tt.push((thin&&m%2===1)?'':((m+1)+'월')); }
   return {x0:-3,x1:_bizYearDays(y)+4,tickvals:tv,ticktext:tt};
 }
-// 진행 완료 │ 진행·예정 음영 — 경계 = 오늘 날짜(선택 연도가 통째로 과거/미래면 음영 한 장). 색 = 기존 토큰 알파 변주만(--past-bg · peach 0.09).
-function _bizYearZones(y,x0,x1,dim){
+// 진행 완료 │ 진행·예정 음영 — 색 = 기존 토큰 알파 변주만(--past-bg · 분야색 0.09 · 기틀 §3.5②).
+// [260805 운영자 「진행하고 예정에 현재 진행중인게 포함이 안되있는데 그 점도 확인좀」·「진행 예정인 부분 포함하게」]
+//   경계 = 구판의 **오늘 날짜**가 아니라 **아직 안 끝난 사업(진행중·예정) 중 가장 이른 시작일**(_bizZoneCut).
+//   구판은 7/21 시작·11/1 종료인 진행중 전시가 오늘(8/5) 왼쪽에서 시작해 곡선 대부분이 「진행 완료」 음영에 깔렸다
+//   = 진행중인 사업이 완료 영역에 있는 모순. 사업 단위로 자르면 그 사업이 통째로 「진행·예정」에 들어간다.
+//   tone = 그 카드의 분야색(전시 = 강조색2 peach · 교육 = 그린 · 공연 = 종전 peach) — 운영자 지시.
+function _bizZoneCut(rows,y,x0,x1){
   var t=new Date(); t.setHours(0,0,0,0);
-  var tx=(t<new Date(y,0,1))?x0:((t>new Date(y,11,31))?x1:_bizXDay(t,y));
+  var live=null;
+  (rows||[]).forEach(function(g){
+    var s=g.start||g.end, e=g.end||g.start;
+    if(!s||(e&&e<t))return;                      // 이미 끝난 사업 = 진행 완료 쪽
+    var x=_bizXDay(s,y); if(live==null||x<live)live=x;
+  });
+  if(live==null)live=(t<new Date(y,0,1))?x0:((t>new Date(y,11,31))?x1:_bizXDay(t,y));   // 진행중·예정이 하나도 없으면 종전대로 오늘 경계
+  return Math.max(x0,Math.min(x1,live));
+}
+function _bizYearZones(y,x0,x1,dim,cut,tone){
+  var tx=(cut==null)?_bizZoneCut(null,y,x0,x1):cut;
   var sh=[],an=[];
   var box=function(a,b,f){ sh.push({type:'rect',xref:'x',yref:'paper',layer:'below',x0:a,x1:b,y0:0,y1:1,fillcolor:f,line:{width:0}}); };
   var note=function(a,b,txt){ if(b-a<30)return; an.push({xref:'x',x:(a+b)/2,xanchor:'center',yref:'paper',y:.995,yanchor:'top',text:txt,showarrow:false,font:{size:9.5,color:dim},opacity:.85}); };   // 좁은 구획(연초·연말 며칠)엔 라벨 생략 — 음영 밖으로 삐져나오지 않게
   if(tx>x0){ box(x0,tx,_yrCss('--past-bg')||'rgba(0,0,0,0.02)'); note(x0,tx,'진행 완료'); }
-  if(tx<x1){ box(tx,x1,_yrHexA(_yrCss('--peach-text'),0.09)); note(tx,x1,'진행·예정'); }   // 강조 = 진행·예정 쪽(운영자 260806)
+  if(tx<x1){ box(tx,x1,_yrHexA(_yrCss(tone||'--peach-text'),0.09)); note(tx,x1,'진행·예정'); }   // 강조 = 진행·예정 쪽(운영자 260806) · 색 = 분야색(운영자 260805)
   return {shapes:sh,notes:an};
 }
 function _bizDrawSalesBars(divId,list,hgt,dom){
@@ -7284,10 +7323,13 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
   var vMax=Math.max.apply(null,vals.filter(function(v){return v!=null&&isFinite(v);}).concat([1]));
   var xAx={tickmode:'array',tickvals:ax.tickvals,ticktext:ax.ticktext,tickfont:{size:10.5,color:dim},
     range:[ax.x0,ax.x1],fixedrange:true,zeroline:false,showgrid:false,automargin:false};
-  var yAx=ED?{visible:false,range:[0,1],fixedrange:true}   // 교육 = 값 축 없음(일정 게이지) — 눈금 숨김이 정직 표기
+  // [260805 운영자 「예술교육은 단위를 일단 100부터 400까지로 잡아서 표기해줘」] 교육 = 수강생 눈금 100·200·300·400을 **미리** 세운다
+  //   (프로그램 단위 실값이 들어오면 그 자에 그대로 얹힌다). 지금 게이지는 값이 없어 파선이고, 높이는 전 항목 **동일**(눈금 사이 =
+  //   특정 눈금값과 겹치지 않는 자리)이라 값으로 읽히지 않는다 — 툴팁도 「수강생 집계 전」을 계속 말한다.
+  var yAx=ED?{range:[0,_ED_YMAX],tickmode:'array',tickvals:[100,200,300,400],tickfont:{size:10.5,color:dim},gridcolor:grid,zeroline:false,fixedrange:true}
     :{title:{text:unit,font:{size:10.5,color:dim}},tickfont:{size:10.5,color:dim},gridcolor:grid,zeroline:false,fixedrange:true,rangemode:'tozero'};
-  var lay={height:hgt,margin:{l:ED?14:52,r:10,t:18,b:34},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',showlegend:false,xaxis:xAx,yaxis:yAx};
-  var zone=_bizYearZones(Y,ax.x0,ax.x1,dim);
+  var lay={height:hgt,margin:{l:ED?38:52,r:10,t:18,b:34},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',showlegend:false,xaxis:xAx,yaxis:yAx};
+  var zone=_bizYearZones(Y,ax.x0,ax.x1,dim,_bizZoneCut(rows,Y,ax.x0,ax.x1),ED?'--green':'--peach-text');   // [260805] 경계 = 진행중 포함 · 교육 음영 = 그린(운영자)
   lay.shapes=zone.shapes; lay.annotations=zone.notes;
   var note=(div.parentNode&&div.parentNode.querySelector)?div.parentNode.querySelector('[data-bizbrknote]'):null;
   if(brk){
@@ -7317,8 +7359,8 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
   //   (marker.line에 dash 없음) 도형으로 그리고, 그 자리에 **투명 채움 막대**를 겹쳐 호버(사업명·상태)를 살린다.
   var pidx=[],i2; for(i2=0;i2<rows.length;i2++)if((ED||plan(rows[i2])||vals[i2]==null)&&xs[i2]!=null)pidx.push(i2);
   if(pidx.length){
-    var axTop=brk?brk.rng:(ED?1:vMax*1.12);
-    var pY=ED?0.52:axTop*0.07, hw=W/2;   // 교육 = 반높이 게이지 세로선(운영자) · 값 축은 종전 7% 자리
+    var axTop=brk?brk.rng:(ED?_ED_YMAX:vMax*1.12);
+    var pY=ED?(_ED_YMAX*0.62):axTop*0.07, hw=W/2;   // 교육 = 눈금 사이(248 ≈ 200~300 중간) 고정 높이 = 값으로 안 읽힌다 · 값 축은 종전 7% 자리
     var psh=pidx.map(function(i){ return {type:'rect',xref:'x',yref:'y',layer:'above',x0:xs[i]-hw,x1:xs[i]+hw,y0:0,y1:pY,fillcolor:'rgba(0,0,0,0)',line:{color:gcol(rows[i]),width:1.2,dash:'dash'}}; });
     lay.shapes=lay.shapes.concat(psh);
     // [260805 운영자] 교육 색인(①②③… = _bizEduMonthRows가 시작일순으로 부여) — 게이지 열 머리에 단다.
@@ -7371,25 +7413,39 @@ function _bizDrawExhibFlow(divId,list,hgt){
     built.push({g:g,xy:xy,peak:peak});
     if(peak[1]>maxV)maxV=peak[1];
   });
-  var yTop=maxV*1.22, data=[],notes=[],shapes=[];
-  var zone=_bizYearZones(Y,ax.x0,ax.x1,dim);
+  // [260805 운영자 「3927이면 4천이 맥시멈이 아니라 5천까지 봐야할 것 같고」] 축 상한 = 최댓값 위 **눈금 사다리 한 칸**
+  //   (_bizNiceStep — 공연 축 중략이 쓰는 그 사다리 그대로). 3,827 → 4,133(여유 8%) → **5,000**. 구판 maxV×1.22는
+  //   Plotly가 4,000에서 눈금을 끊어 최댓값 라벨이 축 밖 언저리에 떠 있었다.
+  var yTop=_bizNiceStep(maxV*1.08), data=[],notes=[],shapes=[];
+  var zone=_bizYearZones(Y,ax.x0,ax.x1,dim,_bizZoneCut(rows,Y,ax.x0,ax.x1),'--peach-text');   // [260805] 경계 = 진행중 포함 · 강조색2(peach) = 운영자
   shapes=zone.shapes; notes=zone.notes;
-  var fill=_yrHexA(pc,0.18);
+  // [260805 운영자 「전시별로 색상을 다르게 · 캘린더 전시마다 테마색 있는데 항상 링킹되게」]
+  //   선·채움 색 = 그 전시의 캘린더 색(_bizExCol → _EX_SPACE 공간색). 같은 공간 전시가 여럿이면 **같은 색**이 되므로
+  //   채움 알파를 순번별로 낮춰 층을 가른다(.20/.15/.11/.08 · 기틀 §3.5② 같은 토큰 alpha 변주 = 새 색 0).
+  //   ⚠ 색을 새로 배정하지 않는다 — 캘린더와 갈리는 순간 「링킹」 요구가 깨진다. 개별 식별은 피크 동그라미·값 라벨·툴팁이 진다.
+  var _seen={}, ALPHA=[0.20,0.15,0.11,0.08];
+  var colOf=function(g){ return g._col||pc; };
   built.forEach(function(b){
-    var g=b.g;
+    var g=b.g, col=colOf(g);
     if(b.plan){
       var x0=_bizXDay(b.s,Y),x1=_bizXDay(b.e,Y);
       if(x1-x0<2.4){ var c=(x0+x1)/2; x0=c-1.2; x1=c+1.2; }   // 하루짜리도 보이는 최소 폭
-      shapes.push({type:'rect',xref:'x',yref:'y',layer:'above',x0:x0,x1:x1,y0:0,y1:yTop*0.07,fillcolor:'rgba(0,0,0,0)',line:{color:pc,width:1.2,dash:'dash'}});
+      shapes.push({type:'rect',xref:'x',yref:'y',layer:'above',x0:x0,x1:x1,y0:0,y1:yTop*0.07,fillcolor:'rgba(0,0,0,0)',line:{color:col,width:1.2,dash:'dash'}});
       data.push({type:'scatter',mode:'markers',x:[(x0+x1)/2],y:[yTop*0.035],marker:{size:16,color:'rgba(0,0,0,0)'},showlegend:false,hoverinfo:'text',
         text:g.name+'\n'+md(b.s)+'~'+md(b.e)+' · 예정\n전시 시작 전'});
       return;
     }
     var st=(g._st==='active')?'진행중':'종료';
+    var n=(_seen[col]=(_seen[col]||0)+1);
+    var tip=g.name+'\n'+md(g.start||g.end)+'~'+md(g.end||g.start)+' · '+st+'\n누적 판매 '+Math.round(b.peak[1]).toLocaleString()+'명'+(g.seat>0?('\n달성률 '+(g.avg||0).toFixed(1)+'%'):'');
     data.push({type:'scatter',mode:'lines',x:b.xy.map(function(p){return p[0];}),y:b.xy.map(function(p){return p[1];}),
-      fill:'tozeroy',fillcolor:fill,line:{color:pc,width:1.6},showlegend:false,hoverinfo:'text',hoveron:'points+fills',
-      text:g.name+'\n'+md(g.start||g.end)+'~'+md(g.end||g.start)+' · '+st+'\n누적 판매 '+Math.round(b.peak[1]).toLocaleString()+'명'+(g.seat>0?('\n달성률 '+(g.avg||0).toFixed(1)+'%'):'')});
-    notes.push({xref:'x',x:b.peak[0],xanchor:'center',yref:'y',y:b.peak[1],yanchor:'bottom',text:Math.round(b.peak[1]).toLocaleString(),showarrow:false,font:{size:9.5,color:dim}});   // 꼭대기 = 최종(종료)/현재(진행) 누계 명
+      fill:'tozeroy',fillcolor:_yrHexA(col,ALPHA[Math.min(n-1,ALPHA.length-1)]),line:{color:col,width:1.6},showlegend:false,hoverinfo:'text',hoveron:'points+fills',text:tip});
+    // [260805 운영자 「피크를 찍은 구간은 동그라미로 한번 더 표기(마지막이 피크 · 진행중인 전시는 진행중인 것 마지막)」]
+    //   곡선이 단조 증가(누계)라 **마지막 점 = 피크**다 — 종료 전시는 종료일의 최종, 진행중 전시는 지금까지의 누계.
+    //   테두리 = 카드 바탕(--surface-solid)이라 곡선이 겹쳐도 동그라미가 서로 먹지 않는다.
+    data.push({type:'scatter',mode:'markers',x:[b.peak[0]],y:[b.peak[1]],
+      marker:{size:8,color:col,line:{color:_yrCss('--surface-solid'),width:1.6}},showlegend:false,hoverinfo:'text',text:tip});
+    notes.push({xref:'x',x:b.peak[0],xanchor:'center',yref:'y',y:b.peak[1],yanchor:'bottom',yshift:6,text:Math.round(b.peak[1]).toLocaleString(),showarrow:false,font:{size:9.5,color:col}});   // 꼭대기 = 최종(종료)/현재(진행) 누계 명 · 잉크 = 그 전시 색(동그라미와 한 몸)
   });
   var lay={height:hgt,margin:{l:46,r:10,t:18,b:30},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',showlegend:false,
     xaxis:{tickmode:'array',tickvals:ax.tickvals,ticktext:ax.ticktext,tickfont:{size:10.5,color:dim},range:[ax.x0,ax.x1],fixedrange:true,zeroline:false,showgrid:false,automargin:false},
@@ -7401,6 +7457,19 @@ function _bizDrawExhibFlow(divId,list,hgt){
 //   지시: *"여기 하단에 장르별 판매 축적 대신에, 반으로 갈라서, 좌 전시 판매현황 우 교육 판매현황 · 보이는건 공연 처럼 연간으로"*.
 //   구 260805 「분야 탭(공연/전시/교육)이 면 전체를 갈아치우는」 구조는 칩과 함께 철거하고, 전시·교육을 **공연 면 안에 상시**로 둔다
 //   = 세 분야가 한 화면에서 같이 읽힌다 · 탭 왕복 0. [260804] 전시 반쪽 그리기는 누적범위 음영(_bizDrawExhibFlow)으로 교체.
+// [260808] 반반 카드 본문 2종 — 로더·실패. 두 반쪽(전시·교육)이 **같은 부품**을 쓴다(형태 이원화 0).
+//   로더 = 기틀 §2-13 로딩 표준(.sk-sweep 빔 + _ldHtml + 「~중」 · 말줄임 점 금지) — 구 전시 반쪽 인라인 문자열을 그대로 뽑았다(마크업 동일).
+//   실패 = 이 파일의 정본 실패 카드 문법 계승(--danger 문구 + .ana-chip 「다시 시도」 · _bizCompRender 운영대장 실패 ~L7455)를 반쪽 크기로.
+//   ink는 `var(--토큰)` **완성 문자열**로 받는다 — 토큰명만 넘겨 조립하면 소스에서 var() 표기가 사라져 게이트·grep이 못 본다.
+function _bizHalfLoad(ink,msg){
+  return '<div style="position:relative;min-height:150px"><div class="sk-sweep" aria-hidden="true"></div><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:'+ink+';opacity:.75;font-size:12.5px;font-weight:600">'+_ldHtml(14)+msg+'</div></div>';
+}
+function _bizHalfFail(what,retry){
+  return '<div style="padding:30px 18px;text-align:center;color:var(--danger);font-size:12.5px;font-weight:600">'+what+' 데이터를 불러오지 못했어요'
+    +'<div style="margin-top:10px"><button class="ana-chip" onclick="'+retry+'">다시 시도</button></div></div>';
+}
+// [260808] 전시 원천 재시도 — 실패 딱지를 걷고 다시 확보한다(도착하면 _bizExhibEnsure가 그 면을 다시 그린다).
+function _bizExhibRetry(){ window._bizmExFail=0; try{_bizExhibEnsure();}catch(_e){} try{_bizInlineRender();}catch(_e){} }
 // 전시 원천(전시마스터·전시일일) 자체 확보 — 넓은 화면은 레일 6시트 플로우가 채우지만 좁은 화면·부팅 중엔 비어 있다.
 //   도착하면 그 면만 다시 그린다(중복 fetch 방지 = window._bizmExBusy · 260805 배선 계승).
 function _bizExhibEnsure(){
@@ -7414,7 +7483,10 @@ function _bizExhibEnsure(){
   Promise.all([_need('전시일일','_exDaily'),_need('전시마스터','_exMaster')]).then(function(res){
     window._bizmExBusy=0;
     try{ if(res[0])_anaState._exDaily=res[0]; if(res[1])_anaState._exMaster=res[1]; }catch(_e){}
-    if(!(res[1]&&typeof _anaState!=='undefined'&&_anaState&&_anaState._exMaster))return;   // 못 받으면 반쪽이 「불러오지 못했어요」로 남는다(면 전체는 공연 축이라 멀쩡하다)
+    // [260808] 못 받으면 **실패 딱지**를 세우고 그 면을 다시 그린다 — 이 return이 딱지 없이 그냥 빠져나가서,
+    //   호출측(_exRows===null)이 로더를 계속 띄운 채 영원히 멈춰 있었다(주석은 「불러오지 못했어요로 남는다」인데 그 상태가 없었다).
+    if(!(res[1]&&typeof _anaState!=='undefined'&&_anaState&&_anaState._exMaster))window._bizmExFail=1;
+    else window._bizmExFail=0;
     if(typeof _mainView!=='undefined'&&_mainView==='biz'&&_bizLeftPage()===3){ _bizInlineRender(); try{ if(_bizRightIsDetail())_railYrmRender(); }catch(_e){} }
   });
 }
@@ -7513,7 +7585,7 @@ function _bizCompRender(el,half){
       var k=_uName(nm); if(!k||_seen2[k])return; _seen2[k]=1;
       var ed=p.e?(_salesDate(p.e)||sd):sd;
       list.push({name:nm,occs:[0],avg:0,paid:0,seat:0,cnt:(p.rc||1),start:sd,end:ed,
-        genre:_bizGenreKey(p.g2||p.g),type:'기획',_rev:null,_sold:null,_st:'planned'});
+        genre:_bizGenreKey(p.g2||p.g,nm),type:'기획',_rev:null,_sold:null,_st:'planned'});
     });
     list.sort(function(a,b){return a.end-b.end;});
   }
@@ -7526,11 +7598,16 @@ function _bizCompRender(el,half){
   //     카드마다 걸면 두 도형이 각자 늘어 하단선이 갈린다. cap(data-bizmcap)은 걸지 않는다 — 이 줄의 높이는
   //     막대 차트(고정)+게이지(자연 높이)라 예측 가능하고, 남는 몫은 위 판매현황 차트가 _bizFitSeason으로 흡수한다.
   var _exRows=_bizExhibRows(_bizmState.year);
-  if(_exRows===null)_bizExhibEnsure();                                        // 캐시 미도착(좁은 화면·부팅 중) = 자체 확보 후 이 면만 다시 그린다
+  // 캐시 미도착(좁은 화면·부팅 중) = 자체 확보 후 이 면만 다시 그린다.
+  // ⚠ [260808] 실패 딱지가 서 있으면 **자동 재시도 금지** — 실패 → 재렌더 → 여기서 또 확보 → 실패 …의 무한 fetch 고리가 된다.
+  //   재확보는 사용자가 「다시 시도」를 누를 때만(_bizExhibRetry가 딱지를 걷는다).
+  if(_exRows===null&&!window._bizmExFail)_bizExhibEnsure();
   else if(_liveOnly)_exRows=_exRows.filter(function(g){return g._st==='active';});   // 「판매중」 = 공연과 같은 축(전시는 진행중)
   var _exSub='',_exBody;
   if(_exRows===null){
-    _exBody='<div style="position:relative;min-height:150px"><div class="sk-sweep" aria-hidden="true"></div><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--peach-text);opacity:.75;font-size:12.5px;font-weight:600">'+_ldHtml(14)+'전시 데이터 불러오는 중</div></div>';
+    // [260808] 미도착 = 로딩 · **못 받아옴 = 실패 카드**(무한 스윕 금지). 구판은 실패해도 로더가 그대로 남아
+    //   화면이 영원히 「불러오는 중」이었다(_bizExhibEnsure 주석은 「불러오지 못했어요로 남는다」라 적혀 있었지만 그 상태가 없었다).
+    _exBody=window._bizmExFail?_bizHalfFail('전시','_bizExhibRetry()'):_bizHalfLoad('var(--peach-text)','전시 데이터 불러오는 중');
   } else if(!_exRows.length){
     _exBody='<div style="padding:34px 18px;text-align:center;color:var(--dim);font-size:12.5px">📭 '+_bizmState.year+'년 '+(_liveOnly?'진행중인 전시가 없어요':'전시 데이터가 없습니다')+'</div>';
   } else {
@@ -7538,10 +7615,13 @@ function _bizCompRender(el,half){
     _exBody='<div id="bizm-ex-chart" style="height:'+_BIZ_HALF_CH+'px;margin:0 4px 2px"></div>';
   }
   // [260804 운영자] 교육 = **당해 연도만** · 프로그램 시트(예술교육)의 월별 일정 게이지(구 연도별 가로 막대 폐지 — 「무조건 당해년도만」)
-  var _eduRows=_bizEduMonthRows(_bizmState.year);
-  if(_liveOnly)_eduRows=_eduRows.filter(function(g){return g._st==='active';});   // 「판매중」 = 지금 진행중인 교육만(공연·전시와 같은 축)
-  var _eduAny=_eduRows.length>0;
-  var _eduBody=_eduAny?('<div id="bizm-edu-chart" style="height:'+_BIZ_HALF_CH+'px;margin:0 4px 0"></div>')
+  var _eduRows=_bizEduMonthRows(_bizmState.year);   // [260808] null = 프로그램 시트 미도착(전시 반쪽과 같은 계약) → 로딩 화면
+  if(_eduRows&&_liveOnly)_eduRows=_eduRows.filter(function(g){return g._st==='active';});   // 「판매중」 = 지금 진행중인 교육만(공연·전시와 같은 축)
+  var _eduAny=!!(_eduRows&&_eduRows.length);
+  // [260808] 로더 = 전시 반쪽과 **같은 부품**(_bizHalfLoad = .sk-sweep 빔 + _ldHtml(14) + 「~중」 · 기틀 §2-13 로딩 문구 표준).
+  //   잉크만 분야색으로 갈린다(전시 --peach-text · 교육 --green = 이 반쪽이 이미 쓰는 토큰 · 신규 색 0).
+  var _eduBody=(_eduRows===null)?_bizHalfLoad('var(--green)','교육 데이터 불러오는 중')
+    :_eduAny?('<div id="bizm-edu-chart" style="height:'+_BIZ_HALF_CH+'px;margin:0 4px 0"></div>')
     :(_liveOnly?('<div style="padding:34px 18px;text-align:center;color:var(--dim);font-size:12.5px">📭 진행중인 교육이 없어요</div>'):_bizEduEmptyHtml(_bizmState.year));
   var _split='<div'+((half===1)?' data-bizmfill':'')+' style="display:flex;gap:14px;align-items:stretch;flex-wrap:wrap">'
     +_bizHalfCard('기획 전시',_exSub,_exBody)
@@ -11263,8 +11343,10 @@ function _bizClean(){
     const m=parseInt(String(r['월']||'').replace(/[^0-9]/g,''),10),d=parseInt(String(r['일']||'').replace(/[^0-9]/g,''),10);
     r._date=(r._year&&!isNaN(m)&&!isNaN(d))?new Date(r._year,m-1,d):null;
     r._type=String(r['공연구분']||'').trim();
-    r._genre=String(r['장르1']!=null?r['장르1']:(r['세부장르']||'')).trim();
     r._name=String(r['공연명']||'').trim();
+    // [260807-4] 운영대장 장르1도 **같은 정규화기**를 통과시킨다 = 어린이·가족 우선 규칙이 과거 연도까지 먹는다.
+    //   구판은 시트 문자열을 그대로 실어 「어린이 뮤지컬」이 뮤지컬로 남았고, '연극'(1행)은 소비처마다 기타로 떨어졌다.
+    r._genre=_bizGenreKey(String(r['장르1']!=null?r['장르1']:(r['세부장르']||'')),r._name);
   });
   return recs.filter(function(r){return r._date&&r._name;});
 }
@@ -11296,9 +11378,21 @@ function _bizCard(label,val){
   return '<div style="flex:1;min-width:120px;padding:14px 16px;background:#fafafa;border-radius:12px;border:1px solid #eee"><div style="font-size:11px;color:#888;font-weight:600;margin-bottom:6px">'+label+'</div><div style="font-size:22px;font-weight:800;color:var(--accent);font-variant-numeric:tabular-nums">'+val+'</div></div>';
 }
 var _BIZ_GENRE_COLORS={'클래식':'#4A4DE7','뮤지컬':'#1A6B3C','대중':'#0891B2','발레/연극':'#D97706','어린이·가족':'#DB2777','기타':'#9CA3AF'};   // [260805 운영자] 뮤지컬 = 구 파랑(클래식 인디고와 인접 blue 쌍이라 「비교가 안 된다」) → **`--green`(=`--c3`) 팔레트 칩 값**으로 교체. 팔레트 밖 색 반입 0 · raw hex 총량 무변(리터럴 1개 치환)
-// 프로그램 시트 장르 문자열 → 위 동결 의미맵 키(정확 일치 → 포함 관계 → 기타). 새 색·새 키를 만들지 않는다.
+// 장르 문자열(+사업명) → 위 동결 의미맵 키. 새 색·새 키를 만들지 않는다.
 //   시트 값은 '뮤지컬(대형)'·'연극'처럼 맵 키와 표기가 달라, 그대로 쓰면 예정 사업이 전부 회색(기타)이 된다.
-function _bizGenreKey(s){
+// ── [260807-4 운영자] **어린이·가족 우선 규칙** ────────────────────────────────────────────────
+//   지시: *"어린이 포함되어있는거는 뮤지컬 말고 어린이라고 해줄래? db까지 통합되어야함. 그니까 어린이
+//   뮤지컬이여도 이게 겹치면 주제는 사업적인 성격에 따라 어린이 가족이 되는거임"*.
+//   = 장르가 겹칠 때 **사업적 성격이 이긴다**. 그래서 이 검사가 **맨 앞**이다.
+//   ⚠ 구판이 놓친 실제 경로: 프로그램 시트 `구분`이 `뮤지컬(어린이)`인 2건(어린이 뮤지컬 <100층짜리 집> ·
+//     뮤지컬 <달 샤베트>)이 통째로 **'뮤지컬'** 로 떨어졌다 — 키 순회에서 '뮤지컬'이 앞서고,
+//     '어린이·가족' 쪽은 포함 검사로도 **절대 안 걸린다**('뮤지컬(어린이)'와 '어린이·가족'은 서로의 부분열이 아니다).
+//   ⚠ 판정 소스 = **장르 문자열 + 사업명 둘 다**. 운영대장 `장르1`은 정규 6분류라 문자열만 보면
+//     「어린이 뮤지컬」류가 계속 뮤지컬로 남는다 = 운영자가 말한 「db까지 통합」이 안 된다.
+//     그래서 이름을 같이 본다(이 함수를 부르는 3소스 = 운영대장·판매 축·프로그램 시트 전부 이름을 넘긴다).
+var _BIZ_KID_RE=/어린이/;
+function _bizGenreKey(s,name){
+  if(_BIZ_KID_RE.test(String(s||''))||_BIZ_KID_RE.test(String(name||'')))return '어린이·가족';
   s=String(s||'').trim(); if(!s)return '기타';
   if(_BIZ_GENRE_COLORS[s])return s;
   var keys=Object.keys(_BIZ_GENRE_COLORS),i;
