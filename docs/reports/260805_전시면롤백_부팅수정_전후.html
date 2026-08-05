@@ -1,0 +1,79 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>전시 = 꺾은선 롤백(면 철거) + 로그인 새로고침 부팅 중단 사고 수정 — 전후 (260805)</title>
+<style>*{box-sizing:border-box}
+:root{--accent:#4A4DE7;--accent-light:#E8E8FD;--peach-text:#D88455;
+--bg:linear-gradient(135deg,#FDF6F3 0%,#F0EBF5 50%,#EBF0F8 100%);--surface-solid:#fff;
+--glass:rgba(255,255,255,0.55);--glass-surface:rgba(255,255,255,.78);--glass-bd:var(--glass);
+--glass-shadow:0 8px 32px rgba(74,77,231,0.08),0 2px 8px rgba(0,0,0,0.04);
+--border:rgba(0,0,0,0.09);--text:#1A1A2E;--dim:#888;--muted:#bbb;--neutral:#EEEDF3;--neutral-text:#6B6B7B;
+--green:#1A6B3C;--danger-btn:#E24B4A;--radius:16px;--radius-lg:20px}
+body{margin:0;background:var(--bg);color:var(--text);font-family:'Pretendard',-apple-system,BlinkMacSystemFont,system-ui,sans-serif;line-height:1.6}
+.wrap{max-width:1180px;margin:0 auto;padding:30px 20px 70px}
+h1{font-size:22px;margin:0 0 6px;letter-spacing:-.3px}
+.lead{color:var(--neutral-text);font-size:13px;margin:0 0 20px}
+section{background:var(--glass-surface);border:1px solid var(--glass-bd);border-radius:var(--radius-lg);box-shadow:var(--glass-shadow);padding:18px 20px 22px;margin:0 0 18px}
+section>h2{margin:0 0 4px;font-size:14px;font-weight:800;color:var(--accent);display:flex;align-items:center;gap:8px}
+section>h2::before{content:"";width:4px;height:14px;border-radius:2px;background:var(--accent)}
+section>.desc{margin:0 0 14px;font-size:12px;color:var(--neutral-text)}
+.ba{display:grid;grid-template-columns:1fr;gap:14px}
+.card{background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.card>.hd{font-size:11.5px;font-weight:800;letter-spacing:.3px;padding:8px 12px;border-bottom:1px solid var(--border)}
+.hd.b{color:var(--danger-btn)}.hd.a{color:var(--green)}
+.card img{display:block;width:100%}
+table{width:100%;border-collapse:collapse;font-size:12px;background:var(--surface-solid);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+th,td{padding:7px 9px;border-top:1px solid var(--border);text-align:left;vertical-align:top}
+th{background:var(--neutral);color:var(--neutral-text);font-size:11px;font-weight:700;border-top:0;white-space:nowrap}
+td.c{text-align:center;white-space:nowrap}
+.ok{color:var(--green);font-weight:800}.no{color:var(--danger-btn);font-weight:800}
+ul{margin:8px 0 0;padding-left:18px;font-size:12.5px}li{margin:3px 0}
+code{background:var(--neutral);padding:1px 5px;border-radius:5px;font-size:11.5px}
+.warn{border-left:3px solid var(--danger-btn);background:var(--surface-solid);border-radius:0 12px 12px 0;padding:10px 14px;font-size:12.5px;margin-top:12px}
+</style></head><body><div class="wrap">
+<h1>기획 전시 = <b style="color:var(--accent)">꺾은선 롤백</b>(면 철거) + <b style="color:var(--danger-btn)">로그인 새로고침 부팅 중단</b> 사고 수정</h1>
+<p class="lead">지시(운영자 260805) 「<b>이야 음영 표기 예술이네, 내가 그 직각 차트라고 하지 않았나? 그리고 누적도 안되는거같은데</b>」 → 「<b>꺾은선으로 롤백하고 마무리해</b>」 ·
+대상 = <code>_bizDrawExhibMonthly</code>(면 철거) · <code>_ctDefs</code> 신설(부팅 사고) · 화면 = <code>tools/scratch/shot_exmonthly.mjs</code> 1920×1080 · 실API·PII 미접촉.</p>
+
+<section>
+<h2>1. 롤백 전 · 후</h2>
+<p class="desc">전 = 직전 머지(#664 · 고유색 50% 면) · 후 = 면 철거, 꺾은선 복귀. 점·선·라벨·툴팁 규칙은 전부 그대로.</p>
+<div class="ba">
+  <div class="card"><div class="hd b">전 — 선 아래 고유색 50% 면(같은 바닥에서 겹쳐 그림 = 누적 아님 · 직각 아님)</div>
+    <img src="260805_전시면롤백_전.png" alt="전"></div>
+  <div class="card"><div class="hd a">후 — 면 0 · 꺾은선만(운영자 「꺾은선으로 롤백」)</div>
+    <img src="260805_전시면롤백_후.png" alt="후"></div>
+</div>
+<ul>
+<li>DOM 실측: <b>fills 0</b>(면 전건 철거) · lines 4 · points 13 · 꼭자락 라벨 4(902 · 3,827 · 3,080 · 252) 유지.</li>
+<li>유지되는 것: 종료 월(최종) 한 점만 채움 · 나머지 빈 동그라미 · 숨 쉬는 SUM 주황 · 누계 y축 · 툴팁 문구.</li>
+<li>코드에 <b>철거 사유와 재도입 조건</b>을 남겼다 — 되살릴 땐 「시작일순 <b>스택</b> + <b>직각(hv 스텝)</b>」 축으로만, 같은 바닥 겹치기 재현 금지.</li>
+</ul>
+</section>
+
+<section>
+<h2>2. ⚠ 도중에 발견·수정한 사고 — 로그인 상태 새로고침 시 앱이 안 뜬다</h2>
+<p class="desc">이번 작업과 무관하게 <b>이미 main에 들어가 있던</b> 버그. 촬영이 계속 실패해 추적하다 잡았다.</p>
+<table>
+<thead><tr><th>항목</th><th>내용</th></tr></thead>
+<tbody>
+<tr><td class="c">증상</td><td><code>TypeError: Cannot read properties of undefined (reading 'map')</code> → <code>initApp</code> 중단 → 대시보드가 <b>아예 렌더되지 않음</b></td></tr>
+<tr><td class="c">발화 조건</td><td><b>로그인 상태에서 새로고침·재방문</b>(sessionStorage 세션 복귀 경로). 새 로그인은 파싱이 끝난 뒤 <code>initApp</code>이 돌아 <b>멀쩡</b> → 눈에 잘 안 띈다</td></tr>
+<tr><td class="c">원인</td><td><code>index.html</code>은 L2750~L32426이 <b>한 script 블록</b>. 그 블록의 L4182 부트가 <code>initApp</code>→<code>buildNav</code>→모바일 아코디언 즉시 빌드(L5050)→<code>_contentMenuBuild</code>를 <b>L24444보다 2만 줄 앞서</b> 부른다. 그 시점 <code>var _CT_IMG</code> 등은 hoist만 되고 값이 <b>undefined</b> → <code>undefined.map</code></td></tr>
+<tr><td class="c">유입</td><td>260805 3차(<code>d07746a</code> · PR #666)가 <code>_CT_ITEM/_CT_HOV/_CT_HD/_CT_SEC/_CT_IMG/_CT_VID</code> 6개를 <b>그 자리에</b> 신설. 그 전엔 문자열이 인라인이라 부트 의존이 없었다</td></tr>
+<tr><td class="c">고침</td><td>값은 문맥 자리에 그대로 두고 <b>hoist되는 <code>_ctDefs()</code>로 감싸 첫 사용 때 보장</b>(함수 선언은 순서 무관) · 진입점 5곳에서 호출. ⚠ 새 <code>_CT_*</code> 상수는 <b>반드시 <code>_ctDefs()</code> 안</b>에 — 밖에 두면 같은 사고 재발(주석 명문)</td></tr>
+<tr><td class="c">실측</td><td>순수 <code>origin/main</code> + 세션 복귀 시뮬(QA 무관) = <b class="no">보드 미렌더</b> · 수정본 = <b class="ok">pageerror 0 · 보드 렌더 ✓</b></td></tr>
+</tbody></table>
+<div class="warn"><b>왜 여태 게이트가 못 잡았나.</b> <code>check_design</code>·<code>smoke:layout</code>·<code>smoke</code>는 각각 색·레이아웃·로그인 화면을 본다 —
+<b>「로그인된 상태로 재진입」 경로를 실제로 밟는 검사가 없었다</b>. 이번 촬영 하네스가 그 경로를 밟아 우연히 걸렸다. 상시 검사로 승격할지는 운영자 판단(게이트 신설 = 규칙 축).</div>
+</section>
+
+<section>
+<h2>3. 게이트</h2>
+<ul>
+<li><code>check_design.py</code> <span class="ok">✓</span> raw hex <b>1578/1578 무변</b> · 신규 색·토큰·<code>:root</code> 0</li>
+<li><code>npm run check</code> <span class="ok">✓</span> · <code>npm run smoke</code> <span class="ok">✓</span> · <code>npm run smoke:layout</code> <span class="ok">✓</span></li>
+<li>실렌더 pageerror 0 · 전시 면 <b>0</b> · 선 4 · 점 13 · 꼭자락 라벨 4</li>
+</ul>
+</section>
+
+</div></body></html>
