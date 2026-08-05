@@ -7700,7 +7700,7 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
   //   [260805] 교육도 **값이 있는 항목은 파선이 아니라 실막대**다 → 파선 자리 = 값이 없는 것만(vals[i]==null).
   //   ⚠ 꺾은선으로 그리는 항목(isLn)은 여기서 뺀다 — 선이 이미 그 사업의 자리를 지키고 있어서, 파선까지 세우면
   //     같은 프로그램이 두 자리(선 + 빈 게이지)를 차지한다.
-  var pidx=[],i2; for(i2=0;i2<rows.length;i2++)if(!isLn[i2]&&(plan(rows[i2])||vals[i2]==null)&&xs[i2]!=null)pidx.push(i2);
+  var pidx=[],i2; for(i2=0;i2<rows.length;i2++)if(!isLn[i2]&&vals[i2]==null&&xs[i2]!=null)pidx.push(i2);   // [260806-3] 파선 자리 = **값이 없을 때만**. 구판은 `plan(row)||값없음`이라 값이 있는 진행·예정에도 점선 네모를 겹쳐 그렸다 — 그 자리를 이제 페이드 게이지(`_bizFadePlanned`)가 말하므로 점선은 중복이자 계약 위반이다(확정 계약 = 「네모 테두리 없음 · 게이지 선 한 줄이 그대로 위로 이어진다」 · 운영자 260806). 값 없음 = 종전 그대로 파선 자리(그 사업이 시간축에서 통째로 사라지는 것 방지)
   var axTop=brk?brk.rng:(ED?_edTop:vMax*1.12);
   var pY=ED?(_edTop*0.62):axTop*0.07, hw=W/2;   // 교육 = 눈금 사이(축 상한의 62% = 특정 눈금과 안 겹침) 고정 높이 = 값으로 안 읽힌다 · 값 축은 종전 7% 자리
   if(pidx.length){
@@ -7768,6 +7768,43 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
   if(lnTr.length)_traces=lnTr.concat(_traces);   // 면·선이 아래층 · 막대(끝난 교육)가 위층 — 전시 반쪽의 「끝난 게 위로」와 같은 축
   if(tr2)_traces.push(tr2);
   try{ Plotly.newPlot(div,_traces,lay,{displayModeBar:false,responsive:true}); }catch(_e){ console.warn('[biz bars]',_e); }
+  try{ _bizFadePlanned(div,rows,plan,gcol); }catch(_e){ console.warn('[biz fade]',_e); }   // [260806-3] 진행·예정 게이지 = 페이드(아래 참조)
+}
+// ── [260806-3 운영자 「이거를 디자인 정본에 넣으셈」] 진행·예정 공연 게이지 = **페이드 그라데이션** ──────
+//   계약(정본 = docs/디자인기틀.md §2 #18) = 아직 안 끝난 공연의 막대는 **위로 갈수록 사라지는 같은 색**으로 그린다.
+//   근거 = Stephanie Evergreen 「Fade it」 — 확정되지 않은 값은 **옅은 같은 색**이 1순위다(패턴필·점선은 이 차트처럼
+//   얇은 게이지(W≈5px)에서 통째로 깨진다 · 실사례 조사 9종 = IBCS/ISO 20707 · Peltier · bullet chart).
+//   ⚠ 굵기로 위계를 주지 않는다 — 실선과 **같은 굵기**이고 달라지는 건 알파뿐이다(= 같은 토큰의 알파 변주 · 새 색 0).
+//   ⚠ 260806 2차의 「막대 농도(상태별 opacity·테두리)는 폐지 — 상태는 배경 음영 구획이 말한다」는 이 지시로 **개정**된다.
+//     다만 음영 구획은 그대로 남는다: 음영 = 「오늘 기준 어느 시기인가」(달력 축) · 페이드 = 「이 공연이 끝났는가」(개별 축).
+//   ⚠ 구현이 후처리인 이유 = Plotly bar의 `marker.color`는 **단색만** 받는다(그라데이션 미지원). 트레이스를 알파 사다리로
+//     쪼개면 막대 하나가 N개 도형이 되어 값 라벨·툴팁·히트존이 전부 갈라진다 → 렌더된 SVG의 그 막대 `fill`만
+//     `<linearGradient>` 참조로 바꾼다(도형 수·좌표·라벨·툴팁 무접촉 = 회귀 면적 0).
+//   ⚠ 예상 판매분(「팔린 만큼 실선 + 예상 만큼 페이드」 2단)은 **원천이 아직 없다** — 진행중 공연의 예상 최종치를
+//     어디서 가져올지가 미정이라, 지금은 막대 전체를 페이드로 둔다. 원천이 생기면 `yS`(실판매 꼭대기)를 받아
+//     `offset`을 그 자리로 옮기는 것만으로 2단이 된다(시안 = docs/reports/260806_예정게이지_페이드x축중략_플레이그라운드.html).
+var _BIZ_FADE_TOP=0.08, _BIZ_FADE_BOT=0.85;   // 꼭대기(거의 사라짐) · 실선과 맞닿는 아래 — 시안 확정값(운영자 260806)
+function _bizFadePlanned(div,rows,planFn,gcolFn){
+  if(!div||!rows||!rows.length)return;
+  var svg=div.querySelector('svg.main-svg'); if(!svg)return;
+  var pts=div.querySelectorAll('.plot .points > .point > path'); if(!pts.length)return;
+  var defs=svg.querySelector('defs'); if(!defs){ defs=document.createElementNS('http://www.w3.org/2000/svg','defs'); svg.insertBefore(defs,svg.firstChild); }
+  var uid='bzf'+(div.id||'x');
+  Array.prototype.forEach.call(defs.querySelectorAll('linearGradient[id^="'+uid+'"]'),function(n){ n.parentNode.removeChild(n); });   // 재렌더 누적 방지
+  var n=Math.min(pts.length,rows.length),i,g,col,bb,gid,lg,st;
+  for(i=0;i<n;i++){
+    g=rows[i]; if(!planFn(g))continue;                       // 끝난 공연 = 실선 그대로
+    col=gcolFn(g); bb=pts[i].getBBox(); if(!(bb.height>0))continue;
+    gid=uid+'-'+i;
+    lg=document.createElementNS('http://www.w3.org/2000/svg','linearGradient');
+    lg.setAttribute('id',gid); lg.setAttribute('gradientUnits','userSpaceOnUse');
+    lg.setAttribute('x1',0); lg.setAttribute('y1',bb.y); lg.setAttribute('x2',0); lg.setAttribute('y2',bb.y+bb.height);   // 위(꼭대기) → 아래(바닥)
+    st=document.createElementNS('http://www.w3.org/2000/svg','stop');
+    st.setAttribute('offset','0'); st.setAttribute('stop-color',col); st.setAttribute('stop-opacity',_BIZ_FADE_TOP); lg.appendChild(st);
+    st=document.createElementNS('http://www.w3.org/2000/svg','stop');
+    st.setAttribute('offset','1'); st.setAttribute('stop-color',col); st.setAttribute('stop-opacity',_BIZ_FADE_BOT); lg.appendChild(st);
+    defs.appendChild(lg); pts[i].style.fill='url(#'+gid+')';
+  }
 }
 // ── [260805 운영자] 기획 전시 = **누계 꺾은선**(완료 = 찬 동그라미 · 진행중 = 빈 동그라미) ─────────
 //   지시: *"최종 완료되었을때만 동그라미 각각을 칠해주고, 진행 중일때 집계는 빈 동그라미로 · 동시에 전시가 같이
