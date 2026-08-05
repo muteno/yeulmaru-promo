@@ -90,6 +90,12 @@ async function main() {
                xTicks:tx('bizm-ex-chart','.xaxislayer-above text'),
                yTicks:tx('bizm-ex-chart','.yaxislayer-above text'),
                annos:tx('bizm-ex-chart','.infolayer .annotation text') };
+      // [260805] 트레이스별 점 채움/테두리 — 「종료 = 찬 동그라미 · 진행중 = 빈 동그라미」 실측용.
+      {const d=document.getElementById('bizm-ex-chart');
+       out.ex.markers=d?[...d.querySelectorAll('.scatterlayer .trace')].map(t=>{
+         const ps=[...t.querySelectorAll('.points path')];
+         return ps.length?{n:ps.length,fill:ps[0].style.fill,stroke:ps[0].style.stroke}:null;
+       }).filter(Boolean):null;}
       out.edu={ bars:gg('bizm-edu-chart','.barlayer .point path'),
                 shapes:gg('bizm-edu-chart','.shapelayer path'),
                 yTicks:tx('bizm-edu-chart','.yaxislayer-above text'),
