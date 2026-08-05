@@ -70,7 +70,10 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 #               정본 밴드 한 벌(`.mhead` + `_mhead()`)로 갈아치우며 그 인라인 리터럴이 동반 청산 -27
 #               (#eee×9 · #888×7 · #aaa×3 · #666×2 · #C02872 페어 2 · #fff·#bbb·#444·#f0f0f0 등).
 #               신규 반입 0 — 밴드는 var(--accent)/var(--surface-solid)/rgba(255,255,255,.85)(기존 알파스텝)뿐.
-BASE_HEX_INDEX = 1551
+# 1551 → 1550 = 호버 반응 통일(운영자 260805-26 「모든 곳에 반영해」) — 「준비 중」 모달의 인라인 스타일 확인 버튼을
+#               정본 컴포넌트 1(`.btn btn--primary btn--md`)로 교체하며 그 안 `color:#fff` 리터럴 1개 동반 청산.
+#               나머지 호버 배선(선택 상태 translateY · 밴드 버튼)은 기존 토큰·기존 수치 계승이라 hex 증감 0.
+BASE_HEX_INDEX = 1550
 BASE_HEX_SIGNAGE = 2          # signage/index.html: #000·#333
 BASE_ROOT_INDEX = 2           # L46(기본 팔레트 34토큰) + L1653(뉴트럴·z·c1~c6 27토큰) — 260803 실측 정정(구 표기 L14/32·L1322/26은 위치·개수 모두 stale)
 BASE_ROOT_SIGNAGE = 0

@@ -974,6 +974,12 @@ button{font-family:inherit;cursor:pointer}
 .sp-chip.selected{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600}
 .sp-chip.selected.red{background:var(--danger-btn);border-color:var(--danger-btn)}
 .sp-chip.selected.red:hover{background:#c93f3e;border-color:#c93f3e}
+/* [260805-26 운영자 「모든 곳에 반영해」] 선택 상태 호버 되살리기 — 호버 감사 실측에서 **선택된 칩 8종이 전부
+   호버 변화 0**이었다(형제인 비선택 칩은 전부 살아 있음). 원인 = `.X.on/.active/.selected` 규칙이 `.X:hover`보다
+   뒤에 와서 호버가 바꾸던 색·테두리를 그대로 덮기 때문. **색을 새로 만들지 않고**, 이 레포의 「채워진 버튼」
+   호버 정본 `.m-btn:hover{transform:translateY(-1px)}`(L1589 · `.m-btn.save` 등 accent 채움 버튼이 쓰는 그 값)만
+   그대로 얹어 반응을 되살린다. 신규 색·신규 수치 0 · `.sp-chip.selected.red:hover`(위 줄) 전례와 같은 축. */
+.nb-chip.on:hover,.ana-chip.on:hover,.prog-tab.active:hover,.sp-chip.selected:hover,.sp-time-unset.active:hover,.fbar-seg button.on:hover{transform:translateY(-1px)}
 .sp-chip-divider{display:inline-block;width:1px;height:18px;background:#ddd;margin:0 4px;vertical-align:middle}
 .sp-other-input{padding:7px 12px;border-radius:14px;border:1.5px solid var(--accent);background:rgba(74,77,231,0.06);color:var(--accent);font-size:12.5px;font-weight:600;outline:none;font-family:inherit;width:130px;box-sizing:border-box;line-height:1}
 .sp-time-unset{padding:5px 10px;border-radius:8px;border:1px solid var(--glass-bd);background:var(--glass-surface);backdrop-filter:blur(8px);box-shadow:var(--glass-shadow);color:var(--text);font-size:11px;cursor:pointer;font-family:inherit;transition:all 0.15s;white-space:nowrap;flex-shrink:0;line-height:1}
@@ -1635,7 +1641,7 @@ table.promo-board-table th:last-child .col-resize-handle{display:none}
 .nb-row{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
 .nb-note{font-size:11.5px;color:#a4a4b0;line-height:1.7;margin-top:10px;background:#f7f7fb;border-radius:9px;padding:9px 12px}
 /* 블로그 도우미 — 타겟 칩·아바타·라벨우측 행 */
-.nb-chip{display:inline-flex;align-items:center;gap:4px;padding:5px 11px;border-radius:999px;border:1px solid var(--glass-bd);background:var(--glass-surface);backdrop-filter:blur(8px);box-shadow:var(--glass-shadow);color:var(--text);font-size:12px;cursor:pointer;font-family:inherit;line-height:1;user-select:none;transition:background .12s,border-color .12s,color .12s}
+.nb-chip{display:inline-flex;align-items:center;gap:4px;padding:5px 11px;border-radius:999px;border:1px solid var(--glass-bd);background:var(--glass-surface);backdrop-filter:blur(8px);box-shadow:var(--glass-shadow);color:var(--text);font-size:12px;cursor:pointer;font-family:inherit;line-height:1;user-select:none;transition:background .12s,border-color .12s,color .12s,transform .12s}
 .nb-chip:hover{border-color:#c5c5d6}
 .nb-chip.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
 .nb-chiprow{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-start}
@@ -1738,7 +1744,8 @@ table.promo-board-table th:last-child .col-resize-handle{display:none}
 .cm-empty:hover{color:rgba(255,255,255,.8)}
 .cm-stage.drop{outline:2px dashed var(--accent);outline-offset:-4px}
 .cm-tools{position:absolute;top:8px;right:8px;display:flex;gap:6px;z-index:3}
-.cm-tool{width:30px;height:30px;display:grid;place-items:center;padding:0;color:var(--accent);background:var(--surface-solid);border:0;border-radius:8px;cursor:pointer;transition:transform .12s}   /* 창 안 우상단 도구 = 에디터 .cpv-tool 배치 계승(불투명 플레이트 위 강조색 픽토) */
+.cm-tool{width:30px;height:30px;display:grid;place-items:center;padding:0;color:var(--accent);background:var(--surface-solid);border:0;border-radius:8px;cursor:pointer;transition:transform .12s}
+.cm-tool:hover{transform:translateY(-1px)}   /* [260805-26] 자기 transition에 transform을 선언해 놓고 :hover가 없어 반응 0이었다 — 정본 `.m-btn:hover` 값 계승 */   /* 창 안 우상단 도구 = 에디터 .cpv-tool 배치 계승(불투명 플레이트 위 강조색 픽토) */
 .cm-tool:active{transform:scale(.86)}
 .cm-tool:disabled{opacity:.45;cursor:default}
 .cm-tool svg{width:15px;height:15px;display:block}
@@ -4489,8 +4496,9 @@ function _mhead(title, sub, pr, extra){
 // 머리줄 위 조작 버튼 한 벌 — 밴드(강조색)에서도 읽히게 흰 알약 + 원래 의미색 잉크/테두리. 색은 넘겨받은 토큰 그대로(신규 0).
 function _mheadBtn(onclick, label, color, title){
   return '<button onclick="'+onclick+'"'+(title?' title="'+title+'"':'')
+    +' onmouseover="this.style.background=\'var(--accent-light)\'" onmouseout="this.style.background=\'var(--surface-solid)\'"'
     +' style="padding:6px 13px;border-radius:8px;border:1.5px solid '+color+';background:var(--surface-solid);color:'+color
-    +';font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap">'+label+'</button>';
+    +';font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;transition:background .15s">'+label+'</button>';
 }
 
 // === CSV 다운로드 헬퍼 ===
@@ -5458,7 +5466,7 @@ function openAnnualCalendar(){
   // [260731] 우상단 버튼 3종 = 같은 .modal-x 부품·같은 60px 피치(right 22/82/142 — 버튼 간 간격 28px 균등 실측).
   //   [260731 운영자 「원 4분할 ↔ 픽토 4분할 중심 일치」] 글리프 3종 모두 잉크중심을 원 중심에 맞춤 — measure_align 잉크프로브 실측 보정(원·배경은 무이동).
   //   실측(보정 전, 원 중심 기준 잉크Δ dx/dy): ↓ 0.01/+1.36 · ↗ +0.73/-1.67 · ✕ -0.43/-0.26 → 각 −Δ만큼 span translate. (구 ↓ -3px 단독보정은 1.64px 과보정이라 폐기)
-  el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeAnnualCalendar)"><div class="modal annual-modal" style="width:96vw;max-width:1400px;height:92vh;max-height:92vh;--mpad-y:0;--mpad-x:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:#FDFCFB"><button class="modal-x" onclick="_ycDownload()" title="HTML 파일로 저장" aria-label="HTML 파일로 저장" style="position:absolute;top:14px;right:142px;float:none;margin:0;z-index:30;background:rgba(255,255,255,0.95);color:var(--accent);box-shadow:0 2px 10px rgba(74,77,231,0.25)"><span style="display:block;transform:translate(-0.01px,-1.36px)">↓</span></button><button class="modal-x" onclick="window.open(location.pathname+\'?annual\',\'_blank\',\'noopener\')" title="새 창에서 열기" aria-label="새 창에서 열기" style="position:absolute;top:14px;right:82px;float:none;margin:0;z-index:30;background:rgba(255,255,255,0.95);color:var(--accent);box-shadow:0 2px 10px rgba(74,77,231,0.25)"><span style="display:block;transform:translate(-0.73px,1.67px)">↗</span></button><button class="modal-x" onclick="closeAnnualCalendar()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;float:none;margin:0;z-index:30"><span style="display:block;transform:translate(0.43px,0.26px)">✕</span></button>'+_mhead('연간 일정','한 해 공연·전시를 한 줄로 훑어봐요',174)+'<div id="yc-scroll" style="flex:1;overflow-y:auto;overscroll-behavior:contain;padding-right:2px"></div></div></div>';
+  el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeAnnualCalendar)"><div class="modal annual-modal" style="width:96vw;max-width:1400px;height:92vh;max-height:92vh;--mpad-y:0;--mpad-x:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:#FDFCFB"><button class="modal-x" onclick="_ycDownload()" title="HTML 파일로 저장" aria-label="HTML 파일로 저장" style="position:absolute;top:14px;right:142px;float:none;margin:0;z-index:30"><span style="display:block;transform:translate(-0.01px,-1.36px)">↓</span></button><button class="modal-x" onclick="window.open(location.pathname+\'?annual\',\'_blank\',\'noopener\')" title="새 창에서 열기" aria-label="새 창에서 열기" style="position:absolute;top:14px;right:82px;float:none;margin:0;z-index:30"><span style="display:block;transform:translate(-0.73px,1.67px)">↗</span></button><button class="modal-x" onclick="closeAnnualCalendar()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;float:none;margin:0;z-index:30"><span style="display:block;transform:translate(0.43px,0.26px)">✕</span></button>'+_mhead('연간 일정','한 해 공연·전시를 한 줄로 훑어봐요',174)+'<div id="yc-scroll" style="flex:1;overflow-y:auto;overscroll-behavior:contain;padding-right:2px"></div></div></div>';
   const wrap=document.getElementById('yc-wrap');
   const sc=document.getElementById('yc-scroll');
   if(wrap&&sc)sc.appendChild(wrap);
@@ -7406,9 +7414,16 @@ function _bizEduMonthRows(year){
 // ── [260804 운영자] y축 중략(≈) — 「매출이 너무 큰 게 하나 있어서 차트가 무너진다」 ────────────────
 //   대형 뮤지컬 1건(486백만)이 나머지 16건(0.9~66백만)을 다 눌러 8건이 2px 막대가 되던 형태 실측 → 적정선에서 축을 끊는다.
 //   ⚠ 값은 손대지 않는다 — 접는 건 **그리는 자리(y)** 뿐이고 눈금·막대 라벨·툴팁은 전부 실값 그대로다.
-//   판정 = 「하위 80% 지점」을 기준으로 눈금 사다리 상한(B)을 잡고, 그 위로 튄 값만 압축한다(본체 5건 이상 잔존 · 최대 ≥ B×2).
-//   ⚠ 문턱·연쇄 규칙(「바로 아래 값의 2배」)은 폐기 — 평의회3 실측: 3위가 67.25→67.26으로 0.02 움직이면 전 막대가 반토막 나고,
-//     대형 뮤지컬이 2편이면 규칙이 조용히 꺼져 원래 문제로 되돌아갔다. 이 차트는 매일 갱신되므로 어제 화면과 비교되는 게 우선이다.
+//   판정 = **후보 순회**(260806 개정 · 구 「하위 80% 지점」 단일 후보는 폐기 — 아래 260806 절이 정본 기술).
+//   ⚠ 「바로 아래 값의 2배」 규칙은 260804에 **절단점 선택자**로서 폐기됐다 — 평의회3 실측: 3위가 67.25→67.26으로 0.02 움직이면
+//     전 막대가 반토막 나고, 대형 뮤지컬이 2편이면 규칙이 조용히 꺼져 원래 문제로 되돌아갔다(이 차트는 매일 갱신되므로
+//     어제 화면과 비교되는 게 우선이다). ⚠ 단, 260806에 같은 「2배」가 **후보 거부권**(선택자 아님)으로 재도입됐다 —
+//     선택은 순회가 하고 2배는 「끊을 빈 구간이 있나」만 판정한다. ⚠ 그렇다고 절벽이 사라진 건 아니다 —
+//     평의회3 실측(실데이터 47공연 분포 407,200회 섭동) = **신규 절벽 클래스 존재**(최상단 +0.0083% 이동에 B ×5.0·
+//     접힘 5→1 · 원인 = `pos[0]<B*2` 경계에서 채택 후보가 4계단 건너뜀). 다만 ⓐ 발생률 2.4%/90일 ⓑ 진동 없음(1회 계단)
+//     ⓒ 현행 라이브 두 분포는 경계에서 +64.6% 떨어져 있다 ⓓ 총 상태변화·≈띠 점멸은 오히려 구판보다 적다(115→73회)
+//     = **경미**로 판정해 현행 유지. 강건성 필터(전 값 ±3% 섭동에도 같은 후보일 때만 채택 = 대형점프 −77%)는
+//     새 수치 규칙이라 운영자 승인 대기. 선언과 코드가 어긋나 보이지 않도록 여기에 함께 못박는다.
 //   조건 미달이면 null = 현행 그대로 그린다(고른 분포·짧은 차트·음수 포함 = 회귀 0).
 function _bizNiceStep(v){   // 눈금 한 칸 = 1·1.5·2·2.5·3·4·5·6·8·10 사다리(사람이 읽는 눈금 값 — 색·토큰 축과 무관한 수치 규칙이라 기틀 대상 아님)
   if(!(v>0))return 1;
@@ -7427,19 +7442,42 @@ function _bizBarBreak(vals,plotPx){
       labPx=Math.max(9,Math.min(18,Math.round(plotPx*0.058))),
       topPx=plotPx-bodyPx-gapPx-labPx;                           // 본체 62~70% · 중략 띠 · 압축 구간 · 값 라벨 자리
   if(topPx<22)return null;
-  var q=pos[Math.floor(pos.length*0.2)],step=_bizNiceStep(q/4),B=step*4;                  // 순위 기반 = 값이 흔들려도 B가 안 뛴다(절벽 없음)
   var cnt=function(b){ var c=0,i; for(i=0;i<pos.length;i++){ if(pos[i]>b)c++; else break; } return c; };
-  var k=cnt(B),u=B/bodyPx;
-  while(k<pos.length&&(B-pos[k])<14*u&&B<step*8){ B+=step; u=B/bodyPx; k=cnt(B); }   // 본체 최대막대가 B에 붙으면 그 값 라벨이 ≈띠에 먹힌다 → 눈금을 한 칸씩 올려 띄운다(한 번만 올리면 다시 붙는 분포가 있다)
-  if(!k||pos[0]<B*2||(pos.length-k)<5)return null;
-  if(pos[k-1]<B*1.25)return null;   // 잘릴 값 중 **최소**가 B에 붙어 있으면 = 끊을 「빈 구간」이 없는 연속 분포 → 접지 않는다(이 게이트가 없으면 순위 규칙이 이상치 없는 완만한 분포에도 발동한다 · 평의회5 실측 오발동 n=100에서 69% → 계수 1.25에서 0%)
-  return {B:B,step:step,nt:Math.round(B/step),n:k,cuts:pos.slice(0,k),oMin:pos[k-1],oMax:pos[0],u:u,
+  // ── [260806 운영자 「예전엔 ≈로 중략됐는데 어느 순간 사라졌다」] 절단점 = **후보 순회**(구 「하위 80% 지점」 단일 후보 폐기) ──
+  //   구판은 기준점 q를 순위 20% 한 자리로 고정했다 → 이상치가 **2건 이상**이면 그 자리 자체가 이상치라 B가 이상치 위로
+  //   올라가 k=0(=끊을 값 없음)으로 규칙이 조용히 꺼졌다. 실측(260806 라이브 분포 [3300,3170,908,637,503,311,277,268,178]) = null.
+  //   게다가 260804(da8a03d)에 오발동 봉합으로 들어온 1.25 게이트와 겹치면서, 이 기능을 만든 계기였던 **원사례**
+  //   ([486,66,52,…] 대형 뮤지컬 1건)까지 함께 껐다(실측 = null) — 「어느 순간 사라졌다」의 정체.
+  //   → 잘리는 개수 i를 1부터 늘리며 **본체 최대값 pos[i]** 기준으로 B를 잡고, 기존 게이트 3종을 **한 글자도 안 바꾼 채**
+  //     전부 통과하는 첫 후보를 채택한다 = 이상치를 최소한만 접는다. 오발동 방어(평의회5 축)는 종전 그대로 유지.
+  for(var ci=1;ci<pos.length;ci++){
+    var q=pos[ci],step=_bizNiceStep(q/4),B=step*4;                                       // 순위 기반 = 값이 흔들려도 B가 안 뛴다(절벽 없음)
+    var k=cnt(B),u=B/bodyPx;
+    while(k<pos.length&&(B-pos[k])<14*u&&B<step*8){ B+=step; u=B/bodyPx; k=cnt(B); }   // 본체 최대막대가 B에 붙으면 그 값 라벨이 ≈띠에 먹힌다 → 눈금을 한 칸씩 올려 띄운다(한 번만 올리면 다시 붙는 분포가 있다)
+    if(!k||(pos.length-k)<5)continue;   // 본체 5건 미만 = 비교할 무리가 없다(중략의 목적이 사라진다). ⚠ 이 줄은 아래 갭 술어보다 **먼저** 있어야 한다 — `k===pos.length`면 `pos[k]`가 undefined라 `x<NaN`이 false가 되어 갭 술어가 조용히 통과한다(평의회4 D4 · 순서 이동 금지)
+    if(k*12>topPx)continue;             // [260806 2차 · 평의회4 D2] 압축 구간이 **눈금을 물리적으로 담을 수 있는 개수**를 넘으면 접지 않는다 — 잘림 상한을 1/2로 넓힌 뒤 압축 9건에 눈금 4개(커버리지 44%)가 실측됐고, 그건 이 함수 자신이 금지한 상태다(「기준자가 최댓값 하나뿐이면 사람이 선형 보간을 해서 135 막대를 200으로 읽는다 · 오차 +49%」). 12 = 값 라벨 글상자 높이(기존 18 = 글상자 12 + 숨구멍 6의 하한 성분 · 새 수치 창작 아님)
+    if(k*2>=pos.length)continue;      // [260806 2차] 잘리는 건 **절반 미만**이어야 한다 — 원 취지가 「이상치 몇 건이 나머지를 뭉갠다」인데 다수가 압축 구간에 몰리면 정반대다. ⚠ 1차의 `k*3`(=1/3 미만)은 너무 좁아 「대형 4편 + 소규모」처럼 **흔한 현실 분포**를 통째로 못 끊었다(평의회2 실측 = 뭉갠 분포의 36.6%가 미발동 · 그중 67%가 이 게이트 단독 차단 · 최악 = 0.06px 막대 7개) → 1/2로 완화(현행 발동 케이스 16,986건 재판정 회귀 0)
+    if(pos[k-1]<pos[k]*2)continue;   // [260806] 갭 술어 — 끊는 자리에 **진짜 빈 구간**이 있어야 한다(잘린 최소 ≥ 본체 최대 ×2). 후보 순회로 절단점이 여러 개가 되면서, 눈금 사다리 반올림에 좌우되는 B 기준(아래 1.25)만으론 완만한 분포에서 새 오발동이 났다 → 값 자체로 재판정해 **크게 줄인다**(평의회6 ablation 실측 = 균등 랜덤 2,000세트 기준 갭 없음 n=9 96건·n=16 13건 → 갭 있음 35건·2건). ⚠ 「0건 복귀」가 아니다 — 1차 커밋의 그 주석은 좁은 표본(내 400세트)만 보고 쓴 **거짓 기술**이라 여기서 정정한다.
+    // ── [260806 2차 운영자 「저렇게 차이가 심하면 **항상** 켜지게 정본에 박아라」] 뭉갬 하드 스위치 ──
+    //   「차이가 심하다」의 정본 정의 = **중략을 안 켰을 때 본체(=안 잘리는 무리)의 최대 막대가 화면 최댓값의 30% 이하로 눌린다.**
+    //   이 조건이 서면 눈금 사다리 기반 보수 게이트(2B·1.25B)를 **우회하고 무조건 켠다** — 그 둘은 「끊을 자리가 애매한가」를
+    //   눈금 반올림으로 재는 자라, 반올림 한 칸 때문에 명백한 뭉갬을 못 끊는 일이 실재했다(라이브 화면이 그 상태였다).
+    //   ⚠ 배율이 아니라 **눌린 정도**로 재는 이유 = 「상위 그룹 150~190 · 하위 그룹 20~70」처럼 두 무리로 갈린 분포는
+    //     배율만 보면 2.5~3.9배라 「심함」으로 읽히지만 본체 최대가 83~126px로 멀쩡히 보인다. 그런 분포를 접으면
+    //     상위 무리가 압축 구간에 몰려 서로 비교가 안 되는 **오독**이 된다(실측 6건 = 전건 이 형태였다).
+    //   ⚠ 이 계약의 정본 기술 = `docs/디자인기틀.md` §2 「축 중략(≈) 발동 계약」 행. 수치를 바꾸려면 그 행부터 고친다.
+    if(pos[pos.length-1]>pos[0]*0.06)continue;   // [260806 2차 · 평의회1 실측] **안 보이는 막대가 하나도 없으면 뭉갠 게 아니다** — 최소 막대가 최댓값의 6% 초과(=378px 차트에서 22px 이상)면 접지 않는다. ⚠ 이 술어가 없으면 「본체가 낮게·촘촘히 앉은」 분포(2024 실관객수 [7437,7339,3520,1509,…880] = 최소 막대 44.7px)를 접어 **관객 2.3배 차이가 높이 14% 차이로** 그려진다(레포의 6년 실주문 데이터에서 실제로 재현되는 형태 · 실 스냅샷 오발동 12건 → 0건). 정발동 6종(0.2~5.4%)과 오발동 5종(11.8~23.3%)이 완전 분리돼 6%가 그 사이의 안전한 자리다
+    if(pos[k]>pos[0]*0.30)continue;    // 본체 최대가 30% 초과로 남아 있다 = 뭉개지지 않았다 → 접지 않는다. ⚠ 기준은 `ci`가 아니라 **`k`** — while 상승 루프가 B를 올리면 실제 잘리는 개수(k)가 후보 인덱스(ci)보다 커져, ci로 재면 「접히지도 않을 값」을 본체 최대로 착각한다(게이트 첫 실행이 이 오발동을 잡았다 = 16건 중 6건 압축)
+    if(pos[0]<B*2)continue;            // (보수) 눈금 상한의 2배 미만이면 끊을 여지가 얕다
+    return {B:B,step:step,nt:Math.round(B/step),n:k,cuts:pos.slice(0,k),oMin:pos[k-1],oMax:pos[0],u:u,
     lo:B,hi:(bodyPx+gapPx)*u,top:(bodyPx+gapPx+topPx)*u,rng:plotPx*u,
     map:function(v){
       if(!(v>this.B))return v;                                   // 본체 = 손 안 댐(실값 = 실높이)
       if(!(this.oMax>this.oMin))return this.top;
       return this.hi+(0.12+0.88*(v-this.oMin)/(this.oMax-this.oMin))*(this.top-this.hi);   // 하한 .12 = 띠 위로 조금만 띄운다(구 .18은 오독을 49%까지 키웠고, .06은 잘린 최소값 눈금이 B 눈금에 붙어 지워졌다)
     }};
+  }
+  return null;   // 어느 절단점도 게이트를 못 넘으면 = 끊을 빈 구간이 없는 분포 → 현행 그대로 그린다(회귀 0)
 }
 function _bizWavePts(x0,x1,y,amp,cyc){   // ≈의 한 획(물결) — 데이터 좌표 점열. cyc = 주기 수(폭에 비례해 파장을 일정하게)
   var n=Math.max(12,Math.round(cyc*10)),a=[],i,t;
@@ -7608,7 +7646,7 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
   //   (게이지 굵기 ≈5px) 「340」이 실제로는 5~6px로 찍힌다. 옆에 선 꼭자락 라벨(주석·10.5px)과 나란히 서니 크기가 갈렸다.
   //   주석은 폭 제약이 없어 지정한 10.5px 그대로 = 한 카드 안 숫자 크기가 한 벌. 공연 차트는 막대가 굵어 종전대로 둔다(회귀 0).
   var tr={type:'bar',x:xs,y:yv,width:W,
-    text:(ED?labs.map(function(){return '';}):labs), textposition:'outside', cliponaxis:false, textfont:{size:10.5,color:rows.map(gcol)},
+    text:(ED?labs.map(function(){return '';}):labs), textposition:'outside', cliponaxis:false, constraintext:'none', textfont:{size:10.5,color:rows.map(gcol)},   // [260806 2차 · 평의회5 렌더 실측] `constraintext` 기본값 `'both'`는 라벨을 **막대 폭에 맞춰 축소**한다 — 이 차트의 막대폭은 게이지 규격이라 W≈5px여서 선언 10.5px 라벨이 실제로는 **5.8×3.0px**(글자 높이 3px)로 찍혔다(대조 실측 = `'none'`이면 26.4×12px 정상 · 전 분포·전 높이 동일). 값·색·기하 창작 0 = Plotly 기본 축소만 해제. ⚠ 이 축이 죽어 있으면 축 중략의 정당화 근거(「값·눈금·라벨·툴팁은 전부 실값」)가 화면에서 성립하지 않는다 — 접힌 막대의 값을 읽을 수단이 라벨뿐인 높이 구간이 있다
     marker:{color:rows.map(gcol),line:{width:0}},   // [260806 2차] 상태별 opacity·테두리 폐지 = 막대 농도 전부 동일 · 상태는 음영 구획이 말한다
     customdata:rows.map(function(g){return [g.name,(ED?(g._g2||'예술교육'):(g.genre||'-')),Math.round((g._sold!=null&&g._sold>0)?g._sold:g.paid),(g._rev!=null?_bizMoney(g._rev):'—'),(g.avg||0).toFixed(1),stName(g),dTxt(g),((ED&&g._vsrc)?(' · '+g._vsrc+'값'):'')];}),   // [260805] 교육 = 프로그램 시트/운영대장 장르(예: 인문학) · [7] = 값 출처 꼬리표(DB 미조인 폴백일 때만 · _BIZ_EDU_SOLD 주석)
     hovertemplate:'<b>%{customdata[0]}</b><br>%{customdata[6]} · %{customdata[5]} · %{customdata[1]}<br>'   // 눈금엔 달만 남는다 → 사업명·정확한 일자는 툴팁이 진다
@@ -7647,8 +7685,8 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
     asc.forEach(function(v,ci){
       var isTop=(ci===asc.length-1), py=pxOf(v);
       // 간격 기준 18px = 눈금 글상자(12px) + 여백 6 — 14로 재면 라벨끼리 3px까지 붙는다(평의회4 실측)
-      if(isTop&&py-lastPx<18&&tv.length>brk.nt+1){ tv.pop(); tt.pop(); }   // 최댓값과 겹치면 바로 아래 눈금을 뺀다
-      if(isTop||py-lastPx>=18){ tv.push(brk.map(v)); tt.push(axn(v)); lastPx=py; }
+      if(isTop&&py-lastPx<12&&tv.length>brk.nt+1){ tv.pop(); tt.pop(); }   // 최댓값과 겹치면 바로 아래 눈금을 뺀다
+      if(isTop||py-lastPx>=12){ tv.push(brk.map(v)); tt.push(axn(v)); lastPx=py; }   // [260806 2차 · 평의회4 D2 · 평의회5 ②] 압축 구간 눈금은 **본체와 다른 자**로 잰다 — 본체 18(글상자 12 + 숨구멍 6)을 압축 구간에도 쓰면 접힌 막대에 기준자가 안 서서 「최댓값 하나로 선형 보간 = 오차 +49%」 상태가 된다(실측 = 압축 9건에 눈금 4개 · 낮은 화면에선 라이브 분포조차 1개). 12 = 글상자 높이 = 겹침이 시작되는 물리적 하한(새 수치 창작 아님 · 후보 단계 `k*12>topPx` 상한과 같은 자)
     });
     lay.yaxis.tickmode='array'; lay.yaxis.tickvals=tv; lay.yaxis.ticktext=tt;
     lay.yaxis.range=[0,brk.rng]; delete lay.yaxis.rangemode;
@@ -7866,18 +7904,33 @@ function _bizDrawExhibMonthly(divId,list,hgt){
   if(_bgMax>maxV)yTop=_bizNiceStep(Math.max(maxV*1.08,_bgMax*1.02));   // 계단이 잘리지 않는 최소 상한(메인 여유 1.08 유지) · 아래 draw·라벨·lay가 이 값을 쓴다
   built.filter(function(b){ return !_done(b); }).forEach(draw);   // 진행중·예정 = 아래층
   built.filter(_done).forEach(draw);                              // 종료 = 위층(운영자 260805)
-  // 값 라벨 = 전시당 꼭자락 1개(위 draw) · 큰 값 우선 배치 · 겹치면 생략(정확값은 툴팁) — 공연 막대(_bizDrawSalesBars)의
-  //   그 규칙 유지. 같은 달에 두 전시가 끝나면(같은 x · 예: 6월 어린이미술전·섬냥이) 세로로 포개지므로 x·y 둘 다 본다.
+  // 값 라벨 = 전시당 꼭자락 1개(위 draw) · **큰 값이 먼저 자리를 잡는다**.
+  // [260805 운영자 6차] 「꺾은선이 수치가 겹칠때는 **더 낮은 수치가 180도 반대편에 기록**되게(겹치는거보다는 그게 나음)」
+  //   → 구판의 「겹치면 생략」을 **뒤집기**로 바꾼다: 큰 값부터 놓으므로 부딪히는 쪽은 항상 **낮은 값** = 그게 점 반대편으로 간다.
+  //   양쪽 다 막힌 경우에만 생략(마지막 안전판 · 정확값은 툴팁). 겹침 판정은 **같은 쪽에 놓인 라벨끼리만** 본다.
   var plotSpan=Math.max(120,wpx-56), pxPerDay=plotSpan/(ax.x1-ax.x0), pxPerY=Math.max(60,hgt-48)/yTop;
-  var placed=[];
+  var placed=[];   // {x,y,side} · side +1 = 점 위 · -1 = 점 아래
+  //   세로 임계 19 = 라벨 글상자(10.5px 활자 ≈ 13) + 숨구멍 6. ⚠ 구판 14는 **글상자 높이만도 못 되는 값**이라
+  //   6월 3,827·3,080처럼 17px 떨어진 짝을 「안 겹침」으로 통과시켜 두 숫자가 선 위에 포개 보였다(실측 후 교정).
+  var _hit=function(L,side){ return placed.some(function(p){ return p.side===side&&Math.abs(p.x-L.x)*pxPerDay<30&&Math.abs(p.y-L.y)*pxPerY<19; }); };
   labs.sort(function(a,b){ return b.v-a.v; }).forEach(function(L){
-    var ok=placed.every(function(p){ return Math.abs(p.x-L.x)*pxPerDay>=30||Math.abs(p.y-L.y)*pxPerY>=14; });
-    if(!ok)return;
-    placed.push(L);
-    // 천장에 붙은 점은 라벨을 **점 아래**로 내린다 — 위에 두면 구획 라벨(「진행 완료」·「진행·예정」)과 겹쳐 글자가 포갠다.
-    //   축을 사다리 한 칸 더 올려 피하면(1,500→2,000) 차트 3분의 1이 빈 자리가 되므로, 축이 아니라 라벨을 옮긴다.
-    var up=(yTop-L.y)*pxPerY>=32;   // 32 = 라벨 글상자(12) + 띄움(6) + 구획 라벨 띠(≈14) — 이보다 얕으면 두 글자가 포갠다(230px 카드 실측)
-    notes.push({xref:'x',x:L.x,xanchor:'center',yref:'y',y:L.y,yanchor:up?'bottom':'top',yshift:up?6:-9,text:Math.round(L.v).toLocaleString(),showarrow:false,font:{size:10.5,color:L.col}});
+    // 천장에 붙은 점은 애초에 **점 아래**에서 시작한다 — 위에 두면 구획 라벨(「진행 완료」·「진행·예정」)과 글자가 포갠다.
+    //   축을 사다리 한 칸 더 올려 피하면 차트 3분의 1이 빈 자리가 되므로, 축이 아니라 라벨을 옮긴다.
+    var side=((yTop-L.y)*pxPerY>=32)?1:-1;   // 32 = 라벨 글상자(12) + 띄움(6) + 구획 라벨 띠(≈14) — 230px 카드 실측
+    if(_hit(L,side))side=-side;              // 겹치면 180도 반대편(운영자 6차)
+    if(_hit(L,side))return;                  // 양쪽 다 막힘 = 생략(정확값은 툴팁)
+    placed.push({x:L.x,y:L.y,side:side});
+    notes.push({xref:'x',x:L.x,xanchor:'center',yref:'y',y:L.y,yanchor:(side>0)?'bottom':'top',yshift:(side>0)?6:-9,text:Math.round(L.v).toLocaleString(),showarrow:false,font:{size:10.5,color:L.col}});
+  });
+  // [260805 운영자 6차] 「각 차트(월별) 위에 **누적 몇개인지** 옆에 **회색 톤**으로」 — 계단 칸 꼭대기의 그 달 누적 합.
+  //   회색 = `--dim`(앱 표준 회색 · 새 색 0) · 9.5px = 축 눈금보다 한 단 작게 = **보조 정보**임이 활자에서 드러난다.
+  //   메인 꼭자락 라벨이 이미 그 자리를 잡았으면(전시가 하나뿐인 달 = 누적 = 그 전시 값) **회색은 생략** — 같은 숫자를 두 번 쓰지 않는다.
+  _bgSum.forEach(function(v,m){
+    if(!(v>0))return;
+    var L={x:mx(m),y:v};
+    if(_hit(L,1))return;
+    placed.push({x:L.x,y:L.y,side:1});
+    notes.push({xref:'x',x:L.x,xanchor:'center',yref:'y',y:v,yanchor:'bottom',yshift:5,text:Math.round(v).toLocaleString(),showarrow:false,font:{size:9.5,color:dim}});
   });
   var lay={height:hgt,margin:{l:46,r:10,t:18,b:30},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',showlegend:false,
     xaxis:{tickmode:'array',tickvals:ax.tickvals,ticktext:ax.ticktext,tickfont:{size:10.5,color:dim},range:[ax.x0,ax.x1],fixedrange:true,zeroline:false,showgrid:false,automargin:false},
@@ -8166,7 +8219,8 @@ function _bizCompRender(el,half){
     try{_bizFitSeason();}catch(_e){}   // [260805] 인라인 시즌 추세 철거 → 그리기 호출도 같이 내림(모달 _bizDrawSeason()은 무접촉 = 인자 없는 기본 divId 'biz-season-chart')
     // [260804] fit이 차트를 줄인 뒤(430→180~) 실높이로 **한 번만** 다시 그린다 — 중략 기하는 그릴 때의 px 배분으로
     //   데이터 좌표에 구워지기 때문에, 430 기준으로 접어 놓고 198px에 표시하면 띠가 3px로 무너져 「목표선」처럼 보이고
-    //   「짧은 차트는 안 끊는다(plotPx<170)」 가드도 무력화된다(평의회7 실측 1920×780). 높이는 안 바꾸므로 fit 재진입 없음.
+    //   「짧은 차트는 안 끊는다」 가드도 무력화된다(평의회7 실측 1920×780). 높이는 안 바꾸므로 fit 재진입 없음.
+    //   ⚠ [260806 2차 정정] 그 가드의 실제 문턱은 **plotPx<100**이다(7421행) — 이 줄이 오래 `plotPx<170`이라 적어 두어 **선언과 코드가 어긋나 있었다**(평의회5 실측). 코드를 170으로 올리면 fit이 줄인 화면(h180~222)에서 중략이 통째로 꺼져 「차이가 심하면 항상 켠다」(디자인기틀 §2 #16) 계약과 정면 충돌하므로, **문턱은 100을 유지하고 이 선언을 사실대로 고친다**. 다만 그 구간에서 물결 띠가 4.3px로 얇아져 이중 실선처럼 보이는 것은 실측된 남은 문제다(후속 과제 · 띠 두께 하한은 새 수치라 운영자 승인 축).
     try{ if(half!==2){ var _c=document.getElementById('bizm-chart');
       if(_c&&_c.offsetParent!==null){ var _z2=(typeof _bizZ==='function')?_bizZ():1, _rh=Math.round(_c.getBoundingClientRect().height/_z2);
         if(_rh>60&&Math.abs(_rh-430)>20)_bizDrawSalesBars('bizm-chart',list,_rh); } } }catch(_e){}
@@ -12637,7 +12691,7 @@ function openDidPartnersMap(){
   if(!document.getElementById('did-partners-style')){
     const ss = document.createElement('style');
     ss.id = 'did-partners-style';
-    ss.textContent = '.did-filter-btn{padding:6px 12px;border:1.5px solid #eee;background:#fff;color:#666;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;transition:all .15s}.did-filter-btn:hover{border-color:var(--accent);color:var(--accent)}.did-filter-btn.on{background:var(--accent);color:#fff;border-color:var(--accent)}.did-list-item{padding:10px 12px;border-radius:8px;cursor:pointer;margin-bottom:4px;background:#fff;transition:all .12s;border:1px solid transparent}.did-list-item:hover{background:var(--peach-light);border-color:var(--peach)}.did-list-item.on{background:var(--accent);color:#fff;border-color:var(--accent)}.did-list-item.on .did-li-addr{color:rgba(255,255,255,0.85)}.did-li-name{font-size:13px;font-weight:700;display:flex;align-items:center;gap:6px}.did-li-addr{font-size:11px;color:#888;margin-top:3px}.did-status-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;display:inline-block}.did-status-dot.done{background:#22a06b}.did-status-dot.pending{background:#FFC107}';
+    ss.textContent = '.did-filter-btn{padding:6px 12px;border:1.5px solid #eee;background:#fff;color:#666;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;transition:all .15s}.did-filter-btn:hover{border-color:var(--accent);color:var(--accent)}.did-filter-btn.on{background:var(--accent);color:#fff;border-color:var(--accent)}.did-list-item{padding:10px 12px;border-radius:8px;cursor:pointer;margin-bottom:4px;background:#fff;transition:all .12s;border:1px solid transparent}.did-list-item:hover{background:var(--peach-light);border-color:var(--peach)}.did-list-item.on{background:var(--accent);color:#fff;border-color:var(--accent)}.did-list-item.on .did-li-addr{color:rgba(255,255,255,0.85)}.did-li-name{font-size:13px;font-weight:700;display:flex;align-items:center;gap:6px}.did-li-addr{font-size:11px;color:#888;margin-top:3px}.did-status-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;display:inline-block}.did-status-dot.done{background:#22a06b}.did-status-dot.pending{background:#FFC107}.did-filter-btn.on:hover{transform:translateY(-1px)}';
     document.head.appendChild(ss);
   }
   _renderDidPartnersList();
@@ -14061,7 +14115,7 @@ function backToAdminMenu(){openAdminPanel();}
 
 // === Coming Soon 모달 (미구현 메뉴용) ===
 function showComingSoon(label){
-  const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeComingSoon)"><div class="modal" style="width:auto;min-width:320px;max-width:90vw;--mpad-y:36px;--mpad-x:40px;text-align:center">'+_mhead(label,'아직 준비 중이에요')+'<div style="font-size:56px;margin-bottom:12px;line-height:1">😉</div><button onclick="closeComingSoon()" style="padding:10px 32px;background:var(--accent);color:#fff;border:0;border-radius:10px;cursor:pointer;font-weight:600;font-size:13px">확인</button></div></div>';
+  const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeComingSoon)"><div class="modal" style="width:auto;min-width:320px;max-width:90vw;--mpad-y:36px;--mpad-x:40px;text-align:center">'+_mhead(label,'아직 준비 중이에요')+'<div style="font-size:56px;margin-bottom:12px;line-height:1">😉</div><button onclick="closeComingSoon()" class="btn btn--primary btn--md">확인</button></div></div>';
   let el=document.getElementById('coming-soon');
   if(!el){el=document.createElement('div');el.id='coming-soon';document.body.appendChild(el);}
   el.innerHTML=html;

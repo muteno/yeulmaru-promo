@@ -46,7 +46,9 @@ const UPDATE = process.argv.includes('--update');
 const W = 1500, H = 1000;
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.jfif': 'image/jpeg', '.svg': 'image/svg+xml', '.woff2': 'font/woff2' };
 
-// 기틀 §2 정본 컴포넌트 15종의 클래스 + 앱에서 그만큼 반복되는 준정본(m-btn·prog-tab·admin-item·ana-chip).
+// 기틀 §2 정본 컴포넌트 16종 중 **CSS 클래스 축** + 앱에서 그만큼 반복되는 준정본(m-btn·prog-tab·admin-item·ana-chip).
+//   ⚠ #15 도넛 차트·#16 판매 추이 차트는 클래스가 아니라 **JS 조립 규약**이라 이 패리티(클래스=픽셀) 축의 대상이 아니다
+//   — 그쪽 강제는 tools/check_exchart.py(정적 계약)와 시안·전후 실측이 진다.
 // ⚠ 이 목록은 **기틀 §2 표가 정본**이다 — 표에 컴포넌트가 늘면 여기도 같이 늘린다.
 const ROOTS = ['btn', 'u-backdrop', 'u-pop', 'u-surface', 'u-empty', 'sw', 'sw-k', 'ry-live-tg',
   'icon-btn', 'toast', 'chip', 'chips', 'chip-dot', 'chip-count', 'chip-label',
