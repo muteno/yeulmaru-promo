@@ -2739,7 +2739,10 @@ var index_default = {
               //  ⚠ 운영_예매(260804 신설) = 주문 4만 행에 주문자명·휴대폰·회원키가 들어있다. 이 목록에
               //   안 넣으면 **앱 비번만으로 전량이 나간다** — 회원 시트와 같은 등급의 개인정보다.
               //   PII 시트를 새로 만들면 반드시 여기에 추가할 것.
-              const PII_SHEETS = ["운영_회원", "운영_예매"];
+              //  ⚠ 운영_예매집계(260805 신설) = 「집계라서 안전」이 아니다. 회원키 = 휴대폰 11자리 원본
+              //   (booking_ingest가 `dg(휴대폰정규화)`를 그대로 박는다)이라 1행 = 실명 없는 연락처 1건이다.
+              //   실측으로 앱 비번만으로 10,119건이 나갔다 — 집계·파생 시트도 원본 키를 지니면 같은 등급.
+              const PII_SHEETS = ["운영_회원", "운영_예매", "운영_예매집계"];
               if (PII_SHEETS.includes(opsName)) {
                 const piiAuth = await checkAdmin(request, env, token);
                 if (!piiAuth.admin) return json({ error: "Admin only (personal data)" }, env, 403);
@@ -2772,7 +2775,7 @@ var index_default = {
               //  다른 isolate가 방금 쓴 변경을 stale 캐시로 놓쳐 전체 재작성이 그 변경을 지우는 동시성 유실 창 축소.
               if (url.searchParams.get("fresh") === "1") delete opsCache[opsName];
               const { headers, rows } = await getOpsCached(token, opsName);
-              // PII 시트(운영_예매)는 회원 시트와 같이 no-store — 브라우저 디스크 캐시에 개인정보가 남지 않게.
+              // PII 시트(예매·예매집계)는 회원 시트와 같이 no-store — 브라우저 디스크 캐시에 개인정보가 남지 않게.
               if (PII_SHEETS.includes(opsName)) {
                 return new Response(JSON.stringify({ sheet, headers, rows, count: rows.length }), {
                   status: 200,
