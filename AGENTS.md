@@ -17,6 +17,8 @@
    (필요 이유 + 가장 가까운 기존 후보 제시). 임의 창작 절대 금지.
 4. **게이트**: `python3 tools/check_design.py`가 위반을 검사한다(커밋 시 `.githooks/pre-commit`이 강제).
    `index.html`·`signage/*.html`을 편집했으면 커밋 전에 반드시 직접 실행해 exit 0 확인.
+   **모달을 새로 만들거나 손댔으면** `python3 tools/check_modal_head.py`(하드 0)와
+   `npm run smoke:modalhead`(패리티 실측)도 같이 — 모든 `.modal`은 머리줄 `_mhead(제목, 부제)` 한 벌을 진다.
 5. 운영자 승인분은 즉시 기틀 편입: 토큰 추가 → `docs/디자인기틀.md` 등재 →
    `tools/check_design.py` baseline 갱신 + 사유 주석.
 6. **디자인 제안·시안·튜닝 = 만지는 플레이그라운드식 HTML**(정적 이미지·텍스트 나열로 갈음 금지) —
