@@ -39,7 +39,10 @@ CONTRACT = (
     '5) 운영자 승인분은 즉시 기틀 편입: :root 토큰 추가 → docs/디자인기틀.md 등재 → check_design baseline 갱신+사유 주석.\n'
     '6) 모달 머리줄(운영자 260805-23 「모든 모달 창 윗부분을 저거로 스모킹 패리티 고정」): 모든 .modal은 강조색 밴드 한 벌 — '
     '모양 SSOT = CSS .mhead · 내용 SSOT = 빌더 _mhead(제목, 부제). 인라인 재타이핑 금지 · 셸 패딩은 --mpad-y/--mpad-x. '
-    '게이트 = tools/check_modal_head.py(하드 0) + tools/smoke_modal_head.mjs(패리티 실측).'
+    '게이트 = tools/check_modal_head.py(하드 0) + tools/smoke_modal_head.mjs(패리티 실측).\n'
+    '7) 정본 컴포넌트 패리티(260805-24 래칫): 「클래스가 같으면 픽셀도 같아야 한다」 — 그 자리에서 인라인으로 다시 '
+    '튜닝하지 말고 정본 CSS를 고친다. 게이트 = tools/smoke_component_parity.mjs(baseline = 기계산출물, --update로만 갱신). '
+    'baseline에 남은 갈래 = 승인된 정본이 아니라 이미 있는 부채(결정 = 운영자 · docs/reports/260805_컴포넌트_패리티_실측.md).'
 )
 
 UI_VOCAB = re.compile(

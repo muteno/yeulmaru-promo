@@ -12,6 +12,7 @@
 - **디자인 SSOT(UI 작업 전 필독)** = `docs/디자인기틀.md` — 토큰(`:root` 2블록)·정본 컴포넌트만. 새 raw hex·새 토큰·새 `:root` 블록 금지, 기틀에 없는 형태는 운영자에게 질문.
 - **디자인 게이트** = `tools/check_design.py` — `index.html`·`signage/*.html` 편집 시 커밋 전 필수(`.githooks/pre-commit`이 강제).
 - **모달 머리줄(운영자 260805-23 「모든 모달 창 윗부분을 저거로 스모킹 패리티 고정」)** = 모든 `.modal`은 강조색 밴드 머리줄 한 벌 — 모양 SSOT `CSS .mhead` · 내용 SSOT 빌더 `_mhead(제목, 부제)`. 인라인 재타이핑 금지 · 셸 패딩은 `--mpad-y`·`--mpad-x`. 게이트 = `tools/check_modal_head.py`(하드 0) + `tools/smoke_modal_head.mjs`(패리티 실측 · fail-soft).
+- **정본 컴포넌트 패리티(260805-24)** = 「클래스가 같으면 픽셀도 같아야 한다」 — 그 자리에서 인라인으로 다시 튜닝하지 말고 정본 CSS를 고친다. 래칫 게이트 `tools/smoke_component_parity.mjs`(baseline `tools/component_parity_baseline.json` = 기계산출물·`--update`로만 갱신). ⚠ baseline에 남은 갈래 = **승인된 정본이 아니라 이미 있는 부채** — 통일 방향은 값 선택이라 세션이 임의로 못 정한다(운영자 결정 · 목록 = `docs/reports/260805_컴포넌트_패리티_실측.md`).
 - **연간 실적(`_YR`) 손대면** = `node tools/build_annual_yr.mjs` — 검산(길이·누계 sum·계=분야합·grand=계인원+장도) · `--recalc`(파생값 자동 재계산) · `--sync-partial`(진행 연도 잠정치를 거울에서 계산 · **후퇴 = 거울 낡음 신호로 거부**, 실측 260804에 라이브 9,568을 낡은 거울 4,210으로 되돌릴 뻔한 걸 막았다). `.githooks/pre-commit`·`npm run check`가 강제. ⚠ 과거 연도를 거울로 재생성하지 마라 — 기준이 다르다(취합본 2025 공연 83,455 = 무료 포함 vs 운영대장 발권유료 63,444 · 전시도 전체 취합 26,785 vs 전시DB 20,217). 거울로 재현되는 건 **진행 연도 잠정치**뿐이고 교육·장도·문화나눔은 연도별 원천 자체가 없다.
 - **디자인 제안·시안·튜닝** = `docs/플레이그라운드_포터블.md` — 만지는 플레이그라운드식 HTML(정적 이미지·텍스트 나열 갈음 금지), 산출 = `docs/reports/`.
 - **앱 도메인 상세** = `docs/앱지침.md`.
