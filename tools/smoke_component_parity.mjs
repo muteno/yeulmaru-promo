@@ -15,7 +15,8 @@
 //   정본은 CSS 하나뿐이고 스모크는 「서로 같은가」만 묻는다(기준 이중 기재가 곧 드리프트 원인).
 //
 // 키 = (자기 클래스 정렬) [readonly/disabled/태그]
-//   · readonly/disabled를 넣는 이유 = 클래스가 아니라 **속성**으로 갈리는 정본 상태(입력칸 읽기전용 등).
+//   · readonly/disabled/aria-checked를 넣는 이유 = 클래스가 아니라 **속성**으로 갈리는 정본 상태
+//     (입력칸 읽기전용 · 글자형 토글 `.ry-live-tg[aria-checked="true|false"]`의 켬/끔 = 정본 CSS가 속성으로 나눈다).
 //   ⚠ 부모 문맥은 **일부러 키에 안 넣는다**(260805-24 킬테스트로 확인): 부모를 넣으면
 //     `.modal-acts > .m-btn.save`가 `.m-btn.save`와 다른 키로 쪼개져, 그 자리만 인라인으로 다시 튜닝해도
 //     「그 키의 유일한 인스턴스」라 갈래가 1로 남아 **드리프트를 통째로 못 잡았다**. 문맥을 빼면
@@ -77,7 +78,8 @@ const SWEEP = `(roots=>{
     if(!cls.some(c=>roots.includes(c)))return;
     const cs=getComputedStyle(e);
     if(cs.display==='none'||cs.visibility==='hidden')return;
-    const st=[e.hasAttribute('readonly')?'ro':'',e.hasAttribute('disabled')?'dis':'',e.tagName].filter(Boolean).join(',');
+    const ac=e.getAttribute('aria-checked');   // 켬/끔이 속성으로 갈리는 정본 상태(글자형 토글 .ry-live-tg[aria-checked]) — readonly/disabled와 같은 축
+    const st=[e.hasAttribute('readonly')?'ro':'',e.hasAttribute('disabled')?'dis':'',ac==='true'?'on':(ac==='false'?'off':''),e.tagName].filter(Boolean).join(',');
     const key=cls.slice().sort().join('.')+' ['+st+']';
     const sig=P.map(p=>cs[p]).join('|');
     out[key]=out[key]||{};
