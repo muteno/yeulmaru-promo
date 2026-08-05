@@ -28549,6 +28549,13 @@ function _veSpecPrompt(){
 //  🔒 공용 PC 원칙(블로그 도우미와 동일): 닫으면 상태 전멸 — 다음 사용자에게 남의 문서가 안 보인다.
 //  레퍼런스 = openNaverBlogTool/openLinkGrab 보드 골격 + .btn/.nb-chip/.nb-textarea/.u-empty 정본 컴포넌트. 신규 raw hex 0.
 // ============================================================
+// ── 서버 보관 정책 (한글문서 편집·오피스문서 편집·용량 줄이기 공용) — 운영자 260805 ────────────────
+//  「문서 최근 3개까지만 쌓이게 하고 안 쌓이게 해줘」. 실제 회수는 `shared/drafts_retain.mjs`가 하고
+//  네 워크플로(nb-blog·hwp-edit·office-edit·slim)가 커밋 직전에 호출한다 — **이 값과 같아야 한다**.
+//  ⚠ 이 레포는 공개 레포다(실측: raw.githubusercontent.com 비인증 GET 200) → 남겨 두는 개수 = 노출 면적.
+//    그래서 화면에도 적는다: 사람이 「서버에 얼마나 남는지」를 모르고 올리면 안 된다.
+var _DRAFT_KEEP=3;
+var _DRAFT_NOTE='서버에 올린 문서는 결과를 받으면 바로 지우고, 결과도 최근 '+_DRAFT_KEEP+'개까지만 보관해요';
 var _HW_MAX=8*1024*1024;      // 업로드 상한 8MB — 한글 공문서는 통상 1MB 미만(용량 초과는 안내로 차단)
 var _HW_EXT=/\.(hwp|hwpx)$/i;
 var _hwState=null;            // {name,bytes,out,outName,view,busy,step,pages,escHandler}
@@ -28606,7 +28613,7 @@ function _hwStageEmpty(){
   var st=document.getElementById('hw-stage');if(!st)return;
   st.innerHTML='<div class="u-empty" style="margin:auto"><div class="ico">📄</div>'
     +'<div class="msg">한글문서(.hwp · .hwpx)를 올리면 미리보기가 열려요</div>'
-    +'<div style="font-size:12px;color:var(--dim);margin-bottom:14px;line-height:1.7">여기로 끌어다 놓거나 아래 버튼으로 고르세요<br>미리보기는 이 컴퓨터 안에서만 열립니다</div>'
+    +'<div style="font-size:12px;color:var(--dim);margin-bottom:14px;line-height:1.7">여기로 끌어다 놓거나 아래 버튼으로 고르세요<br>미리보기는 이 컴퓨터 안에서만 열립니다<br>'+escapeHtml(_DRAFT_NOTE)+'</div>'
     +'<button type="button" class="btn btn--primary btn--md" onclick="_hwPick()">문서 고르기</button></div>';
 }
 function _hwStageMsg(msg,isErr){
@@ -28790,7 +28797,7 @@ function _ofStageDraw(){
   if(!s.bytes){
     st.innerHTML='<div class="u-empty" style="margin:auto"><div class="ico">🗂️</div>'
       +'<div class="msg">워드 · 엑셀 · PPT 문서(.docx · .xlsx · .pptx)를 올려 주세요</div>'
-      +'<div style="font-size:12px;color:var(--dim);margin-bottom:14px;line-height:1.7">여기로 끌어다 놓거나 아래 버튼으로 고르세요<br>파일은 [문서 수정]을 누를 때만 서버로 보내요</div>'
+      +'<div style="font-size:12px;color:var(--dim);margin-bottom:14px;line-height:1.7">여기로 끌어다 놓거나 아래 버튼으로 고르세요<br>파일은 [문서 수정]을 누를 때만 서버로 보내요<br>'+escapeHtml(_DRAFT_NOTE)+'</div>'
       +'<button type="button" class="btn btn--primary btn--md" onclick="_ofPick()">문서 고르기</button></div>';
     return;
   }
@@ -28813,7 +28820,8 @@ function _ofStageDraw(){
   st.innerHTML='<div class="u-empty" style="margin:auto"><div class="ico">'+mt.ico+'</div>'
     +'<div class="msg">'+escapeHtml(s.name)+'</div>'
     +'<div style="font-size:12px;color:var(--dim);line-height:1.7">'+mt.kind+' · '+_ofSize(s.bytes.length)
-    +'<br>미리보기는 지원하지 않아요 — 아래에 어떻게 바꿀지 적고 [문서 수정]을 누르면<br>서버에서 고친 문서를 요약과 함께 돌려드려요</div></div>';
+    +'<br>미리보기는 지원하지 않아요 — 아래에 어떻게 바꿀지 적고 [문서 수정]을 누르면<br>서버에서 고친 문서를 요약과 함께 돌려드려요'
+    +'<br>'+escapeHtml(_DRAFT_NOTE)+'</div></div>';
 }
 
 // ── 파일 받기 ─────────────────────────────────────────────────────────────
@@ -29051,7 +29059,7 @@ function _slStageDraw(){
     +'<div class="msg">'+escapeHtml(s.name)+'</div>'
     +'<div style="font-size:12px;color:var(--dim);line-height:1.7">'+mt.kind+' · '+_slSize(s.orig.length)
     +'<br>아래에서 세기를 고르고 [용량 줄이기]를 누르세요'
-    +(s.runner?'<br>이 형식(PDF · 구형 한글)은 서버에서 처리해요 — 파일이 서버로 올라가요'
+    +(s.runner?'<br>이 형식(PDF · 구형 한글)은 서버에서 처리해요 — 파일이 서버로 올라가요<br>'+escapeHtml(_DRAFT_NOTE)
               :'<br>이 PC에서 바로 처리해요 — 파일이 밖으로 나가지 않아요')+'</div></div>';
 }
 
