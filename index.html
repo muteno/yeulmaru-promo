@@ -1150,10 +1150,15 @@ table.promo-board-table th:last-child .col-resize-handle{display:none}
 .mhead>span:first-child{flex:0 0 auto;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mhead .sub{flex:1 0 auto;max-width:100%;font-size:11.5px;font-weight:600;color:rgba(255,255,255,.85);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* 머리줄이 있는 모달의 X = 밴드 위 흰 잉크·절대 자리 고정(정본 잉크 var(--accent)는 accent 밴드 위에서 소실).
-   `float:right` 기본값(L1129)이 밴드 아래로 흘러가는 것도 여기서 막는다. */
+   `float:right` 기본값(L1129)이 밴드 아래로 흘러가는 것도 여기서 막는다.
+   [260805-25 운영자 선택 · 시안 C 「흰 알파 리프트」] 배경도 흰 알파 축으로 갈아탄다 —
+   정본 `.modal-x`의 쉼/호버 배경(`rgba(74,77,231,.08)`→`.18`)은 **흰 표면을 전제로** 만든 값이라
+   같은 accent로 칠한 밴드 위에서는 두 상태가 전부 묻혔다(실측 ΔE 0.7 · 변한 픽셀 0.0% = 호버 무반응).
+   흰 알파 `.12`→`.25`는 **이미 있는 알파 스텝**(index.html 흰 알파 사다리 33단에 둘 다 존재) = 신규 값 0.
+   ⚠ 이 값은 「머리줄 위」 한정 — 흰 표면 위 `.modal-x`(연간 일정 ↓·↗ 등 인라인 배경 보유분)는 종전 그대로. */
 .modal:has(>.mhead){position:relative}
-.modal:has(>.mhead)>.modal-x{position:absolute;top:14px;right:22px;float:none;margin:0;z-index:10;color:var(--surface-solid)}
-.modal:has(>.mhead)>.modal-x:hover{color:var(--surface-solid)}
+.modal:has(>.mhead)>.modal-x{position:absolute;top:14px;right:22px;float:none;margin:0;z-index:10;color:var(--surface-solid);background:rgba(255,255,255,.12)}
+.modal:has(>.mhead)>.modal-x:hover{color:var(--surface-solid);background:rgba(255,255,255,.25)}
 .mv-nav{position:sticky;top:40px;float:right;clear:both;display:flex;gap:6px;margin:0 -8px 8px 0;z-index:10}
 .mv-nav-btn{width:32px;height:32px;border-radius:50%;border:0;background:rgba(240,196,184,0.2);cursor:pointer;font-size:18px;color:#C97A11;display:flex;align-items:center;justify-content:center;transition:background .15s,color .15s,opacity .15s;line-height:1;padding:0}
 .mv-nav-btn:hover:not(:disabled){background:rgba(240,196,184,0.45);color:#A0610A}
@@ -7245,13 +7250,21 @@ function _bizEduOpsIdx(year){
   try{
     var raw=(_bizState&&_bizState.raw&&_bizState.raw.rows)||[];
     if(!raw.length)return null;
-    var idx={};
+    var idx={}, eduNm=_bizEduNameSet();
     raw.map(_bizNorm).forEach(function(r){
-      if(['교육','특강'].indexOf(String(r['사업구분']||'').trim())<0)return;
       if(String(r['상태']||'').trim()==='취소공연')return;
       if(String(r['티켓구분']||'').trim()==='무료')return;
       var y=Math.trunc(_bizNum(r['년도']!=null?r['년도']:r['연도'])||0); if(y!==year)return;
       var nm=String(r['공연명']||'').trim(); if(!nm)return;
+      var k0=_uName(nm), sg=String(r['사업구분']||'').trim();
+      // [260805 실측] 이 대장에서 교육은 사업구분이 **한 값이 아니다** — 「교육」·「특강」 말고 **「기타」**로도 들어간다
+      //   (거울 2,188행 실측: 2016~2017 「아카데미 화요인문학」 9행 = 사업구분 **기타** · 유료 · 발권유료 163/161/128/113/192/144/264/179/164).
+      //   구판은 교육·특강만 읽어서, 운영자가 대장에 관행대로 「기타」로 적어 넣으면 **교육 카드가 그 값을 영영 못 읽었다**
+      //   = 값을 넣었는데 화면이 안 바뀌는 형태(폴백표가 계속 화면을 지킨다).
+      //   → 「기타」는 **프로그램 시트에 예술교육으로 등재된 이름일 때만** 합류시킨다(_bizEduNameSet = 풀네임·줄임말).
+      //     이름 밖 「기타」는 손대지 않는다 — 그건 정말 기타이지 교육이라고 부를 근거가 없다(의미 창작 0).
+      //   ⚠ 이중 계상 없음: 공연 목록 `_bizClean`은 교육·특강·기타·연기를 **전부** 걸러낸다(같은 행이 두 자리에서 세지지 않는다).
+      if(['교육','특강'].indexOf(sg)<0&&!(sg==='기타'&&eduNm[k0]))return;
       var m=parseInt(String(r['월']||'').replace(/[^0-9]/g,''),10), d=parseInt(String(r['일']||'').replace(/[^0-9]/g,''),10);
       var dt=(!isNaN(m)&&!isNaN(d))?new Date(y,m-1,d):null;
       var k=_uName(nm), e=idx[k]||(idx[k]={name:nm,paid:0,cnt:0,start:dt,end:dt,genre:String(r['장르1']||'').trim()});
@@ -7809,7 +7822,11 @@ function _bizDrawExhibMonthly(divId,list,hgt){
     ys.forEach(function(v,i){ _bgSum[i]+=v; if(_bgSum[i]>_bgMax)_bgMax=_bgSum[i]; });
     data.push({type:'scatter',mode:'none',stackgroup:'exbg',fill:'tonexty',x:_bgX,y:ys,
       fillcolor:_yrHexA(col,(b.g._st==='active')?0.12:0.09),   // 알파 변주만(기틀 §3.5②) · 진행중이 반 단 진하다 = 점의 빈/찬 규칙과 같은 축
-      line:{width:0,shape:'hv'},hoverinfo:'skip',showlegend:false});   // ⚠ hv = **직각**(운영자 「네모차트」) — 이걸 빼면 사선 삼각형이 된다(실측으로 물렸다)
+      // ⚠ 직각 = 계단(운영자 「네모차트」) — 선 모양을 빼면 사선 삼각형이 된다(실측으로 물렸다).
+      //   ⚠⚠ **`hvh`여야 한다**(운영자 5차 「반틈씩 밀리는듯 · 네모박스 각각 **가운데** 기준해서 꺾은선 꼭짓점이 있어야함」):
+      //   `hv`는 값이 **그 점에서 오른쪽으로** 뻗어 칸의 **왼쪽 끝**에 꼭짓점이 놓인다(= 한 달의 절반만큼 밀려 보인다).
+      //   `hvh`는 전환이 **점 사이 중간**에서 일어나므로 칸이 그 달 눈금을 **정중앙**에 두고 선다 = 꼭짓점이 칸 가운데.
+      line:{width:0,shape:'hvh'},hoverinfo:'skip',showlegend:false});
   });
   if(_bgMax>maxV)yTop=_bizNiceStep(Math.max(maxV*1.08,_bgMax*1.02));   // 계단이 잘리지 않는 최소 상한(메인 여유 1.08 유지) · 아래 draw·라벨·lay가 이 값을 쓴다
   built.filter(function(b){ return !_done(b); }).forEach(draw);   // 진행중·예정 = 아래층
