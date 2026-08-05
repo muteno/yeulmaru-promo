@@ -7522,11 +7522,18 @@ function _bizCompRender(el,half){
   //   오른쪽 끝까지가 한 덩어리로 오른쪽 정렬이라, 제목 칸의 오른쪽 경계선이 한 줄로 선다.
   //   ⚠ 공연명 머리글은 **배지 폭만큼 들여쓴다**(12+16+5=33) — 머리글이 배지에 붙으면 아래 제목 글자들과 한 줄이
   //     안 맞는다. 열의 세로선은 「눈에 띄는 글자」(제목)를 기준으로 세운다 = 체크박스 목록과 같은 정렬 규약.
+  //     이래야 260801 운영자 규약(「머리글 첫 글자와 값 첫 글자가 한 세로선에서 시작」 ~L8410)이 실제로 성립한다(실측 Δ0).
+  //   ⚠ 단위 문자열은 이 네 열이 **한 템플릿**(`'(단위: '+c[1]+')'`)에서 뽑아 쓰는 공용 조각이다 — 운영자 원문의
+  //     `(단위 : 명, 회)`(콜론 앞 공백)를 오픈석에만 넣으면 형제 3열(유료 관객·점유율·매출)과 어긋난다.
+  //     레포 실측 `(단위: ` 3건 / `(단위 :` 0건 → **관례 계승**. 원문 표기로 되돌리려면 네 열을 같이 바꾼다.
   var _nameHdPad=12+_BIZ_HALL_BADGE_W+_BIZ_HALL_BADGE_GAP;
   [['일시',''],['공연명',''],['장르',''],['유료 관객','명'],['오픈석','명, 회'],['점유율','%'],['매출','만원']].forEach(function(c,i){_tbl+='<td style="padding:8px 12px;position:sticky;top:0;z-index:1;background:var(--surface-solid);box-shadow:inset 0 -2px 0 var(--border);vertical-align:top;'+(i>=2?'text-align:right;':'')+(i===0?'padding-left:14px;':'')+(i===1?'padding-left:'+_nameHdPad+'px;':'')+(i===6?'padding-right:14px;':'')+'white-space:nowrap">'+c[0]+(c[1]?'<div style="font-size:10.5px;font-weight:400;margin-top:2px">(단위: '+c[1]+')</div>':'')+'</td>';});
   _tbl+='</tr></thead><tbody>';
   list.forEach(function(g,idx){
-    var dr=_bizDateCell(g.start,g.end,(g.cnt===1||g.start.getTime()===g.end.getTime()));
+    // 단일일 판정 = **날짜가 같은가**만 본다. 구판의 `g.cnt===1 ||` 는 회차 1인데 기간이 이틀 이상인 행
+    //   (판매 축·예정 행: 회차 열 공란 → cnt 1로 낙하)에서 **시작일을 통째로 지웠다**(1/24~1/25가 `01.25`로만 표기).
+    //   운영대장 행은 cnt 1이면 날짜도 하나라 이 절이 애초에 무용 = 회귀 0, 갭만 닫힌다.
+    var dr=_bizDateCell(g.start,g.end,g.start.getTime()===g.end.getTime());
     _tbl+='<tr style="border-bottom:1px solid var(--border);'+(idx%2===1?'background:var(--past-bg);':'')+'">'
       +'<td style="padding:7px 12px;padding-left:14px;white-space:nowrap;color:var(--neutral-text);font-variant-numeric:tabular-nums">'+dr+'</td>'
       // 제목 = **무조건 1행**(운영자) — max-width:0 + width:100%로 「남는 폭 전부, 그러나 다른 열은 안 밀침」이 되고,
