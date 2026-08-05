@@ -11390,10 +11390,22 @@ var _BIZ_GENRE_COLORS={'클래식':'#4A4DE7','뮤지컬':'#1A6B3C','대중':'#08
 //   ⚠ 판정 소스 = **장르 문자열 + 사업명 둘 다**. 운영대장 `장르1`은 정규 6분류라 문자열만 보면
 //     「어린이 뮤지컬」류가 계속 뮤지컬로 남는다 = 운영자가 말한 「db까지 통합」이 안 된다.
 //     그래서 이름을 같이 본다(이 함수를 부르는 3소스 = 운영대장·판매 축·프로그램 시트 전부 이름을 넘긴다).
-var _BIZ_KID_RE=/어린이/;
+//   ⚠ [260807-5 운영자] **`가족`은 본제목에 있을 때만** 승격한다 — 부제(꺾쇠·따옴표 안)에만 있으면 본제목 장르를 따른다.
+//     운영자 판정 3건이 이 선을 그었다: 「가족오페라 '신콩쥐'」·「환상가족음악극 〈리틀 뮤지션〉」 = **어린이·가족**
+//     (가족이 장르어와 붙어 본제목을 이룬다) / 「여수필하모닉 제36회 **정기연주회** 〈…송년의 밤, 가족음악회〉」 = **클래식**
+//     (본제목은 정기연주회이고 가족은 부제 안 수식). 실데이터 대조 = 그 3건 전건 재현 · 올라감 10 / 유지 1.
+//     `어린이`는 부제 여부를 안 본다 — 어린이는 대상을 못 박는 낱말이라 어디 있든 사업 성격이 그것이다.
+var _BIZ_KID_RE=/어린이/, _BIZ_FAM_RE=/가족/;
+var _BIZ_SUB_RE=/[<〈「『"“‘'][^>〉」』"”’']*[>〉」』"”’']/g;   // 부제 = 꺾쇠·따옴표 묶음(레포 표기 관례 · _uName의 괄호 집합과 같은 축)
+//   [260807-5 운영자 「무용 과 발레 같은 개념으로 발레/연극」] 시트 표기가 맵 키와 아예 다른 값의 별칭표.
+//   포함 검사로는 못 잡는다('발레/연극'과 '무용'은 서로의 부분열이 아니다) — 구판은 통째로 기타였다.
+var _BIZ_GENRE_ALIAS={'무용':'발레/연극'};
 function _bizGenreKey(s,name){
-  if(_BIZ_KID_RE.test(String(s||''))||_BIZ_KID_RE.test(String(name||'')))return '어린이·가족';
-  s=String(s||'').trim(); if(!s)return '기타';
+  var _g=String(s||''), _nm=String(name||'');
+  if(_BIZ_KID_RE.test(_g)||_BIZ_KID_RE.test(_nm))return '어린이·가족';
+  if(_BIZ_FAM_RE.test(_g)||_BIZ_FAM_RE.test(_nm.replace(_BIZ_SUB_RE,'')))return '어린이·가족';
+  s=_g.trim(); if(!s)return '기타';
+  if(_BIZ_GENRE_ALIAS[s])return _BIZ_GENRE_ALIAS[s];
   if(_BIZ_GENRE_COLORS[s])return s;
   var keys=Object.keys(_BIZ_GENRE_COLORS),i;
   for(i=0;i<keys.length;i++){ if(keys[i]==='기타')continue; if(keys[i].indexOf(s)>=0||s.indexOf(keys[i])>=0)return keys[i]; }
