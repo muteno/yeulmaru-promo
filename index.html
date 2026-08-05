@@ -6911,22 +6911,17 @@ function _bizMoney(v,bare){
 //   지시: *"1/24-25 이렇게 갈게 (요일은 뺄게)"* · *"12/24-25"* · *"월이 넘어가는 케이스가 있을때는. 12/24-1/3"*.
 //   = 같은 달이면 뒤쪽 월을 생략(일만 잇는다) · 달이 바뀌면 양쪽 다 적는다. 구 표기(`01.24(토)~01.25(일)` 19자)
 //     대비 절반 이하로 줄어든 폭은 그대로 공연명 칸이 가져간다(운영자 「확보된 만큼 공연명을 좌측으로」).
-//   ⚠ **앞자리 맞춤**(운영자 「1/24랑 12/24랑 앞에 십의자리수때문에 정렬이 안맞는데 … 앞에 0이 있다고 가정하고
-//     세로선 배치를 광학 잉크단위로」) = 맨 앞 월을 **두 자리 폭의 오른쪽 정렬 상자**에 담는다. 그러면 한 자리 월은
-//     저절로 한 칸 들여써지고(=「앞에 0이 있다고 가정」) **슬래시와 그 뒤가 전부 한 세로선**에 선다.
-//     폭 `2ch` = 숫자 '0' 두 자(ch의 정의) — 숨은 '0' 글자를 앞에 끼우는 방식과 자리는 같고, **폰트가 tabular
-//     숫자를 지원하든 안 하든**(구현 폰트 Pretendard 미설치 폴백까지) 어긋나지 않는다. 잉크 0 · 읽히는 글자 0.
-//     ⚠ `ch`는 **이 레포 최초 도입 단위**다 — 고정폭 상자 관용구 자체는 기존(`.pw-summary .lbl{min-width:70px}` ~L1542 ·
-//       `_accBar`의 `flex:0 0 42px` ~L8132)이고, px 대신 **폰트 상대**로 잡은 변형이다. px로 잡으면 서체가 바뀔 때
-//       글자폭을 못 따라가 어긋난다(숨은 0 시안이 `11` 커닝에서 0.97px 어긋난 것과 같은 실패). 색·토큰 신설 0.
-//       ⚠ 오픈석 회차에도 같은 상자를 썼다가 철회했다(아래 _tbl 주석) — `ch`는 숫자 폭이라 괄호에는 안 맞는다.
-//     min-width라 혹시 두 자리가 2ch보다 넓은 서체를 만나도 겹치지 않고 그 행만 자연폭으로 물러선다(무해 열화).
+//   ⚠ **앞자리 맞춤은 철회했다 — 그냥 좌측 정렬**(운영자 260807-3 「일시 그냥 좌측정렬할게」).
+//     구판은 맨 앞 월을 `min-width:2ch;text-align:right` 상자에 담아 한 자리 월을 한 칸 들여썼다
+//     (=「앞에 0이 있다고 가정」 · 첫 `/` 편차 0.02px). 실물을 본 운영자 판단으로 **한 자리 월이 들여써지는 것보다
+//     전 행 왼쪽 끝이 한 줄로 서는 쪽**을 택한다 → 상자 제거, 잉크 그대로 왼쪽 정렬.
+//     되살리려면 앞 월을 `<span style="display:inline-block;min-width:2ch;text-align:right">`로 감싸면 된다.
 function _bizMD(d){ return (d.getMonth()+1)+'/'+d.getDate(); }
 function _bizDateCell(s,e,single){
   var head=single?e:s;
   var tail=single?String(e.getDate())
     :((s.getMonth()===e.getMonth()&&s.getFullYear()===e.getFullYear())?s.getDate()+'-'+e.getDate():s.getDate()+'-'+_bizMD(e));
-  return '<span style="display:inline-block;min-width:2ch;text-align:right">'+(head.getMonth()+1)+'</span>/'+tail;
+  return (head.getMonth()+1)+'/'+tail;
 }
 // ── [260807 운영자] 공연명 앞 대/소 원형 배지 = 「어느 극장인가」 ────────────────────────────────
 //   '대'·'소' 한 글자 표기 = 이 레포 정본 축약(_GC_PLACE 「대→대극장 · 소→소극장」) 그대로.
@@ -6984,12 +6979,11 @@ function _bizHallOf(g){
 // 형태 = **`_batchBadge`(~L16293) 자구 그대로 계승** — 16px 원 · 9px/700 · 이름과 5px · 표 셀 안 · 말줄임 제목 앞.
 //   조건이 같은 자리(그쪽 본문 12.5px · 여기 13px)라 크기를 새로 잡을 이유가 없다 = **값 변경 0**.
 //   (그 배지도 캘린더 셀 배지 ~L3318에서 온 것 — 같은 계보의 표 셀판이다.)
-//   두 상태 구분은 기틀 §3.5③대로 **색 하나에 안 맡긴다**(글자 대/소 + 명도 + 글자색 삼중단서).
-//   ⚠ **채움은 「소」에 준다** — 실측 분포가 대 12 : 소 2다. 최빈값에 가장 진한 마크(16px 채색 원)를 주면
-//     매 행에서 제일 큰 잉크가 아무 정보도 안 나르고, 정작 **행의 해석을 바꾸는 예외**(소극장 302석에서의
-//     점유율 31.1%는 대극장 31.1%와 완전히 다른 뜻)가 가장 조용해진다. 희소값 현저성이 서수 직관(대=크니까 진하게)을 이긴다.
-//     소 = 진한 채움 + 흰 글자(5.99:1) / 대 = 옅은 채움 + 유채색 글자(4.96:1) — 둘 다 WCAG AA · 팔레트 밖 색 0.
-//     되돌리려면 아래 삼항의 조건만 뒤집으면 된다(운영자 취향 사항).
+//   ⚠ **대·소가 같은 음영**(운영자 260807-3 「소극장도 같은 음영 동그라미 써줘」) —
+//     `--accent-light` 채움 + `--accent` 글자 한 벌(**4.96:1** · WCAG AA 통과 · 팔레트 밖 색 0).
+//     구별은 **글자(대/소)가 진다** = 색은 「극장 표식」이라는 한 가지만 말한다. 채움/틴트로 대·소를 갈랐던
+//     구판(그리고 희소값 강조로 뒤집었던 그 앞판)은 같은 letter가 두 모양으로 보여 범례 없이는 오독된다 —
+//     운영자가 실물을 보고 한 벌로 정리했다. 배지가 조용해져 제목·점유율의 위계도 돌아온다.
 //   ⚠ 같은 앱 캘린더에 **원형 '대' = 대관** 배지가 이미 있다(perfBadgeLb ~L3271). 화면이 다르고 색축도 다르지만
 //     (대관 = --c5 시안블루 · 여기 = --accent 인디고), 한 글자가 두 뜻이라 title/aria-label로 뜻을 못 박는다.
 var _BIZ_HALL_BADGE_W=16, _BIZ_HALL_BADGE_GAP=5, _BIZ_HALL_BADGE_L=12;   // 제목 칸 좌패딩(좌여백+배지폭+간격)이 이 셋을 읽는다 — 값 이원화 금지
@@ -7000,13 +6994,13 @@ function _bizHallBadge(x){
   // ⚠ `user-select:none` = 흐름 밖이어도 **복사 문자열에는 섞인다**(`대2026 신년음악회`로 붙어 엑셀에 들어갔다 · 실측).
   //   배지는 값이 아니라 표식이라 선택 대상에서 뺀다. aria-label은 남긴다(낭독은 필요 · 복사와 별개 축).
   if(!x||!x.h)return '';
-  var big=(x.h==='대'), loud=!big;   // loud = 채움(강조) 쪽 = 희소값 '소'
+  var big=(x.h==='대');
   //   aria-label은 **짧게** — 배지 라벨이 셀 접근성 이름에 흡수돼 스크린리더가 매 행 앞에 이걸 먼저 읽는다.
   //   긴 근거 문장은 title(호버)에만 둔다.
   var lab=(big?'대극장':'소극장')+(x.est?' 추정':''),
       tip=(big?'대극장':'소극장')+(x.est?(' (추정 · 회차당 '+x.per.toLocaleString()+'석 — 운영대장에 장소 열이 없어 좌석으로 미룬 값)'):'');
   return '<span title="'+escapeHtml(tip)+'" aria-label="'+escapeHtml(lab)+'" style="position:absolute;left:'+_BIZ_HALL_BADGE_L+'px;top:50%;transform:translateY(-50%);user-select:none;-webkit-user-select:none;display:inline-flex;align-items:center;justify-content:center;min-width:'+_BIZ_HALL_BADGE_W+'px;height:'+_BIZ_HALL_BADGE_W+'px;border-radius:50%;font-size:9px;font-weight:700;line-height:1;'
-    +(loud?'background:var(--accent);color:var(--surface-solid)':'background:var(--accent-light);color:var(--accent)')+'">'+x.h+'</span>';
+    +'background:var(--accent-light);color:var(--accent)">'+x.h+'</span>';
 }
 // ── [260806 운영자] 3면 조작부 = 「연도 ▾ │ 전체·판매중」 토글 한 벌 ────────────────────────
 //   지시: *"공연 전시 교육 2026년 기획 자세히보기 이거 모두 삭제해주고 첨부와 같은 토글만 넣어줘"* +
