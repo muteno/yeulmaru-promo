@@ -7866,18 +7866,33 @@ function _bizDrawExhibMonthly(divId,list,hgt){
   if(_bgMax>maxV)yTop=_bizNiceStep(Math.max(maxV*1.08,_bgMax*1.02));   // 계단이 잘리지 않는 최소 상한(메인 여유 1.08 유지) · 아래 draw·라벨·lay가 이 값을 쓴다
   built.filter(function(b){ return !_done(b); }).forEach(draw);   // 진행중·예정 = 아래층
   built.filter(_done).forEach(draw);                              // 종료 = 위층(운영자 260805)
-  // 값 라벨 = 전시당 꼭자락 1개(위 draw) · 큰 값 우선 배치 · 겹치면 생략(정확값은 툴팁) — 공연 막대(_bizDrawSalesBars)의
-  //   그 규칙 유지. 같은 달에 두 전시가 끝나면(같은 x · 예: 6월 어린이미술전·섬냥이) 세로로 포개지므로 x·y 둘 다 본다.
+  // 값 라벨 = 전시당 꼭자락 1개(위 draw) · **큰 값이 먼저 자리를 잡는다**.
+  // [260805 운영자 6차] 「꺾은선이 수치가 겹칠때는 **더 낮은 수치가 180도 반대편에 기록**되게(겹치는거보다는 그게 나음)」
+  //   → 구판의 「겹치면 생략」을 **뒤집기**로 바꾼다: 큰 값부터 놓으므로 부딪히는 쪽은 항상 **낮은 값** = 그게 점 반대편으로 간다.
+  //   양쪽 다 막힌 경우에만 생략(마지막 안전판 · 정확값은 툴팁). 겹침 판정은 **같은 쪽에 놓인 라벨끼리만** 본다.
   var plotSpan=Math.max(120,wpx-56), pxPerDay=plotSpan/(ax.x1-ax.x0), pxPerY=Math.max(60,hgt-48)/yTop;
-  var placed=[];
+  var placed=[];   // {x,y,side} · side +1 = 점 위 · -1 = 점 아래
+  //   세로 임계 19 = 라벨 글상자(10.5px 활자 ≈ 13) + 숨구멍 6. ⚠ 구판 14는 **글상자 높이만도 못 되는 값**이라
+  //   6월 3,827·3,080처럼 17px 떨어진 짝을 「안 겹침」으로 통과시켜 두 숫자가 선 위에 포개 보였다(실측 후 교정).
+  var _hit=function(L,side){ return placed.some(function(p){ return p.side===side&&Math.abs(p.x-L.x)*pxPerDay<30&&Math.abs(p.y-L.y)*pxPerY<19; }); };
   labs.sort(function(a,b){ return b.v-a.v; }).forEach(function(L){
-    var ok=placed.every(function(p){ return Math.abs(p.x-L.x)*pxPerDay>=30||Math.abs(p.y-L.y)*pxPerY>=14; });
-    if(!ok)return;
-    placed.push(L);
-    // 천장에 붙은 점은 라벨을 **점 아래**로 내린다 — 위에 두면 구획 라벨(「진행 완료」·「진행·예정」)과 겹쳐 글자가 포갠다.
-    //   축을 사다리 한 칸 더 올려 피하면(1,500→2,000) 차트 3분의 1이 빈 자리가 되므로, 축이 아니라 라벨을 옮긴다.
-    var up=(yTop-L.y)*pxPerY>=32;   // 32 = 라벨 글상자(12) + 띄움(6) + 구획 라벨 띠(≈14) — 이보다 얕으면 두 글자가 포갠다(230px 카드 실측)
-    notes.push({xref:'x',x:L.x,xanchor:'center',yref:'y',y:L.y,yanchor:up?'bottom':'top',yshift:up?6:-9,text:Math.round(L.v).toLocaleString(),showarrow:false,font:{size:10.5,color:L.col}});
+    // 천장에 붙은 점은 애초에 **점 아래**에서 시작한다 — 위에 두면 구획 라벨(「진행 완료」·「진행·예정」)과 글자가 포갠다.
+    //   축을 사다리 한 칸 더 올려 피하면 차트 3분의 1이 빈 자리가 되므로, 축이 아니라 라벨을 옮긴다.
+    var side=((yTop-L.y)*pxPerY>=32)?1:-1;   // 32 = 라벨 글상자(12) + 띄움(6) + 구획 라벨 띠(≈14) — 230px 카드 실측
+    if(_hit(L,side))side=-side;              // 겹치면 180도 반대편(운영자 6차)
+    if(_hit(L,side))return;                  // 양쪽 다 막힘 = 생략(정확값은 툴팁)
+    placed.push({x:L.x,y:L.y,side:side});
+    notes.push({xref:'x',x:L.x,xanchor:'center',yref:'y',y:L.y,yanchor:(side>0)?'bottom':'top',yshift:(side>0)?6:-9,text:Math.round(L.v).toLocaleString(),showarrow:false,font:{size:10.5,color:L.col}});
+  });
+  // [260805 운영자 6차] 「각 차트(월별) 위에 **누적 몇개인지** 옆에 **회색 톤**으로」 — 계단 칸 꼭대기의 그 달 누적 합.
+  //   회색 = `--dim`(앱 표준 회색 · 새 색 0) · 9.5px = 축 눈금보다 한 단 작게 = **보조 정보**임이 활자에서 드러난다.
+  //   메인 꼭자락 라벨이 이미 그 자리를 잡았으면(전시가 하나뿐인 달 = 누적 = 그 전시 값) **회색은 생략** — 같은 숫자를 두 번 쓰지 않는다.
+  _bgSum.forEach(function(v,m){
+    if(!(v>0))return;
+    var L={x:mx(m),y:v};
+    if(_hit(L,1))return;
+    placed.push({x:L.x,y:L.y,side:1});
+    notes.push({xref:'x',x:L.x,xanchor:'center',yref:'y',y:v,yanchor:'bottom',yshift:5,text:Math.round(v).toLocaleString(),showarrow:false,font:{size:9.5,color:dim}});
   });
   var lay={height:hgt,margin:{l:46,r:10,t:18,b:30},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',showlegend:false,
     xaxis:{tickmode:'array',tickvals:ax.tickvals,ticktext:ax.ticktext,tickfont:{size:10.5,color:dim},range:[ax.x0,ax.x1],fixedrange:true,zeroline:false,showgrid:false,automargin:false},
