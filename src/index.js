@@ -2619,6 +2619,88 @@ var index_default = {
         }
       }
 
+      // === 콘텐츠 제작 ▸ 용량 줄이기 (260805 운영자) — 오피스문서 편집(/api/office/*)의 **부분** 미러 ===
+      // ⚠ 이 경로로 오는 건 **.pdf 와 구형 .hwp 둘뿐**이다. 나머지 7종(xlsx/xlsm/xltx/docx/dotx/pptx/potx/hwpx)은
+      //    전부 ZIP 컨테이너라 브라우저가 직접 줄이고 **여기 오지 않는다**(서버 무경유 = 파일 무반출 · 8MB 상한 무관).
+      //    「용량 줄이기인데 정작 큰 파일이 8MB 상한에 막힌다」는 모순을 그렇게 피한다 — 러너 전량 안이 기각된 이유.
+      // ⚠ office 와 갈리는 지점: **claude -p 를 안 쓴다.** 압축은 결정적 처리라 판단할 게 없어 에이전트가 불필요하고,
+      //    그래서 계정 체인·쿼터를 전혀 안 먹는다(slim.yml 에 OAuth 시크릿 자체가 없다).
+      // 흐름은 동일(신설 0): upload(원본 커밋) → dispatch(slim) → [Actions 압축 후 커밋] → /api/blog/draft 폴링(공용) → file.
+      if (url.pathname.startsWith("/api/slim/")) {
+        const cfg = ghBlogCfg(env);
+        if (!cfg.pat) return json({ error: "no_github_pat", note: "Worker에 GITHUB_PAT 시크릿 미설정" }, env, 503);
+        const ghHdr = { "Authorization": "Bearer " + cfg.pat, "Accept": "application/vnd.github+json", "User-Agent": "yeulmaru-promo-worker" };
+        const slmId = (v) => String(v || "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 64);
+        // 2종 화이트리스트 — 미일치 = 400 거절(office 의 3종 화이트리스트와 같은 문법, 경로 조작 차단 동일).
+        const slmExt = (n) => { const m = String(n || "").match(/\.(pdf|hwp)$/i); return m ? m[1].toLowerCase() : null; };
+        const slmLevel = (v) => (["screen", "std", "hq"].includes(String(v || "")) ? String(v) : "std");
+
+        if (url.pathname === "/api/slim/upload" && request.method === "POST") {
+          let b = {};
+          try { b = await request.json(); } catch (e) {}
+          const id = slmId(b.id);
+          const ext = slmExt(b.name);
+          const b64 = String(b.b64 || "").replace(/\s/g, "");
+          if (!id) return json({ error: "id required" }, env, 400);
+          if (!ext) return json({ error: "PDF·구형 한글(.pdf·.hwp)만 서버로 보내요 — 나머지는 브라우저가 직접 줄여요" }, env, 400);
+          if (!b64) return json({ error: "빈 파일이에요" }, env, 400);
+          if (b64.length > 12e6) return json({ error: "문서가 너무 커요(8MB 이하)" }, env, 413);
+          const path = `drafts/slim/${id}.in.${ext}`;
+          try {
+            const gr = await fetch(`https://api.github.com/repos/${cfg.repo}/contents/${path}`, {
+              method: "PUT",
+              headers: { ...ghHdr, "Content-Type": "application/json" },
+              body: JSON.stringify({ message: `chore(slim): ${id} 원본 [skip ci]`, content: b64, branch: cfg.branch })
+            });
+            if (!gr.ok) return json({ error: gr.status === 401 || gr.status === 403 ? "github_denied" : "upload_failed", status: gr.status, note: (await gr.text()).slice(0, 200) }, env, 502);
+            return json({ ok: true, id, path }, env);
+          } catch (e) {
+            return json({ error: String((e && e.message) || e) }, env, 502);
+          }
+        }
+
+        // 트리거 — 전용 event_type(slim)이라 블로그·한글문서·오피스문서 큐에 안 막힌다.
+        if (url.pathname === "/api/slim/dispatch" && request.method === "POST") {
+          let b = {};
+          try { b = await request.json(); } catch (e) {}
+          const id = slmId(b.id);
+          const ext = slmExt(b.name);
+          if (!id) return json({ error: "id required" }, env, 400);
+          if (!ext) return json({ error: "PDF·구형 한글(.pdf·.hwp)만 서버에서 줄여요" }, env, 400);
+          const inner = { id, name: String(b.name || "문서").slice(0, 160), ext, level: slmLevel(b.level) };
+          try {
+            const gr = await fetch(`https://api.github.com/repos/${cfg.repo}/dispatches`, {
+              method: "POST",
+              headers: { ...ghHdr, "Content-Type": "application/json" },
+              body: JSON.stringify({ event_type: "slim", client_payload: { d: inner } })
+            });
+            if (gr.ok) return json({ ok: true, id }, env);
+            return json({ error: gr.status === 401 || gr.status === 403 ? "github_denied" : "dispatch_failed", status: gr.status, note: (await gr.text()).slice(0, 200) }, env, 502);
+          } catch (e) {
+            return json({ error: String((e && e.message) || e) }, env, 502);
+          }
+        }
+
+        // 결과 바이트 — 1MB 넘는 파일도 오게 raw 미디어타입(office·hwp 와 동일). 확장자는 원본과 같으므로 2종 순회.
+        if (url.pathname === "/api/slim/file" && request.method === "GET") {
+          const id = slmId(url.searchParams.get("id"));
+          if (!id) return json({ error: "id required" }, env, 400);
+          for (const ext of ["pdf", "hwp"]) {
+            try {
+              const gr = await fetch(`https://api.github.com/repos/${cfg.repo}/contents/drafts/slim/${id}.out.${ext}?ref=${encodeURIComponent(cfg.branch)}&t=${Date.now()}`, {
+                headers: { ...ghHdr, "Accept": "application/vnd.github.raw" }
+              });
+              if (gr.status === 404) continue;
+              if (!gr.ok) return json({ error: "github " + gr.status }, env, 502);
+              return new Response(gr.body, { headers: { "Content-Type": "application/octet-stream", ...corsHeaders(env) } });
+            } catch (e) {
+              return json({ error: String((e && e.message) || e) }, env, 502);
+            }
+          }
+          return json({ error: "not_ready" }, env, 404);
+        }
+      }
+
       const token = await getToken(env);
 
       // 홍보기록
