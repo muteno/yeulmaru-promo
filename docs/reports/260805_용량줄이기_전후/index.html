@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>260805 콘텐츠 제작 ▸ 용량 줄이기 (하이브리드) · 전후</title>
+<style>
+  body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;max-width:1060px;margin:30px auto;padding:0 20px;color:#1A1A2E;line-height:1.6}
+  h1{font-size:20px} h2{font-size:16px;margin-top:34px}
+  img{max-width:100%;border:1px solid rgba(0,0,0,0.12);border-radius:12px;display:block;margin:10px 0}
+  .dim{color:#888;font-size:12.5px} code{background:rgba(74,77,231,0.08);padding:1px 5px;border-radius:5px;font-size:12px}
+  table{border-collapse:collapse;font-size:13px;margin:10px 0;width:100%} td,th{border:1px solid rgba(0,0,0,0.12);padding:6px 10px;text-align:left;vertical-align:top}
+  th{background:rgba(0,0,0,0.02)}
+  .c1{color:#4A4DE7;font-weight:700} .c2{color:#D88455;font-weight:700} .c3{color:#1A6B3C;font-weight:700}
+  .ba{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .ba .lb{font-size:12px;font-weight:700;color:#888;margin-bottom:2px}
+  .ba .lb b{color:#1A1A2E}
+  .note{background:rgba(74,77,231,0.05);border-left:3px solid #4A4DE7;padding:10px 14px;border-radius:0 8px 8px 0;font-size:12.5px;margin:12px 0}
+  .warn{background:rgba(226,75,74,0.05);border-left:3px solid #E24B4A;padding:10px 14px;border-radius:0 8px 8px 0;font-size:12.5px;margin:12px 0}
+  .num{text-align:right;font-variant-numeric:tabular-nums}
+  @media(max-width:820px){.ba{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<h1>260805 — 콘텐츠 제작 ▸ <span class="c1">용량 줄이기</span> (하이브리드 · 브라우저 7종 + 러너 2종)</h1>
+<p class="dim">지시(운영자): <b>「엑셀 파일 이미지를 압축하는git이 있어? 확인해주고, 엑셀, ppt, pdf, 한글 파일 용량줄이기 개념으로 기능을 탑재하고싶은데」</b>
+→ 선택지 제시 후 <b class="c1">「하이브리드」 + 「3단 선택」</b> 확정.</p>
+<p class="dim">아래 스냅샷은 정본 하네스(<code>tools/smoke_layout.mjs</code>)와 같은 방식으로 <code>?qa=admin</code> 목데이터를 1500×900 헤드리스에 띄워 찍은 것 —
+실API·실데이터 미접촉. 「전」은 <code>git show origin/main:index.html</code>을 그대로 서빙해 같은 시나리오를 두 판본에서 돌렸다.</p>
+
+<h2>0. 기존 git 확인 결과 — 있지만 그대로 못 쓴다</h2>
+<table>
+<tr><th>저장소</th><th>방식</th><th>왜 그대로 못 쓰나</th></tr>
+<tr><td><a href="https://github.com/cometeme/compress-office">cometeme/compress-office</a><br><span class="dim">MIT · Python · ⭐12</span></td>
+    <td>docx/pptx/xlsx를 풀어 optipng·jpegoptim·gifsicle로 <b>무손실</b> 압축 후 되말기</td>
+    <td>외부 바이너리 의존(브라우저 불가) · <b>축소를 안 해</b> 감량폭이 작다 · PDF·한글 없음</td></tr>
+<tr><td><a href="https://github.com/district10/compress-excel-images">district10/compress-excel-images</a><br><span class="dim">bash · ⭐1</span></td>
+    <td>ImageMagick으로 임계치까지 반복 축소 · CMYK→RGB</td>
+    <td>외부 바이너리 의존 · xlsx 전용</td></tr>
+</table>
+<div class="note"><b>판정 = 직접 구현.</b> 원리가 단순하다 — 대상 포맷 대부분(<code>xlsx xlsm xltx docx dotx pptx potx hwpx</code>)이 <b>ZIP 컨테이너</b>이고
+사진은 <code>xl/media/</code>·<code>ppt/media/</code>·<code>word/media/</code>·<code>BinData/</code>에 그냥 들어 있다. 12스타 저장소에 의존을 걸 이유가 없고,
+이 레포는 <b>이미 JSZip을 쓰고 있다</b>(티켓링크 파서 <code>_tktEnsureJSZip</code>) → <b>신규 의존 0</b>.</div>
+
+<h2>1. 왜 하이브리드인가 — 러너 전량 안이 기각된 이유</h2>
+<div class="warn"><b>「용량 줄이기인데 정작 줄이고 싶은 큰 파일이 8MB 업로드 상한에 막힌다」</b>는 모순.
+오피스문서 편집(<code>of-*</code>) 경로를 그대로 미러하면 전 형식이 Worker b64 상한에 묶인다 — 20MB PPT를 줄이러 온 사람이 파일을 못 올린다.
+그래서 <b>ZIP 컨테이너 7종은 브라우저에서 끝내고</b>(서버 무경유 · 파일 무반출 · 상한 200MB), ZIP이 아닌 <b>PDF·구형 hwp 2종만</b> 러너로 보낸다.</div>
+<table>
+<tr><th></th><th class="c1">브라우저 즉시 (7종)</th><th class="c2">러너 경유 (2종)</th></tr>
+<tr><th>대상</th><td><code>.xlsx .xlsm .xltx .docx .dotx .pptx .potx .hwpx</code></td><td><code>.pdf</code> · 구형 <code>.hwp</code></td></tr>
+<tr><th>왜 갈리나</th><td>전부 ZIP 컨테이너 = JSZip으로 열린다</td><td>PDF = XObject 구조 · HWP 5.0 = CFB 복합문서 + raw-deflate 스트림</td></tr>
+<tr><th>소요</th><td>0.4~0.5초</td><td>1~3분(Actions 왕복)</td></tr>
+<tr><th>파일이 나가나</th><td><b class="c3">안 나간다</b>(온디바이스)</td><td>레포에 임시 커밋 → 즉시 삭제 + 자동 회수</td></tr>
+<tr><th>용량 상한</th><td>200MB(캔버스 메모리 안전판)</td><td>8MB(Worker b64 검사)</td></tr>
+<tr><th>엔진</th><td>JSZip + 캔버스</td><td>Ghostscript · SheetJS <code>cfb</code> + <code>sharp</code></td></tr>
+<tr><th>claude -p</th><td colspan="2"><b>양쪽 다 안 쓴다</b> — 압축은 결정적 처리라 판단할 게 없다. <code>slim.yml</code>에 OAuth 시크릿이 아예 없고 <b>계정 체인·쿼터를 전혀 안 먹는다</b>(한글문서·오피스문서 편집과 갈리는 지점)</td></tr>
+</table>
+
+<h2>2. 드롭다운 — 「오피스문서 편집」 아래 한 줄</h2>
+<div class="ba">
+  <div><div class="lb">전 — <b>콘텐츠 제작 드롭다운</b>(용량 항목 없음 · DOM 검증 0개)</div><img src="before_dropdown.png" alt="전: 카드 제작/로고 제작/네이버 블로그/한글문서 편집/오피스문서 편집/링크 자료수집/누끼따기"></div>
+  <div><div class="lb">후 — <b>「용량 줄이기」 추가</b>(DOM 검증 1개 · 같은 itemCss·호버 결)</div><img src="after_dropdown.png" alt="후: 오피스문서 편집 아래 용량 줄이기 항목 추가"></div>
+</div>
+<p class="dim">항목 문법(<code>itemCss</code>·호버 알파)은 기존 빌더 그대로 — 신규 색·형태 0.</p>
+
+<h2>3. 새 모달 — openHwpEditor 골격 그대로(신규 CSS 0 · 신규 raw hex 0)</h2>
+<div><div class="lb">① <b>빈 상태</b> — 셸·무대·버튼 전부 <code>hw-*</code>/<code>.u-empty</code>/<code>.btn</code> 정본 재사용</div><img src="after_modal_empty.png" alt="후: 용량을 줄일 문서를 올려 주세요 빈 상태"></div>
+<div><div class="lb">② <b>문서 올린 상태</b> — 파일 카드 + <b>세기 3단 칩</b>(<code>.nb-chip</code>/<code>.nb-chiprow</code> 재사용) + [용량 줄이기]</div><img src="after_modal_file.png" alt="후: 파일 카드 + 화면용/표준/고화질 칩 + 용량 줄이기 버튼"></div>
+<div><div class="lb">③ <b>줄인 상태</b> — 전후 용량·감량률·처리한 사진 수 + 자동 내려받기(실제로 <code>test_표준.xlsx</code>가 받아졌다)</div><img src="after_modal_done.png" alt="후: 8.6MB → 336KB · 96.2% 줄었어요"></div>
+<div><div class="lb">④ <b>세기를 고화질로 바꿔 다시</b> — <b>원본에서 새로</b> 만든다(압축본 재압축 = 세대 손실 차단)</div><img src="after_modal_hq.png" alt="후: 고화질 재실행 결과"></div>
+<div><div class="lb">⑤ <b>이미 최적인 파일</b> — 무접촉 + <b>내려받기 버튼도 안 띄운다</b>(원본과 바이트가 같은 파일을 「_표준」 이름으로 받게 하면 헷갈린다)</div><img src="after_modal_nochange.png" alt="후: 이미 충분히 작은 문서예요"></div>
+
+<h2>4. 실측 — 세기 3단 × 형식별</h2>
+<p class="dim">브라우저 갈래는 <b>index.html에 실제로 들어간 코어 코드를 파일에서 슬라이스해</b> 헤드리스 크로미움에서 돌린 값이다(복사본이 아니라 배포본).</p>
+<table>
+<tr><th>파일</th><th>원본</th><th class="num">화면용<br><span class="dim">1200px·q75</span></th><th class="num">표준<br><span class="dim">1600px·q82</span></th><th class="num">고화질<br><span class="dim">2400px·q88</span></th><th>비고</th></tr>
+<tr><td><code>test.xlsx</code><span class="dim"> 레포 실제 8.9MB PNG 삽입</span></td><td class="num">8.55MB</td>
+    <td class="num"><b class="c3">0.17MB</b><br><span class="dim">−98.1%</span></td>
+    <td class="num"><b class="c3">0.33MB</b><br><span class="dim">−96.2% · 26.1배</span></td>
+    <td class="num"><b class="c3">0.77MB</b><br><span class="dim">−91.0%</span></td>
+    <td>383~471ms · PNG→JPEG 전환 + <code>.rels</code>/<code>[Content_Types]</code> 추종</td></tr>
+<tr><td><code>test_alpha.pptx</code><span class="dim"> 불투명 사진 + 투명 로고</span></td><td class="num">8.55MB</td>
+    <td class="num">0.17MB</td><td class="num">0.33MB</td><td class="num">0.77MB</td>
+    <td><b>투명 로고는 PNG 유지</b>(축소본 900×900 중 405,000px = 정확히 절반 투명 보존) · 불투명 사진만 JPEG 전환</td></tr>
+<tr><td><code>ticketlink_template.xlsm</code><span class="dim"> 레포 실물</span></td><td class="num">0.09MB</td>
+    <td class="num">0.09MB</td><td class="num">0.09MB</td><td class="num">0.09MB</td>
+    <td><b>무접촉</b> — 이미 최적이라 전 이미지 유지 판정(−0.0%)</td></tr>
+<tr><td><code>test_image.hwp</code><span class="dim"> 사진 2장 · 압축본+무압축본 혼재</span></td><td class="num">4.85MB</td>
+    <td class="num">0.24MB<br><span class="dim">−95.1%</span></td><td class="num">0.51MB<br><span class="dim">−89.5%</span></td><td class="num">1.30MB<br><span class="dim">−73.1%</span></td>
+    <td><b>사진 외 스트림 변조 0 · 유실 0</b></td></tr>
+<tr><td><code>test_image.pdf</code><span class="dim"> 스캔형 A4</span></td><td class="num">1.18MB</td>
+    <td class="num">0.15MB<br><span class="dim">−87.7%</span></td><td class="num">0.38MB<br><span class="dim">−67.9%</span></td><td class="num">0.38MB<br><span class="dim">−67.9%</span></td>
+    <td>gs는 정수배로만 다운샘플 → 표준·고화질이 같은 배율(÷2)에 걸려 동값</td></tr>
+<tr><td><code>사무처리규정.pdf</code><span class="dim"> 레포 실물 · 본문형</span></td><td class="num">1.06MB</td>
+    <td class="num">0.91MB<br><span class="dim">−13.9%</span></td><td class="num">0.95MB<br><span class="dim">−10.1%</span></td><td class="num">0.96MB<br><span class="dim">−9.5%</span></td>
+    <td><b>추출 글자수 284,591 → 284,958 보존</b>(본문이 사진으로 안 구워짐)</td></tr>
+</table>
+<p class="dim">구조 검증(브라우저 갈래 3세기×3파일): 파트 수 불변 · <code>.rels</code> 끊긴 참조 0 · <code>[Content_Types]</code> 미선언 확장자 0 · 이미지 단위 증가 0 · hwpx 파트명 불변 — <b class="c3">전건 통과</b>.</p>
+
+<h2>5. 함정 실측 2건 — 명문화</h2>
+<div class="warn"><b>① PDF에 <code>-dPDFSETTINGS=/ebook</code> 프리셋을 쓰지 마라 — 사진을 안 줄인다.</b>
+gs는 <code>PassThroughJPEGImages</code>가 기본 참이라 JPEG를 무손질 통과시키고, 프리셋의 <code>DownsampleThreshold</code>(1.5)까지 겹친다.
+290dpi 사진이 <code>/ebook</code>·<code>/printer</code>에서 <b>그대로 나왔다</b>:
+<table><tr><th>프리셋</th><th class="num">결과</th></tr>
+<tr><td>원본</td><td class="num">1,241,093 B</td></tr>
+<tr><td><code>/screen</code></td><td class="num">195,406 B</td></tr>
+<tr><td><code>/ebook</code></td><td class="num">1,242,896 B <b>(+1.8KB)</b></td></tr>
+<tr><td><code>/printer</code></td><td class="num">1,245,668 B <b>(+4.6KB)</b></td></tr></table>
+다운샘플 파라미터를 직접 지정하도록 교체 → 같은 파일이 <b>152KB / 398KB / 398KB</b>. <b>프리셋으로 되돌리지 말 것.</b></div>
+<div class="warn"><b>② 회수 TTL 정규식이 16자리를 잡으면 영영 안 걸린다.</b>
+id = <code>sl</code> + <code>Date.now()</code>(13자리) + 난수(최대 3자리)라 <code>(\d+)</code>는 ≈1.75e15를 캡처하고 <code>now − 그것</code>이 늘 음수 → <code>&gt; ttl</code>이 참이 안 된다.
+신설 <code>slim.yml</code>은 <code>(\d{13})\d*</code>로 고정했다.
+⚠ <b>기존 <code>office-edit.yml</code>·<code>hwp-edit.yml</code>의 같은 자리는 <code>(\d+)</code>라 원본·산출물 자동 회수가 실제로는 안 돌고 있다</b> — 이번 범위 밖이라 손대지 않았고, 개선 우선사항에 별건으로 등재했다.</div>
+
+<h2>6. 불변식 2개 — 어기면 남의 공문이 깨진다</h2>
+<table>
+<tr><th>불변식</th><th>구현</th><th>실증</th></tr>
+<tr><td><b>① 절대 안 키운다</b></td><td>이미지 1장 단위 + 파일 전체, 두 층에서 검사해 원본 이상이면 원본 유지</td><td><code>ticketlink_template.xlsm</code> −0.0% 무접촉 · 이미지 단위 증가 0건</td></tr>
+<tr><td><b>② 포맷 전환은 OOXML에서만</b></td><td>투명 있으면 PNG 유지 / 없으면 JPEG. 전환 시 파트 이름·<code>.rels</code> Target·<code>[Content_Types].xml</code>을 따라서 고친다. hwpx·hwp는 매니페스트·DocInfo가 얽혀 있어 <b>전환 금지</b></td><td>투명 405,000px 보존 · <code>Target="../media/photo1.jpeg"</code> 추종 · <code>&lt;Default Extension="jpeg"&gt;</code> 자동 추가 · hwpx BinData 파트명 불변</td></tr>
+</table>
+<p class="dim">캔버스가 못 여는 형식(EMF/WMF 벡터 등)은 무접촉 — 지우면 도형이 사라진다.</p>
+
+<h2>7. 게이트</h2>
+<p class="dim"><code>check_design</code> ✓(raw hex index 1578/1578 <b>무변</b> · :root 2/0 · 신규 CSS 0) · <code>check_refs</code> ✓ · <code>check_wiring</code> ✓ ·
+YAML 파싱 ✓ · <code>node --check</code> (slim_runner.mjs · src/index.js) ✓.
+재사용 컴포넌트 = <code>.modal</code>/<code>.modal-x</code> · <code>.btn</code> · <code>.nb-chip</code>/<code>.nb-chiprow</code> · <code>.u-empty</code> · <code>.hw-bar</code>/<code>.hw-stage</code>/<code>.hw-ask</code> · <code>_ldHtml</code>.</p>
+</body>
+</html>
