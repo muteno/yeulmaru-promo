@@ -588,6 +588,7 @@ button{font-family:inherit;cursor:pointer}
   .qa-fab{bottom:calc(132px + env(safe-area-inset-bottom)) !important;right:14px !important;padding:8px 13px 8px 11px !important;font-size:11.5px !important}
   .cb-win{bottom:calc(132px + env(safe-area-inset-bottom)) !important}
   .toast{bottom:calc(80px + env(safe-area-inset-bottom))}
+  #tmin-dock{left:10px;bottom:calc(80px + env(safe-area-inset-bottom))}   /* 하단 네비 위로 — .toast 오프셋 미러 */
   /* 더보기 시트 */
   .bn-sheet-bg{position:fixed;inset:0;z-index:88;background:rgba(26,26,46,0.35);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);display:flex;align-items:flex-end;animation:bnFade .18s ease}
   .bn-sheet{width:100%;background:rgba(255,255,255,0.97);border-top-left-radius:22px;border-top-right-radius:22px;padding:10px 14px calc(18px + env(safe-area-inset-bottom));animation:slideUp .26s cubic-bezier(.2,.8,.2,1);box-shadow:0 -10px 40px rgba(0,0,0,0.15)}
@@ -1084,6 +1085,8 @@ table.promo-board-table th:last-child .col-resize-handle{display:none}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 .toast.success::before{content:"✓ ";color:#0F8B4C;font-weight:700;margin-right:4px}
 .toast.error::before{content:"✕ ";color:var(--danger);font-weight:700;margin-right:4px}
+/* 콘텐츠 제작 최소화 복원 독(운영자 260805) — 칩 = .bp-tbtn 정본 재사용 · z = --z-toast(모달 백드롭 위 = 다른 화면이 떠 있어도 복원 가능) · 신규 색 0 */
+#tmin-dock{position:fixed;left:14px;bottom:14px;z-index:var(--z-toast);display:flex;gap:8px;flex-wrap:wrap;max-width:min(92vw,560px)}
 /* 새 메시지 알림 토스트 (요청4 · 260710 선택값 배선) — 체크(✓) 눌러야 닫힘·자동 타이머 없음.
    기존 .toast(저장·에러용 3초 자동)와 별개 컴포넌트. 색 전부 토큰/흰색 alpha 변주(팔레트 폐쇄). */
 .msg-toast{position:fixed;bottom:43px;left:50%;transform:translateX(-50%) translateY(26px);max-width:488px;width:max-content;padding:20px 28px;background:rgba(26,26,46,0.82);backdrop-filter:blur(15px) saturate(1.3);-webkit-backdrop-filter:blur(15px) saturate(1.3);border:1px solid var(--glass-border);border-radius:14px;box-shadow:var(--glass-shadow);color:var(--surface-solid);z-index:1000001;opacity:0;pointer-events:none;transition:opacity .42s ease,transform .42s ease;display:flex;gap:14px;align-items:flex-start}   /* 260715 분신술: 다크글래스 판(--text rgb·alpha .82 = appbar 계승) + 전 텍스트 흰색 — 반투명 흰 판 위 흰 글자 대비 붕괴 해소, 배경 무관 또렷 */
@@ -24417,6 +24420,42 @@ function _contentMenuBuild(menu){
     ;   // 안내 문구 삭제(운영자 260710)
 }
 // ============================================================
+// 콘텐츠 제작 공용 — 최소화(─) 버튼 + 하단 왼쪽 복원 독 (운영자 260805 「각 X 옆 최소화」)
+//  최소화 = 보드 display:none — DOM·타이머·업로드가 그대로 살아서 러너 작업(한글·오피스·용량 줄이기 등)이 뒤에서 이어진다. 복원 = 다시 표시 + 열린 다른 보드 위로 z 부양.
+//  가드 2종(도구별 배선): ① 각 Esc 핸들러 = _tminIs면 무시(숨은 보드를 Esc가 몰래 파괴하는 사고 방지) ② 각 open*() = _tminIs면 재생성 대신 복원(「매번 새로」 리셋에서 작업 보존).
+//  부품 = 전부 정본 계승: 버튼 = .modal-x/.bp-x 부품에 글자만 ─(U+2500 — X 정본 게이트⑦의 X_FAMILY 밖 = 별개 버튼) · 칩 = .bp-tbtn 글래스 · 독 z = --z-toast(§6-4 고아 재활성 — 다른 모달이 떠 있어도 칩이 닿게). 신규 색·클래스·hex 0.
+var _tmin={};    // boardId → 칩 라벨 (최소화 중인 보드 목록 — 페이지 수명 · 새로고침이면 보드와 함께 소멸)
+var _tminZn=0;   // 복원 z 부양 카운터 — --z-modal(2000) 위·--z-confirm(2100) 아래 순환. 보드 스택은 원래 「첫 생성 순」이라 복원분만 확실히 맨 위로 올린다.
+function _tminIs(id){return !!_tmin[id];}
+function _tminLayer(el){return (el.classList&&(el.classList.contains('modal-bg')||el.classList.contains('bp-bg')))?el:el.querySelector('.modal-bg,.bp-bg');}
+function _tminHide(id,label){
+  var el=document.getElementById(id);if(!el||!el.innerHTML)return;
+  _tmin[id]=label||_tmin[id]||'창';
+  el.style.display='none';
+  var fg=_tminLayer(el);if(fg)fg.style.zIndex='';   // 지난 복원의 부양 흔적 제거 — 다음 열림 스택 오염 방지
+  _tminDock();_tminScroll();
+}
+function _tminShow(id){
+  delete _tmin[id];_tminDock();
+  var el=document.getElementById(id);
+  if(!el||!el.innerHTML){_tminScroll();return;}   // 다른 경로로 이미 닫힌 보드 = 칩만 걷는다(자가 치유)
+  el.style.display='';
+  var fg=_tminLayer(el);if(fg)fg.style.zIndex=String(2001+(_tminZn++%80));
+  _tminScroll();
+}
+function _tminScroll(){   // body 스크롤락은 도화지·에니어그램만 소유(각 open이 hidden 설정) — 최소화면 풀고 복원하면 다시 건다. closeBookingProcess·closeEnneagram의 상호 검사와 같은 축.
+  function vis(i){var n=document.getElementById(i);return !!(n&&n.innerHTML&&n.style.display!=='none');}
+  if(vis('bp-board')||vis('enn-bg'))document.body.style.overflow='hidden';
+  else if(document.getElementById('bp-board')||document.getElementById('enn-bg'))document.body.style.overflow='';
+}
+function _tminDock(){
+  var d=document.getElementById('tmin-dock'),ids=Object.keys(_tmin);
+  if(!ids.length){if(d)d.remove();return;}
+  if(!d){d=document.createElement('div');d.id='tmin-dock';document.body.appendChild(d);}
+  d.innerHTML=ids.map(function(id){var nm=_tmin[id];
+    return '<button type="button" class="bp-tbtn" onclick="_tminShow(\''+id+'\')" title="'+nm+' 복원" aria-label="'+nm+' 복원">'+nm+'</button>';}).join('');
+}
+// ============================================================
 // PLAY ZONE ▸ 도화지 — 다이어그램 에디터 v2 (피그마식 편집 + 파일 시스템 + 라인별 문의 수집)
 //  내 문서 = 열면 바로 편집(편집 버튼 없음) · [저장] = 덮어쓰기 확인(예=확정, 아니오=방금 편집 휘발 → 열 때 스냅샷 _bpS.base로 복원, 문의는 보존).
 //  자동 임시 보관(로컬 400ms + 서버 2.5s 디바운스)은 유지 — 탭이 닫혀도 그리던 건 남고, 확정 기준선만 [저장]이 옮긴다.
@@ -25560,6 +25599,7 @@ function _bpDbl(e){
 // ── 키보드 — 도구 단축키·삭제·undo·복제·이동 (텍스트 입력·confirm 모달·드래그 중엔 양보) ──
 function _bpKeyG(e){
   if(!_bpS||!document.getElementById('bp-board'))return;
+  if(_tminIs('bp-board'))return;   // 최소화 중 = 문서 키(Esc·Delete·undo 등)가 숨은 보드를 조작·파괴하지 않게 전부 무시
   if(e.defaultPrevented)return;   // 앞선 전역 핸들러가 소비한 키(확인창 Esc 등) — 이중 처리 금지. 부트 전역 Esc가 bp보다 먼저 등록돼 .show 검사만으론 레이스(260710 실측)
   var cm=document.getElementById('confirm-modal');
   if(cm&&cm.classList.contains('show'))return;   // confirm 열림 = 전역 핸들러 소관 — bp 키 전부 양보(Esc 이중 처리 방지)
@@ -26027,6 +26067,7 @@ function _bpImportJson(){
 }
 // ── 보드 열기/닫기 — 진입 = 마지막 열었던 파일(자동 임시저장 연속) 또는 홈 ──
 function openBookingProcess(){
+  if(_tminIs('bp-board')){_tminShow('bp-board');return;}   // 최소화 중 재열기 = 복원 — 그리던 도표·뷰 상태 보존
   if(document.getElementById('bp-board'))return;
   _bpMigrate();
   _bpS={file:null,doc:_bpEmptyDoc(),home:true,sel:[],view:{x:0,y:0,z:1},tool:'select',edit:false,undo:[],redo:[],drag:null,hover:null,guides:null,clip:null,editingText:null,space:false,_raf:null,saveT:null,ro:false,base:'',srvList:null,srvT:null,srvBusy:false,srvFail:false};
@@ -26040,6 +26081,7 @@ function openBookingProcess(){
     +'<span class="sp"></span>'
     +'<span class="bp-user" id="bp-user">'+_bpUserTag()+'</span>'
     +'<span id="bp-hacts" style="display:inline-flex;gap:6px;flex-wrap:wrap"></span>'
+    +'<button type="button" class="bp-x" onclick="_tminHide(\'bp-board\',\'도화지\')" title="최소화" aria-label="최소화">─</button>'   /* [260805 운영자] 최소화 — 창 규약 순서(최소화·전체화면·닫기) */
     +'<button type="button" class="bp-x bp-full" onclick="_bpToggleFull()" aria-label="전체화면" title="전체화면">'+_BP_ICO.expand+'</button>'
     +'<button type="button" class="bp-x" onclick="closeBookingProcess()" title="닫기" aria-label="닫기">✕</button></div>'
     +'<div class="bp-tools" id="bp-tools" style="display:none"></div>'
@@ -26915,6 +26957,7 @@ function _memAiSend(sfx){
 // [260710 운영자] 에니어그램 모달화 — 새 탭 → 메인 위 모달(iframe 임베드) + 전체화면 토글 + ↗ 새 탭 + ✕. 도화지와 동일 셸.
 //  경로: 루트 enneagram_all.html은 playground/enneagram/ 이사(플레이그라운드 정리분)로 소멸 — 이사 후 경로 사용.
 function openEnneagram(){
+  if(_tminIs('enn-bg')){_tminShow('enn-bg');return;}   // 최소화 중 재열기 = 복원 — iframe 상태(진행 중 검사) 보존
   if(document.getElementById('enn-bg'))return;
   var bg=document.createElement('div');
   bg.id='enn-bg';bg.className='modal-bg enn show';
@@ -26923,6 +26966,7 @@ function openEnneagram(){
   bg.innerHTML='<div class="modal enn-modal">'
     +'<div class="enn-btns">'
       +'<button type="button" class="bp-x" onclick="window.open(\'playground/enneagram/\',\'_blank\',\'noopener\')" title="새 탭에서 열기" aria-label="새 탭에서 열기">↗</button>'
+      +'<button type="button" class="bp-x" onclick="_tminHide(\'enn-bg\',\'에니어그램\')" title="최소화" aria-label="최소화">─</button>'   /* [260805 운영자] 최소화 — 창 규약 순서(최소화·전체화면·닫기) */
       +'<button type="button" class="bp-x enn-full" onclick="_ennToggleFull()" title="전체화면" aria-label="전체화면">'+_BP_ICO.expand+'</button>'
       +'<button type="button" class="bp-x" onclick="closeEnneagram()" title="닫기" aria-label="닫기">✕</button>'
     +'</div>'
@@ -26930,7 +26974,7 @@ function openEnneagram(){
     +'</div>';
   document.body.appendChild(bg);
   document.body.style.overflow='hidden';
-  window._ennEsc=function(e){if(e.key==='Escape'){e.stopPropagation();closeEnneagram();}};
+  window._ennEsc=function(e){if(e.key==='Escape'&&!_tminIs('enn-bg')){e.stopPropagation();closeEnneagram();}};   // 최소화 중 Esc = 숨은 보드 파괴 금지(소비도 안 함 — 다른 모달 Esc 양보)
   document.addEventListener('keydown',window._ennEsc,true);   // 캡처 = 전역 Esc(closeModal)보다 먼저 소비
 }
 function _ennToggleFull(){
@@ -27513,6 +27557,7 @@ function _tktBuild(){
 
 
 function openNaverBlogTool(){
+  if(_tminIs('nblog-board')){_tminShow('nblog-board');return;}   // 최소화 중 재열기 = 복원 — 아래 「매번 새로」 리셋에서 작성 중 초안 보존
   var el=document.getElementById('nblog-board');
   if(!el){el=document.createElement('div');el.id='nblog-board';document.body.appendChild(el);}
   // 🔒 매번 새로 시작 — 이전 세션/다른 사용자의 초안을 복원하지 않는다(화면 벗어나면 소멸). 공용 PC에서 다음 사용자에게 초안 노출 차단.
@@ -27524,12 +27569,13 @@ function openNaverBlogTool(){
   _nbTgtNormalize();   // 옛 단일값 tgt → 새 다중선택 구조로 정규화(호환)
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeNaverBlogTool)">'
     +'<div class="modal" style="width:96vw;max-width:1080px;height:92vh;max-height:92vh;padding:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:#fff">'
+    +'<button class="modal-x" onclick="_tminHide(\'nblog-board\',\'네이버 블로그\')" title="최소화" aria-label="최소화" style="position:absolute;top:14px;right:60px;z-index:10">─</button>'
     +'<button class="modal-x" onclick="closeNaverBlogTool()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;z-index:10">✕</button>'
     +'<div style="padding:18px 24px;border-bottom:1px solid #eee;font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px">✍️ <span>블로그 글쓰기 도우미</span></div>'
     +'<div id="nblog-body" style="flex:1;overflow:auto;padding:20px 24px;min-width:0;min-height:0"></div>'
     +'</div></div>';
   if(_nbState.escHandler)document.removeEventListener('keydown',_nbState.escHandler);
-  _nbState.escHandler=function(e){if(e.key==='Escape')closeNaverBlogTool();};
+  _nbState.escHandler=function(e){if(e.key==='Escape'&&!_tminIs('nblog-board'))closeNaverBlogTool();};   // 최소화 중 Esc = 숨은 보드 파괴 금지
   document.addEventListener('keydown',_nbState.escHandler);
   _nbRender();
 }
@@ -28212,6 +28258,7 @@ function _veRestore(d){
 function openVideoEditor(tab){
   var t=(tab==='sub'||tab==='prompt')?tab:'edit';
   var el=document.getElementById('ve-board');
+  if(_tminIs('ve-board'))_tminShow('ve-board');   // 최소화 중 재열기 = 복원 — 바로 아래 「이미 열려 있으면」 분기가 탭 전환을 이어받는다
   // 이미 열려 있으면 리셋 없이 탭 전환만 — 작업 유실 방지
   if(el&&el.innerHTML&&_veState&&_veState._owner===_veUserKey()){_veState.tab=t;_veRender();return;}
   if(!el){el=document.createElement('div');el.id='ve-board';document.body.appendChild(el);}
@@ -28233,6 +28280,7 @@ function openVideoEditor(tab){
   _veState.tab=t;_veState._touch=Date.now();
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeVideoEditor)">'
     +'<div class="modal" style="width:96vw;max-width:1120px;height:92vh;max-height:92vh;padding:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:var(--surface-solid);border-radius:var(--radius)">'   // 운영자 선택값 260711: 라운드 24→16 = --radius 동값 계승
+    +'<button class="modal-x" onclick="_tminHide(\'ve-board\',\'영상 편집기\')" title="최소화" aria-label="최소화" style="position:absolute;top:14px;right:60px;z-index:10">─</button>'
     +'<button class="modal-x" onclick="closeVideoEditor()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;z-index:10">✕</button>'
     +'<div style="padding:15px 24px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:14px;flex-wrap:wrap">'
     +'<span style="font-size:14px;font-weight:900">🎬 영상 편집기</span>'   // 운영자 선택값 260711: 16/700 → 14/900
@@ -28241,11 +28289,11 @@ function openVideoEditor(tab){
     +'<button type="button" class="prog-tab" data-t="sub" onclick="_veTab(\'sub\')" style="flex:none;padding:7px 16px">2. 자막 삽입</button>'
     +'<button type="button" class="prog-tab" data-t="prompt" onclick="_veTab(\'prompt\')" style="flex:none;padding:7px 16px">3. 영상 프롬프팅</button>'
     +'</div>'
-    +'<button type="button" class="btn btn--neutral btn--sm" id="ve-pinbtn" style="margin-left:auto;margin-right:34px" onclick="_veDraftPin()">'+(_veState._pinned?'저장됨':'임시 저장')+'</button>'
+    +'<button type="button" class="btn btn--neutral btn--sm" id="ve-pinbtn" style="margin-left:auto;margin-right:72px" onclick="_veDraftPin()">'+(_veState._pinned?'저장됨':'임시 저장')+'</button>'
     +'</div>'
     +'<div id="ve-body" style="flex:1;overflow:auto;padding:20px 24px;min-width:0;min-height:0"></div>'
     +'</div></div>';
-  _veState.escHandler=function(e){if(e.key==='Escape')closeVideoEditor();};
+  _veState.escHandler=function(e){if(e.key==='Escape'&&!_tminIs('ve-board'))closeVideoEditor();};   // 최소화 중 Esc = 숨은 보드 파괴 금지
   document.addEventListener('keydown',_veState.escHandler);
   _veRender();
 }
@@ -28858,12 +28906,14 @@ function _hwDefault(){return {name:'',bytes:null,out:null,outName:'',view:'orig'
 async function _hwViewer(){ if(!_hwMod)_hwMod=await import('./hwp/viewer-core.js'); return _hwMod; }
 
 function openHwpEditor(){
+  if(_tminIs('hw-board')){_tminShow('hw-board');return;}   // 최소화 중 재열기 = 복원 — 「매번 새로」 리셋에서 문서·편집본 보존
   var el=document.getElementById('hw-board');
   if(!el){el=document.createElement('div');el.id='hw-board';document.body.appendChild(el);}
   try{if(_hwState&&_hwState.escHandler)document.removeEventListener('keydown',_hwState.escHandler);}catch(_e){}
   _hwState=_hwDefault();   // 🔒 매번 새로 — 이전 사용자의 문서를 복원하지 않는다
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeHwpEditor)">'
     +'<div class="modal" style="width:96vw;max-width:1080px;height:92vh;max-height:92vh;padding:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:var(--surface-solid)">'
+    +'<button class="modal-x" onclick="_tminHide(\'hw-board\',\'한글문서 편집\')" title="최소화" aria-label="최소화" style="position:absolute;top:14px;right:60px;z-index:10">─</button>'
     +'<button class="modal-x" onclick="closeHwpEditor()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;z-index:10">✕</button>'
     +'<div style="padding:18px 24px;border-bottom:1px solid var(--border);font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px">📄 <span>한글문서 편집</span></div>'
     +'<div style="flex:1;display:flex;flex-direction:column;min-height:0;padding:16px 24px 18px">'
@@ -28873,7 +28923,7 @@ function openHwpEditor(){
     +'</div>'
     +'<input type="file" id="hw-file" accept=".hwp,.hwpx" style="display:none" onchange="_hwOnFile(this)">'
     +'</div></div>';
-  _hwState.escHandler=function(e){if(e.key==='Escape'&&!_hwState.busy)closeHwpEditor();};
+  _hwState.escHandler=function(e){if(e.key==='Escape'&&!_hwState.busy&&!_tminIs('hw-board'))closeHwpEditor();};   // 최소화 중 Esc = 숨은 보드 파괴 금지
   document.addEventListener('keydown',_hwState.escHandler);
   _hwWireDrop();
   _hwRender();
@@ -29042,12 +29092,14 @@ function _ofMeta(name){return /\.docx$/i.test(name)?{ico:'📝',kind:'워드 문
 function _ofSize(n){return n>=1048576?(n/1048576).toFixed(1)+'MB':Math.max(1,Math.round(n/1024))+'KB';}
 
 function openOfficeEditor(){
+  if(_tminIs('of-board')){_tminShow('of-board');return;}   // 최소화 중 재열기 = 복원 — 「매번 새로」 리셋에서 문서·편집본 보존
   var el=document.getElementById('of-board');
   if(!el){el=document.createElement('div');el.id='of-board';document.body.appendChild(el);}
   try{if(_ofState&&_ofState.escHandler)document.removeEventListener('keydown',_ofState.escHandler);}catch(_e){}
   _ofState=_ofDefault();   // 🔒 매번 새로 — 이전 사용자의 문서를 복원하지 않는다
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeOfficeEditor)">'
     +'<div class="modal" style="width:96vw;max-width:1080px;height:92vh;max-height:92vh;padding:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:var(--surface-solid)">'
+    +'<button class="modal-x" onclick="_tminHide(\'of-board\',\'오피스문서 편집\')" title="최소화" aria-label="최소화" style="position:absolute;top:14px;right:60px;z-index:10">─</button>'
     +'<button class="modal-x" onclick="closeOfficeEditor()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;z-index:10">✕</button>'
     +'<div style="padding:18px 24px;border-bottom:1px solid var(--border);font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px">🗂️ <span>오피스문서 편집</span></div>'
     +'<div style="flex:1;display:flex;flex-direction:column;min-height:0;padding:16px 24px 18px">'
@@ -29057,7 +29109,7 @@ function openOfficeEditor(){
     +'</div>'
     +'<input type="file" id="of-file" accept=".docx,.xlsx,.pptx" style="display:none" onchange="_ofOnFile(this)">'
     +'</div></div>';
-  _ofState.escHandler=function(e){if(e.key==='Escape'&&!_ofState.busy)closeOfficeEditor();};
+  _ofState.escHandler=function(e){if(e.key==='Escape'&&!_ofState.busy&&!_tminIs('of-board'))closeOfficeEditor();};   // 최소화 중 Esc = 숨은 보드 파괴 금지
   document.addEventListener('keydown',_ofState.escHandler);
   _ofWireDrop();
   _ofRender();
@@ -29261,6 +29313,7 @@ function _slMeta(name){
 }
 
 function openFileSlimmer(){
+  if(_tminIs('sl-board')){_tminShow('sl-board');return;}   // 최소화 중 재열기 = 복원 — 진행 중 축소 작업(러너 폴링 포함) 보존
   var el=document.getElementById('sl-board');
   if(!el){el=document.createElement('div');el.id='sl-board';document.body.appendChild(el);}
   try{if(_slState&&_slState.escHandler)document.removeEventListener('keydown',_slState.escHandler);}catch(_e){}
@@ -29269,6 +29322,7 @@ function openFileSlimmer(){
   // 설정 토글만 있으면 되는데」) — 높이 고정을 걷어 `height:auto`, 무대는 내용에 붙는다(빈 회색 판 소멸).
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeFileSlimmer)">'
     +'<div class="modal" style="width:min(94vw,600px);height:auto;max-height:88vh;padding:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:var(--surface-solid)">'
+    +'<button class="modal-x" onclick="_tminHide(\'sl-board\',\'용량 줄이기\')" title="최소화" aria-label="최소화" style="position:absolute;top:12px;right:56px;z-index:10">─</button>'
     +'<button class="modal-x" onclick="closeFileSlimmer()" title="닫기" aria-label="닫기" style="position:absolute;top:12px;right:18px;z-index:10">✕</button>'
     +'<div style="padding:14px 20px;border-bottom:1px solid var(--border);font-size:15px;font-weight:700;display:flex;align-items:center;gap:8px">🗜️ <span>용량 줄이기</span></div>'
     +'<div style="flex:1;display:flex;flex-direction:column;min-height:0;padding:13px 20px 15px">'
@@ -29278,7 +29332,7 @@ function openFileSlimmer(){
     +'</div>'
     +'<input type="file" id="sl-file" accept=".xlsx,.xlsm,.xltx,.docx,.dotx,.pptx,.potx,.hwpx,.hwp,.pdf" style="display:none" onchange="_slOnFile(this)">'
     +'</div></div>';
-  _slState.escHandler=function(e){if(e.key==='Escape'&&!_slState.busy)closeFileSlimmer();};
+  _slState.escHandler=function(e){if(e.key==='Escape'&&!_slState.busy&&!_tminIs('sl-board'))closeFileSlimmer();};   // 최소화 중 Esc = 숨은 보드 파괴 금지
   document.addEventListener('keydown',_slState.escHandler);
   _slWireDrop();
   _slRender();
@@ -29635,12 +29689,14 @@ function _dmMeta(name){
 }
 
 function openDocMd(){
+  if(_tminIs('dm-board')){_tminShow('dm-board');return;}   // 최소화 중 재열기 = 복원 — 진행 중 변환(러너 폴링 포함) 보존
   var el=document.getElementById('dm-board');
   if(!el){el=document.createElement('div');el.id='dm-board';document.body.appendChild(el);}
   try{if(_dmState&&_dmState.escHandler)document.removeEventListener('keydown',_dmState.escHandler);}catch(_e){}
   _dmState=_dmDefault();   // 🔒 매번 새로 — 이전 사용자의 문서를 복원하지 않는다
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeDocMd)">'
     +'<div class="modal" style="width:96vw;max-width:1080px;height:92vh;max-height:92vh;padding:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:var(--surface-solid)">'
+    +'<button class="modal-x" onclick="_tminHide(\'dm-board\',\'문서 → 마크다운\')" title="최소화" aria-label="최소화" style="position:absolute;top:14px;right:60px;z-index:10">─</button>'
     +'<button class="modal-x" onclick="closeDocMd()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;z-index:10">✕</button>'
     +'<div style="padding:18px 24px;border-bottom:1px solid var(--border);font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px">📄 <span>문서 → 마크다운</span></div>'
     +'<div style="flex:1;display:flex;flex-direction:column;min-height:0;padding:16px 24px 18px">'
@@ -29650,7 +29706,7 @@ function openDocMd(){
     +'</div>'
     +'<input type="file" id="dm-file" accept="'+_DM_ACCEPT+'" style="display:none" onchange="_dmOnFile(this)">'
     +'</div></div>';
-  _dmState.escHandler=function(e){if(e.key==='Escape'&&!_dmState.busy)closeDocMd();};
+  _dmState.escHandler=function(e){if(e.key==='Escape'&&!_dmState.busy&&!_tminIs('dm-board'))closeDocMd();};   // 최소화 중 Esc = 숨은 보드 파괴 금지
   document.addEventListener('keydown',_dmState.escHandler);
   _dmWireDrop();
   _dmRender();
@@ -30232,12 +30288,14 @@ var _CM_ICO={
 function _cmDefault(){return {img:null,name:'',zoom:1,px:.5,py:.5,text:'',drag:null,fontOk:false,escHandler:null};}
 
 function openCardMaker(){
+  if(_tminIs('cm-board')){_tminShow('cm-board');return;}   // 최소화 중 재열기 = 복원 — 「매번 새로」 리셋에서 사진·문구 보존
   var el=document.getElementById('cm-board');
   if(!el){el=document.createElement('div');el.id='cm-board';document.body.appendChild(el);}
   try{if(_cmState&&_cmState.escHandler)document.removeEventListener('keydown',_cmState.escHandler);}catch(_e){}
   _cmState=_cmDefault();   // 🔒 매번 새로 — 이전 사용자의 사진·문구를 복원하지 않는다
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeCardMaker)">'
     +'<div class="modal" style="width:96vw;max-width:1080px;height:92vh;max-height:92vh;padding:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:var(--surface-solid)">'
+    +'<button class="modal-x" onclick="_tminHide(\'cm-board\',\'카드 제작\')" title="최소화" aria-label="최소화" style="position:absolute;top:14px;right:60px;z-index:10">─</button>'
     +'<button class="modal-x" onclick="closeCardMaker()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;z-index:10">✕</button>'
     +'<div style="padding:18px 24px;border-bottom:1px solid var(--border);font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px">🖼 <span>카드 제작</span>'
       +'<span style="font-size:11.5px;font-weight:600;color:var(--dim)">1080 × 1350 · 이 컴퓨터 안에서 만들어요</span></div>'
@@ -30266,7 +30324,7 @@ function openCardMaker(){
     +'</div>'
     +'<input type="file" id="cm-file" accept="image/*" style="display:none" onchange="_cmOnFile(this)">'
     +'</div></div>';
-  _cmState.escHandler=function(e){if(e.key==='Escape')closeCardMaker();};
+  _cmState.escHandler=function(e){if(e.key==='Escape'&&!_tminIs('cm-board'))closeCardMaker();};   // 최소화 중 Esc = 숨은 보드 파괴 금지
   document.addEventListener('keydown',_cmState.escHandler);
   _cmWireStage();
   _cmFontWarm();
@@ -30574,12 +30632,14 @@ var _LM_NOTEXT={icon:1,abstract:1};   // 글자가 안 들어가는 형태 — �
 function _lmDefault(){return {busy:false,name:'',tagline:'',type:'icon-name',style:'minimal',color:'auto',extra:'',results:[],sel:-1,escHandler:null};}
 
 function openLogoMaker(){
+  if(_tminIs('lm-board')){_tminShow('lm-board');return;}   // 최소화 중 재열기 = 복원 — 「매번 새로」 리셋에서 이름·결과 보존 (메뉴 숨김 중이어도 진입점 잔존 = 동일 계약)
   var el=document.getElementById('lm-board');
   if(!el){el=document.createElement('div');el.id='lm-board';document.body.appendChild(el);}
   try{if(_lmState&&_lmState.escHandler)document.removeEventListener('keydown',_lmState.escHandler);}catch(_e){}
   _lmState=_lmDefault();   // 🔒 매번 새로 — 이전 사용자의 이름·결과를 복원하지 않는다(카드 제작 동일 계약)
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeLogoMaker)">'
     +'<div class="modal" style="width:96vw;max-width:1080px;height:92vh;max-height:92vh;padding:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:var(--surface-solid)">'
+    +'<button class="modal-x" onclick="_tminHide(\'lm-board\',\'로고 제작\')" title="최소화" aria-label="최소화" style="position:absolute;top:14px;right:60px;z-index:10">─</button>'
     +'<button class="modal-x" onclick="closeLogoMaker()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;z-index:10">✕</button>'
     +'<div style="padding:18px 24px;border-bottom:1px solid var(--border);font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px">🎯 <span>로고 제작</span>'
       +'<span style="font-size:11.5px;font-weight:600;color:var(--dim)">1:1 · 고른 것만으로 만들어요</span></div>'
@@ -30614,7 +30674,7 @@ function openLogoMaker(){
       +'</div>'
     +'</div>'
     +'</div></div>';
-  _lmState.escHandler=function(e){if(e.key==='Escape')closeLogoMaker();};
+  _lmState.escHandler=function(e){if(e.key==='Escape'&&!_tminIs('lm-board'))closeLogoMaker();};   // 최소화 중 Esc = 숨은 보드 파괴 금지
   document.addEventListener('keydown',_lmState.escHandler);
   _lmRender();
 }
@@ -30747,12 +30807,14 @@ function _kmPerfs(){
   return (typeof PERFS!=='undefined'?PERFS:[]).filter(function(p){return p&&p.f&&String(p.u||'').trim();});
 }
 function openKakaoDesigner(){
+  if(_tminIs('km-board')){_tminShow('km-board');return;}   // 최소화 중 재열기 = 복원 — 「매번 새로」 리셋에서 공연 선택·문구 후보 보존
   var el=document.getElementById('km-board');
   if(!el){el=document.createElement('div');el.id='km-board';document.body.appendChild(el);}
   try{if(_kmState&&_kmState.escHandler)document.removeEventListener('keydown',_kmState.escHandler);}catch(_e){}
   _kmState=_kmDefault();   // 🔒 매번 새로 — 이전 사용자의 공연·문구를 복원하지 않는다(로고 제작 동일 계약)
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeKakaoDesigner)">'
     +'<div class="modal" style="width:96vw;max-width:1080px;height:92vh;max-height:92vh;padding:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:var(--surface-solid)">'
+    +'<button class="modal-x" onclick="_tminHide(\'km-board\',\'카카오 메세지 설계\')" title="최소화" aria-label="최소화" style="position:absolute;top:14px;right:60px;z-index:10">─</button>'
     +'<button class="modal-x" onclick="closeKakaoDesigner()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;z-index:10">✕</button>'
     +'<div style="padding:18px 24px;border-bottom:1px solid var(--border);font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px">💬 <span>카카오 메세지 설계</span>'
       +'<span style="font-size:11.5px;font-weight:600;color:var(--dim)">공연 상세 링크를 읽어 76자 문구를 만들어요</span></div>'
@@ -30779,7 +30841,7 @@ function openKakaoDesigner(){
       +'</div>'
     +'</div>'
     +'</div></div>';
-  _kmState.escHandler=function(e){if(e.key==='Escape')closeKakaoDesigner();};
+  _kmState.escHandler=function(e){if(e.key==='Escape'&&!_tminIs('km-board'))closeKakaoDesigner();};   // 최소화 중 Esc = 숨은 보드 파괴 금지
   document.addEventListener('keydown',_kmState.escHandler);
   _kmRender();
 }
@@ -30928,17 +30990,19 @@ function _lgLoadHist(){   // 구조 = {사용자: {u,title,t}} — 읽을 때마
 }
 function _lgMyHist(){var e=_lgLoadHist()[_lgUser()];return e?[e]:[];}
 function openLinkGrab(){
+  if(_tminIs('lg-board')){_tminShow('lg-board');return;}   // 최소화 중 재열기 = 복원 — 스캔 결과·선택 보존
   var el=document.getElementById('lg-board');
   if(!el){el=document.createElement('div');el.id='lg-board';document.body.appendChild(el);}
   try{if(_lgState&&_lgState.escHandler)document.removeEventListener('keydown',_lgState.escHandler);}catch(_e){}
   _lgState={busy:false,res:null,err:'',lastUrl:'',escHandler:null,sel:{},meta:{},got:_lgLoadGot(),histOpen:false,qual:{},yt:{}};   // 결과는 매번 새로(공용 PC 원칙) · 받음/기록만 기기 보존
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeLinkGrab)">'
     +'<div class="modal" style="width:96vw;max-width:720px;max-height:92vh;padding:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:var(--surface-solid)">'
+    +'<button class="modal-x" onclick="_tminHide(\'lg-board\',\'링크 자료수집\')" title="최소화" aria-label="최소화" style="position:absolute;top:14px;right:60px;z-index:10">─</button>'
     +'<button class="modal-x" onclick="closeLinkGrab()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;z-index:10">✕</button>'
     +'<div style="padding:18px 24px;border-bottom:1px solid var(--border);font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px">🔗 <span>링크 자료수집</span></div>'
     +'<div id="lg-body" style="flex:1;overflow:auto;padding:20px 24px;min-width:0;min-height:0"></div>'
     +'</div></div>';
-  _lgState.escHandler=function(e){if(e.key==='Escape')closeLinkGrab();};
+  _lgState.escHandler=function(e){if(e.key==='Escape'&&!_tminIs('lg-board'))closeLinkGrab();};   // 최소화 중 Esc = 숨은 보드 파괴 금지
   document.addEventListener('keydown',_lgState.escHandler);
   _lgRender();
 }
