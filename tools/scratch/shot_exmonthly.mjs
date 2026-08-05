@@ -90,6 +90,15 @@ async function main() {
                xTicks:tx('bizm-ex-chart','.xaxislayer-above text'),
                yTicks:tx('bizm-ex-chart','.yaxislayer-above text'),
                annos:tx('bizm-ex-chart','.infolayer .annotation text') };
+      // [260805] 트레이스별 점 채움/테두리 — 「종료 월(최종) 점만 채움 · 나머지 전부 빈 동그라미」 실측용(first/last 분리).
+      {const d=document.getElementById('bizm-ex-chart');
+       out.ex.markers=d?[...d.querySelectorAll('.scatterlayer .trace')].map(t=>{
+         const ps=[...t.querySelectorAll('.points path')];
+         return ps.length?{n:ps.length,first:{fill:ps[0].style.fill,stroke:ps[0].style.stroke},
+                           last:{fill:ps[ps.length-1].style.fill,stroke:ps[ps.length-1].style.stroke}}:null;
+       }).filter(Boolean):null;
+       // 누적 집계 면 — fillcolor(고유색 알파 .5) 실측.
+       out.ex.areas=d?[...d.querySelectorAll('.scatterlayer .trace .js-fill')].map(f=>f.style.fill).filter(Boolean):null;}
       out.edu={ bars:gg('bizm-edu-chart','.barlayer .point path'),
                 shapes:gg('bizm-edu-chart','.shapelayer path'),
                 yTicks:tx('bizm-edu-chart','.yaxislayer-above text'),
