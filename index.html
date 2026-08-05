@@ -1165,6 +1165,13 @@ table.promo-board-table th:last-child .col-resize-handle{display:none}
 .modal:has(>.mhead){position:relative}
 .modal:has(>.mhead)>.modal-x{position:absolute;top:14px;right:22px;float:none;margin:0;z-index:10;color:var(--surface-solid);background:rgba(255,255,255,.12)}
 .modal:has(>.mhead)>.modal-x:hover{color:var(--surface-solid);background:rgba(255,255,255,.25)}
+/* [260805-30 운영자 「정리해줘」] 머리줄 예약폭 매직넘버(74/106/112/130/200) 폐지 —
+   닫기 `✕`만 절대 자리(right:22)에 남기고 **나머지 버튼은 밴드 안 흐름**으로 넣는다(`_mhead`의 extra).
+   그러면 `.mhead`의 오른쪽 예약은 **언제나 74px 하나**뿐 = 패리티 갈래가 자리 수만큼 늘어나던 축이 붕괴한다.
+   (구조: `.mhead`는 flex-wrap이라 자리가 모자라면 부제가 다음 줄로 내려가고 버튼은 첫 줄 오른쪽에 남는다) */
+.mhead .modal-x,.mhead .bp-x{position:static;float:none;margin:0;flex:none;top:auto;right:auto}
+.mhead .modal-x{background:rgba(255,255,255,.12);color:var(--surface-solid)}
+.mhead .modal-x:hover{background:rgba(255,255,255,.25);color:var(--surface-solid)}
 /* [260805-29 운영자 「방금 시안 준대로」 → 「그거로 전 구간 통일」] SSOT 픽토그램 공용 크기 —
    자리마다 다른 버튼 글자 크기를 **그대로 상속**한다(em). 머리줄 `.modal-x`는 13px → 14.95px ≈ 시안 채택값 15px,
    캘린더 `.arrow`(18px)·레일 버튼 등은 각자 자기 크기로 자동으로 맞는다 = 자리마다 수치를 다시 정하지 않는다. */
@@ -4492,8 +4499,11 @@ function escapeHtml(s){return String(s||'').replace(/[<>&"']/g,c=>({'<':'&lt;','
 //   pr = 오른쪽 예약 폭(px) — 닫기 X 말고 버튼이 더 붙는 모달만 넘긴다(기본 74 = X 하나 자리, CSS `.mhead`).
 //   extra = 머리줄 오른쪽에 붙는 조작 버튼 HTML(보드류의 「엑셀 복사」 등) — 밴드 위라 흰 알약(`--surface-solid`)으로 넘긴다.
 //   ⚠ 이모지는 넣지 않는다 — 운영자 260805-22 「이모지 가능한 안 씀」(그때 💬·📡·📭를 뺀 판단 그대로).
-function _mhead(title, sub, pr, extra){
-  return '<div class="mhead"'+(pr?' style="padding-right:'+pr+'px"':'')+'><span>'+escapeHtml(title)+'</span>'
+//   [260805-30 운영자 「정리해줘」] `pr`(오른쪽 예약폭) 인자 **폐지** — 닫기 `✕` 말고는 전부 `extra`(밴드 안 흐름)로 들어오므로
+//   예약은 CSS `.mhead` 한 값(74px)뿐이다. 자리마다 74/106/112/130/200을 손으로 정하던 매직넘버가 사라졌고,
+//   패리티 래칫에서 `.mhead` 갈래가 예약폭 종류만큼 늘어나던 축도 같이 붕괴한다.
+function _mhead(title, sub, extra){
+  return '<div class="mhead"><span>'+escapeHtml(title)+'</span>'
     +(sub?'<span class="sub">'+escapeHtml(sub)+'</span>':'')
     +(extra?'<span style="margin-left:auto;display:flex;align-items:center;gap:8px;flex:0 0 auto">'+extra+'</span>':'')+'</div>';
 }
@@ -5532,9 +5542,9 @@ function openAnnualCalendar(){
     //   ⚠ 구 인라인 `transform:translate(...)` 광학 보정 2개도 같이 제거 — 글리프 노선이 이미 한 번 땜질됐다는 흔적이라
     //      남겨두면 튜닝이 두 층으로 겹친다(정본 CSS 밖 인라인 재튜닝 = 260805-24 계약 위반).
     //   `✕`만 icon-only로 남는다 = NN/g가 인정하는 범용 관용구 하나 + 게이트 ⑦ U+2715 하드 0 유지.
-    +'<button class="modal-x" onclick="_ycDownload()" title="HTML 파일로 저장 — 인터넷 없이도 열려요" aria-label="HTML 파일로 저장" style="position:absolute;top:14px;right:98px;float:none;margin:0;z-index:30">'+_NM_ICO.download+'</button>'
-    +'<button class="modal-x" onclick="window.open(location.pathname+\'?annual\',\'_blank\',\'noopener\')" title="새 창(탭)에서 열기" aria-label="새 창에서 열기" style="position:absolute;top:14px;right:60px;float:none;margin:0;z-index:30">'+_NM_ICO.extlink+'</button>'
-    +_mhead('연간 일정','한 해 공연·전시를 한 줄로 훑어봐요',130)+'<div id="yc-scroll" style="flex:1;overflow-y:auto;overscroll-behavior:contain;padding-right:2px"></div></div></div>';
+    +_mhead('연간 일정','한 해 공연·전시를 한 줄로 훑어봐요',
+        '<button class="modal-x" onclick="_ycDownload()" title="HTML 파일로 저장 — 인터넷 없이도 열려요" aria-label="HTML 파일로 저장">'+_NM_ICO.download+'</button>'
+      + '<button class="modal-x" onclick="window.open(location.pathname+\'?annual\',\'_blank\',\'noopener\')" title="새 창(탭)에서 열기" aria-label="새 창에서 열기">'+_NM_ICO.extlink+'</button>')+'<div id="yc-scroll" style="flex:1;overflow-y:auto;overscroll-behavior:contain;padding-right:2px"></div></div></div>';
   const wrap=document.getElementById('yc-wrap');
   const sc=document.getElementById('yc-scroll');
   if(wrap&&sc)sc.appendChild(wrap);
@@ -20073,7 +20083,7 @@ function invalidateApplyCache(){
 }
 
 async function openApplySettings(){
-  const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeAdminPanel)"><div class="modal" style="width:96vw;max-width:720px;max-height:88vh;overflow:auto;--mpad-y:24px;--mpad-x:24px;position:relative"><button onclick="backToAdminMenu()" title="뒤로" aria-label="뒤로" style="position:absolute;top:14px;right:54px;float:none;margin:0;width:32px;height:32px;border-radius:50%;border:1px solid var(--glass-bd);background:var(--glass-surface);backdrop-filter:blur(8px);color:var(--accent);cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:10;box-shadow:var(--glass-shadow);transition:background .15s" onmouseover="this.style.background=\'var(--accent-light)\'" onmouseout="this.style.background=\'var(--glass-surface)\'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button><button class="modal-x" onclick="closeAdminPanel()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;float:none;margin:0;z-index:10">✕</button>'+_mhead('신청 일정 관리','홍보 신청을 받는 기간·제외일을 정해요',106)+'<div id="apply-settings-body" style="text-align:center;padding:40px;color:#888">'+_ldHtml(16)+'로딩 중</div></div></div>';
+  const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeAdminPanel)"><div class="modal" style="width:96vw;max-width:720px;max-height:88vh;overflow:auto;--mpad-y:24px;--mpad-x:24px;position:relative"><button class="modal-x" onclick="closeAdminPanel()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;float:none;margin:0;z-index:10">✕</button>'+_mhead('신청 일정 관리','홍보 신청을 받는 기간·제외일을 정해요','<button onclick="backToAdminMenu()" title="뒤로" aria-label="뒤로" class="modal-x">'+_NM_ICO.chevL+'</button>')+'<div id="apply-settings-body" style="text-align:center;padding:40px;color:#888">'+_ldHtml(16)+'로딩 중</div></div></div>';
   let el=document.getElementById('admin-panel');
   if(!el){el=document.createElement('div');el.id='admin-panel';document.body.appendChild(el);}
   el.innerHTML=html;
@@ -21272,7 +21282,7 @@ let _logsFilter={action:'all',sheet:'all',role:'all',q:''};
 let _logsQTimer=null;
 
 async function openLogsAdmin(){
-  const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeAdminPanel)"><div class="modal" style="width:96vw;max-width:1100px;max-height:88vh;overflow:auto;--mpad-y:24px;--mpad-x:24px;position:relative"><button onclick="backToAdminMenu()" title="뒤로" aria-label="뒤로" style="position:absolute;top:14px;right:54px;float:none;margin:0;width:32px;height:32px;border-radius:50%;border:1px solid var(--glass-bd);background:var(--glass-surface);backdrop-filter:blur(8px);color:var(--accent);cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:10;box-shadow:var(--glass-shadow);transition:background .15s" onmouseover="this.style.background=\'var(--accent-light)\'" onmouseout="this.style.background=\'var(--glass-surface)\'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button><button class="modal-x" onclick="closeAdminPanel()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;float:none;margin:0;z-index:10">✕</button>'+_mhead('로그 조회','누가 언제 무엇을 했는지 봐요',106)+'<div id="logs-admin-body" style="text-align:center;padding:40px;color:#888">'+_ldHtml(16)+'로딩 중</div></div></div>';
+  const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeAdminPanel)"><div class="modal" style="width:96vw;max-width:1100px;max-height:88vh;overflow:auto;--mpad-y:24px;--mpad-x:24px;position:relative"><button class="modal-x" onclick="closeAdminPanel()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;float:none;margin:0;z-index:10">✕</button>'+_mhead('로그 조회','누가 언제 무엇을 했는지 봐요','<button onclick="backToAdminMenu()" title="뒤로" aria-label="뒤로" class="modal-x">'+_NM_ICO.chevL+'</button>')+'<div id="logs-admin-body" style="text-align:center;padding:40px;color:#888">'+_ldHtml(16)+'로딩 중</div></div></div>';
   let el=document.getElementById('admin-panel');
   if(!el){el=document.createElement('div');el.id='admin-panel';document.body.appendChild(el);}
   el.innerHTML=html;
@@ -21438,7 +21448,7 @@ function exportLogsCsv(){
 async function openSheetAdmin(slug){
   const cfg=SHEET_CONFIG[slug];
   if(!cfg){showToast('알 수 없는 시트예요: '+slug,'error');return;}
-  const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeAdminPanel)"><div class="modal" style="width:96vw;max-width:1100px;max-height:88vh;overflow:auto;--mpad-y:24px;--mpad-x:24px;position:relative"><button onclick="backToAdminMenu()" title="뒤로" aria-label="뒤로" style="position:absolute;top:14px;right:54px;float:none;margin:0;width:32px;height:32px;border-radius:50%;border:1px solid var(--glass-bd);background:var(--glass-surface);backdrop-filter:blur(8px);color:var(--accent);cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:10;box-shadow:var(--glass-shadow);transition:background .15s" onmouseover="this.style.background=\'var(--accent-light)\'" onmouseout="this.style.background=\'var(--glass-surface)\'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button><button class="modal-x" onclick="closeAdminPanel()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;float:none;margin:0;z-index:10">✕</button>'+_mhead('시트 관리','운영 시트를 앱에서 바로 고쳐요',106)+'<div id="sheet-admin-body" style="text-align:center;padding:40px;color:#888">'+_ldHtml(16)+'로딩 중</div></div></div>';
+  const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeAdminPanel)"><div class="modal" style="width:96vw;max-width:1100px;max-height:88vh;overflow:auto;--mpad-y:24px;--mpad-x:24px;position:relative"><button class="modal-x" onclick="closeAdminPanel()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;float:none;margin:0;z-index:10">✕</button>'+_mhead('시트 관리','운영 시트를 앱에서 바로 고쳐요','<button onclick="backToAdminMenu()" title="뒤로" aria-label="뒤로" class="modal-x">'+_NM_ICO.chevL+'</button>')+'<div id="sheet-admin-body" style="text-align:center;padding:40px;color:#888">'+_ldHtml(16)+'로딩 중</div></div></div>';
   let el=document.getElementById('admin-panel');
   if(!el){el=document.createElement('div');el.id='admin-panel';document.body.appendChild(el);}
   el.innerHTML=html;
@@ -21802,7 +21812,7 @@ async function deleteSheetRow(slug,rowIndex){
 
 // === 프로그램 관리 ===
 async function openProgramAdmin(){
-  const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeAdminPanel)"><div class="modal" style="width:96vw;max-width:1100px;max-height:88vh;overflow:auto;--mpad-y:24px;--mpad-x:24px;position:relative"><button onclick="backToAdminMenu()" title="뒤로" aria-label="뒤로" style="position:absolute;top:14px;right:54px;float:none;margin:0;width:32px;height:32px;border-radius:50%;border:1px solid var(--glass-bd);background:var(--glass-surface);backdrop-filter:blur(8px);color:var(--accent);cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:10;box-shadow:var(--glass-shadow);transition:background .15s" onmouseover="this.style.background=\'var(--accent-light)\'" onmouseout="this.style.background=\'var(--glass-surface)\'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button><button class="modal-x" onclick="closeAdminPanel()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;float:none;margin:0;z-index:10">✕</button>'+_mhead('프로그램 관리','공연·전시 프로그램을 등록·변경해요',106)+'<div id="prog-admin-body" style="text-align:center;padding:40px;color:#888">'+_ldHtml(16)+'로딩 중</div></div></div>';
+  const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeAdminPanel)"><div class="modal" style="width:96vw;max-width:1100px;max-height:88vh;overflow:auto;--mpad-y:24px;--mpad-x:24px;position:relative"><button class="modal-x" onclick="closeAdminPanel()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;float:none;margin:0;z-index:10">✕</button>'+_mhead('프로그램 관리','공연·전시 프로그램을 등록·변경해요','<button onclick="backToAdminMenu()" title="뒤로" aria-label="뒤로" class="modal-x">'+_NM_ICO.chevL+'</button>')+'<div id="prog-admin-body" style="text-align:center;padding:40px;color:#888">'+_ldHtml(16)+'로딩 중</div></div></div>';
   let el=document.getElementById('admin-panel');
   if(!el){el=document.createElement('div');el.id='admin-panel';document.body.appendChild(el);}
   el.innerHTML=html;
@@ -26957,11 +26967,10 @@ async function openMemberOverview(){
     // [260803 운영자 「스크롤 없이 한 창에」] 높이 88vh → 92vh = 레포 전례 값(.enn-modal·연간 캘린더·현황 보드 모달과 동일 · 신규 값 0)
     +'<div class="modal pb-modal" style="width:96vw;max-width:1100px;height:92vh;max-height:92vh;overflow:hidden;--mpad-y:0;--mpad-x:0;position:relative;display:flex;flex-direction:column">'
     +'<button class="modal-x" onclick="closeMemberOverview()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;float:none;margin:0;z-index:10">✕</button>'
-    +_mhead('회원 분포','회원 명부를 지역·연령으로 훑어봐요',110)
+    +_mhead('회원 분포','회원 명부를 지역·연령으로 훑어봐요','<button type="button" onclick="closeMemberOverview();openMemberLookup()" title="회원 명부 조회 (운영_회원 시트)" aria-label="회원 조회" style="width:32px;height:32px;border:1.5px solid var(--surface-solid);background:var(--glass-surface);color:var(--accent);border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="3.6"/><path d="M5 20c0-3.6 3.2-5.6 7-5.6s7 2 7 5.6"/></svg></button>')
     // [260731 운영자 2차] 회원 관리 대메뉴 폐지 → 회원 조회(표)로 가는 문을 여기에(구 회원 조회 ▸ 회원 분포 버튼의 짝). 셸에 두는 이유 = 로딩·로드실패 상태에서도 항상 있게.
     // [260801 운영자] 텍스트 버튼 → 사람 픽토그램 원형 버튼(글리프 = _bpUserTag 사람 픽토 계승 · 형태 = 신청 일정 관리 뒤로가기 원형 버튼 계승, 색만 이 버튼 종전 accent 유지) · ✕(top:16px·32px)와 수평 정렬.
-    +'<button type="button" onclick="closeMemberOverview();openMemberLookup()" title="회원 명부 조회 (운영_회원 시트)" aria-label="회원 조회" style="position:absolute;top:14px;right:60px;z-index:10;width:32px;height:32px;border:1.5px solid var(--surface-solid);background:var(--glass-surface);color:var(--accent);border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="3.6"/><path d="M5 20c0-3.6 3.2-5.6 7-5.6s7 2 7 5.6"/></svg></button>'
-    +'<div id="mem-ov-body" style="flex:1;overflow:auto;padding:25px 29px;text-align:center;color:var(--dim)">'+_ldHtml(16)+'회원 데이터 불러오는 중…</div>'
+        +'<div id="mem-ov-body" style="flex:1;overflow:auto;padding:25px 29px;text-align:center;color:var(--dim)">'+_ldHtml(16)+'회원 데이터 불러오는 중…</div>'
     +'</div></div>';
   document.body.appendChild(el);
   if(!_memState||!_memState.rows.length)await _memLoad(false);
@@ -27543,13 +27552,12 @@ function openEnneagram(){
   bg.setAttribute('onmousedown','modalBgMouseDown(event)');
   bg.setAttribute('onclick','modalBgClick(event,closeEnneagram)');
   bg.innerHTML='<div class="modal enn-modal">'
-    +_mhead('에니어그램','성격 유형으로 서로를 이해해요',200)
-    +'<div class="enn-btns">'
-      +'<button type="button" class="bp-x" onclick="window.open(\'playground/enneagram/\',\'_blank\',\'noopener\')" title="새 탭에서 열기" aria-label="새 탭에서 열기">↗</button>'
-      +'<button type="button" class="bp-x" onclick="_tminHide(\'enn-bg\',\'에니어그램\')" title="최소화" aria-label="최소화">─</button>'   /* [260805 운영자] 최소화 — 창 규약 순서(최소화·전체화면·닫기) */
-      +'<button type="button" class="bp-x enn-full" onclick="_ennToggleFull()" title="전체화면" aria-label="전체화면">'+_BP_ICO.expand+'</button>'
-      +'<button type="button" class="bp-x" onclick="closeEnneagram()" title="닫기" aria-label="닫기">✕</button>'
-    +'</div>'
+    +_mhead('에니어그램','성격 유형으로 서로를 이해해요',
+      // [260805-30] 구 `.enn-btns` 절대배치 묶음 → 밴드 안 흐름으로(예약폭 200 폐지). 창 규약 순서(새 탭·최소화·전체화면·닫기) 유지.
+        '<button type="button" class="bp-x" onclick="window.open(\'playground/enneagram/\',\'_blank\',\'noopener\')" title="새 탭에서 열기" aria-label="새 탭에서 열기">'+_NM_ICO.extlink+'</button>'
+      + '<button type="button" class="bp-x" onclick="_tminHide(\'enn-bg\',\'에니어그램\')" title="최소화" aria-label="최소화">─</button>'
+      + '<button type="button" class="bp-x enn-full" onclick="_ennToggleFull()" title="전체화면" aria-label="전체화면">'+_BP_ICO.expand+'</button>'
+      + '<button type="button" class="bp-x" onclick="closeEnneagram()" title="닫기" aria-label="닫기">✕</button>')
     +'<iframe class="enn-frame" src="playground/enneagram/enneagram_all.html" title="에니어그램 툴킷" onload="_ennBindEsc(this)"></iframe>'
     +'</div>';
   document.body.appendChild(bg);
@@ -28149,9 +28157,8 @@ function openNaverBlogTool(){
   _nbTgtNormalize();   // 옛 단일값 tgt → 새 다중선택 구조로 정규화(호환)
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeNaverBlogTool)">'
     +'<div class="modal" style="width:96vw;max-width:1080px;height:92vh;max-height:92vh;--mpad-y:0;--mpad-x:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:#fff">'
-    +'<button class="modal-x" onclick="_tminHide(\'nblog-board\',\'네이버 블로그\')" title="최소화" aria-label="최소화" style="position:absolute;top:14px;right:60px;z-index:10">─</button>'
     +'<button class="modal-x" onclick="closeNaverBlogTool()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;z-index:10">✕</button>'
-    +_mhead('블로그 글쓰기 도우미','네이버 블로그 초안을 만들어요',112)
+    +_mhead('블로그 글쓰기 도우미','네이버 블로그 초안을 만들어요','<button class="modal-x" onclick="_tminHide(\'nblog-board\',\'네이버 블로그\')" title="최소화" aria-label="최소화">─</button>')
     +'<div id="nblog-body" style="flex:1;overflow:auto;padding:20px 24px;min-width:0;min-height:0"></div>'
     +'</div></div>';
   if(_nbState.escHandler)document.removeEventListener('keydown',_nbState.escHandler);
@@ -28860,9 +28867,8 @@ function openVideoEditor(tab){
   _veState.tab=t;_veState._touch=Date.now();
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeVideoEditor)">'
     +'<div class="modal" style="width:96vw;max-width:1120px;height:92vh;max-height:92vh;--mpad-y:0;--mpad-x:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:var(--surface-solid);border-radius:var(--radius)">'   // 운영자 선택값 260711: 라운드 24→16 = --radius 동값 계승
-    +'<button class="modal-x" onclick="_tminHide(\'ve-board\',\'영상 편집기\')" title="최소화" aria-label="최소화" style="position:absolute;top:14px;right:60px;z-index:10">─</button>'
     +'<button class="modal-x" onclick="closeVideoEditor()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;z-index:10">✕</button>'
-    +_mhead('영상 편집기','이 컴퓨터 안에서 자르고 붙여요',112)
+    +_mhead('영상 편집기','이 컴퓨터 안에서 자르고 붙여요','<button class="modal-x" onclick="_tminHide(\'ve-board\',\'영상 편집기\')" title="최소화" aria-label="최소화">─</button>')
     +'<div style="padding:12px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:14px;flex-wrap:wrap">'   // 운영자 선택값 260711: 16/700 → 14/900
     +'<div id="ve-tabs" style="display:flex;gap:2px;background:var(--neutral);border-radius:8px;padding:3px">'
     +'<button type="button" class="prog-tab" data-t="edit" onclick="_veTab(\'edit\')" style="flex:none;padding:7px 16px">1. 영상 편집</button>'
@@ -29493,9 +29499,8 @@ function openHwpEditor(){
   _hwState=_hwDefault();   // 🔒 매번 새로 — 이전 사용자의 문서를 복원하지 않는다
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeHwpEditor)">'
     +'<div class="modal" style="width:96vw;max-width:1080px;height:92vh;max-height:92vh;--mpad-y:0;--mpad-x:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:var(--surface-solid)">'
-    +'<button class="modal-x" onclick="_tminHide(\'hw-board\',\'한글문서 편집\')" title="최소화" aria-label="최소화" style="position:absolute;top:14px;right:60px;z-index:10">─</button>'
     +'<button class="modal-x" onclick="closeHwpEditor()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;z-index:10">✕</button>'
-    +_mhead('한글문서 편집','hwp 파일을 앱에서 열고 고쳐요',112)
+    +_mhead('한글문서 편집','hwp 파일을 앱에서 열고 고쳐요','<button class="modal-x" onclick="_tminHide(\'hw-board\',\'한글문서 편집\')" title="최소화" aria-label="최소화">─</button>')
     +'<div style="flex:1;display:flex;flex-direction:column;min-height:0;padding:16px 24px 18px">'
       +'<div id="hw-bar" class="hw-bar"></div>'
       +'<div id="hw-stage" class="hw-stage"></div>'
@@ -29679,9 +29684,8 @@ function openOfficeEditor(){
   _ofState=_ofDefault();   // 🔒 매번 새로 — 이전 사용자의 문서를 복원하지 않는다
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeOfficeEditor)">'
     +'<div class="modal" style="width:96vw;max-width:1080px;height:92vh;max-height:92vh;--mpad-y:0;--mpad-x:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:var(--surface-solid)">'
-    +'<button class="modal-x" onclick="_tminHide(\'of-board\',\'오피스문서 편집\')" title="최소화" aria-label="최소화" style="position:absolute;top:14px;right:60px;z-index:10">─</button>'
     +'<button class="modal-x" onclick="closeOfficeEditor()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;z-index:10">✕</button>'
-    +_mhead('오피스문서 편집','워드·엑셀·PPT를 앱에서 열고 고쳐요',112)
+    +_mhead('오피스문서 편집','워드·엑셀·PPT를 앱에서 열고 고쳐요','<button class="modal-x" onclick="_tminHide(\'of-board\',\'오피스문서 편집\')" title="최소화" aria-label="최소화">─</button>')
     +'<div style="flex:1;display:flex;flex-direction:column;min-height:0;padding:16px 24px 18px">'
       +'<div id="of-bar" class="hw-bar"></div>'
       +'<div id="of-stage" class="hw-stage"></div>'
@@ -29902,9 +29906,8 @@ function openFileSlimmer(){
   // 좌 = 첨부·파일명·도구(교체·삭제·내려받기) · 우 = 세기 게이지 + [용량 줄이기] + 상태 한 줄.
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeFileSlimmer)">'
     +'<div class="modal" style="width:min(94vw,560px);height:auto;max-height:88vh;--mpad-y:0;--mpad-x:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:var(--surface-solid)">'
-    +'<button class="modal-x" onclick="_tminHide(\'sl-board\',\'용량 줄이기\')" title="최소화" aria-label="최소화" style="position:absolute;top:14px;right:60px;z-index:10">─</button>'
     +'<button class="modal-x" onclick="closeFileSlimmer()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;z-index:10">✕</button>'
-    +_mhead('용량 줄이기','무거운 파일을 가볍게 만들어요',112)
+    +_mhead('용량 줄이기','무거운 파일을 가볍게 만들어요','<button class="modal-x" onclick="_tminHide(\'sl-board\',\'용량 줄이기\')" title="최소화" aria-label="최소화">─</button>')
     +'<div style="flex:1;display:flex;flex-direction:column;min-height:0;padding:13px 16px 16px">'
       // 무대 하나로 통합 — 위 파일 줄(.hw-bar)·아래 게이지 줄(.hw-ask)을 이 안으로 접어 넣어 두 줄만큼 창이 낮아진다.
       +'<div id="sl-stage" class="hw-stage" style="display:grid;grid-template-columns:1fr 1fr;align-items:stretch;gap:0;padding:0;overflow:visible"></div>'
@@ -30271,9 +30274,8 @@ function openDocMd(){
   _dmState=_dmDefault();   // 🔒 매번 새로 — 이전 사용자의 문서를 복원하지 않는다
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeDocMd)">'
     +'<div class="modal" style="width:96vw;max-width:1080px;height:92vh;max-height:92vh;--mpad-y:0;--mpad-x:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:var(--surface-solid)">'
-    +'<button class="modal-x" onclick="_tminHide(\'dm-board\',\'문서 → 마크다운\')" title="최소화" aria-label="최소화" style="position:absolute;top:14px;right:60px;z-index:10">─</button>'
     +'<button class="modal-x" onclick="closeDocMd()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;z-index:10">✕</button>'
-    +_mhead('문서 → 마크다운','문서를 마크다운 글로 바꿔요',112)
+    +_mhead('문서 → 마크다운','문서를 마크다운 글로 바꿔요','<button class="modal-x" onclick="_tminHide(\'dm-board\',\'문서 → 마크다운\')" title="최소화" aria-label="최소화">─</button>')
     +'<div style="flex:1;display:flex;flex-direction:column;min-height:0;padding:16px 24px 18px">'
       +'<div id="dm-bar" class="hw-bar"></div>'
       +'<div id="dm-stage" class="hw-stage"></div>'
@@ -30873,11 +30875,10 @@ function openCardMaker(tab){
   _cmState=_cmDefault();   // 🔒 매번 새로 — 이전 사용자의 사진·문구를 복원하지 않는다
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeCardMaker)">'
     +'<div class="modal" style="width:96vw;max-width:1080px;height:92vh;max-height:92vh;--mpad-y:0;--mpad-x:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:var(--surface-solid)">'
-    +'<button class="modal-x" onclick="_tminHide(\'cm-board\',\'이미지 편집\')" title="최소화" aria-label="최소화" style="position:absolute;top:14px;right:60px;z-index:10">─</button>'
     +'<button class="modal-x" onclick="closeCardMaker()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;z-index:10">✕</button>'
     // [260805-23] 머리줄 = 정본 밴드(`_mhead`) · 탭줄은 그 아래 자기 줄로 내렸다(영상 편집기와 같은 처리) —
     //   밴드는 제목·부제만 진다는 계약. `#cm-subnote`는 탭에 따라 글이 바뀌므로(_cmTab) 탭줄에 남긴다.
-    +_mhead('이미지 편집','',112)
+    +_mhead('이미지 편집','','<button class="modal-x" onclick="_tminHide(\'cm-board\',\'이미지 편집\')" title="최소화" aria-label="최소화">─</button>')
     +'<div style="padding:12px 24px;border-bottom:1px solid var(--border);font-size:16px;font-weight:700;display:flex;align-items:center;gap:14px;flex-wrap:wrap">'
       +'<div id="cm-tabs" style="display:flex;gap:2px;background:var(--neutral);border-radius:8px;padding:3px">'
         +'<button type="button" class="prog-tab" data-t="card" onclick="_cmTab(\'card\')" style="flex:none;padding:7px 16px">1. 카드 제작</button>'
@@ -31243,9 +31244,8 @@ function openLogoMaker(){
   _lmState=_lmDefault();   // 🔒 매번 새로 — 이전 사용자의 이름·결과를 복원하지 않는다(카드 제작 동일 계약)
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeLogoMaker)">'
     +'<div class="modal" style="width:96vw;max-width:1080px;height:92vh;max-height:92vh;--mpad-y:0;--mpad-x:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:var(--surface-solid)">'
-    +'<button class="modal-x" onclick="_tminHide(\'lm-board\',\'로고 제작\')" title="최소화" aria-label="최소화" style="position:absolute;top:14px;right:60px;z-index:10">─</button>'
     +'<button class="modal-x" onclick="closeLogoMaker()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;z-index:10">✕</button>'
-    +_mhead('로고 제작','1:1 · 고른 것만으로 만들어요',112)
+    +_mhead('로고 제작','1:1 · 고른 것만으로 만들어요','<button class="modal-x" onclick="_tminHide(\'lm-board\',\'로고 제작\')" title="최소화" aria-label="최소화">─</button>')
     +'<div style="flex:1;min-height:0;padding:18px 24px 20px">'
       +'<div class="lm-wrap">'
         +'<div class="lm-col prev">'
@@ -31420,9 +31420,8 @@ function openKakaoDesigner(){
     // [260805-22 운영자] 머리줄 = 강조색1 음영(--accent) + 잉크 흰 축 대응 · 💬 제거(「이모지 가능한 안 씀」) · 밴드가 스스로 경계라 border-bottom 제거.
     //   [260805-23] 이 인라인 밴드가 **앱 전체 모달 머리줄의 원본**이 됐다 — 값은 그대로 CSS `.mhead` + 빌더 `_mhead`로 옮겼고
     //   여기도 그 빌더를 쓴다(자기 자신을 포함해 61개 모달이 한 벌). 인라인으로 되돌리지 마라(check_modal_head가 차단).
-    +'<button class="modal-x" onclick="_tminHide(\'km-board\',\'카카오 메세지 설계\')" title="최소화" aria-label="최소화" style="position:absolute;top:14px;right:60px;z-index:10">─</button>'
     +'<button class="modal-x" onclick="closeKakaoDesigner()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;z-index:10">✕</button>'
-    +_mhead('카카오 메세지 설계','공연 상세 링크를 읽어 76자 문구를 만들어요',112)
+    +_mhead('카카오 메세지 설계','공연 상세 링크를 읽어 76자 문구를 만들어요','<button class="modal-x" onclick="_tminHide(\'km-board\',\'카카오 메세지 설계\')" title="최소화" aria-label="최소화">─</button>')
     +'<div style="flex:1;min-height:0;padding:18px 24px 20px">'
       +'<div class="lm-wrap">'
         +'<div class="lm-col">'
@@ -31603,9 +31602,8 @@ function openLinkGrab(){
   _lgState={busy:false,res:null,err:'',lastUrl:'',escHandler:null,sel:{},meta:{},got:_lgLoadGot(),histOpen:false,qual:{},yt:{}};   // 결과는 매번 새로(공용 PC 원칙) · 받음/기록만 기기 보존
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeLinkGrab)">'
     +'<div class="modal" style="width:96vw;max-width:720px;max-height:92vh;--mpad-y:0;--mpad-x:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:var(--surface-solid)">'
-    +'<button class="modal-x" onclick="_tminHide(\'lg-board\',\'링크 자료수집\')" title="최소화" aria-label="최소화" style="position:absolute;top:14px;right:60px;z-index:10">─</button>'
     +'<button class="modal-x" onclick="closeLinkGrab()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;z-index:10">✕</button>'
-    +_mhead('링크 자료수집','링크에서 글·사진을 모아와요',112)
+    +_mhead('링크 자료수집','링크에서 글·사진을 모아와요','<button class="modal-x" onclick="_tminHide(\'lg-board\',\'링크 자료수집\')" title="최소화" aria-label="최소화">─</button>')
     +'<div id="lg-body" style="flex:1;overflow:auto;padding:20px 24px;min-width:0;min-height:0"></div>'
     +'</div></div>';
   _lgState.escHandler=function(e){if(e.key==='Escape'&&!_tminIs('lg-board'))closeLinkGrab();};   // 최소화 중 Esc = 숨은 보드 파괴 금지
@@ -32052,7 +32050,7 @@ async function openQaBoard(highlightId){
   _qaHighlightId = (highlightId||'').toString().trim() || null;
   // 메시지함에서 특정 건으로 진입하면 그 건이 필터에 가려지지 않게 필터 초기화
   if(_qaHighlightId){ _qaFilterState={status:'all',cat:'all'}; }
-  const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeAdminPanel)"><div class="modal" style="width:96vw;max-width:1000px;max-height:88vh;overflow:auto;--mpad-y:24px;--mpad-x:24px;position:relative"><button onclick="backToAdminMenu()" title="뒤로" aria-label="뒤로" style="position:absolute;top:14px;right:54px;float:none;margin:0;width:32px;height:32px;border-radius:50%;border:1px solid var(--glass-bd);background:var(--glass-surface);backdrop-filter:blur(8px);color:var(--accent);cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:10;box-shadow:var(--glass-shadow)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button><button class="modal-x" onclick="closeAdminPanel()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;float:none;margin:0;z-index:10">✕</button>'+_mhead('불편사항 관리','접수된 불편사항을 확인해요',106)+'<div id="qa-board-body" style="text-align:center;padding:40px;color:#888">'+_ldHtml(16)+'로딩 중</div></div></div>';
+  const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeAdminPanel)"><div class="modal" style="width:96vw;max-width:1000px;max-height:88vh;overflow:auto;--mpad-y:24px;--mpad-x:24px;position:relative"><button class="modal-x" onclick="closeAdminPanel()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;float:none;margin:0;z-index:10">✕</button>'+_mhead('불편사항 관리','접수된 불편사항을 확인해요','<button onclick="backToAdminMenu()" title="뒤로" aria-label="뒤로" class="modal-x">'+_NM_ICO.chevL+'</button>')+'<div id="qa-board-body" style="text-align:center;padding:40px;color:#888">'+_ldHtml(16)+'로딩 중</div></div></div>';
   let el=document.getElementById('admin-panel');
   if(!el){el=document.createElement('div');el.id='admin-panel';document.body.appendChild(el);}
   el.innerHTML=html;
