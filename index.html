@@ -10771,12 +10771,24 @@ function _dailyMasters(){
     if(cat==='전시'||cat==='대관')return;
     var ss=excelSerialToISO(p['판매시작일']), se=excelSerialToISO(p['판매종료일']), e=excelSerialToISO(p['종료일']);
     var until=se||e;
-    if(!ss||!until||!(ss<=todayISO&&todayISO<=until))return;   // ISO 문자열 사전순 = 날짜순
-    if(e&&e<todayISO)return;   // 공연이 끝났으면 판매기간이 남아도 제외
+    // [260805 운영자 「6월거. 6월 30일 종료 건 · db에 이 내용 160개 팔렸다고 저장되어 있나」] **끝난 교육 = 소급 입력 허용**.
+    //   실측(거울 `이관본/data/ops_세부운영관리대장정리.csv` 2,188행 · `ops_일일입력.csv` 1,477행 · `ops_공연마스터.csv` 9행):
+    //   화요살롱은 **프로그램 시트에만** 있고 운영대장·일일입력·공연마스터 **어디에도 없다** = DB에 160이라는 값 자체가 없다.
+    //   넣을 입구도 없었다 — 아래 두 줄(판매기간 중 · 종료 전)이 6/30에 끝난 건을 통째로 막는다. 그래서 `_BIZ_EDU_SOLD`
+    //   하드코딩 폴백이 화면을 대신 지켜 왔다(그 표의 존재 이유 = 이 막힘).
+    //   → **예술교육만·같은 해에 끝난 것만** 목록에 올린다. 공연은 종전 그대로(끝난 공연이 목록에 쏟아지면 안 된다) ·
+    //     전시는 위에서 이미 제외(자체 목록 별도) · 담당 카테고리 필터도 그대로.
+    //   ⚠ 넣는 곳은 **운영_일일입력**(공연이 쓰는 그 시트) = 「공연처럼 기록된다」의 실체. 값이 들어오는 순간
+    //     `_salesBuild → _bizSalesIdx`가 그 값을 이기고 `_BIZ_EDU_SOLD` 폴백은 자동 은퇴한다(그 표 주석의 계약).
+    var _eduBack=(cat==='예술교육'&&!!e&&e<todayISO&&e.slice(0,4)===todayISO.slice(0,4));
+    if(!_eduBack){
+      if(!ss||!until||!(ss<=todayISO&&todayISO<=until))return;   // ISO 문자열 사전순 = 날짜순
+      if(e&&e<todayISO)return;   // 공연이 끝났으면 판매기간이 남아도 제외
+    }
     seen[_uName(name)]=1; if(pid)seenId[pid]=1;
     var open=_SALES_FALLBACK_SEAT;
     try{ var yr=parseInt(String(excelSerialToISO(p['시작일'])).slice(0,4),10)||(new Date()).getFullYear(); var opsP=(_salesState&&_salesState.ops)?((pid?_opsLookupById(pid):null)||_opsLookup(name,yr)):null; if(opsP)open=(opsP.base||_SALES_FALLBACK_SEAT)*(opsP.count||1); }catch(_e){}
-    out.push({name:name, id:pid, open:open, cat:cat, base:_SALES_FALLBACK_SEAT, rc:1, needRc:false, totalOpen:open});   // 마스터 미등록(프로그램 폴백)은 총회차를 쓸 마스터 행이 없어 회차 보정 대상 아님
+    out.push({name:name, id:pid, open:open, cat:cat, base:_SALES_FALLBACK_SEAT, rc:1, needRc:false, totalOpen:open, back:(_eduBack?e:null)});   // 마스터 미등록(프로그램 폴백)은 총회차를 쓸 마스터 행이 없어 회차 보정 대상 아님 · back = 소급(종료일) 표식
   });
   return out.filter(function(m){ if(!m.name)return false; if(!allowed)return true; if(!m.cat)return true; return allowed.indexOf(m.cat)>=0; });  // 담당 카테고리만(카테고리 미상=조인실패는 표시해 입력 누락 방지)
 }
@@ -10973,7 +10985,9 @@ function _dailyRowHtml(r,regSet){
   var selO=null; if(r&&r.공연)opts.some(function(o){if(o.name===r.공연){selO=o;return true;}return false;});   // [회차 보정 260723] 선택 공연 = 회차칸 노출 판정
   var s='<div class="daily-row" style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">';
   s+='<select class="d-perf" onchange="_dailyRenderForm(_dailyReadDOM())" style="flex:2;min-width:160px;padding:7px 8px;border:1.5px solid #ddd;border-radius:7px;font-size:12px;font-family:inherit;background:#fff"><option value="">'+(opts.length?'공연 선택':'이 날짜는 모두 입력됨')+'</option>';
-  opts.forEach(function(o){s+='<option value="'+escapeHtml(o.name)+'"'+((r&&r.공연===o.name)?' selected':'')+'>'+escapeHtml(o.name)+'</option>';});
+  // [260805] `· 종료(소급)` 꼬리표 = 이미 끝난 예술교육(_dailyMasters back) — **보이는 글자만** 다르고 value는 공연명 그대로다
+  //   (`_dailyReadDOM`이 value를 읽는다 = 저장 값 무변). 판매중 목록에 끝난 건이 섞이는 걸 눈으로 갈라 준다.
+  opts.forEach(function(o){s+='<option value="'+escapeHtml(o.name)+'"'+((r&&r.공연===o.name)?' selected':'')+'>'+escapeHtml(o.name)+(o.back?' · 종료(소급)':'')+'</option>';});
   s+='</select>';
   function inp(cls,val){return '<input type="number" class="'+cls+'" min="0" value="'+((r&&r[cls]!=null)?r[cls]:'')+'" style="flex:1;min-width:78px;padding:7px 8px;border:1.5px solid #ddd;border-radius:7px;font-size:12px;font-family:inherit">';}
   s+=inp('d-paids',r)+inp('d-paida',r)+inp('d-free',r);
@@ -11028,6 +11042,10 @@ function _dailyRenderForm(rowsData, groupData){
   h+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px"><span style="font-size:12px;color:#888;font-weight:600">기준일자</span><input type="date" id="d-date" value="'+curDate+'" onchange="_dailyRenderForm(_dailyReadDOM())" style="padding:7px 10px;border:1.5px solid #ddd;border-radius:7px;font-size:13px;font-family:inherit"></div>';
   h+='<div style="display:flex;gap:8px;font-size:11px;color:#999;font-weight:600;margin-bottom:6px;padding:0 4px"><span style="flex:2;min-width:160px">공연</span><span style="flex:1;min-width:78px">유료좌석</span><span style="flex:1;min-width:78px">유료금액</span><span style="flex:1;min-width:78px">무료좌석</span><span style="width:24px"></span></div>';
   h+='<div id="d-rows">'; rows.forEach(function(r){h+=_dailyRowHtml(r,regSet);}); h+='</div>';
+  // [260805 운영자 「6월 30일 종료 건」] 소급 안내 — 끝난 예술교육이 목록에 있을 때만. 기준일자를 **그 프로그램 종료일**로
+  //   맞춰 넣어야 차트의 그 달 자리에 선다(일일입력은 기준일자로 달을 가른다 · _bizEduDailyIdx).
+  var _bk=_dailyMasters().filter(function(o){return o.back;});
+  if(_bk.length)h+='<div style="font-size:11.5px;color:var(--dim);margin-top:8px;line-height:1.7">「<b style="color:var(--green)">· 종료(소급)</b>」 표시 = 이미 끝난 <b>예술교육</b>이에요 — 최종 실적을 뒤늦게 넣는 자리.<br>기준일자를 그 프로그램 <b>종료일</b>로 맞춰 주세요('+_bk.map(function(o){return escapeHtml(o.name)+' → '+o.back;}).join(' · ')+').</div>';
   if(regSet){ var _remain=_dailyMasters().filter(function(o){return !regSet[o.name];}).length; if(!_remain)h+='<div style="font-size:11.5px;color:var(--dim);margin-top:6px">이 날짜는 판매중 공연이 모두 입력됐어요 — 값 수정은 판매 현황 카드 ▸ <b>실적 수정</b>에서.</div>'; }
   h+='<button onclick="_dailyAddRow()" style="margin-top:4px;padding:6px 12px;border:1.5px dashed #ccc;border-radius:8px;background:#fafafa;color:#666;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">+ 공연 추가</button>';
   // [단체 유입] 단체 섹션 — 상단 기준일자 공유. 같은 날 여러 건 OK. 색·형태 토큰 계승(신규 raw 0).
