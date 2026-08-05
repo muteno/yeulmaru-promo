@@ -23,6 +23,14 @@ if [ -f "$ROOT/tools/check_wiring.py" ]; then
     exit 1
   }
 fi
+# 모달 머리줄 정본 게이트 (260805-23 운영자 「모든 모달 창 윗부분을 저거로 … 항상 저 형식」)
+# 잡는 것 = 머리줄 없는 모달 · 밴드 인라인 재타이핑 · 셸 인라인 padding(음수 마진 상쇄 파손). 네트워크 0·하드 0.
+if [ -f "$ROOT/tools/check_modal_head.py" ]; then
+  python3 "$ROOT/tools/check_modal_head.py" || {
+    echo "[pre-commit] 모달 머리줄 정본 위반 — 커밋 차단. 위 출력의 자리에 _mhead(제목, 부제)를 넣어라." >&2
+    exit 1
+  }
+fi
 # 연간 실적(_YR) 정합 게이트 (260804) — index.html 변경 시만.
 # 잡는 것 = 연도 열은 늘렸는데 누계(sum)·계·grand를 안 고친 자리(260804 실사고: 2026 열은 있는데 누계는 ~2025 그대로 ·
 # 화면상 무증상이라 운영자가 눈으로 잡아냈다). 값 판단은 안 한다 — 파생값 산수만 본다(네트워크·LLM 0).
@@ -51,6 +59,17 @@ if [ -f "$ROOT/tools/smoke_layout.mjs" ] && command -v node >/dev/null 2>&1; the
   if git diff --cached --name-only | grep -q '^index\.html$'; then
     node "$ROOT/tools/smoke_layout.mjs" || {
       echo "[pre-commit] 레이아웃 스모크 실패 — 대시보드 블러 박스·흰 카드 하단선이 어긋남. 위 출력의 Δ를 0으로 되돌린 뒤 커밋(정말 의도된 변경이면 git commit --no-verify)." >&2
+      exit 1
+    }
+  fi
+fi
+# 모달 머리줄 패리티 스모크 — 운영자 260805-23 「스모킹 패리티 고정」
+# 실제로 그려진 밴드의 computed style이 모달끼리 같은지 실측(정적 게이트가 못 보는 축 = 이스케이프 파손·CSS 덮어쓰기).
+# fail-soft: playwright-core·chromium 미탐지 = SKIP. 패리티 파손만 exit 1.
+if [ -f "$ROOT/tools/smoke_modal_head.mjs" ] && command -v node >/dev/null 2>&1; then
+  if git diff --cached --name-only | grep -q '^index\.html$'; then
+    node "$ROOT/tools/smoke_modal_head.mjs" || {
+      echo "[pre-commit] 모달 머리줄 패리티 스모크 실패 — 머리줄이 모달마다 달라졌다. 위 출력의 그룹을 하나로 되돌린 뒤 커밋." >&2
       exit 1
     }
   fi

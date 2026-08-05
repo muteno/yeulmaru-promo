@@ -415,7 +415,9 @@ button{font-family:inherit;cursor:pointer}
   .year-text{font-size:14px}
   .arrow{width:34px;height:34px;font-size:16px}
   /* === 모달 공통 (콘텐츠 모달 #modal) === */
-  .modal{padding:18px !important;border-radius:14px !important}
+  /* [260805-23] `--mpad-*`도 같이 !important — 안 그러면 인라인 `--mpad-y:0`(보드류)이 이기면서
+     밴드 음수 마진(0)과 강제된 패딩(18)이 어긋나 모바일에서만 머리줄이 안쪽으로 들어간다. 값·거동은 종전 그대로. */
+  .modal{padding:18px !important;--mpad-y:18px !important;--mpad-x:18px !important;border-radius:14px !important}
   .modal h3{font-size:15px}
   .modal label{font-size:10.5px;margin:12px 0 4px}
   .modal-acts{flex-wrap:wrap;gap:8px !important;margin-top:16px}
@@ -627,7 +629,10 @@ button{font-family:inherit;cursor:pointer}
   -webkit-backdrop-filter:blur(32px) saturate(170%) !important;
   box-shadow:0 24px 64px rgba(74,77,231,0.16),0 8px 28px rgba(216,132,85,0.12),0 0 0 1px rgba(255,255,255,0.4) inset !important;
   border:1px solid rgba(255,255,255,0.5) !important;
-  padding:0 2px 0 0 !important;
+  /* [260805-23] 구 `padding:0 2px 0 0`(scrollbar 자리) → 셸 패딩 0 + 그 2px는 스크롤 칸(#yc-scroll)이 진다.
+     셸에 패딩이 남아 있으면 머리줄 밴드가 오른쪽에서 2px 모자라 다른 60개와 안 맞는다(패리티 스모크 실측). */
+  --mpad-y:0 !important; --mpad-x:0 !important;
+  padding:0 !important;
 }
 
 /* ═══ HEADER ═══ */
@@ -1117,7 +1122,7 @@ table.promo-board-table th:last-child .col-resize-handle{display:none}
 @keyframes olRot{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.ol-dots i,.ld-p i,.ld-p svg{animation:none;opacity:.85}}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
-.modal{background:var(--surface-solid);border:1px solid var(--glass-border);border-radius:var(--radius-xl);padding:28px;width:400px;max-width:92vw;max-height:90vh;overflow-y:auto;box-shadow:0 24px 80px rgba(74,77,231,0.12),0 8px 24px rgba(0,0,0,0.08);animation:fadeUp .25s ease}
+.modal{background:var(--surface-solid);border:1px solid var(--glass-border);border-radius:var(--radius-xl);padding:var(--mpad-y,28px) var(--mpad-x,28px);width:400px;max-width:92vw;max-height:90vh;overflow-y:auto;box-shadow:0 24px 80px rgba(74,77,231,0.12),0 8px 24px rgba(0,0,0,0.08);animation:fadeUp .25s ease}
 .modal h3{font-size:16px;font-weight:700}
 .modal .meta{font-size:12px;color:var(--dim);margin:2px 0 16px}
 .modal label{display:block;font-size:11px;color:#888;margin:14px 0 4px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px}
@@ -1128,6 +1133,27 @@ table.promo-board-table th:last-child .col-resize-handle{display:none}
 .modal input[readonly]:focus,.modal textarea[readonly]:focus,.modal select:disabled:focus{border-color:rgba(0,0,0,0.04);box-shadow:none;background:#EEE}
 .modal-x{position:sticky;top:0;float:right;margin:-8px -8px 0 0;width:32px;height:32px;border-radius:50%;border:0;background:rgba(74,77,231,0.08);cursor:pointer;font-size:13px;color:var(--accent);display:flex;align-items:center;justify-content:center;z-index:10;transition:background .15s,color .15s;line-height:1}
 .modal-x:hover{background:rgba(74,77,231,0.18);color:var(--accent)}
+/* ═══ 모달 머리줄 정본 `.mhead` (260805-23 · 운영자 「모든 모달 창에 윗부분을 저거로 … 항상 저 형식이 나오게」) ═══
+   출처 = 260805-22 「카카오 메세지 설계」(openKakaoDesigner)·「AI 홍보 · 점검」(openPromoCheck)의 인라인 밴드.
+   그 두 곳이 쓰던 값을 **한 글자도 안 바꾸고** 클래스로 옮긴 것 = 신규 색·신규 수치 0(padding 18/24 · 제목 16px/700
+   var(--surface-solid) · 부제 11.5px/600 rgba(255,255,255,.85) · 밴드 var(--accent) · gap 8).
+   ⚠ 인라인으로 이 밴드를 다시 타이핑하지 마라 — `tools/check_modal_head.py`가 하드 0으로 차단한다(기틀 §2 컴포넌트 7).
+   패딩 상쇄: `.modal`의 패딩은 이제 `--mpad-y/--mpad-x`(기본 28) — 밴드는 그 값만큼 음수 마진으로 되밀어
+   **모달 폭 끝까지** 칠해진다. padding:0 셸(보드류)은 `--mpad-y:0;--mpad-x:0` → 마진 0 = 밀착.
+   오른쪽 74px 예약 = 닫기 X(right:22 + 32px) 자리. 버튼이 더 붙는 모달만 인라인 padding-right로 넓힌다. */
+.mhead{display:flex;align-items:center;gap:8px;flex:0 0 auto;flex-wrap:wrap;row-gap:1px;overflow:hidden;text-align:left;
+  margin:calc(-1 * var(--mpad-y,28px)) calc(-1 * var(--mpad-x,28px)) var(--mpad-y,28px);
+  padding:18px 74px 18px 24px;background:var(--accent);
+  font-size:16px;font-weight:700;color:var(--surface-solid)}
+/* 제목은 안 줄어든다(`flex-shrink:0`) — 좁은 모달에서 잘리는 쪽은 언제나 부제다. 부제도 안 줄어들게 두면
+   자리가 모자랄 때 **다음 줄로 내려가** 통째로 읽힌다(줄여서 「전역설정 · 모든 사용자에게 적용…」이 되는 것보다 낫다). */
+.mhead>span:first-child{flex:0 0 auto;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mhead .sub{flex:1 0 auto;max-width:100%;font-size:11.5px;font-weight:600;color:rgba(255,255,255,.85);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* 머리줄이 있는 모달의 X = 밴드 위 흰 잉크·절대 자리 고정(정본 잉크 var(--accent)는 accent 밴드 위에서 소실).
+   `float:right` 기본값(L1129)이 밴드 아래로 흘러가는 것도 여기서 막는다. */
+.modal:has(>.mhead){position:relative}
+.modal:has(>.mhead)>.modal-x{position:absolute;top:14px;right:22px;float:none;margin:0;z-index:10;color:var(--surface-solid)}
+.modal:has(>.mhead)>.modal-x:hover{color:var(--surface-solid)}
 .mv-nav{position:sticky;top:40px;float:right;clear:both;display:flex;gap:6px;margin:0 -8px 8px 0;z-index:10}
 .mv-nav-btn{width:32px;height:32px;border-radius:50%;border:0;background:rgba(240,196,184,0.2);cursor:pointer;font-size:18px;color:#C97A11;display:flex;align-items:center;justify-content:center;transition:background .15s,color .15s,opacity .15s;line-height:1;padding:0}
 .mv-nav-btn:hover:not(:disabled){background:rgba(240,196,184,0.45);color:#A0610A}
@@ -1896,9 +1922,9 @@ table.promo-board-table th:last-child .col-resize-handle{display:none}
 .bp-bg.full{background:var(--surface-solid);backdrop-filter:none;-webkit-backdrop-filter:none}
 .bp-bg.full .bp-card{width:100vw;max-width:none;height:100vh;border-radius:0;box-shadow:none;animation:none}
 /* [260710 운영자] 에니어그램 모달화 — 새 탭 → 메인 위 모달(iframe 임베드) + 전체화면 토글. 도화지와 동일 셸(신규 hex 0). */
-.enn-modal{width:96vw;max-width:1400px;height:92vh;max-height:92vh;padding:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:var(--surface-solid)}
+.enn-modal{width:96vw;max-width:1400px;height:92vh;max-height:92vh;--mpad-y:0;--mpad-x:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:var(--surface-solid)}
 .enn-frame{flex:1;width:100%;border:0;display:block;background:var(--surface-solid)}
-.enn-btns{position:absolute;top:9px;right:22px;display:inline-flex;gap:8px;z-index:30}
+.enn-btns{position:absolute;top:14px;right:22px;display:inline-flex;gap:8px;z-index:30}
 .modal-bg.enn.full{background:var(--surface-solid);backdrop-filter:none;-webkit-backdrop-filter:none}
 .modal-bg.enn.full .enn-modal{width:100vw;height:100vh;max-width:none;max-height:none;border:0;border-radius:0;box-shadow:none}
 .bp-hd{display:flex;align-items:center;gap:10px;padding:9px clamp(14px,3vw,26px);border-bottom:1px solid var(--border);flex:none;flex-wrap:wrap}
@@ -2686,8 +2712,9 @@ html::-webkit-scrollbar-thumb{background:rgba(0,0,0,.15)}
 <div class="modal-bg" id="modal">
   <div class="modal" style="position:relative">
     <button class="modal-x" onclick="closeModal()" title="닫기" aria-label="닫기">✕</button>
-    <h3 id="m-title"></h3>
-    <div class="meta" id="m-meta"></div>
+    <!-- [260805-23] 머리줄 정본 `.mhead` — 구 `<h3 id=m-title>` + `<div class=meta id=m-meta>` 2단을 밴드 한 줄로.
+         id는 그대로라 제목·날짜를 넣던 JS(`_openModalCore` 등 6곳 textContent)는 손댈 것이 없다. -->
+    <div class="mhead"><span id="m-title"></span><span class="sub" id="m-meta"></span></div>
     <!-- DEPRECATED REMOVED: 옛 modal-form HTML 영역. 모든 수정은 변경 위저드(openChangeWizard), 모든 추가는 새 콘텐츠 위저드(openPromoWizard)로 처리. 저장/삭제/승인/반려 등 JS 함수들(saveEntry, delEntry, onPlatChange 등)은 dead code로 잔존하지만 호출처 없음. -->
     <div id="modal-view" style="display:none"></div>
   </div>
@@ -2697,7 +2724,7 @@ html::-webkit-scrollbar-thumb{background:rgba(0,0,0,.15)}
 <div class="modal-bg" id="promo-wizard">
   <div class="modal pw-modal" style="position:relative;max-width:520px">
     <button class="modal-x" onclick="closePromoWizard()" title="닫기" aria-label="닫기">✕</button>
-    <h3 style="margin:0">홍보 신청</h3>
+    <div class="mhead"><span>홍보 신청</span><span class="sub">단계를 따라가면 신청이 끝나요</span></div>
     <div class="pw-progress">
       <div class="pw-progress-bar" id="pw-progress-bar"></div>
     </div>
@@ -2727,8 +2754,7 @@ html::-webkit-scrollbar-thumb{background:rgba(0,0,0,.15)}
 
 <div class="modal-bg" id="prog-modal">
   <div class="modal" style="width:380px">
-    <h3>프로그램 필터</h3>
-    <div class="meta">선택한 프로그램의 콘텐츠만 캘린더에 표시</div>
+    <div class="mhead"><span>프로그램 필터</span><span class="sub">고른 프로그램의 콘텐츠만 캘린더에 보여요</span></div>
     <div class="prog-toggle">
       <button class="prog-tab active" data-scope="active" onclick="setProgScope('active')">판매 중</button>
       <button class="prog-tab" data-scope="all" onclick="setProgScope('all')">전체</button>
@@ -3446,9 +3472,8 @@ function _promptPasswordSetup(userName){
     const inpSt='width:100%;padding:11px 44px 11px 14px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:12px;font-size:14px;outline:none;box-sizing:border-box;font-family:inherit;letter-spacing:2px;text-align:center;transition:border-color .15s';
     const eyeSt='position:absolute;right:10px;top:50%;transform:translateY(-50%);background:transparent;border:0;cursor:pointer;color:#888;padding:6px;line-height:1;border-radius:6px;display:flex;align-items:center;justify-content:center;transition:color .12s';
     const eyeIcon='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
-    const html='<div class="modal-bg show" id="pwd-setup-modal" style="z-index:99999" onclick="if(event.target===this)_resolvePwdSetup(null)"><div class="modal" style="max-width:400px;padding:24px;text-align:left;position:relative"><button class="modal-x" onclick="_resolvePwdSetup(null)" title="닫기" aria-label="닫기">✕</button>'+
-      '<h3 style="margin:0 0 4px">'+escapeHtml(userName)+' 님</h3>'+
-      '<div style="font-size:12px;color:#888;margin-bottom:16px;line-height:1.5">사용할 비밀번호를 설정해 주세요.</div>'+
+    const html='<div class="modal-bg show" id="pwd-setup-modal" style="z-index:99999" onclick="if(event.target===this)_resolvePwdSetup(null)"><div class="modal" style="max-width:400px;--mpad-y:24px;--mpad-x:24px;text-align:left;position:relative"><button class="modal-x" onclick="_resolvePwdSetup(null)" title="닫기" aria-label="닫기">✕</button>'+
+      _mhead(userName+' 님','사용할 비밀번호를 설정해 주세요')+
       // 새 비밀번호
       '<label style="display:block;font-size:11px;color:#888;margin:0 0 4px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">새 비밀번호 (4~20자)<span style="color:var(--peach);margin-left:3px">*</span></label>'+
       '<div style="position:relative">'+
@@ -3566,9 +3591,8 @@ function _promptPasswordInput(userName){
     const inpSt='width:100%;padding:11px 44px 11px 14px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:12px;font-size:14px;outline:none;box-sizing:border-box;font-family:inherit;letter-spacing:2px;text-align:center';
     const eyeSt='position:absolute;right:10px;top:50%;transform:translateY(-50%);background:transparent;border:0;cursor:pointer;color:#888;padding:6px;line-height:1;border-radius:6px;display:flex;align-items:center;justify-content:center;transition:color .12s';
     const eyeIcon='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
-    const html='<div class="modal-bg show" id="pwd-input-modal" style="z-index:99999" onclick="if(event.target===this)_resolvePwdInput(null)"><div class="modal" style="max-width:360px;padding:24px;text-align:left;position:relative"><button class="modal-x" onclick="_resolvePwdInput(null)" title="닫기" aria-label="닫기">✕</button>'+
-      '<h3 style="margin:0 0 4px">'+escapeHtml(userName)+' 님</h3>'+
-      '<div style="font-size:12px;color:#888;margin-bottom:14px">비밀번호를 입력해 주세요.</div>'+
+    const html='<div class="modal-bg show" id="pwd-input-modal" style="z-index:99999" onclick="if(event.target===this)_resolvePwdInput(null)"><div class="modal" style="max-width:360px;--mpad-y:24px;--mpad-x:24px;text-align:left;position:relative"><button class="modal-x" onclick="_resolvePwdInput(null)" title="닫기" aria-label="닫기">✕</button>'+
+      _mhead(userName+' 님','비밀번호를 입력해 주세요')+
       '<div style="position:relative">'+
       '<input id="pwd-in" type="password" autocomplete="current-password" maxlength="20" style="'+inpSt+'">'+
       '<button type="button" onclick="_togglePwdVisibility(\'pwd-in\', this)" title="비밀번호 보기" style="'+eyeSt+'" onmouseover="this.style.color=\'var(--accent)\'" onmouseout="this.style.color=\'#888\'">'+eyeIcon+'</button>'+
@@ -4084,7 +4108,7 @@ async function msLogin(){
 function _promptNewPin(userName){
   const p = new Promise(function(resolve){
     const inpSt='width:100%;padding:13px 14px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:12px;font-size:20px;outline:none;box-sizing:border-box;font-family:inherit;letter-spacing:10px;text-align:center';
-    const html='<div class="modal-bg show" id="newpin-modal" style="z-index:99999" onclick="if(event.target===this)_resolveNewPin(null)"><div class="modal" style="max-width:340px;padding:24px;text-align:left;position:relative"><button class="modal-x" onclick="_resolveNewPin(null)" title="닫기" aria-label="닫기">✕</button><h3 style="margin:0 0 4px">'+escapeHtml(userName)+' 님</h3><div style="font-size:12px;color:#888;margin-bottom:14px">처음 로그인이에요. 사용할 PIN 4자리를 정해 주세요.</div><input id="newpin-in" type="text" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="••••" style="'+inpSt+'"><div id="newpin-msg" style="font-size:11px;color:var(--danger);margin-top:8px;min-height:14px"></div><div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end"><button onclick="_resolveNewPin(null)" class="m-btn cancel">취소</button><button onclick="_resolveNewPinOk()" class="m-btn save">설정</button></div></div></div>';
+    const html='<div class="modal-bg show" id="newpin-modal" style="z-index:99999" onclick="if(event.target===this)_resolveNewPin(null)"><div class="modal" style="max-width:340px;--mpad-y:24px;--mpad-x:24px;text-align:left;position:relative"><button class="modal-x" onclick="_resolveNewPin(null)" title="닫기" aria-label="닫기">✕</button>'+_mhead(userName+' 님','처음 로그인이에요 · 사용할 PIN 4자리를 정해 주세요')+'<input id="newpin-in" type="text" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="••••" style="'+inpSt+'"><div id="newpin-msg" style="font-size:11px;color:var(--danger);margin-top:8px;min-height:14px"></div><div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end"><button onclick="_resolveNewPin(null)" class="m-btn cancel">취소</button><button onclick="_resolveNewPinOk()" class="m-btn save">설정</button></div></div></div>';
     let el=document.getElementById('newpin-modal');
     if(el)el.remove();
     document.body.insertAdjacentHTML('beforeend',html);
@@ -4444,6 +4468,25 @@ function excelDateInputValue(v){
   return excelSerialToISO(v);   // 텍스트 날짜도 파싱 — 폼 프리필이 게이트와 동일 해석(홍보 ON/OFF 오판·노출일 유실 방지)
 }
 function escapeHtml(s){return String(s||'').replace(/[<>&"']/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c]));}
+
+// === 모달 머리줄 정본 빌더 (260805-23 · 운영자 「모든 모달 창에 윗부분을 저거로 … 항상 저 형식」) ===
+//   내용의 SSOT — 앱의 모든 `.modal`은 이 함수가 뱉은 머리줄 하나만 쓴다(인라인 재타이핑 금지 · 게이트가 하드 0으로 차단).
+//   모양의 SSOT는 CSS `.mhead`(L1130 부근). 바꿀 곳은 언제나 이 두 곳뿐 = 한 벌 고치면 61개 모달이 같이 바뀐다.
+//   인자: title = 굵은 제목 · sub = 옆에 붙는 한 줄 설명(없으면 생략) · 둘 다 평문(이스케이프는 여기서 한다).
+//   pr = 오른쪽 예약 폭(px) — 닫기 X 말고 버튼이 더 붙는 모달만 넘긴다(기본 74 = X 하나 자리, CSS `.mhead`).
+//   extra = 머리줄 오른쪽에 붙는 조작 버튼 HTML(보드류의 「엑셀 복사」 등) — 밴드 위라 흰 알약(`--surface-solid`)으로 넘긴다.
+//   ⚠ 이모지는 넣지 않는다 — 운영자 260805-22 「이모지 가능한 안 씀」(그때 💬·📡·📭를 뺀 판단 그대로).
+function _mhead(title, sub, pr, extra){
+  return '<div class="mhead"'+(pr?' style="padding-right:'+pr+'px"':'')+'><span>'+escapeHtml(title)+'</span>'
+    +(sub?'<span class="sub">'+escapeHtml(sub)+'</span>':'')
+    +(extra?'<span style="margin-left:auto;display:flex;align-items:center;gap:8px;flex:0 0 auto">'+extra+'</span>':'')+'</div>';
+}
+// 머리줄 위 조작 버튼 한 벌 — 밴드(강조색)에서도 읽히게 흰 알약 + 원래 의미색 잉크/테두리. 색은 넘겨받은 토큰 그대로(신규 0).
+function _mheadBtn(onclick, label, color, title){
+  return '<button onclick="'+onclick+'"'+(title?' title="'+title+'"':'')
+    +' style="padding:6px 13px;border-radius:8px;border:1.5px solid '+color+';background:var(--surface-solid);color:'+color
+    +';font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap">'+label+'</button>';
+}
 
 // === CSV 다운로드 헬퍼 ===
 function rowsToCsv(rows,columns){
@@ -5088,7 +5131,7 @@ function openAdminPanel(){
   // 하단 펫 표시 토글 = 관리자(매니저) 노출. Worker POST가 checkAdmin(슈퍼 OR 서브admin PIN)로 정합 · 이 레포는 슈퍼admin 개념 폐기(role==='admin' 통일)라 admin=서브admin(PIN 보유) · openAdminPanel 자체가 admin 전용 · 분신술 재검증 260711(구 슈퍼전용 게이트 = 전원 미노출 오류 교정)
   var _petTogAdmin=(typeof userRole!=='undefined' && userRole==='admin');
   var _petTogHtml=_petTogAdmin?'<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:10px"><div><div style="font-weight:700;font-size:13px">캘린더 하단 펫 표시</div><div style="font-size:11px;color:var(--dim)">공차는 애·크랩·LOVE 3마리 랜덤 등장 · 전역설정</div></div><label style="display:inline-flex;align-items:center;cursor:pointer;flex:0 0 auto"><input type="checkbox" id="pet-vis-toggle" onchange="_petToggle(this.checked)" style="width:18px;height:18px;cursor:pointer;accent-color:var(--accent);margin:0"></label></div>':'';
-  const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeAdminPanel)"><div class="modal admin-modal" style="width:520px;position:relative"><button class="modal-x" onclick="closeAdminPanel()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;float:none;margin:0;z-index:10">✕</button><div style="display:flex;align-items:center;margin-bottom:14px;gap:8px;padding-bottom:14px;padding-right:48px;border-bottom:1px solid #eee"><h3 style="margin:0;flex:1;text-align:left">관리자 패널</h3></div><div style="font-size:12px;color:#888;margin-bottom:14px">관리할 항목을 골라 주세요</div><div class="admin-modal-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+items.map(it=>'<button class="admin-item" data-id="'+it.id+'" style="text-align:left;padding:14px;border:1px solid rgba(0,0,0,0.08);border-radius:12px;background:#fff;cursor:pointer;transition:all .15s"><div style="font-weight:700;font-size:14px;margin-bottom:4px">'+it.label+'</div><div style="font-size:11px;color:#888">'+it.desc+'</div></button>').join('')+'</div>'+_petTogHtml+'</div></div>';
+  const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeAdminPanel)"><div class="modal admin-modal" style="width:520px;position:relative"><button class="modal-x" onclick="closeAdminPanel()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;float:none;margin:0;z-index:10">✕</button>'+_mhead('관리자 패널','관리할 항목을 골라 주세요')+'<div class="admin-modal-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+items.map(it=>'<button class="admin-item" data-id="'+it.id+'" style="text-align:left;padding:14px;border:1px solid rgba(0,0,0,0.08);border-radius:12px;background:#fff;cursor:pointer;transition:all .15s"><div style="font-weight:700;font-size:14px;margin-bottom:4px">'+it.label+'</div><div style="font-size:11px;color:#888">'+it.desc+'</div></button>').join('')+'</div>'+_petTogHtml+'</div></div>';
   let el=document.getElementById('admin-panel');
   if(!el){el=document.createElement('div');el.id='admin-panel';document.body.appendChild(el);}
   el.innerHTML=html;
@@ -5105,7 +5148,7 @@ function openLockSettings(){
   var _cur=Math.max(1,Math.round((IDLE_MS||1800000)/60000));
   var _opts=[5,10,20,30,60]; if(_opts.indexOf(_cur)<0){ _opts.push(_cur); _opts.sort(function(a,b){return a-b;}); }   // 현재값이 프리셋에 없으면 포함해 선택 반영
   var _optHtml=_opts.map(function(m){return '<option value="'+m+'"'+(m===_cur?' selected':'')+'>'+m+'분</option>';}).join('');
-  var html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeLockSettings)"><div class="modal" style="width:400px;position:relative"><button class="modal-x" onclick="closeLockSettings()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;float:none;margin:0;z-index:10">✕</button><div style="display:flex;align-items:center;margin-bottom:14px;gap:8px;padding-bottom:14px;padding-right:48px;border-bottom:1px solid var(--border)"><h3 style="margin:0;flex:1;text-align:left">자동 잠금 시간</h3></div><div style="font-size:12px;color:var(--dim);margin-bottom:18px;line-height:1.6">아무 입력이 없으면 설정한 시간 뒤 잠금화면으로 전환됩니다. <b>전역설정</b>이라 모든 사용자에게 적용돼요.</div><div style="display:flex;align-items:center;justify-content:space-between;gap:10px"><div style="font-weight:700;font-size:13px">잠금까지</div><select id="lock-min-select" onchange="_lockMinChange(this.value)" style="width:auto;flex:0 0 auto;padding:8px 12px;font-size:13px">'+_optHtml+'</select></div></div></div>';
+  var html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeLockSettings)"><div class="modal" style="width:400px;position:relative"><button class="modal-x" onclick="closeLockSettings()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;float:none;margin:0;z-index:10">✕</button>'+_mhead('자동 잠금 시간','전역설정 · 모든 사용자에게 적용돼요')+'<div style="font-size:12px;color:var(--dim);margin-bottom:18px;line-height:1.6">아무 입력이 없으면 설정한 시간 뒤 잠금화면으로 전환됩니다. <b>전역설정</b>이라 모든 사용자에게 적용돼요.</div><div style="display:flex;align-items:center;justify-content:space-between;gap:10px"><div style="font-weight:700;font-size:13px">잠금까지</div><select id="lock-min-select" onchange="_lockMinChange(this.value)" style="width:auto;flex:0 0 auto;padding:8px 12px;font-size:13px">'+_optHtml+'</select></div></div></div>';
   var el=document.getElementById('admin-panel');
   if(!el){el=document.createElement('div');el.id='admin-panel';document.body.appendChild(el);}
   el.innerHTML=html;
@@ -5117,7 +5160,7 @@ function openYeulPersona(){
   var cur=_yeulAiPersona();
   var html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeYeulPersona)"><div class="modal" style="width:520px;position:relative">'
     +'<button class="modal-x" onclick="closeYeulPersona()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;float:none;margin:0;z-index:10">✕</button>'
-    +'<div style="display:flex;align-items:center;margin-bottom:14px;gap:8px;padding-bottom:14px;padding-right:48px;border-bottom:1px solid var(--border)"><h3 style="margin:0;flex:1;text-align:left">예울이 페르소나</h3></div>'
+    +_mhead('예울이 페르소나','AI 답변의 성격·말투 카드예요')
     +'<div style="font-size:12px;color:var(--dim);margin-bottom:12px;line-height:1.6">AI 답변(자유 질문)의 성격·말투 카드예요. <b>카드 문장이 곧 말투</b>가 됩니다(루시봇 방식).<br>비워두면 레포 카드(<b>persona/yeuli.md</b>)를 쓰고, 여기 적으면 <b>이 기기에서만</b> 이 내용이 우선해요. 규정·FAQ·집계 즉답에는 영향 없음.</div>'
     +'<textarea id="yeul-persona-ta" maxlength="6000" placeholder="예: 너는 예울마루 도우미 예울이. 밝고 정중한 존댓말, 답은 2~6문장, 이모지는 아주 가끔." style="width:100%;height:220px;padding:10px 12px;border:1px solid var(--border2);border-radius:var(--r-btn);font-size:12.5px;font-family:inherit;resize:vertical;background:var(--surface-solid);color:var(--text)">'+_memEsc(cur)+'</textarea>'
     +'<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">'
@@ -5410,7 +5453,7 @@ function openAnnualCalendar(){
   // [260731] 우상단 버튼 3종 = 같은 .modal-x 부품·같은 60px 피치(right 22/82/142 — 버튼 간 간격 28px 균등 실측).
   //   [260731 운영자 「원 4분할 ↔ 픽토 4분할 중심 일치」] 글리프 3종 모두 잉크중심을 원 중심에 맞춤 — measure_align 잉크프로브 실측 보정(원·배경은 무이동).
   //   실측(보정 전, 원 중심 기준 잉크Δ dx/dy): ↓ 0.01/+1.36 · ↗ +0.73/-1.67 · ✕ -0.43/-0.26 → 각 −Δ만큼 span translate. (구 ↓ -3px 단독보정은 1.64px 과보정이라 폐기)
-  el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeAnnualCalendar)"><div class="modal annual-modal" style="width:96vw;max-width:1400px;height:92vh;max-height:92vh;padding:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:#FDFCFB"><button class="modal-x" onclick="_ycDownload()" title="HTML 파일로 저장" aria-label="HTML 파일로 저장" style="position:absolute;top:9px;right:142px;float:none;margin:0;z-index:30;background:rgba(255,255,255,0.95);color:var(--accent);box-shadow:0 2px 10px rgba(74,77,231,0.25)"><span style="display:block;transform:translate(-0.01px,-1.36px)">↓</span></button><button class="modal-x" onclick="window.open(location.pathname+\'?annual\',\'_blank\',\'noopener\')" title="새 창에서 열기" aria-label="새 창에서 열기" style="position:absolute;top:9px;right:82px;float:none;margin:0;z-index:30;background:rgba(255,255,255,0.95);color:var(--accent);box-shadow:0 2px 10px rgba(74,77,231,0.25)"><span style="display:block;transform:translate(-0.73px,1.67px)">↗</span></button><button class="modal-x" onclick="closeAnnualCalendar()" title="닫기" aria-label="닫기" style="position:absolute;top:9px;right:22px;float:none;margin:0;z-index:30;background:var(--accent);color:#fff;box-shadow:0 4px 14px rgba(74,77,231,0.4)"><span style="display:block;transform:translate(0.43px,0.26px)">✕</span></button><div id="yc-scroll" style="flex:1;overflow-y:auto;overscroll-behavior:contain"></div></div></div>';
+  el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeAnnualCalendar)"><div class="modal annual-modal" style="width:96vw;max-width:1400px;height:92vh;max-height:92vh;--mpad-y:0;--mpad-x:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:#FDFCFB"><button class="modal-x" onclick="_ycDownload()" title="HTML 파일로 저장" aria-label="HTML 파일로 저장" style="position:absolute;top:14px;right:142px;float:none;margin:0;z-index:30;background:rgba(255,255,255,0.95);color:var(--accent);box-shadow:0 2px 10px rgba(74,77,231,0.25)"><span style="display:block;transform:translate(-0.01px,-1.36px)">↓</span></button><button class="modal-x" onclick="window.open(location.pathname+\'?annual\',\'_blank\',\'noopener\')" title="새 창에서 열기" aria-label="새 창에서 열기" style="position:absolute;top:14px;right:82px;float:none;margin:0;z-index:30;background:rgba(255,255,255,0.95);color:var(--accent);box-shadow:0 2px 10px rgba(74,77,231,0.25)"><span style="display:block;transform:translate(-0.73px,1.67px)">↗</span></button><button class="modal-x" onclick="closeAnnualCalendar()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;float:none;margin:0;z-index:30"><span style="display:block;transform:translate(0.43px,0.26px)">✕</span></button>'+_mhead('연간 일정','한 해 공연·전시를 한 줄로 훑어봐요',174)+'<div id="yc-scroll" style="flex:1;overflow-y:auto;overscroll-behavior:contain;padding-right:2px"></div></div></div>';
   const wrap=document.getElementById('yc-wrap');
   const sc=document.getElementById('yc-scroll');
   if(wrap&&sc)sc.appendChild(wrap);
@@ -5732,9 +5775,12 @@ function openSalesBoard(){
   let el=document.getElementById('sales-board');
   if(!el){el=document.createElement('div');el.id='sales-board';document.body.appendChild(el);}
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeSalesBoard)">'
-    +'<div class="modal" style="width:96vw;max-width:1280px;height:92vh;max-height:92vh;padding:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:#fff">'
+    +'<div class="modal" style="width:96vw;max-width:1280px;height:92vh;max-height:92vh;--mpad-y:0;--mpad-x:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:#fff">'
     +'<button class="modal-x" onclick="closeSalesBoard()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;z-index:10">✕</button>'
-    +'<div style="padding:18px 24px;border-bottom:1px solid #eee;font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px">📈 <span>판매 현황</span><span style="font-size:11px;color:#aaa;font-weight:500">· 실시간 판매</span>'+'<button onclick="_salesCopyExcel()" style="margin-left:auto;margin-right:8px;padding:6px 13px;border-radius:8px;border:1.5px solid var(--green);background:rgba(26,107,60,0.07);color:var(--green);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit" title="판매 현황 표를 복사 — 엑셀에 그대로 붙여넣기(Ctrl+V)">📋 엑셀 복사</button>'+'<button onclick="closeSalesBoard();openAnalyticsBoard()" style="margin-right:'+(userRole==='admin'?'8px':'34px')+';padding:6px 13px;border-radius:8px;border:1.5px solid #C02872;background:rgba(192,40,114,0.07);color:#C02872;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit" title="판매·사업현황 분석 (베타)">🧪 분석(beta)</button>'+(userRole==='admin'?'<button onclick="openDailyInput()" style="margin-right:34px;padding:6px 13px;border-radius:8px;border:1.5px solid var(--accent);background:rgba(74,77,231,0.07);color:var(--accent);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">➕ 일일입력</button>':'')+'</div>'
+    +_mhead('판매 현황','실시간 판매',0,
+        _mheadBtn('_salesCopyExcel()','엑셀 복사','var(--green)','판매 현황 표를 복사 — 엑셀에 그대로 붙여넣기(Ctrl+V)')
+      + _mheadBtn('closeSalesBoard();openAnalyticsBoard()','분석(beta)','var(--insta)','판매·사업현황 분석 (베타)')
+      + (userRole==='admin'?_mheadBtn('openDailyInput()','일일입력','var(--accent)',''):''))
     +'<div id="sales-body" style="flex:1;overflow:auto;padding:20px 24px;min-width:0"></div>'
     +'</div></div>';
   _salesState.escHandler=function(e){if(e.key==='Escape')closeSalesBoard();};
@@ -9633,8 +9679,8 @@ async function _srailRoundsOpen(mid,name){
   _srailRndClose();
   var wrap=document.createElement('div'); wrap.id='srail-rnd-modal';
   wrap.innerHTML='<div class="modal-bg show" onclick="if(event.target===this)_srailRndClose()"><div class="modal" style="width:480px;max-width:94vw;position:relative;text-align:left"><button class="modal-x" onclick="_srailRndClose()" title="닫기" aria-label="닫기">✕</button>'
-    +'<h3 style="margin:0 0 4px;padding-right:40px">회차·객석 — '+escapeHtml(name)+'</h3>'
-    +'<div style="font-size:11.5px;color:var(--dim);margin-bottom:12px">시트(운영_회차상세)에서 방금 불러온 값이에요. 회차마다 오픈 객석이 다르면 그대로 적어줘 — <b>모든 회차에 객석이 입력되면 합산이 가용좌석(점유율 분모)</b>이 되고, 마스터에 총회차가 있으면 회차 수 일치까지 검증해요. 같은 날 2회 공연은 행 2개로.</div>'
+    +_mhead('회차·객석 — '+name,'시트(운영_회차상세)에서 방금 불러온 값이에요')
+    +'<div style="font-size:11.5px;color:var(--dim);margin-bottom:12px">회차마다 오픈 객석이 다르면 그대로 적어줘 — <b>모든 회차에 객석이 입력되면 합산이 가용좌석(점유율 분모)</b>이 되고, 마스터에 총회차가 있으면 회차 수 일치까지 검증해요. 같은 날 2회 공연은 행 2개로.</div>'
     +'<div id="srail-rnd-body" style="max-height:52vh;overflow-y:auto;overflow-x:auto"><div style="padding:26px 0;text-align:center;color:var(--dim);font-size:12px">'+_ldHtml(13)+'시트에서 불러오는 중</div></div>'
     +'<div id="srail-rnd-sum" style="font-size:12px;margin-top:10px;min-height:16px"></div>'
     +'<div style="display:flex;gap:8px;margin-top:10px;justify-content:space-between;align-items:center"><span style="display:inline-flex;gap:6px"><button class="ana-chip" onclick="_srailRndAuto()" title="총회차(없으면 공연 기간 일수)만큼 행을 만들고, 날짜는 공연 기간에 균등 배치·객석은 기준석으로 채워요 — 다른 회차만 고치면 끝">⚡ 자동 생성</button><button class="ana-chip" onclick="_srailRndAddRow()">+ 회차 추가</button></span><span style="flex:1"></span><button class="m-btn cancel" onclick="_srailRndClose()">취소</button><button class="m-btn save" onclick="_srailRndSave()">저장</button></div>'
@@ -9789,8 +9835,8 @@ async function _srailEditOpen(name){
   var wrap=document.createElement('div'); wrap.id='srail-edit-modal';
   // ⚠️ 이 모달 backdrop에 z-index 올리지 말 것 — 저장 확인(showConfirm, .confirm-bg z:200)이 위에 떠야 저장 클릭 가능(260710 「예측 제외 저장 안 됨」 원인 = 구 z-confirm 2100이 confirm을 가림)
   wrap.innerHTML='<div class="modal-bg show" onclick="if(event.target===this)_srailEditClose()"><div class="modal" style="width:560px;max-width:94vw;position:relative;text-align:left"><button class="modal-x" onclick="_srailEditClose()" title="닫기" aria-label="닫기">✕</button>'
-    +'<h3 style="margin:0 0 4px;padding-right:40px">실적 수정 — '+escapeHtml(name)+'</h3>'
-    +'<div style="font-size:11.5px;color:var(--dim);margin-bottom:12px">시트(운영_일일입력)에서 방금 불러온 값이에요. 저장하면 시트에 바로 반영됩니다.<br>「예측 제외」 = 단체 유입·2차 티켓 오픈처럼 이벤트성 판매가 낀 날 — 체크하면 그 날 증분을 <b>예상(추세) 계산에서만</b> 빼요(실측 표기·점유율은 그대로).</div>'
+    +_mhead('실적 수정 — '+name,'시트(운영_일일입력)에서 방금 불러온 값이에요')
+    +'<div style="font-size:11.5px;color:var(--dim);margin-bottom:12px">저장하면 시트에 바로 반영됩니다.<br>「예측 제외」 = 단체 유입·2차 티켓 오픈처럼 이벤트성 판매가 낀 날 — 체크하면 그 날 증분을 <b>예상(추세) 계산에서만</b> 빼요(실측 표기·점유율은 그대로).</div>'
     +'<div id="srail-edit-body" style="max-height:56vh;overflow-y:auto;overflow-x:auto"><div style="padding:26px 0;text-align:center;color:var(--dim);font-size:12px">'+_ldHtml(13)+'시트에서 불러오는 중</div></div>'
     +'<div style="display:flex;gap:8px;margin-top:14px;justify-content:space-between;align-items:center"><button class="ana-chip" onclick="_srailEditAddRow()">+ 행 추가</button><span style="flex:1"></span><button class="m-btn cancel" onclick="_srailEditClose()">취소</button><button class="m-btn save" onclick="_srailEditSave()">저장</button></div>'
     +'</div></div>';
@@ -10008,12 +10054,11 @@ function openAnalyticsBoard(){
   var el=document.getElementById('analytics-board');
   if(!el){el=document.createElement('div');el.id='analytics-board';document.body.appendChild(el);}
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeAnalyticsBoard)">'
-    +'<div class="modal" style="width:96vw;max-width:1280px;height:92vh;max-height:92vh;padding:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:#fff">'
+    +'<div class="modal" style="width:96vw;max-width:1280px;height:92vh;max-height:92vh;--mpad-y:0;--mpad-x:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:#fff">'
     +'<button class="modal-x" onclick="closeAnalyticsBoard()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;z-index:10">✕</button>'
-    +'<div style="padding:18px 24px;border-bottom:1px solid #eee;font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px">📈 <span>판매 현황</span>'
-    +'<button onclick="_salesCopyExcel()" style="margin-left:auto;margin-right:'+(userRole==='admin'?'8px':'34px')+';padding:6px 13px;border-radius:8px;border:1.5px solid var(--green);background:rgba(26,107,60,0.07);color:var(--green);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit" title="판매 현황 표를 복사 — 엑셀에 그대로 붙여넣기(Ctrl+V)">📋 엑셀 복사</button>'
-    +(userRole==='admin'?'<button onclick="openDailyInput()" style="margin-right:34px;padding:6px 13px;border-radius:8px;border:1.5px solid var(--accent);background:rgba(74,77,231,0.07);color:var(--accent);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">➕ 일일입력</button>':'')
-    +'</div>'
+    +_mhead('판매 현황','판매·사업현황 분석',0,
+        _mheadBtn('_salesCopyExcel()','엑셀 복사','var(--green)','판매 현황 표를 복사 — 엑셀에 그대로 붙여넣기(Ctrl+V)')
+      + (userRole==='admin'?_mheadBtn('openDailyInput()','일일입력','var(--accent)',''):''))
     +'<div id="ana-body" style="flex:1;overflow:auto;padding:18px 24px;min-width:0"></div>'
     +'</div></div>';
   _anaState=_anaState||{screen:1,cat:'공연',genre:'전체',year:null,drillName:null,xstep:3,cmp:{tray:[],bars:false}};
@@ -10855,7 +10900,7 @@ function openDailyInput(origin){
   window._dsxGen=(window._dsxGen||0)+1;   // [260715 분신술] 세대++ — 이전 세션 orphan 파싱이 이 폼을 덮어쓰지 못하게
   let el=document.getElementById('daily-input');
   if(!el){el=document.createElement('div');el.id='daily-input';document.body.appendChild(el);}
-  el.innerHTML='<div class="modal-bg show" style="z-index:99990" onclick="if(event.target===this)closeDailyInput()"><div class="modal" style="width:96vw;max-width:760px;max-height:90vh;overflow:auto;padding:0;position:relative;background:#fff"><button class="modal-x" onclick="closeDailyInput()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;z-index:10">✕</button><div style="padding:18px 22px;border-bottom:1px solid #eee;font-size:15px;font-weight:700">➕ 일일 판매 입력</div><div id="daily-body" style="padding:18px 22px"><div style="text-align:center;color:#888;padding:30px">'+_ldHtml(16)+'공연 목록 불러오는 중</div></div></div></div>';
+  el.innerHTML='<div class="modal-bg show" style="z-index:99990" onclick="if(event.target===this)closeDailyInput()"><div class="modal" style="width:96vw;max-width:760px;max-height:90vh;overflow:auto;--mpad-y:0;--mpad-x:0;position:relative;background:#fff"><button class="modal-x" onclick="closeDailyInput()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;z-index:10">✕</button>'+_mhead('일일 판매 입력','오늘 판매분을 시트에 바로 적어요')+'<div id="daily-body" style="padding:18px 22px"><div style="text-align:center;color:#888;padding:30px">'+_ldHtml(16)+'공연 목록 불러오는 중</div></div></div></div>';
   if(_dailyState.master&&_dailyState.programs&&_dailyState.exMaster){_dailyRenderForm();return;}
   Promise.all([
     api('GET','/api/ops?sheet='+encodeURIComponent('공연마스터')),
@@ -11641,9 +11686,9 @@ function openBusinessBoard(){
   let el=document.getElementById('business-board');
   if(!el){el=document.createElement('div');el.id='business-board';document.body.appendChild(el);}
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeBusinessBoard)">'
-    +'<div class="modal" style="width:96vw;max-width:1200px;height:92vh;max-height:92vh;padding:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:#fff">'
+    +'<div class="modal" style="width:96vw;max-width:1200px;height:92vh;max-height:92vh;--mpad-y:0;--mpad-x:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:#fff">'
     +'<button class="modal-x" onclick="closeBusinessBoard()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;z-index:10">✕</button>'
-    +'<div style="padding:18px 24px;border-bottom:1px solid #eee;font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px"><span>연간 누적 실적</span><span style="font-size:11px;color:#aaa;font-weight:500">· 연간 운영현황</span></div>'
+    +_mhead('연간 누적 실적','연간 운영현황')
     +'<div id="biz-body" style="flex:1;overflow:auto;padding:20px 24px;min-width:0"></div>'
     +'</div></div>';
   _bizState.escHandler=function(e){if(e.key==='Escape')closeBusinessBoard();};
@@ -11910,9 +11955,9 @@ function openYearBoard(){
   if(!el){el=document.createElement('div');el.id='year-board';document.body.appendChild(el);}
   _yrState.opened=false;
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeYearBoard)">'
-    +'<div class="modal" style="width:96vw;max-width:1200px;height:92vh;max-height:92vh;padding:0;position:relative;display:flex;flex-direction:column;overflow:hidden">'
+    +'<div class="modal" style="width:96vw;max-width:1200px;height:92vh;max-height:92vh;--mpad-y:0;--mpad-x:0;position:relative;display:flex;flex-direction:column;overflow:hidden">'
     +'<button class="modal-x" onclick="closeYearBoard()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;z-index:10">✕</button>'
-    +'<div style="padding:18px 24px;border-bottom:1px solid var(--border);font-size:16px;font-weight:800;display:flex;align-items:center;gap:8px;flex-shrink:0"><span>연간 실적</span><span style="font-size:11px;color:var(--muted);font-weight:500">· 예울마루(망마·장도) 2012 ~ 2026 상반기(잠정)</span></div>'
+    +_mhead('연간 실적','예울마루(망마·장도) 2012 ~ 2026 상반기(잠정)')
     +'<div id="yr-body" style="flex:1;overflow:auto;padding:20px 24px;min-width:0"></div>'
     +'</div></div>';
   _yrState.esc=function(e){if(e.key==='Escape')closeYearBoard();};
@@ -12163,12 +12208,10 @@ function openPlatformBoard(){
     document.body.appendChild(el);
   }
   const html = '<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closePlatformBoard)">'
-    + '<div class="modal platform-modal" style="width:96vw;max-width:1400px;height:92vh;max-height:92vh;padding:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:#fff">'
+    + '<div class="modal platform-modal" style="width:96vw;max-width:1400px;height:92vh;max-height:92vh;--mpad-y:0;--mpad-x:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:#fff">'
     + '<button class="modal-x" onclick="closePlatformBoard()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;float:none;margin:0;z-index:10">✕</button>'
-    + '<div style="padding:18px 24px;border-bottom:1px solid #eee;font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px">🗺️ <span>플랫폼 현황</span>'
-      + '<div style="margin-left:auto;margin-right:40px;display:flex;gap:8px;align-items:center">'
-      + '<button onclick="_pmapHome()" title="홍보 현황 지도 (여수·순천·광양)" class="pm-fbtn">홍보 지도</button>'
-      + '</div>'
+    + _mhead('플랫폼 현황','홍보 플랫폼별 노출 현황',0,
+        _mheadBtn('_pmapHome()','홍보 지도','var(--accent)','홍보 현황 지도 (여수·순천·광양)'))
     + '</div>'
     + '<div id="platform-body" style="display:flex;flex:1;overflow:hidden;min-height:0;position:relative">'
     + '<div id="platform-tree" class="pm-menupanel"></div>'
@@ -12237,8 +12280,8 @@ function _sigShellHtml(){
   return '<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeSignageManager)">'
    + '<div class="modal" style="width:680px;max-width:96vw;max-height:92vh;overflow:auto;position:relative">'
    + '<button class="modal-x" onclick="closeSignageManager()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;float:none;margin:0;z-index:10">✕</button>'
-   + '<h3 style="margin:0 0 4px">📺 사이니지 관리</h3>'
-   + '<div style="font-size:12px;color:#888;margin-bottom:14px">사이니지에 송출되는 사진을 관리합니다. 저장하면 GitHub에 커밋되고, 약 1~2분 후 배포 → 사이니지는 최대 5분 후 갱신됩니다.</div>'
+   + _mhead('사이니지 관리','송출 사진을 관리해요')
+   + '<div style="font-size:12px;color:#888;margin-bottom:14px">저장하면 GitHub에 커밋되고, 약 1~2분 후 배포 → 사이니지는 최대 5분 후 갱신됩니다.</div>'
    + '<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px;padding:12px;border:1px solid #eee;border-radius:10px;background:#fafafa">'
    +   '<label style="font-size:12px;font-weight:600;color:#555">GitHub 토큰 (PAT · Contents 쓰기 권한)</label>'
    +   '<input id="sig-pat" type="password" value="'+escapeHtml(pat)+'" placeholder="ghp_… 또는 github_pat_…" autocomplete="off" style="padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;font-family:monospace">'
@@ -12444,11 +12487,10 @@ function openDidPartnersMap(){
   }
   const counts = _didCounts();
   const html = '<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeDidPartnersMap)">'
-    + '<div class="modal" style="width:96vw;max-width:1400px;height:92vh;max-height:92vh;padding:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:#fff">'
+    + '<div class="modal" style="width:96vw;max-width:1400px;height:92vh;max-height:92vh;--mpad-y:0;--mpad-x:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:#fff">'
     + '<button class="modal-x" onclick="closeDidPartnersMap()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;float:none;margin:0;z-index:20">✕</button>'
-    + '<div style="padding:16px 24px;border-bottom:1px solid #eee;display:flex;align-items:center;gap:14px;flex-shrink:0;flex-wrap:wrap">'
-    + '<div style="font-size:16px;font-weight:700;display:flex;align-items:center;gap:6px">🗺️ <span>협력기관 DID 지도</span></div>'
-    + '<div style="font-size:12px;color:#666">설치완료 '+counts.done+' · 예정 '+counts.pending+' · 미설치 '+counts.notInstalled+'</div>'
+    + _mhead('협력기관 DID 지도','설치완료 '+counts.done+' · 예정 '+counts.pending+' · 미설치 '+counts.notInstalled)
+    + '<div style="padding:10px 24px;border-bottom:1px solid #eee;display:flex;align-items:center;gap:14px;flex-shrink:0;flex-wrap:wrap">'
     + '<div style="margin-left:auto;display:flex;gap:6px">'
     + '<button onclick="filterDidPartners(\'all\')" data-did-filter="all" class="did-filter-btn">전체</button>'
     + '<button onclick="filterDidPartners(\'done\')" data-did-filter="done" class="did-filter-btn">설치완료</button>'
@@ -12643,10 +12685,9 @@ function openDidPartnerDetail(id){
     closeDidPartnerDetail();
   };
   const html = '<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeDidPartnerDetail)">'
-    + '<div class="modal" style="width:auto;min-width:340px;max-width:480px;padding:24px 28px;position:relative">'
+    + '<div class="modal" style="width:auto;min-width:340px;max-width:480px;--mpad-y:24px;--mpad-x:28px;position:relative">'
     + '<button class="modal-x" onclick="closeDidPartnerDetail()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;float:none;margin:0;z-index:10">✕</button>'
-    + '<div style="font-size:11px;color:#888;margin-bottom:4px">'+escapeHtml(p.id)+'</div>'
-    + '<div style="font-size:18px;font-weight:700;margin-bottom:14px;padding-right:36px">'+escapeHtml(p.name)+'</div>'
+    + _mhead(p.name, p.id)
     + photoBox
     + (p.addr ? '<div style="margin-bottom:8px;font-size:13px">📍 '+escapeHtml(p.addr)+'</div>' : '<div style="margin-bottom:8px;font-size:13px;color:#bbb">📍 주소 미정</div>')
     + (p.mgr ? '<div style="margin-bottom:8px;font-size:13px">🧑 '+escapeHtml(p.mgr)+'</div>' : '')
@@ -13417,10 +13458,9 @@ function _pmapViewItem(spotId,mi,ci){
     imgHtml='<img src="'+it.src+'" alt="" style="max-width:80vw;max-height:68vh;border-radius:12px;display:block;background:var(--neutral)">';
   }
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,_pmapCloseItem)">'
-    +'<div class="modal" style="width:auto;max-width:88vw;padding:20px 22px;position:relative">'
+    +'<div class="modal" style="width:auto;max-width:88vw;--mpad-y:20px;--mpad-x:22px;position:relative">'
     +'<button class="modal-x" onclick="_pmapCloseItem()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;float:none;margin:0;z-index:10">✕</button>'
-    +'<div style="font-size:11px;color:var(--dim);margin-bottom:4px">'+escapeHtml(s.city+' › '+s.name+' › '+ml.name)+'</div>'
-    +'<div style="font-size:15px;font-weight:800;margin-bottom:12px;padding-right:30px">'+escapeHtml(it.name)+'</div>'
+    +_mhead(it.name, s.city+' › '+s.name+' › '+ml.name)
     +imgHtml
     +'</div></div>';
   el._escHandler=esc;
@@ -13516,10 +13556,10 @@ function openVenueMap(venueFilter){
   }
   const title = venueFilter ? ('🛰️ 예울마루 조감도 — ' + venueFilter) : '🛰️ 예울마루 조감도';
   const html = '<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeVenueMap)">'
-    + '<div class="modal" style="width:96vw;max-width:1500px;height:92vh;max-height:92vh;padding:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:#0f1216">'
-    + '<button class="modal-x" onclick="closeVenueMap()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;float:none;margin:0;z-index:60;background:rgba(255,255,255,0.92);box-shadow:0 2px 8px rgba(0,0,0,0.18)">✕</button>'
-    + '<div style="padding:14px 22px;background:rgba(15,18,22,0.92);color:#fff;display:flex;align-items:center;gap:14px;flex-shrink:0;border-bottom:1px solid rgba(255,255,255,0.08)">'
-    + '<div style="font-size:15px;font-weight:700">'+escapeHtml(title)+'</div>'
+    + '<div class="modal" style="width:96vw;max-width:1500px;height:92vh;max-height:92vh;--mpad-y:0;--mpad-x:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:#0f1216">'
+    + '<button class="modal-x" onclick="closeVenueMap()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;float:none;margin:0;z-index:60">✕</button>'
+    + _mhead(title,'')
+    + '<div style="padding:10px 22px;background:rgba(15,18,22,0.92);color:#fff;display:flex;align-items:center;gap:14px;flex-shrink:0;border-bottom:1px solid rgba(255,255,255,0.08)">'
     + '<div style="margin-left:auto;display:flex;gap:8px;align-items:center">'
     + '<button id="vm-edit-toggle" onclick="toggleVenuePinEdit()" style="padding:7px 14px;border:1.5px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.08);color:#fff;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600">📍 좌표 조정 모드</button>'
     + '</div></div>'
@@ -13678,10 +13718,9 @@ function openVenueItemDetail(spec){
   const name = spec.label || spec.name || '';
   const escHandler = function(e){ if(e.key === 'Escape') closeVenueItemDetail(); };
   const html = '<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeVenueItemDetail)">'
-    + '<div class="modal" style="width:auto;min-width:340px;max-width:480px;padding:24px 28px;position:relative">'
+    + '<div class="modal" style="width:auto;min-width:340px;max-width:480px;--mpad-y:24px;--mpad-x:28px;position:relative">'
     + '<button class="modal-x" onclick="closeVenueItemDetail()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;float:none;margin:0;z-index:10">✕</button>'
-    + '<div style="font-size:11px;color:#888;margin-bottom:4px">'+escapeHtml(spec.id || '')+'</div>'
-    + '<div style="font-size:18px;font-weight:700;margin-bottom:14px;padding-right:36px">'+escapeHtml(name)+'</div>'
+    + _mhead(name, spec.id || '')
     + body
     + '</div></div>';
   el.innerHTML = html;
@@ -13889,7 +13928,7 @@ function backToAdminMenu(){openAdminPanel();}
 
 // === Coming Soon 모달 (미구현 메뉴용) ===
 function showComingSoon(label){
-  const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeComingSoon)"><div class="modal" style="width:auto;min-width:320px;max-width:90vw;padding:36px 40px;text-align:center"><div style="font-size:56px;margin-bottom:12px;line-height:1">😉</div><h3 style="margin:0 0 6px;font-size:18px">'+escapeHtml(label)+'</h3><div style="color:#888;font-size:13px;margin-bottom:24px">아직 준비 중이에요</div><button onclick="closeComingSoon()" style="padding:10px 32px;background:var(--accent);color:#fff;border:0;border-radius:10px;cursor:pointer;font-weight:600;font-size:13px">확인</button></div></div>';
+  const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeComingSoon)"><div class="modal" style="width:auto;min-width:320px;max-width:90vw;--mpad-y:36px;--mpad-x:40px;text-align:center">'+_mhead(label,'아직 준비 중이에요')+'<div style="font-size:56px;margin-bottom:12px;line-height:1">😉</div><button onclick="closeComingSoon()" style="padding:10px 32px;background:var(--accent);color:#fff;border:0;border-radius:10px;cursor:pointer;font-weight:600;font-size:13px">확인</button></div></div>';
   let el=document.getElementById('coming-soon');
   if(!el){el=document.createElement('div');el.id='coming-soon';document.body.appendChild(el);}
   el.innerHTML=html;
@@ -14253,11 +14292,9 @@ function openSpecialView(rowIndex){
   const stChip='<span style="color:var(--accent);font-weight:700;font-size:13.5px">'+spSt+'</span>'+(spManual?'<span style="color:#aaa;font-size:11px;margin-left:5px">(수동)</span>':'');
   const stBtn=userRole==='admin'?'<button onclick="_spRowMenu(event,'+rowIndex+',\'view\')" style="margin-left:10px;padding:4px 13px;border-radius:8px;border:1px solid rgba(74,77,231,0.35);background:#fff;color:var(--accent);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s" onmouseover="this.style.background=\'rgba(74,77,231,0.10)\';this.style.borderColor=\'var(--accent)\'" onmouseout="this.style.background=\'#fff\';this.style.borderColor=\'rgba(74,77,231,0.35)\'">변경</button>':'';
   const html = '<div class="modal-bg show" onclick="if(event.target===this)closeSpecialView()" style="z-index:9100">'
-    +'<div class="modal" style="max-width:480px;padding:0;position:relative;text-align:left">'
-    +'<div style="padding:24px 24px 0;display:flex;align-items:center;justify-content:space-between">'
-    +'<h3 style="margin:0;font-size:16px;font-weight:700">담당자 일정</h3>'
-    +'<button onclick="closeSpecialView()" style="background:rgba(216,132,85,0.15);border:none;width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:16px;color:var(--peach);font-family:inherit" title="닫기" aria-label="닫기">✕</button>'
-    +'</div>'
+    +'<div class="modal" style="max-width:480px;--mpad-y:0;--mpad-x:0;position:relative;text-align:left">'
+    +'<button class="modal-x" onclick="closeSpecialView()" title="닫기" aria-label="닫기">✕</button>'
+    +_mhead('담당자 일정','홍보 담당자가 지정한 개별 일정')
     +'<div style="padding:16px 24px 24px">'
     +'<div class="mv-section">📅 일정 현황</div>'
     +'<div class="mv-row"><span class="lbl">상태</span><span class="val" style="display:inline-flex;align-items:center">'+stChip+stBtn+'</span></div>'
@@ -14867,9 +14904,9 @@ function openSpecialEntry(key, editRowIndex){
   });
   chipsHtml+='<input id="sp-type-other" class="sp-other-input" type="text" placeholder="유형 입력" style="display:none" oninput="document.getElementById(\'sp-type\').value=this.value.trim()||\'기타\'">';
   chipsHtml+='</div><input type="hidden" id="sp-type" value="회의">';
-  const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeSpecialEntry)"><div class="modal sp-entry-modal" style="width:96vw;max-width:480px;padding:24px;position:relative;text-align:left;background:linear-gradient(135deg,#E0F2FE 0%,#F0F9FF 100%);border:1px solid rgba(125,211,252,0.5)"><button class="modal-x" onclick="closeSpecialEntry()" title="닫기" aria-label="닫기">✕</button>'+
-    '<h3 style="margin:0 0 4px">'+(isEdit?'담당자 일정 변경':'담당자 일정 추가')+'</h3>'+
-    '<div style="font-size:11px;color:#888;margin-bottom:8px">홍보 담당자가 지정한 개별 일정 — 캘린더에 별개로 표시돼요<br><span style="color:#aaa">※ 닫기 시 입력 내용은 저장되지 않아요</span></div>'+
+  const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeSpecialEntry)"><div class="modal sp-entry-modal" style="width:96vw;max-width:480px;--mpad-y:24px;--mpad-x:24px;position:relative;text-align:left;background:linear-gradient(135deg,#E0F2FE 0%,#F0F9FF 100%);border:1px solid rgba(125,211,252,0.5)"><button class="modal-x" onclick="closeSpecialEntry()" title="닫기" aria-label="닫기">✕</button>'+
+    _mhead(isEdit?'담당자 일정 변경':'담당자 일정 추가','캘린더에 별개로 표시돼요')+
+    '<div style="font-size:11px;color:#aaa;margin-bottom:8px">※ 닫기 시 입력 내용은 저장되지 않아요</div>'+
     '<label style="'+lbSt+'">유형<span style="color:var(--peach);margin-left:3px">*</span></label>'+
     chipsHtml+
     '<label style="'+lbSt+'">내용<span style="color:var(--peach);margin-left:3px">*</span></label>'+
@@ -15573,7 +15610,7 @@ function openPromoBoard(){
   _promoFilter.viewMode='mine';  // 비관리자: 열 때마다 '내 신청만' 기본 (admin은 이 값 무시)
   _promoFilter.colFilters={};
   _promoFilter.sortBy='';_promoFilter.sortDir='asc';
-  const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closePromoBoard)"><div class="modal pb-modal" style="width:96vw;max-width:1100px;height:88vh;max-height:88vh;overflow:hidden;padding:0;position:relative;display:flex;flex-direction:column"><button class="modal-x" onclick="closePromoBoard()" title="닫기" aria-label="닫기" style="position:absolute;top:16px;right:18px;float:none;margin:0;z-index:10">✕</button><div id="promo-board-body" style="flex:1;overflow:auto;padding:26px 30px 26px 30px;text-align:center;color:#888">'+_ldHtml(16)+'로딩 중</div><div id="edit-mode-bar" style="display:none;align-items:center;gap:12px;padding:12px 24px;border-top:1px solid rgba(0,0,0,0.08);background:var(--surface-solid)"><span style="font-size:13px;font-weight:700;color:var(--accent)"><span id="edit-mode-count">0건 선택</span></span><span style="font-size:11px;color:var(--dim)">변경할 신청을 체크하세요 · 완료/취소·남의 신청은 선택 불가</span><div id="edit-mode-actions" style="display:none;gap:8px;margin-left:auto"><button onclick="_bulkMoveSchedule()" style="padding:8px 16px;border-radius:9px;border:0;background:var(--accent);color:var(--surface-solid);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">📅 일괄 일정 이동</button><button onclick="_bulkCancelSchedule()" style="padding:8px 16px;border-radius:9px;border:1.5px solid var(--peach-text);background:var(--surface-solid);color:var(--peach-text);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">✕ 일괄 취소</button></div></div></div></div>';
+  const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closePromoBoard)"><div class="modal pb-modal" style="width:96vw;max-width:1100px;height:88vh;max-height:88vh;overflow:hidden;--mpad-y:0;--mpad-x:0;position:relative;display:flex;flex-direction:column"><button class="modal-x" onclick="closePromoBoard()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;float:none;margin:0;z-index:10">✕</button>'+_mhead('홍보 신청·확인','신청한 홍보를 한눈에 보고 고쳐요')+'<div id="promo-board-body" style="flex:1;overflow:auto;padding:26px 30px 26px 30px;text-align:center;color:#888">'+_ldHtml(16)+'로딩 중</div><div id="edit-mode-bar" style="display:none;align-items:center;gap:12px;padding:12px 24px;border-top:1px solid rgba(0,0,0,0.08);background:var(--surface-solid)"><span style="font-size:13px;font-weight:700;color:var(--accent)"><span id="edit-mode-count">0건 선택</span></span><span style="font-size:11px;color:var(--dim)">변경할 신청을 체크하세요 · 완료/취소·남의 신청은 선택 불가</span><div id="edit-mode-actions" style="display:none;gap:8px;margin-left:auto"><button onclick="_bulkMoveSchedule()" style="padding:8px 16px;border-radius:9px;border:0;background:var(--accent);color:var(--surface-solid);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">📅 일괄 일정 이동</button><button onclick="_bulkCancelSchedule()" style="padding:8px 16px;border-radius:9px;border:1.5px solid var(--peach-text);background:var(--surface-solid);color:var(--peach-text);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">✕ 일괄 취소</button></div></div></div></div>';
   let el=document.getElementById('promo-board');
   if(!el){el=document.createElement('div');el.id='promo-board';document.body.appendChild(el);}
   el.innerHTML=html;
@@ -15672,10 +15709,9 @@ function _bulkMoveSchedule(){
   if(!_editChecks.size){showToast('선택된 건이 없어요','error');return;}
   const n=_editChecks.size;
   const _today=(typeof getTodayKey==='function')?getTodayKey():'';
-  let html='<div class="modal-bg show" style="z-index:9600" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,_closeBulkMove)"><div class="modal" style="width:94vw;max-width:400px;padding:24px;position:relative">';
+  let html='<div class="modal-bg show" style="z-index:9600" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,_closeBulkMove)"><div class="modal" style="width:94vw;max-width:400px;--mpad-y:24px;--mpad-x:24px;position:relative">';
   html+='<button class="modal-x" onclick="_closeBulkMove()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;float:none;margin:0;z-index:10">✕</button>';
-  html+='<h3 style="margin:0 0 4px;text-align:left">📅 일괄 일정 이동</h3>';
-  html+='<p style="margin:0 0 16px;color:var(--dim);font-size:13px">선택한 <b style="color:var(--accent)">'+n+'건</b>의 일정을 옮겨요</p>';
+  html+=_mhead('일괄 일정 이동','선택한 '+n+'건의 일정을 옮겨요');
   html+='<div style="display:flex;gap:6px;margin-bottom:14px">';
   html+='<button id="bm-tab-fixed" onclick="_bulkMoveTab(\'fixed\')" style="flex:1;padding:9px;border-radius:9px;border:1.5px solid var(--accent);background:var(--accent);color:var(--surface-solid);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">특정 날짜로</button>';
   html+='<button id="bm-tab-shift" onclick="_bulkMoveTab(\'shift\')" style="flex:1;padding:9px;border-radius:9px;border:1.5px solid rgba(0,0,0,0.12);background:var(--surface-solid);color:var(--text);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">N일 이동</button>';
@@ -15928,9 +15964,8 @@ function _renderCancelReasonModal(count, opts){
   const buttonColor = opts.buttonColor || 'var(--danger-btn)';
   return new Promise(function(resolve){
     const inpSt='width:100%;padding:10px 14px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:12px;font-size:13px;outline:none;box-sizing:border-box;font-family:inherit;resize:vertical;line-height:1.5';
-    const html='<div class="modal-bg show" id="cancel-reason-modal" style="z-index:99999" onclick="if(event.target===this)_resolveCancelReason(null)"><div class="modal" style="max-width:440px;padding:24px;text-align:left;position:relative"><button class="modal-x" onclick="_resolveCancelReason(null)" title="닫기" aria-label="닫기">✕</button>'+
-      '<h3 style="margin:0 0 4px">'+escapeHtml(title)+'</h3>'+
-      '<div style="font-size:12px;color:#888;margin-bottom:14px">'+escapeHtml(subtitle)+'</div>'+
+    const html='<div class="modal-bg show" id="cancel-reason-modal" style="z-index:99999" onclick="if(event.target===this)_resolveCancelReason(null)"><div class="modal" style="max-width:440px;--mpad-y:24px;--mpad-x:24px;text-align:left;position:relative"><button class="modal-x" onclick="_resolveCancelReason(null)" title="닫기" aria-label="닫기">✕</button>'+
+      _mhead(title, subtitle)+
       '<label style="display:block;font-size:11px;color:#888;margin:0 0 4px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">'+escapeHtml(labelText)+'<span style="color:var(--peach);margin-left:3px">*</span></label>'+
       '<textarea id="cancel-reason-input" rows="4" placeholder="'+escapeHtml(placeholder)+'" style="'+inpSt+'"></textarea>'+
       '<div style="display:flex;gap:8px;margin-top:18px;justify-content:flex-end">'+
@@ -16757,7 +16792,8 @@ function _batchRender(){
   var body=''; rows.forEach(function(r,i){ body+=_batchRowHtml(r,i); });
   if(!body)body='<tr><td colspan="5" style="text-align:center;color:#aaa;padding:26px">지금 홍보 신청 가능한 프로그램이 없어요</td></tr>';
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeBatchWizard)"><div class="modal" style="width:min(880px,96vw);max-height:90vh;display:flex;flex-direction:column;position:relative"><button class="modal-x" onclick="closeBatchWizard()" style="position:absolute;top:14px;right:22px;z-index:10" title="닫기" aria-label="닫기">✕</button>'
-    +'<div style="padding-bottom:10px;border-bottom:1px solid #eee;margin-bottom:10px"><h3 style="margin:0">📋 홍보 일괄 신청 <span style="font-size:12px;color:#888;font-weight:400">· 여러 건 한 번에</span></h3><div style="font-size:11.5px;color:#888;margin-top:4px">등록할 프로그램을 체크하고 홍보 일시·위치·내용을 정하세요. <b>홍보 위치는 복수 선택</b> 가능(위치마다 1건). 상세(본문·타겟)는 등록 후 각 건에서. <span style="color:#bbb">(열 경계 드래그로 너비 조절)</span></div></div>'
+    +_mhead('홍보 일괄 신청','여러 건 한 번에')
+    +'<div style="padding-bottom:10px;border-bottom:1px solid #eee;margin-bottom:10px"><div style="font-size:11.5px;color:#888">등록할 프로그램을 체크하고 홍보 일시·위치·내용을 정하세요. <b>홍보 위치는 복수 선택</b> 가능(위치마다 1건). 상세(본문·타겟)는 등록 후 각 건에서. <span style="color:#bbb">(열 경계 드래그로 너비 조절)</span></div></div>'
     +'<div style="overflow:auto;flex:1;border-radius:10px;border:1px solid #f0f0f0"><table class="promo-board-table batch-board-table" style="width:100%;border-collapse:collapse;font-size:12.5px;table-layout:fixed"><thead><tr style="background:rgba(74,77,231,0.95);color:#fff;font-size:11px;letter-spacing:0.3px">'
     + _batchSh('sel','✓',44) + _batchSh('program','프로그램',210) + _batchSh('datetime','홍보 일시',124) + _batchSh('plat','홍보 위치 <button onclick="event.stopPropagation();_batchBulkPlat(this)" style="margin-left:5px;font-size:9px;font-weight:700;color:#fff;background:rgba(255,255,255,0.28);border:0;border-radius:5px;padding:2px 7px;cursor:pointer">일괄</button>',180) + '<th data-col="content" style="padding:9px 8px;text-align:center;color:#fff">홍보 내용 입력</th>'
     +'</tr></thead><tbody>'+body+'</tbody></table></div>'
@@ -16930,10 +16966,9 @@ function _renderChangeMenu(rec){
   if(isAdmin)items.push({step:7,icon:'⚙️',label:'진행 상태 (관리자)',desc:rec['진행 상태']||''});
   if(isAdmin)items.push({step:8,icon:'🙋',label:'신청자 (관리자)',desc:rec['신청자']||'(없음)'});
   let html='<div class="modal-bg show" id="change-menu-modal" style="z-index:99998" onclick="if(event.target===this)closeChangeMenu()">';
-  html+='<div class="modal" style="max-width:480px;padding:24px;text-align:left;position:relative">';
+  html+='<div class="modal" style="max-width:480px;--mpad-y:24px;--mpad-x:24px;text-align:left;position:relative">';
   html+='<button class="modal-x" onclick="closeChangeMenu()" title="닫기" aria-label="닫기">✕</button>';
-  html+='<h3 style="margin:0 0 4px">변경할 항목 선택</h3>';
-  html+='<div style="font-size:12px;color:#888;margin-bottom:6px">여러 개 선택 가능 — 선택한 순서대로 진행</div>';
+  html+=_mhead('변경할 항목 선택','여러 개 선택 가능 — 고른 순서대로 진행');
   html+='<div style="font-size:12px;color:var(--accent);padding:8px 12px;background:rgba(74,77,231,0.06);border-radius:8px;margin-bottom:14px;font-weight:600">'+escapeHtml(rec['콘텐츠 제목']||'(제목 없음)')+'</div>';
   // admin이 신청 중 상태 변경 시 — 자동 승인 안내
   if(isAdmin && (rec['진행 상태']||'')==='신청 중'){
@@ -18296,11 +18331,9 @@ async function openFolderTreeModal(idx){
     document.body.appendChild(el);
   }
   el.innerHTML = '<div class="modal-bg show" style="z-index:9300" onclick="if(event.target===this)closeFolderTreeModal()">'+
-    '<div class="modal" style="max-width:560px;padding:0;text-align:left;max-height:80vh;display:flex;flex-direction:column">'+
-    '<div style="padding:18px 22px;border-bottom:1px solid rgba(0,0,0,0.06);display:flex;justify-content:space-between;align-items:center;flex-shrink:0">'+
-    '<h3 style="margin:0;font-size:15px;font-weight:700">📁 참고자료 폴더 선택</h3>'+
-    '<button onclick="closeFolderTreeModal()" style="background:rgba(216,132,85,0.15);border:none;width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:14px;color:var(--peach);font-family:inherit" title="닫기" aria-label="닫기">✕</button>'+
-    '</div>'+
+    '<div class="modal" style="max-width:560px;--mpad-y:0;--mpad-x:0;text-align:left;max-height:80vh;display:flex;flex-direction:column">'+
+    '<button class="modal-x" onclick="closeFolderTreeModal()" title="닫기" aria-label="닫기">✕</button>'+
+    _mhead('참고자료 폴더 선택','올릴 폴더를 골라 주세요')+
     '<div style="padding:10px 18px 8px;border-bottom:1px solid rgba(0,0,0,0.04);font-size:11px;color:#888;flex-shrink:0;letter-spacing:0.2px">'+
     '<span style="color:#666">현재 선택: </span><span id="ftm-current-path" style="color:#333">없음</span>'+
     '</div>'+
@@ -19669,7 +19702,7 @@ function invalidateApplyCache(){
 }
 
 async function openApplySettings(){
-  const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeAdminPanel)"><div class="modal" style="width:96vw;max-width:720px;max-height:88vh;overflow:auto;padding:24px;position:relative"><button onclick="backToAdminMenu()" title="뒤로" aria-label="뒤로" style="position:absolute;top:14px;right:54px;float:none;margin:0;width:32px;height:32px;border-radius:50%;border:1px solid var(--glass-bd);background:var(--glass-surface);backdrop-filter:blur(8px);color:var(--accent);cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:10;box-shadow:var(--glass-shadow);transition:background .15s" onmouseover="this.style.background=\'var(--accent-light)\'" onmouseout="this.style.background=\'var(--glass-surface)\'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button><button class="modal-x" onclick="closeAdminPanel()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;float:none;margin:0;z-index:10">✕</button><div id="apply-settings-body" style="text-align:center;padding:40px;color:#888">'+_ldHtml(16)+'로딩 중</div></div></div>';
+  const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeAdminPanel)"><div class="modal" style="width:96vw;max-width:720px;max-height:88vh;overflow:auto;--mpad-y:24px;--mpad-x:24px;position:relative"><button onclick="backToAdminMenu()" title="뒤로" aria-label="뒤로" style="position:absolute;top:14px;right:54px;float:none;margin:0;width:32px;height:32px;border-radius:50%;border:1px solid var(--glass-bd);background:var(--glass-surface);backdrop-filter:blur(8px);color:var(--accent);cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:10;box-shadow:var(--glass-shadow);transition:background .15s" onmouseover="this.style.background=\'var(--accent-light)\'" onmouseout="this.style.background=\'var(--glass-surface)\'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button><button class="modal-x" onclick="closeAdminPanel()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;float:none;margin:0;z-index:10">✕</button>'+_mhead('신청 일정 관리','홍보 신청을 받는 기간·제외일을 정해요',106)+'<div id="apply-settings-body" style="text-align:center;padding:40px;color:#888">'+_ldHtml(16)+'로딩 중</div></div></div>';
   let el=document.getElementById('admin-panel');
   if(!el){el=document.createElement('div');el.id='admin-panel';document.body.appendChild(el);}
   el.innerHTML=html;
@@ -20464,10 +20497,9 @@ function openPromoCheck(){
   //   [260805-15] X 글자 = 정본 `✕`(U+2715) 유지 — check_design ⑦(정본 부품 일치)이 커밋에서 강제.
   //   📡·📭 이모지는 운영자 「이모지 가능한 안 씀」으로 제거(위 body 조립부).
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closePromoCheck)">'
-    + '<div class="modal" style="width:min(760px,94vw);max-height:88vh;padding:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:var(--surface-solid)">'
-    + '<button class="modal-x" onclick="closePromoCheck()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;z-index:10;color:var(--surface-solid)">✕</button>'
-    + '<div style="padding:18px 24px;background:var(--accent);font-size:16px;font-weight:700;color:var(--surface-solid);display:flex;align-items:center;gap:8px"><span>AI 홍보 · 점검</span>'
-    + '<span style="font-size:11.5px;font-weight:600;color:rgba(255,255,255,.85)">홍보 기록과 프로그램 시트를 훑어 지금 손볼 곳을 찾아요</span></div>'
+    + '<div class="modal" style="width:min(760px,94vw);max-height:88vh;--mpad-y:0;--mpad-x:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:var(--surface-solid)">'
+    + '<button class="modal-x" onclick="closePromoCheck()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;z-index:10">✕</button>'
+    + _mhead('AI 홍보 · 점검','홍보 기록과 프로그램 시트를 훑어 지금 손볼 곳을 찾아요')
     + '<div style="overflow:auto;flex:1;min-height:0;padding:18px 24px 20px">'+body+'</div></div></div>';
 }
 
@@ -20869,7 +20901,7 @@ let _logsFilter={action:'all',sheet:'all',role:'all',q:''};
 let _logsQTimer=null;
 
 async function openLogsAdmin(){
-  const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeAdminPanel)"><div class="modal" style="width:96vw;max-width:1100px;max-height:88vh;overflow:auto;padding:24px;position:relative"><button onclick="backToAdminMenu()" title="뒤로" aria-label="뒤로" style="position:absolute;top:14px;right:54px;float:none;margin:0;width:32px;height:32px;border-radius:50%;border:1px solid var(--glass-bd);background:var(--glass-surface);backdrop-filter:blur(8px);color:var(--accent);cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:10;box-shadow:var(--glass-shadow);transition:background .15s" onmouseover="this.style.background=\'var(--accent-light)\'" onmouseout="this.style.background=\'var(--glass-surface)\'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button><button class="modal-x" onclick="closeAdminPanel()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;float:none;margin:0;z-index:10">✕</button><div id="logs-admin-body" style="text-align:center;padding:40px;color:#888">'+_ldHtml(16)+'로딩 중</div></div></div>';
+  const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeAdminPanel)"><div class="modal" style="width:96vw;max-width:1100px;max-height:88vh;overflow:auto;--mpad-y:24px;--mpad-x:24px;position:relative"><button onclick="backToAdminMenu()" title="뒤로" aria-label="뒤로" style="position:absolute;top:14px;right:54px;float:none;margin:0;width:32px;height:32px;border-radius:50%;border:1px solid var(--glass-bd);background:var(--glass-surface);backdrop-filter:blur(8px);color:var(--accent);cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:10;box-shadow:var(--glass-shadow);transition:background .15s" onmouseover="this.style.background=\'var(--accent-light)\'" onmouseout="this.style.background=\'var(--glass-surface)\'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button><button class="modal-x" onclick="closeAdminPanel()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;float:none;margin:0;z-index:10">✕</button>'+_mhead('로그 조회','누가 언제 무엇을 했는지 봐요',106)+'<div id="logs-admin-body" style="text-align:center;padding:40px;color:#888">'+_ldHtml(16)+'로딩 중</div></div></div>';
   let el=document.getElementById('admin-panel');
   if(!el){el=document.createElement('div');el.id='admin-panel';document.body.appendChild(el);}
   el.innerHTML=html;
@@ -21035,7 +21067,7 @@ function exportLogsCsv(){
 async function openSheetAdmin(slug){
   const cfg=SHEET_CONFIG[slug];
   if(!cfg){showToast('알 수 없는 시트예요: '+slug,'error');return;}
-  const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeAdminPanel)"><div class="modal" style="width:96vw;max-width:1100px;max-height:88vh;overflow:auto;padding:24px;position:relative"><button onclick="backToAdminMenu()" title="뒤로" aria-label="뒤로" style="position:absolute;top:14px;right:54px;float:none;margin:0;width:32px;height:32px;border-radius:50%;border:1px solid var(--glass-bd);background:var(--glass-surface);backdrop-filter:blur(8px);color:var(--accent);cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:10;box-shadow:var(--glass-shadow);transition:background .15s" onmouseover="this.style.background=\'var(--accent-light)\'" onmouseout="this.style.background=\'var(--glass-surface)\'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button><button class="modal-x" onclick="closeAdminPanel()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;float:none;margin:0;z-index:10">✕</button><div id="sheet-admin-body" style="text-align:center;padding:40px;color:#888">'+_ldHtml(16)+'로딩 중</div></div></div>';
+  const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeAdminPanel)"><div class="modal" style="width:96vw;max-width:1100px;max-height:88vh;overflow:auto;--mpad-y:24px;--mpad-x:24px;position:relative"><button onclick="backToAdminMenu()" title="뒤로" aria-label="뒤로" style="position:absolute;top:14px;right:54px;float:none;margin:0;width:32px;height:32px;border-radius:50%;border:1px solid var(--glass-bd);background:var(--glass-surface);backdrop-filter:blur(8px);color:var(--accent);cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:10;box-shadow:var(--glass-shadow);transition:background .15s" onmouseover="this.style.background=\'var(--accent-light)\'" onmouseout="this.style.background=\'var(--glass-surface)\'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button><button class="modal-x" onclick="closeAdminPanel()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;float:none;margin:0;z-index:10">✕</button>'+_mhead('시트 관리','운영 시트를 앱에서 바로 고쳐요',106)+'<div id="sheet-admin-body" style="text-align:center;padding:40px;color:#888">'+_ldHtml(16)+'로딩 중</div></div></div>';
   let el=document.getElementById('admin-panel');
   if(!el){el=document.createElement('div');el.id='admin-panel';document.body.appendChild(el);}
   el.innerHTML=html;
@@ -21150,10 +21182,10 @@ async function resetUserPin(rowIndex, userName, email){
 // (Worker set-pin이 이메일로 사용자 매칭 → 이메일이 로그인 키라 재설정 기능 필요)
 function openEmailReset(rowIndex, userName, curEmail){
   const _cur = curEmail?('현재 '+escapeHtml(curEmail)):'미설정';
-  let html='<div class="modal-bg show" style="z-index:9600" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeEmailReset)"><div class="modal" style="width:94vw;max-width:380px;padding:24px;position:relative">';
+  let html='<div class="modal-bg show" style="z-index:9600" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeEmailReset)"><div class="modal" style="width:94vw;max-width:380px;--mpad-y:24px;--mpad-x:24px;position:relative">';
   html+='<button class="modal-x" onclick="closeEmailReset()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;float:none;margin:0;z-index:10">✕</button>';
-  html+='<h3 style="margin:0 0 4px;text-align:left">✉ 이메일 재설정</h3>';
-  html+='<p style="margin:0 0 16px;color:var(--dim);font-size:13px"><b>'+escapeHtml(userName||'사용자')+'</b> 님 · '+_cur+'</p>';
+  html+=_mhead('이메일 재설정',(userName||'사용자')+' 님');
+  html+='<p style="margin:0 0 16px;color:var(--dim);font-size:13px">'+_cur+'</p>';
   html+='<form id="email-reset-form" onsubmit="event.preventDefault();saveEmailReset('+rowIndex+')" style="display:flex;flex-direction:column;gap:12px">';
   html+='<div><label>새 이메일<span class="req">*</span></label><input id="er-email1" type="email" required placeholder="name@gscf.or.kr" autocomplete="off" oninput="_emailResetCheck()"></div>';
   html+='<div><label>이메일 확인<span class="req">*</span></label><input id="er-email2" type="email" required placeholder="한 번 더 입력해 주세요" autocomplete="off" oninput="_emailResetCheck()"></div>';
@@ -21259,9 +21291,9 @@ async function saveInlineRow(slug,rowIndex){
 function openSheetForm(slug,rowIndex){
   const cfg=SHEET_CONFIG[slug];
   const existing=rowIndex?_sheetCache[slug].find(r=>r._rowIndex===rowIndex):null;
-  let html='<div class="modal-bg show" style="z-index:9500" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeSheetForm)"><div class="modal" style="width:96vw;max-width:440px;max-height:88vh;overflow:auto;padding:24px;position:relative">';
+  let html='<div class="modal-bg show" style="z-index:9500" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeSheetForm)"><div class="modal" style="width:96vw;max-width:440px;max-height:88vh;overflow:auto;--mpad-y:24px;--mpad-x:24px;position:relative">';
   html+='<button class="modal-x" onclick="closeSheetForm()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;float:none;margin:0;z-index:10">✕</button>';
-  html+='<div style="display:flex;align-items:center;margin-bottom:14px;gap:8px;padding-bottom:14px;padding-right:48px;border-bottom:1px solid #eee"><h3 style="margin:0;flex:1;text-align:left">'+escapeHtml(cfg.title)+' '+(existing?'변경':'등록')+'</h3></div>';
+  html+=_mhead(cfg.title+' '+(existing?'변경':'등록'),'');
   html+='<form id="sheet-form" onsubmit="event.preventDefault();saveSheetRow(\''+slug+'\','+(rowIndex||'null')+')" style="display:flex;flex-direction:column;gap:14px">';
   if(slug==='manager'){
     // === 사용자 등록 전용 폼 ===
@@ -21399,7 +21431,7 @@ async function deleteSheetRow(slug,rowIndex){
 
 // === 프로그램 관리 ===
 async function openProgramAdmin(){
-  const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeAdminPanel)"><div class="modal" style="width:96vw;max-width:1100px;max-height:88vh;overflow:auto;padding:24px;position:relative"><button onclick="backToAdminMenu()" title="뒤로" aria-label="뒤로" style="position:absolute;top:14px;right:54px;float:none;margin:0;width:32px;height:32px;border-radius:50%;border:1px solid var(--glass-bd);background:var(--glass-surface);backdrop-filter:blur(8px);color:var(--accent);cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:10;box-shadow:var(--glass-shadow);transition:background .15s" onmouseover="this.style.background=\'var(--accent-light)\'" onmouseout="this.style.background=\'var(--glass-surface)\'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button><button class="modal-x" onclick="closeAdminPanel()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;float:none;margin:0;z-index:10">✕</button><div id="prog-admin-body" style="text-align:center;padding:40px;color:#888">'+_ldHtml(16)+'로딩 중</div></div></div>';
+  const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeAdminPanel)"><div class="modal" style="width:96vw;max-width:1100px;max-height:88vh;overflow:auto;--mpad-y:24px;--mpad-x:24px;position:relative"><button onclick="backToAdminMenu()" title="뒤로" aria-label="뒤로" style="position:absolute;top:14px;right:54px;float:none;margin:0;width:32px;height:32px;border-radius:50%;border:1px solid var(--glass-bd);background:var(--glass-surface);backdrop-filter:blur(8px);color:var(--accent);cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:10;box-shadow:var(--glass-shadow);transition:background .15s" onmouseover="this.style.background=\'var(--accent-light)\'" onmouseout="this.style.background=\'var(--glass-surface)\'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button><button class="modal-x" onclick="closeAdminPanel()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;float:none;margin:0;z-index:10">✕</button>'+_mhead('프로그램 관리','공연·전시 프로그램을 등록·변경해요',106)+'<div id="prog-admin-body" style="text-align:center;padding:40px;color:#888">'+_ldHtml(16)+'로딩 중</div></div></div>';
   let el=document.getElementById('admin-panel');
   if(!el){el=document.createElement('div');el.id='admin-panel';document.body.appendChild(el);}
   el.innerHTML=html;
@@ -21610,9 +21642,9 @@ function openProgramForm(rowIndex){
     회차:existing?_progRounds(existing['회차']):0,          // [260729] 0 = 미지정(기간 일수로 추정)
     장르:existing?String(existing['장르']||'').trim():''       // [260729 운영자] 주관식 장르(전시 포함) — '' = 미지정(공연=자동 조인 폴백 · 전시='시즌')
   };
-  let html='<div class="modal-bg show" style="z-index:9500" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeProgramForm)"><div class="modal" style="width:96vw;max-width:480px;max-height:88vh;overflow:auto;padding:24px;position:relative">';
+  let html='<div class="modal-bg show" style="z-index:9500" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeProgramForm)"><div class="modal" style="width:96vw;max-width:480px;max-height:88vh;overflow:auto;--mpad-y:24px;--mpad-x:24px;position:relative">';
   html+='<button class="modal-x" onclick="closeProgramForm()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;float:none;margin:0;z-index:10">✕</button>';
-  html+='<div style="display:flex;align-items:center;margin-bottom:14px;gap:8px;padding-bottom:14px;padding-right:48px;border-bottom:1px solid #eee"><h3 style="margin:0;flex:1;text-align:left">'+(existing?'프로그램 변경':'프로그램 등록')+'</h3></div>';
+  html+=_mhead(existing?'프로그램 변경':'프로그램 등록','');
   html+='<form id="prog-form" onsubmit="event.preventDefault();saveProgram('+(rowIndex||'null')+')" style="display:flex;flex-direction:column;gap:14px">';
   html+='<div style="display:flex;gap:10px"><div style="flex:0 0 80px"><label>NO</label><input name="NO" type="number" value="'+v.NO+'" readonly></div><div style="flex:1"><label>콘텐츠구분<span class="req">*</span></label><select name="콘텐츠구분" required onchange="refreshManagerOptions(this.value)">'+CONTENT_TYPES.map(t=>'<option value="'+escapeHtml(t)+'" '+(t===v.구분?'selected':'')+'>'+escapeHtml(t)+'</option>').join('')+'</select></div></div>';
   html+='<div><label>풀네임<span class="req">*</span></label><input name="풀네임" type="text" value="'+escapeHtml(v.풀네임)+'" required></div>';
@@ -23528,11 +23560,9 @@ function openProgramView(perfName){
     bodyHtml += '<div class="mv-row"><span class="lbl">'+escapeHtml(f.label)+'</span><span class="val"'+(f.bold?' style="font-weight:700;color:var(--accent)"':'')+'>'+escapeHtml(String(f.value))+'</span></div>';
   });
   const html = '<div class="modal-bg show" onclick="if(event.target===this)closeProgramView()" style="z-index:9100">'
-    +'<div class="modal" style="max-width:480px;padding:0;position:relative;text-align:left">'
-    +'<div style="padding:24px 24px 0;display:flex;align-items:center;justify-content:space-between">'
-    +'<h3 style="margin:0;font-size:16px;font-weight:700">프로그램 조회</h3>'
-    +'<button onclick="closeProgramView()" style="background:rgba(216,132,85,0.15);border:none;width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:16px;color:var(--peach);font-family:inherit" title="닫기" aria-label="닫기">✕</button>'
-    +'</div>'
+    +'<div class="modal" style="max-width:480px;--mpad-y:0;--mpad-x:0;position:relative;text-align:left">'
+    +'<button class="modal-x" onclick="closeProgramView()" title="닫기" aria-label="닫기">✕</button>'
+    +_mhead('프로그램 조회','')
     +'<div style="padding:16px 24px 24px">'+bodyHtml+'</div>'
     +'</div>'
     +'</div>';
@@ -24193,9 +24223,8 @@ function _askCopyDate(originalRec){
     const _platOpts=_p1s.map(function(p){return '<option value="'+escapeHtml(p)+'"'+(p===origPlat?' selected':'')+'>'+escapeHtml(p)+'</option>';}).join('');
     const inpSt='width:100%;padding:10px 14px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:12px;font-size:13px;outline:none;box-sizing:border-box;font-family:inherit';
     const lbSt='display:block;font-size:11px;color:#888;margin:14px 0 4px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px';
-    const html='<div class="modal-bg show" style="z-index:99999" onclick="if(event.target===this)_resolveCopyAsk(null)"><div class="modal" style="width:96vw;max-width:380px;padding:24px;text-align:left;position:relative"><button class="modal-x" onclick="_resolveCopyAsk(null)" title="닫기" aria-label="닫기">✕</button>'+
-      '<h3 style="margin:0 0 4px">복사할 날짜·시간 선택</h3>'+
-      '<div style="font-size:11px;color:#888;margin-bottom:8px">원본 일정 기준으로 미리 입력됨</div>'+
+    const html='<div class="modal-bg show" style="z-index:99999" onclick="if(event.target===this)_resolveCopyAsk(null)"><div class="modal" style="width:96vw;max-width:380px;--mpad-y:24px;--mpad-x:24px;text-align:left;position:relative"><button class="modal-x" onclick="_resolveCopyAsk(null)" title="닫기" aria-label="닫기">✕</button>'+
+      _mhead('복사할 날짜·시간 선택','원본 일정 기준으로 미리 입력됨')+
       '<div style="font-size:12px;color:#444;padding:8px 12px;background:rgba(74,77,231,0.06);border-radius:8px;margin-bottom:4px"><span style="color:#888;font-size:10.5px">원본:</span> '+escapeHtml(origTitle)+' <span style="color:#aaa;font-size:11px">('+origDate+' '+origTime+')</span></div>'+
       '<label style="'+lbSt+'">새 날짜<span style="color:var(--peach);margin-left:3px">*</span></label>'+
       '<input id="cp-date" type="date" value="'+origDate+'" style="'+inpSt+'">'+
@@ -26429,7 +26458,7 @@ async function openMemberLookup(){
     el.onclick=function(ev){if(ev.target===el)closeMemberLookup();};
     el.innerHTML='<div class="modal" style="position:relative;width:940px;max-width:94vw">'
       +'<button class="modal-x" onclick="closeMemberLookup()" title="닫기" aria-label="닫기">✕</button>'
-      +'<h3 style="margin:0 0 3px;font-size:16px;font-weight:800">회원 조회</h3>'
+      +_mhead('회원 조회','')
       +'<div id="mem-sub" style="font-size:11.5px;color:var(--dim);margin-bottom:12px">불러오는 중…</div>'
       +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center">'
       +'<input id="mem-q" placeholder="이름 · 휴대폰 · 주소 검색" oninput="clearTimeout(_memQT);_memQT=setTimeout(_memRender,150)" style="flex:1;width:100%;box-sizing:border-box;min-width:180px;padding:9px 12px;border:1px solid var(--border2);border-radius:var(--r-btn);font-size:13px;font-family:inherit;background:var(--surface-solid);color:var(--text)">'
@@ -26555,11 +26584,12 @@ async function openMemberOverview(){
   var el=document.createElement('div');el.id='member-ov';
   el.innerHTML='<div class="modal-bg show" style="z-index:var(--z-modal)" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeMemberOverview)">'
     // [260803 운영자 「스크롤 없이 한 창에」] 높이 88vh → 92vh = 레포 전례 값(.enn-modal·연간 캘린더·현황 보드 모달과 동일 · 신규 값 0)
-    +'<div class="modal pb-modal" style="width:96vw;max-width:1100px;height:92vh;max-height:92vh;overflow:hidden;padding:0;position:relative;display:flex;flex-direction:column">'
-    +'<button class="modal-x" onclick="closeMemberOverview()" title="닫기" aria-label="닫기" style="position:absolute;top:16px;right:18px;float:none;margin:0;z-index:10">✕</button>'
+    +'<div class="modal pb-modal" style="width:96vw;max-width:1100px;height:92vh;max-height:92vh;overflow:hidden;--mpad-y:0;--mpad-x:0;position:relative;display:flex;flex-direction:column">'
+    +'<button class="modal-x" onclick="closeMemberOverview()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;float:none;margin:0;z-index:10">✕</button>'
+    +_mhead('회원 분포','회원 명부를 지역·연령으로 훑어봐요',110)
     // [260731 운영자 2차] 회원 관리 대메뉴 폐지 → 회원 조회(표)로 가는 문을 여기에(구 회원 조회 ▸ 회원 분포 버튼의 짝). 셸에 두는 이유 = 로딩·로드실패 상태에서도 항상 있게.
     // [260801 운영자] 텍스트 버튼 → 사람 픽토그램 원형 버튼(글리프 = _bpUserTag 사람 픽토 계승 · 형태 = 신청 일정 관리 뒤로가기 원형 버튼 계승, 색만 이 버튼 종전 accent 유지) · ✕(top:16px·32px)와 수평 정렬.
-    +'<button type="button" onclick="closeMemberOverview();openMemberLookup()" title="회원 명부 조회 (운영_회원 시트)" aria-label="회원 조회" style="position:absolute;top:16px;right:58px;z-index:10;width:32px;height:32px;border:1.5px solid var(--accent);background:var(--accent-glow);color:var(--accent);border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="3.6"/><path d="M5 20c0-3.6 3.2-5.6 7-5.6s7 2 7 5.6"/></svg></button>'
+    +'<button type="button" onclick="closeMemberOverview();openMemberLookup()" title="회원 명부 조회 (운영_회원 시트)" aria-label="회원 조회" style="position:absolute;top:14px;right:60px;z-index:10;width:32px;height:32px;border:1.5px solid var(--surface-solid);background:var(--glass-surface);color:var(--accent);border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="3.6"/><path d="M5 20c0-3.6 3.2-5.6 7-5.6s7 2 7 5.6"/></svg></button>'
     +'<div id="mem-ov-body" style="flex:1;overflow:auto;padding:25px 29px;text-align:center;color:var(--dim)">'+_ldHtml(16)+'회원 데이터 불러오는 중…</div>'
     +'</div></div>';
   document.body.appendChild(el);
@@ -27142,6 +27172,7 @@ function openEnneagram(){
   bg.setAttribute('onmousedown','modalBgMouseDown(event)');
   bg.setAttribute('onclick','modalBgClick(event,closeEnneagram)');
   bg.innerHTML='<div class="modal enn-modal">'
+    +_mhead('에니어그램','성격 유형으로 서로를 이해해요',200)
     +'<div class="enn-btns">'
       +'<button type="button" class="bp-x" onclick="window.open(\'playground/enneagram/\',\'_blank\',\'noopener\')" title="새 탭에서 열기" aria-label="새 탭에서 열기">↗</button>'
       +'<button type="button" class="bp-x" onclick="_tminHide(\'enn-bg\',\'에니어그램\')" title="최소화" aria-label="최소화">─</button>'   /* [260805 운영자] 최소화 — 창 규약 순서(최소화·전체화면·닫기) */
@@ -27225,9 +27256,9 @@ function openTicketReg(){
   if(!el){el=document.createElement('div');el.id='tkt-board';document.body.appendChild(el);}
   _tktState=_tktDefaultState(); // 매번 새로 — 공용 PC에서 이전 입력 노출 방지(콘텐츠 제작과 동일 원칙)
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeTicketReg)">'
-    +'<div class="modal" style="width:96vw;max-width:900px;max-height:92vh;padding:0;position:relative;display:flex;flex-direction:column;overflow:hidden">'
+    +'<div class="modal" style="width:96vw;max-width:900px;max-height:92vh;--mpad-y:0;--mpad-x:0;position:relative;display:flex;flex-direction:column;overflow:hidden">'
     +'<button class="modal-x" onclick="closeTicketReg()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;z-index:10;float:none;margin:0">✕</button>'
-    +'<div style="padding:18px 24px;border-bottom:1px solid var(--border);font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px">🎫 <span>티켓 등록 신청</span><span style="font-size:11px;font-weight:600;color:var(--dim)">운영계획 PPT → 티켓링크 판매대행 의뢰서(엑셀)</span></div>'
+    +_mhead('티켓 등록 신청','운영계획 PPT → 티켓링크 판매대행 의뢰서(엑셀)')
     +'<div id="tkt-body" style="flex:1;overflow:auto;padding:20px 24px;min-height:0"></div>'
     +'</div></div>';
   _tktRender();
@@ -27746,10 +27777,10 @@ function openNaverBlogTool(){
   try{localStorage.removeItem('nb_gh_pat');}catch(_e){}   // 구 브라우저 PAT 잔재 제거 — 이제 Worker가 토큰 보유(브라우저 무토큰)
   _nbTgtNormalize();   // 옛 단일값 tgt → 새 다중선택 구조로 정규화(호환)
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeNaverBlogTool)">'
-    +'<div class="modal" style="width:96vw;max-width:1080px;height:92vh;max-height:92vh;padding:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:#fff">'
+    +'<div class="modal" style="width:96vw;max-width:1080px;height:92vh;max-height:92vh;--mpad-y:0;--mpad-x:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:#fff">'
     +'<button class="modal-x" onclick="_tminHide(\'nblog-board\',\'네이버 블로그\')" title="최소화" aria-label="최소화" style="position:absolute;top:14px;right:60px;z-index:10">─</button>'
     +'<button class="modal-x" onclick="closeNaverBlogTool()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;z-index:10">✕</button>'
-    +'<div style="padding:18px 24px;border-bottom:1px solid #eee;font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px">✍️ <span>블로그 글쓰기 도우미</span></div>'
+    +_mhead('블로그 글쓰기 도우미','네이버 블로그 초안을 만들어요',112)
     +'<div id="nblog-body" style="flex:1;overflow:auto;padding:20px 24px;min-width:0;min-height:0"></div>'
     +'</div></div>';
   if(_nbState.escHandler)document.removeEventListener('keydown',_nbState.escHandler);
@@ -28457,11 +28488,11 @@ function openVideoEditor(tab){
   _veState._owner=_veUserKey();
   _veState.tab=t;_veState._touch=Date.now();
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeVideoEditor)">'
-    +'<div class="modal" style="width:96vw;max-width:1120px;height:92vh;max-height:92vh;padding:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:var(--surface-solid);border-radius:var(--radius)">'   // 운영자 선택값 260711: 라운드 24→16 = --radius 동값 계승
+    +'<div class="modal" style="width:96vw;max-width:1120px;height:92vh;max-height:92vh;--mpad-y:0;--mpad-x:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:var(--surface-solid);border-radius:var(--radius)">'   // 운영자 선택값 260711: 라운드 24→16 = --radius 동값 계승
     +'<button class="modal-x" onclick="_tminHide(\'ve-board\',\'영상 편집기\')" title="최소화" aria-label="최소화" style="position:absolute;top:14px;right:60px;z-index:10">─</button>'
     +'<button class="modal-x" onclick="closeVideoEditor()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;z-index:10">✕</button>'
-    +'<div style="padding:15px 24px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:14px;flex-wrap:wrap">'
-    +'<span style="font-size:14px;font-weight:900">🎬 영상 편집기</span>'   // 운영자 선택값 260711: 16/700 → 14/900
+    +_mhead('영상 편집기','이 컴퓨터 안에서 자르고 붙여요',112)
+    +'<div style="padding:12px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:14px;flex-wrap:wrap">'   // 운영자 선택값 260711: 16/700 → 14/900
     +'<div id="ve-tabs" style="display:flex;gap:2px;background:var(--neutral);border-radius:8px;padding:3px">'
     +'<button type="button" class="prog-tab" data-t="edit" onclick="_veTab(\'edit\')" style="flex:none;padding:7px 16px">1. 영상 편집</button>'
     +'<button type="button" class="prog-tab" data-t="sub" onclick="_veTab(\'sub\')" style="flex:none;padding:7px 16px">2. 자막 삽입</button>'
@@ -29090,10 +29121,10 @@ function openHwpEditor(){
   try{if(_hwState&&_hwState.escHandler)document.removeEventListener('keydown',_hwState.escHandler);}catch(_e){}
   _hwState=_hwDefault();   // 🔒 매번 새로 — 이전 사용자의 문서를 복원하지 않는다
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeHwpEditor)">'
-    +'<div class="modal" style="width:96vw;max-width:1080px;height:92vh;max-height:92vh;padding:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:var(--surface-solid)">'
+    +'<div class="modal" style="width:96vw;max-width:1080px;height:92vh;max-height:92vh;--mpad-y:0;--mpad-x:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:var(--surface-solid)">'
     +'<button class="modal-x" onclick="_tminHide(\'hw-board\',\'한글문서 편집\')" title="최소화" aria-label="최소화" style="position:absolute;top:14px;right:60px;z-index:10">─</button>'
     +'<button class="modal-x" onclick="closeHwpEditor()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;z-index:10">✕</button>'
-    +'<div style="padding:18px 24px;border-bottom:1px solid var(--border);font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px">📄 <span>한글문서 편집</span></div>'
+    +_mhead('한글문서 편집','hwp 파일을 앱에서 열고 고쳐요',112)
     +'<div style="flex:1;display:flex;flex-direction:column;min-height:0;padding:16px 24px 18px">'
       +'<div id="hw-bar" class="hw-bar"></div>'
       +'<div id="hw-stage" class="hw-stage"></div>'
@@ -29276,10 +29307,10 @@ function openOfficeEditor(){
   try{if(_ofState&&_ofState.escHandler)document.removeEventListener('keydown',_ofState.escHandler);}catch(_e){}
   _ofState=_ofDefault();   // 🔒 매번 새로 — 이전 사용자의 문서를 복원하지 않는다
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeOfficeEditor)">'
-    +'<div class="modal" style="width:96vw;max-width:1080px;height:92vh;max-height:92vh;padding:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:var(--surface-solid)">'
+    +'<div class="modal" style="width:96vw;max-width:1080px;height:92vh;max-height:92vh;--mpad-y:0;--mpad-x:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:var(--surface-solid)">'
     +'<button class="modal-x" onclick="_tminHide(\'of-board\',\'오피스문서 편집\')" title="최소화" aria-label="최소화" style="position:absolute;top:14px;right:60px;z-index:10">─</button>'
     +'<button class="modal-x" onclick="closeOfficeEditor()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;z-index:10">✕</button>'
-    +'<div style="padding:18px 24px;border-bottom:1px solid var(--border);font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px">🗂️ <span>오피스문서 편집</span></div>'
+    +_mhead('오피스문서 편집','워드·엑셀·PPT를 앱에서 열고 고쳐요',112)
     +'<div style="flex:1;display:flex;flex-direction:column;min-height:0;padding:16px 24px 18px">'
       +'<div id="of-bar" class="hw-bar"></div>'
       +'<div id="of-stage" class="hw-stage"></div>'
@@ -29499,10 +29530,10 @@ function openFileSlimmer(){
   // 창은 **내용만큼만** 연다(운영자 260805-2 「저렇게 커야 되는 이유를 모르겠다 · 첨부하고 진행상황만 보여주고
   // 설정 토글만 있으면 되는데」) — 높이 고정을 걷어 `height:auto`, 무대는 내용에 붙는다(빈 회색 판 소멸).
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeFileSlimmer)">'
-    +'<div class="modal" style="width:min(94vw,600px);height:auto;max-height:88vh;padding:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:var(--surface-solid)">'
-    +'<button class="modal-x" onclick="_tminHide(\'sl-board\',\'용량 줄이기\')" title="최소화" aria-label="최소화" style="position:absolute;top:12px;right:56px;z-index:10">─</button>'
-    +'<button class="modal-x" onclick="closeFileSlimmer()" title="닫기" aria-label="닫기" style="position:absolute;top:12px;right:18px;z-index:10">✕</button>'
-    +'<div style="padding:14px 20px;border-bottom:1px solid var(--border);font-size:15px;font-weight:700;display:flex;align-items:center;gap:8px">🗜️ <span>용량 줄이기</span></div>'
+    +'<div class="modal" style="width:min(94vw,600px);height:auto;max-height:88vh;--mpad-y:0;--mpad-x:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:var(--surface-solid)">'
+    +'<button class="modal-x" onclick="_tminHide(\'sl-board\',\'용량 줄이기\')" title="최소화" aria-label="최소화" style="position:absolute;top:14px;right:60px;z-index:10">─</button>'
+    +'<button class="modal-x" onclick="closeFileSlimmer()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;z-index:10">✕</button>'
+    +_mhead('용량 줄이기','무거운 파일을 가볍게 만들어요',112)
     +'<div style="flex:1;display:flex;flex-direction:column;min-height:0;padding:13px 20px 15px">'
       +'<div id="sl-bar" class="hw-bar"></div>'
       +'<div id="sl-stage" class="hw-stage" style="min-height:96px;padding:10px"></div>'
@@ -29873,10 +29904,10 @@ function openDocMd(){
   try{if(_dmState&&_dmState.escHandler)document.removeEventListener('keydown',_dmState.escHandler);}catch(_e){}
   _dmState=_dmDefault();   // 🔒 매번 새로 — 이전 사용자의 문서를 복원하지 않는다
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeDocMd)">'
-    +'<div class="modal" style="width:96vw;max-width:1080px;height:92vh;max-height:92vh;padding:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:var(--surface-solid)">'
+    +'<div class="modal" style="width:96vw;max-width:1080px;height:92vh;max-height:92vh;--mpad-y:0;--mpad-x:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:var(--surface-solid)">'
     +'<button class="modal-x" onclick="_tminHide(\'dm-board\',\'문서 → 마크다운\')" title="최소화" aria-label="최소화" style="position:absolute;top:14px;right:60px;z-index:10">─</button>'
     +'<button class="modal-x" onclick="closeDocMd()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;z-index:10">✕</button>'
-    +'<div style="padding:18px 24px;border-bottom:1px solid var(--border);font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px">📄 <span>문서 → 마크다운</span></div>'
+    +_mhead('문서 → 마크다운','문서를 마크다운 글로 바꿔요',112)
     +'<div style="flex:1;display:flex;flex-direction:column;min-height:0;padding:16px 24px 18px">'
       +'<div id="dm-bar" class="hw-bar"></div>'
       +'<div id="dm-stage" class="hw-stage"></div>'
@@ -30050,8 +30081,7 @@ function openScheduleSync(){
   if(userRole!=='admin'){showToast('관리자만 쓸 수 있어요','error');return;}
   var html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeScheduleSync)"><div class="modal admin-modal" style="width:460px;position:relative">'
     +'<button class="modal-x" onclick="closeScheduleSync()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;float:none;margin:0;z-index:10">✕</button>'
-    +'<div style="display:flex;align-items:center;margin-bottom:14px;gap:8px;padding-bottom:14px;padding-right:48px;border-bottom:1px solid var(--border)"><h3 style="margin:0;flex:1;text-align:left">일정 반영</h3></div>'
-    +'<div style="font-size:12px;color:var(--dim);margin-bottom:14px">받은 일정표를 앱 데이터로 옮깁니다 — 반영할 일정을 골라 주세요</div>'
+    +_mhead('일정 반영','받은 일정표를 앱 데이터로 옮겨요 — 반영할 일정을 골라 주세요')
     +'<div class="admin-modal-grid" style="display:grid;grid-template-columns:1fr;gap:10px">'
     +_CS_MENU.map(function(it){return '<button class="admin-item" data-id="'+it.id+'" style="text-align:left;padding:14px;border:1px solid var(--border);border-radius:12px;background:var(--surface-solid);cursor:pointer;transition:all .15s"><div style="font-weight:700;font-size:14px;margin-bottom:4px">'+escapeHtml(it.label)+'</div><div style="font-size:11px;color:var(--dim)">'+escapeHtml(it.desc)+'</div></button>';}).join('')
     +'</div></div></div>';
@@ -30075,9 +30105,9 @@ function openCafeSchedule(){
   _csState=_csDefault();          // 🔒 매번 새로 — 이전 사용자의 표를 복원하지 않는다
   _csState.ym=_csYmOf(new Date());
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeCafeSchedule)">'
-    +'<div class="modal" style="width:96vw;max-width:900px;height:92vh;max-height:92vh;padding:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:var(--surface-solid)">'
+    +'<div class="modal" style="width:96vw;max-width:900px;height:92vh;max-height:92vh;--mpad-y:0;--mpad-x:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:var(--surface-solid)">'
     +'<button class="modal-x" onclick="closeCafeSchedule()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;z-index:10">✕</button>'
-    +'<div style="padding:18px 24px;border-bottom:1px solid var(--border);font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px">☕ <span>카페 운영 일정</span></div>'
+    +_mhead('카페 운영 일정','받은 운영시간표를 앱 일정으로 옮겨요')
     +'<div style="flex:1;display:flex;flex-direction:column;min-height:0;padding:16px 24px 18px">'
       +'<div id="cs-bar" class="cs-bar"></div>'
       +'<div id="cs-stage" class="cs-stage"></div>'
@@ -30476,10 +30506,13 @@ function openCardMaker(tab){
   try{if(_cmState&&_cmState.escHandler)document.removeEventListener('keydown',_cmState.escHandler);}catch(_e){}
   _cmState=_cmDefault();   // 🔒 매번 새로 — 이전 사용자의 사진·문구를 복원하지 않는다
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeCardMaker)">'
-    +'<div class="modal" style="width:96vw;max-width:1080px;height:92vh;max-height:92vh;padding:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:var(--surface-solid)">'
+    +'<div class="modal" style="width:96vw;max-width:1080px;height:92vh;max-height:92vh;--mpad-y:0;--mpad-x:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:var(--surface-solid)">'
     +'<button class="modal-x" onclick="_tminHide(\'cm-board\',\'이미지 편집\')" title="최소화" aria-label="최소화" style="position:absolute;top:14px;right:60px;z-index:10">─</button>'
     +'<button class="modal-x" onclick="closeCardMaker()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;z-index:10">✕</button>'
-    +'<div style="padding:18px 24px;border-bottom:1px solid var(--border);font-size:16px;font-weight:700;display:flex;align-items:center;gap:14px;flex-wrap:wrap">🖼 <span>이미지 편집</span>'
+    // [260805-23] 머리줄 = 정본 밴드(`_mhead`) · 탭줄은 그 아래 자기 줄로 내렸다(영상 편집기와 같은 처리) —
+    //   밴드는 제목·부제만 진다는 계약. `#cm-subnote`는 탭에 따라 글이 바뀌므로(_cmTab) 탭줄에 남긴다.
+    +_mhead('이미지 편집','',112)
+    +'<div style="padding:12px 24px;border-bottom:1px solid var(--border);font-size:16px;font-weight:700;display:flex;align-items:center;gap:14px;flex-wrap:wrap">'
       +'<div id="cm-tabs" style="display:flex;gap:2px;background:var(--neutral);border-radius:8px;padding:3px">'
         +'<button type="button" class="prog-tab" data-t="card" onclick="_cmTab(\'card\')" style="flex:none;padding:7px 16px">1. 카드 제작</button>'
         +'<button type="button" class="prog-tab" data-t="cut" onclick="_cmTab(\'cut\')" style="flex:none;padding:7px 16px">2. 누끼따기</button>'
@@ -30843,11 +30876,10 @@ function openLogoMaker(){
   try{if(_lmState&&_lmState.escHandler)document.removeEventListener('keydown',_lmState.escHandler);}catch(_e){}
   _lmState=_lmDefault();   // 🔒 매번 새로 — 이전 사용자의 이름·결과를 복원하지 않는다(카드 제작 동일 계약)
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeLogoMaker)">'
-    +'<div class="modal" style="width:96vw;max-width:1080px;height:92vh;max-height:92vh;padding:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:var(--surface-solid)">'
+    +'<div class="modal" style="width:96vw;max-width:1080px;height:92vh;max-height:92vh;--mpad-y:0;--mpad-x:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:var(--surface-solid)">'
     +'<button class="modal-x" onclick="_tminHide(\'lm-board\',\'로고 제작\')" title="최소화" aria-label="최소화" style="position:absolute;top:14px;right:60px;z-index:10">─</button>'
     +'<button class="modal-x" onclick="closeLogoMaker()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;z-index:10">✕</button>'
-    +'<div style="padding:18px 24px;border-bottom:1px solid var(--border);font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px">🎯 <span>로고 제작</span>'
-      +'<span style="font-size:11.5px;font-weight:600;color:var(--dim)">1:1 · 고른 것만으로 만들어요</span></div>'
+    +_mhead('로고 제작','1:1 · 고른 것만으로 만들어요',112)
     +'<div style="flex:1;min-height:0;padding:18px 24px 20px">'
       +'<div class="lm-wrap">'
         +'<div class="lm-col prev">'
@@ -31018,15 +31050,13 @@ function openKakaoDesigner(){
   try{if(_kmState&&_kmState.escHandler)document.removeEventListener('keydown',_kmState.escHandler);}catch(_e){}
   _kmState=_kmDefault();   // 🔒 매번 새로 — 이전 사용자의 공연·문구를 복원하지 않는다(로고 제작 동일 계약)
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeKakaoDesigner)">'
-    +'<div class="modal" style="width:96vw;max-width:1080px;height:92vh;max-height:92vh;padding:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:var(--surface-solid)">'
-    // [260805-22 운영자] 머리줄 = 강조색1 음영(--accent) + 잉크 흰 축 대응(제목 --surface-solid 6.0:1 AA · 부제 흰 .85 기존 스텝) ·
-    //   💬 제거(「이모지 가능한 안 씀」) · 밴드가 스스로 경계라 border-bottom 제거 · X·최소화(─ · 260805-20 PR661) 잉크도
-    //   흰색(--accent 잉크는 accent 밴드 위에서 소실 — 머지 합류점: PR661은 버튼을 더했고 이 작업은 밴드를 칠했다, 둘 다 보존).
-    //   같은 머리줄을 「AI 홍보 · 점검」(openPromoCheck)이 계승한다 — 바꿀 땐 두 곳을 한 벌로.
-    +'<button class="modal-x" onclick="_tminHide(\'km-board\',\'카카오 메세지 설계\')" title="최소화" aria-label="최소화" style="position:absolute;top:14px;right:60px;z-index:10;color:var(--surface-solid)">─</button>'
-    +'<button class="modal-x" onclick="closeKakaoDesigner()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;z-index:10;color:var(--surface-solid)">✕</button>'
-    +'<div style="padding:18px 24px;background:var(--accent);font-size:16px;font-weight:700;color:var(--surface-solid);display:flex;align-items:center;gap:8px"><span>카카오 메세지 설계</span>'
-      +'<span style="font-size:11.5px;font-weight:600;color:rgba(255,255,255,.85)">공연 상세 링크를 읽어 76자 문구를 만들어요</span></div>'
+    +'<div class="modal" style="width:96vw;max-width:1080px;height:92vh;max-height:92vh;--mpad-y:0;--mpad-x:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:var(--surface-solid)">'
+    // [260805-22 운영자] 머리줄 = 강조색1 음영(--accent) + 잉크 흰 축 대응 · 💬 제거(「이모지 가능한 안 씀」) · 밴드가 스스로 경계라 border-bottom 제거.
+    //   [260805-23] 이 인라인 밴드가 **앱 전체 모달 머리줄의 원본**이 됐다 — 값은 그대로 CSS `.mhead` + 빌더 `_mhead`로 옮겼고
+    //   여기도 그 빌더를 쓴다(자기 자신을 포함해 61개 모달이 한 벌). 인라인으로 되돌리지 마라(check_modal_head가 차단).
+    +'<button class="modal-x" onclick="_tminHide(\'km-board\',\'카카오 메세지 설계\')" title="최소화" aria-label="최소화" style="position:absolute;top:14px;right:60px;z-index:10">─</button>'
+    +'<button class="modal-x" onclick="closeKakaoDesigner()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;z-index:10">✕</button>'
+    +_mhead('카카오 메세지 설계','공연 상세 링크를 읽어 76자 문구를 만들어요',112)
     +'<div style="flex:1;min-height:0;padding:18px 24px 20px">'
       +'<div class="lm-wrap">'
         +'<div class="lm-col">'
@@ -31206,10 +31236,10 @@ function openLinkGrab(){
   try{if(_lgState&&_lgState.escHandler)document.removeEventListener('keydown',_lgState.escHandler);}catch(_e){}
   _lgState={busy:false,res:null,err:'',lastUrl:'',escHandler:null,sel:{},meta:{},got:_lgLoadGot(),histOpen:false,qual:{},yt:{}};   // 결과는 매번 새로(공용 PC 원칙) · 받음/기록만 기기 보존
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeLinkGrab)">'
-    +'<div class="modal" style="width:96vw;max-width:720px;max-height:92vh;padding:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:var(--surface-solid)">'
+    +'<div class="modal" style="width:96vw;max-width:720px;max-height:92vh;--mpad-y:0;--mpad-x:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:var(--surface-solid)">'
     +'<button class="modal-x" onclick="_tminHide(\'lg-board\',\'링크 자료수집\')" title="최소화" aria-label="최소화" style="position:absolute;top:14px;right:60px;z-index:10">─</button>'
     +'<button class="modal-x" onclick="closeLinkGrab()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;z-index:10">✕</button>'
-    +'<div style="padding:18px 24px;border-bottom:1px solid var(--border);font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px">🔗 <span>링크 자료수집</span></div>'
+    +_mhead('링크 자료수집','링크에서 글·사진을 모아와요',112)
     +'<div id="lg-body" style="flex:1;overflow:auto;padding:20px 24px;min-width:0;min-height:0"></div>'
     +'</div></div>';
   _lgState.escHandler=function(e){if(e.key==='Escape'&&!_tminIs('lg-board'))closeLinkGrab();};   // 최소화 중 Esc = 숨은 보드 파괴 금지
@@ -31576,10 +31606,10 @@ function _qaOpen(){
   let el=document.getElementById('qa-modal');
   if(!el){el=document.createElement('div');el.id='qa-modal';document.body.appendChild(el);}
   const cats=['오류·버그','사용 불편','기능 제안','기타'];
-  let h='<div class="modal-bg show" style="z-index:9600" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,_qaClose)"><div class="modal" style="width:94vw;max-width:440px;padding:22px;position:relative">';
+  let h='<div class="modal-bg show" style="z-index:9600" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,_qaClose)"><div class="modal" style="width:94vw;max-width:440px;--mpad-y:22px;--mpad-x:22px;position:relative">';
   h+='<button class="modal-x" onclick="_qaClose()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;float:none;margin:0;z-index:10">✕</button>';
-  h+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span style="font-size:20px">📣</span><h3 style="margin:0">불편사항 접수</h3></div>';
-  h+='<div style="font-size:12.5px;color:#666;line-height:1.65;margin-bottom:16px">쓰시면서 불편했던 점·오류·바라는 점을 자유롭게 남겨주세요. 담당자가 확인해 개선할게요 🙂</div>';
+  h+=_mhead('불편사항 접수','불편했던 점·오류·바라는 점을 남겨 주세요');
+  h+='<div style="font-size:12.5px;color:#666;line-height:1.65;margin-bottom:16px">담당자가 확인해 개선할게요.</div>';
   h+='<label style="display:block;font-size:11px;color:#888;font-weight:600;margin-bottom:5px">분류</label>';
   h+='<select id="qa-cat" style="width:100%;padding:9px 12px;border:1.5px solid rgba(0,0,0,0.08);border-radius:10px;font-size:13px;margin-bottom:13px;box-sizing:border-box;font-family:inherit;background:#F8F7FC">'+cats.map(function(c){return '<option value="'+c+'">'+c+'</option>';}).join('')+'</select>';
   h+='<label style="display:block;font-size:11px;color:#888;font-weight:600;margin-bottom:5px">내용<span style="color:var(--peach-text,#D88455);margin-left:2px">*</span></label>';
@@ -31656,7 +31686,7 @@ async function openQaBoard(highlightId){
   _qaHighlightId = (highlightId||'').toString().trim() || null;
   // 메시지함에서 특정 건으로 진입하면 그 건이 필터에 가려지지 않게 필터 초기화
   if(_qaHighlightId){ _qaFilterState={status:'all',cat:'all'}; }
-  const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeAdminPanel)"><div class="modal" style="width:96vw;max-width:1000px;max-height:88vh;overflow:auto;padding:24px;position:relative"><button onclick="backToAdminMenu()" title="뒤로" aria-label="뒤로" style="position:absolute;top:14px;right:54px;float:none;margin:0;width:32px;height:32px;border-radius:50%;border:1px solid var(--glass-bd);background:var(--glass-surface);backdrop-filter:blur(8px);color:var(--accent);cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:10;box-shadow:var(--glass-shadow)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button><button class="modal-x" onclick="closeAdminPanel()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;float:none;margin:0;z-index:10">✕</button><div id="qa-board-body" style="text-align:center;padding:40px;color:#888">'+_ldHtml(16)+'로딩 중</div></div></div>';
+  const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeAdminPanel)"><div class="modal" style="width:96vw;max-width:1000px;max-height:88vh;overflow:auto;--mpad-y:24px;--mpad-x:24px;position:relative"><button onclick="backToAdminMenu()" title="뒤로" aria-label="뒤로" style="position:absolute;top:14px;right:54px;float:none;margin:0;width:32px;height:32px;border-radius:50%;border:1px solid var(--glass-bd);background:var(--glass-surface);backdrop-filter:blur(8px);color:var(--accent);cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:10;box-shadow:var(--glass-shadow)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button><button class="modal-x" onclick="closeAdminPanel()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;float:none;margin:0;z-index:10">✕</button>'+_mhead('불편사항 관리','접수된 불편사항을 확인해요',106)+'<div id="qa-board-body" style="text-align:center;padding:40px;color:#888">'+_ldHtml(16)+'로딩 중</div></div></div>';
   let el=document.getElementById('admin-panel');
   if(!el){el=document.createElement('div');el.id='admin-panel';document.body.appendChild(el);}
   el.innerHTML=html;

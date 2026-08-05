@@ -65,7 +65,12 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # 1590 → 1578 = 캘린더 일괄 완료(운영자 260804) — 완료 결과 입력창을 단건·일괄 공용 `_completeResultPrompt`로
 #               뽑으며 그 안 인라인 리터럴을 토큰화 -12(#fff·#888·#555×3·#eee×3·#f5f5f5·#666·rgba 백드롭 → --surface-solid
 #               ·--dim·--neutral-text·--border·--backdrop, 버튼 2종은 정본 `.btn` 조합으로 교체). 신규 반입 0.
-BASE_HEX_INDEX = 1578
+# 1578 → 1551 = 모달 머리줄 정본화(운영자 260805-23 「모든 모달 창에 윗부분을 저거로 … 항상 저 형식」) —
+#               61개 모달의 제각각인 머리 영역(h3 + `border-bottom:1px solid #eee` 줄 + 회색 부제 등)을
+#               정본 밴드 한 벌(`.mhead` + `_mhead()`)로 갈아치우며 그 인라인 리터럴이 동반 청산 -27
+#               (#eee×9 · #888×7 · #aaa×3 · #666×2 · #C02872 페어 2 · #fff·#bbb·#444·#f0f0f0 등).
+#               신규 반입 0 — 밴드는 var(--accent)/var(--surface-solid)/rgba(255,255,255,.85)(기존 알파스텝)뿐.
+BASE_HEX_INDEX = 1551
 BASE_HEX_SIGNAGE = 2          # signage/index.html: #000·#333
 BASE_ROOT_INDEX = 2           # L46(기본 팔레트 34토큰) + L1653(뉴트럴·z·c1~c6 27토큰) — 260803 실측 정정(구 표기 L14/32·L1322/26은 위치·개수 모두 stale)
 BASE_ROOT_SIGNAGE = 0
