@@ -21193,11 +21193,31 @@ function _progRunTxt(p){
   var r=rc||d;
   return escapeHtml(d+'일 '+r+'회')+(rc?'':'<span style="color:var(--muted)"> 추정</span>');
 }
+// ── [260808 운영자] 목록 나열 축 = 구분 묶음 → 그 안에서 진행 시작일 오름차순 ────────────────
+//   종전엔 정렬이 아예 없어 시트 행 순서를 그대로 뿌렸다(Worker handleGetSheet = 행 번호 오름차순 · 정렬 0).
+//   NO는 시트에 박힌 값(등록 시 max(NO)+1)이라 「등록한 순서」일 뿐 구분·일자와 무관 →
+//   화면에서 공연 사이에 전시가 끼어 있었다(운영자 스샷 3·4행). 이제 공연은 공연끼리, 전시는 전시끼리 모인다.
+//   구분 순서 = 콘텐츠 시트(CONTENT_TYPES) 순서 계승 — 프로그램 폼 드롭다운·홍보 신청 구분과 같은 한 출처라
+//   표기와 순서가 어긋날 수 없다(달력 패널 _PK_ORDER가 perfBadgeKind 하나로 줄 세우는 것과 같은 규칙).
+//   목록 밖 구분(시트에 없는 값)은 맨 뒤 · 폴백 목록은 홍보 신청 구분 select(§_pwData.customCat)와 같은 리터럴.
+//   같은 구분 안 = 진행 시작일 오름차순, 시작일 없는 행은 그 구분 맨 뒤(원래 순서 유지 = 안정 정렬).
+function _pgCatOrder(){ return (CONTENT_TYPES.length>0?CONTENT_TYPES:['공연','전시','예술교육','대관','기타']); }
+function _pgCatRank(p){
+  var o=_pgCatOrder(), i=o.indexOf(String(p&&p['콘텐츠구분']||'').trim());
+  return i<0?o.length:i;
+}
+function _pgSortRows(rows){
+  return (rows||[]).slice().sort(function(a,b){
+    var d=_pgCatRank(a)-_pgCatRank(b); if(d)return d;
+    var sa=excelDateInputValue(a['시작일'])||'9999-99-99', sb=excelDateInputValue(b['시작일'])||'9999-99-99';
+    return sa<sb?-1:(sa>sb?1:0);
+  });
+}
 function buildProgramListHtml(programs){
   // [260731 운영자] 상위 구분 = 기획 / 대관. 기획 = 프로그램 시트(콘텐츠구분 ≠ 대관) · 대관 = 프로그램 시트 대관 행 + 구글 캘린더 대관 일정.
   var _sheet=(programs||[]);
-  var _plan=_sheet.filter(function(p){return !_pgIsRentalRow(p);});
-  var _rent=_sheet.filter(function(p){return _pgIsRentalRow(p)&&!_pgIsSyncRow(p);}).concat(_pgRentals||[]);   // [260801] 편입 행 제외 = 구글 라이브 행과 이중 노출 방지(§_pgIsSyncRow)
+  var _plan=_pgSortRows(_sheet.filter(function(p){return !_pgIsRentalRow(p);}));
+  var _rent=_pgSortRows(_sheet.filter(function(p){return _pgIsRentalRow(p)&&!_pgIsSyncRow(p);}).concat(_pgRentals||[]));   // [260801] 편입 행 제외 = 구글 라이브 행과 이중 노출 방지(§_pgIsSyncRow)
   var _rows=(_pgKind==='기획')?_plan:((_pgKind==='대관')?_rent:_plan.concat(_rent));
   let html='<div style="display:flex;align-items:center;margin-bottom:10px;gap:8px;padding-bottom:14px;padding-right:48px;border-bottom:1px solid #eee">';
   html+='<h3 style="margin:0;flex:1;text-align:left">프로그램 관리</h3>';
