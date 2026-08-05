@@ -1059,6 +1059,120 @@ __name(handleDgmDelete, "handleDgmDelete");
 
 // === [DB통합/이관] 운영 데이터를 프로모 엑셀(통합 문서1.xlsm)의 "운영_*" 시트에 저장 (source of truth, Workbook API 읽기·쓰기 OK 검증됨). dash 파일은 501이라 dash가 push만 함. ===
 function opsSheetName(s){ return "운영_" + String(s).replace(/[()（）]/g, ""); }
+
+// === [260805 장도 위젯] 공개 조회 공용부 — /api/public/jangdo(JSON)·/api/public/jangdo.svg(이미지)가 함께 쓴다 ===
+// 왜 SVG까지 내주나: 홈페이지(yeulmaru.org) 글 저장 필터가 **iframe을 삭제**한다(260805 실측 — 저장 후 본문에 태그·도메인 문자열 0).
+//  살아남는 건 `<img>`·`<a>`·인라인 style뿐이라, 서버가 오늘 시간을 그려 이미지로 내주면 새 창 없이 글 안에서 바로 보인다.
+async function jangdoPublicRows(env, fresh) {
+  const KV_KEY = "jangdo-public:v1";
+  if (!fresh) { try { const kv = await env.ops_kv.get(KV_KEY); if (kv) return JSON.parse(kv).rows || []; } catch (e) {} }
+  const token = await getToken(env);
+  const opsName = opsSheetName("장도");
+  if (fresh) delete opsCache[opsName];
+  const { rows } = await getOpsCached(token, opsName);
+  const list = [];
+  for (const r of rows) {
+    let d = String(r["날짜"] || "").trim();
+    if (!d) continue;
+    const a = d.split("-");                                   // 시트가 2026-8-5로 와도 키를 맞춘다(제로패딩 정규화)
+    if (a.length === 3) d = a[0] + "-" + ("0" + a[1]).slice(-2) + "-" + ("0" + a[2]).slice(-2);
+    list.push({ d, t: String(r["입도가능시간"] || "").trim() });
+  }
+  try { await env.ops_kv.put(KV_KEY, JSON.stringify({ rows: list }), { expirationTtl: 3600 }); } catch (e) {}
+  return list;
+}
+__name(jangdoPublicRows, "jangdoPublicRows");
+
+// "6:00~8:32, 10:32~20:31" → [[360,512],[632,1231]] · 형식 밖 텍스트(통제 공지 등)는 null = 원문 그대로 표시
+function jangdoRanges(t) {
+  if (!t) return null;
+  const out = [];
+  for (const seg of String(t).split(/[,·]/)) {
+    const m = seg.trim().match(/^(\d{1,2})\s*:\s*(\d{2})\s*[~∼–-]\s*(\d{1,2})\s*:\s*(\d{2})$/);
+    if (!m) return null;
+    out.push([+m[1] * 60 + +m[2], +m[3] * 60 + +m[4]]);
+  }
+  return out.length ? out : null;
+}
+__name(jangdoRanges, "jangdoRanges");
+
+// 홈페이지 본문 인라인용 카드 이미지. 값 = docs/디자인기틀.md §1 팔레트 그대로(신규 색 0 · jangdo.html과 같은 매핑):
+//  #4A4DE7=--accent · #1A1A2E=--text · #888=--dim · #bbb=--muted · #fff=--surface-solid · #1A6B3C=--green · #E24B4A=--danger-btn.
+//  ⚠ `<img>`로 실리므로 SVG 내부 스크립트는 브라우저가 실행하지 않는다 = 상태 계산·조판 전부 서버(여기)에서 끝낸다.
+//  rgba()는 SVG 1.1 미지원 → fill-opacity로 표현(같은 토큰 alpha 변주 = 기틀 §3.5②).
+export function buildJangdoSvg(rows, nowKst) {
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  const fmt = (m) => Math.floor(m / 60) + ":" + ("0" + (m % 60)).slice(-2);
+  const map = {};
+  for (const r of rows) map[r.d] = r.t;
+  const addDay = (ymd, n) => {
+    const a = ymd.split("-");
+    return new Date(Date.UTC(+a[0], +a[1] - 1, +a[2] + n)).toISOString().slice(0, 10);
+  };
+  const label = (ymd) => {
+    const a = ymd.split("-");
+    const d = new Date(Date.UTC(+a[0], +a[1] - 1, +a[2]));
+    return +a[1] + "월 " + +a[2] + "일 (" + "일월화수목금토"[d.getUTCDay()] + ")";
+  };
+  const today = nowKst.ymd, tmrw = addDay(today, 1);
+  const rawT = map[today], ranges = jangdoRanges(rawT);
+
+  // 세로는 **내용만큼만** 자란다(줄 커서 y) — 시간이 없는 날 고정 높이로 그리면 카드 아래가 빈 채로 남는다.
+  const W = 760;
+  let y = 40, body = "";
+  body += '<text x="30" y="' + y + '" font-size="17" font-weight="800" fill="#1A1A2E">장도 입도 가능 시간</text>';
+  y += 26;
+  body += '<text x="30" y="' + y + '" font-size="13.5" fill="#888">' + esc(label(today)) +
+          ' <tspan fill="#4A4DE7" font-weight="700">오늘</tspan></text>';
+
+  if (ranges) {
+    y += 46;
+    body += '<text x="30" y="' + y + '" font-size="31" font-weight="800" fill="#1A1A2E">';
+    ranges.forEach((r, i) => {
+      if (i) body += '<tspan fill="#bbb" font-weight="400"> · </tspan>';
+      body += "<tspan>" + fmt(r[0]) + " ~ " + fmt(r[1]) + "</tspan>";
+    });
+    body += "</text>";
+    let dot = "#bbb", txt = "오늘 입도 시간이 종료됐어요", col = "#888";
+    for (const r of ranges) {
+      if (nowKst.min >= r[0] && nowKst.min < r[1]) { dot = col = "#1A6B3C"; txt = "지금 입도 가능 · " + fmt(r[1]) + "까지"; break; }
+      if (nowKst.min < r[0]) { dot = col = "#E24B4A"; txt = "지금은 입도 불가 · " + fmt(r[0]) + "부터 입도 가능"; break; }
+    }
+    y += 32;
+    body += '<circle cx="35" cy="' + (y - 5) + '" r="5" fill="' + dot + '"/>';
+    body += '<text x="48" y="' + y + '" font-size="14.5" font-weight="700" fill="' + col + '">' + esc(txt) + "</text>";
+  } else {
+    y += 44;
+    body += '<text x="30" y="' + y + '" font-size="' + (rawT ? 20 : 16) + '" font-weight="' + (rawT ? 700 : 600) + '" fill="' +
+            (rawT ? "#1A1A2E" : "#888") + '">' + esc(rawT || "오늘 입도 시간이 아직 등록되지 않았어요") + "</text>";
+  }
+
+  const tR = jangdoRanges(map[tmrw]);
+  if (tR) {
+    y += 33;
+    body += '<text x="30" y="' + y + '" font-size="13" fill="#888">내일 ' + esc(label(tmrw)) + "  " +
+            esc(tR.map((r) => fmt(r[0]) + " ~ " + fmt(r[1])).join(" · ")) + "</text>";
+  }
+  y += 23;
+  body += '<text x="30" y="' + y + '" font-size="11.5" fill="#bbb">위 시간 외에는 진섬다리가 물에 잠겨 출입이 불가합니다. 아래 월별 캘린더도 함께 확인해 주세요.</text>';
+
+  const H = y + 16;
+  return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + W + " " + H + '" width="' + W + '" height="' + H +
+    '" role="img" aria-label="장도 입도 가능 시간" font-family="\'Noto Sans KR\',\'Apple SD Gothic Neo\',\'Malgun Gothic\',sans-serif">' +
+    '<rect x="1" y="1" width="' + (W - 2) + '" height="' + (H - 2) + '" rx="16" fill="#fff" stroke="#000" stroke-opacity="0.09"/>' +
+    body + "</svg>";
+}
+__name(buildJangdoSvg, "buildJangdoSvg");
+
+// 방문자 기기 시간대와 무관하게 Asia/Seoul 고정(Worker 런타임 = UTC)
+function jangdoNowKst() {
+  const d = new Date(Date.now() + 9 * 3600 * 1000);
+  return {
+    ymd: d.toISOString().slice(0, 10),
+    min: d.getUTCHours() * 60 + d.getUTCMinutes()
+  };
+}
+__name(jangdoNowKst, "jangdoNowKst");
 async function ensureSheet(token, sheetName, headers){
   const { driveId, itemId } = await findFile(token);
   const ws = await graphGet(token, `/drives/${driveId}/items/${itemId}/workbook/worksheets`);
@@ -2084,6 +2198,166 @@ async function structurePromoText(env, rawText) {
 }
 __name(structurePromoText, "structurePromoText");
 
+// ── 콘텐츠 제작 ▸ 카카오 76자 문구 제안 (260805) ───────────────────────────────
+// 프로그램 상세 링크(프로그램 시트 K열 URL) → ①페이지 본문 텍스트 ②포스터·상세페이지 이미지 OCR → ③LLM이 후보 N개.
+// 왜 페이지 텍스트 + OCR 둘 다인가(260805 실측): 예울마루 상세페이지는 일시·장소·티켓가격·할인정보를 HTML 표로
+// 갖고 있지만 **출연자·프로그램·카피 문구는 이미지 안에만** 있다(브런치 콘서트 실측 = 페이지 텍스트에 연주자 이름 0).
+// 사실은 페이지 텍스트에서, 홍보 표현은 OCR에서 나온다 → 한쪽만 쓰면 문구가 비거나 틀린다.
+const KKO_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
+const KKO_MAX_IMG = 2;           // OCR에 태울 이미지 수 상한 = 포스터 + 상세페이지(실측상 이 2장이 전부)
+const KKO_MAX_IMG_BYTES = 6e6;   // 이미지 1장 상한 — Gemini inline_data 한도·Worker 메모리 보호(실측 포스터 0.2MB·상세 2.1MB)
+
+// 링크 위생 — 서버가 대신 여는 요청이라 사설 대역은 원천 차단(SSRF). 링크는 시트에서 오지만 사람이 넣는 값이다.
+function kkoSafeUrl(raw) {
+  let u;
+  try { u = new URL(String(raw || "").trim()); } catch (e) { throw new Error("링크 형식이 올바르지 않아요"); }
+  if (u.protocol !== "http:" && u.protocol !== "https:") throw new Error("http(s) 링크만 읽을 수 있어요");
+  const h = u.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (h === "localhost" || h.endsWith(".localhost") || h === "0.0.0.0" || h === "::1" ||
+      /^127\./.test(h) || /^10\./.test(h) || /^192\.168\./.test(h) ||
+      /^172\.(1[6-9]|2\d|3[01])\./.test(h) || /^169\.254\./.test(h) || /^(fc|fd|fe80)/.test(h)) {
+    throw new Error("내부 주소는 열 수 없어요");
+  }
+  return u;
+}
+__name(kkoSafeUrl, "kkoSafeUrl");
+
+// HTML → 사람이 읽는 줄들. (&amp;는 맨 마지막에 — 먼저 풀면 `&amp;lt;`가 이중 디코드된다)
+function kkoStripTags(html) {
+  let t = String(html || "")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<!--[\s\S]*?-->/g, " ")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|li|dd|dt|tr|h[1-6]|section|figure)>/gi, "\n")
+    .replace(/<[^>]+>/g, " ");
+  t = t.replace(/&nbsp;/g, " ").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"').replace(/&#0?39;|&apos;/g, "'").replace(/&amp;/g, "&");
+  return t.split("\n").map((l) => l.replace(/[ \t ]+/g, " ").trim()).filter(Boolean).join("\n");
+}
+__name(kkoStripTags, "kkoStripTags");
+
+// 상세 링크 열기 → 본문 텍스트 + OCR 대상 이미지.
+// ⚠ 이미지 판별 = 「<article> 안 + /inday_fileinfo/」 — 260805 예울마루 공연·전시 페이지 실측으로 확정한 규칙이다.
+//    og:image는 **전 페이지 공통 기본값**(사이트 대표 이미지)이라 포스터가 아니고, /src/img/ 는 로고·스와이프 등 크롬,
+//    헤더 네비의 대관 썸네일도 /inday_fileinfo/ 라 <article> 경계가 있어야 걸러진다. 두 조건을 함께 걸면 포스터+상세 2장만 남는다.
+//    사이트 구조가 바뀌어 0장이 되면 본문 안 이미지 → og:image 순으로 물러서고, 그래도 없으면 페이지 텍스트만으로 진행한다.
+async function kkoFetchPage(rawUrl) {
+  const u = kkoSafeUrl(rawUrl);
+  const resp = await fetch(u.toString(), {
+    headers: { "User-Agent": KKO_UA, "Accept": "text/html,application/xhtml+xml", "Accept-Language": "ko-KR,ko;q=0.9" },
+    redirect: "follow", cf: { cacheTtl: 300, cacheEverything: true }
+  });
+  // UA 없이 부르면 예울마루가 406을 준다(260805 실측) — 위 User-Agent는 장식이 아니다.
+  if (!resp.ok) throw new Error("링크를 열 수 없어요 (HTTP " + resp.status + ")");
+  const html = await resp.text();
+  const am = html.match(/<article[\s\S]*?<\/article>/i);
+  const seg = am ? am[0] : html;
+  const imgs = [];
+  const push = (src) => {
+    let abs;
+    try { abs = new URL(src, u).toString(); } catch (e) { return; }
+    if (!/^https?:/i.test(abs) || imgs.indexOf(abs) >= 0) return;
+    imgs.push(abs);
+  };
+  const re = /<img[^>]*\ssrc=["']([^"']+)["']/gi;
+  let m;
+  while ((m = re.exec(seg))) { if (/\/inday_fileinfo\//i.test(m[1])) push(m[1]); }
+  if (!imgs.length) { re.lastIndex = 0; while ((m = re.exec(seg))) { if (!/\.(svg|gif)(\?|$)/i.test(m[1])) push(m[1]); } }
+  if (!imgs.length) {
+    const og = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i);
+    if (og) push(og[1]);
+  }
+  return { url: u.toString(), text: kkoStripTags(seg).slice(0, 6000), images: imgs.slice(0, KKO_MAX_IMG) };
+}
+__name(kkoFetchPage, "kkoFetchPage");
+
+// ArrayBuffer → base64 (청크 — 통째로 apply 하면 큰 이미지에서 스택이 터진다)
+function kkoB64(buf) {
+  const bytes = new Uint8Array(buf);
+  let s = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+__name(kkoB64, "kkoB64");
+
+// 이미지들 OCR — 한 장 실패는 건너뛴다(나머지 장·페이지 텍스트로 계속 진행 = 전부 실패해야 빈 문자열).
+async function kkoOcrImages(env, urls) {
+  const out = [];
+  for (const iu of urls) {
+    try {
+      const r = await fetch(iu, { headers: { "User-Agent": KKO_UA, "Referer": iu }, cf: { cacheTtl: 300, cacheEverything: true } });
+      if (!r.ok) continue;
+      const mime = String(r.headers.get("content-type") || "image/jpeg").split(";")[0].trim();
+      if (!/^image\//i.test(mime)) continue;
+      const buf = await r.arrayBuffer();
+      if (!buf.byteLength || buf.byteLength > KKO_MAX_IMG_BYTES) continue;
+      const ocr = await runExternalOcr(env, kkoB64(buf), mime);
+      const t = String((ocr && ocr.text) || "").trim();
+      if (t) out.push(t);
+    } catch (e) { console.error("[content/kakao] ocr", iu, String((e && e.message) || e)); }
+  }
+  return out.join("\n\n");
+}
+__name(kkoOcrImages, "kkoOcrImages");
+
+// b = {url, program, title, date, extra, count}. 반환 = {items:[{tone,text,len}], ocrText, pageText, images, source, over}
+async function suggestKakaoLines(env, b) {
+  const limit = 76;   // 앱 입력칸 maxlength와 같은 값 — 길이는 textarea와 같게 UTF-16 .length로 센다(이모지 = 2)
+  const count = Math.min(8, Math.max(1, parseInt(b.count, 10) || 5));
+  const src = await kkoFetchPage(b.url);
+  const ocrText = await kkoOcrImages(env, src.images);
+  if (!src.text && !ocrText) throw new Error("링크에서 읽어낸 내용이 없어요 (페이지 구조 확인 필요)");
+  const facts = [
+    b.program ? "프로그램: " + String(b.program).slice(0, 200) : "",
+    b.title ? "콘텐츠 제목: " + String(b.title).slice(0, 200) : "",
+    b.date ? "발송 예정일: " + String(b.date).slice(0, 40) : "",
+    b.extra ? "담당자 요청: " + String(b.extra).slice(0, 400) : ""
+  ].filter(Boolean).join("\n");
+
+  const system = "당신은 공연·전시 홍보 문구를 쓰는 한국어 카피라이터입니다. 카카오톡 채널 메시지 본문(글자수 제한이 엄격한 자리)을 씁니다. " +
+    "주어진 자료에 실제로 있는 사실만 쓰고, 없는 정보(출연자·가격·특전·수상 이력 등)는 절대 지어내지 않습니다.";
+  // 후보를 count+2개 요청하는 이유 = 길이 초과분을 **자르지 않고 버리기** 위한 여유분(잘린 문장은 문구가 아니다).
+  const ask =
+    "아래 자료는 공연·전시 상세페이지에서 가져온 것입니다(① 페이지 본문 텍스트 ② 포스터·상세 이미지 OCR 원문).\n" +
+    "이 자료만 근거로, 카카오톡으로 발송할 홍보 문구 후보 " + (count + 2) + "개를 만들어 주세요.\n\n" +
+    "[규칙]\n" +
+    "1. 각 문구는 공백·문장부호 포함 " + limit + "자 이하여야 합니다. 넘으면 발송이 안 됩니다. 30자 이상으로 쓰세요.\n" +
+    "2. 후보끼리 톤이 겹치지 않게 만드세요 — 정보 전달형 / 감성형 / 초대·권유형 / 궁금증 유발형 / 예매·마감 강조형 등.\n" +
+    "3. 자료에 있는 사실(공연명·일시·장소·출연·가격)만 씁니다. 확인 안 되는 건 넣지 마세요.\n" +
+    "4. '최고의·완벽한·유일한' 같은 과장 수식과 같은 뜻의 반복(예: 한 문장에 '음악적'을 두 번)은 쓰지 마세요.\n" +
+    "5. 이모지는 넣더라도 0~1개까지. 해시태그·URL은 넣지 마세요(발송 시 따로 붙습니다).\n" +
+    "6. 출력은 JSON 배열만. 설명·머리말·코드블록 없이.\n" +
+    '   [{"tone":"정보형","text":"문구"}, …]\n\n' +
+    (facts ? "# 신청 정보\n" + facts + "\n\n" : "") +
+    "# 페이지 본문\n" + (src.text || "(없음)") + "\n\n" +
+    "# 포스터·상세페이지 OCR 원문\n" + (ocrText || "(읽은 텍스트 없음)");
+
+  let txt = await llmText(env, system, ask, 1600);
+  txt = txt.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+  let arr = [];
+  try { arr = JSON.parse(txt); } catch (e) {
+    const m = txt.match(/\[[\s\S]*\]/);
+    if (m) { try { arr = JSON.parse(m[0]); } catch (e2) {} }
+  }
+  if (!Array.isArray(arr)) arr = [];
+  const seen = new Set();
+  const items = [];
+  let over = 0;
+  for (const it of arr) {
+    const text = String((it && typeof it === "object" ? it.text : it) || "").replace(/\s+/g, " ").trim();
+    if (!text) continue;
+    if (text.length > limit) { over++; continue; }   // 자르지 않고 버린다 — 잘린 문장은 문구가 아니다
+    const key = text.replace(/[\s.,!?~·…'"]/g, "");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    items.push({ tone: String((it && it.tone) || "").trim().slice(0, 20), text, len: text.length });
+    if (items.length >= count) break;
+  }
+  return { items, over, limit, ocrText, pageText: src.text, images: src.images, source: src.url };
+}
+__name(suggestKakaoLines, "suggestKakaoLines");
+
 // === 블로그 초안 GitHub 연동 (서버 시크릿 PAT) ===
 // 브라우저에 GitHub 토큰을 두지 않기 위해 dispatch/폴링을 Worker가 대행한다.
 // PAT는 env.GITHUB_PAT(대체: GH_BLOG_PAT / GITHUB_TOKEN) — Cloudflare 시크릿. repo/branch는 env로 오버라이드 가능.
@@ -2263,30 +2537,28 @@ var index_default = {
       //  — 홈페이지 방문 트래픽이 Graph를 안 때린다. 시트 갱신 반영 = 최대 ~70분(조수 시간표 = 월 단위 선입력이라 충분) · 즉시 = ?fresh=1.
       if (url.pathname === "/api/public/jangdo" && request.method === "GET") {
         try {
-          const KV_KEY = "jangdo-public:v1";
-          const fresh = url.searchParams.get("fresh") === "1";
-          let out = null;
-          if (!fresh) { try { const kv = await env.ops_kv.get(KV_KEY); if (kv) out = JSON.parse(kv); } catch (e) {} }
-          if (!out) {
-            const token = await getToken(env);
-            const opsName = opsSheetName("장도");
-            if (fresh) delete opsCache[opsName];
-            const { rows } = await getOpsCached(token, opsName);
-            const list = [];
-            for (const r of rows) {
-              const d = String(r["날짜"] || "").trim();
-              if (d) list.push({ d, t: String(r["입도가능시간"] || "").trim() });
-            }
-            out = { rows: list };
-            try { await env.ops_kv.put(KV_KEY, JSON.stringify(out), { expirationTtl: 3600 }); } catch (e) {}
-          }
-          return new Response(JSON.stringify({ ok: true, count: out.rows.length, rows: out.rows }), {
+          const list = await jangdoPublicRows(env, url.searchParams.get("fresh") === "1");
+          return new Response(JSON.stringify({ ok: true, count: list.length, rows: list }), {
             status: 200,
             headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=600", ...corsHeaders(env) }
           });
         } catch (e) {
           console.error("[public/jangdo]", e);
           return json({ ok: false, error: "unavailable" }, env, 503);
+        }
+      }
+
+      // 같은 데이터의 **이미지 판**(홈페이지 본문 <img> 임베드용 — iframe이 저장 필터에 지워지는 대응).
+      // max-age 120 = 「지금 입도 가능」 상태 문구가 최대 2분까지만 낡는다(데이터 자체는 KV 1시간 축 그대로).
+      // 실패해도 이미지 자리는 비워야 하니 502가 아니라 '안내 문구를 그린 SVG'를 200으로 내준다(깨진 이미지 아이콘 방지).
+      if (url.pathname === "/api/public/jangdo.svg" && request.method === "GET") {
+        const svgHead = { "Content-Type": "image/svg+xml; charset=utf-8", "Cache-Control": "public, max-age=120", ...corsHeaders(env) };
+        try {
+          const list = await jangdoPublicRows(env, url.searchParams.get("fresh") === "1");
+          return new Response(buildJangdoSvg(list, jangdoNowKst()), { status: 200, headers: svgHead });
+        } catch (e) {
+          console.error("[public/jangdo.svg]", e);
+          return new Response(buildJangdoSvg([], jangdoNowKst()), { status: 200, headers: svgHead });
         }
       }
 
@@ -2398,6 +2670,21 @@ var index_default = {
           return json({ info }, env);
         } catch (e) {
           console.error("[content/structure]", e);
+          return json({ error: String((e && e.message) || e) }, env, 502);
+        }
+      }
+
+      // === ④ 카카오 76자 문구 제안 — 상세 링크 → 페이지 텍스트 + 포스터 OCR → LLM이 후보 N개 ===
+      // 인증 = 위 전역 게이트(X-App-Password). OCR·LLM 둘 다 유료 호출이라 공개 금지.
+      if (url.pathname === "/api/content/kakao" && request.method === "POST") {
+        if (!env.GEMINI_API_KEY && !env.ANTHROPIC_API_KEY && !env.ANTHROPIC_AUTH_TOKEN) return json({ error: "no_api_key", note: "GEMINI_API_KEY 또는 ANTHROPIC_* 미설정" }, env, 503);
+        let bb = {};
+        try { bb = await request.json(); } catch (e) {}
+        if (!String(bb.url || "").trim()) return json({ error: "공연 상세 링크가 필요해요" }, env, 400);
+        try {
+          return json(await suggestKakaoLines(env, bb), env);
+        } catch (e) {
+          console.error("[content/kakao]", e);
           return json({ error: String((e && e.message) || e) }, env, 502);
         }
       }
@@ -2606,6 +2893,88 @@ var index_default = {
           for (const ext of ["docx", "xlsx", "pptx"]) {
             try {
               const gr = await fetch(`https://api.github.com/repos/${cfg.repo}/contents/drafts/office/${id}.out.${ext}?ref=${encodeURIComponent(cfg.branch)}&t=${Date.now()}`, {
+                headers: { ...ghHdr, "Accept": "application/vnd.github.raw" }
+              });
+              if (gr.status === 404) continue;
+              if (!gr.ok) return json({ error: "github " + gr.status }, env, 502);
+              return new Response(gr.body, { headers: { "Content-Type": "application/octet-stream", ...corsHeaders(env) } });
+            } catch (e) {
+              return json({ error: String((e && e.message) || e) }, env, 502);
+            }
+          }
+          return json({ error: "not_ready" }, env, 404);
+        }
+      }
+
+      // === 콘텐츠 제작 ▸ 용량 줄이기 (260805 운영자) — 오피스문서 편집(/api/office/*)의 **부분** 미러 ===
+      // ⚠ 이 경로로 오는 건 **.pdf 와 구형 .hwp 둘뿐**이다. 나머지 7종(xlsx/xlsm/xltx/docx/dotx/pptx/potx/hwpx)은
+      //    전부 ZIP 컨테이너라 브라우저가 직접 줄이고 **여기 오지 않는다**(서버 무경유 = 파일 무반출 · 8MB 상한 무관).
+      //    「용량 줄이기인데 정작 큰 파일이 8MB 상한에 막힌다」는 모순을 그렇게 피한다 — 러너 전량 안이 기각된 이유.
+      // ⚠ office 와 갈리는 지점: **claude -p 를 안 쓴다.** 압축은 결정적 처리라 판단할 게 없어 에이전트가 불필요하고,
+      //    그래서 계정 체인·쿼터를 전혀 안 먹는다(slim.yml 에 OAuth 시크릿 자체가 없다).
+      // 흐름은 동일(신설 0): upload(원본 커밋) → dispatch(slim) → [Actions 압축 후 커밋] → /api/blog/draft 폴링(공용) → file.
+      if (url.pathname.startsWith("/api/slim/")) {
+        const cfg = ghBlogCfg(env);
+        if (!cfg.pat) return json({ error: "no_github_pat", note: "Worker에 GITHUB_PAT 시크릿 미설정" }, env, 503);
+        const ghHdr = { "Authorization": "Bearer " + cfg.pat, "Accept": "application/vnd.github+json", "User-Agent": "yeulmaru-promo-worker" };
+        const slmId = (v) => String(v || "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 64);
+        // 2종 화이트리스트 — 미일치 = 400 거절(office 의 3종 화이트리스트와 같은 문법, 경로 조작 차단 동일).
+        const slmExt = (n) => { const m = String(n || "").match(/\.(pdf|hwp)$/i); return m ? m[1].toLowerCase() : null; };
+        const slmLevel = (v) => (["screen", "std", "hq"].includes(String(v || "")) ? String(v) : "std");
+
+        if (url.pathname === "/api/slim/upload" && request.method === "POST") {
+          let b = {};
+          try { b = await request.json(); } catch (e) {}
+          const id = slmId(b.id);
+          const ext = slmExt(b.name);
+          const b64 = String(b.b64 || "").replace(/\s/g, "");
+          if (!id) return json({ error: "id required" }, env, 400);
+          if (!ext) return json({ error: "PDF·구형 한글(.pdf·.hwp)만 서버로 보내요 — 나머지는 브라우저가 직접 줄여요" }, env, 400);
+          if (!b64) return json({ error: "빈 파일이에요" }, env, 400);
+          if (b64.length > 12e6) return json({ error: "문서가 너무 커요(8MB 이하)" }, env, 413);
+          const path = `drafts/slim/${id}.in.${ext}`;
+          try {
+            const gr = await fetch(`https://api.github.com/repos/${cfg.repo}/contents/${path}`, {
+              method: "PUT",
+              headers: { ...ghHdr, "Content-Type": "application/json" },
+              body: JSON.stringify({ message: `chore(slim): ${id} 원본 [skip ci]`, content: b64, branch: cfg.branch })
+            });
+            if (!gr.ok) return json({ error: gr.status === 401 || gr.status === 403 ? "github_denied" : "upload_failed", status: gr.status, note: (await gr.text()).slice(0, 200) }, env, 502);
+            return json({ ok: true, id, path }, env);
+          } catch (e) {
+            return json({ error: String((e && e.message) || e) }, env, 502);
+          }
+        }
+
+        // 트리거 — 전용 event_type(slim)이라 블로그·한글문서·오피스문서 큐에 안 막힌다.
+        if (url.pathname === "/api/slim/dispatch" && request.method === "POST") {
+          let b = {};
+          try { b = await request.json(); } catch (e) {}
+          const id = slmId(b.id);
+          const ext = slmExt(b.name);
+          if (!id) return json({ error: "id required" }, env, 400);
+          if (!ext) return json({ error: "PDF·구형 한글(.pdf·.hwp)만 서버에서 줄여요" }, env, 400);
+          const inner = { id, name: String(b.name || "문서").slice(0, 160), ext, level: slmLevel(b.level) };
+          try {
+            const gr = await fetch(`https://api.github.com/repos/${cfg.repo}/dispatches`, {
+              method: "POST",
+              headers: { ...ghHdr, "Content-Type": "application/json" },
+              body: JSON.stringify({ event_type: "slim", client_payload: { d: inner } })
+            });
+            if (gr.ok) return json({ ok: true, id }, env);
+            return json({ error: gr.status === 401 || gr.status === 403 ? "github_denied" : "dispatch_failed", status: gr.status, note: (await gr.text()).slice(0, 200) }, env, 502);
+          } catch (e) {
+            return json({ error: String((e && e.message) || e) }, env, 502);
+          }
+        }
+
+        // 결과 바이트 — 1MB 넘는 파일도 오게 raw 미디어타입(office·hwp 와 동일). 확장자는 원본과 같으므로 2종 순회.
+        if (url.pathname === "/api/slim/file" && request.method === "GET") {
+          const id = slmId(url.searchParams.get("id"));
+          if (!id) return json({ error: "id required" }, env, 400);
+          for (const ext of ["pdf", "hwp"]) {
+            try {
+              const gr = await fetch(`https://api.github.com/repos/${cfg.repo}/contents/drafts/slim/${id}.out.${ext}?ref=${encodeURIComponent(cfg.branch)}&t=${Date.now()}`, {
                 headers: { ...ghHdr, "Accept": "application/vnd.github.raw" }
               });
               if (gr.status === 404) continue;
