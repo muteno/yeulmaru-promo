@@ -7283,7 +7283,26 @@ function _bizEduOpsIdx(year){
 //   ⚠ [260805 후속] 구 ②의 나머지 절반 「프로그램 폴백이 `콘텐츠구분==='예술교육'`을 제외한다」는 **해소됐다**
 //     (_dailyMasters 폴백에서 교육 제외를 풀었다 · ~L10700) — 이제 판매중 교육은 앱에서 바로 넣을 수 있다.
 //     남은 건 「이미 끝난 것」뿐이라 이 표는 화요살롱 한 줄로 계속 유효하다. 값의 출처는 툴팁이 밝힌다(집계 위장 0).
-var _BIZ_EDU_SOLD={'2026화요살롱이낙준6월':160};   // 키 = _uName 정규화(`_BIZ_EX_COL` 예외표와 같은 문법)
+// ⚠ [260805 운영자 실측 「계속 점선으로 예술교육에 있는 걸 표현하네」] 구판은 **정규화 전체 이름 정확 일치**
+//   (`_BIZ_EDU_SOLD[_uName(이름)]`) 하나뿐이라, 라이브 프로그램 시트의 표기가 이 표의 키와 한 글자라도 다르면
+//   폴백이 통째로 불발했다 → 값 없음 = **파선 게이지**(운영자 화면 그대로). 전체 이름은 사람이 자유롭게 적는 칸이라
+//   정확 일치로 걸면 언제든 다시 어긋난다.
+//   → 규칙표로 바꾼다: **부분 문자열(key) + 종료 연·월**로 건다. 세 조건이 다 맞을 때만 발화 = 오발 0
+//     (2026년 예술교육은 거울 실측 1건뿐 · 프로그램 시트 30행 중 예술교육 1).
+//   ⚠ 계약은 그대로 — **실값이 이긴다**. 운영대장(`_bizEduOpsIdx`)·판매 축(`_bizSalesIdx`) 중 하나라도 값이 있으면
+//     이 표는 쳐다보지도 않고, 값이 들어오는 순간 자동 은퇴한다(그 순서가 아래 attach에 있다).
+var _BIZ_EDU_SOLD=[{key:'화요살롱',y:2026,m:6,v:160}];   // key = _uName 정규화 **부분** 일치 · m = 종료 월(1~12)
+function _bizEduFallback(name,end){
+  if(!end||!end.getFullYear)return null;
+  var k=_uName(name||''); if(!k)return null;
+  var hit=null;
+  _BIZ_EDU_SOLD.some(function(x){
+    if(k.indexOf(_uName(x.key))<0)return false;
+    if(end.getFullYear()!==x.y||(end.getMonth()+1)!==x.m)return false;
+    hit=x; return true;
+  });
+  return hit?hit.v:null;
+}
 // [260805 운영자 「종료 안된거는(판매중일경우는, 공연과 같이) … 동시에 팔릴경우는 누적그래프로 할거임」]
 //   판매중 교육의 **월별 누계** 색인 — 정규화 이름 → [[월(0~11), 그 달까지의 누계], …].
 //   원천 = 공연이 쓰는 그 시트 그대로(`운영_일일입력` = `_salesState.daily` · 합계좌석 = 그 날짜까지의 누계)
@@ -7348,7 +7367,7 @@ function _bizEduMonthRows(year){
     var k=_uName(g.name||'');
     var o=opsIdx?opsIdx[k]:null, p=(sx&&sx[k])?sx[k]:null;
     var v=(o&&o.paid>0)?o.paid:((p&&isFinite(p.seats)&&p.seats>0)?p.seats:null);
-    if(v==null&&_BIZ_EDU_SOLD[k]>0){ v=_BIZ_EDU_SOLD[k]; g._vsrc='운영자 확정'; }   // 실값 둘 다 없을 때만 = 폴백(위 표 주석)
+    if(v==null){ var fb=_bizEduFallback(g.name,g.end); if(fb>0){ v=fb; g._vsrc='운영자 확정'; } }   // 실값 둘 다 없을 때만 = 폴백(위 규칙표 주석 · 부분 일치 + 종료 연·월)
     if(v!=null){ g.paid=v; g._sold=v; }
     if(o&&o.genre)g._g2=o.genre;
     if(p&&isFinite(p.money)&&p.money>0)g._rev=p.money;
@@ -7457,10 +7476,26 @@ function _bizBreakShapes(brk,spans,ink,fill,cyc){
 var _ED_YMAX=400;   // [260805 운영자 「예술교육은 단위를 일단 100부터 400까지로」] 교육 값 축 상한 — 눈금 100·200·300·400
 function _bizYearDays(y){ return Math.round((new Date(y+1,0,1)-new Date(y,0,1))/86400000); }
 function _bizXDay(d,y){ if(!d)return null; var t=(d-new Date(y,0,1))/86400000+1; return Math.max(0.5,Math.min(_bizYearDays(y)+0.5,t)); }   // 연 밖(이월 전시 등) = 축 가장자리 클램프
-function _bizMonthAxis(y,thin){   // thin = 반쪽 카드처럼 좁은 폭 — 짝수달 라벨만 생략(눈금 12개는 유지 = 격자 감각 보존)
-  var tv=[],tt=[],m;
-  for(m=0;m<12;m++){ tv.push(_bizXDay(new Date(y,m,1),y)); tt.push((thin&&m%2===1)?'':((m+1)+'월')); }
-  return {x0:-3,x1:_bizYearDays(y)+4,tickvals:tv,ticktext:tt};
+// [260805 운영자 「6월인데 7월 한가운데에 있으니까 7월에 진행했다는 게 상식적으로 더 가깝게 표현되어있어. 6월 30일인데」]
+//   ⚠ 구판은 라벨을 **달 첫날에** 세웠다 — 라벨 글자는 그 눈금을 **가운데로** 놓고 그려지므로 「7월」 글자가
+//   6월 말~7월 초에 **걸쳐** 앉는다. 그래서 6/30 막대(1년 중 181일째 · 7/1 = 182일째)가 「7월」 글자 바로 위에 서서
+//   7월 사업으로 읽혔다(운영자 실측 화면 그대로). 라벨만 가운데로 옮겨도 6/30은 6월 중앙(≈166)과 7월 중앙(≈197)의
+//   **거의 한가운데**라 여전히 안 갈린다 → 라벨 위치와 **칸 경계**를 같이 준다.
+//   ① 라벨 = 그 달의 **가운데**(15일 자리) · ② `sep` = 달 첫날마다 세로 경계선(도형) → 막대가 **어느 칸 안**인지로 읽힌다.
+//   색 = `--border`(y축 격자와 같은 토큰) · 새 색 0. 세 카드(공연·전시·교육)가 같은 함수를 쓰므로 축 문법이 갈리지 않는다.
+function _bizMonthAxis(y,thin){   // thin = 반쪽 카드처럼 좁은 폭 — 짝수달 라벨만 생략(경계선 12개는 유지 = 격자 감각 보존)
+  var tv=[],tt=[],sep=[],m;
+  for(m=0;m<12;m++){
+    tv.push(_bizXDay(new Date(y,m,15),y));                       // 라벨 = 달 가운데
+    tt.push((thin&&m%2===1)?'':((m+1)+'월'));
+    if(m>0)sep.push(_bizXDay(new Date(y,m,1),y));                // 경계 = 달 첫날(1월 1일은 축 왼쪽 끝이라 생략)
+  }
+  return {x0:-3,x1:_bizYearDays(y)+4,tickvals:tv,ticktext:tt,sep:sep};
+}
+// 달 경계선 도형 — 차트마다 `lay.shapes`에 붙인다(축 격자와 같은 잉크 · layer below = 막대·선 아래).
+function _bizMonthSep(ax){
+  return (ax.sep||[]).map(function(x){ return {type:'line',xref:'x',yref:'paper',layer:'below',
+    x0:x,x1:x,y0:0,y1:1,line:{color:_yrCss('--border'),width:1}}; });
 }
 // 진행 완료 │ 진행·예정 음영 — 색 = 기존 토큰 알파 변주만(--past-bg · 분야색 0.09 · 기틀 §3.5②).
 // [260805 운영자 「진행하고 예정에 현재 진행중인게 포함이 안되있는데 그 점도 확인좀」·「진행 예정인 부분 포함하게」]
@@ -7597,7 +7632,7 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
     :{title:{text:unit,font:{size:10.5,color:dim}},tickfont:{size:10.5,color:dim},gridcolor:grid,zeroline:false,fixedrange:true,rangemode:'tozero'};
   var lay={height:hgt,margin:{l:ED?38:52,r:10,t:18,b:34},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',showlegend:false,xaxis:xAx,yaxis:yAx};
   var zone=_bizYearZones(Y,ax.x0,ax.x1,dim,_bizZoneCut(rows,Y,ax.x0,ax.x1),ED?'--green':'--peach-text');   // [260805] 경계 = 진행중 포함 · 교육 음영 = 그린(운영자)
-  lay.shapes=zone.shapes; lay.annotations=zone.notes;
+  lay.shapes=_bizMonthSep(ax).concat(zone.shapes); lay.annotations=zone.notes;   // [260805] 달 경계선 = 음영보다 먼저(둘 다 below · 경계가 음영 위에 얹히지 않게)
   var note=(div.parentNode&&div.parentNode.querySelector)?div.parentNode.querySelector('[data-bizbrknote]'):null;
   if(brk){
     // 눈금 라벨 자릿수 = step의 소수 자리에 맞춘다(구판은 0.15 눈금에 "0.2"를 찍어 눈금선과 글자가 어긋났다 — 평의회3)
@@ -7758,7 +7793,7 @@ function _bizDrawExhibMonthly(divId,list,hgt){
   //   [260805 운영자 「3927이면 4천이 맥시멈이 아니라 5천까지」]가 세운 규약 계승 — 이제 재는 값이 월별이라 자릿수만 내려온다.
   var yTop=_bizNiceStep(maxV*1.08), data=[],notes=[],shapes=[];
   var zone=_bizYearZones(Y,ax.x0,ax.x1,dim,_bizZoneCut(rows,Y,ax.x0,ax.x1),'--peach-text');   // [260805] 경계 = 진행중 포함 · 강조색2(peach) = 운영자
-  shapes=zone.shapes; notes=zone.notes;
+  shapes=_bizMonthSep(ax).concat(zone.shapes); notes=zone.notes;   // [260805] 달 경계선 = 음영보다 먼저(둘 다 below)
   var colOf=function(g){ return g._col||pc; };
   var _done=function(b){ return !b.plan&&b.g._st!=='active'; };
   var labs=[];   // 값 라벨 후보 — 전 전시를 모아 두고 **큰 값 우선**으로 배치한다(아래 겹침 판정)
