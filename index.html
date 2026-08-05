@@ -7311,13 +7311,35 @@ function _bizZoneCut(rows,y,x0,x1){
   if(live==null)live=(t<new Date(y,0,1))?x0:((t>new Date(y,11,31))?x1:_bizXDay(t,y));   // 진행중·예정이 하나도 없으면 종전대로 오늘 경계
   return Math.max(x0,Math.min(x1,live));
 }
+// [260808 운영자 「진행 예정이랑 아닌거 구분 좀 더 확실하게 · 예술교육 수준으로는 도드라져야할듯」]
+//   구판 = 분야색이 뭐든 **alpha 0.09 고정** → 음영 세기가 색 밝기에 휘둘렸다. 흰 바탕과의 luma 차 실측 =
+//   어두운 `--green`(교육) 168.6 · 밝은 `--peach-text`(공연·전시) 108.5 → 같은 0.09라도 깔리는 세기가 **1 : 0.64**.
+//   그래서 교육 카드만 경계가 보이고 공연·전시는 두 구획이 붙어 보였다(260808 스냅샷 실측 = 운영자 지적 그대로).
+//   ① 세기 기준 = **교육(그린 0.09)** — alpha를 톤 밝기로 역산해 어느 분야든 같은 ΔY로 깔린다(peach ≈ 0.14).
+//      교육은 계수 1.0 = **종전 그대로** · 색은 손대지 않는다 = 같은 토큰 alpha 변주뿐(기틀 §3.5②) · 새 색 0.
+//   ② 라벨 = 완료 쪽 회색(`--dim`) │ 예정 쪽 **분야색 볼드** — 음영이 옅게 보이는 화면(저휘도 패널·햇빛)에서도
+//      「어느 쪽이 앞으로 올 일인가」가 글자 색만으로 갈린다. 잉크 = 그 카드 색 = 전시 피크 라벨과 같은 문법.
+//   ⚠ 막대 농도(상태별 opacity·테두리)는 260806 2차 운영자 판정으로 폐지된 축 — 여기서 되살리지 마라.
+//      상태를 말하는 것은 **이 음영 구획**이고, 이 함수가 그 유일한 자리다.
+var _BIZ_ZONE_A=0.09, _BIZ_ZONE_AMAX=0.22;   // 기준 alpha(그린) · 상한(밝은 톤이라도 막대 잉크를 먹지 않는 선)
+function _bizLumaGap(hex){   // 톤 hex → 흰 바탕과의 luma 차(0~255) · 같은 alpha라도 밝은 색은 옅게 깔린다 = 그 편차를 없애는 자
+  var m=String(hex||'').trim().replace('#','');
+  if(m.length===3)m=m[0]+m[0]+m[1]+m[1]+m[2]+m[2];
+  var r=parseInt(m.slice(0,2),16),g=parseInt(m.slice(2,4),16),b=parseInt(m.slice(4,6),16);
+  return isNaN(r)?null:(255-(0.2126*r+0.7152*g+0.0722*b));
+}
+function _bizZoneAlpha(hex){
+  var ref=_bizLumaGap(_yrCss('--green')), me=_bizLumaGap(hex);   // 기준 = 토큰 실해석값(리터럴 사본 금지 = 값 SSOT는 :root)
+  if(!ref||!me)return _BIZ_ZONE_A;
+  return Math.round(Math.max(_BIZ_ZONE_A,Math.min(_BIZ_ZONE_AMAX,_BIZ_ZONE_A*ref/me))*1000)/1000;   // 하한 = 종전 값(어떤 톤도 구판보다 옅어지지 않는다)
+}
 function _bizYearZones(y,x0,x1,dim,cut,tone){
   var tx=(cut==null)?_bizZoneCut(null,y,x0,x1):cut;
-  var sh=[],an=[];
+  var sh=[],an=[], th=_yrCss(tone||'--peach-text');
   var box=function(a,b,f){ sh.push({type:'rect',xref:'x',yref:'paper',layer:'below',x0:a,x1:b,y0:0,y1:1,fillcolor:f,line:{width:0}}); };
-  var note=function(a,b,txt){ if(b-a<30)return; an.push({xref:'x',x:(a+b)/2,xanchor:'center',yref:'paper',y:.995,yanchor:'top',text:txt,showarrow:false,font:{size:9.5,color:dim},opacity:.85}); };   // 좁은 구획(연초·연말 며칠)엔 라벨 생략 — 음영 밖으로 삐져나오지 않게
+  var note=function(a,b,txt,ink){ if(b-a<30)return; an.push({xref:'x',x:(a+b)/2,xanchor:'center',yref:'paper',y:.995,yanchor:'top',text:txt,showarrow:false,font:{size:9.5,color:ink||dim},opacity:ink?1:.85}); };   // 좁은 구획(연초·연말 며칠)엔 라벨 생략 — 음영 밖으로 삐져나오지 않게
   if(tx>x0){ box(x0,tx,_yrCss('--past-bg')||'rgba(0,0,0,0.02)'); note(x0,tx,'진행 완료'); }
-  if(tx<x1){ box(tx,x1,_yrHexA(_yrCss(tone||'--peach-text'),0.09)); note(tx,x1,'진행·예정'); }   // 강조 = 진행·예정 쪽(운영자 260806) · 색 = 분야색(운영자 260805)
+  if(tx<x1){ box(tx,x1,_yrHexA(th,_bizZoneAlpha(th))); note(tx,x1,'<b>진행·예정</b>',th); }   // 강조 = 진행·예정 쪽(운영자 260806) · 색 = 분야색(운영자 260805) · 세기 = 교육 기준 정규화(운영자 260808)
   return {shapes:sh,notes:an};
 }
 function _bizDrawSalesBars(divId,list,hgt,dom){
