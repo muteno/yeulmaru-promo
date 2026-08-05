@@ -7609,7 +7609,7 @@ function _bizQuarterNotes(y,x0,x1,dim){
 //     참고용 라벨 박스 하나만 세로 중앙(paper .5)에 둔다 = 「참고할 수 있게」와 「안 튀게」의 교집합.
 function _bizMaintNotes(y,x0,x1){
   if(typeof _YC_MAINT==='undefined'||!_YC_MAINT)return [];
-  var pk=_yrCss('--peach-text'), pf=_yrCss('--peach'), a=[];
+  var pk=_yrCss('--peach-text'), pf=_yrCss('--peach'), a=[], im=(arguments[3]||[]);
   if(!pk||!pf)return a;   // 토큰 미해석 = 라벨을 안 그린다(raw hex 폴백 금지 = 기틀 팔레트 폐쇄 · 게이트 check_design이 잡는 축)
   _YC_MAINT.forEach(function(m){
     if(!m||!m.ms||!m.ms.length)return;
@@ -7617,10 +7617,16 @@ function _bizMaintNotes(y,x0,x1){
         qb=Math.min(x1,_bizXDay(new Date(y,m.ms[m.ms.length-1]+1,1),y)-0.5);
     if(!(qb>qa))return;
     a.push({xref:'x',x:(qa+qb)/2,xanchor:'center',yref:'paper',y:.5,yanchor:'middle',
-      text:'보수 기간',showarrow:false,font:{size:9.5,color:pk},
+      text:'　보수 기간',showarrow:false,font:{size:9.5,color:pk},   // 앞 전각 공백 = 픽토 자리(아래 images가 그 자리에 렌치를 얹는다)
       bgcolor:_yrHexA(pf,.22),bordercolor:_yrHexA(pk,.5),borderwidth:1,borderpad:4,opacity:.95});
+    im.push({x:(qa+qb)/2,cx:1});   // 픽토 위치 = 그 박스 중앙 기준(픽셀 오프셋은 호출부에서 축 스케일로 환산)
   });
   return a;
+}
+// 보수 픽토(렌치) — 표지판성 도형은 폰트 글리프가 아니라 SVG(§핵심명령 3-1) · 규격 = 이 레포 아이콘 정본 계승
+//   (viewBox 24 · stroke=currentColor 자리에 토큰 실해석값 · stroke-width 2 · linecap/linejoin round · 새 색 0).
+function _bizMaintIcon(ink){
+  return 'data:image/svg+xml;utf8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="'+ink+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.66 5.66l-5.3 5.3a2 2 0 1 0 2.83 2.83l5.3-5.3a4 4 0 0 0 5.66-5.66l-2.83 2.83-2.83-2.83z"/></svg>');
 }
 function _bizYearZones(y,x0,x1,dim,cut,tone){
   var tx=(cut==null)?_bizZoneCut(null,y,x0,x1):cut;
@@ -7736,7 +7742,17 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
   xAx.ticklen=5; xAx.tickcolor='rgba(0,0,0,0)';   // 눈금선은 안 보이고 라벨만 아래로 밀린다(차트↔월 간격)
   var zone=_bizYearZones(Y,ax.x0,ax.x1,dim,_bizZoneCut(rows,Y,ax.x0,ax.x1),ED?'--green':'--accent');   // [260806-4 운영자 「공연은 진행·예정 부분을 공연 강조색으로(차트 배경)」] 공연 = **--accent**(이 레포 분야색 계약 = 공연 --accent / 전시 --peach-text / 교육 --green · 6490행 주석이 그 계약의 정본 기술). 구판은 공연 음영도 peach라 전시 반쪽과 같은 색이어서 「어느 분야 차트인가」가 배경으로 안 갈렸다 · 알파는 _bizZoneAlpha가 톤 밝기로 자동 정규화(진한 인디고 = 하한 0.09) = 새 색·새 값 0   // [260805] 경계 = 진행중 포함 · 교육 음영 = 그린(운영자)
   lay.shapes=_bizMonthSep(ax).concat(zone.shapes); lay.annotations=zone.notes;
-  if(!ED)lay.annotations=lay.annotations.concat(_bizQuarterNotes(Y,ax.x0,ax.x1,dim)).concat(_bizMaintNotes(Y,ax.x0,ax.x1));   // [260806-5] 월 라벨 **아랫줄** = 1Q~4Q. ⚠ 이 줄은 위 `lay.annotations=zone.notes` **뒤**여야 한다 — 앞에 두면 그 할당이 통째로 덮어써서 분기 라벨이 조용히 사라진다(첫 렌더 실측)   // [260805] 달 경계선 = 음영보다 먼저(둘 다 below · 경계가 음영 위에 얹히지 않게)
+  if(!ED){
+    var _mtIm=[], _mtNo=_bizMaintNotes(Y,ax.x0,ax.x1,_mtIm);
+    lay.annotations=lay.annotations.concat(_bizQuarterNotes(Y,ax.x0,ax.x1,dim)).concat(_mtNo);
+    if(_mtIm.length){   // 픽토 = layout.images(annotation 텍스트엔 SVG를 못 넣는다) · 크기 11px를 축 단위로 환산
+      var _ipk=_yrCss('--peach-text'), _isz=11/pxPerDay;
+      if(_ipk)lay.images=(lay.images||[]).concat(_mtIm.map(function(m){
+        return {source:_bizMaintIcon(_ipk),xref:'x',x:m.x-(20/pxPerDay),yref:'paper',y:.5,sizex:_isz,sizey:11/Math.max(1,hgt),
+          xanchor:'center',yanchor:'middle',sizing:'contain',layer:'above'};
+      }));
+    }
+  }   // [260806-5] 월 라벨 **아랫줄** = 1Q~4Q. ⚠ 이 줄은 위 `lay.annotations=zone.notes` **뒤**여야 한다 — 앞에 두면 그 할당이 통째로 덮어써서 분기 라벨이 조용히 사라진다(첫 렌더 실측)   // [260805] 달 경계선 = 음영보다 먼저(둘 다 below · 경계가 음영 위에 얹히지 않게)
   var note=(div.parentNode&&div.parentNode.querySelector)?div.parentNode.querySelector('[data-bizbrknote]'):null;
   if(brk){
     // 눈금 라벨 자릿수 = step의 소수 자리에 맞춘다(구판은 0.15 눈금에 "0.2"를 찍어 눈금선과 글자가 어긋났다 — 평의회3)
