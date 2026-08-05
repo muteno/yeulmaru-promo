@@ -1,7 +1,7 @@
 // [260805] 다중선택 중 우클릭 메뉴 — 전/후 촬영 + 메뉴 항목 DOM 실측.
 // 하네스 골격 = smoke_layout.mjs 계승(가상호스트 서빙 + ?qa=admin 목데이터 · 실API·실데이터·PII 미접촉).
-// 「전」 = git show HEAD:index.html 을 그대로 서빙 = 같은 시나리오를 두 판본에서 돌린다.
-// 실행: node tools/scratch/probe_selmenu_ba.mjs <출력디렉터리>
+// 「전」 = 지정 리비전(기본 HEAD)의 index.html 을 그대로 서빙 = 같은 시나리오를 두 판본에서 돌린다.
+// 실행: node tools/scratch/probe_selmenu_ba.mjs <출력디렉터리> [전_리비전]   (예: … docs/reports/x 1f56bc5)
 import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath, URL as NodeURL } from 'node:url';
 import { dirname, join, extname } from 'node:path';
@@ -42,7 +42,8 @@ async function shotMenu(page, file) {
   await page.screenshot({ path: join(OUT, file), clip: { x: Math.max(0, r.x - pad), y: Math.max(0, r.y - pad), width: r.w + pad * 2, height: r.h + pad * 2 } });
 }
 
-const beforeHtml = execFileSync('git', ['-C', ROOT, 'show', 'HEAD:index.html'], { maxBuffer: 1 << 28 });
+const BEFORE_REF = process.argv[3] || 'HEAD';   // 변경 전 판본 = 이 리비전의 index.html
+const beforeHtml = execFileSync('git', ['-C', ROOT, 'show', `${BEFORE_REF}:index.html`], { maxBuffer: 1 << 28 });
 const afterHtml = readFileSync(join(ROOT, 'index.html'));
 
 const browser = await chromium.launch({ executablePath: chrome, headless: true, args: ['--no-sandbox', '--no-proxy-server'] });
@@ -101,6 +102,17 @@ for (const [tag, html] of [['before', beforeHtml], ['after', afterHtml]]) {
   report[tag].hold = await page.evaluate(READ_MENU);
   await shotMenu(page, `${tag}_ctx_hold.png`);
 
+  // ⑤ Esc 규약 — 1회 = 메뉴만 닫힘(선택 유지) · 2회 = 선택 해제
+  await page.evaluate(`(()=>{ closeCellContextMenu(); _evSel.clear(); [100,101,102].forEach(function(ri){_evSel.add(ri);}); _evSelPaint(); })()`);
+  await page.click('.ev[data-ri="100"]', { button: 'right' });
+  await page.waitForTimeout(200);
+  const escOpen = await page.evaluate(`(()=>({menu:!!document.getElementById('cell-context-menu'),sel:_evSel.size}))()`);
+  await page.keyboard.press('Escape'); await page.waitForTimeout(200);
+  const esc1 = await page.evaluate(`(()=>({menu:!!document.getElementById('cell-context-menu'),sel:_evSel.size}))()`);
+  await page.keyboard.press('Escape'); await page.waitForTimeout(200);
+  const esc2 = await page.evaluate(`(()=>({menu:!!document.getElementById('cell-context-menu'),sel:_evSel.size}))()`);
+  report[tag].esc = { open: escOpen, esc1, esc2 };
+
   await page.close();
 }
 await browser.close();
@@ -112,6 +124,8 @@ for (const tag of ['before', 'after']) {
     console.log(` ${k.padEnd(8)} : ${r ? r.items.join(' / ') : '(메뉴 없음)'}`);
     if(r&&r.lines.some(l=>l.startsWith('div |')))console.log(`          (머리/캡션: ${r.lines.filter(l=>l.startsWith('div |')).join(' ⟂ ')})`);
   }
+  const e = report[tag].esc;
+  if (e) console.log(` esc      : 메뉴 열림 선택 ${e.open.sel} → Esc1 메뉴=${e.esc1.menu} 선택 ${e.esc1.sel} → Esc2 메뉴=${e.esc2.menu} 선택 ${e.esc2.sel}`);
 }
 writeFileSync(join(OUT, '_measure.json'), JSON.stringify(report, null, 2));
 console.log('\n출력 =', OUT);
