@@ -16,7 +16,7 @@
 | **Cloudflare** | `APP_PASSWORD` | 🔒 | Worker Variables/Secrets | 일반 사용자 앱 비번 (X-App-Password) |
 | **Cloudflare** | `ADMIN_PASSWORD` | 🔒 | Worker Variables/Secrets | 관리자/슈퍼 비번 = **DB 스크립트 `DB_PW` 값** |
 | **Cloudflare** | `AZURE_TENANT_ID/CLIENT_ID/CLIENT_SECRET` | 🔒 | Worker Secrets | Graph API 서비스계정 → SharePoint Excel 읽기/쓰기 |
-| **Cloudflare** | `GEMINI_API_KEY` | 🔒 | Worker Secrets | OCR(상세페이지 → 텍스트) + 분석 + **로고 제작(이미지 생성, 260805)** |
+| **Cloudflare** | `GEMINI_API_KEY` | 🔒 | Worker Secrets | OCR(상세페이지 → 텍스트) + 분석 + **로고 제작(이미지 생성, 260805)** + **카카오 76자 문구 제안(260805)** |
 | **Cloudflare** | `KASI_KEY` | 🔒 | Worker Secrets | 공휴일(천문연 특일정보) |
 | **Azure AD** | MSAL `clientId` `9f3a0105-…854` | 공개 | `index.html:1609` | MS 로그인(SPA) + SharePoint 폴더 선택기 |
 | **Naver Cloud** | Maps `ncpKeyId` `12kxk8z3z0` | 공개 | `index.html:4870` | 네이버 지도(DID 위치) |
@@ -71,8 +71,9 @@
 - `APP_PASSWORD` — 일반 사용자 앱 비번 (`X-App-Password` 게이트 → role=user)
 - `ADMIN_PASSWORD` — 슈퍼/관리자 비번 (role=admin). **= DB 인제스트 스크립트 실행 시 `DB_PW`에 넣는 값**
 - `AZURE_TENANT_ID` / `AZURE_CLIENT_ID` / `AZURE_CLIENT_SECRET` — Graph API 서비스계정(SharePoint Excel CRUD)
-- `GEMINI_API_KEY` — Google Gemini (OCR + 분석 + **로고 제작 이미지 생성**). 모델명은 `GEMINI_MODEL`/`OCR_MODEL`/`BLOG_MODEL`/`LOGO_MODEL`(비밀 아님)로 오버라이드
+- `GEMINI_API_KEY` — Google Gemini (OCR + 분석 + **로고 제작 이미지 생성** + **카카오 76자 문구 제안**). 모델명은 `GEMINI_MODEL`/`OCR_MODEL`/`BLOG_MODEL`/`LOGO_MODEL`(비밀 아님)로 오버라이드
   - **로고 제작(260805)은 키를 새로 안 만든다** — 이 키 하나를 이미지 생성에도 태웠다(`POST /api/content/logo`). 원본 프로젝트(Nutlope/logocreator)는 Together AI 키를 요구하지만 그걸 발급·등록하지 않기로 한 결정. 미설정이면 이 엔드포인트만 503(앱 나머지 무관하게 정상).
+  - **카카오 76자 문구 제안(260805)도 키를 새로 안 만든다** — `POST /api/content/kakao`가 이 키 하나로 포스터 OCR(비전)과 문구 생성(텍스트)을 둘 다 한다. 미설정이면 이 엔드포인트만 503(앱 나머지 무관하게 정상) · 프론트는 「AI가 아직 연결되지 않았어요」 안내.
   - `LOGO_MODEL` 미설정 시 후보 순서 = `gemini-3.1-flash-image` → `gemini-2.5-flash-image`. 프리뷰 모델이 은퇴해 404가 나면 이 변수에 현행 모델명을 넣으면 코드 수정 없이 복구된다.
 - `KASI_KEY` — 공공데이터포털(한국천문연구원) 특일정보 = 공휴일
 - *(대체 경로, 현재 주력 아님)* `ANTHROPIC_API_KEY`/`ANTHROPIC_AUTH_TOKEN`, `CLOVA_OCR_INVOKE_URL`/`CLOVA_OCR_SECRET`(네이버 CLOVA OCR), `GOOGLE_SA_EMAIL`/`GOOGLE_SA_PRIVATE_KEY`/`GOOGLE_VISION_KEY`(Google Vision OCR)

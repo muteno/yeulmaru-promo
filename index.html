@@ -3367,6 +3367,9 @@ let selected=null,editing=null,panelOpen=false,activeFilters=[],activePrograms=[
 //   ⚠ 선언만 여기로 올린 것 = renderCal→_evSelPaint가 읽으므로, F5 세션복원이 부트 IIFE에서
 //   initApp을 「파싱 중」 동기 호출하는 경로(같은 파일 _salesState TDZ 전례)에 물리지 않게 하려는 것.
 let _evSel=new Set();   // 선택된 records._rowIndex
+// [260805] 카카오 76자 AI 문구 제안 상태 — 본체 로직은 아래 `_pwAiRun`~`_pwAiPick` 절.
+//   ⚠ 선언만 여기로 올린 것 = 위 _evSel과 같은 이유(파싱 중 동기 호출 경로의 TDZ 회피).
+let _pwAi={busy:false,items:[],err:'',src:'',ocr:'',over:0,open:false,gen:0};
 
 // PIN
 const pins=document.querySelectorAll('.pin');
@@ -16277,6 +16280,7 @@ function openPromoWizard(prefillDate, batchJob){
     applicant:'',               // 게시자
     memo:''                     // 추가 요청 (비고)
   };
+  _pwAiReset();   // 새 신청 = AI 문구 제안도 백지에서(앞 건의 후보가 다음 공연에 남지 않게)
   document.getElementById('pw-acts').innerHTML='<button class="m-btn cancel" id="pw-back" onclick="promoBack()">이전</button><button class="m-btn save" id="pw-next" onclick="promoNext()">다음</button>';
   document.getElementById('promo-wizard').classList.add('show');
   // [배치 순차] 프로그램·날짜·플랫폼·제목 프리필 → 본문 입력(Step4)부터 시작. 제출 시 다음 건으로.
@@ -16823,6 +16827,7 @@ async function closePromoWizard(force){
   function _doClose(){
     if(_pwMode==='edit'){_pwMode='request';_pwEditTarget=null;_pwSelectedSteps=[];_pwSelectedIdx=0;_pwOriginalRec=null;}
     if(_pwBatchQueue!=null){ _pwBatchQueue=null; _pwBatchTotal=0; try{syncReload();}catch(e){} }  // 배치 순차 중단 — 이미 등록된 건은 반영
+    _pwAiReset();   // 🔒 공용 PC — AI 문구 제안은 닫으면 전멸(다음 사용자에게 남의 공연 문구가 안 남게) + 세대 가드 증가
     document.getElementById('promo-wizard').classList.remove('show');
     document.getElementById('pw-acts').innerHTML='<button class="m-btn cancel" id="pw-back" onclick="promoBack()">이전</button><button class="m-btn save" id="pw-next" onclick="promoNext()">다음</button>';
   }
@@ -18327,7 +18332,8 @@ function renderPwSubDetail(body,next){
       html+=_pwKakaoLabelBar();
       html+='<textarea id="pw-kakao-text" maxlength="76" rows="4" oninput="pwCharCount(\'pw-kakao-text\',\'pw-kakao-count\',76)" placeholder="30자 이상 76자까지 입력해 주세요" style="width:100%;padding:10px 14px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:12px;font-size:13px;outline:none;box-sizing:border-box;resize:vertical;font-family:inherit;line-height:1.5">'+escapeHtml(_pwData.kakaoText)+'</textarea>';
       html+='<div style="display:flex;justify-content:flex-end;margin-top:6px"><span id="pw-kakao-count" style="font-size:11px;color:#888">'+(_pwData.kakaoText||'').length+' / 76</span></div>';
-      body.innerHTML=html;next.textContent='다음';return;
+      html+='<div id="pw-ai-box"></div>';
+      body.innerHTML=html;next.textContent='다음';_pwAiPaint();return;   /* 이 step으로 되돌아와도 이미 받은 제안이 남아 있게 */
     }
     // 인스타그램 — 본문 틀
     if(p1==='인스타그램'){
@@ -18379,8 +18385,105 @@ var _PW_EMOJIS=['😊','😄','😍','🥰','😉','😎','🤩','🙂','😆','
 function _pwKakaoLabelBar(){
   return '<div style="display:flex;justify-content:space-between;align-items:center;margin:14px 0 4px">'+
     '<label style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">본문<span style="color:var(--peach);margin-left:3px">*</span></label>'+
+    '<div style="display:flex;gap:6px;align-items:center">'+
+    /* 신규 버튼 = 기틀 §2 #1 `.btn` 조합 · 라벨은 텍스트만(버튼 내 이모지 금지). 옆 이모지 버튼은 동결 부채라 그대로 둔다. */
+    '<button type="button" class="btn btn--ghost btn--sm" id="pw-ai-btn" onclick="_pwAiRun()" title="공연 상세 링크를 읽어 문구 후보를 만들어요">AI 문구 제안</button>'+
     '<button type="button" class="pw-emoji-btn" onclick="_pwEmojiToggle(event)" title="이모지 넣기" style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;background:#FFF7E6;border:1px solid rgba(240,180,80,0.45);border-radius:8px;font-size:11px;cursor:pointer;font-family:inherit;color:#B8860B">😊 이모지</button>'+
-    '</div>';
+    '</div></div>';
+}
+
+// === 카카오 76자 문구 AI 제안 (260805) ===
+// 프로그램 상세 링크(프로그램 시트 K열 URL) → Worker가 페이지 본문 + 포스터·상세 이미지 OCR → LLM이 76자 후보 5개.
+// 🔒 공용 PC 원칙(블로그 도우미·카드 제작과 동일): 결과는 인메모리만 — 서버·깃 무저장, 위저드를 닫으면 전멸.
+// 상태 `_pwAi` 선언은 위쪽 상태 절(`_evSel` 옆) — TDZ 회피. 여기로 내리지 마라.
+function _pwAiReset(){_pwAi={busy:false,items:[],err:'',src:'',ocr:'',over:0,open:false,gen:_pwAi.gen+1};}
+// 선택된 프로그램의 상세 링크 — PERFS의 풀네임(f)이 _pwData.program과 같은 축(프로그램 step이 p.f로 저장)
+function _pwAiUrl(){
+  var pg=String(_pwData.program||'').trim();
+  if(!pg)return'';
+  var hit=(typeof PERFS!=='undefined'?PERFS:[]).filter(function(p){return p.f===pg;})[0];
+  return hit?String(hit.u||'').trim():'';
+}
+async function _pwAiRun(){
+  if(_pwAi.busy)return;
+  var url=_pwAiUrl();
+  if(!url){
+    var pg=String(_pwData.program||'').trim();
+    showToast(pg?('「'+pg+'」에 상세 링크가 없어요 · 프로그램 관리에서 URL을 넣어주세요'):'프로그램을 먼저 골라주세요','error');
+    return;
+  }
+  var gen=_pwAi.gen;                       // 🔒 세대 가드 — 응답이 늦게 와도 닫힌/새 위저드 화면은 안 건드린다
+  _pwAi.busy=true;_pwAi.open=true;_pwAi.err='';_pwAiPaint();
+  try{
+    var r=await api('POST','/api/content/kakao',{url:url,program:_pwData.program,title:_pwData.title,date:_pwData.date,count:5});
+    if(gen!==_pwAi.gen)return;
+    _pwAi.busy=false;
+    _pwAi.items=(r&&r.items)||[];_pwAi.over=(r&&r.over)||0;_pwAi.src=(r&&r.source)||url;_pwAi.ocr=String((r&&r.ocrText)||'');
+    if(!_pwAi.items.length)_pwAi.err='문구를 만들지 못했어요 · 다시 시도해 주세요';
+    _pwAiPaint();
+  }catch(e){
+    if(gen!==_pwAi.gen)return;
+    _pwAi.busy=false;
+    var m=String((e&&e.message)||e);
+    if(m.indexOf('no_api_key')>-1||m.indexOf('503')>-1)_pwAi.err='AI가 아직 연결되지 않았어요 (Worker 키 확인)';
+    else if(m.indexOf('no_ocr_provider')>-1)_pwAi.err='OCR 엔진이 설정되지 않았어요 (Worker 키 확인)';
+    else _pwAi.err=m;
+    _pwAiPaint();
+  }
+}
+function _pwAiPaint(){
+  var box=document.getElementById('pw-ai-box');
+  if(!box)return;
+  if(!_pwAi.open){box.innerHTML='';return;}
+  var h='<div class="u-surface" style="margin-top:10px;padding:12px 13px">';
+  h+='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px">';
+  h+='<span style="font-size:11px;font-weight:700;color:var(--neutral-text);letter-spacing:.3px">상세 링크를 읽어 만든 제안</span>';
+  h+='<button type="button" class="btn btn--ghost btn--sm" onclick="_pwAiClose()">닫기</button>';
+  h+='</div>';
+  if(_pwAi.busy){
+    /* 로딩 문구 표준 = dots 픽토그램 + `~중`(말줄임 점 금지) */
+    h+='<div style="display:flex;align-items:center;font-size:12.5px;color:var(--accent);padding:8px 2px">'+_ldHtml(14)+'상세 링크와 포스터를 읽는 중</div>';
+    h+='<div style="font-size:11px;color:var(--dim);padding:0 2px 4px">포스터·상세페이지 OCR까지 하느라 20~40초쯤 걸려요</div>';
+  }else if(_pwAi.err){
+    h+='<div style="font-size:12.5px;color:var(--danger);padding:6px 2px 8px">'+escapeHtml(_pwAi.err)+'</div>';
+    h+='<button type="button" class="btn btn--neutral btn--sm" onclick="_pwAiRun()">다시 시도</button>';
+  }else{
+    h+='<div style="display:flex;flex-direction:column;gap:7px">';
+    _pwAi.items.forEach(function(it,i){
+      var over=it.len>76;
+      h+='<div style="border:1px solid var(--border);border-radius:var(--r-btn);padding:9px 11px;background:var(--surface-solid)">';
+      h+='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:5px">';
+      h+='<span style="font-size:10.5px;font-weight:700;color:var(--accent)">'+escapeHtml(it.tone||('후보 '+(i+1)))+'</span>';
+      h+='<span style="font-size:10.5px;color:'+(over?'var(--danger)':'var(--dim)')+';font-variant-numeric:tabular-nums">'+it.len+' / 76</span>';
+      h+='</div>';
+      h+='<div style="font-size:13px;line-height:1.55;color:var(--text);white-space:pre-wrap;word-break:break-all">'+escapeHtml(it.text)+'</div>';
+      h+='<div style="display:flex;justify-content:flex-end;margin-top:7px">';
+      h+='<button type="button" class="btn btn--primary btn--sm" onclick="_pwAiPick('+i+')">이 문구 쓰기</button>';
+      h+='</div></div>';
+    });
+    h+='</div>';
+    /* 근거 공개 — 사람이 「무엇을 읽고 쓴 문구인지」 확인하고 사실을 대조할 수 있어야 한다(추측 금지 축) */
+    if(_pwAi.ocr){
+      h+='<details style="margin-top:9px"><summary style="font-size:11px;color:var(--dim);cursor:pointer">읽은 원문 보기</summary>';
+      h+='<div style="margin-top:6px;max-height:150px;overflow:auto;font-size:11px;line-height:1.5;color:var(--neutral-text);white-space:pre-wrap;word-break:break-all">'+escapeHtml(_pwAi.ocr.slice(0,4000))+'</div></details>';
+    }
+    if(_pwAi.src)h+='<div style="font-size:10.5px;color:var(--muted);margin-top:7px;word-break:break-all">출처 '+escapeHtml(_pwAi.src)+'</div>';
+    h+='<div style="font-size:10.5px;color:var(--dim);margin-top:5px">AI가 쓴 초안이에요 · 사실(일시·장소·가격)은 꼭 직접 확인해 주세요'+(_pwAi.over?(' · 76자를 넘어 버린 후보 '+_pwAi.over+'개'):'')+'</div>';
+  }
+  h+='</div>';
+  box.innerHTML=h;
+}
+function _pwAiClose(){_pwAi.open=false;_pwAiPaint();}
+function _pwAiPick(i){
+  var it=_pwAi.items[i];if(!it)return;
+  var ta=document.getElementById('pw-kakao-text');if(!ta)return;
+  var max=parseInt(ta.getAttribute('maxlength'))||76;
+  if(it.text.length>max){showToast('이 후보는 '+max+'자를 넘어요','error');return;}
+  ta.value=it.text;
+  _pwData.kakaoText=ta.value;
+  ta.focus();try{ta.setSelectionRange(ta.value.length,ta.value.length);}catch(e){}
+  if(typeof pwCharCount==='function')pwCharCount('pw-kakao-text','pw-kakao-count',max);
+  showToast('문구를 넣었어요 · 그대로 쓰거나 고쳐 주세요','success');
 }
 function _pwEmojiToggle(ev){
   if(ev)ev.stopPropagation();
@@ -18429,6 +18532,7 @@ function renderPwSubText(body,next){
     html+=_pwKakaoLabelBar();
     html+='<textarea id="pw-kakao-text" maxlength="76" rows="4" oninput="pwCharCount(\'pw-kakao-text\',\'pw-kakao-count\',76)" placeholder="30자 이상 76자까지 입력해 주세요" style="width:100%;padding:10px 14px;background:#F8F7FC;border:1.5px solid rgba(0,0,0,0.06);border-radius:12px;font-size:13px;outline:none;box-sizing:border-box;resize:vertical;font-family:inherit;line-height:1.5">'+escapeHtml(_pwData.kakaoText)+'</textarea>';
     html+='<div style="display:flex;justify-content:flex-end;margin-top:6px"><span id="pw-kakao-count" style="font-size:11px;color:#888">'+(_pwData.kakaoText||'').length+' / 76</span></div>';
+    html+='<div id="pw-ai-box"></div>';
   }else if(p1==='인스타그램'){
     const tpl=_pwData.instaText||getInstaTemplate();
     html+='<div class="pw-question">인스타그램 본문을 작성해주세요</div>';
@@ -18474,6 +18578,7 @@ function renderPwSubBlog(body,next){
   html+=pwFolderInputs();
   body.innerHTML=html;
   next.textContent='다음';
+  _pwAiPaint();   /* 카카오 갈래로 그려졌을 때만 #pw-ai-box가 있다 — 없으면 no-op */
 }
 
 // === Step 4 — B2B 인트라넷 c) 링크 ===
