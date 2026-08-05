@@ -4833,24 +4833,9 @@ function _ddMorph(m,anchor,builder,minW,owner){
   anchor.setAttribute('aria-expanded','true');
   m.dataset.owner=owner;m._anchor=anchor;
 }
-// [260805 운영자 3차] 상위 분류 → 하위 도구 = 같은 컨테이너 안 「드릴인」(앵커는 그대로, 패널만 갈아끼움).
-//   문법 = 바로 위 _ddMorph가 쓰는 축 100% 재사용(.dd-panel ±200px 좌우 슬라이드 + .dd-menu left/width/height 모핑) — 신규 CSS·값·색 0.
-//   dir 1 = 들어가기(새 패널 오른쪽에서), -1 = 나오기(왼쪽에서). 되돌아오기 = 같은 함수에 상위 빌더 + dir -1.
-function _ddDrill(el,builder,minW,dir){
-  var menu=el.closest?el.closest('.dd-menu'):null;
-  if(!menu)return;   // 패널 뷰포트 밖(모바일 아코디언 등) = 드릴인 없음 — 그쪽은 빌더가 인라인으로 펼친다
-  var old=menu.querySelector('.dd-panel.is-active');
-  var np=_ddPanel(builder,minW);
-  np.classList.add(dir===1?'is-enter-right':'is-enter-left');
-  menu.appendChild(np);
-  menu.classList.add('dd-morphing');
-  var m=document.getElementById('dd-pop');
-  if(m&&m._anchor)menu.style.left=_ddLeftFor(m._anchor.getBoundingClientRect(),np.offsetWidth)+'px';   // 폭이 바뀌어도 화면 안 유지(_ddMorph와 같은 클램프)
-  menu.style.width=np.offsetWidth+'px';menu.style.height=np.offsetHeight+'px';
-  void np.offsetWidth;   // enter 초기 위치 커밋 후 전이 시작
-  np.classList.remove('is-enter-right','is-enter-left');np.classList.add('is-active');
-  if(old){old.classList.remove('is-active');old.classList.add(dir===1?'is-leaving-left':'is-leaving-right');setTimeout(function(){old.remove();},500);}
-}
+// [260805 운영자 4차] 「메뉴 안에 메뉴는 없어」 — 3차의 패널 드릴인(_ddDrill) 철거.
+//   분류 = 메뉴 계층이 아니라 **모달 안 탭**으로 푼다(영상 편집기 .prog-tab 정본과 같은 축):
+//   이미지 편집 버튼 1개 → 그 모달 안에 카드 제작·누끼따기 탭. 드롭다운은 한 겹으로 끝난다.
 function _ddOpen(anchor,builder,minW,owner){
   if(!anchor)return;
   const ex=document.getElementById('dd-pop');
@@ -24448,30 +24433,25 @@ function _bizMenuBuild(menu){
 // [260805 운영자 2차·3차] 콘텐츠 제작 = SNS / Edit / Utility 3구획.
 //   3차 정정: 「이미지 편집」·「영상 편집」은 도구가 아니라 **상위 분류**다(운영자 「이미지 편집이 더 대메뉴인데」) —
 //   도구 하나에 붙이는 게 아니라 그 아래 도구들(카드 제작·누끼따기 / 영상 편집·자막 삽입·영상 프롬프팅)을 담는다.
-//   데스크탑 = 패널 드릴인(_ddDrill · _ddMorph와 같은 슬라이드 축) · 모바일 아코디언 = 뷰포트가 없어 인라인 나열(같은 목록 배열 공유 = 두 벌 관리 없음).
+//   [260805 운영자 4차] 「메뉴 안에 메뉴는 없어」 — 3차 드릴인 철거. 분류는 **모달 안 탭**으로 푼다:
+//   이미지 편집 = openCardMaker()(모달 안 탭 = 카드 제작·누끼따기) · 영상 편집 = openVideoEditor('edit')(모달 안 탭 3 · 260711부터 이미 그 형태).
+//   드롭다운은 데스크탑·모바일 아코디언 모두 **한 겹 6항목**으로 동일 — 분기 자체가 사라졌다.
 //   항목·라벨 문법(itemCss·hov·구획 라벨) = 구 빌더 자구 그대로 — 신규 값·색 0.
 var _CT_ITEM='display:flex;align-items:center;gap:10px;width:100%;padding:11px 14px;border:0;background:none;text-align:left;font-size:13px;font-weight:600;color:var(--text);border-radius:9px;cursor:pointer;font-family:inherit;transition:background .12s';
 var _CT_HOV=' onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'"';
-var _CT_HD='padding:8px 14px 6px;font-size:11px;color:var(--dim);font-weight:700';   // 머리 라벨 = 구 「콘텐츠 제작」 헤더 값 그대로(하위 패널 제목·아코디언 분류명 공용)
+var _CT_HD='padding:8px 14px 6px;font-size:11px;color:var(--dim);font-weight:700';   // 머리 라벨 = 구 「콘텐츠 제작」 헤더 값 그대로
 var _CT_SEC='margin:6px 8px 0;padding:8px 6px 4px;font-size:11px;color:var(--dim);font-weight:700;border-top:1px solid var(--border)';   // 구획 라벨 = 구 「영상 편집기」·「PLAY ZONE」 값 그대로
-// 하위 도구 목록 = 데스크탑 드릴인 패널과 모바일 인라인이 공유하는 한 벌(SSOT).
-var _CT_IMG=[["openCardMaker()",'카드 제작'],["window.open('cutout/','_blank','noopener')",'누끼따기']];   /* 카드 제작 = 사진 절삭+문구→PNG(nomute-editor 카드뉴스 이식) · 누끼따기 = 배경 제거 독립 도구 /cutout/ 새 탭(온디바이스 · 대시보드 상태 보존 = noopener) */
-var _CT_VID=[["openVideoEditor('edit')",'1. 영상 편집'],["openVideoEditor('sub')",'2. 자막 삽입'],["openVideoEditor('prompt')",'3. 영상 프롬프팅']];   /* [260711 운영자] 한 도구, 탭 진입점 3개 */
-function _ctItem(act,label,more){   // more = 상위 분류(하위 있음) 표시 — 오른쪽 끝 › (글자만 · 새 부품 0)
-  return '<button type="button" onclick="'+act+'" style="'+_CT_ITEM+'"'+_CT_HOV+'>'+label
-    +(more?'<span style="margin-left:auto;color:var(--dim);font-size:12px">›</span>':'')+'</button>';
+function _ctItem(act,label){
+  return '<button type="button" onclick="'+act+'" style="'+_CT_ITEM+'"'+_CT_HOV+'>'+label+'</button>';
 }
-function _ctList(list){ return list.map(function(it){ return _ctItem('_ddCloseAll();'+it[0],it[1]); }).join(''); }
 function _contentMenuBuild(menu){
-  var acc=menu.classList&&menu.classList.contains('nav-acc-panel');   // 모바일 햄버거 아코디언 = 패널 뷰포트 없음 → 드릴인 대신 분류명 라벨 + 도구 인라인
   menu.innerHTML='<div style="'+_CT_HD+'">콘텐츠 제작</div>'
     +'<div style="'+_CT_SEC+'">SNS</div>'
     +_ctItem("_ddCloseAll();openKakaoDesigner()",'카카오채널 톡')   /* 구 「카카오 메세지 설계」 개명(260805 2차) — 공연 상세 링크 → 포스터 OCR → 카카오 76자 문구 후보 */
     +_ctItem("_ddCloseAll();openNaverBlogTool()",'블로그·카페 포스팅')   /* 구 「네이버 블로그」 개명(260805 2차) — 글쓰기 도우미 */
     +'<div style="'+_CT_SEC+'">Edit</div>'
-    +(acc ? '<div style="'+_CT_HD+'">이미지 편집</div>'+_ctList(_CT_IMG)+'<div style="'+_CT_HD+'">영상 편집</div>'+_ctList(_CT_VID)
-          : _ctItem("_ddDrill(this,_contentImgMenuBuild,210,1)",'이미지 편집',1)
-           +_ctItem("_ddDrill(this,_contentVidMenuBuild,210,1)",'영상 편집',1))
+    +_ctItem("_ddCloseAll();openCardMaker()",'이미지 편집')   /* 모달 안 탭 = 1 카드 제작(사진 절삭+문구→PNG) · 2 누끼따기(배경 제거 /cutout/ 임베드) */
+    +_ctItem("_ddCloseAll();openVideoEditor('edit')",'영상 편집')   /* 모달 안 탭 = 1 영상 편집 · 2 자막 삽입 · 3 영상 프롬프팅([260711 운영자] 한 도구, 탭 3) */
     +'<div style="'+_CT_SEC+'">Utility</div>'
     +_ctItem("_ddCloseAll();openFileSlimmer()",'파일 용량 줄이기')   /* 구 「용량 줄이기」 개명(260805 2차) — 엑셀·PPT·워드·한글·PDF 사진 재인코딩 */
     +_ctItem("_ddCloseAll();openBookingProcess()",'도화지')   /* 구 PLAY ZONE 섹션에서 이사(260805 2차) — 다이어그램 에디터 */
@@ -24485,13 +24465,6 @@ function _contentMenuBuild(menu){
   // +_ctItem("_ddCloseAll();openLinkGrab()",'링크 자료수집')   /* [260721 운영자] URL 붙여넣기 = 자료 일괄 다운로드 */
   // +_ctItem("_ddCloseAll();openEnneagram()",'에니어그램')   /* [260729 운영자] PLAY ZONE 이관분 */
 }
-// 하위 패널 2종 — 머리에 「‹ 콘텐츠 제작」 되돌아가기(같은 _ddDrill · dir -1 = 왼쪽에서 복귀), 그 아래 분류명 + 도구.
-function _ctSubBuild(menu,title,list){
-  menu.innerHTML='<button type="button" onclick="_ddDrill(this,_contentMenuBuild,210,-1)" style="'+_CT_ITEM+';color:var(--dim);font-size:12px"'+_CT_HOV+'>‹ 콘텐츠 제작</button>'
-    +'<div style="'+_CT_HD+'">'+title+'</div>'+_ctList(list);
-}
-function _contentImgMenuBuild(menu){ _ctSubBuild(menu,'이미지 편집',_CT_IMG); }
-function _contentVidMenuBuild(menu){ _ctSubBuild(menu,'영상 편집',_CT_VID); }
 // ============================================================
 // 콘텐츠 제작 공용 — 최소화(─) 버튼 + 하단 왼쪽 복원 독 (운영자 260805 「각 X 옆 최소화」)
 //  최소화 = 보드 display:none — DOM·타이머·업로드가 그대로 살아서 러너 작업(한글·오피스·용량 줄이기 등)이 뒤에서 이어진다. 복원 = 다시 표시 + 열린 다른 보드 위로 z 부양.
@@ -30360,19 +30333,28 @@ var _CM_ICO={
 };
 function _cmDefault(){return {img:null,name:'',zoom:1,px:.5,py:.5,text:'',drag:null,fontOk:false,escHandler:null};}
 
-function openCardMaker(){
-  if(_tminIs('cm-board')){_tminShow('cm-board');return;}   // 최소화 중 재열기 = 복원 — 「매번 새로」 리셋에서 사진·문구 보존
+// [260805 운영자 4차] 「이미지 편집」 = 이 모달 하나 — 안에 도구를 탭으로 담는다(메뉴 계층 대신 모달 안 탭).
+//   탭 문법 = 영상 편집기(#ve-tabs) 정본 그대로(.prog-tab · --neutral 트랙 · 같은 padding) — 신규 부품·색 0.
+//   1 카드 제작 = 기존 본문 그대로 · 2 누끼따기 = 독립 도구 /cutout/ 임베드(코드 한 벌 유지 — 복제 금지 · ?embed=1 = 자체 머리글 접기).
+function openCardMaker(tab){
+  var t=(tab==='cut')?'cut':'card';
+  if(_tminIs('cm-board')){_tminShow('cm-board');if(tab)_cmTab(t);return;}   // 최소화 중 재열기 = 복원 — 「매번 새로」 리셋에서 사진·문구 보존
   var el=document.getElementById('cm-board');
   if(!el){el=document.createElement('div');el.id='cm-board';document.body.appendChild(el);}
   try{if(_cmState&&_cmState.escHandler)document.removeEventListener('keydown',_cmState.escHandler);}catch(_e){}
   _cmState=_cmDefault();   // 🔒 매번 새로 — 이전 사용자의 사진·문구를 복원하지 않는다
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeCardMaker)">'
     +'<div class="modal" style="width:96vw;max-width:1080px;height:92vh;max-height:92vh;padding:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:var(--surface-solid)">'
-    +'<button class="modal-x" onclick="_tminHide(\'cm-board\',\'카드 제작\')" title="최소화" aria-label="최소화" style="position:absolute;top:14px;right:60px;z-index:10">─</button>'
+    +'<button class="modal-x" onclick="_tminHide(\'cm-board\',\'이미지 편집\')" title="최소화" aria-label="최소화" style="position:absolute;top:14px;right:60px;z-index:10">─</button>'
     +'<button class="modal-x" onclick="closeCardMaker()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;z-index:10">✕</button>'
-    +'<div style="padding:18px 24px;border-bottom:1px solid var(--border);font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px">🖼 <span>카드 제작</span>'
-      +'<span style="font-size:11.5px;font-weight:600;color:var(--dim)">1080 × 1350 · 이 컴퓨터 안에서 만들어요</span></div>'
-    +'<div style="flex:1;min-height:0;padding:18px 24px 20px">'
+    +'<div style="padding:18px 24px;border-bottom:1px solid var(--border);font-size:16px;font-weight:700;display:flex;align-items:center;gap:14px;flex-wrap:wrap">🖼 <span>이미지 편집</span>'
+      +'<div id="cm-tabs" style="display:flex;gap:2px;background:var(--neutral);border-radius:8px;padding:3px">'
+        +'<button type="button" class="prog-tab" data-t="card" onclick="_cmTab(\'card\')" style="flex:none;padding:7px 16px">1. 카드 제작</button>'
+        +'<button type="button" class="prog-tab" data-t="cut" onclick="_cmTab(\'cut\')" style="flex:none;padding:7px 16px">2. 누끼따기</button>'
+      +'</div>'
+      +'<span id="cm-subnote" style="font-size:11.5px;font-weight:600;color:var(--dim)">1080 × 1350 · 이 컴퓨터 안에서 만들어요</span></div>'
+    +'<div id="cm-pane-cut" style="flex:1;min-height:0;display:none"></div>'   // 누끼따기 = 첫 전환 때 임베드 생성(모델 4.5MB를 안 쓸 땐 안 받게)
+    +'<div id="cm-pane-card" style="flex:1;min-height:0;padding:18px 24px 20px">'
       +'<div class="cm-wrap">'
         +'<div class="cm-col prev">'
           +'<div class="nb-col-head">미리보기</div>'
@@ -30402,11 +30384,29 @@ function openCardMaker(){
   _cmWireStage();
   _cmFontWarm();
   _cmRender();
+  _cmTab(t);
+}
+// 탭 전환 = 영상 편집기 _veTab과 같은 자세(활성 표시 + 본문 교체). 누끼따기 임베드는 **처음 열 때 1회 생성** —
+//   안 쓰면 모델(4.5MB)·wasm을 아예 안 받는다. 이미 만든 프레임은 탭을 오가도 그대로(작업 중 사진·결과 유지).
+function _cmTab(t){
+  var card=document.getElementById('cm-pane-card'),cut=document.getElementById('cm-pane-cut');
+  if(!card||!cut)return;
+  document.querySelectorAll('#cm-tabs .prog-tab').forEach(function(b){b.classList.toggle('active',b.dataset.t===t);});
+  card.style.display=(t==='cut')?'none':'';
+  cut.style.display=(t==='cut')?'':'none';
+  var note=document.getElementById('cm-subnote');
+  if(note)note.textContent=(t==='cut')?'사진 배경 지우기 · 이 컴퓨터 안에서 처리해요':'1080 × 1350 · 이 컴퓨터 안에서 만들어요';
+  if(t==='cut'&&!cut.firstChild){
+    var f=document.createElement('iframe');
+    f.src='cutout/?embed=1';f.title='누끼따기';f.loading='lazy';
+    f.style.cssText='width:100%;height:100%;border:0;display:block';
+    cut.appendChild(f);
+  }
 }
 function closeCardMaker(){
   if(_cmState&&_cmState.escHandler)document.removeEventListener('keydown',_cmState.escHandler);
   _cmState=_cmDefault();   // 🔒 사진·문구 전부 폐기(인메모리만 썼으므로 참조만 끊으면 끝)
-  var el=document.getElementById('cm-board');if(el)el.innerHTML='';
+  var el=document.getElementById('cm-board');if(el)el.innerHTML='';   // 누끼따기 프레임도 함께 파기 = 그쪽 사진도 메모리에서 사라짐
 }
 function _cmReset(){ if(!_cmState)return; var t=document.getElementById('cm-text'); if(t)t.value='';
   _cmState.img=null;_cmState.name='';_cmState.zoom=1;_cmState.px=.5;_cmState.py=.5;_cmState.text='';_cmRender(); }
