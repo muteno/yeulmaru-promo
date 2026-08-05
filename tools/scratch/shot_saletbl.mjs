@@ -68,7 +68,7 @@ const meas = await page.evaluate(`(()=>{
   const box=document.querySelector('#rail-yrm [data-bizmbox]'); if(!box)return null;
   const tb=box.querySelector('table'); if(!tb)return {err:'no table'};
   const hd=[...tb.querySelectorAll('thead td')].map(td=>({t:td.innerText.replace(/\\n/g,' / '),x:+td.getBoundingClientRect().left.toFixed(1),w:+td.getBoundingClientRect().width.toFixed(1),al:getComputedStyle(td).textAlign}));
-  const rows=[...tb.querySelectorAll('tbody tr')].slice(0,14).map(tr=>[...tr.children].map(td=>td.innerText.trim()));
+  const rows=[...tb.querySelectorAll('tbody tr')].map(tr=>[...tr.children].map(td=>td.innerText.trim()));
   const nameCells=[...tb.querySelectorAll('tbody tr')].map(tr=>{const td=tr.children[1];if(!td)return null;const inner=td.querySelector('span,div');
     return {txt:td.innerText.trim(),cw:+td.getBoundingClientRect().width.toFixed(1),sw:td.scrollWidth,h:+td.getBoundingClientRect().height.toFixed(1)};});
   const dateXs=[...tb.querySelectorAll('tbody tr')].map(tr=>{const td=tr.children[0];if(!td)return null;
