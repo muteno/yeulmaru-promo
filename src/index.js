@@ -1794,9 +1794,24 @@ async function claudeText(env, system, userText, maxTokens) {
 }
 __name(claudeText, "claudeText");
 
+// 텍스트 LLM 자격증명이 「실제로 쓸 수 있는가」. ANTHROPIC_AUTH_TOKEN(구독 OAuth) 단독은 세지 않는다 —
+// 이 Worker에서 403 forbidden/"Request not allowed"로 떨어진다(위 1640행 주석·실측 260805, 아래 참조).
+// ⚠ 이 판정을 느슨하게 되돌리면(=AUTH_TOKEN도 「있음」으로 치면) 키 미설정이 503 「AI 미연결」이 아니라
+//   502 + 제공자 원문 JSON으로 새어 나온다. 260805 카카오 문구 제안이 실제로 그렇게 터졌다.
+function hasTextLlm(env) { return !!(env.GEMINI_API_KEY || env.ANTHROPIC_API_KEY); }
+__name(hasTextLlm, "hasTextLlm");
+
 async function llmText(env, system, userText, maxTokens) {
-  if (env.GEMINI_API_KEY) return geminiText(env, system, userText, maxTokens);
-  return claudeText(env, system, userText, maxTokens);
+  try {
+    if (env.GEMINI_API_KEY) return await geminiText(env, system, userText, maxTokens);
+    return await claudeText(env, system, userText, maxTokens);
+  } catch (e) {
+    // 401·403 = 키가 없거나 이 용도로 허용되지 않음. 제공자 원문 JSON을 그대로 화면에 던지지 말고
+    // 프론트가 아는 신호(llm_auth)로 바꾼다 — 사용자에겐 「키 확인」이 유일한 행동이라 원문은 소음이다.
+    const m = String((e && e.message) || e);
+    if (/^(Anthropic|Gemini) (401|403):/.test(m)) throw new Error("llm_auth: " + m.slice(0, 160));
+    throw e;
+  }
 }
 __name(llmText, "llmText");
 
@@ -2626,7 +2641,7 @@ var index_default = {
       // === 콘텐츠 제작 — 네이버 블로그 초안 AI 생성 (Graph 토큰 불요) ===
       // ANTHROPIC_API_KEY 미설정 시 503 → 프론트가 로컬 템플릿 생성기로 폴백.
       if (url.pathname === "/api/content/blog" && request.method === "POST") {
-        if (!env.GEMINI_API_KEY && !env.ANTHROPIC_API_KEY && !env.ANTHROPIC_AUTH_TOKEN) return json({ error: "no_api_key", note: "GEMINI_API_KEY 또는 ANTHROPIC_* 미설정" }, env, 503);
+        if (!hasTextLlm(env)) return json({ error: "no_api_key", note: "GEMINI_API_KEY 또는 ANTHROPIC_API_KEY 미설정(구독 OAuth 토큰 단독은 403이라 불가)" }, env, 503);
         let bb = {};
         try { bb = await request.json(); } catch (e) {}
         const topic = String(bb.topic || "").slice(0, 2000).trim();
@@ -2660,7 +2675,7 @@ var index_default = {
 
       // === ② 분석 — OCR 원문 텍스트 → 육하원칙 JSON (LLM: Gemini/Claude). OCR과 분리. ===
       if (url.pathname === "/api/content/structure" && request.method === "POST") {
-        if (!env.GEMINI_API_KEY && !env.ANTHROPIC_API_KEY && !env.ANTHROPIC_AUTH_TOKEN) return json({ error: "no_api_key", note: "GEMINI_API_KEY 또는 ANTHROPIC_* 미설정" }, env, 503);
+        if (!hasTextLlm(env)) return json({ error: "no_api_key", note: "GEMINI_API_KEY 또는 ANTHROPIC_API_KEY 미설정(구독 OAuth 토큰 단독은 403이라 불가)" }, env, 503);
         let bb = {};
         try { bb = await request.json(); } catch (e) {}
         const text = String(bb.text || "").trim();
@@ -2677,7 +2692,7 @@ var index_default = {
       // === ④ 카카오 76자 문구 제안 — 상세 링크 → 페이지 텍스트 + 포스터 OCR → LLM이 후보 N개 ===
       // 인증 = 위 전역 게이트(X-App-Password). OCR·LLM 둘 다 유료 호출이라 공개 금지.
       if (url.pathname === "/api/content/kakao" && request.method === "POST") {
-        if (!env.GEMINI_API_KEY && !env.ANTHROPIC_API_KEY && !env.ANTHROPIC_AUTH_TOKEN) return json({ error: "no_api_key", note: "GEMINI_API_KEY 또는 ANTHROPIC_* 미설정" }, env, 503);
+        if (!hasTextLlm(env)) return json({ error: "no_api_key", note: "GEMINI_API_KEY 또는 ANTHROPIC_API_KEY 미설정(구독 OAuth 토큰 단독은 403이라 불가)" }, env, 503);
         let bb = {};
         try { bb = await request.json(); } catch (e) {}
         if (!String(bb.url || "").trim()) return json({ error: "공연 상세 링크가 필요해요" }, env, 400);
