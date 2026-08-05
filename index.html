@@ -7073,8 +7073,15 @@ function _bizmRepaint(){
 //   캘린더 전시선 색의 SSOT = `_EX_SPACE`(7층·장도·야외 공간색) + 판정 `_exLaneOf(이름,장소)` — 그 둘을 그대로 부른다
 //   = 두 화면이 같은 함수를 지나므로 색이 갈릴 수 없다(값 복사 0 · 신규 hex 0).
 //   ⚠ 야외 칩은 `var(--accent)` 표기라 Plotly에 그대로 못 준다(CSS var 미해석) → 런타임 해석값으로 환산.
+// [260805 운영자] 색 예외표 — 캘린더 공간색을 덮는 **개별 전시 지정**. 지시: 「프리뷰는 색을 파란색 강조색1로」.
+//   왜 = 7층 전시실 두 건(프리뷰 2/13~3/22 · 어린이미술전 2/27~6/28)이 같은 초록인데 기간이 겹쳐 곡선이 서로 읽혔다.
+//   ⚠ 이 표에 오르는 전시는 **캘린더 전시선과 색이 갈린다**(링킹 예외) — 그래서 표를 명시적으로 두고 사유를 남긴다.
+//   값 = 기틀 토큰 이름만(운영자 어휘 「강조색 1번」 = `--accent` · 캘린더 야외 칩과 같은 토큰) = 새 색 0.
+var _BIZ_EX_COL={'창작스튜디오7기입주작가프리뷰':'--accent'};   // 키 = _uName 정규화
 function _bizExCol(name,place){
   try{
+    var ov=_BIZ_EX_COL[_uName(name||'')];
+    if(ov)return _yrCss(ov)||'';
     var c=String((_EX_SPACE[_exLaneOf(name,place)]||{}).c||'');
     var m=c.match(/^var\((--[\w-]+)\)$/);
     return (m?(_yrCss(m[1])||''):c)||(_yrCss('--peach-text')||'');
@@ -7140,6 +7147,30 @@ function _bizEduEmptyHtml(year){
     +'<div style="margin-top:8px;font-size:11.5px;color:var(--muted);line-height:1.7">프로그램 시트에 <b style="color:var(--green)">예술교육</b>으로 등록되면<br>1월~12월 축의 그 달 자리에 표시됩니다.</div>'
     +'</div>';
 }
+// [260805 운영자] 운영대장 교육 행 색인 — 끝난 교육의 **정본**(공연이 운영대장을 정본으로 삼는 것과 같은 축).
+//   `_bizClean`은 사업구분 '교육·특강'을 통째로 걸러낸다(그건 **공연** 목록 함수라 그게 맞다) → 교육은 여기서 따로 읽는다.
+//   값 = 발권유료 합(= 그 프로그램 수강 인원) · 무료 티켓 행은 공연과 같은 규칙으로 제외 · 취소분 제외.
+//   ⚠ 새 집계 규칙을 만들지 않는다 — 필드·정규화 전부 `_bizClean`이 쓰는 그 함수들(`_bizNorm`·`_bizNum`)이다.
+function _bizEduOpsIdx(year){
+  try{
+    var raw=(_bizState&&_bizState.raw&&_bizState.raw.rows)||[];
+    if(!raw.length)return null;
+    var idx={};
+    raw.map(_bizNorm).forEach(function(r){
+      if(['교육','특강'].indexOf(String(r['사업구분']||'').trim())<0)return;
+      if(String(r['상태']||'').trim()==='취소공연')return;
+      if(String(r['티켓구분']||'').trim()==='무료')return;
+      var y=Math.trunc(_bizNum(r['년도']!=null?r['년도']:r['연도'])||0); if(y!==year)return;
+      var nm=String(r['공연명']||'').trim(); if(!nm)return;
+      var m=parseInt(String(r['월']||'').replace(/[^0-9]/g,''),10), d=parseInt(String(r['일']||'').replace(/[^0-9]/g,''),10);
+      var dt=(!isNaN(m)&&!isNaN(d))?new Date(y,m-1,d):null;
+      var k=_uName(nm), e=idx[k]||(idx[k]={name:nm,paid:0,cnt:0,start:dt,end:dt,genre:String(r['장르1']||'').trim()});
+      e.paid+=(_bizNum(r['발권유료'])||0); e.cnt++;
+      if(dt){ if(!e.start||dt<e.start)e.start=dt; if(!e.end||dt>e.end)e.end=dt; }
+    });
+    return idx;
+  }catch(_e){ console.warn('[biz edu ops]',_e); return null; }
+}
 function _bizEduMonthRows(year){
   // [260808 운영자 「전시랑 교육이 처음 로딩될 때 오류처럼 나온다 · 바로 못 받아오면 로딩처럼」]
   //   ⚠ **프로그램 시트 미도착 = 「없어요」 확정 금지**(로딩 유지) — 이 반쪽의 유일한 소스가 PERFS인데
@@ -7151,14 +7182,40 @@ function _bizEduMonthRows(year){
   if(typeof _perfReady!=='undefined'&&!_perfReady)return null;
   var out=[], col=_yrCss('--green')||'';
   var tdy=new Date(); tdy.setHours(0,0,0,0);
+  // [260805 운영자 「화요살롱 … 160개 팔렸다고 · db에도 동일하게」] 수강생 **실값 조인** — 공연 목록이 쓰는 그 축을 그대로 쓴다.
+  //   ① 운영대장(세부운영관리대장) 교육 행 = 끝난 교육의 정본(발권유료 = 그 프로그램 수강 인원)
+  //   ② 판매 축(_salesBuild → _bizSalesIdx) = 지금 팔고 있는 교육(일일입력 누계)
+  //   ⚠ 여기서 새로 집계하지 않는다 — ①은 원본 행 합, ②는 정본 산출물 조회. 값이 **둘 다 없으면 종전대로 파선**(창작 0).
+  var opsIdx=_bizEduOpsIdx(year), sx=null;
+  try{ sx=_bizSalesIdx(year); }catch(_e){}
+  var attach=function(g){
+    var k=_uName(g.name||'');
+    var o=opsIdx?opsIdx[k]:null, p=(sx&&sx[k])?sx[k]:null;
+    var v=(o&&o.paid>0)?o.paid:((p&&isFinite(p.seats)&&p.seats>0)?p.seats:null);
+    if(v!=null){ g.paid=v; g._sold=v; }
+    if(o&&o.genre)g._g2=o.genre;
+    if(p&&isFinite(p.money)&&p.money>0)g._rev=p.money;
+    return g;
+  };
+  var seen={};
   ((typeof PERFS!=='undefined'&&PERFS)||[]).forEach(function(p){
     if(!p||p.t!=='a'||!p.s)return;
     var sd=_salesDate(p.s); if(!sd||sd.getFullYear()!==year)return;
     var ed=p.e?(_salesDate(p.e)||sd):sd;
     var nm=String(p.f||p.n||'').trim(); if(!nm)return;
-    out.push({name:nm,genre:'교육',_col:col,start:sd,end:ed,cnt:0,paid:0,seat:0,avg:0,
-      _rev:null,_sold:null,   // 값 없음 = 파선 게이지(_bizDrawSalesBars dom='edu') — 수강생 창작 금지
-      _st:(ed<tdy)?'ended':((sd>tdy)?'planned':'active')});
+    seen[_uName(nm)]=1;
+    out.push(attach({name:nm,genre:'교육',_col:col,start:sd,end:ed,cnt:0,paid:0,seat:0,avg:0,
+      _g2:String(p.g2||p.g||'').trim()||'',   // 프로그램 시트 장르(예: 인문학) — 툴팁이 말한다
+      _rev:null,_sold:null,   // 조인 실패 = 파선 게이지(_bizDrawSalesBars dom='edu') — 수강생 창작 금지
+      _st:(ed<tdy)?'ended':((sd>tdy)?'planned':'active')}));
+  });
+  // 프로그램 시트엔 없고 운영대장에만 있는 교육(과거 소급 등)도 싣는다 — 공연 목록의 ∪ 규칙과 같은 축.
+  if(opsIdx)Object.keys(opsIdx).forEach(function(k){
+    if(seen[k])return;
+    var o=opsIdx[k]; if(!o||!o.start)return;
+    out.push({name:o.name,genre:'교육',_col:col,start:o.start,end:o.end||o.start,cnt:o.cnt||0,
+      paid:o.paid||0,seat:0,avg:0,_g2:o.genre||'',_rev:null,_sold:(o.paid>0?o.paid:null),
+      _st:((o.end||o.start)<tdy)?'ended':'active'});
   });
   out.sort(function(a,b){ return (a.start-b.start)||(a.name<b.name?-1:1); });
   // [260805 운영자 「교육, 별도의 인덱싱 열 부여해줘」] 각 교육 게이지(세로 열)에 고유 순번을 단다 —
@@ -7261,13 +7318,35 @@ function _bizZoneCut(rows,y,x0,x1){
   if(live==null)live=(t<new Date(y,0,1))?x0:((t>new Date(y,11,31))?x1:_bizXDay(t,y));   // 진행중·예정이 하나도 없으면 종전대로 오늘 경계
   return Math.max(x0,Math.min(x1,live));
 }
+// [260808 운영자 「진행 예정이랑 아닌거 구분 좀 더 확실하게 · 예술교육 수준으로는 도드라져야할듯」]
+//   구판 = 분야색이 뭐든 **alpha 0.09 고정** → 음영 세기가 색 밝기에 휘둘렸다. 흰 바탕과의 luma 차 실측 =
+//   어두운 `--green`(교육) 168.6 · 밝은 `--peach-text`(공연·전시) 108.5 → 같은 0.09라도 깔리는 세기가 **1 : 0.64**.
+//   그래서 교육 카드만 경계가 보이고 공연·전시는 두 구획이 붙어 보였다(260808 스냅샷 실측 = 운영자 지적 그대로).
+//   ① 세기 기준 = **교육(그린 0.09)** — alpha를 톤 밝기로 역산해 어느 분야든 같은 ΔY로 깔린다(peach ≈ 0.14).
+//      교육은 계수 1.0 = **종전 그대로** · 색은 손대지 않는다 = 같은 토큰 alpha 변주뿐(기틀 §3.5②) · 새 색 0.
+//   ② 라벨 = 완료 쪽 회색(`--dim`) │ 예정 쪽 **분야색 볼드** — 음영이 옅게 보이는 화면(저휘도 패널·햇빛)에서도
+//      「어느 쪽이 앞으로 올 일인가」가 글자 색만으로 갈린다. 잉크 = 그 카드 색 = 전시 피크 라벨과 같은 문법.
+//   ⚠ 막대 농도(상태별 opacity·테두리)는 260806 2차 운영자 판정으로 폐지된 축 — 여기서 되살리지 마라.
+//      상태를 말하는 것은 **이 음영 구획**이고, 이 함수가 그 유일한 자리다.
+var _BIZ_ZONE_A=0.09, _BIZ_ZONE_AMAX=0.22;   // 기준 alpha(그린) · 상한(밝은 톤이라도 막대 잉크를 먹지 않는 선)
+function _bizLumaGap(hex){   // 톤 hex → 흰 바탕과의 luma 차(0~255) · 같은 alpha라도 밝은 색은 옅게 깔린다 = 그 편차를 없애는 자
+  var m=String(hex||'').trim().replace('#','');
+  if(m.length===3)m=m[0]+m[0]+m[1]+m[1]+m[2]+m[2];
+  var r=parseInt(m.slice(0,2),16),g=parseInt(m.slice(2,4),16),b=parseInt(m.slice(4,6),16);
+  return isNaN(r)?null:(255-(0.2126*r+0.7152*g+0.0722*b));
+}
+function _bizZoneAlpha(hex){
+  var ref=_bizLumaGap(_yrCss('--green')), me=_bizLumaGap(hex);   // 기준 = 토큰 실해석값(리터럴 사본 금지 = 값 SSOT는 :root)
+  if(!ref||!me)return _BIZ_ZONE_A;
+  return Math.round(Math.max(_BIZ_ZONE_A,Math.min(_BIZ_ZONE_AMAX,_BIZ_ZONE_A*ref/me))*1000)/1000;   // 하한 = 종전 값(어떤 톤도 구판보다 옅어지지 않는다)
+}
 function _bizYearZones(y,x0,x1,dim,cut,tone){
   var tx=(cut==null)?_bizZoneCut(null,y,x0,x1):cut;
-  var sh=[],an=[];
+  var sh=[],an=[], th=_yrCss(tone||'--peach-text');
   var box=function(a,b,f){ sh.push({type:'rect',xref:'x',yref:'paper',layer:'below',x0:a,x1:b,y0:0,y1:1,fillcolor:f,line:{width:0}}); };
-  var note=function(a,b,txt){ if(b-a<30)return; an.push({xref:'x',x:(a+b)/2,xanchor:'center',yref:'paper',y:.995,yanchor:'top',text:txt,showarrow:false,font:{size:9.5,color:dim},opacity:.85}); };   // 좁은 구획(연초·연말 며칠)엔 라벨 생략 — 음영 밖으로 삐져나오지 않게
+  var note=function(a,b,txt,ink){ if(b-a<30)return; an.push({xref:'x',x:(a+b)/2,xanchor:'center',yref:'paper',y:.995,yanchor:'top',text:txt,showarrow:false,font:{size:9.5,color:ink||dim},opacity:ink?1:.85}); };   // 좁은 구획(연초·연말 며칠)엔 라벨 생략 — 음영 밖으로 삐져나오지 않게
   if(tx>x0){ box(x0,tx,_yrCss('--past-bg')||'rgba(0,0,0,0.02)'); note(x0,tx,'진행 완료'); }
-  if(tx<x1){ box(tx,x1,_yrHexA(_yrCss(tone||'--peach-text'),0.09)); note(tx,x1,'진행·예정'); }   // 강조 = 진행·예정 쪽(운영자 260806) · 색 = 분야색(운영자 260805)
+  if(tx<x1){ box(tx,x1,_yrHexA(th,_bizZoneAlpha(th))); note(tx,x1,'<b>진행·예정</b>',th); }   // 강조 = 진행·예정 쪽(운영자 260806) · 색 = 분야색(운영자 260805) · 세기 = 교육 기준 정규화(운영자 260808)
   return {shapes:sh,notes:an};
 }
 function _bizDrawSalesBars(divId,list,hgt,dom){
@@ -7280,8 +7359,10 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
   var hasRev=rows.some(function(g){return g._rev!=null&&g._rev>0;});
   // ⚠ 매출 미조인(_rev==null)은 **0이 아니라 null** — 0으로 떨어뜨리면 "0.0" 막대가 깔려 「하나도 안 팔렸다」로 읽힌다(평의회6).
   //   null = 막대 없음 → 아래 파선 자리(값 없음)가 그 사업의 자리를 지킨다(시간축엔 이름 눈금이 없어, 안 그리면 통째로 사라진다).
-  var valOf=function(g){ if(ED)return null; return hasRev?((g._rev!=null)?(g._rev/1e6):null):((g._sold!=null&&g._sold>0)?g._sold:(g.paid>0?g.paid:null)); };
-  var unit=hasRev?'백만 원':'명';
+  // [260805 운영자] 교육도 **실값이 있으면 막대**로 — 축은 수강생(명) 하나뿐이라 매출 축으로 갈아타지 않는다(카드 눈금 100~400과 어긋나면 안 된다).
+  var valOf=function(g){ if(ED)return (g._sold!=null&&g._sold>0)?g._sold:null;
+    return hasRev?((g._rev!=null)?(g._rev/1e6):null):((g._sold!=null&&g._sold>0)?g._sold:(g.paid>0?g.paid:null)); };
+  var unit=(hasRev&&!ED)?'백만 원':'명';
   var plan=function(g){ return g._st==='planned'; };
   var _fix=ED?(_yrCss('--green')||''):'';
   var gcol=function(g){ return g._col||_fix||_BIZ_GENRE_COLORS[g.genre||'기타']||_BIZ_GENRE_COLORS['기타']; };   // [260805] _col/_fix = 분야색 고정(교육엔 장르 축이 없다)
@@ -7310,23 +7391,33 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
   var yv=brk?vals.map(function(v){return v==null?null:brk.map(v);}):vals;
   // 값 라벨 = 큰 값 우선 배치 — 몰린 구간에서 겹치면 작은 값 라벨을 생략(정확값은 툴팁). 간격 26px ≈ 4자 라벨(9.5px) + 숨구멍(1920 실측 — 34px는 15일 떨어진 38.3까지 지웠다).
   var labs=rows.map(function(g,i){ return vals[i]==null?'':vfmt(vals[i]); });
-  var labGap=26/pxPerDay, placedX=[];
+  var labGap=29/pxPerDay, placedX=[];   // [260805] 라벨 10.5px로 키운 만큼 간격도 26→29(4자 라벨 폭 + 숨구멍)
   rows.map(function(g,i){return i;}).filter(function(i){return vals[i]!=null;})
     .sort(function(a,b){return vals[b]-vals[a];})
     .forEach(function(i){ var ok=placedX.every(function(p){return Math.abs(p-xs[i])>=labGap;}); if(ok)placedX.push(xs[i]); else labs[i]=''; });
+  // [260805 운영자 「교육도 그 위에 명수 숫자를 써줘 · 공연 차트도 각각 맨 위에 (백만 단위로)」]
+  //   값 라벨 = 9.5px·--dim(3.32:1 · 화면에서 거의 안 읽혔다) → **10.5px + 그 막대 색**(전시 피크 라벨과 같은 문법 =
+  //   숫자와 막대가 한 몸으로 읽힌다 · 장르색·분야색은 --dim보다 대비가 높다). 단위는 축 제목(백만 원)·카드 우상단(명)이 말한다.
   var tr={type:'bar',x:xs,y:yv,width:W,
-    text:labs, textposition:'outside', cliponaxis:false, textfont:{size:9.5,color:dim},
+    text:labs, textposition:'outside', cliponaxis:false, textfont:{size:10.5,color:rows.map(gcol)},
     marker:{color:rows.map(gcol),line:{width:0}},   // [260806 2차] 상태별 opacity·테두리 폐지 = 막대 농도 전부 동일 · 상태는 음영 구획이 말한다
-    customdata:rows.map(function(g){return [g.name,g.genre||'-',Math.round((g._sold!=null&&g._sold>0)?g._sold:g.paid),(g._rev!=null?_bizMoney(g._rev):'—'),(g.avg||0).toFixed(1),stName(g),dTxt(g)];}),
+    customdata:rows.map(function(g){return [g.name,(ED?(g._g2||'예술교육'):(g.genre||'-')),Math.round((g._sold!=null&&g._sold>0)?g._sold:g.paid),(g._rev!=null?_bizMoney(g._rev):'—'),(g.avg||0).toFixed(1),stName(g),dTxt(g)];}),   // [260805] 교육 = 프로그램 시트/운영대장 장르(예: 인문학)
     hovertemplate:'<b>%{customdata[0]}</b><br>%{customdata[6]} · %{customdata[5]} · %{customdata[1]}<br>'   // 눈금엔 달만 남는다 → 사업명·정확한 일자는 툴팁이 진다
-      +'판매 %{customdata[2]:,}명<br>매출 %{customdata[3]}<br>점유율 %{customdata[4]}%<extra></extra>'};
+      +(ED?'수강생 %{customdata[2]:,}명<extra></extra>'   // [260805] 교육은 좌석·점유율 축이 없다 = 수강생 한 줄
+          :'판매 %{customdata[2]:,}명<br>매출 %{customdata[3]}<br>점유율 %{customdata[4]}%<extra></extra>')};
   var vMax=Math.max.apply(null,vals.filter(function(v){return v!=null&&isFinite(v);}).concat([1]));
   var xAx={tickmode:'array',tickvals:ax.tickvals,ticktext:ax.ticktext,tickfont:{size:10.5,color:dim},
     range:[ax.x0,ax.x1],fixedrange:true,zeroline:false,showgrid:false,automargin:false};
   // [260805 운영자 「예술교육은 단위를 일단 100부터 400까지로 잡아서 표기해줘」] 교육 = 수강생 눈금 100·200·300·400을 **미리** 세운다
   //   (프로그램 단위 실값이 들어오면 그 자에 그대로 얹힌다). 지금 게이지는 값이 없어 파선이고, 높이는 전 항목 **동일**(눈금 사이 =
   //   특정 눈금값과 겹치지 않는 자리)이라 값으로 읽히지 않는다 — 툴팁도 「수강생 집계 전」을 계속 말한다.
-  var yAx=ED?{range:[0,_ED_YMAX],tickmode:'array',tickvals:[100,200,300,400],tickfont:{size:10.5,color:dim},gridcolor:grid,zeroline:false,fixedrange:true}
+  //   ⚠ 실값이 400을 넘으면 축을 넓힌다(안 그러면 막대가 잘려 **작아 보인다** = 오독) — 눈금 간격은 100 유지, 넓어지면 사다리로.
+  var _edTop=_ED_YMAX, _edTick=[100,200,300,400];
+  if(ED){
+    var _edMax=Math.max.apply(null,rows.map(valOf).filter(function(v){return v!=null&&isFinite(v);}).concat([0]));
+    if(_edMax>_ED_YMAX*0.94){ _edTop=_bizNiceStep(_edMax*1.12); var _st2=Math.max(100,_bizNiceStep(_edTop/4)); _edTick=[]; for(var _t=_st2;_t<=_edTop+1e-6;_t+=_st2)_edTick.push(Math.round(_t)); }
+  }
+  var yAx=ED?{range:[0,_edTop],tickmode:'array',tickvals:_edTick,tickfont:{size:10.5,color:dim},gridcolor:grid,zeroline:false,fixedrange:true}
     :{title:{text:unit,font:{size:10.5,color:dim}},tickfont:{size:10.5,color:dim},gridcolor:grid,zeroline:false,fixedrange:true,rangemode:'tozero'};
   var lay={height:hgt,margin:{l:ED?38:52,r:10,t:18,b:34},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',showlegend:false,xaxis:xAx,yaxis:yAx};
   var zone=_bizYearZones(Y,ax.x0,ax.x1,dim,_bizZoneCut(rows,Y,ax.x0,ax.x1),ED?'--green':'--peach-text');   // [260805] 경계 = 진행중 포함 · 교육 음영 = 그린(운영자)
@@ -7357,23 +7448,26 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
   } else if(note) note.textContent='';                           // 재그리기로 중략이 풀렸는데 각주만 남는 것 차단
   // [260805] 값이 없는 사업 = **빈 파선 자리**로만(예정 · 매출 미조인 · 교육 일정). 파선은 Plotly 막대 테두리로 못 그려서
   //   (marker.line에 dash 없음) 도형으로 그리고, 그 자리에 **투명 채움 막대**를 겹쳐 호버(사업명·상태)를 살린다.
-  var pidx=[],i2; for(i2=0;i2<rows.length;i2++)if((ED||plan(rows[i2])||vals[i2]==null)&&xs[i2]!=null)pidx.push(i2);
+  //   [260805] 교육도 **값이 있는 항목은 파선이 아니라 실막대**다 → 파선 자리 = 값이 없는 것만(vals[i]==null).
+  var pidx=[],i2; for(i2=0;i2<rows.length;i2++)if((plan(rows[i2])||vals[i2]==null)&&xs[i2]!=null)pidx.push(i2);
+  var axTop=brk?brk.rng:(ED?_edTop:vMax*1.12);
+  var pY=ED?(_edTop*0.62):axTop*0.07, hw=W/2;   // 교육 = 눈금 사이(축 상한의 62% = 특정 눈금과 안 겹침) 고정 높이 = 값으로 안 읽힌다 · 값 축은 종전 7% 자리
   if(pidx.length){
-    var axTop=brk?brk.rng:(ED?_ED_YMAX:vMax*1.12);
-    var pY=ED?(_ED_YMAX*0.62):axTop*0.07, hw=W/2;   // 교육 = 눈금 사이(248 ≈ 200~300 중간) 고정 높이 = 값으로 안 읽힌다 · 값 축은 종전 7% 자리
     var psh=pidx.map(function(i){ return {type:'rect',xref:'x',yref:'y',layer:'above',x0:xs[i]-hw,x1:xs[i]+hw,y0:0,y1:pY,fillcolor:'rgba(0,0,0,0)',line:{color:gcol(rows[i]),width:1.2,dash:'dash'}}; });
     lay.shapes=lay.shapes.concat(psh);
-    // [260805 운영자] 교육 색인(①②③… = _bizEduMonthRows가 시작일순으로 부여) — 게이지 열 머리에 단다.
-    //   원문자 = 「(단위: 명)」 아래에서 값 숫자로 오독되지 않는 색인 표기 · 잉크 = 그 게이지 색(분야색) = 한 몸으로 읽힌다.
-    if(ED)lay.annotations=lay.annotations.concat(pidx.filter(function(i){return rows[i]._idx!=null;}).map(function(i){
-      return {xref:'x',x:xs[i],xanchor:'center',yref:'y',y:pY,yanchor:'bottom',yshift:2,text:String(rows[i]._idx),showarrow:false,font:{size:10,color:gcol(rows[i])}};
-    }));
     tr2={type:'bar',width:W,marker:{color:'rgba(0,0,0,0)',line:{width:0}},showlegend:false,hoverinfo:'text',textposition:'none',
       x:pidx.map(function(i){return xs[i];}),y:pidx.map(function(){return pY;}),
       text:pidx.map(function(i){ var g=rows[i]; return ED?((g._idx?g._idx+' ':'')+g.name+'\n'+dTxt(g)+' · '+stName(g)+'\n수강생 집계 전')
         :(g.name+'\n'+dTxt(g)+' · '+(g.genre||'-')+'\n'+(plan(g)?'예정 · 티켓 오픈 전':stName(g)+' · 자료 없음')); })};
   }
-  try{ Plotly.newPlot(div,ED?(tr2?[tr2]:[]):(tr2?[tr,tr2]:[tr]),lay,{displayModeBar:false,responsive:true}); }catch(_e){ console.warn('[biz bars]',_e); }
+  // [260805 운영자] 교육 색인(①②③… = _bizEduMonthRows가 시작일순으로 부여) — **모든** 교육 열 머리에 단다
+  //   (실막대는 막대 꼭대기 위 · 값 라벨과 겹치지 않게 한 칸 더 · 파선은 게이지 끝). 원문자 = 값 숫자로 오독되지 않는 색인 표기.
+  if(ED)lay.annotations=lay.annotations.concat(rows.map(function(g,i){ return (g._idx==null||xs[i]==null)?null:{
+      xref:'x',x:xs[i],xanchor:'center',yref:'y',y:(vals[i]!=null?vals[i]:pY),yanchor:'bottom',yshift:(vals[i]!=null?15:2),
+      text:String(g._idx),showarrow:false,font:{size:10,color:gcol(g)}}; }).filter(Boolean));   // [260805] 값 라벨 10.5px 위로 한 칸 더(13→15)
+  var _traces=ED?(vals.some(function(v){return v!=null;})?[tr]:[]):[tr];   // 교육 = 값이 하나도 없으면 실막대 트레이스 자체를 안 싣는다(0 막대 오독 방지)
+  if(tr2)_traces.push(tr2);
+  try{ Plotly.newPlot(div,_traces,lay,{displayModeBar:false,responsive:true}); }catch(_e){ console.warn('[biz bars]',_e); }
 }
 // ── [260804 운영자] 기획 전시 = **세로 누적범위 음영 그래프** ────────────────────────────────
 //   지시: *"전시는 장기간이니까 누적범위 그래프로 · (전시간에 중첩될 수도 있음) · 꼭대기는 항상 최종인원 판매로
@@ -7419,13 +7513,16 @@ function _bizDrawExhibFlow(divId,list,hgt){
   var yTop=_bizNiceStep(maxV*1.08), data=[],notes=[],shapes=[];
   var zone=_bizYearZones(Y,ax.x0,ax.x1,dim,_bizZoneCut(rows,Y,ax.x0,ax.x1),'--peach-text');   // [260805] 경계 = 진행중 포함 · 강조색2(peach) = 운영자
   shapes=zone.shapes; notes=zone.notes;
-  // [260805 운영자 「전시별로 색상을 다르게 · 캘린더 전시마다 테마색 있는데 항상 링킹되게」]
-  //   선·채움 색 = 그 전시의 캘린더 색(_bizExCol → _EX_SPACE 공간색). 같은 공간 전시가 여럿이면 **같은 색**이 되므로
-  //   채움 알파를 순번별로 낮춰 층을 가른다(.20/.15/.11/.08 · 기틀 §3.5② 같은 토큰 alpha 변주 = 새 색 0).
-  //   ⚠ 색을 새로 배정하지 않는다 — 캘린더와 갈리는 순간 「링킹」 요구가 깨진다. 개별 식별은 피크 동그라미·값 라벨·툴팁이 진다.
+  // [260805 운영자] 선·채움 색 = 그 전시의 캘린더 색(_bizExCol → _EX_SPACE 공간색 · 개별 지정은 _BIZ_EX_COL 예외표).
+  //   같은 색이 겹치면 채움 알파를 순번별로 낮춰 층을 가른다(.20/.15/.11/.08 · 기틀 §3.5② alpha 변주 = 새 색 0).
+  // [260805 운영자 「이미 끝난거가 항상 레이어 위로 올라오게」] Plotly는 **나중에 실은 트레이스가 위**다 →
+  //   진행중·예정을 먼저 싣고 **종료를 나중에** 싣는다. 겹치는 구간에서 완결된 곡선이 진행중 곡선에 가리지 않는다.
+  //   ⚠ 알파 순번(_seen)은 **그리기 순서와 무관**하게 세야 색 층이 매 렌더 같다 → 순번은 built 원순서(종료일순)로 미리 매긴다.
   var _seen={}, ALPHA=[0.20,0.15,0.11,0.08];
   var colOf=function(g){ return g._col||pc; };
-  built.forEach(function(b){
+  built.forEach(function(b){ if(!b.plan)b._n=(_seen[colOf(b.g)]=(_seen[colOf(b.g)]||0)+1); });
+  var _done=function(b){ return !b.plan&&b.g._st!=='active'; };
+  var draw=function(b){
     var g=b.g, col=colOf(g);
     if(b.plan){
       var x0=_bizXDay(b.s,Y),x1=_bizXDay(b.e,Y);
@@ -7435,18 +7532,25 @@ function _bizDrawExhibFlow(divId,list,hgt){
         text:g.name+'\n'+md(b.s)+'~'+md(b.e)+' · 예정\n전시 시작 전'});
       return;
     }
-    var st=(g._st==='active')?'진행중':'종료';
-    var n=(_seen[col]=(_seen[col]||0)+1);
+    var fin=_done(b), st=fin?'종료':'진행중';
     var tip=g.name+'\n'+md(g.start||g.end)+'~'+md(g.end||g.start)+' · '+st+'\n누적 판매 '+Math.round(b.peak[1]).toLocaleString()+'명'+(g.seat>0?('\n달성률 '+(g.avg||0).toFixed(1)+'%'):'');
-    data.push({type:'scatter',mode:'lines',x:b.xy.map(function(p){return p[0];}),y:b.xy.map(function(p){return p[1];}),
-      fill:'tozeroy',fillcolor:_yrHexA(col,ALPHA[Math.min(n-1,ALPHA.length-1)]),line:{color:col,width:1.6},showlegend:false,hoverinfo:'text',hoveron:'points+fills',text:tip});
+    // [260805 운영자 「끝난거는 마무리 선도 진하게 해서 차트를 완결시켜버리셈(끝에 절벽처럼 떨어지는 부분)」]
+    //   종료 전시는 꼭대기에서 바닥으로 **내려긋고 닫는다** — 좌표 끝에 [피크x, 0]을 더하면 선·채움이 같이 닫혀
+    //   「여기서 끝났다」가 도형으로 확정된다(진행중은 안 닫는다 = 아직 절벽이 없다).
+    var xy=fin?b.xy.concat([[b.peak[0],0]]):b.xy;
+    data.push({type:'scatter',mode:'lines',x:xy.map(function(p){return p[0];}),y:xy.map(function(p){return p[1];}),
+      fill:'tozeroy',fillcolor:_yrHexA(col,ALPHA[Math.min((b._n||1)-1,ALPHA.length-1)]),line:{color:col,width:1.6},showlegend:false,hoverinfo:'text',hoveron:'points+fills',text:tip});
+    if(fin)data.push({type:'scatter',mode:'lines',x:[b.peak[0],b.peak[0]],y:[b.peak[1],0],   // 마감 절벽 = 한 겹 더 진하게(2.4) — 곡선 굵기 1.6과 구분되는 「완결」 표식
+      line:{color:col,width:2.4},showlegend:false,hoverinfo:'skip'});
     // [260805 운영자 「피크를 찍은 구간은 동그라미로 한번 더 표기(마지막이 피크 · 진행중인 전시는 진행중인 것 마지막)」]
     //   곡선이 단조 증가(누계)라 **마지막 점 = 피크**다 — 종료 전시는 종료일의 최종, 진행중 전시는 지금까지의 누계.
     //   테두리 = 카드 바탕(--surface-solid)이라 곡선이 겹쳐도 동그라미가 서로 먹지 않는다.
     data.push({type:'scatter',mode:'markers',x:[b.peak[0]],y:[b.peak[1]],
       marker:{size:8,color:col,line:{color:_yrCss('--surface-solid'),width:1.6}},showlegend:false,hoverinfo:'text',text:tip});
-    notes.push({xref:'x',x:b.peak[0],xanchor:'center',yref:'y',y:b.peak[1],yanchor:'bottom',yshift:6,text:Math.round(b.peak[1]).toLocaleString(),showarrow:false,font:{size:9.5,color:col}});   // 꼭대기 = 최종(종료)/현재(진행) 누계 명 · 잉크 = 그 전시 색(동그라미와 한 몸)
-  });
+    notes.push({xref:'x',x:b.peak[0],xanchor:'center',yref:'y',y:b.peak[1],yanchor:'bottom',yshift:6,text:Math.round(b.peak[1]).toLocaleString(),showarrow:false,font:{size:10.5,color:col}});   // 꼭대기 = 최종(종료)/현재(진행) 누계 명 · 잉크 = 그 전시 색(동그라미와 한 몸)
+  };
+  built.filter(function(b){ return !_done(b); }).forEach(draw);   // 진행중·예정 = 아래층
+  built.filter(_done).forEach(draw);                              // 종료 = 위층(운영자)
   var lay={height:hgt,margin:{l:46,r:10,t:18,b:30},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',showlegend:false,
     xaxis:{tickmode:'array',tickvals:ax.tickvals,ticktext:ax.ticktext,tickfont:{size:10.5,color:dim},range:[ax.x0,ax.x1],fixedrange:true,zeroline:false,showgrid:false,automargin:false},
     yaxis:{tickfont:{size:10.5,color:dim},gridcolor:grid,zeroline:false,fixedrange:true,range:[0,yTop]},   // 단위(명)는 카드 우상단 「(단위: 명)」이 말한다
@@ -11390,10 +11494,22 @@ var _BIZ_GENRE_COLORS={'클래식':'#4A4DE7','뮤지컬':'#1A6B3C','대중':'#08
 //   ⚠ 판정 소스 = **장르 문자열 + 사업명 둘 다**. 운영대장 `장르1`은 정규 6분류라 문자열만 보면
 //     「어린이 뮤지컬」류가 계속 뮤지컬로 남는다 = 운영자가 말한 「db까지 통합」이 안 된다.
 //     그래서 이름을 같이 본다(이 함수를 부르는 3소스 = 운영대장·판매 축·프로그램 시트 전부 이름을 넘긴다).
-var _BIZ_KID_RE=/어린이/;
+//   ⚠ [260807-5 운영자] **`가족`은 본제목에 있을 때만** 승격한다 — 부제(꺾쇠·따옴표 안)에만 있으면 본제목 장르를 따른다.
+//     운영자 판정 3건이 이 선을 그었다: 「가족오페라 '신콩쥐'」·「환상가족음악극 〈리틀 뮤지션〉」 = **어린이·가족**
+//     (가족이 장르어와 붙어 본제목을 이룬다) / 「여수필하모닉 제36회 **정기연주회** 〈…송년의 밤, 가족음악회〉」 = **클래식**
+//     (본제목은 정기연주회이고 가족은 부제 안 수식). 실데이터 대조 = 그 3건 전건 재현 · 올라감 10 / 유지 1.
+//     `어린이`는 부제 여부를 안 본다 — 어린이는 대상을 못 박는 낱말이라 어디 있든 사업 성격이 그것이다.
+var _BIZ_KID_RE=/어린이/, _BIZ_FAM_RE=/가족/;
+var _BIZ_SUB_RE=/[<〈「『"“‘'][^>〉」』"”’']*[>〉」』"”’']/g;   // 부제 = 꺾쇠·따옴표 묶음(레포 표기 관례 · _uName의 괄호 집합과 같은 축)
+//   [260807-5 운영자 「무용 과 발레 같은 개념으로 발레/연극」] 시트 표기가 맵 키와 아예 다른 값의 별칭표.
+//   포함 검사로는 못 잡는다('발레/연극'과 '무용'은 서로의 부분열이 아니다) — 구판은 통째로 기타였다.
+var _BIZ_GENRE_ALIAS={'무용':'발레/연극'};
 function _bizGenreKey(s,name){
-  if(_BIZ_KID_RE.test(String(s||''))||_BIZ_KID_RE.test(String(name||'')))return '어린이·가족';
-  s=String(s||'').trim(); if(!s)return '기타';
+  var _g=String(s||''), _nm=String(name||'');
+  if(_BIZ_KID_RE.test(_g)||_BIZ_KID_RE.test(_nm))return '어린이·가족';
+  if(_BIZ_FAM_RE.test(_g)||_BIZ_FAM_RE.test(_nm.replace(_BIZ_SUB_RE,'')))return '어린이·가족';
+  s=_g.trim(); if(!s)return '기타';
+  if(_BIZ_GENRE_ALIAS[s])return _BIZ_GENRE_ALIAS[s];
   if(_BIZ_GENRE_COLORS[s])return s;
   var keys=Object.keys(_BIZ_GENRE_COLORS),i;
   for(i=0;i<keys.length;i++){ if(keys[i]==='기타')continue; if(keys[i].indexOf(s)>=0||s.indexOf(keys[i])>=0)return keys[i]; }
@@ -20124,7 +20240,12 @@ function openPromoCheck(){
        + '<button class="btn btn--neutral btn--sm" style="margin-top:12px" onclick="closePromoCheck();openPromoCheck()">다시 시도</button></div>';
   }else{
     var s=_promoCheckScan(), h=[];
-    var card=function(t,sub,inner){ return '<div class="bizm-card" style="padding:14px 16px"><div style="font-size:14px;font-weight:800">'+t
+    // [260805 운영자] 카드 사이 간격 = 정본 `.bizm-card` margin-bottom 14 → **21**(지시 「지금의 +50%」 · 14×1.5).
+    //   마지막 카드에도 그대로 걸려 「카드↔카드」와 「마지막 카드↔집계줄」이 **같은 21**로 선다(간격 항상 일정).
+    //   인라인으로 두는 이유 = 이 모달만의 값. 전역 `.bizm-card`(L2298)를 건드리면 대시보드 이젤 하단선 계약
+    //   (tools/smoke_layout.mjs ①~③)이 좌·우 열 전부에서 흔들린다.
+    // 제목 잉크 = `var(--accent)`(강조색1 · 운영자 260805) — 흰 카드 위 6.0:1(WCAG AA 통과) · 신규 hex 0.
+    var card=function(t,sub,inner){ return '<div class="bizm-card" style="padding:14px 16px;margin-bottom:21px"><div style="font-size:14px;font-weight:800;color:var(--accent)">'+t
       +(sub?'<span style="font-size:11.5px;font-weight:600;color:var(--neutral-text);margin-left:8px">'+sub+'</span>':'')+'</div>'+inner+'</div>'; };
     var row=function(lead,main,sub,hot){ return '<div style="display:flex;gap:10px;align-items:baseline;padding:7px 0;border-top:1px solid var(--border)">'
       +'<span style="font-size:12px;font-weight:800;white-space:nowrap;font-variant-numeric:tabular-nums;color:'+(hot?'var(--danger-btn)':'var(--neutral-text)')+'">'+lead+'</span>'
@@ -20145,8 +20266,14 @@ function openPromoCheck(){
   }
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closePromoCheck)">'
     + '<div class="modal" style="width:min(760px,94vw);max-height:88vh;display:flex;flex-direction:column;overflow:hidden">'
-    + '<button class="modal-x" onclick="closePromoCheck()" title="닫기">×</button>'
-    + '<div style="font-size:17px;font-weight:800;padding:2px 0 10px">AI 홍보 · 점검</div>'
+    // [260805 운영자 「우측 상단에 x로 · 디자인 정본따르게」] 머리줄 = X + 제목을 **한 덩이(블록)로 묶는다**.
+    //   원인: 이 모달은 `display:flex`라 정본 `.modal-x{float:right}`(L1126)가 **flex 항목에선 무효** — 그래서
+    //   X가 제목 위 좌측에 세로로 쌓였다. 묶음 div는 flex 항목 = BFC라 그 안에서 float가 되살아나고,
+    //   자리는 정본 계산(`margin:-8px -8px 0 0` + sticky)이 그대로 낸다 = 일반 모달과 **같은 우상단 21/29px**.
+    //   좌표 하드코딩(`.pw-modal .modal-x` L1525식 absolute) 대신 이 방식을 쓰는 이유 = 모바일 `.modal{padding:18px}`
+    //   (L418)에서도 정본이 자동으로 따라온다(고정 px면 그 화면만 어긋난다).
+    + '<div><button class="modal-x" onclick="closePromoCheck()" title="닫기">×</button>'
+    + '<div style="font-size:17px;font-weight:800;padding:2px 0 10px">AI 홍보 · 점검</div></div>'
     + '<div style="overflow:auto;flex:1;min-height:0">'+body+'</div></div></div>';
 }
 
@@ -21181,11 +21308,31 @@ function _progRunTxt(p){
   var r=rc||d;
   return escapeHtml(d+'일 '+r+'회')+(rc?'':'<span style="color:var(--muted)"> 추정</span>');
 }
+// ── [260808 운영자] 목록 나열 축 = 구분 묶음 → 그 안에서 진행 시작일 오름차순 ────────────────
+//   종전엔 정렬이 아예 없어 시트 행 순서를 그대로 뿌렸다(Worker handleGetSheet = 행 번호 오름차순 · 정렬 0).
+//   NO는 시트에 박힌 값(등록 시 max(NO)+1)이라 「등록한 순서」일 뿐 구분·일자와 무관 →
+//   화면에서 공연 사이에 전시가 끼어 있었다(운영자 스샷 3·4행). 이제 공연은 공연끼리, 전시는 전시끼리 모인다.
+//   구분 순서 = 콘텐츠 시트(CONTENT_TYPES) 순서 계승 — 프로그램 폼 드롭다운·홍보 신청 구분과 같은 한 출처라
+//   표기와 순서가 어긋날 수 없다(달력 패널 _PK_ORDER가 perfBadgeKind 하나로 줄 세우는 것과 같은 규칙).
+//   목록 밖 구분(시트에 없는 값)은 맨 뒤 · 폴백 목록은 홍보 신청 구분 select(§_pwData.customCat)와 같은 리터럴.
+//   같은 구분 안 = 진행 시작일 오름차순, 시작일 없는 행은 그 구분 맨 뒤(원래 순서 유지 = 안정 정렬).
+function _pgCatOrder(){ return (CONTENT_TYPES.length>0?CONTENT_TYPES:['공연','전시','예술교육','대관','기타']); }
+function _pgCatRank(p){
+  var o=_pgCatOrder(), i=o.indexOf(String(p&&p['콘텐츠구분']||'').trim());
+  return i<0?o.length:i;
+}
+function _pgSortRows(rows){
+  return (rows||[]).slice().sort(function(a,b){
+    var d=_pgCatRank(a)-_pgCatRank(b); if(d)return d;
+    var sa=excelDateInputValue(a['시작일'])||'9999-99-99', sb=excelDateInputValue(b['시작일'])||'9999-99-99';
+    return sa<sb?-1:(sa>sb?1:0);
+  });
+}
 function buildProgramListHtml(programs){
   // [260731 운영자] 상위 구분 = 기획 / 대관. 기획 = 프로그램 시트(콘텐츠구분 ≠ 대관) · 대관 = 프로그램 시트 대관 행 + 구글 캘린더 대관 일정.
   var _sheet=(programs||[]);
-  var _plan=_sheet.filter(function(p){return !_pgIsRentalRow(p);});
-  var _rent=_sheet.filter(function(p){return _pgIsRentalRow(p)&&!_pgIsSyncRow(p);}).concat(_pgRentals||[]);   // [260801] 편입 행 제외 = 구글 라이브 행과 이중 노출 방지(§_pgIsSyncRow)
+  var _plan=_pgSortRows(_sheet.filter(function(p){return !_pgIsRentalRow(p);}));
+  var _rent=_pgSortRows(_sheet.filter(function(p){return _pgIsRentalRow(p)&&!_pgIsSyncRow(p);}).concat(_pgRentals||[]));   // [260801] 편입 행 제외 = 구글 라이브 행과 이중 노출 방지(§_pgIsSyncRow)
   var _rows=(_pgKind==='기획')?_plan:((_pgKind==='대관')?_rent:_plan.concat(_rent));
   let html='<div style="display:flex;align-items:center;margin-bottom:10px;gap:8px;padding-bottom:14px;padding-right:48px;border-bottom:1px solid #eee">';
   html+='<h3 style="margin:0;flex:1;text-align:left">프로그램 관리</h3>';
@@ -24102,7 +24249,9 @@ function _bnavMore(){
   let h='<div class="bn-sheet">';
   const add=function(emo,label,fnStr){h+='<button class="bn-sheet-item" onclick="this.closest(\'.bn-sheet-bg\').remove();'+fnStr+'"><span class="emo">'+emo+'</span>'+label+'</button>';};
   add('📝','네이버 블로그 글쓰기','openNaverBlogTool()');
-  add('🎯','로고 제작','openLogoMaker()');   // [260804 운영자] 데스크톱 「콘텐츠 제작」 드롭다운과 같은 진입점 — 좁은 폭에서도 닿게
+  // [260805 운영자] 「로고 제작」 메뉴 숨김 — 데스크톱 드롭다운(_contentMenuBuild)과 같이 내림. 롤백 = 이 줄 주석 해제.
+  //   숨김일 뿐 제거가 아니다: openLogoMaker()·_lm* 함수와 .lm-* CSS는 그대로 살아있다(.lm-wrap·.lm-col은 「카카오 메세지 설계」가 공용 — 지우면 그쪽이 깨진다).
+  // add('🎯','로고 제작','openLogoMaker()');   // [260804 운영자] 데스크톱 「콘텐츠 제작」 드롭다운과 같은 진입점 — 좁은 폭에서도 닿게
   add('🔗','링크 자료수집','openLinkGrab()');
   add('🧩','플랫폼 현황','openPlatformBoard()');
   add('⇄','대시보드 화면 (메인)','setMainView(\'biz\')');   // [260723 평의회3 HIGH] 좁은 폭 토글 숨김 시에도 메인 복귀 경로 보장
@@ -24198,7 +24347,8 @@ function _contentMenuBuild(menu){
   var hov=' onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'"';
   menu.innerHTML='<div style="padding:8px 14px 6px;font-size:11px;color:var(--dim);font-weight:700">콘텐츠 제작</div>'
     +'<button type="button" onclick="_ddCloseAll();openCardMaker()" style="'+itemCss+'"'+hov+'>카드 제작</button>'   /* [260803 운영자] 사진 첨부 → 비율 안 확대·이동 절삭 + 문구 → PNG 내려받기 (nomute-editor 카드뉴스 이식 — apps/comp/card_news.py 기하 정본) */
-    +'<button type="button" onclick="_ddCloseAll();openLogoMaker()" style="'+itemCss+'"'+hov+'>로고 제작</button>'   /* [260804 운영자] 이름·형태·느낌·색 → 로고 PNG (Nutlope/logocreator 프롬프트 로직 이식 · 엔진 = 기존 GEMINI_API_KEY) */
+    // [260805 운영자] 「로고 제작」 메뉴 숨김 — 모바일 「더보기」 시트(_bnavMore)와 같이 내림. 롤백 = 아래 줄 주석 해제(양쪽 다).
+    // +'<button type="button" onclick="_ddCloseAll();openLogoMaker()" style="'+itemCss+'"'+hov+'>로고 제작</button>'   /* [260804 운영자] 이름·형태·느낌·색 → 로고 PNG (Nutlope/logocreator 프롬프트 로직 이식 · 엔진 = 기존 GEMINI_API_KEY) */
     +'<button type="button" onclick="_ddCloseAll();openKakaoDesigner()" style="'+itemCss+'"'+hov+'>카카오 메세지 설계</button>'   /* [260805 운영자] 공연 고르면 상세 링크 → 포스터 OCR → 카카오 76자 문구 후보 (홍보 신청 위저드 [AI 문구 제안]과 같은 엔진·같은 후보 카드) */
     +'<button type="button" onclick="_ddCloseAll();openNaverBlogTool()" style="'+itemCss+'"'+hov+'>네이버 블로그</button>'
     +'<button type="button" onclick="_ddCloseAll();openHwpEditor()" style="'+itemCss+'"'+hov+'>한글문서 편집</button>'   /* [260803 운영자] 문서 올림 → 미리보기 → 말로 수정 (claw-hwp 이식 — hwp/NOTICE.md) */
@@ -28644,6 +28794,13 @@ function _veSpecPrompt(){
 //  🔒 공용 PC 원칙(블로그 도우미와 동일): 닫으면 상태 전멸 — 다음 사용자에게 남의 문서가 안 보인다.
 //  레퍼런스 = openNaverBlogTool/openLinkGrab 보드 골격 + .btn/.nb-chip/.nb-textarea/.u-empty 정본 컴포넌트. 신규 raw hex 0.
 // ============================================================
+// ── 서버 보관 정책 (한글문서 편집·오피스문서 편집·용량 줄이기 공용) — 운영자 260805 ────────────────
+//  「문서 최근 3개까지만 쌓이게 하고 안 쌓이게 해줘」. 실제 회수는 `shared/drafts_retain.mjs`가 하고
+//  네 워크플로(nb-blog·hwp-edit·office-edit·slim)가 커밋 직전에 호출한다 — **이 값과 같아야 한다**.
+//  ⚠ 이 레포는 공개 레포다(실측: raw.githubusercontent.com 비인증 GET 200) → 남겨 두는 개수 = 노출 면적.
+//    그래서 화면에도 적는다: 사람이 「서버에 얼마나 남는지」를 모르고 올리면 안 된다.
+var _DRAFT_KEEP=3;
+var _DRAFT_NOTE='서버에 올린 문서는 결과를 받으면 바로 지우고, 결과도 최근 '+_DRAFT_KEEP+'개까지만 보관해요';
 var _HW_MAX=8*1024*1024;      // 업로드 상한 8MB — 한글 공문서는 통상 1MB 미만(용량 초과는 안내로 차단)
 var _HW_EXT=/\.(hwp|hwpx)$/i;
 var _hwState=null;            // {name,bytes,out,outName,view,busy,step,pages,escHandler}
@@ -28701,7 +28858,7 @@ function _hwStageEmpty(){
   var st=document.getElementById('hw-stage');if(!st)return;
   st.innerHTML='<div class="u-empty" style="margin:auto"><div class="ico">📄</div>'
     +'<div class="msg">한글문서(.hwp · .hwpx)를 올리면 미리보기가 열려요</div>'
-    +'<div style="font-size:12px;color:var(--dim);margin-bottom:14px;line-height:1.7">여기로 끌어다 놓거나 아래 버튼으로 고르세요<br>미리보기는 이 컴퓨터 안에서만 열립니다</div>'
+    +'<div style="font-size:12px;color:var(--dim);margin-bottom:14px;line-height:1.7">여기로 끌어다 놓거나 아래 버튼으로 고르세요<br>미리보기는 이 컴퓨터 안에서만 열립니다<br>'+escapeHtml(_DRAFT_NOTE)+'</div>'
     +'<button type="button" class="btn btn--primary btn--md" onclick="_hwPick()">문서 고르기</button></div>';
 }
 function _hwStageMsg(msg,isErr){
@@ -28885,7 +29042,7 @@ function _ofStageDraw(){
   if(!s.bytes){
     st.innerHTML='<div class="u-empty" style="margin:auto"><div class="ico">🗂️</div>'
       +'<div class="msg">워드 · 엑셀 · PPT 문서(.docx · .xlsx · .pptx)를 올려 주세요</div>'
-      +'<div style="font-size:12px;color:var(--dim);margin-bottom:14px;line-height:1.7">여기로 끌어다 놓거나 아래 버튼으로 고르세요<br>파일은 [문서 수정]을 누를 때만 서버로 보내요</div>'
+      +'<div style="font-size:12px;color:var(--dim);margin-bottom:14px;line-height:1.7">여기로 끌어다 놓거나 아래 버튼으로 고르세요<br>파일은 [문서 수정]을 누를 때만 서버로 보내요<br>'+escapeHtml(_DRAFT_NOTE)+'</div>'
       +'<button type="button" class="btn btn--primary btn--md" onclick="_ofPick()">문서 고르기</button></div>';
     return;
   }
@@ -28908,7 +29065,8 @@ function _ofStageDraw(){
   st.innerHTML='<div class="u-empty" style="margin:auto"><div class="ico">'+mt.ico+'</div>'
     +'<div class="msg">'+escapeHtml(s.name)+'</div>'
     +'<div style="font-size:12px;color:var(--dim);line-height:1.7">'+mt.kind+' · '+_ofSize(s.bytes.length)
-    +'<br>미리보기는 지원하지 않아요 — 아래에 어떻게 바꿀지 적고 [문서 수정]을 누르면<br>서버에서 고친 문서를 요약과 함께 돌려드려요</div></div>';
+    +'<br>미리보기는 지원하지 않아요 — 아래에 어떻게 바꿀지 적고 [문서 수정]을 누르면<br>서버에서 고친 문서를 요약과 함께 돌려드려요'
+    +'<br>'+escapeHtml(_DRAFT_NOTE)+'</div></div>';
 }
 
 // ── 파일 받기 ─────────────────────────────────────────────────────────────
@@ -29146,7 +29304,7 @@ function _slStageDraw(){
     +'<div class="msg">'+escapeHtml(s.name)+'</div>'
     +'<div style="font-size:12px;color:var(--dim);line-height:1.7">'+mt.kind+' · '+_slSize(s.orig.length)
     +'<br>아래에서 세기를 고르고 [용량 줄이기]를 누르세요'
-    +(s.runner?'<br>이 형식(PDF · 구형 한글)은 서버에서 처리해요 — 파일이 서버로 올라가요'
+    +(s.runner?'<br>이 형식(PDF · 구형 한글)은 서버에서 처리해요 — 파일이 서버로 올라가요<br>'+escapeHtml(_DRAFT_NOTE)
               :'<br>이 PC에서 바로 처리해요 — 파일이 밖으로 나가지 않아요')+'</div></div>';
 }
 

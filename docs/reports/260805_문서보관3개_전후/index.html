@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>260805 drafts 산출물 최근 3개 보관 + 화면 안내 · 전후</title>
+<style>
+  body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;max-width:1060px;margin:30px auto;padding:0 20px;color:#1A1A2E;line-height:1.6}
+  h1{font-size:20px} h2{font-size:16px;margin-top:34px}
+  img{max-width:100%;border:1px solid rgba(0,0,0,0.12);border-radius:12px;display:block;margin:10px 0}
+  .dim{color:#888;font-size:12.5px} code{background:rgba(74,77,231,0.08);padding:1px 5px;border-radius:5px;font-size:12px}
+  table{border-collapse:collapse;font-size:13px;margin:10px 0;width:100%} td,th{border:1px solid rgba(0,0,0,0.12);padding:6px 10px;text-align:left;vertical-align:top}
+  th{background:rgba(0,0,0,0.02)}
+  .c1{color:#4A4DE7;font-weight:700} .c3{color:#1A6B3C;font-weight:700}
+  .ba{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .ba .lb{font-size:12px;font-weight:700;color:#888;margin-bottom:2px}
+  .ba .lb b{color:#1A1A2E}
+  .note{background:rgba(74,77,231,0.05);border-left:3px solid #4A4DE7;padding:10px 14px;border-radius:0 8px 8px 0;font-size:12.5px;margin:12px 0}
+  .warn{background:rgba(226,75,74,0.05);border-left:3px solid #E24B4A;padding:10px 14px;border-radius:0 8px 8px 0;font-size:12.5px;margin:12px 0}
+  .num{text-align:right;font-variant-numeric:tabular-nums}
+  @media(max-width:820px){.ba{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<h1>260805 — <span class="c1">drafts 산출물 최근 3개 보관</span> + 화면 안내</h1>
+<p class="dim">지시(운영자): <b>「문서 최근 3개까지만 쌓이게하고 안쌓이게해줘 ui에도 반영 디자인 정본따라서」</b></p>
+
+<h2>1. 왜 쌓였나 — 원인 2개(둘 다 실측)</h2>
+<table>
+<tr><th>워크플로</th><th>구 회수 코드</th><th>실제 동작</th></tr>
+<tr><td><code>nb-blog.yml</code></td><td><code>/^yc(\d+)r\d+\.json$/</code> 만 3일 TTL</td>
+    <td>주석에 <b>「블로그 초안(nb*)은 무접촉」</b>이라고 명시 — <b>nb는 아예 안 지웠다</b>. 260805 실측 <b>nb 18건</b> 누적</td></tr>
+<tr><td><code>hwp-edit.yml</code><br><code>office-edit.yml</code></td><td><code>/^of(\d+)\.(in|out)\./</code> 3일 TTL</td>
+    <td>id = 접두 + <code>Date.now()</code>(13자리) + 난수(≤3자리) → <code>(\d+)</code>가 <b>16자리(≈1.75e15)를 통째로</b> 캡처 →
+        <code>now − 그것</code>이 늘 음수 → <code>&gt; ttl</code>이 <b>영영 참이 안 됨</b> = 회수가 한 번도 안 돌았다</td></tr>
+</table>
+<div class="warn"><b>이 레포는 공개 레포다.</b> <code>raw.githubusercontent.com</code>에 <b>비인증 GET → HTTP 200</b> 실측.
+즉 <code>drafts/</code>에 남은 파일은 <b>누구나 받을 수 있다</b> — 남겨 두는 개수가 곧 노출 면적이다.</div>
+
+<h2>2. 고친 방식 — 시간(TTL)이 아니라 <span class="c1">개수</span></h2>
+<p class="dim">공용 회수기 <code>shared/drafts_retain.mjs</code> 신설. 네 워크플로(<code>nb-blog</code>·<code>hwp-edit</code>·<code>office-edit</code>·<code>slim</code>)가
+커밋 직전에 호출한다. <b>정기 크론은 안 만들었다</b> — 이 레포는 정기 봇 커밋 축이 없고(CLAUDE.md 「빌드 큐」 절), 신설하면 그 절의 짝 규칙이 따라붙는다.</p>
+<ul class="dim">
+  <li><b>시각은 정렬에만 쓰고 임계 비교를 안 한다</b> → 위 ②의 16자리 함정을 원천적으로 안 밟는다(그래도 <code>\d{13}</code>로 못박음).</li>
+  <li>접두(<code>nb</code>·<code>yc</code>·<code>hw</code>·<code>of</code>·<code>sl</code>)별로 <b>최근 3개</b>. 이번 런 id는 개수와 무관하게 보호.</li>
+  <li><b>원본(<code>.in</code>)은 이번 런 것만 남긴다</b> — 결과가 나온 뒤엔 쓸모가 없고, 남의 문서 노출만 늘린다.</li>
+  <li><b>규약 밖 파일은 손대지 않는다</b>(사람이 둔 파일 보호).</li>
+</ul>
+
+<h3>회수기 검증 (모의 트리)</h3>
+<p class="dim">접두 5종 × 5건 + 하위폴더 in/out + 사람이 둔 <code>README.md</code>를 만들어 돌린 결과:</p>
+<table>
+<tr><th>검사</th><th>결과</th></tr>
+<tr><td>접두별 3건만 잔존 (nb·yc·hw·of·sl)</td><td class="c3">통과</td></tr>
+<tr><td>규약 밖 파일(<code>README.md</code>) 무접촉</td><td class="c3">통과</td></tr>
+<tr><td><code>.in</code>은 이번 런 것 1건만 잔존</td><td class="c3">통과</td></tr>
+<tr><td><code>.out</code>은 3건</td><td class="c3">통과</td></tr>
+</table>
+
+<h3>실제 <code>drafts/</code>에 적용</h3>
+<table>
+<tr><th></th><th class="num">전</th><th class="num">후</th></tr>
+<tr><td>파일 수</td><td class="num">19건 (nb 18 · yc 1)</td><td class="num"><b>4건</b> (nb 3 · yc 1)</td></tr>
+<tr><td>용량</td><td class="num">132KB</td><td class="num"><b>28KB</b></td></tr>
+</table>
+<p class="dim">남은 것은 최신순 <code>nb1785197782044896</code>·<code>nb1785198572179435</code>·<code>nb1785458719963692</code> + <code>yc1785819317950r385</code> — 회수는 손편집이 아니라 <b>회수기를 실행</b>해서 했다(기계산출물 손편집 금지 원칙).</p>
+
+<h2>3. UI 반영 — 「서버에 얼마나 남는지」를 올리기 전에 알린다</h2>
+<div class="note"><b>왜 「최근 문서 목록」을 안 만들었나.</b> 목록으로 띄우면 <b>공개 레포</b>라 남의 공문·예산안이 서로 보이게 되고,
+이 레포의 <code>🔒 공용 PC 원칙</code>(닫으면 상태 전멸)과 정면으로 충돌한다. 대신 <b>보관 정책을 문구로</b> 알린다 —
+문구는 상수 <code>_DRAFT_NOTE</code> 하나를 세 모달이 공유하고, <code>_DRAFT_KEEP</code>은 회수기의 <code>keep</code>과 같은 값이다.</div>
+<p class="dim">디자인 = 기존 <code>.u-empty</code> 안내 문구 자리에 한 줄 추가. <b>신규 CSS 0 · 신규 raw hex 0</b>(<code>check_design</code> index 1578 무변) · 신규 컴포넌트 0.</p>
+
+<div class="ba">
+  <div><div class="lb">전 — <b>한글문서 편집</b>(보관 안내 없음 · DOM 검증 없음)</div><img src="before_hwp.png" alt="전: 한글문서 편집 빈 상태"></div>
+  <div><div class="lb">후 — <b>한글문서 편집</b>(안내 1줄 · DOM 검증 있음)</div><img src="after_hwp.png" alt="후: 한글문서 편집 빈 상태 + 보관 안내"></div>
+</div>
+<div class="ba">
+  <div><div class="lb">전 — <b>오피스문서 편집</b></div><img src="before_office.png" alt="전: 오피스문서 편집 빈 상태"></div>
+  <div><div class="lb">후 — <b>오피스문서 편집</b></div><img src="after_office.png" alt="후: 오피스문서 편집 빈 상태 + 보관 안내"></div>
+</div>
+<div class="ba">
+  <div><div class="lb">전 — <b>용량 줄이기</b>(PDF 물린 상태)</div><img src="before_slim.png" alt="전: 용량 줄이기 PDF 상태"></div>
+  <div><div class="lb">후 — <b>용량 줄이기</b>(PDF = 러너 경로에서만 안내)</div><img src="after_slim.png" alt="후: 용량 줄이기 PDF 상태 + 보관 안내"></div>
+</div>
+<div class="note"><b>용량 줄이기는 러너 경로(PDF·구형 hwp)에서만 이 안내가 뜬다.</b>
+브라우저 경로 7종(xlsx·xlsm·xltx·docx·dotx·pptx·potx·hwpx)은 <b>애초에 서버로 안 나가므로</b> 기존 문구
+「이 PC에서 바로 처리해요 — 파일이 밖으로 나가지 않아요」가 그대로다. 안 나가는 걸 두고 보관 얘기를 하면 거짓말이 된다.</div>
+
+<h2>4. 게이트</h2>
+<p class="dim"><code>check_design</code> ✓(raw hex index <b>1578/1578 무변</b>) · <code>check_refs</code> ✓ · <code>check_wiring</code> ✓ · <code>smoke:layout</code> ✓ ·
+워크플로 8종 YAML 파싱 ✓ · 수정한 4종의 <code>script:</code> 본문 <code>node --check</code> ✓ · 회수기 모의 트리 검증 ✓.</p>
+<p class="dim">⚠ 하네스 각주: Playwright <code>setInputFiles</code>가 <b>한글+괄호 파일명</b>을 못 넘긴다(<code>files.length=0</code>, 예외도 토스트도 없음).
+앱 정규식은 그 이름에 <code>true</code>이고 같은 파일을 ASCII 이름으로 주면 정상 로드되므로 <b>제품 결함이 아니라 하네스 한계</b>다 — 스냅샷은 ASCII 이름 사본으로 찍었다.</p>
+</body>
+</html>

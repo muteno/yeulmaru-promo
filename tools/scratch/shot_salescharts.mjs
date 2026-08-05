@@ -63,12 +63,15 @@ const EXD = { headers: [], rows: exd };
 const PERFS_STUB = DATA.shows.filter(s => s.status === '예정')
   .map(s => ({ s: s.date, e: s.dateEnd, n: s.name, f: s.name, t: 'c', g: s.gu || '', g2: s.genre || '', rc: 1, id: '' }))
   .concat([
-    { s: '2026-03-10', e: '2026-06-25', n: '아카데미 봄', f: '예울마루 아카데미 봄학기', t: 'a', g: '', g2: '', rc: 0, id: 'EDU1' },
-    { s: '2026-04-08', e: '2026-04-08', n: '해설음악회', f: '청소년 해설 음악회', t: 'a', g: '', g2: '', rc: 0, id: 'EDU2' },
-    { s: '2026-07-29', e: '2026-08-22', n: '여름예술캠프', f: '어린이 여름 예술캠프', t: 'a', g: '', g2: '', rc: 0, id: 'EDU3' },
-    { s: '2026-09-02', e: '2026-11-27', n: '아카데미 가을', f: '예울마루 아카데미 가을학기', t: 'a', g: '', g2: '', rc: 0, id: 'EDU4' },
-    { s: '2026-10-16', e: '2026-10-17', n: '무대예술워크숍', f: '무대예술 워크숍', t: 'a', g: '', g2: '', rc: 0, id: 'EDU5' }
+    // [260805 운영자] 교육 = 「화요살롱」(인문학 장르) 1건 · 6월 · 종료 · 수강생 160명(운영대장 교육 행으로 조인)
+    { s: '2026-06-09', e: '2026-06-30', n: '화요살롱', f: '화요살롱', t: 'a', g: '인문학', g2: '인문학', rc: 0, id: 'EDU1' }
   ]);
+
+// 운영대장 교육 행 — 끝난 교육의 정본(발권유료 = 수강 인원). 화요살롱 4회 × 40명 = 160명
+[9, 16, 23, 30].forEach(d => opsRows.push({
+  '상태': '', '사업구분': '교육', '티켓구분': '유료', '기본좌석': 50, '발권유료': 40,
+  '년도': 2026, '월': 6, '일': d, '공연구분': '기획', '장르1': '인문학', '공연명': '화요살롱', '수익성': ''
+}));
 
 const INIT = `(function(){
   window.__MOCK_OPS=${JSON.stringify({ rows: opsRows, headers: Object.keys(opsRows[0]) })};
@@ -177,6 +180,15 @@ async function main() {
       return out;
     })()`);
     console.log('ZONE ' + JSON.stringify(zone, null, 1));
+
+    // LABELPROBE — 막대 위 값 라벨 실크기·색(운영자 260805 「숫자를 써줘」)
+    const lab = await page.evaluate(`(()=>{
+      const get=(id)=>{const d=document.getElementById(id); if(!d)return null;
+        const t=[...d.querySelectorAll('.barlayer text, g.points text')];
+        return t.slice(0,4).map(n=>({txt:n.textContent, fs:getComputedStyle(n).fontSize, fill:n.getAttribute('fill')||getComputedStyle(n).fill}));};
+      return {perf:get('bizm-chart'), edu:get('bizm-edu-chart')};
+    })()`);
+    console.log('LABEL ' + JSON.stringify(lab));
 
     const box = await page.$('#biz-main');
     await box.screenshot({ path: OUT });

@@ -32,6 +32,22 @@ SRC = sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, '2026 기획전�
 OUT = os.path.join(ROOT, 'data', 'exhib_daily_2026.js')
 YEAR = 2026
 
+# ── 운영자 판정 제외 — 이름 → **사유**(사유를 값으로 두면 로그에 그대로 찍히고, 되돌릴 때 판단이 쉽다) ──
+#   ⚠ 두 종류가 섞여 있으니 사유를 반드시 남긴다:
+#     ① 「전시가 아님」 — 축이 다른 것(회차 프로그램 등). 데이터 성격상의 제외.
+#     ② 「화면 판정」 — 진짜 전시지만 운영자가 읽기 위해 화면에서 내린 것. **실적 자체는 원본에 그대로 있다.**
+#   ⚠ 되돌리려면 이 표에서 지우고 재실행하면 된다 — 원본 xlsx는 무접촉이고 거울만 다시 만들어진다.
+EXCLUDE = {
+    # ① 전시 아님 — 원본 기간 표기 「2026. 4. 16(토) ~ 5. 30(토), 4회차」(회차 프로그램) · 일일보고도 종료일 1일치(21명).
+    #    전시 곡선은 「기간 동안 차오르는 누계 관람」 축이라 회차 프로그램을 같은 축에 그리면 기준이 섞인다.
+    '어린이미술전 <우리 SUM 타볼래> 워크숍': '전시 아님 — 회차 워크숍(4회차 · 보고 1일치 21명, 운영자 260805)',
+    # (260805 「3월 전후 초록 두 개가 겹친다」 건은 **제외가 아니라 색 분리**로 갔다 — 운영자 후속 「프리뷰는 색을
+    #  파란색 강조색1로」. 창작스튜디오 7기 입주작가 프리뷰(902명)는 그대로 실리고, 색만 index.html에서 갈린다.)
+}
+def _norm(s):
+    return re.sub(r'\s+', '', str(s or '')).lower()
+EXCLUDE_KEYS = {_norm(k): v for k, v in EXCLUDE.items()}
+
 def num(v):
     if v is None or v == '':
         return None
@@ -54,6 +70,7 @@ def parse_range(s):
 wb = openpyxl.load_workbook(SRC, data_only=True, read_only=True)
 ex = {}          # name -> dict
 skipped = []
+dropped = set()  # EXCLUDE로 걸러낸 이름(로그용 — 목록이 실제로 물렸는지 매 실행 확인)
 for sn in wb.sheetnames:
     if not re.fullmatch(r'\d{4}', sn):
         skipped.append(f'시트명 비일자 {sn}')
@@ -67,6 +84,9 @@ for sn in wb.sheetnames:
         name = re.sub(r'\s+', ' ', str(rows[i][2] or '').strip())
         if not name:
             continue                     # 빈 서식 블록(전시 교체기)
+        if _norm(name) in EXCLUDE_KEYS:
+            dropped.add(name)            # 운영자 판정 제외(위 EXCLUDE)
+            continue
         rng = str(rows[i][6] or '').strip() if len(rows[i]) > 6 else ''
         goal = None
         tot = paid = free_n = rev = None
@@ -138,6 +158,10 @@ for o in out_list:
     print(' · %-34s %s~%s %3d일 최종 총 %s명 · 유료 %s · 매출 %s원%s' % (
         o['name'][:34], o['start'], o['end'], o['days'],
         o['tot'], o['paid'], o['rev'], ' · 무료(판매 축 제외)' if o['free'] else ''))
+for d in sorted(dropped):
+    print(' ⛔ 제외: %s — %s' % (d, EXCLUDE_KEYS.get(_norm(d), '')))
+for miss in sorted(set(EXCLUDE_KEYS) - set(_norm(d) for d in dropped)):
+    print(' ⚠ EXCLUDE 목록에 있으나 원본에서 못 찾음(이름 바뀜?): %s' % miss)   # 조용히 무효가 되지 않게
 if skipped:
     print('건너뜀/경고:')
     for s in skipped[:12]:
