@@ -77,6 +77,7 @@
   - `LOGO_MODEL` 미설정 시 후보 순서 = `gemini-3.1-flash-image` → `gemini-2.5-flash-image`. 프리뷰 모델이 은퇴해 404가 나면 이 변수에 현행 모델명을 넣으면 코드 수정 없이 복구된다.
 - `KASI_KEY` — 공공데이터포털(한국천문연구원) 특일정보 = 공휴일
 - *(대체 경로, 현재 주력 아님)* `ANTHROPIC_API_KEY`/`ANTHROPIC_AUTH_TOKEN`, `CLOVA_OCR_INVOKE_URL`/`CLOVA_OCR_SECRET`(네이버 CLOVA OCR), `GOOGLE_SA_EMAIL`/`GOOGLE_SA_PRIVATE_KEY`/`GOOGLE_VISION_KEY`(Google Vision OCR)
+  - ⚠ **`ANTHROPIC_AUTH_TOKEN`(구독 OAuth 토큰) 단독은 쓸 수 없다** — Worker에서 부르면 `403 forbidden / "Request not allowed"`(260807 실측 · `src/index.js` 1640행 주석과 일치). Claude 경로를 살리려면 진짜 `ANTHROPIC_API_KEY`가 필요하다. 그래서 텍스트 LLM 가드 `hasTextLlm()`은 **AUTH_TOKEN을 「키 있음」으로 세지 않는다** — 느슨하게 되돌리면 키 미설정이 503 「AI 미연결」이 아니라 502 + 제공자 원문 JSON으로 샌다.
 
 **Config (비밀 아님):** `ALLOWED_ORIGIN=*` (`wrangler.toml [vars]`) · KV `ops_kv`(binding, 메모 등) · cron `0 1 * * *`(보류 자동취소)
 
