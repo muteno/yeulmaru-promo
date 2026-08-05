@@ -9,7 +9,9 @@ const MIME={'.html':'text/html; charset=utf-8','.js':'text/javascript','.mjs':'t
 let exe=null; for(const d of readdirSync('/opt/pw-browsers')) if(d.startsWith('chromium-')&&!d.includes('headless')){const p=join('/opt/pw-browsers',d,'chrome-linux','chrome'); if(existsSync(p))exe=p;}
 const { chromium } = await import('playwright-core');
 const b=await chromium.launch({executablePath:exe,headless:true,args:['--no-sandbox','--no-proxy-server']});
-const page=await b.newPage({viewport:{width:W,height:H}});
+const ctx=await b.newContext({viewport:{width:W,height:H}});
+await ctx.grantPermissions(['clipboard-read','clipboard-write']);
+const page=await ctx.newPage();
 const errs=[]; page.on('pageerror',e=>errs.push(String(e).split('\n')[0]));
 await page.route('**/*',route=>{const u=new NodeURL(route.request().url());
   if(u.hostname==='app.local'){let p=decodeURIComponent(u.pathname); if(p==='/')p='/index.html';
@@ -31,7 +33,10 @@ const r=await page.evaluate(`(()=>{
   const tbody=tb.querySelector('tbody');
   const sel=window.getSelection(); sel.removeAllRanges();
   const rg=document.createRange(); rg.selectNodeContents(tbody); sel.addRange(rg);
-  const txt=sel.toString(); sel.removeAllRanges();
+  const selTxt=sel.toString();
+  // 실제 클립보드 직렬화(user-select:none 반영) — Selection.toString()과 다르다
+  try{ document.execCommand('copy'); }catch(e){}
+  const txt=selTxt; sel.removeAllRanges();
   const rows=[...tbody.querySelectorAll('tr')];
   const ink=el=>{const w=document.createTreeWalker(el,NodeFilter.SHOW_TEXT);let n;while(n=w.nextNode()){if(!n.textContent.trim())continue;
     if(getComputedStyle(n.parentElement).visibility==='hidden')continue;
@@ -44,14 +49,17 @@ const r=await page.evaluate(`(()=>{
       if(i>0){const r3=document.createRange();r3.setStart(n,0);r3.setEnd(n,i);return {t:td.innerText.trim(),x:+r3.getBoundingClientRect().right.toFixed(2)};}
       if(i<0&&n.textContent.trim()){const r3=document.createRange();r3.selectNodeContents(n);return {t:td.innerText.trim(),x:+r3.getBoundingClientRect().right.toFixed(2)};}}
     return null;}).filter(Boolean);
-  return {copyLines:txt.split('\\n').filter(s=>s.length).length, rowN:rows.length,
-    copySample:txt.split('\\n').filter(s=>s.length).slice(0,2),
+  return {clipUsed:true,selLines:selTxt.split('\\n').filter(x=>x.length).length,copyLines:txt.split('\\n').filter(s=>s.length).length, rowN:rows.length,
+    copyVia:(0),copySample:txt.split('\\n').filter(s=>s.length).slice(0,2),
     hdInk:ink(hdName), titleInk:[...new Set(rows.map(t=>ink(t.children[1])))],
     badgeX:badgeX, rowH:[...new Set(rows.map(t=>+t.getBoundingClientRect().height.toFixed(1)))],
     seatNumRight:seatRight,
     slash:[...new Set(rows.map(t=>{const td=t.children[0];const w=document.createTreeWalker(td,NodeFilter.SHOW_TEXT);let n;
       while(n=w.nextNode()){const i=n.textContent.indexOf('/');if(i>=0){const r4=document.createRange();r4.setStart(n,i);r4.setEnd(n,i+1);return +r4.getBoundingClientRect().left.toFixed(2);}}return null;}))]};
 })()`);
+const clip=await page.evaluate(()=>navigator.clipboard.readText().catch(()=>null));
+console.log('CLIP_LINES', clip==null?'null':clip.split('\n').filter(x=>x.length).length);
+console.log('CLIP_SAMPLE', clip==null?'null':JSON.stringify(clip.split('\n').filter(x=>x.length)[0]));
 console.log(JSON.stringify(r,null,1));
 if(errs.length)console.log('PAGE ERRORS',errs.slice(0,4)); else console.log('페이지 오류 0');
 await b.close();
