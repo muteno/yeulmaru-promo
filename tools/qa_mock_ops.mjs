@@ -136,6 +136,16 @@ export const INIT_SCRIPT = `(function(){
 
 // 데이터 주입(목록·운영대장) — 페이지 로드 후 호출
 export const FEED_SCRIPT = `(()=>{
+  // [260807] ⚠ **프로그램 시트 목은 API 훅으로는 앱에 못 닿는다** — INIT_SCRIPT가 심는 window._qaApi 접근자를
+  //   페이지 최상위 \`async function _qaApi(...)\` 선언이 CreateGlobalFunctionBinding으로 데이터 속성으로 덮어쓴다
+  //   (실측: getOwnPropertyDescriptor(window,'_qaApi') = {value:fn, get:undefined, configurable:false}).
+  //   그래서 /api/programs는 앱 자체 폴백 {programs:[]}가 응답했고 **PERFS.length가 계속 0**이었다
+  //   — 260804 예술교육 목(t'a')도, 260807 공연 목(t'c'·장소)도 통째로 죽어 있었다.
+  //   → 운영대장 목이 _bizState.raw를 직접 넣는 것과 같은 방식으로 **PERFS에 직접 대입**한다(같은 realm이라
+  //     let 바인딩에 그대로 닿는다). 이게 없으면 대·소 배지의 **확정 분기**·연도 가드·**예정 행**이 무측정이다.
+  if(window.__MOCK_PROGRAMS&&typeof programToPerf==='function'){
+    try{ PERFS=window.__MOCK_PROGRAMS.programs.map(programToPerf); _perfReady=true; }catch(_e){ console.warn('[qa perfs]',_e); }
+  }
   if(typeof _bizState!=='undefined'&&_bizState)_bizState.raw=window.__MOCK_OPS;
   if(typeof _salesState!=='undefined'&&_salesState){ _salesState.ops=window.__MOCK_OPS; _salesState._opsIdx=null; }
   // [260805] 전시 캐시 = 레일 6시트 플로우가 채우는 자리(_anaState._exMaster/_exDaily)를 목값으로 선점 — 3면 전시 반쪽이 로딩 화면에 머물지 않게
