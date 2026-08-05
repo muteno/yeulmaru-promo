@@ -29184,7 +29184,8 @@ async function _ofRun(){
 //    hwpx는 매니페스트(`Contents/content.hpf`)까지 얽혀 있어 **확장자 전환을 안 한다** — 같은 포맷 축소만.
 //  ▸ 캔버스가 못 여는 형식(EMF/WMF 벡터 등)은 손대지 않는다 — 지우면 도형이 사라진다.
 //  🔒 공용 PC 원칙(한글문서·오피스문서 편집과 동일): 닫으면 상태 전멸.
-//  레퍼런스 컴포넌트 = `.modal`/`.modal-x`(공용) · `.btn` · `.nb-chip`/`.nb-chiprow` · `.u-empty` ·
+//  레퍼런스 컴포넌트 = `.modal`/`.modal-x`(공용) · `.btn` · `.u-empty` · 세기 게이지 = `.ve-range`+`.ve-val`(영상 편집기·
+//    카드 제작 슬라이더) · 바 아이콘 = `.cm-tool`+`_CM_ICO.swap`(카드 제작 창 안 도구) ·
 //    셸·레이아웃 = `openHwpEditor` 골격(`.hw-bar`/`.hw-stage`/`.hw-ask`) — 신규 CSS·신규 raw hex 0.
 // ============================================================
 var _SL_ZIP=/\.(xlsx|xlsm|xltx|docx|dotx|pptx|potx|hwpx)$/i;   // 브라우저 즉시 처리 = ZIP 컨테이너 계열
@@ -29193,12 +29194,22 @@ var _SL_MAX_ZIP=200*1024*1024;   // 브라우저 상한 — 서버를 안 타므
 var _SL_MAX_RUN=8*1024*1024;     // 러너 상한 — Worker b64 12e6 검사와 정렬(오피스문서 편집과 동일)
 var _SL_MEDIA=/(^|\/)(media|BinData)\//i;                       // 사진이 사는 자리(OOXML media · HWPX BinData)
 var _SL_IMG=/\.(png|jpe?g|gif|bmp)$/i;
-// 3단 세기(운영자 260805 선택) — dim=긴 변 상한 px · q=JPEG 품질 · gs=Ghostscript 프리셋(러너 PDF용)
+// 4단 세기(운영자 260805 게이지 개정) — dim=긴 변 상한 px · q=JPEG 품질.
+//  ▸ 「고화질」 폐지 — 2400px·q0.88은 원본과 거의 같아 줄지 않는 세기였다(용량 줄이기 화면에서 의미 없음).
+//  ▸ 「화면용」 아래 2단 신설 — 운영자 260805 「화면용 이하로 더 줄일 수 있게」. 900px·640px는 화면에서 읽히는
+//    하한(문서 안 사진은 대개 페이지 폭 이하로 배치된다) · 그 아래는 글자 박힌 캡처가 뭉개져 안 내린다.
+//  ▸ 순서 = 게이지 왼→오 = 약→강(더 많이 줄임). `_SL_ORDER`가 게이지 눈금 순서의 정본.
+//  ⚠ 이 표를 고치면 러너 쪽 3곳도 같이 = `tools/slim_runner.mjs` LEVELS · `src/index.js` slmLevel · `.github/workflows/slim.yml`.
 var _SL_LV={
-  screen:{dim:1200,q:0.75,label:'화면용',note:'화면·메신저 공유',gs:'/screen'},
-  std:   {dim:1600,q:0.82,label:'표준',  note:'메일·공문 첨부',  gs:'/ebook'},
-  hq:    {dim:2400,q:0.88,label:'고화질',note:'인쇄 여지 남김',  gs:'/printer'}
+  std:   {dim:1600,q:0.82,label:'표준'},
+  screen:{dim:1200,q:0.75,label:'화면용'},
+  small: {dim:900, q:0.68,label:'작게'},
+  min:   {dim:640, q:0.58,label:'최소'}
 };
+var _SL_ORDER=['std','screen','small','min'];   // 게이지 눈금 순서(약→강)
+// 내려받기 픽토그램 — 기존 아이콘 세트(`_CM_ICO`)와 같은 작도 규칙(feather · viewBox 24 · stroke 2 · round).
+// 교체 픽토그램은 `_CM_ICO.swap`(카드 제작 「사진 교체」와 같은 뜻)을 그대로 빌려 쓴다 — 신규 작도 0.
+var _SL_ICO={down:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>'};
 var _slState=null;   // {name,orig,out,outName,level,busy,step,log,runner,escHandler}
 function _slDefault(){return {name:'',orig:null,out:null,outName:'',level:'std',busy:false,step:'',log:null,runner:false,escHandler:null};}
 function _slSize(n){return n>=1048576?(n/1048576).toFixed(1)+'MB':Math.max(1,Math.round(n/1024))+'KB';}
@@ -29216,8 +29227,9 @@ function openFileSlimmer(){
   if(!el){el=document.createElement('div');el.id='sl-board';document.body.appendChild(el);}
   try{if(_slState&&_slState.escHandler)document.removeEventListener('keydown',_slState.escHandler);}catch(_e){}
   _slState=_slDefault();   // 🔒 매번 새로 — 이전 사용자의 문서를 복원하지 않는다
+  // 창은 「고르고 · 누르고 · 결과 한 줄」이 전부라 크게 열 이유가 없다(운영자 260805 「모달이 저렇게 안 커도 될 듯」).
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeFileSlimmer)">'
-    +'<div class="modal" style="width:96vw;max-width:1080px;height:92vh;max-height:92vh;padding:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:var(--surface-solid)">'
+    +'<div class="modal" style="width:min(94vw,700px);height:min(86vh,560px);padding:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:var(--surface-solid)">'
     +'<button class="modal-x" onclick="closeFileSlimmer()" title="닫기" style="position:absolute;top:14px;right:22px;z-index:10">✕</button>'
     +'<div style="padding:18px 24px;border-bottom:1px solid var(--border);font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px">🗜️ <span>용량 줄이기</span></div>'
     +'<div style="flex:1;display:flex;flex-direction:column;min-height:0;padding:16px 24px 18px">'
@@ -29238,37 +29250,77 @@ function closeFileSlimmer(){
   var el=document.getElementById('sl-board');if(el)el.innerHTML='';
 }
 function _slPick(){var f=document.getElementById('sl-file');if(f)f.click();}
-function _slSetLevel(k){
-  var s=_slState;if(!s||s.busy||!_SL_LV[k])return;
-  s.level=k;s.out=null;s.outName='';s.log=null;   // 세기가 바뀌면 이전 결과는 무효 — 다시 눌러야 새 결과
-  _slRender();
+// 게이지(레일)·눈금 라벨 공용 진입점 — 인자 = `_SL_ORDER` 인덱스.
+// ⚠ 여기서 `_slRender()`(전체 재조립)를 부르면 **끌고 있던 레일이 통째로 교체돼 드래그가 끊긴다** —
+//    그래서 레일은 손대지 않고 눈금·바·무대만 갱신한다(라벨 클릭으로 들어온 경우만 레일 값을 맞춰 준다).
+function _slSetLevel(i){
+  var s=_slState;if(!s||s.busy)return;
+  var n=Math.max(0,Math.min(_SL_ORDER.length-1,parseInt(i,10)||0)),k=_SL_ORDER[n];
+  if(s.level!==k){s.level=k;s.out=null;s.outName='';s.log=null;}   // 세기가 바뀌면 이전 결과는 무효 — 다시 눌러야 새 결과
+  var r=document.getElementById('sl-rail');if(r&&+r.value!==n)r.value=n;
+  _slTickSync();_slBarDraw();_slStageDraw();
+}
+function _slTickSync(){
+  var box=document.getElementById('sl-ticks');if(!box)return;
+  for(var i=0;i<box.children.length;i++){
+    var on=(_SL_ORDER[i]===_slState.level);
+    box.children[i].style.color=on?'var(--accent)':'';       // 빈 값 = .ve-val 기본(--dim)으로 복귀
+    box.children[i].style.fontWeight=on?'700':'';
+  }
 }
 
 // ── 화면 ──────────────────────────────────────────────────────────────────
-function _slRender(){
-  var bar=document.getElementById('sl-bar'),ask=document.getElementById('sl-ask');
-  if(!bar||!ask)return;
-  var s=_slState,has=!!s.orig;
-  bar.innerHTML=has
+// 상단 바 = 파일 이름 + [교체][내려받기] 아이콘. 아이콘 전용 버튼이라 정본 `.cm-tool`(카드 제작 창 안 도구 —
+// 밝은 서피스 위 강조색 픽토그램)을 그대로 쓴다 = 신규 CSS 0. 「버튼 내 SVG 금지」는 텍스트 라벨 버튼(.btn) 축이고
+// 아이콘 전용 버튼은 별개(기틀 §2 #14 각주 · `.icon-btn`/`.iobtn`/`.cm-tool` 선례).
+function _slBarDraw(){
+  var bar=document.getElementById('sl-bar');if(!bar)return;
+  var s=_slState;
+  bar.innerHTML=s.orig
     ? '<span class="hw-name" title="'+escapeHtml(s.name)+'">'+escapeHtml(s.name)+' · '+_slSize(s.orig.length)+'</span>'
-      +'<button type="button" class="btn btn--neutral btn--sm" onclick="_slPick()"'+(s.busy?' disabled':'')+'>다른 문서</button>'
+      +'<button type="button" class="cm-tool" onclick="_slPick()" title="다른 문서" aria-label="다른 문서"'+(s.busy?' disabled':'')+'>'+_CM_ICO.swap+'</button>'
       // 줄지 않았으면 내려받기를 안 띄운다 — 원본과 바이트가 같은 파일을 「_표준」 이름으로 받게 하면 헷갈린다(무대 문구와도 어긋난다)
-      +(s.out&&s.out.length<s.orig.length?'<button type="button" class="btn btn--primary btn--sm" onclick="_slDownload()">내려받기</button>':'')
+      +(s.out&&s.out.length<s.orig.length?'<button type="button" class="cm-tool" onclick="_slDownload()" title="내려받기" aria-label="내려받기">'+_SL_ICO.down+'</button>':'')
     : '';
-  if(!has){ask.innerHTML='';_slStageDraw();return;}
-  var chips='';
-  for(var k in _SL_LV){
-    var lv=_SL_LV[k];
-    chips+='<button type="button" class="nb-chip'+(s.level===k?' on':'')+'" onclick="_slSetLevel(\''+k+'\')"'+(s.busy?' disabled':'')+'>'
-      +escapeHtml(lv.label)+'</button>';
+}
+// 세기 게이지 — 정본 `.ve-range`(영상 편집기·카드 제작 슬라이더) + 눈금 라벨 `.ve-val`. 신규 CSS 0.
+//  ▸ 눈금은 **손잡이 중심**에 맞춘다: 손잡이는 레일 양끝에서 `_SL_RAILPAD`만큼 안쪽까지만 움직이므로
+//    라벨 띠도 좌우 같은 값만큼 좁혀 놓고 i/(n-1) 비율로 절대배치한다(그냥 space-between 하면 양끝이 어긋난다).
+//  ▸ 라벨 띠 높이(+아래 여백)만큼 아래에 같은 여백을 두어 **레일 잉크가 게이지 상자의 세로 한가운데**에 오게 한다
+//    = 옆 [용량 줄이기] 버튼 한가운데와 같은 수평선(운영자 260805 「광학 잉크 수평」 · 헤드리스 실측 Δ0.1px).
+var _SL_RAILPAD=23;   // 손잡이 중심의 좌우 여백(px) — 헤드리스 실측(손잡이 Ø12 · 이동 구간 [23, 폭-23]).
+                      // 내역 = `.modal input` 패딩 14 + 테두리 1.5 + 손잡이 반지름 6 ≈ 21.5 + 크로미움 트랙 내부 여백.
+                      // 폭과 무관한 상수라 게이지가 좁아져도 눈금이 안 어긋난다.
+var _SL_TICKH=13;     // 게이지 상자 아래 여백 — 레일 잉크 중심이 상자 세로 한가운데 오도록 맞춘 실측값(눈금 띠 15+2를 상쇄)
+function _slGaugeHtml(s){
+  var n=_SL_ORDER.length,cur=_SL_ORDER.indexOf(s.level),ticks='',i;
+  for(i=0;i<n;i++){
+    var on=(_SL_ORDER[i]===s.level);
+    ticks+='<span class="ve-val" style="position:absolute;left:'+(n>1?i/(n-1)*100:50)+'%;transform:translateX(-50%);cursor:pointer'
+      +(on?';color:var(--accent);font-weight:700':'')+'" onclick="_slSetLevel('+i+')">'+escapeHtml(_SL_LV[_SL_ORDER[i]].label)+'</span>';
   }
-  ask.innerHTML='<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:6px">'
-    +'<div class="nb-chiprow">'+chips+'</div>'
-    +'<div style="font-size:11.5px;color:var(--dim);line-height:1.5">'+escapeHtml(_SL_LV[s.level].note)
-    +' · 긴 변 '+_SL_LV[s.level].dim+'px 상한'+(s.runner?'':' · 사진만 다시 저장하고 글·표·수식은 그대로 둬요')+'</div>'
-    +'</div>'
+  return '<div style="width:100%;max-width:240px;justify-self:end;padding:0 8px '+_SL_TICKH+'px">'
+    +'<div id="sl-ticks" style="position:relative;height:15px;margin:0 '+_SL_RAILPAD+'px 2px">'+ticks+'</div>'
+    +'<input type="range" class="ve-range" id="sl-rail" min="0" max="'+(n-1)+'" step="1" value="'+(cur<0?0:cur)+'"'
+    +' aria-label="줄이는 세기" oninput="_slSetLevel(this.value)"'+(s.busy?' disabled':'')+'>'
+    +'</div>';
+}
+function _slRender(){
+  var ask=document.getElementById('sl-ask');
+  if(!ask)return;
+  var s=_slState;
+  _slBarDraw();
+  if(!s.orig){ask.innerHTML='';_slStageDraw();return;}
+  // 3열 그리드(1fr · auto · 1fr) = [용량 줄이기]가 **창 정가운데**, 게이지는 그 왼쪽에 붙어 선다.
+  // 양끝 열이 같은 1fr이라 버튼 중심 = 창 중심 — 누르는 자리도, 진행 표시(버튼 안 dots)도 한가운데에서 일어난다.
+  // minmax(0,1fr) = 좁은 화면에서 열이 0까지 줄어 게이지가 같이 좁아진다(버튼은 계속 가운데).
+  ask.innerHTML='<div style="flex:1;min-width:0;display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:14px">'
+    +_slGaugeHtml(s)
+    // 진행 중 라벨은 짧게 고정 — 장수까지 버튼에 넣으면 버튼 폭이 매 장 늘었다 줄었다 하며 게이지까지 밀린다.
+    // 상세 진행(사진 n/N장)은 무대 한가운데가 맡는다.
     +'<button type="button" id="sl-run" class="btn btn--primary btn--md" onclick="_slRun()"'+(s.busy?' disabled':'')+'>'
-    +(s.busy?_ldHtml(14)+' '+escapeHtml(s.step||'줄이는 중'):'용량 줄이기')+'</button>';
+    +(s.busy?_ldHtml(14)+' 줄이는 중':'용량 줄이기')+'</button>'
+    +'</div>';
   _slStageDraw();
 }
 function _slStageDraw(){
@@ -29306,7 +29358,7 @@ function _slStageDraw(){
         : '이미 충분히 작은 문서예요')+'</div>'
       +'<div style="font-size:12px;color:var(--dim);margin-bottom:14px;line-height:1.7">'
       +escapeHtml(s.outName)+' · '+_SL_LV[s.level].label+rows
-      +(cut>0?'<br>내려받기가 시작됐어요 — 열어 보고 화질이 아쉬우면 위에서 세기를 올려 다시 누르세요<br>다시 줄일 땐 항상 원본에서 새로 만들어요(겹쳐 줄여 화질이 깎이지 않아요)'
+      +(cut>0?'<br>내려받기가 시작됐어요 — 열어 보고 화질이 아쉬우면 아래 게이지를 왼쪽으로 옮겨 다시 누르세요<br>다시 줄일 땐 항상 원본에서 새로 만들어요(겹쳐 줄여 화질이 깎이지 않아요)'
              :'<br>줄일 여지가 없어서 원본을 그대로 뒀어요')+'</div>'
       +(cut>0?'<button type="button" class="btn btn--primary btn--md" onclick="_slDownload()">다시 내려받기</button>':'')+'</div>';
     return;
@@ -29314,7 +29366,7 @@ function _slStageDraw(){
   st.innerHTML='<div class="u-empty" style="margin:auto"><div class="ico">'+mt.ico+'</div>'
     +'<div class="msg">'+escapeHtml(s.name)+'</div>'
     +'<div style="font-size:12px;color:var(--dim);line-height:1.7">'+mt.kind+' · '+_slSize(s.orig.length)
-    +'<br>아래에서 세기를 고르고 [용량 줄이기]를 누르세요'
+    +'<br>아래 게이지로 세기를 고르고 [용량 줄이기]를 누르세요'
     +(s.runner?'<br>이 형식(PDF · 구형 한글)은 서버에서 처리해요 — 파일이 서버로 올라가요<br>'+escapeHtml(_DRAFT_NOTE)
               :'<br>이 PC에서 바로 처리해요 — 파일이 밖으로 나가지 않아요')+'</div></div>';
 }
@@ -29448,9 +29500,7 @@ async function _slRun(){
     var r=await _slZipSlim(s.orig,s.name,lv,function(i,n){
       if(s!==_slState)return;
       s.step=n?('사진 '+i+'/'+n+'장 줄이는 중'):'줄이는 중';
-      var run=document.getElementById('sl-run');
-      if(run)run.innerHTML=_ldHtml(14)+' '+escapeHtml(s.step);
-      _slStageDraw();
+      _slStageDraw();   // 진행 표시는 무대 한가운데만 — 버튼은 짧은 고정 라벨이라 다시 그릴 게 없다
     });
     if(s!==_slState)return;
     // 컨테이너를 다시 말면서 오히려 커지는 경우(원본이 이미 최대 압축) = 원본을 돌려준다.

@@ -19,7 +19,7 @@
  *      jpg→png 같은 전환은 문서를 깨뜨린다. 같은 포맷으로 축소·재인코딩만 한다.
  *      (브라우저 쪽 OOXML 은 `.rels`·`[Content_Types].xml`을 따라 고칠 수 있어 전환을 허용한다 — 그쪽만의 특권.)
  *
- * 사용:  node tools/slim_runner.mjs --in <파일> --out <파일> --level screen|std|hq
+ * 사용:  node tools/slim_runner.mjs --in <파일> --out <파일> --level std|screen|small|min
  * 출력:  stdout 에 JSON 한 줄 {ok, from, to, kept, log[], note}
  */
 import fs from 'fs';
@@ -27,12 +27,14 @@ import path from 'path';
 import zlib from 'zlib';
 import { execFileSync } from 'child_process';
 
-// 세기 3단 — dim·q 는 index.html `_SL_LV` 와 **같은 값**이어야 한다(화면에서 고른 세기가 여기서 그대로 적용).
+// 세기 4단 — dim·q 는 index.html `_SL_LV` 와 **같은 값**이어야 한다(화면에서 고른 세기가 여기서 그대로 적용).
+// 260805 게이지 개정: `hq`(2400/88) 폐지 — 원본과 거의 같아 안 줄었다. `small`·`min` 신설 = 화면용 아래 2단.
 // dpi/mono = PDF 전용(길이 px 상한이라는 개념이 없어 해상도로 환산한 짝).
 const LEVELS = {
-  screen: { dim: 1200, q: 75, dpi: 72,  mono: 300 },
   std:    { dim: 1600, q: 82, dpi: 150, mono: 600 },
-  hq:     { dim: 2400, q: 88, dpi: 220, mono: 900 },
+  screen: { dim: 1200, q: 75, dpi: 72,  mono: 300 },
+  small:  { dim: 900,  q: 68, dpi: 60,  mono: 220 },
+  min:    { dim: 640,  q: 58, dpi: 45,  mono: 150 },
 };
 
 function arg(name, dflt) {
@@ -43,7 +45,7 @@ function arg(name, dflt) {
 const IN = arg('in');
 const OUT = arg('out');
 const LV = LEVELS[arg('level', 'std')] || LEVELS.std;
-if (!IN || !OUT) { console.error('usage: slim_runner.mjs --in <f> --out <f> [--level screen|std|hq]'); process.exit(2); }
+if (!IN || !OUT) { console.error('usage: slim_runner.mjs --in <f> --out <f> [--level std|screen|small|min]'); process.exit(2); }
 
 const done = (o) => { console.log(JSON.stringify(o)); process.exit(o.ok ? 0 : 1); };
 
