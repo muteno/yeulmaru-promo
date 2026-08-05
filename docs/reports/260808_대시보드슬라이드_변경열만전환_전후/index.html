@@ -1,0 +1,143 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>260808 대시보드 슬라이드 — 「변경된 열만 전환」 계약 전/후</title>
+<style>
+:root{--accent:#4A4DE7;--accent-light:#E8E8FD;--peach-text:#D88455;--text:#1A1A2E;--dim:#888;--muted:#bbb;--border:rgba(0,0,0,.09);--radius:16px;--radius-lg:20px;--green:#1A6B3C;--danger:#E24B4A;--neutral:#EEEDF3;--neutral-text:#6B6B7B}
+*{box-sizing:border-box}
+body{margin:0;padding:32px 28px 60px;background:linear-gradient(135deg,#FDF6F3 0%,#F0EBF5 50%,#EBF0F8 100%);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Malgun Gothic",sans-serif}
+h1{font-size:22px;margin:0 0 6px;letter-spacing:-.02em}
+.sub{color:var(--dim);font-size:13px;margin-bottom:26px;line-height:1.7}
+section{background:rgba(255,255,255,.78);border:1px solid rgba(255,255,255,.7);border-radius:var(--radius-lg);box-shadow:0 8px 32px rgba(74,77,231,.08),0 2px 8px rgba(0,0,0,.04);padding:18px 20px 22px;margin-bottom:20px}
+h2{font-size:15px;margin:0 0 6px;color:var(--accent);letter-spacing:-.01em}
+h3{font-size:13px;margin:18px 0 8px;color:var(--text)}
+p{font-size:12.5px;line-height:1.75;margin:0 0 10px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:900px){.two{grid-template-columns:1fr}}
+figure{margin:0}
+figcaption{font-size:12px;color:var(--text);line-height:1.6;margin-bottom:8px}
+.tag{display:inline-block;font-size:11px;font-weight:800;border-radius:999px;padding:2px 9px;margin-right:7px;vertical-align:1px}
+.tag.b{background:var(--neutral);color:var(--neutral-text)}
+.tag.a{background:var(--accent-light);color:var(--accent)}
+img{width:100%;display:block;border:1px solid var(--border);border-radius:12px;background:#fff}
+table{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums;margin:6px 0 4px}
+th,td{padding:7px 10px;border-bottom:1px solid var(--border);text-align:right}
+th:first-child,td:first-child{text-align:left}
+thead td,th{color:var(--dim);font-weight:700}
+tbody tr:last-child td{border-bottom:none}
+.ok{color:var(--green);font-weight:800}
+.bad{color:var(--danger);font-weight:800}
+.note{background:var(--neutral);border-left:3px solid var(--peach-text);border-radius:0 10px 10px 0;padding:10px 13px;font-size:12px;line-height:1.7;margin:12px 0 0}
+code{font-size:11.5px;background:rgba(74,77,231,.06);border-radius:5px;padding:1px 5px}
+ol,ul{font-size:12.5px;line-height:1.8;margin:0 0 10px;padding-left:20px}
+</style></head><body>
+
+<h1>260808 대시보드 슬라이드 — 「항상 변경된 열만 전환」</h1>
+<div class="sub">
+운영자 지시 ①「1페이지에서 2페이지 갈 때는 양 쪽이 둘다 번쩍이는데, 2페이지에서 3페이지 갈때는 변경된 부분만 바뀌어. <b>후자가 디자인 정본</b>. 이에 맞춰서 항상 저렇게 슬라이드는 변경된 부분만 전환되도록 <b>강하게 박아</b>」<br>
+운영자 지시 ②「3-4로 전환할때, 사실상 4페이지만 나오는건데 <b>1페이지까지 재로딩</b>되는 문제를 해결」<br>
+캡처·수치는 전부 헤드리스 크로미엄 실측(<code>?qa=admin</code> 목데이터 · 1920×1080). 대상 = <code>index.html</code> 대시보드 슬라이드.
+</div>
+
+<section>
+  <h2>정체 — 우 열만 지키던 계약을, 좌 열은 안 지키고 있었다</h2>
+  <p>우 열(<code>#rail-yrm</code>)은 260804부터 <code>_bizRightNeedsRedraw()</code>가 「그릴 면이 바뀔 때만 다시 그린다」를 지켜 왔다.
+  그런데 <b>좌 열(<code>#biz-main</code>)에는 같은 판정이 아예 없었다</b> — <code>_bizBookRender</code>는 <code>var cols=['biz-main']</code>로,
+  <code>_bizmFlip</code>은 <code>['biz-main'].concat(…)</code>로 <b>매 넘김마다 무조건</b> 좌 열을 재렌더+디졸브했다.</p>
+  <p>그래서 좌 면이 그대로인 칸(①→② = 좌측 「사업 결과 비교」 유지, 바뀌는 건 우측 판매 실적→판매현황 상세)에서도
+  좌 열이 통째로 지워졌다 다시 올라왔다 = 운영자가 본 <b>「양 쪽이 둘다 번쩍」</b>. 반대로 ②→③은 우 열이 계약을 지켜 좌측만 바뀌었다 = <b>「정본」</b>.</p>
+  <p>둘째 문제(③→④)는 <b>차례표의 칸 수</b> 문제였다. 구 4칸 배치는 한 바퀴에 좌가 3번·우가 2번 바뀌어 열-변경 합이 5인데 칸이 4개 —
+  비둘기집으로 <b>「두 열이 같이 바뀌는 칸」이 반드시 1개 남는다</b>(구판에선 그게 ③→④). 그 셈이 그대로 해법을 말해 준다: <b>칸을 5개로</b> 늘리면 합 5 = 칸 5 → 매 칸 정확히 한 열.</p>
+</section>
+
+<section>
+  <h2>조치 3가지 (신규 화면·색·토큰 0)</h2>
+  <ol>
+    <li><b>좌 열 신원 도장</b> — <code>_bizLeftId()</code> / <code>_bizLeftNeedsRedraw()</code>를 우 열과 <b>대칭</b>으로 신설.
+      신원 = 「좌 열이 지금 그리는 화면」(넓은 화면 3면은 전반 <code>3-1</code>만 그리므로 우 열이 상세든 아니든 같은 신원).
+      도장은 <code>_bizInlineRender</code>가 찍는다 → 필터·연도 토글·모드 복귀 같은 <b>강제 재렌더 경로도 자동으로 최신</b>.</li>
+    <li><b>차례표 4칸 → 5칸</b> — <code>_BIZ_SLIDES</code>에 <code>{p:1,d:0}</code>(연간 실적 | 판매 실적) 한 칸 추가.
+      새 화면이 아니라 <b>이미 있는 두 면의 조합</b>(구 「1-2면 펼침」 그대로)이다.</li>
+    <li><b>계약 자가검사</b> — <code>_bizSlidesAudit()</code>가 인접 칸(순환 포함)이 좌·우 중 <b>정확히 하나만</b> 다른지 검사하고,
+      어긋나면 콘솔에 경고한다. 화면은 안 건드린다 = 「강하게 박아」의 실체(다음에 표를 잘못 고치면 즉시 드러난다).</li>
+  </ol>
+  <div class="note">넓은 화면 점(●) 수 = 차례표 칸 수 → admin 4개→<b>5개</b> · 비admin 3개→<b>4개</b>. 좁은 화면(≤1200, 한 열)은 무접촉.</div>
+</section>
+
+<section>
+  <h2>전 / 후 ① — 칸 ①→② (좌측 「사업 결과 비교」는 그대로, 우측만 상세로)</h2>
+  <p>넘김 한가운데 프레임(디졸브 <code>out</code> 구간). 캡처 시계만 1/10로 늦춰(CDP <code>Animation.setPlaybackRate</code>) 같은 지점을 흔들림 없이 찍었다 — 코드·CSS 무변경.</p>
+  <div class="two">
+    <figure>
+      <figcaption><span class="tag b">전</span> <b>좌·우가 같이 흐려진다</b> — 불투명도 좌 0.43 / 우 0.43. 좌측은 내용이 하나도 안 바뀌는데 같이 지워졌다 올라온다.</figcaption>
+      <img src="전_칸1-2.png" alt="구판 칸1→2 넘김 중간 프레임 — 좌·우 두 열이 모두 반투명">
+    </figure>
+    <figure>
+      <figcaption><span class="tag a">후</span> <b>우 열만 흐려진다</b> — 불투명도 좌 <b>1</b> / 우 0.51. 좌측 「사업 결과 비교」는 손도 안 댄다.</figcaption>
+      <img src="후_칸1-2.png" alt="신판 칸1→2 넘김 중간 프레임 — 좌 열은 선명, 우 열만 반투명">
+    </figure>
+  </div>
+</section>
+
+<section>
+  <h2>전 / 후 ② — 칸 ③→④ (운영자 지시 ②의 그 자리)</h2>
+  <div class="two">
+    <figure>
+      <figcaption><span class="tag b">전</span> ③(연간 실적|상세) → ④(고객 분석|판매 실적) = <b>두 열이 동시에</b> 갈린다(좌 0.49 / 우 0.49).
+      「사실상 고객 분석만 나오면 되는데 옆까지 다 재로딩」이 이 칸이다.</figcaption>
+      <img src="전_칸3-4.png" alt="구판 칸3→4 넘김 중간 프레임 — 좌·우 두 열이 모두 반투명">
+    </figure>
+    <figure>
+      <figcaption><span class="tag a">후</span> 같은 자리가 ③(연간 실적|상세) → ④(연간 실적|<b>판매 실적</b>) = <b>우 열만</b>(좌 <b>1</b> / 우 0.43).
+      고객 분석은 다음 칸 ④→⑤에서 <b>좌 열만</b> 바뀌며 등장한다.</figcaption>
+      <img src="후_칸3-4.png" alt="신판 칸3→4 넘김 중간 프레임 — 좌 열은 선명, 우 열만 반투명">
+    </figure>
+  </div>
+</section>
+
+<section>
+  <h2>추가된 칸 ④ — 연간 실적 | 판매 실적</h2>
+  <p>새로 만든 화면이 아니라 <b>이미 있는 두 면을 나란히 세운 조합</b>. 이 칸이 있어야 「좌만 / 우만」이 번갈아 성립한다.</p>
+  <figure><img src="후_새슬라이드4_연간실적-판매실적.png" alt="신판 슬라이드 4 — 좌 연간 실적, 우 판매 실적"></figure>
+</section>
+
+<section>
+  <h2>실측 — 한 칸에 다시 그려지는 열 수</h2>
+  <p>측정법: 넘김 직전 <code>MutationObserver</code>를 걸고, <b>프레임 내용 교체</b>(<code>[data-bizmhead]</code>·<code>[data-bizmbox]</code>·<code>#bizm-dots-row</code>의 자식 교체 = <code>_bizmSwap</code>이 하는 일)만 센다.
+  차트(Plotly) 내부 SVG 갱신은 열 재렌더가 아니라서 제외했다 — 같은 값으로 다시 그리는 것이라 <b>넘김 전/후 좌 열 캡처가 바이트 단위로 동일</b>함을 따로 실측했다(박스 rect·차트 rect·innerHTML 길이도 전부 불변).</p>
+
+  <h3>전 (구판 · 4칸)</h3>
+  <table>
+    <thead><tr><td>칸</td><td>가는 곳</td><td>다시 그린 열</td><td>디졸브 걸린 열</td><td>열 수</td></tr></thead>
+    <tbody>
+      <tr><td>①→②</td><td>사업 결과 비교 | 상세</td><td>좌+우</td><td>좌+우</td><td class="bad">2</td></tr>
+      <tr><td>②→③</td><td>연간 실적 | 상세</td><td>좌</td><td>좌</td><td class="ok">1</td></tr>
+      <tr><td>③→④</td><td>고객 분석 | 판매 실적</td><td>좌+우</td><td>좌+우</td><td class="bad">2</td></tr>
+      <tr><td>④→①</td><td>사업 결과 비교 | 판매 실적</td><td>좌</td><td>좌</td><td class="ok">1</td></tr>
+    </tbody>
+  </table>
+
+  <h3>후 (신판 · 5칸)</h3>
+  <table>
+    <thead><tr><td>칸</td><td>가는 곳</td><td>다시 그린 열</td><td>디졸브 걸린 열</td><td>열 수</td></tr></thead>
+    <tbody>
+      <tr><td>①→②</td><td>사업 결과 비교 | 상세</td><td>우</td><td>우</td><td class="ok">1</td></tr>
+      <tr><td>②→③</td><td>연간 실적 | 상세</td><td>좌</td><td>좌</td><td class="ok">1</td></tr>
+      <tr><td>③→④</td><td>연간 실적 | 판매 실적</td><td>우</td><td>우</td><td class="ok">1</td></tr>
+      <tr><td>④→⑤</td><td>고객 분석 | 판매 실적</td><td>좌</td><td>좌</td><td class="ok">1</td></tr>
+      <tr><td>⑤→①</td><td>사업 결과 비교 | 판매 실적</td><td>좌</td><td>좌</td><td class="ok">1</td></tr>
+    </tbody>
+  </table>
+  <p><b>한 칸 최대 동시 재렌더 열 = 2 → <span class="ok">1</span></b>. 비admin(3면 책 · 4칸)도 같은 방식으로 전 칸 1열임을 코드 실행으로 확인했다.</p>
+</section>
+
+<section>
+  <h2>회귀 확인</h2>
+  <ul>
+    <li><code>python3 tools/check_design.py</code> — 통과(새 raw hex·새 <code>:root</code>·새 토큰 0).</li>
+    <li><code>npm run smoke:layout</code> — PASS(1920×1080 이젤·흰 라인 계약 유지 · 박스 Δ0 · 흰 카드 하단 Δ0). 이 게이트는 <code>_bizSlides()</code>를 그대로 읽어 <b>늘어난 5번째 칸까지 자동으로 검사</b>한다.</li>
+    <li>좌 열을 안 그리는 칸에서도 <code>_srailAlignTop()</code> rAF 1패스는 그대로 돈다(두 박스 하단선 계약 무접촉).</li>
+    <li>데이터 실패 미러(운영 데이터 못 불러옴)는 좌 열 신원을 <code>null</code>로 되돌린다 = 다음 넘김에 정상 화면으로 복구.</li>
+  </ul>
+</section>
+
+</body></html>
