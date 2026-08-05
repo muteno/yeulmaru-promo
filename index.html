@@ -7498,8 +7498,12 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
 //     (누계는 줄지 않는다 — 종전 「음수 판매량 없음」 규칙의 누계판).
 //   · 값 라벨 = **선 꼭자락(마지막 점) 하나뿐** — 그 전시의 누계 수치. 달마다 찍던 라벨은 전부 철거(운영자 「헤비」)
 //     · 월별 수치는 선에 올릴 때(툴팁)만. 누계는 단조 증가라 꼭자락 = 그 선의 제일 높은 점이다.
-//   · 동그라미 = **종료 전시만 채운다**(선색 채움 + 카드 바탕 테두리) · 진행중 = **빈 동그라미**(카드 바탕 채움 +
-//     선색 테두리) — 집계가 아직 차는 중임을 점 모양이 말하고, 최종 완료로 넘어가면 그 전시의 점 각각이 채워진다.
+//   · 동그라미 = **종료 월(최종) 한 점만 채운다**(운영자 2차 「맨 마지막이 아니면 빈 동그라미로(테두리로 감쌈) ·
+//     맨 마지막 = 종료 월(최종)」) — 종료 전시도 중간 달은 빈 동그라미고 마지막 점(최종 누계)만 선색 채움 ·
+//     진행중은 **전부 빈 동그라미**(종료 월이 아직 없다). 빈 = 카드 바탕 채움 + 선색 테두리 · 찬 = 선색 채움 + 카드 바탕 테두리.
+//   · 면(누적 집계) = **선 뒤**에 그 전시 고유색 **50%**(`_yrHexA` 알파 변주 = 새 색 0)로 선 아래를 채운다(운영자 2차 ·
+//     전시별 분리 · fill tozeroy). 윤곽·호버 없음 — 경계는 꺾은선 그 자체고 수치는 점 툴팁만 말한다(「선 올릴때만」 유지).
+//     겹침 구간의 색 혼합 = 동시 진행 표시로 읽힌다. 점 하나짜리(한 달 전시)는 면이 성립 안 해 생략.
 //   · x = 공연·교육과 **같은 1월~12월 축**(`_bizMonthAxis`) · 점 자리 = 그 달 눈금(종전 그대로).
 //   · 일일 실측이 없는 전시 = 종전 그대로(**한 달 안에 끝난 것만** 총계 점 하나 · 여러 달이면 파선 자리 — 달 배분 창작 금지).
 //   · 색 = 그 전시의 캘린더 색(`_bizExCol` → `_EX_SPACE` 공간색 · 개별 지정은 `_BIZ_EX_COL` 예외표 —
@@ -7513,7 +7517,7 @@ function _bizDrawExhibMonthly(divId,list,hgt){
   var div=document.getElementById(divId); if(!div)return;
   var rows=(list||[]).slice();
   if(!rows.length){ try{Plotly.purge(div);}catch(_e0){} return; }
-  var dim=_yrCss('--dim'), grid=_yrCss('--border'), pc=_yrCss('--peach-text')||'', Y=_bizmState.year;
+  var dim=_yrCss('--dim'), grid=_yrCss('--border'), pc=_yrCss('--peach-text')||'', srf=_yrCss('--surface-solid'), Y=_bizmState.year;
   var today=new Date(); today.setHours(0,0,0,0);
   var wpx=div.clientWidth||360, ax=_bizMonthAxis(Y,wpx<430);
   var md=function(d){ return ('0'+(d.getMonth()+1)).slice(-2)+'.'+('0'+d.getDate()).slice(-2); };
@@ -7566,16 +7570,29 @@ function _bizDrawExhibMonthly(divId,list,hgt){
     data.push({type:'scatter',mode:'lines+markers',
       x:b.mo.map(function(p){return mx(p[0]);}), y:b.mo.map(function(p){return p[1];}),
       line:{color:col,width:1.8},
-      // [260805 운영자] 동그라미 채움 = **완료의 표식** — 종료 전시만 선색으로 채우고(테두리 = 카드 바탕 · 점이 겹쳐도
-      //   서로 안 먹는 종전 규칙), 진행중(집계가 차는 중)은 카드 바탕 채움 + 선색 테두리의 **빈 동그라미**.
-      marker:(fin?{size:7,color:col,line:{color:_yrCss('--surface-solid'),width:1.6}}
-                 :{size:7,color:_yrCss('--surface-solid'),line:{color:col,width:1.6}}),
+      // [260805 운영자 2차 「맨 마지막이 아니면 빈 동그라미로(테두리로 감쌈) · 맨 마지막 = 종료 월(최종)」]
+      //   채움 = **종료 월 한 점뿐** — 종료 전시도 중간 달은 빈 동그라미(카드 바탕 채움 + 선색 테두리)고
+      //   마지막 점(최종 누계)만 선색으로 채운다. 진행중은 종료 월이 아직 없으니 전부 빈 동그라미(1차 지시 그대로).
+      marker:{size:7,
+        color:b.mo.map(function(_p,i){ return (fin&&i===b.mo.length-1)?col:srf; }),
+        line:{color:b.mo.map(function(_p,i){ return (fin&&i===b.mo.length-1)?srf:col; }),width:1.6}},
       showlegend:false,hoverinfo:'text',
       text:b.mo.map(function(p,i){ var inc=p[1]-(i>0?b.mo[i-1][1]:0);   // 그 달 증가분 = 툴팁 전용(운영자 「선 올릴 때만 파악」)
         return g.name+'\n'+(p[0]+1)+'월 누계 '+Math.round(p[1]).toLocaleString()+'명 (그 달 +'+Math.round(inc).toLocaleString()+')'+(live(p[0])?' · 집계중':'')+'\n'+per+' · '+st+tot; })});
     var tip=b.mo[b.mo.length-1];
     labs.push({x:mx(tip[0]),y:tip[1],v:tip[1],col:col});   // 라벨 = 꼭자락(마지막 점 = 누계) **하나뿐** — 나머지 숫자는 전부 툴팁으로(운영자 「헤비」)
   };
+  // [260805 운영자 2차 「저거 뒤에 투명도 50% 정도로 전시 고유색 사용해서 누적 집계 차트 · 전시별로 분리하되 복잡하지 않게」]
+  //   누적 집계 **면** — 선 뒤(트레이스 순서 = 그리기 순서)에 그 전시 고유색 50%(`_yrHexA` 알파 변주 = 새 색 0)로
+  //   선 아래를 채운다(fill tozeroy · 전시별 분리). 윤곽·호버 없음 — 경계는 위 꺾은선이 그 자체고, 수치는 종전대로
+  //   점 툴팁만 말한다(「선 올릴때만」 유지). 겹침 구간의 반투명 혼합 = 동시 진행이 색으로 드러나는 부수 정보.
+  var drawArea=function(b){
+    if(b.plan||b.mo.length<2)return;   // 파선 자리·점 하나(한 달짜리)는 면이 성립 안 한다
+    data.push({type:'scatter',mode:'none',x:b.mo.map(function(p){return mx(p[0]);}),y:b.mo.map(function(p){return p[1];}),
+      fill:'tozeroy',fillcolor:_yrHexA(colOf(b.g),.5),showlegend:false,hoverinfo:'skip'});
+  };
+  built.filter(function(b){ return !_done(b); }).forEach(drawArea);   // 면 전체가 선 전체보다 뒤 · 층 순서는 선과 동일
+  built.filter(_done).forEach(drawArea);
   built.filter(function(b){ return !_done(b); }).forEach(draw);   // 진행중·예정 = 아래층
   built.filter(_done).forEach(draw);                              // 종료 = 위층(운영자 260805)
   // 값 라벨 = 전시당 꼭자락 1개(위 draw) · 큰 값 우선 배치 · 겹치면 생략(정확값은 툴팁) — 공연 막대(_bizDrawSalesBars)의
