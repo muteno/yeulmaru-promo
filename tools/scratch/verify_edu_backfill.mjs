@@ -10,6 +10,8 @@
 //   ④ 소급 안내줄에 그 프로그램의 종료일이 적힌다
 //   ⑤ 그 값이 일일입력에 들어가면 하드코딩 폴백(_BIZ_EDU_SOLD 160)이 **자동 은퇴**한다
 //     — 끝난 건이라 선이 아니라 막대(= _mo 없음)로 서고, 값 출처 꼬리표(_vsrc)가 사라진다
+//   ⑥ 운영대장에 **사업구분 「기타」**로 적힌 교육 행도 읽힌다(거울 실측 = 이 계열의 관행 표기) ·
+//     단 **프로그램 시트에 예술교육으로 있는 이름일 때만** — 이름 밖 「기타」는 안 읽는다(의미 창작 0)
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath, URL as NodeURL } from 'node:url';
 import { dirname, join, extname } from 'node:path';
@@ -111,6 +113,18 @@ async function main() {
     })()`);
     console.log('after-save: ' + JSON.stringify(after));
 
+    // ⑥ 운영대장 「기타」 표기 경로 — 이름 매칭분만 교육으로 읽히는지 / 무관한 기타는 안 읽히는지.
+    const etc = await page.evaluate(`(()=>{
+      _salesState.master={rows:[],headers:[]}; _salesState.daily={rows:[],headers:[]};   // 판매 축 비우고 대장만으로 판정
+      _bizState.raw={headers:[],rows:[
+        {'상태':'','사업구분':'기타','티켓구분':'유료','기본좌석':302,'발권유료':160,'년도':2026,'월':6,'일':30,'공연구분':'기획','장르1':'인문학','공연명':'2026 화요살롱 - 이낙준(6월)','수익성':''},
+        {'상태':'','사업구분':'기타','티켓구분':'유료','기본좌석':302,'발권유료':999,'년도':2026,'월':7,'일':1,'공연구분':'기획','장르1':'','공연명':'무관한 기타 행사','수익성':''}
+      ]};
+      const rows=(_bizEduMonthRows(2026)||[]).map(g=>({n:g.name,sold:g._sold,vsrc:g._vsrc||''}));
+      return {rows:rows, names:rows.map(g=>g.n)};
+    })()`);
+    console.log('etc-path: ' + JSON.stringify(etc));
+
     const fails = [];
     const hy = after.find(g => g.n.indexOf('화요살롱') >= 0);
     if (!hy) fails.push('⑤ 저장 뒤 교육 목록에 그 건이 없다');
@@ -130,6 +144,11 @@ async function main() {
       if (opt.text.indexOf('· 종료(소급)') < 0) fails.push('③ 꼬리표 「· 종료(소급)」가 없다');
       if (opt.value !== '2026 화요살롱 - 이낙준(6월)') fails.push('③ value가 공연명이 아니다(저장 값 오염): ' + opt.value);
     }
+    const hy2 = etc.rows.find(g => g.n.indexOf('화요살롱') >= 0);
+    if (!hy2 || hy2.sold !== 160) fails.push('⑥ 대장 「기타」 표기 교육이 안 읽힌다: ' + JSON.stringify(hy2 || null));
+    else if (hy2.vsrc) fails.push('⑥ 대장 실값인데 폴백 꼬리표가 남았다: ' + hy2.vsrc);
+    if (etc.names.some(n => n.indexOf('무관한 기타') >= 0)) fails.push('⑥ 이름 밖 「기타」가 교육으로 새어 들어왔다');
+
     const regs = errs.filter(e => /ReferenceError|TypeError|SyntaxError/.test(e));
     if (regs.length) fails.push('JS 회귀: ' + regs.slice(0, 3).join(' | '));
 
