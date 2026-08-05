@@ -7519,9 +7519,8 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
 //   · 동그라미 = **종료 월(최종) 한 점만 채운다**(운영자 2차 「맨 마지막이 아니면 빈 동그라미로(테두리로 감쌈) ·
 //     맨 마지막 = 종료 월(최종)」) — 종료 전시도 중간 달은 빈 동그라미고 마지막 점(최종 누계)만 선색 채움 ·
 //     진행중은 **전부 빈 동그라미**(종료 월이 아직 없다). 빈 = 카드 바탕 채움 + 선색 테두리 · 찬 = 선색 채움 + 카드 바탕 테두리.
-//   · 면(누적 집계) = **선 뒤**에 그 전시 고유색 **50%**(`_yrHexA` 알파 변주 = 새 색 0)로 선 아래를 채운다(운영자 2차 ·
-//     전시별 분리 · fill tozeroy). 윤곽·호버 없음 — 경계는 꺾은선 그 자체고 수치는 점 툴팁만 말한다(「선 올릴때만」 유지).
-//     겹침 구간의 색 혼합 = 동시 진행 표시로 읽힌다. 점 하나짜리(한 달 전시)는 면이 성립 안 해 생략.
+//   · 면(누적 집계)은 **없다** — 2차 「고유색 50% 면」은 3차 「꺾은선으로 롤백하고 마무리해」로 철거(같은 바닥 겹치기 =
+//     운영자 판정 「누적이 아니다 · 직각도 아니다」). 되살릴 땐 시작일순 **스택 + 직각(hv 스텝)** 축으로만(아래 철거 주석).
 //   · x = 공연·교육과 **같은 1월~12월 축**(`_bizMonthAxis`) · 점 자리 = 그 달 눈금(종전 그대로).
 //   · 일일 실측이 없는 전시 = 종전 그대로(**한 달 안에 끝난 것만** 총계 점 하나 · 여러 달이면 파선 자리 — 달 배분 창작 금지).
 //   · 색 = 그 전시의 캘린더 색(`_bizExCol` → `_EX_SPACE` 공간색 · 개별 지정은 `_BIZ_EX_COL` 예외표 —
@@ -7600,17 +7599,9 @@ function _bizDrawExhibMonthly(divId,list,hgt){
     var tip=b.mo[b.mo.length-1];
     labs.push({x:mx(tip[0]),y:tip[1],v:tip[1],col:col});   // 라벨 = 꼭자락(마지막 점 = 누계) **하나뿐** — 나머지 숫자는 전부 툴팁으로(운영자 「헤비」)
   };
-  // [260805 운영자 2차 「저거 뒤에 투명도 50% 정도로 전시 고유색 사용해서 누적 집계 차트 · 전시별로 분리하되 복잡하지 않게」]
-  //   누적 집계 **면** — 선 뒤(트레이스 순서 = 그리기 순서)에 그 전시 고유색 50%(`_yrHexA` 알파 변주 = 새 색 0)로
-  //   선 아래를 채운다(fill tozeroy · 전시별 분리). 윤곽·호버 없음 — 경계는 위 꺾은선이 그 자체고, 수치는 종전대로
-  //   점 툴팁만 말한다(「선 올릴때만」 유지). 겹침 구간의 반투명 혼합 = 동시 진행이 색으로 드러나는 부수 정보.
-  var drawArea=function(b){
-    if(b.plan||b.mo.length<2)return;   // 파선 자리·점 하나(한 달짜리)는 면이 성립 안 한다
-    data.push({type:'scatter',mode:'none',x:b.mo.map(function(p){return mx(p[0]);}),y:b.mo.map(function(p){return p[1];}),
-      fill:'tozeroy',fillcolor:_yrHexA(colOf(b.g),.5),showlegend:false,hoverinfo:'skip'});
-  };
-  built.filter(function(b){ return !_done(b); }).forEach(drawArea);   // 면 전체가 선 전체보다 뒤 · 층 순서는 선과 동일
-  built.filter(_done).forEach(drawArea);
+  // ⚠ [260805 운영자 3차 「꺾은선으로 롤백하고 마무리해」] 2차의 「고유색 50% 누적 집계 면」(drawArea · fill tozeroy)은
+  //   **철거** — 같은 바닥(0)에서 겹쳐 그린 면은 운영자 판정 「누적이 아니다 · 직각도 아니다」였고, 스택(직각 스텝) 재작업
+  //   대신 꺾은선으로 되돌리는 결정. 면을 되살리려면 「시작일순 스택 + 직각(hv)」 축으로 — 같은 바닥 겹치기로 재현 금지.
   built.filter(function(b){ return !_done(b); }).forEach(draw);   // 진행중·예정 = 아래층
   built.filter(_done).forEach(draw);                              // 종료 = 위층(운영자 260805)
   // 값 라벨 = 전시당 꼭자락 1개(위 draw) · 큰 값 우선 배치 · 겹치면 생략(정확값은 툴팁) — 공연 막대(_bizDrawSalesBars)의
@@ -24450,19 +24441,33 @@ function _bizMenuBuild(menu){
 //   도구 하나에 붙이는 게 아니라 그 아래 도구들(카드 제작·누끼따기 / 영상 편집·자막 삽입·영상 프롬프팅)을 담는다.
 //   데스크탑 = 패널 드릴인(_ddDrill · _ddMorph와 같은 슬라이드 축) · 모바일 아코디언 = 뷰포트가 없어 인라인 나열(같은 목록 배열 공유 = 두 벌 관리 없음).
 //   항목·라벨 문법(itemCss·hov·구획 라벨) = 구 빌더 자구 그대로 — 신규 값·색 0.
-var _CT_ITEM='display:flex;align-items:center;gap:10px;width:100%;padding:11px 14px;border:0;background:none;text-align:left;font-size:13px;font-weight:600;color:var(--text);border-radius:9px;cursor:pointer;font-family:inherit;transition:background .12s';
-var _CT_HOV=' onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'"';
-var _CT_HD='padding:8px 14px 6px;font-size:11px;color:var(--dim);font-weight:700';   // 머리 라벨 = 구 「콘텐츠 제작」 헤더 값 그대로(하위 패널 제목·아코디언 분류명 공용)
-var _CT_SEC='margin:6px 8px 0;padding:8px 6px 4px;font-size:11px;color:var(--dim);font-weight:700;border-top:1px solid var(--border)';   // 구획 라벨 = 구 「영상 편집기」·「PLAY ZONE」 값 그대로
-// 하위 도구 목록 = 데스크탑 드릴인 패널과 모바일 인라인이 공유하는 한 벌(SSOT).
-var _CT_IMG=[["openCardMaker()",'카드 제작'],["window.open('cutout/','_blank','noopener')",'누끼따기']];   /* 카드 제작 = 사진 절삭+문구→PNG(nomute-editor 카드뉴스 이식) · 누끼따기 = 배경 제거 독립 도구 /cutout/ 새 탭(온디바이스 · 대시보드 상태 보존 = noopener) */
-var _CT_VID=[["openVideoEditor('edit')",'1. 영상 편집'],["openVideoEditor('sub')",'2. 자막 삽입'],["openVideoEditor('prompt')",'3. 영상 프롬프팅']];   /* [260711 운영자] 한 도구, 탭 진입점 3개 */
+// ⚠⚠ [260805 부팅 사고 수정] 이 상수들은 **`var` 대입이 부트보다 늦게 실행되는 자리**에 있다 — index.html은
+//   L2750~L32426이 **한 script 블록**이라 위에서 아래로 한 번에 돌고, 그 블록의 L4182 부트 IIFE가
+//   `initApp()`(L4490) → `buildNav()`(L5017) → **모바일 아코디언 즉시 빌드**(L5050 `_sub(_accP)` · 260723부터)
+//   → `_contentMenuBuild()`를 **여기(L24444)보다 2만 줄 앞서** 부른다. 그 시점 `var`는 hoist만 되고 값은 `undefined`.
+//   그래서 260805 3차가 넣은 `_ctList(_CT_IMG)`가 **`undefined.map`으로 터져 initApp이 통째로 중단**됐다
+//   = **로그인 상태 새로고침이면 앱이 아예 안 뜬다**(순수 main·QA 무관 재현 · 새 로그인은 파싱이 끝난 뒤라 멀쩡 → 눈에 안 띄었다).
+//   고침 = 값은 이 자리(문맥)에 그대로 두고 **hoist되는 `_ctDefs()`로 감싸 첫 사용 때 보장**한다(함수 선언은 순서 무관).
+//   ⚠ 여기에 새 `_CT_*` 상수를 더할 땐 **반드시 `_ctDefs()` 안**에 넣어라 — 밖에 두면 같은 사고가 재발한다.
+var _CT_ITEM,_CT_HOV,_CT_HD,_CT_SEC,_CT_IMG,_CT_VID;
+function _ctDefs(){
+  if(_CT_ITEM)return;
+  _CT_ITEM='display:flex;align-items:center;gap:10px;width:100%;padding:11px 14px;border:0;background:none;text-align:left;font-size:13px;font-weight:600;color:var(--text);border-radius:9px;cursor:pointer;font-family:inherit;transition:background .12s';
+  _CT_HOV=' onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'"';
+  _CT_HD='padding:8px 14px 6px;font-size:11px;color:var(--dim);font-weight:700';   // 머리 라벨 = 구 「콘텐츠 제작」 헤더 값 그대로(하위 패널 제목·아코디언 분류명 공용)
+  _CT_SEC='margin:6px 8px 0;padding:8px 6px 4px;font-size:11px;color:var(--dim);font-weight:700;border-top:1px solid var(--border)';   // 구획 라벨 = 구 「영상 편집기」·「PLAY ZONE」 값 그대로
+  // 하위 도구 목록 = 데스크탑 드릴인 패널과 모바일 인라인이 공유하는 한 벌(SSOT).
+  _CT_IMG=[["openCardMaker()",'카드 제작'],["window.open('cutout/','_blank','noopener')",'누끼따기']];   /* 카드 제작 = 사진 절삭+문구→PNG(nomute-editor 카드뉴스 이식) · 누끼따기 = 배경 제거 독립 도구 /cutout/ 새 탭(온디바이스 · 대시보드 상태 보존 = noopener) */
+  _CT_VID=[["openVideoEditor('edit')",'1. 영상 편집'],["openVideoEditor('sub')",'2. 자막 삽입'],["openVideoEditor('prompt')",'3. 영상 프롬프팅']];   /* [260711 운영자] 한 도구, 탭 진입점 3개 */
+}
 function _ctItem(act,label,more){   // more = 상위 분류(하위 있음) 표시 — 오른쪽 끝 › (글자만 · 새 부품 0)
+  _ctDefs();
   return '<button type="button" onclick="'+act+'" style="'+_CT_ITEM+'"'+_CT_HOV+'>'+label
     +(more?'<span style="margin-left:auto;color:var(--dim);font-size:12px">›</span>':'')+'</button>';
 }
 function _ctList(list){ return list.map(function(it){ return _ctItem('_ddCloseAll();'+it[0],it[1]); }).join(''); }
 function _contentMenuBuild(menu){
+  _ctDefs();   // ⚠ 부트(buildNav)가 이 파일의 var 대입보다 앞서 부른다 — 위 _ctDefs 주석
   var acc=menu.classList&&menu.classList.contains('nav-acc-panel');   // 모바일 햄버거 아코디언 = 패널 뷰포트 없음 → 드릴인 대신 분류명 라벨 + 도구 인라인
   menu.innerHTML='<div style="'+_CT_HD+'">콘텐츠 제작</div>'
     +'<div style="'+_CT_SEC+'">SNS</div>'
@@ -24487,11 +24492,12 @@ function _contentMenuBuild(menu){
 }
 // 하위 패널 2종 — 머리에 「‹ 콘텐츠 제작」 되돌아가기(같은 _ddDrill · dir -1 = 왼쪽에서 복귀), 그 아래 분류명 + 도구.
 function _ctSubBuild(menu,title,list){
+  _ctDefs();
   menu.innerHTML='<button type="button" onclick="_ddDrill(this,_contentMenuBuild,210,-1)" style="'+_CT_ITEM+';color:var(--dim);font-size:12px"'+_CT_HOV+'>‹ 콘텐츠 제작</button>'
     +'<div style="'+_CT_HD+'">'+title+'</div>'+_ctList(list);
 }
-function _contentImgMenuBuild(menu){ _ctSubBuild(menu,'이미지 편집',_CT_IMG); }
-function _contentVidMenuBuild(menu){ _ctSubBuild(menu,'영상 편집',_CT_VID); }
+function _contentImgMenuBuild(menu){ _ctDefs(); _ctSubBuild(menu,'이미지 편집',_CT_IMG); }
+function _contentVidMenuBuild(menu){ _ctDefs(); _ctSubBuild(menu,'영상 편집',_CT_VID); }
 // ============================================================
 // 콘텐츠 제작 공용 — 최소화(─) 버튼 + 하단 왼쪽 복원 독 (운영자 260805 「각 X 옆 최소화」)
 //  최소화 = 보드 display:none — DOM·타이머·업로드가 그대로 살아서 러너 작업(한글·오피스·용량 줄이기 등)이 뒤에서 이어진다. 복원 = 다시 표시 + 열린 다른 보드 위로 z 부양.
