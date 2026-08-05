@@ -4520,6 +4520,10 @@ async function initApp(){
     try{_ycSync();}catch(_e){}          // [260731e] 프로그램 시트 도착 = 연간 일정 타임라인 자동 재생성(스냅샷 → 실데이터)
     // 판매 레일이 PERFS보다 먼저 그려졌으면 재렌더 — 프로그램 시트 폴백 카드(마스터 미등록 판매중 공연) 누락 방지
     if(typeof _salesState!=='undefined'&&_salesState&&_salesState.daily&&_salesState.master&&!_srailBusy){try{_srailRender();}catch(_e){}}
+    // [260808] 프로그램 시트 도착 = 3면 **예술교육 반쪽의 로딩 해제 신호** — 그 반쪽의 유일한 소스가 PERFS인데
+    //   도착을 알리는 자리가 여기뿐이다(전시 반쪽은 _bizExhibEnsure .then이 같은 역할을 진다).
+    //   위 _srailRender 경로가 이미 3면을 다시 그렸으면(그 안에서 _bizInlineRender 호출) 여기선 건너뛴다 = 이중 렌더 0.
+    else if(typeof _mainView!=='undefined'&&_mainView==='biz'&&_bizLeftPage()===3){try{_bizInlineRender();}catch(_e){console.warn('[initApp bizm edu]',_e);}}
   }).catch(function(e){console.warn('[initApp loadPrograms]',e);});
   Promise.all([
     _pPrograms,
@@ -7123,6 +7127,14 @@ function _bizEduEmptyHtml(year){
     +'</div>';
 }
 function _bizEduMonthRows(year){
+  // [260808 운영자 「전시랑 교육이 처음 로딩될 때 오류처럼 나온다 · 바로 못 받아오면 로딩처럼」]
+  //   ⚠ **프로그램 시트 미도착 = 「없어요」 확정 금지**(로딩 유지) — 이 반쪽의 유일한 소스가 PERFS인데
+  //   구판은 「아직 안 왔다」와 「진짜 0건」을 구분하지 않아, 부팅 중 PERFS가 운영대장보다 늦게 오는 창에서
+  //   「📭 2026년 교육 프로그램이 없어요」가 2초가량 떴다(실측 재현: 프로그램 3.2s / 운영·전시 0.9s → 1.68~3.66s 노출).
+  //   같은 규약이 이미 판매 레일에 있다(_perfReady 게이트 ~L8105 「master 도착 전에는 '없어요' 확정 금지」)
+  //   · 반환 계약도 전시 반쪽과 같은 축으로 맞춘다(_bizExhibRows: 미로드 = null → 호출측이 로딩 화면).
+  //   ⚠ _perfReady는 loadPrograms가 **실패해도** true가 된다(.catch 후 .then) = 무한 로딩 아님.
+  if(typeof _perfReady!=='undefined'&&!_perfReady)return null;
   var out=[], col=_yrCss('--green')||'';
   var tdy=new Date(); tdy.setHours(0,0,0,0);
   ((typeof PERFS!=='undefined'&&PERFS)||[]).forEach(function(p){
@@ -7398,6 +7410,19 @@ function _bizDrawExhibFlow(divId,list,hgt){
 //   지시: *"여기 하단에 장르별 판매 축적 대신에, 반으로 갈라서, 좌 전시 판매현황 우 교육 판매현황 · 보이는건 공연 처럼 연간으로"*.
 //   구 260805 「분야 탭(공연/전시/교육)이 면 전체를 갈아치우는」 구조는 칩과 함께 철거하고, 전시·교육을 **공연 면 안에 상시**로 둔다
 //   = 세 분야가 한 화면에서 같이 읽힌다 · 탭 왕복 0. [260804] 전시 반쪽 그리기는 누적범위 음영(_bizDrawExhibFlow)으로 교체.
+// [260808] 반반 카드 본문 2종 — 로더·실패. 두 반쪽(전시·교육)이 **같은 부품**을 쓴다(형태 이원화 0).
+//   로더 = 기틀 §2-13 로딩 표준(.sk-sweep 빔 + _ldHtml + 「~중」 · 말줄임 점 금지) — 구 전시 반쪽 인라인 문자열을 그대로 뽑았다(마크업 동일).
+//   실패 = 이 파일의 정본 실패 카드 문법 계승(--danger 문구 + .ana-chip 「다시 시도」 · _bizCompRender 운영대장 실패 ~L7455)를 반쪽 크기로.
+//   ink는 `var(--토큰)` **완성 문자열**로 받는다 — 토큰명만 넘겨 조립하면 소스에서 var() 표기가 사라져 게이트·grep이 못 본다.
+function _bizHalfLoad(ink,msg){
+  return '<div style="position:relative;min-height:150px"><div class="sk-sweep" aria-hidden="true"></div><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:'+ink+';opacity:.75;font-size:12.5px;font-weight:600">'+_ldHtml(14)+msg+'</div></div>';
+}
+function _bizHalfFail(what,retry){
+  return '<div style="padding:30px 18px;text-align:center;color:var(--danger);font-size:12.5px;font-weight:600">'+what+' 데이터를 불러오지 못했어요'
+    +'<div style="margin-top:10px"><button class="ana-chip" onclick="'+retry+'">다시 시도</button></div></div>';
+}
+// [260808] 전시 원천 재시도 — 실패 딱지를 걷고 다시 확보한다(도착하면 _bizExhibEnsure가 그 면을 다시 그린다).
+function _bizExhibRetry(){ window._bizmExFail=0; try{_bizExhibEnsure();}catch(_e){} try{_bizInlineRender();}catch(_e){} }
 // 전시 원천(전시마스터·전시일일) 자체 확보 — 넓은 화면은 레일 6시트 플로우가 채우지만 좁은 화면·부팅 중엔 비어 있다.
 //   도착하면 그 면만 다시 그린다(중복 fetch 방지 = window._bizmExBusy · 260805 배선 계승).
 function _bizExhibEnsure(){
@@ -7411,7 +7436,10 @@ function _bizExhibEnsure(){
   Promise.all([_need('전시일일','_exDaily'),_need('전시마스터','_exMaster')]).then(function(res){
     window._bizmExBusy=0;
     try{ if(res[0])_anaState._exDaily=res[0]; if(res[1])_anaState._exMaster=res[1]; }catch(_e){}
-    if(!(res[1]&&typeof _anaState!=='undefined'&&_anaState&&_anaState._exMaster))return;   // 못 받으면 반쪽이 「불러오지 못했어요」로 남는다(면 전체는 공연 축이라 멀쩡하다)
+    // [260808] 못 받으면 **실패 딱지**를 세우고 그 면을 다시 그린다 — 이 return이 딱지 없이 그냥 빠져나가서,
+    //   호출측(_exRows===null)이 로더를 계속 띄운 채 영원히 멈춰 있었다(주석은 「불러오지 못했어요로 남는다」인데 그 상태가 없었다).
+    if(!(res[1]&&typeof _anaState!=='undefined'&&_anaState&&_anaState._exMaster))window._bizmExFail=1;
+    else window._bizmExFail=0;
     if(typeof _mainView!=='undefined'&&_mainView==='biz'&&_bizLeftPage()===3){ _bizInlineRender(); try{ if(_bizRightIsDetail())_railYrmRender(); }catch(_e){} }
   });
 }
@@ -7523,11 +7551,16 @@ function _bizCompRender(el,half){
   //     카드마다 걸면 두 도형이 각자 늘어 하단선이 갈린다. cap(data-bizmcap)은 걸지 않는다 — 이 줄의 높이는
   //     막대 차트(고정)+게이지(자연 높이)라 예측 가능하고, 남는 몫은 위 판매현황 차트가 _bizFitSeason으로 흡수한다.
   var _exRows=_bizExhibRows(_bizmState.year);
-  if(_exRows===null)_bizExhibEnsure();                                        // 캐시 미도착(좁은 화면·부팅 중) = 자체 확보 후 이 면만 다시 그린다
+  // 캐시 미도착(좁은 화면·부팅 중) = 자체 확보 후 이 면만 다시 그린다.
+  // ⚠ [260808] 실패 딱지가 서 있으면 **자동 재시도 금지** — 실패 → 재렌더 → 여기서 또 확보 → 실패 …의 무한 fetch 고리가 된다.
+  //   재확보는 사용자가 「다시 시도」를 누를 때만(_bizExhibRetry가 딱지를 걷는다).
+  if(_exRows===null&&!window._bizmExFail)_bizExhibEnsure();
   else if(_liveOnly)_exRows=_exRows.filter(function(g){return g._st==='active';});   // 「판매중」 = 공연과 같은 축(전시는 진행중)
   var _exSub='',_exBody;
   if(_exRows===null){
-    _exBody='<div style="position:relative;min-height:150px"><div class="sk-sweep" aria-hidden="true"></div><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--peach-text);opacity:.75;font-size:12.5px;font-weight:600">'+_ldHtml(14)+'전시 데이터 불러오는 중</div></div>';
+    // [260808] 미도착 = 로딩 · **못 받아옴 = 실패 카드**(무한 스윕 금지). 구판은 실패해도 로더가 그대로 남아
+    //   화면이 영원히 「불러오는 중」이었다(_bizExhibEnsure 주석은 「불러오지 못했어요로 남는다」라 적혀 있었지만 그 상태가 없었다).
+    _exBody=window._bizmExFail?_bizHalfFail('전시','_bizExhibRetry()'):_bizHalfLoad('var(--peach-text)','전시 데이터 불러오는 중');
   } else if(!_exRows.length){
     _exBody='<div style="padding:34px 18px;text-align:center;color:var(--dim);font-size:12.5px">📭 '+_bizmState.year+'년 '+(_liveOnly?'진행중인 전시가 없어요':'전시 데이터가 없습니다')+'</div>';
   } else {
@@ -7535,10 +7568,13 @@ function _bizCompRender(el,half){
     _exBody='<div id="bizm-ex-chart" style="height:'+_BIZ_HALF_CH+'px;margin:0 4px 2px"></div>';
   }
   // [260804 운영자] 교육 = **당해 연도만** · 프로그램 시트(예술교육)의 월별 일정 게이지(구 연도별 가로 막대 폐지 — 「무조건 당해년도만」)
-  var _eduRows=_bizEduMonthRows(_bizmState.year);
-  if(_liveOnly)_eduRows=_eduRows.filter(function(g){return g._st==='active';});   // 「판매중」 = 지금 진행중인 교육만(공연·전시와 같은 축)
-  var _eduAny=_eduRows.length>0;
-  var _eduBody=_eduAny?('<div id="bizm-edu-chart" style="height:'+_BIZ_HALF_CH+'px;margin:0 4px 0"></div>')
+  var _eduRows=_bizEduMonthRows(_bizmState.year);   // [260808] null = 프로그램 시트 미도착(전시 반쪽과 같은 계약) → 로딩 화면
+  if(_eduRows&&_liveOnly)_eduRows=_eduRows.filter(function(g){return g._st==='active';});   // 「판매중」 = 지금 진행중인 교육만(공연·전시와 같은 축)
+  var _eduAny=!!(_eduRows&&_eduRows.length);
+  // [260808] 로더 = 전시 반쪽과 **같은 부품**(_bizHalfLoad = .sk-sweep 빔 + _ldHtml(14) + 「~중」 · 기틀 §2-13 로딩 문구 표준).
+  //   잉크만 분야색으로 갈린다(전시 --peach-text · 교육 --green = 이 반쪽이 이미 쓰는 토큰 · 신규 색 0).
+  var _eduBody=(_eduRows===null)?_bizHalfLoad('var(--green)','교육 데이터 불러오는 중')
+    :_eduAny?('<div id="bizm-edu-chart" style="height:'+_BIZ_HALF_CH+'px;margin:0 4px 0"></div>')
     :(_liveOnly?('<div style="padding:34px 18px;text-align:center;color:var(--dim);font-size:12.5px">📭 진행중인 교육이 없어요</div>'):_bizEduEmptyHtml(_bizmState.year));
   var _split='<div'+((half===1)?' data-bizmfill':'')+' style="display:flex;gap:14px;align-items:stretch;flex-wrap:wrap">'
     +_bizHalfCard('기획 전시',_exSub,_exBody)
