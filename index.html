@@ -6915,6 +6915,9 @@ function _bizMoney(v,bare){
 //     저절로 한 칸 들여써지고(=「앞에 0이 있다고 가정」) **슬래시와 그 뒤가 전부 한 세로선**에 선다.
 //     폭 `2ch` = 숫자 '0' 두 자(ch의 정의) — 숨은 '0' 글자를 앞에 끼우는 방식과 자리는 같고, **폰트가 tabular
 //     숫자를 지원하든 안 하든**(구현 폰트 Pretendard 미설치 폴백까지) 어긋나지 않는다. 잉크 0 · 읽히는 글자 0.
+//     ⚠ `ch`는 **이 레포 최초 도입 단위**다 — 고정폭 상자 관용구 자체는 기존(`.pw-summary .lbl{min-width:70px}` ~L1542 ·
+//       `_accBar`의 `flex:0 0 42px` ~L8132)이고, px 대신 **폰트 상대**로 잡은 변형이다. px로 잡으면 서체가 바뀔 때
+//       글자폭을 못 따라가 어긋난다(숨은 0 시안이 `11` 커닝에서 0.97px 어긋난 것과 같은 실패). 색·토큰 신설 0.
 //     min-width라 혹시 두 자리가 2ch보다 넓은 서체를 만나도 겹치지 않고 그 행만 자연폭으로 물러선다(무해 열화).
 function _bizMD(d){ return (d.getMonth()+1)+'/'+d.getDate(); }
 function _bizDateCell(s,e,single){
@@ -6976,9 +6979,9 @@ function _bizHallOf(g){
   if(!per||per>_BIZ_HALL_BIG_MAX)return null;
   return {h:(per<=_BIZ_HALL_SMALL_MAX)?'소':'대',est:1,per:per};
 }
-// 형태 = 캘린더 셀의 공연 원형 배지(index.html ~L3318 — 16px 원 · 이름 앞 · 이름과 5px)를 계승. 신규 클래스·색 0.
-//   ⚠ 계승분 = **형태·자리·간격**. 글자 크기·굵기는 이 표의 본문(13px)에 맞춰 8px/600 → 9.5px/700로 키웠다
-//     (캘린더 원본은 옆 글자가 9px이라 8px이 맞는 자리다 · 13px 옆에서 8px은 읽히지 않는다 — 값 변경 1건 명시).
+// 형태 = **`_batchBadge`(~L16293) 자구 그대로 계승** — 16px 원 · 9px/700 · 이름과 5px · 표 셀 안 · 말줄임 제목 앞.
+//   조건이 같은 자리(그쪽 본문 12.5px · 여기 13px)라 크기를 새로 잡을 이유가 없다 = **값 변경 0**.
+//   (그 배지도 캘린더 셀 배지 ~L3318에서 온 것 — 같은 계보의 표 셀판이다.)
 //   두 상태 구분은 기틀 §3.5③대로 **색 하나에 안 맡긴다**: 대 = 진한 채움 + 흰 글자(5.99:1) / 소 = 옅은 채움 +
 //     유채색 글자(4.96:1) — 같은 인디고 축의 명도·글자색 이중단서, 둘 다 WCAG AA 통과, 팔레트 밖 색 반입 0.
 //   ⚠ 같은 앱 캘린더에 **원형 '대' = 대관** 배지가 이미 있다(perfBadgeLb ~L3271). 화면이 다르고 색축도 다르지만
@@ -6994,7 +6997,7 @@ function _bizHallBadge(x){
   //   긴 근거 문장은 title(호버)에만 둔다.
   var lab=(big?'대극장':'소극장')+(x.est?' 추정':''),
       tip=(big?'대극장':'소극장')+(x.est?(' (추정 · 회차당 '+x.per.toLocaleString()+'석 — 운영대장에 장소 열이 없어 좌석으로 미룬 값)'):'');
-  return '<span title="'+escapeHtml(tip)+'" aria-label="'+escapeHtml(lab)+'" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);display:inline-flex;align-items:center;justify-content:center;width:'+_BIZ_HALL_BADGE_W+'px;height:'+_BIZ_HALL_BADGE_W+'px;border-radius:50%;font-size:9.5px;font-weight:700;line-height:1;'
+  return '<span title="'+escapeHtml(tip)+'" aria-label="'+escapeHtml(lab)+'" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);display:inline-flex;align-items:center;justify-content:center;min-width:'+_BIZ_HALL_BADGE_W+'px;height:'+_BIZ_HALL_BADGE_W+'px;border-radius:50%;font-size:9px;font-weight:700;line-height:1;'
     +(big?'background:var(--accent);color:var(--surface-solid)':'background:var(--accent-light);color:var(--accent)')+'">'+x.h+'</span>';
 }
 // ── [260806 운영자] 3면 조작부 = 「연도 ▾ │ 전체·판매중」 토글 한 벌 ────────────────────────
@@ -7213,7 +7216,11 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
   var plan=function(g){ return g._st==='planned'; };
   var _fix=ED?(_yrCss('--green')||''):'';
   var gcol=function(g){ return g._col||_fix||_BIZ_GENRE_COLORS[g.genre||'기타']||_BIZ_GENRE_COLORS['기타']; };   // [260805] _col/_fix = 분야색 고정(교육엔 장르 축이 없다)
-  var md=function(d){ return ('0'+(d.getMonth()+1)).slice(-2)+'.'+('0'+d.getDate()).slice(-2); };   // MM.DD = 우 열 상세 표(01.09(금))와 같은 문법
+  // 축 라벨 = `MM.DD`(선행 0 유지 — 한 자리 월 `2.05`는 소수로 오독된다, 260806b 실측 후 교정).
+  // ⚠ [260807] 구 주석 「우 열 상세 표(01.09(금))와 같은 문법」은 **더 이상 사실이 아니다** — 그 표는 운영자 지시로
+  //   `M/D`(요일 없음·범위 `-`)로 갈렸다(_bizDateCell). 두 표기는 지금 **의도적으로 다르다**: 여기는 45° 눈금이라
+  //   자릿수가 흔들리면 라벨이 어긋나 보이고, 표는 세로선 정렬이 목적이라 상자로 잡는다. 한쪽에 맞춰 「통일」하지 마라.
+  var md=function(d){ return ('0'+(d.getMonth()+1)).slice(-2)+'.'+('0'+d.getDate()).slice(-2); };
   var dOf=function(g){ return g.start||g.end||null; };
   var stName=function(g){ return plan(g)?'예정':(g._st==='active'?(ED?'진행중':'판매중'):'종료'); };
   var dTxt=function(g){ var s=g.start,e=g.end; if(!s&&!e)return '-';
@@ -7561,6 +7568,7 @@ function _bizCompRender(el,half){
   //   (1자리 ↔ 2자리에서 7.2px = 숫자 한 자 · 실데이터 1,307공연 중 10회 이상 13건). 괄호를 **가장 긴 회차 폭의
   //   왼쪽 정렬 상자**에 담아 좌석 쪽 오른쪽 끝을 다시 한 줄로 세운다 — 일시 칸의 2ch 상자와 같은 관용구.
   //   ⚠ 표 안 최대 자릿수가 1이면(99% 뷰) 상자를 아예 걸지 않는다 = 그 경우 폭 변화 0·마크업 종전 동일.
+  //   ⚠ `ch` = 레포 최초 단위(위 _bizDateCell 주석 참조) · 신규 색·토큰 0.
   var _cntW=Math.max.apply(null,list.map(function(g){return String(g.cnt).length;}));
   var _cntBox=(_cntW>1)?('display:inline-block;min-width:'+(_cntW+2)+'ch;text-align:left;'):'';
   list.forEach(function(g,idx){
@@ -7578,10 +7586,12 @@ function _bizCompRender(el,half){
       +'<td style="padding:7px 12px;text-align:right;color:var(--neutral-text);white-space:nowrap">'+escapeHtml(g.genre||'-')+'</td>'
       // [260805] 예정(오픈 전) 행 = 실적 칸을 0으로 채우지 않고 「오픈 전」·「—」로 — 0은 「안 팔렸다」로 읽힌다
       +'<td style="padding:7px 12px;text-align:right;color:var(--peach-text);font-weight:600;font-variant-numeric:tabular-nums">'+(g._st==='planned'?'<span style="color:var(--muted);font-weight:500">오픈 전</span>':Math.round((g._sold!=null&&g._sold>0)?g._sold:g.paid).toLocaleString())+'</td>'
-      // 오픈석(회차) — 부차 정보임은 **괄호가 말한다**. 잉크를 한 급 더 흐리게(--muted) 내리는 시안은 흰 바탕 대비
-      //   1.92:1(AA 4.5 한참 미달)이라, 실제 값인 회차를 못 읽는 사람이 생긴다 → 열 잉크(--dim)를 그대로 쓴다
-      //   = 이 열 나머지와 같은 가독 수준(신규 부채 0). 게이트 ⑤는 리터럴 hex 쌍만 채점해 var() 조합을 못 보므로
-      //   통과 여부가 근거가 못 된다 — 손으로 계산해 정한 값이다.
+      // 오픈석(회차) — 부차 정보임은 **괄호가 말한다**(잉크로 더 내리지 않는다).
+      //   ⚠ 대비 이력: 회차 값은 구 독립 열에서 `--neutral-text` **5.23:1**(AA 통과)이었고, 이 열로 옮기며 열 잉크
+      //     `--dim` **3.54:1**(제브라 행 3.40:1 · AA 미달)로 **내려간다**. 더 흐린 `--muted` 시안은 **1.92:1**이라
+      //     기각했다. 지금 값 = 오픈석 숫자와 **같은 가독 수준**(이 열 전체가 원래 --dim = §6-5 그레이 축 부채 안) —
+      //     회차만 더 진하게 하면 부값이 주값보다 진해져 위계가 뒤집힌다. 열 전체를 올리는 건 이 지시 밖 = 운영자 판단.
+      //   게이트 ⑤는 리터럴 hex 쌍만 채점해 var() 조합을 못 본다 → 통과 여부는 근거가 못 된다(손으로 계산한 값).
       +'<td style="padding:7px 12px;text-align:right;color:var(--dim);white-space:nowrap;font-variant-numeric:tabular-nums">'+(g.seat>0?Math.round(g.seat).toLocaleString():'—')+(_cntBox?('<span style="'+_cntBox+'">('+g.cnt+')</span>'):('('+g.cnt+')'))+'</td>'
       +'<td style="padding:7px 12px;text-align:right;color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums">'+(g._st==='planned'?'—':g.avg.toFixed(1))+'</td>'
       +'<td style="padding:7px 12px;padding-right:14px;text-align:right;color:var(--green);font-weight:600;font-variant-numeric:tabular-nums">'+((g._rev!=null&&g._rev>0)?_bizMoney(g._rev,true):'—')+'</td>'   // [260803 선택값] 열: 매출 = 표시(진행바·최근 7일 = 끔) · [260805] 단위는 머리글이 말한다 = 숫자만(bare)
