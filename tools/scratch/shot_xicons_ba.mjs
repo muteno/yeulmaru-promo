@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // X 아이콘 버튼 일괄 정본화 전후 촬영 — 글자가 바뀐 7곳.
-//   버튼 마크업은 **index.html 실코드에서 onclick 서명으로 뽑아** 쓴다(재타이핑 0 = 260805-15 규약).
+//   버튼 마크업은 **index.html 실코드에서 onclick 서명으로 뽑아** 쓴다(재타이핑 0 = 260805-16 규약).
 //   실앱 페이지 안에 심어 렌더하므로 CSS·토큰이 실제 그대로 적용된다.
 //   후 = 실코드 그대로(`✕`) · 전 = 그 마크업의 글자만 구 `×`로 되돌린 것(그 커밋의 diff가 정확히 그것뿐).
 import { existsSync, readdirSync, readFileSync, mkdirSync } from 'node:fs';
