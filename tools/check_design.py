@@ -77,7 +77,10 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 #   서로 참조값 가지도록」) — 모달 `_bizRender`가 따로 타이핑하고 있던 표를 3면과 **같은 빌더**
 #   (`_bizListTable`)로 갈아끼우면서, 그 표에만 남아 있던 raw hex 잉크(테두리·줄무늬·글자 7개 자리)가
 #   토큰 조합으로 대체됐다. 신규 색 반입 0 · 순수 청산.
-BASE_HEX_INDEX = 1548
+# 1548 → 1546 = 업데이트 알림 배지를 정본 `.toast`(글래스) 계승으로 갈아치우며(운영자 260806-8 「아래에 · 반투명
+#               글래스모피즘」) 구판 인라인 cssText의 리터럴 2개 동반 청산 — `#6366F1`(그라데이션 끝색) · `color:#fff`.
+#               신규 반입 0 — 새 배지는 var(--glass-surface)/var(--glass-border)/var(--accent)/var(--danger)뿐.
+BASE_HEX_INDEX = 1546
 BASE_HEX_SIGNAGE = 2          # signage/index.html: #000·#333
 BASE_ROOT_INDEX = 2           # L46(기본 팔레트 34토큰) + L1653(뉴트럴·z·c1~c6 27토큰) — 260803 실측 정정(구 표기 L14/32·L1322/26은 위치·개수 모두 stale)
 BASE_ROOT_SIGNAGE = 0
