@@ -7778,9 +7778,40 @@ function _bizDrawExhibMonthly(divId,list,hgt){
     var tip=b.mo[b.mo.length-1];
     labs.push({x:mx(tip[0]),y:tip[1],v:tip[1],col:col});   // 라벨 = 꼭자락(마지막 점 = 누계) **하나뿐** — 나머지 숫자는 전부 툴팁으로(운영자 「헤비」)
   };
-  // ⚠ [260805 운영자 3차 「꺾은선으로 롤백하고 마무리해」] 2차의 「고유색 50% 누적 집계 면」(drawArea · fill tozeroy)은
-  //   **철거** — 같은 바닥(0)에서 겹쳐 그린 면은 운영자 판정 「누적이 아니다 · 직각도 아니다」였고, 스택(직각 스텝) 재작업
-  //   대신 꺾은선으로 되돌리는 결정. 면을 되살리려면 「시작일순 스택 + 직각(hv)」 축으로 — 같은 바닥 겹치기로 재현 금지.
+  // ── [260805 운영자 4차] 보조 레이어 = **옅은 직각(스텝) 누적 스택** ─────────────────────────
+  //   지시: *"직각 누적을 좀 더 연하게해서 투박하게 안보이면 될거같음 · 메인은 선그래프 지금과 같이 · 네모차트는 보조느낌"*.
+  //   2차의 「고유색 50% 면」이 철거된 이유(3차 「누적도 안되는거같은데」)를 이번엔 **진짜 스택**으로 갚는다 —
+  //   같은 바닥에서 겹쳐 그리지 않고 `stackgroup`으로 **시작일순 차곡차곡**, 선 모양은 `hv`(직각 = 그 달 값이 다음 달까지 유지).
+  //   ⚠ **보조는 보조답게**: 알파 한 자릿수대(종료 .09 · 진행중 .12 = 같은 토큰 알파 변주 · 새 색 0) · **윤곽선 0** ·
+  //     **점·라벨·툴팁 0**(hoverinfo skip) — 숫자와 상호작용은 전부 메인 꺾은선 몫이다(운영자 「선 올릴때만」 계승).
+  //   · 쌓는 값 = 그 달 **동시에 진행 중이던 전시들의 누계 합**(끝난 전시는 그 달부터 빠진다) — 그래서 계단이
+  //     6월에 제일 높고(6,907 = 어린이 3,827 + 섬냥이 3,080) 7월에 내려간다 = 「같이 진행될 때의 누계」 그 자체.
+  //     끝난 전시까지 연말까지 물고 가면(연간 누적) 상한이 한 사다리 더 올라 **메인 선이 그만큼 눌린다** — 보조가 주인을
+  //     누르면 안 되므로 안 한다(그 선택지는 시안 플레이그라운드 C 프리셋에 살아 있다).
+  //   · 실측 없는 중간 달 = 앞 달 누계 유지(계단이 끊기지 않게) · 파선 자리(예정·월별 내역 없음)는 스택에서 제외.
+  var _bgSeq=built.filter(function(b){ return !b.plan&&b.mo&&b.mo.length; })
+    .sort(function(a,b){ var as=a.g.start,bs=b.g.start; return (as&&bs)?(as-bs):0; });   // 시작일순 = 먼저 시작한 전시가 아래 칸
+  var _bgGrid=function(b){
+    var first=b.mo[0][0], last=b.mo[b.mo.length-1][0], out=[], m,i,v,p;
+    for(m=0;m<12;m++){
+      v=null; for(i=0;i<b.mo.length;i++)if(b.mo[i][0]===m)v=b.mo[i][1];
+      if(v==null){
+        if(m<first||m>last)v=0;                                        // 시작 전·종료 후 = 0(그때 진행중이던 양만 쌓는다)
+        else{ p=0; for(i=0;i<b.mo.length;i++)if(b.mo[i][0]<m)p=b.mo[i][1]; v=p; }   // 실측 빠진 달 = 앞 달 유지
+      }
+      out.push(v);
+    }
+    return out;
+  };
+  var _bgSum=new Array(12), _bgMax=0, _bgX=[]; for(var _m=0;_m<12;_m++){_bgSum[_m]=0;_bgX.push(mx(_m));}
+  _bgSeq.forEach(function(b){
+    var ys=_bgGrid(b), col=colOf(b.g);
+    ys.forEach(function(v,i){ _bgSum[i]+=v; if(_bgSum[i]>_bgMax)_bgMax=_bgSum[i]; });
+    data.push({type:'scatter',mode:'none',stackgroup:'exbg',fill:'tonexty',x:_bgX,y:ys,
+      fillcolor:_yrHexA(col,(b.g._st==='active')?0.12:0.09),   // 알파 변주만(기틀 §3.5②) · 진행중이 반 단 진하다 = 점의 빈/찬 규칙과 같은 축
+      line:{width:0,shape:'hv'},hoverinfo:'skip',showlegend:false});   // ⚠ hv = **직각**(운영자 「네모차트」) — 이걸 빼면 사선 삼각형이 된다(실측으로 물렸다)
+  });
+  if(_bgMax>maxV)yTop=_bizNiceStep(Math.max(maxV*1.08,_bgMax*1.02));   // 계단이 잘리지 않는 최소 상한(메인 여유 1.08 유지) · 아래 draw·라벨·lay가 이 값을 쓴다
   built.filter(function(b){ return !_done(b); }).forEach(draw);   // 진행중·예정 = 아래층
   built.filter(_done).forEach(draw);                              // 종료 = 위층(운영자 260805)
   // 값 라벨 = 전시당 꼭자락 1개(위 draw) · 큰 값 우선 배치 · 겹치면 생략(정확값은 툴팁) — 공연 막대(_bizDrawSalesBars)의
