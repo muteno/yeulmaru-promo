@@ -7427,19 +7427,31 @@ function _bizBarBreak(vals,plotPx){
       labPx=Math.max(9,Math.min(18,Math.round(plotPx*0.058))),
       topPx=plotPx-bodyPx-gapPx-labPx;                           // 본체 62~70% · 중략 띠 · 압축 구간 · 값 라벨 자리
   if(topPx<22)return null;
-  var q=pos[Math.floor(pos.length*0.2)],step=_bizNiceStep(q/4),B=step*4;                  // 순위 기반 = 값이 흔들려도 B가 안 뛴다(절벽 없음)
   var cnt=function(b){ var c=0,i; for(i=0;i<pos.length;i++){ if(pos[i]>b)c++; else break; } return c; };
-  var k=cnt(B),u=B/bodyPx;
-  while(k<pos.length&&(B-pos[k])<14*u&&B<step*8){ B+=step; u=B/bodyPx; k=cnt(B); }   // 본체 최대막대가 B에 붙으면 그 값 라벨이 ≈띠에 먹힌다 → 눈금을 한 칸씩 올려 띄운다(한 번만 올리면 다시 붙는 분포가 있다)
-  if(!k||pos[0]<B*2||(pos.length-k)<5)return null;
-  if(pos[k-1]<B*1.25)return null;   // 잘릴 값 중 **최소**가 B에 붙어 있으면 = 끊을 「빈 구간」이 없는 연속 분포 → 접지 않는다(이 게이트가 없으면 순위 규칙이 이상치 없는 완만한 분포에도 발동한다 · 평의회5 실측 오발동 n=100에서 69% → 계수 1.25에서 0%)
-  return {B:B,step:step,nt:Math.round(B/step),n:k,cuts:pos.slice(0,k),oMin:pos[k-1],oMax:pos[0],u:u,
+  // ── [260806 운영자 「예전엔 ≈로 중략됐는데 어느 순간 사라졌다」] 절단점 = **후보 순회**(구 「하위 80% 지점」 단일 후보 폐기) ──
+  //   구판은 기준점 q를 순위 20% 한 자리로 고정했다 → 이상치가 **2건 이상**이면 그 자리 자체가 이상치라 B가 이상치 위로
+  //   올라가 k=0(=끊을 값 없음)으로 규칙이 조용히 꺼졌다. 실측(260806 라이브 분포 [3300,3170,908,637,503,311,277,268,178]) = null.
+  //   게다가 260804(da8a03d)에 오발동 봉합으로 들어온 1.25 게이트와 겹치면서, 이 기능을 만든 계기였던 **원사례**
+  //   ([486,66,52,…] 대형 뮤지컬 1건)까지 함께 껐다(실측 = null) — 「어느 순간 사라졌다」의 정체.
+  //   → 잘리는 개수 i를 1부터 늘리며 **본체 최대값 pos[i]** 기준으로 B를 잡고, 기존 게이트 3종을 **한 글자도 안 바꾼 채**
+  //     전부 통과하는 첫 후보를 채택한다 = 이상치를 최소한만 접는다. 오발동 방어(평의회5 축)는 종전 그대로 유지.
+  for(var ci=1;ci<pos.length;ci++){
+    var q=pos[ci],step=_bizNiceStep(q/4),B=step*4;                                       // 순위 기반 = 값이 흔들려도 B가 안 뛴다(절벽 없음)
+    var k=cnt(B),u=B/bodyPx;
+    while(k<pos.length&&(B-pos[k])<14*u&&B<step*8){ B+=step; u=B/bodyPx; k=cnt(B); }   // 본체 최대막대가 B에 붙으면 그 값 라벨이 ≈띠에 먹힌다 → 눈금을 한 칸씩 올려 띄운다(한 번만 올리면 다시 붙는 분포가 있다)
+    if(!k||pos[0]<B*2||(pos.length-k)<5)continue;
+    if(k*3>pos.length)continue;      // [260806] 잘리는 건 **소수**여야 한다(본체가 2배 이상) — 원 취지가 「이상치 몇 건이 나머지를 뭉갠다」인데 다수가 압축 구간에 몰리면 정반대가 된다(실측 = 16건 중 11건 압축 오발동)
+    if(pos[k-1]<pos[k]*2)continue;   // [260806] 갭 술어 — 끊는 자리에 **진짜 빈 구간**이 있어야 한다(잘린 최소 ≥ 본체 최대 ×2). 후보 순회로 절단점이 여러 개가 되면서 눈금 사다리 반올림에 좌우되는 B 기준(아래 1.25)만으론 완만한 분포에서 새 오발동이 났다(실측 = 이상치 없는 랜덤 100세트 중 10건) → 값 자체로 재판정해 0건 복귀
+    if(pos[k-1]<B*1.25)continue;   // 잘릴 값 중 **최소**가 B에 붙어 있으면 = 끊을 「빈 구간」이 없는 연속 분포 → 접지 않는다(이 게이트가 없으면 순위 규칙이 이상치 없는 완만한 분포에도 발동한다 · 평의회5 실측 오발동 n=100에서 69% → 계수 1.25에서 0%)
+    return {B:B,step:step,nt:Math.round(B/step),n:k,cuts:pos.slice(0,k),oMin:pos[k-1],oMax:pos[0],u:u,
     lo:B,hi:(bodyPx+gapPx)*u,top:(bodyPx+gapPx+topPx)*u,rng:plotPx*u,
     map:function(v){
       if(!(v>this.B))return v;                                   // 본체 = 손 안 댐(실값 = 실높이)
       if(!(this.oMax>this.oMin))return this.top;
       return this.hi+(0.12+0.88*(v-this.oMin)/(this.oMax-this.oMin))*(this.top-this.hi);   // 하한 .12 = 띠 위로 조금만 띄운다(구 .18은 오독을 49%까지 키웠고, .06은 잘린 최소값 눈금이 B 눈금에 붙어 지워졌다)
     }};
+  }
+  return null;   // 어느 절단점도 게이트를 못 넘으면 = 끊을 빈 구간이 없는 분포 → 현행 그대로 그린다(회귀 0)
 }
 function _bizWavePts(x0,x1,y,amp,cyc){   // ≈의 한 획(물결) — 데이터 좌표 점열. cyc = 주기 수(폭에 비례해 파장을 일정하게)
   var n=Math.max(12,Math.round(cyc*10)),a=[],i,t;
