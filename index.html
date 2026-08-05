@@ -7454,7 +7454,8 @@ function _bizBarBreak(vals,plotPx){
     var q=pos[ci],step=_bizNiceStep(q/4),B=step*4;                                       // 순위 기반 = 값이 흔들려도 B가 안 뛴다(절벽 없음)
     var k=cnt(B),u=B/bodyPx;
     while(k<pos.length&&(B-pos[k])<14*u&&B<step*8){ B+=step; u=B/bodyPx; k=cnt(B); }   // 본체 최대막대가 B에 붙으면 그 값 라벨이 ≈띠에 먹힌다 → 눈금을 한 칸씩 올려 띄운다(한 번만 올리면 다시 붙는 분포가 있다)
-    if(!k||(pos.length-k)<5)continue;   // 본체 5건 미만 = 비교할 무리가 없다(중략의 목적이 사라진다)
+    if(!k||(pos.length-k)<5)continue;   // 본체 5건 미만 = 비교할 무리가 없다(중략의 목적이 사라진다). ⚠ 이 줄은 아래 갭 술어보다 **먼저** 있어야 한다 — `k===pos.length`면 `pos[k]`가 undefined라 `x<NaN`이 false가 되어 갭 술어가 조용히 통과한다(평의회4 D4 · 순서 이동 금지)
+    if(k*12>topPx)continue;             // [260806 2차 · 평의회4 D2] 압축 구간이 **눈금을 물리적으로 담을 수 있는 개수**를 넘으면 접지 않는다 — 잘림 상한을 1/2로 넓힌 뒤 압축 9건에 눈금 4개(커버리지 44%)가 실측됐고, 그건 이 함수 자신이 금지한 상태다(「기준자가 최댓값 하나뿐이면 사람이 선형 보간을 해서 135 막대를 200으로 읽는다 · 오차 +49%」). 12 = 값 라벨 글상자 높이(기존 18 = 글상자 12 + 숨구멍 6의 하한 성분 · 새 수치 창작 아님)
     if(k*2>=pos.length)continue;      // [260806 2차] 잘리는 건 **절반 미만**이어야 한다 — 원 취지가 「이상치 몇 건이 나머지를 뭉갠다」인데 다수가 압축 구간에 몰리면 정반대다. ⚠ 1차의 `k*3`(=1/3 미만)은 너무 좁아 「대형 4편 + 소규모」처럼 **흔한 현실 분포**를 통째로 못 끊었다(평의회2 실측 = 뭉갠 분포의 36.6%가 미발동 · 그중 67%가 이 게이트 단독 차단 · 최악 = 0.06px 막대 7개) → 1/2로 완화(현행 발동 케이스 16,986건 재판정 회귀 0)
     if(pos[k-1]<pos[k]*2)continue;   // [260806] 갭 술어 — 끊는 자리에 **진짜 빈 구간**이 있어야 한다(잘린 최소 ≥ 본체 최대 ×2). 후보 순회로 절단점이 여러 개가 되면서, 눈금 사다리 반올림에 좌우되는 B 기준(아래 1.25)만으론 완만한 분포에서 새 오발동이 났다 → 값 자체로 재판정해 **크게 줄인다**(평의회6 ablation 실측 = 균등 랜덤 2,000세트 기준 갭 없음 n=9 96건·n=16 13건 → 갭 있음 35건·2건). ⚠ 「0건 복귀」가 아니다 — 1차 커밋의 그 주석은 좁은 표본(내 400세트)만 보고 쓴 **거짓 기술**이라 여기서 정정한다.
     // ── [260806 2차 운영자 「저렇게 차이가 심하면 **항상** 켜지게 정본에 박아라」] 뭉갬 하드 스위치 ──
@@ -7684,8 +7685,8 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
     asc.forEach(function(v,ci){
       var isTop=(ci===asc.length-1), py=pxOf(v);
       // 간격 기준 18px = 눈금 글상자(12px) + 여백 6 — 14로 재면 라벨끼리 3px까지 붙는다(평의회4 실측)
-      if(isTop&&py-lastPx<18&&tv.length>brk.nt+1){ tv.pop(); tt.pop(); }   // 최댓값과 겹치면 바로 아래 눈금을 뺀다
-      if(isTop||py-lastPx>=18){ tv.push(brk.map(v)); tt.push(axn(v)); lastPx=py; }
+      if(isTop&&py-lastPx<12&&tv.length>brk.nt+1){ tv.pop(); tt.pop(); }   // 최댓값과 겹치면 바로 아래 눈금을 뺀다
+      if(isTop||py-lastPx>=12){ tv.push(brk.map(v)); tt.push(axn(v)); lastPx=py; }   // [260806 2차 · 평의회4 D2 · 평의회5 ②] 압축 구간 눈금은 **본체와 다른 자**로 잰다 — 본체 18(글상자 12 + 숨구멍 6)을 압축 구간에도 쓰면 접힌 막대에 기준자가 안 서서 「최댓값 하나로 선형 보간 = 오차 +49%」 상태가 된다(실측 = 압축 9건에 눈금 4개 · 낮은 화면에선 라이브 분포조차 1개). 12 = 글상자 높이 = 겹침이 시작되는 물리적 하한(새 수치 창작 아님 · 후보 단계 `k*12>topPx` 상한과 같은 자)
     });
     lay.yaxis.tickmode='array'; lay.yaxis.tickvals=tv; lay.yaxis.ticktext=tt;
     lay.yaxis.range=[0,brk.rng]; delete lay.yaxis.rangemode;
