@@ -20124,7 +20124,12 @@ function openPromoCheck(){
        + '<button class="btn btn--neutral btn--sm" style="margin-top:12px" onclick="closePromoCheck();openPromoCheck()">다시 시도</button></div>';
   }else{
     var s=_promoCheckScan(), h=[];
-    var card=function(t,sub,inner){ return '<div class="bizm-card" style="padding:14px 16px"><div style="font-size:14px;font-weight:800">'+t
+    // [260805 운영자] 카드 사이 간격 = 정본 `.bizm-card` margin-bottom 14 → **21**(지시 「지금의 +50%」 · 14×1.5).
+    //   마지막 카드에도 그대로 걸려 「카드↔카드」와 「마지막 카드↔집계줄」이 **같은 21**로 선다(간격 항상 일정).
+    //   인라인으로 두는 이유 = 이 모달만의 값. 전역 `.bizm-card`(L2298)를 건드리면 대시보드 이젤 하단선 계약
+    //   (tools/smoke_layout.mjs ①~③)이 좌·우 열 전부에서 흔들린다.
+    // 제목 잉크 = `var(--accent)`(강조색1 · 운영자 260805) — 흰 카드 위 6.0:1(WCAG AA 통과) · 신규 hex 0.
+    var card=function(t,sub,inner){ return '<div class="bizm-card" style="padding:14px 16px;margin-bottom:21px"><div style="font-size:14px;font-weight:800;color:var(--accent)">'+t
       +(sub?'<span style="font-size:11.5px;font-weight:600;color:var(--neutral-text);margin-left:8px">'+sub+'</span>':'')+'</div>'+inner+'</div>'; };
     var row=function(lead,main,sub,hot){ return '<div style="display:flex;gap:10px;align-items:baseline;padding:7px 0;border-top:1px solid var(--border)">'
       +'<span style="font-size:12px;font-weight:800;white-space:nowrap;font-variant-numeric:tabular-nums;color:'+(hot?'var(--danger-btn)':'var(--neutral-text)')+'">'+lead+'</span>'
@@ -20145,8 +20150,14 @@ function openPromoCheck(){
   }
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closePromoCheck)">'
     + '<div class="modal" style="width:min(760px,94vw);max-height:88vh;display:flex;flex-direction:column;overflow:hidden">'
-    + '<button class="modal-x" onclick="closePromoCheck()" title="닫기">×</button>'
-    + '<div style="font-size:17px;font-weight:800;padding:2px 0 10px">AI 홍보 · 점검</div>'
+    // [260805 운영자 「우측 상단에 x로 · 디자인 정본따르게」] 머리줄 = X + 제목을 **한 덩이(블록)로 묶는다**.
+    //   원인: 이 모달은 `display:flex`라 정본 `.modal-x{float:right}`(L1126)가 **flex 항목에선 무효** — 그래서
+    //   X가 제목 위 좌측에 세로로 쌓였다. 묶음 div는 flex 항목 = BFC라 그 안에서 float가 되살아나고,
+    //   자리는 정본 계산(`margin:-8px -8px 0 0` + sticky)이 그대로 낸다 = 일반 모달과 **같은 우상단 21/29px**.
+    //   좌표 하드코딩(`.pw-modal .modal-x` L1525식 absolute) 대신 이 방식을 쓰는 이유 = 모바일 `.modal{padding:18px}`
+    //   (L418)에서도 정본이 자동으로 따라온다(고정 px면 그 화면만 어긋난다).
+    + '<div><button class="modal-x" onclick="closePromoCheck()" title="닫기">×</button>'
+    + '<div style="font-size:17px;font-weight:800;padding:2px 0 10px">AI 홍보 · 점검</div></div>'
     + '<div style="overflow:auto;flex:1;min-height:0">'+body+'</div></div></div>';
 }
 
