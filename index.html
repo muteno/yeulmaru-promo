@@ -6529,7 +6529,7 @@ function _yrmRender(){
     +cell('연평균',avg.toLocaleString(),'--text')
     +cell('전년 대비',(dup?'+':'−')+Math.abs(dpct).toFixed(1)+'%',dup?'--green':'--danger')
     +'</div>';
-  h+='<div class="bizm-card"><div class="ct"><span class="ct-bul"></span>연도별 관람·수강 추이 <span class="sub">막대=실적 · 선=추세 · 점선 기둥=2026 예상 (만명)</span></div><div id="yrm-chart" style="height:560px;margin:0 6px 6px;animation:fadeUp .45s ease"></div></div>';   // [260725 운영자] 높이 410→560 = 좌 보드를 우 레일 하단선까지 내리며 생긴 여백을 차트 확대로 흡수(카드 외벽 마진 0 6 6은 유지). Plotly layout.height도 pfx==='yrm'일 때만 560 — 모달(pfx='yr')은 410 그대로
+  h+='<div class="bizm-card"><div class="ct"><span class="ct-bul"></span>연도별 관람·수강 추이 <span class="sub">막대=실적 · 선=추세 · 점선 기둥=2026 예상 누적 (만명)</span></div><div id="yrm-chart" style="height:560px;margin:0 6px 6px;animation:fadeUp .45s ease"></div></div>';   // [260725 운영자] 높이 410→560 = 좌 보드를 우 레일 하단선까지 내리며 생긴 여백을 차트 확대로 흡수(카드 외벽 마진 0 6 6은 유지). Plotly layout.height도 pfx==='yrm'일 때만 560 — 모달(pfx='yr')은 410 그대로
   h+='<div id="yrm-tbl"></div>';
   body.innerHTML=h;
   _yrmTable();
@@ -11857,22 +11857,27 @@ function _yrDrawChart(first,pfx,stO){
       traces.push({type:'scatter',mode:'markers+text',name:c+' 점',x:years,y:vm,customdata:vv,text:vv.map(function(v,idx){return (v>0&&idx!==pi&&idx!==vi)?_man(v):'';}),textposition:vv.map(function(v,idx){return (idx===vv.length-1&&_oi===1)?'bottom center':'top center';}),textfont:{color:hex,size:8.5},marker:{color:hex,size:5,line:{color:paper,width:1}},hovertemplate:'%{x}년 '+c+'<br>%{customdata:,}명<extra></extra>',showlegend:false,cliponaxis:false});   // [260723 운영자] 각 점 위 수치(만명·소수1) · 최고/최저는 콜아웃이 담당(중복 제거) · [260804 3차] 마지막(잠정) 칸만 2등분야 라벨을 점 아래로 = 2026 「1.0(공연)」과 「0.8(전시)」가 8px 차라 겹쳐 읽히던 것 분리(다른 해는 종전 그대로)
       annos.push({x:years[pi],y:vm[pi],text:'최고 '+_man(vv[pi]),showarrow:true,arrowhead:0,arrowwidth:1,arrowcolor:hex,ax:0,ay:-24,font:{color:hex,size:9.5},bgcolor:paper,bordercolor:hex,borderwidth:1,borderpad:3});   // [260723 운영자·한수] 최고 콜아웃(만명) — 리더선으로 빼내 불투명 칩+드롭섀도
       if(vi>=0&&vi!==pi)annos.push({x:years[vi],y:vm[vi],text:'최저 '+_man(vv[vi]),showarrow:true,arrowhead:0,arrowwidth:1,arrowcolor:hex,ax:0,ay:28,font:{color:hex,size:9.5},bgcolor:paper,bordercolor:hex,borderwidth:1,borderpad:3});   // 최저 콜아웃(만명)
-      // [260804 4차 운영자 「점선으로 쭉 할 필요 없고 · 차트 기둥으로 · 현재치 + 예상 기둥(테두리를 점선으로) · 공연·전시·교육 각각 별개로 · 25년처럼」]
-      //   3차의 「2025→2026 점선 추세선」 폐지. 2026 칸을 **분야별 2단 기둥**으로 세운다:
-      //     아래 = 지금 확보분(기존 실적 막대 그대로 · 꽉 찬 옅은 면) / 위 = 남은 예상분(같은 색, **테두리 점선**의 빈 기둥).
-      //   두 단을 합친 높이 = 연간 예상 → 2026 칸이 2025 칸과 같은 눈높이로 읽힌다(운영자 「저기가 지금 차트가 낮잖아」).
-      //   Plotly 막대는 테두리에 dash를 못 준다 → 같은 자리에 **shape 사각(line.dash:'dot')** 을 얹는다(기존 dash:'dot' 문법 계승 · 새 색 0).
-      if(_fcOn&&_YR_FC[c]){
-        var _fc=_YR_FC[c],_fy=_fc.v/10000,_fb=vm[vm.length-1]||0,_fcx=years[years.length-1],_hw=0.2*_YR_FCW;
-        if(_fy>_fb){
-          fcShapes.push({type:'rect',xref:'x',yref:'y',x0:_fcx-_hw,x1:_fcx+_hw,y0:_fb,y1:_fy,layer:'below',
-            line:{color:hex,width:1.4,dash:'dot'},fillcolor:_yrHexA(hex,.07)});   // 빈 기둥(예상분) — 면은 실적 막대(.14)보다 옅게 = 「아직 안 채워짐」
-          annos.push({x:_fcx+_hw+0.06,y:_fy,xanchor:'left',yanchor:'middle',text:'예상 '+_man(_fc.v),showarrow:false,font:{color:hex,size:9.5},bgcolor:labelBg,borderpad:2});   // 값은 기둥 오른쪽(넓힌 칸의 여백 자리)
-        }
-        fcHover.x.push(_fcx);fcHover.y.push(_fy);fcHover.cd.push([c,_fc.v,_fc.why]);   // shape엔 hover가 없다 → 꼭대기에 투명 점 하나로 산식 툴팁 제공
-      }
     });
-    if(fcHover.x.length)traces.push({type:'scatter',mode:'markers',name:'2026 예상',x:fcHover.x,y:fcHover.y,customdata:fcHover.cd,marker:{color:transp,size:14},hovertemplate:'2026년 %{customdata[0]} 예상 <b>%{customdata[1]:,}명</b><extra>%{customdata[2]}</extra>',showlegend:false});   // [260804 4차] 예상 기둥 꼭대기의 투명 히트존 — 산식이 그대로 뜬다(shape은 hover를 못 받는다)
+    // [260805 운영자 「올해 예상그래프가 누적그래프가 아님 → 예상 누적그래프로 · 각 누적 수치를 만단위 표기」]
+    //   4차의 「분야별 각자 0부터」 기둥 폐지 — 셋이 같은 x자리에 0 기준으로 포개져(공연 기둥 안에 전시 기둥이 통째로 들어감)
+    //   합산 규모가 안 읽혔다. 2026 예상 기둥을 **누적(스택)** 으로 세운다:
+    //     쌓는 순서 = 값 오름차순(교육→전시→공연) — 개별 추이선의 상하 눈높이 순서 그대로라 각 경계가 제 분야 선 근처에 선다.
+    //     각 단 = 직전 누적 꼭대기에서 시작(y0=누적, y1=누적+제 예상분) · 경계 라벨 = **누적치**(만명 · _man 공통 문법)
+    //       = 교육 0.1 → 전시 2.5 → 공연 8.6(=전체 예상 합 85,801명). 개별치·산식은 hover가 병기로 답한다.
+    //   확보분(실적 막대·점 1.0/0.8)은 종전 그대로 0 기준 overlay — 실적 ≠ 예상(누적) 축 분리 불변.
+    //   분야 토글을 끄면 그 단만 빠지고 누적이 자동 재계산된다(selCats 기준). 문법 = 4차 shape dash:'dot' 그대로 · 새 색·값 0.
+    if(_fcOn){
+      var _fcx=years[years.length-1],_hw=0.2*_YR_FCW,_cum=0;
+      selCats.slice().sort(function(a,b){return ((_YR_FC[a]||{v:0}).v)-((_YR_FC[b]||{v:0}).v);}).forEach(function(c){
+        var _fc=_YR_FC[c]; if(!_fc||!(_fc.v>0))return;
+        var _hx=col[c],_y0=_cum/10000;_cum+=_fc.v;var _y1=_cum/10000;
+        fcShapes.push({type:'rect',xref:'x',yref:'y',x0:_fcx-_hw,x1:_fcx+_hw,y0:_y0,y1:_y1,layer:'below',
+          line:{color:_hx,width:1.4,dash:'dot'},fillcolor:_yrHexA(_hx,.07)});   // 빈 기둥(예상분) — 면은 실적 막대(.14)보다 옅게 = 「아직 안 채워짐」
+        annos.push({x:_fcx+_hw+0.06,y:_y1,xanchor:'left',yanchor:'middle',text:'예상 '+_man(_cum),showarrow:false,font:{color:_hx,size:9.5},bgcolor:labelBg,borderpad:2});   // 라벨 = 단 경계의 누적치(만명) — 기둥 오른쪽(넓힌 칸의 여백 자리)
+        fcHover.x.push(_fcx);fcHover.y.push(_y1);fcHover.cd.push([c,_fc.v,_fc.why,_cum]);   // shape엔 hover가 없다 → 단 경계에 투명 점으로 개별치+누적치+산식 툴팁
+      });
+    }
+    if(fcHover.x.length)traces.push({type:'scatter',mode:'markers',name:'2026 예상',x:fcHover.x,y:fcHover.y,customdata:fcHover.cd,marker:{color:transp,size:14},hovertemplate:'2026년 %{customdata[0]} 예상 <b>%{customdata[1]:,}명</b> · 누적 %{customdata[3]:,}명<extra>%{customdata[2]}</extra>',showlegend:false});   // [260805] 히트존 = 각 단 경계 — 개별치·누적치·산식이 그대로 뜬다(shape은 hover를 못 받는다)
     // [260724 운영자 정정] 관람 추세선 = 공연선 실제 꼭짓점 원(2022→2025) 직결(운영자 "너가 준 시안대로 · 계 기준은 잘못된 방향"). 선분 끝점 = 공연 2022·2025(≈7.4→8.3만) · %·라벨은 계(전체 관람) 2021→2025 유지 · 박스 상단(값 라벨 위)
     if(pfx==='yrm'&&typeof _yrmTotRow==='function'){
       var _tr=_yrmTotRow();   // 계 = %(전체 관람 추이) 산출용
@@ -11951,7 +11956,7 @@ function _yrRender(pfx){
   h+=_yrCard('연평균',pfx+'-k3','','--green');
   h+='<div class="bizm-kpi" style="--kpitok:var('+dtok+')"><div class="lab">전년 대비 (2025 vs 2024)</div><div class="val">'+darr+' <span id="'+pfx+'-k4">0</span>'+(dpct?'<span class="u">'+dpct+'</span>':'')+'</div></div>';   // [260723f Opus] 글래스 KPI 통일
   h+='</div>';
-  h+='<div class="bizm-card"><div class="ct">'+(st.year==='all'?('연도별 '+mLabel+' 추이'):(st.year+'년 분야별 '+mLabel))+' <span class="sub">— '+catTxt+(st.year==='all'?(' · 막대=실적, 선=추세'+((st.metric==='인원')?', 점선 기둥=2026 예상':'')):' · 선택 연도')+'</span></div><div id="'+pfx+'-chart" style="height:360px;margin:0 6px 6px;animation:fadeUp .45s ease"></div></div>';   // [260723f Opus] 차트 = 흰 서피스 카드 통일
+  h+='<div class="bizm-card"><div class="ct">'+(st.year==='all'?('연도별 '+mLabel+' 추이'):(st.year+'년 분야별 '+mLabel))+' <span class="sub">— '+catTxt+(st.year==='all'?(' · 막대=실적, 선=추세'+((st.metric==='인원')?', 점선 기둥=2026 예상 누적':'')):' · 선택 연도')+'</span></div><div id="'+pfx+'-chart" style="height:360px;margin:0 6px 6px;animation:fadeUp .45s ease"></div></div>';   // [260723f Opus] 차트 = 흰 서피스 카드 통일
   var _navCss='width:28px;height:28px;border-radius:8px;border:1.5px solid var(--glass-bd);background:var(--glass-surface);color:var(--text);font-size:16px;font-weight:700;cursor:pointer;line-height:1;font-family:inherit;display:inline-flex;align-items:center;justify-content:center;box-shadow:var(--glass-shadow)';
   h+='<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin:2px 0 8px"><div style="font-size:13px;font-weight:700;color:var(--text)">전체 실적표 <span style="font-weight:400;color:var(--dim);font-size:11px">— 엑셀 원본 그대로 · 선택 연도 열 하이라이트 · 2025 최근 취합 강조</span></div><div style="display:flex;gap:6px;flex-shrink:0"><button type="button" onclick="_yrScrollTable(-1,\''+pfx+'\')" title="이전 연도들 보기" style="'+_navCss+'">‹</button><button type="button" onclick="_yrScrollTable(1,\''+pfx+'\')" title="다음 연도들 보기" style="'+_navCss+'">›</button></div></div>';   // [260723 운영자] 묻히는 연도 열 = 부제줄 우측 ◀▶로 가로 스크롤(데이터 안 가리는 위치)
   h+=_yrTable(pfx);
