@@ -1097,12 +1097,22 @@ function jangdoRanges(t) {
 __name(jangdoRanges, "jangdoRanges");
 
 // 홈페이지 본문 인라인용 카드 이미지. 값 = docs/디자인기틀.md §1 팔레트 그대로(신규 색 0 · jangdo.html과 같은 매핑):
-//  #4A4DE7=--accent · #1A1A2E=--text · #888=--dim · #bbb=--muted · #fff=--surface-solid · #1A6B3C=--green · #E24B4A=--danger-btn.
-//  ⚠ `<img>`로 실리므로 SVG 내부 스크립트는 브라우저가 실행하지 않는다 = 상태 계산·조판 전부 서버(여기)에서 끝낸다.
+//  #4A4DE7=--accent · #1A1A2E=--text · #888=--dim · #bbb=--muted · #fff=--surface-solid · #1A6B3C=--green · #E24B4A=--danger-btn ·
+//  #E1DFEC=--neutral-d(게이지 트랙 = 물에 잠긴 시간).
+//  ⚠ `<img>`로 실리므로 SVG 내부 **스크립트**는 브라우저가 실행하지 않는다 = 상태 계산·조판 전부 서버(여기)에서 끝낸다.
+//    단 SMIL `<animate>`·CSS는 `<img>` 안에서도 재생된다(스크립트만 차단) → 게이지 채움·「지금」 마커 박동에 SMIL을 쓴다.
+//    ⚠ SMIL 미지원 환경 대비: 와이프용 clip 사각형의 **정적 width는 전체 폭**으로 두고 애니메이션이 0에서 자라게 한다.
+//      (정적 0으로 두면 애니메이션이 안 도는 환경에서 가능 구간이 통째로 안 보인다.) begin은 0s 고정 —
+//      지연이 필요하면 values 앞에 0을 한 번 더 넣어 멈춰 세운다(begin 지연 = 그 사이 정적 전체 폭이 번쩍인다).
 //  rgba()는 SVG 1.1 미지원 → fill-opacity로 표현(같은 토큰 alpha 변주 = 기틀 §3.5②).
 export function buildJangdoSvg(rows, nowKst) {
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
-  const fmt = (m) => Math.floor(m / 60) + ":" + ("0" + (m % 60)).slice(-2);
+  // [260805 개정 · 운영자 지시] 표기는 12시간제 AM/PM(홈페이지 방문자 기준). 내부 계산은 그대로 분(minute) 24시간.
+  const ap12 = (m) => { const h = Math.floor(m / 60) % 24; return { ap: h < 12 ? "AM" : "PM", h: (h % 12) || 12 }; };
+  const fmt = (m) => { const v = ap12(m); return v.ap + " " + v.h + ":" + ("0" + (m % 60)).slice(-2); };
+  const fmtTick = (m) => { const v = ap12(m); return v.ap + v.h; };
+  // 글자폭 어림(볼드 산세리프 em 비율) — 통행 구간이 3개 이상인 날 큰 글씨가 카드 밖으로 나가지 않게 자동 축소한다.
+  const estEm = (s) => { let w = 0; for (const c of s) w += c === ":" ? 0.3 : c === " " ? 0.28 : c === "·" ? 0.36 : 0.62; return w; };
   const map = {};
   for (const r of rows) map[r.d] = r.t;
   const addDay = (ymd, n) => {
@@ -1116,49 +1126,114 @@ export function buildJangdoSvg(rows, nowKst) {
   };
   const today = nowKst.ymd, tmrw = addDay(today, 1);
   const rawT = map[today], ranges = jangdoRanges(rawT);
+  const tR = jangdoRanges(map[tmrw]);
 
-  // 세로는 **내용만큼만** 자란다(줄 커서 y) — 시간이 없는 날 고정 높이로 그리면 카드 아래가 빈 채로 남는다.
-  const W = 760;
-  let y = 40, body = "";
-  body += '<text x="30" y="' + y + '" font-size="17" font-weight="800" fill="#1A1A2E">장도 입도 가능 시간</text>';
-  y += 26;
-  body += '<text x="30" y="' + y + '" font-size="13.5" fill="#888">' + esc(label(today)) +
+  // 게이지 축 = 통상 AM6~PM10(진섬다리 통행 창). 실데이터가 그 밖으로 나가는 날은 시(hour) 단위로 넓혀 잘리지 않게 한다.
+  let AX0 = 6 * 60, AX1 = 22 * 60;
+  for (const rs of [ranges, tR]) if (rs) for (const r of rs) { AX0 = Math.min(AX0, r[0]); AX1 = Math.max(AX1, r[1]); }
+  AX0 = Math.floor(AX0 / 60) * 60; AX1 = Math.ceil(AX1 / 60) * 60;
+
+  // 가로는 넓게(운영자 지시) — 폰트도 같은 비율로 키워 임베드 max-width가 760이어도 기존과 같은 크기로 보이고,
+  // 1000으로 넓히면 그만큼 커진다. 세로는 **내용만큼만** 자란다(줄 커서 y).
+  const W = 1000, PAD = 36, GX = PAD, GW = W - PAD * 2;
+  const px = (m) => GX + (Math.max(AX0, Math.min(AX1, m)) - AX0) / (AX1 - AX0) * GW;
+  let y = 52, body = "", defs = "";
+  body += '<text x="' + PAD + '" y="' + y + '" font-size="22" font-weight="800" fill="#1A1A2E">장도 입도 가능 시간</text>';
+  body += '<text x="' + (W - PAD) + '" y="' + y + '" text-anchor="end" font-size="17" fill="#888">' + esc(label(today)) +
           ' <tspan fill="#4A4DE7" font-weight="700">오늘</tspan></text>';
 
   if (ranges) {
-    y += 46;
-    body += '<text x="30" y="' + y + '" font-size="31" font-weight="800" fill="#1A1A2E">';
+    y += 52;
+    const line = ranges.map((r) => fmt(r[0]) + " ~ " + fmt(r[1])).join("  ·  ");
+    const fs = Math.min(34, Math.max(19, Math.floor(GW / estEm(line))));
+    body += '<text x="' + PAD + '" y="' + y + '" font-size="' + fs + '" font-weight="800" fill="#1A1A2E">';
     ranges.forEach((r, i) => {
-      if (i) body += '<tspan fill="#bbb" font-weight="400"> · </tspan>';
+      if (i) body += '<tspan fill="#bbb" font-weight="400">  ·  </tspan>';
       body += "<tspan>" + fmt(r[0]) + " ~ " + fmt(r[1]) + "</tspan>";
     });
     body += "</text>";
-    let dot = "#bbb", txt = "오늘 입도 시간이 종료됐어요", col = "#888";
+
+    let dot = "#bbb", txt = "오늘 입도 시간이 종료됐어요", col = "#888", live = false;
     for (const r of ranges) {
-      if (nowKst.min >= r[0] && nowKst.min < r[1]) { dot = col = "#1A6B3C"; txt = "지금 입도 가능 · " + fmt(r[1]) + "까지"; break; }
+      if (nowKst.min >= r[0] && nowKst.min < r[1]) { dot = col = "#1A6B3C"; txt = "지금 입도 가능 · " + fmt(r[1]) + "까지"; live = true; break; }
       if (nowKst.min < r[0]) { dot = col = "#E24B4A"; txt = "지금은 입도 불가 · " + fmt(r[0]) + "부터 입도 가능"; break; }
     }
-    y += 32;
-    body += '<circle cx="35" cy="' + (y - 5) + '" r="5" fill="' + dot + '"/>';
-    body += '<text x="48" y="' + y + '" font-size="14.5" font-weight="700" fill="' + col + '">' + esc(txt) + "</text>";
+    y += 38;
+    body += '<circle cx="' + (PAD + 6.5) + '" cy="' + (y - 6) + '" r="6.5" fill="' + dot + '">' +
+            (live ? '<animate attributeName="opacity" values="1;0.35;1" dur="2.2s" repeatCount="indefinite"/>' : "") + "</circle>";
+    body += '<text x="' + (PAD + 23) + '" y="' + y + '" font-size="19" font-weight="700" fill="' + col + '">' + esc(txt) + "</text>";
+    // 범례 — 게이지 두 색이 무엇인지 (오른쪽)
+    body += '<rect x="800" y="' + (y - 15) + '" width="13" height="13" rx="3.5" fill="#1A6B3C"/>' +
+            '<text x="818" y="' + (y - 4) + '" font-size="13.5" fill="#888">입도 가능</text>' +
+            '<rect x="888" y="' + (y - 15) + '" width="13" height="13" rx="3.5" fill="#E1DFEC"/>' +
+            '<text x="906" y="' + (y - 4) + '" font-size="13.5" fill="#888">물에 잠김</text>';
+
+    // 게이지 — 트랙 전체 = 하루 통행 창, 초록 = 건널 수 있는 시간, 회색 = 다리가 잠겨 못 건너는 시간
+    const BT = y + 28, BH = 30;
+    defs += '<clipPath id="wipe"><rect x="' + GX + '" y="' + (BT - 34) + '" width="' + GW + '" height="' + (BH + 68) + '">' +
+            '<animate attributeName="width" values="0;' + GW + '" keyTimes="0;1" dur="0.95s" begin="0s"' +
+            ' calcMode="spline" keySplines="0.22 1 0.36 1" fill="freeze"/></rect></clipPath>';
+    body += '<rect x="' + GX + '" y="' + BT + '" width="' + GW + '" height="' + BH + '" rx="' + (BH / 2) + '" fill="#E1DFEC"/>';
+    let segs = "";
+    for (const r of ranges) {
+      const x0 = px(r[0]), x1 = px(r[1]);
+      segs += '<rect x="' + x0.toFixed(1) + '" y="' + BT + '" width="' + Math.max(3, x1 - x0).toFixed(1) +
+              '" height="' + BH + '" rx="' + (BH / 2) + '" fill="#1A6B3C"/>';
+    }
+    // 「지금」 마커 — 와이프 안에 넣어 게이지가 채워지며 함께 드러난다. 박동(ping)은 무한 반복.
+    if (nowKst.min >= AX0 && nowKst.min <= AX1) {
+      const nx = px(nowKst.min).toFixed(1);
+      segs += '<line x1="' + nx + '" y1="' + (BT - 7) + '" x2="' + nx + '" y2="' + (BT + BH + 7) +
+              '" stroke="#4A4DE7" stroke-width="2.5" stroke-linecap="round"/>' +
+              '<circle cx="' + nx + '" cy="' + (BT - 11) + '" r="4.5" fill="#4A4DE7" fill-opacity="0.5">' +
+              '<animate attributeName="r" values="4.5;15" dur="2.2s" repeatCount="indefinite"/>' +
+              '<animate attributeName="fill-opacity" values="0.5;0" dur="2.2s" repeatCount="indefinite"/></circle>' +
+              '<circle cx="' + nx + '" cy="' + (BT - 11) + '" r="4.5" fill="#4A4DE7"/>';
+    }
+    body += '<g clip-path="url(#wipe)">' + segs + "</g>";
+
+    // 눈금 — 2시간 간격(와이프 밖 = 처음부터 보인다)
+    const TY = BT + BH + 22;
+    for (let m = AX0; m <= AX1; m += 120) {
+      const tx = px(m).toFixed(1);
+      const anchor = px(m) < GX + 18 ? "start" : px(m) > GX + GW - 18 ? "end" : "middle";
+      body += '<line x1="' + tx + '" y1="' + (BT + BH + 3) + '" x2="' + tx + '" y2="' + (BT + BH + 8) +
+              '" stroke="#000" stroke-opacity="0.09" stroke-width="1"/>' +
+              '<text x="' + tx + '" y="' + TY + '" text-anchor="' + anchor + '" font-size="13" fill="#bbb">' + fmtTick(m) + "</text>";
+    }
+    y = TY;
   } else {
-    y += 44;
-    body += '<text x="30" y="' + y + '" font-size="' + (rawT ? 20 : 16) + '" font-weight="' + (rawT ? 700 : 600) + '" fill="' +
+    y += 50;
+    body += '<text x="' + PAD + '" y="' + y + '" font-size="' + (rawT ? 26 : 20) + '" font-weight="' + (rawT ? 700 : 600) + '" fill="' +
             (rawT ? "#1A1A2E" : "#888") + '">' + esc(rawT || "오늘 입도 시간이 아직 등록되지 않았어요") + "</text>";
   }
 
-  const tR = jangdoRanges(map[tmrw]);
   if (tR) {
-    y += 33;
-    body += '<text x="30" y="' + y + '" font-size="13" fill="#888">내일 ' + esc(label(tmrw)) + "  " +
-            esc(tR.map((r) => fmt(r[0]) + " ~ " + fmt(r[1])).join(" · ")) + "</text>";
+    y += 36;
+    body += '<text x="' + PAD + '" y="' + y + '" font-size="15" fill="#888">내일 ' + esc(label(tmrw)) + "</text>";
+    body += '<text x="' + (W - PAD) + '" y="' + y + '" text-anchor="end" font-size="15" font-weight="700" fill="#1A1A2E">' +
+            esc(tR.map((r) => fmt(r[0]) + " ~ " + fmt(r[1])).join("  ·  ")) + "</text>";
+    const BT2 = y + 10, BH2 = 12;
+    defs += '<clipPath id="wipe2"><rect x="' + GX + '" y="' + BT2 + '" width="' + GW + '" height="' + BH2 + '">' +
+            '<animate attributeName="width" values="0;0;' + GW + '" keyTimes="0;0.28;1" dur="1.3s" begin="0s"' +
+            ' calcMode="spline" keySplines="0 0 1 1;0.22 1 0.36 1" fill="freeze"/></rect></clipPath>';
+    body += '<rect x="' + GX + '" y="' + BT2 + '" width="' + GW + '" height="' + BH2 + '" rx="6" fill="#E1DFEC"/>';
+    let segs2 = "";
+    for (const r of tR) {
+      const x0 = px(r[0]), x1 = px(r[1]);
+      segs2 += '<rect x="' + x0.toFixed(1) + '" y="' + BT2 + '" width="' + Math.max(3, x1 - x0).toFixed(1) +
+               '" height="' + BH2 + '" rx="6" fill="#1A6B3C" fill-opacity="0.42"/>';
+    }
+    body += '<g clip-path="url(#wipe2)">' + segs2 + "</g>";
+    y = BT2 + BH2 + 4;
   }
-  y += 23;
-  body += '<text x="30" y="' + y + '" font-size="11.5" fill="#bbb">위 시간 외에는 진섬다리가 물에 잠겨 출입이 불가합니다. 아래 월별 캘린더도 함께 확인해 주세요.</text>';
+  y += 26;
+  body += '<text x="' + PAD + '" y="' + y + '" font-size="13" fill="#bbb">위 시간 외에는 진섬다리가 물에 잠겨 출입이 불가합니다. 아래 월별 캘린더도 함께 확인해 주세요.</text>';
 
-  const H = y + 16;
+  const H = y + 20;
   return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + W + " " + H + '" width="' + W + '" height="' + H +
     '" role="img" aria-label="장도 입도 가능 시간" font-family="\'Noto Sans KR\',\'Apple SD Gothic Neo\',\'Malgun Gothic\',sans-serif">' +
+    (defs ? "<defs>" + defs + "</defs>" : "") +
     '<rect x="1" y="1" width="' + (W - 2) + '" height="' + (H - 2) + '" rx="16" fill="#fff" stroke="#000" stroke-opacity="0.09"/>' +
     body + "</svg>";
 }
