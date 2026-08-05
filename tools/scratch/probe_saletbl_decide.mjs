@@ -50,18 +50,10 @@ async function shot(out,W,H,patch,sel){
       hd:[...tb.querySelectorAll('thead td')].map(td=>td.innerText.split('\\n')[0]),
       nameW:+((tb.querySelector('tbody tr')||{}).children?[...tb.querySelectorAll('tbody tr')][0].children[1].getBoundingClientRect().width:0).toFixed(1)};
   })()`);
-  const el=await page.evaluateHandle(()=>[...document.querySelectorAll('table')].filter(t=>(t.innerText||'').indexOf('오픈석')>=0)[0]).then(h=>h.asElement());
+  const el=await page.$('#biz-main [data-bizmbox]');
   if(el)await el.screenshot({path:out}); else await page.screenshot({path:out});
   console.log(out.split('/').pop().padEnd(38), JSON.stringify(info));
   await b.close();
 }
 const S='/tmp/claude-0/-home-user-yeulmaru-promo/ddf38944-70fe-52fc-a89a-dabc42b51886/scratchpad/shots/';
-// ① 1201~1281 띠 — 전부 **무패치 실화면**. 1200은 이미 1열이라 「임계를 1281로 올린 뒤」의 모습이 그대로다.
-await shot(S+'dec_1201.png',1201,900,null);
-await shot(S+'dec_1240.png',1240,900,null);
-await shot(S+'dec_1281.png',1281,900,null);
-await shot(S+'dec_1200.png',1200,900,null);
-await shot(S+'dec_1290.png',1290,900,null);
-// ② 오픈석 잉크
-await shot(S+'dec_ink_now.png',1920,1080,null);
-await shot(S+'dec_ink_neutral.png',1920,1080,'ink');
+await shot(S+'left_biz.png',1920,1080,null);
