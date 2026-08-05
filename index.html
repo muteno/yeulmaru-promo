@@ -6934,19 +6934,43 @@ function _bizDateCell(s,e,single){
 //        그래서 추정분은 배지 툴팁이 「추정 · 회차당 N석」이라고 **스스로 밝힌다**(화면이 사실로 우기지 않게).
 //     ③ 좌석이 없거나 실측 최대 극장값(1021)을 넘으면(야외 1,300~12,000) **배지 없음** — 두 극장 중 하나라고
 //        말할 근거가 없는 자리에 배지를 달지 않는다.
-var _BIZ_HALL_SMALL_MAX=350, _BIZ_HALL_BIG_MAX=1021;
+var _BIZ_HALL_SMALL_MAX=350, _BIZ_HALL_BIG_MAX=1021, _bizHallIdx=null, _bizHallIdxSrc=null;
+// 정규화 이름 → [{장소, 연도}] 인덱스. **PERFS 배열이 통째로 갈릴 때만** 다시 만든다(loadPrograms가 새 배열을 대입).
+//   행마다 PERFS를 훑으면 O(행수×PERFS)라 시트가 자라면 렌더가 늘어진다(PERFS 300 = 렌더당 52.8ms 실측) —
+//   같은 레포 _bizSalesIdx와 같은 규약으로 한 번만 만들고 재사용한다.
+function _bizHallMap(){
+  var P=(typeof PERFS!=='undefined'&&PERFS)?PERFS:null;
+  if(!P||!P.length)return null;
+  if(_bizHallIdx&&_bizHallIdxSrc===P)return _bizHallIdx;
+  var m={};
+  P.forEach(function(p){
+    if(!p||p.t!=='c'||!p.l)return;
+    var d=_salesDate(p.s), y=(d&&d.getFullYear)?d.getFullYear():null;
+    [p.f,p.n].forEach(function(nm){ var k=_uName(nm||''); if(!k)return; (m[k]=m[k]||[]).push({l:String(p.l),y:y}); });
+  });
+  _bizHallIdx=m; _bizHallIdxSrc=P; return m;
+}
 function _bizHallOf(g){
   try{
-    var un=_uName(g&&g.name||''), pl='';
-    if(un&&typeof PERFS!=='undefined'&&PERFS&&PERFS.length){
-      PERFS.some(function(p){
-        if(!p||p.t!=='c'||!p.l)return false;
-        if(_uName(p.f||'')===un||_uName(p.n||'')===un){ pl=String(p.l); return true; }
-        return false;
-      });
+    // ⚠ 프로그램 시트가 아직 안 왔으면 **추정 배지도 그리지 않는다**(빈 자리만 유지).
+    //   그리면 시트 도착 뒤 좌석 추정이 시트 장소로 뒤집혀 **글자가 대↔소로 바뀌는 게 눈에 보인다**(실측).
+    //   「없다가 생긴다」는 정상 로딩으로 읽히지만 「틀렸다가 고쳐진다」는 화면이 거짓말을 한 것이다.
+    if(typeof _perfReady!=='undefined'&&!_perfReady)return null;
+    var m=_bizHallMap(), un=_uName(g&&g.name||'');
+    var hit=(m&&un)?m[un]:null;
+    if(hit&&hit.length){
+      // ⚠ **연도 가드** — 시리즈물(브런치 콘서트 Ⅰ~Ⅳ·헬로!오페라·호두까기 인형)은 해마다 같은 이름으로 돌아온다.
+      //   가드가 없으면 다른 해 편성의 장소를 이 해 행에 **확정으로** 달아 버린다(추정과 달리 자기 고지가 없어 최악).
+      //   같은 레포 _bizSalesIdx의 「재연 오매칭 방어」와 같은 축. 연도를 모르는 쪽은 통과시킨다(정보 없음 ≠ 불일치).
+      var gy=(g&&g.end&&g.end.getFullYear)?g.end.getFullYear():null, c=null, i;
+      for(i=0;i<hit.length;i++){ if(gy==null||hit[i].y==null||hit[i].y===gy){ c=hit[i]; break; } }
+      if(c){
+        var big=c.l.indexOf('대극장')>=0, sml=c.l.indexOf('소극장')>=0;
+        // 시트가 「대극장도 소극장도 아니다」라고 말하면(7층 전시실·야외 등) 그 말을 믿고 **배지를 안 단다** —
+        //   정본이 있는데 좌석으로 되짚는 건 정본을 무시하는 것이다. 둘 다 적힌 병기도 판정 불가로 본다.
+        return (big&&!sml)?{h:'대',est:0,per:0}:((sml&&!big)?{h:'소',est:0,per:0}:null);
+      }
     }
-    if(pl.indexOf('소극장')>=0)return {h:'소',est:0,per:0};
-    if(pl.indexOf('대극장')>=0)return {h:'대',est:0,per:0};
   }catch(_e){}
   var per=(g&&g.cnt>0&&g.seat>0)?Math.round(g.seat/g.cnt):0;
   if(!per||per>_BIZ_HALL_BIG_MAX)return null;
@@ -6959,14 +6983,18 @@ function _bizHallOf(g){
 //     유채색 글자(4.96:1) — 같은 인디고 축의 명도·글자색 이중단서, 둘 다 WCAG AA 통과, 팔레트 밖 색 반입 0.
 //   ⚠ 같은 앱 캘린더에 **원형 '대' = 대관** 배지가 이미 있다(perfBadgeLb ~L3271). 화면이 다르고 색축도 다르지만
 //     (대관 = --c5 시안블루 · 여기 = --accent 인디고), 한 글자가 두 뜻이라 title/aria-label로 뜻을 못 박는다.
-var _BIZ_HALL_BADGE_W=16, _BIZ_HALL_BADGE_GAP=5;   // 제목 열 머리글 들여쓰기(=배지폭+간격)가 이 두 값을 읽는다 — 값 이원화 금지
+var _BIZ_HALL_BADGE_W=16, _BIZ_HALL_BADGE_GAP=5;   // 제목 칸 좌패딩(12+배지폭+간격)이 이 두 값을 읽는다 — 값 이원화 금지
 function _bizHallBadge(x){
-  var base='flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;width:'+_BIZ_HALL_BADGE_W+'px;height:'+_BIZ_HALL_BADGE_W+'px;border-radius:50%;font-size:9.5px;font-weight:700;line-height:1;';
-  // 극장을 모르는 행 = 배지를 **빼는 게 아니라 빈 자리로 남긴다**. 빼면 그 행만 제목이 21px 왼쪽으로 튀어나가
-  //   1행 제목 열의 세로선이 무너진다(야외 공연 행 실측). 일시 칸의 「앞자리 0 자리」와 같은 규약 = 잉크는 없고 자리는 있다.
-  if(!x||!x.h)return '<span aria-hidden="true" style="'+base+'visibility:hidden"></span>';
-  var big=(x.h==='대'), nm=(big?'대극장':'소극장')+(x.est?(' (추정 · 회차당 '+x.per.toLocaleString()+'석 — 운영대장에 장소 열이 없어 좌석으로 미룬 값)'):'');
-  return '<span title="'+escapeHtml(nm)+'" aria-label="'+escapeHtml(nm)+'" style="'+base
+  // ⚠ **절대 배치**(칸 좌패딩이 자리를 낸다) — 인라인 flex 래퍼로 감싸면 표 복사가 행마다 4줄로 쪼개져
+  //   14행 선택이 55줄로 붙는다(엑셀 붙여넣기 파손 · 실측). 배지를 흐름 밖으로 빼면 칸이 순수 텍스트 한 줄이라
+  //   복사가 14줄로 복원되고, 「자리는 있고 잉크만 없는」 미상 행 규약도 좌패딩이 그대로 진다(빈 배지 불요).
+  if(!x||!x.h)return '';
+  var big=(x.h==='대');
+  //   aria-label은 **짧게** — 배지 라벨이 셀 접근성 이름에 흡수돼 스크린리더가 매 행 앞에 이걸 먼저 읽는다.
+  //   긴 근거 문장은 title(호버)에만 둔다.
+  var lab=(big?'대극장':'소극장')+(x.est?' 추정':''),
+      tip=(big?'대극장':'소극장')+(x.est?(' (추정 · 회차당 '+x.per.toLocaleString()+'석 — 운영대장에 장소 열이 없어 좌석으로 미룬 값)'):'');
+  return '<span title="'+escapeHtml(tip)+'" aria-label="'+escapeHtml(lab)+'" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);display:inline-flex;align-items:center;justify-content:center;width:'+_BIZ_HALL_BADGE_W+'px;height:'+_BIZ_HALL_BADGE_W+'px;border-radius:50%;font-size:9.5px;font-weight:700;line-height:1;'
     +(big?'background:var(--accent);color:var(--surface-solid)':'background:var(--accent-light);color:var(--accent)')+'">'+x.h+'</span>';
 }
 // ── [260806 운영자] 3면 조작부 = 「연도 ▾ │ 전체·판매중」 토글 한 벌 ────────────────────────
@@ -7529,6 +7557,12 @@ function _bizCompRender(el,half){
   var _nameHdPad=12+_BIZ_HALL_BADGE_W+_BIZ_HALL_BADGE_GAP;
   [['일시',''],['공연명',''],['장르',''],['유료 관객','명'],['오픈석','명, 회'],['점유율','%'],['매출','만원']].forEach(function(c,i){_tbl+='<td style="padding:8px 12px;position:sticky;top:0;z-index:1;background:var(--surface-solid);box-shadow:inset 0 -2px 0 var(--border);vertical-align:top;'+(i>=2?'text-align:right;':'')+(i===0?'padding-left:14px;':'')+(i===1?'padding-left:'+_nameHdPad+'px;':'')+(i===6?'padding-right:14px;':'')+'white-space:nowrap">'+c[0]+(c[1]?'<div style="font-size:10.5px;font-weight:400;margin-top:2px">(단위: '+c[1]+')</div>':'')+'</td>';});
   _tbl+='</tr></thead><tbody>';
+  // 오픈석 칸은 `3,892(4)` 한 덩어리를 오른쪽 정렬한다 → 회차 자릿수가 섞이면 **좌석 숫자 끝자리가 어긋난다**
+  //   (1자리 ↔ 2자리에서 7.2px = 숫자 한 자 · 실데이터 1,307공연 중 10회 이상 13건). 괄호를 **가장 긴 회차 폭의
+  //   왼쪽 정렬 상자**에 담아 좌석 쪽 오른쪽 끝을 다시 한 줄로 세운다 — 일시 칸의 2ch 상자와 같은 관용구.
+  //   ⚠ 표 안 최대 자릿수가 1이면(99% 뷰) 상자를 아예 걸지 않는다 = 그 경우 폭 변화 0·마크업 종전 동일.
+  var _cntW=Math.max.apply(null,list.map(function(g){return String(g.cnt).length;}));
+  var _cntBox=(_cntW>1)?('display:inline-block;min-width:'+(_cntW+2)+'ch;text-align:left;'):'';
   list.forEach(function(g,idx){
     // 단일일 판정 = **날짜가 같은가**만 본다. 구판의 `g.cnt===1 ||` 는 회차 1인데 기간이 이틀 이상인 행
     //   (판매 축·예정 행: 회차 열 공란 → cnt 1로 낙하)에서 **시작일을 통째로 지웠다**(1/24~1/25가 `01.25`로만 표기).
@@ -7537,14 +7571,18 @@ function _bizCompRender(el,half){
     _tbl+='<tr style="border-bottom:1px solid var(--border);'+(idx%2===1?'background:var(--past-bg);':'')+'">'
       +'<td style="padding:7px 12px;padding-left:14px;white-space:nowrap;color:var(--neutral-text);font-variant-numeric:tabular-nums">'+dr+'</td>'
       // 제목 = **무조건 1행**(운영자) — max-width:0 + width:100%로 「남는 폭 전부, 그러나 다른 열은 안 밀침」이 되고,
-      //   넘치는 만큼만 말줄임(…)으로 잘린다. 배지·제목은 flex 한 줄(min-width:0 = 제목이 줄어들 수 있어야 …이 걸린다).
-      +'<td style="padding:7px 12px;max-width:0;width:100%" title="'+escapeHtml(g.name)+'"><div style="display:flex;align-items:center;gap:'+_BIZ_HALL_BADGE_GAP+'px;min-width:0">'+_bizHallBadge(_bizHallOf(g))
-      +'<span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;color:var(--text)">'+escapeHtml(g.name)+'</span></div></td>'
+      //   넘치는 만큼만 말줄임(…)으로 잘린다. 말줄임은 **칸 자체**에 건다(래퍼 div 금지 — 인라인 flex 래퍼는 표 복사를
+      //   행마다 4줄로 쪼갠다 · 실측 14행→55줄). 배지는 흐름 밖(절대 배치)이고 그 자리는 좌패딩 33이 낸다.
+      +'<td style="padding:7px 12px 7px '+_nameHdPad+'px;max-width:0;width:100%;position:relative;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;color:var(--text)" title="'+escapeHtml(g.name)+'">'
+      +_bizHallBadge(_bizHallOf(g))+escapeHtml(g.name)+'</td>'
       +'<td style="padding:7px 12px;text-align:right;color:var(--neutral-text);white-space:nowrap">'+escapeHtml(g.genre||'-')+'</td>'
       // [260805] 예정(오픈 전) 행 = 실적 칸을 0으로 채우지 않고 「오픈 전」·「—」로 — 0은 「안 팔렸다」로 읽힌다
       +'<td style="padding:7px 12px;text-align:right;color:var(--peach-text);font-weight:600;font-variant-numeric:tabular-nums">'+(g._st==='planned'?'<span style="color:var(--muted);font-weight:500">오픈 전</span>':Math.round((g._sold!=null&&g._sold>0)?g._sold:g.paid).toLocaleString())+'</td>'
-      // 오픈석(회차) — 괄호 안 회차는 한 급 흐린 잉크(--muted)로 부차 정보임을 말한다(구 독립 열의 위계 계승 · 중립 사다리 안)
-      +'<td style="padding:7px 12px;text-align:right;color:var(--dim);font-variant-numeric:tabular-nums">'+(g.seat>0?Math.round(g.seat).toLocaleString():'—')+'<span style="color:var(--muted)">('+g.cnt+')</span></td>'
+      // 오픈석(회차) — 부차 정보임은 **괄호가 말한다**. 잉크를 한 급 더 흐리게(--muted) 내리는 시안은 흰 바탕 대비
+      //   1.92:1(AA 4.5 한참 미달)이라, 실제 값인 회차를 못 읽는 사람이 생긴다 → 열 잉크(--dim)를 그대로 쓴다
+      //   = 이 열 나머지와 같은 가독 수준(신규 부채 0). 게이트 ⑤는 리터럴 hex 쌍만 채점해 var() 조합을 못 보므로
+      //   통과 여부가 근거가 못 된다 — 손으로 계산해 정한 값이다.
+      +'<td style="padding:7px 12px;text-align:right;color:var(--dim);white-space:nowrap;font-variant-numeric:tabular-nums">'+(g.seat>0?Math.round(g.seat).toLocaleString():'—')+(_cntBox?('<span style="'+_cntBox+'">('+g.cnt+')</span>'):('('+g.cnt+')'))+'</td>'
       +'<td style="padding:7px 12px;text-align:right;color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums">'+(g._st==='planned'?'—':g.avg.toFixed(1))+'</td>'
       +'<td style="padding:7px 12px;padding-right:14px;text-align:right;color:var(--green);font-weight:600;font-variant-numeric:tabular-nums">'+((g._rev!=null&&g._rev>0)?_bizMoney(g._rev,true):'—')+'</td>'   // [260803 선택값] 열: 매출 = 표시(진행바·최근 7일 = 끔) · [260805] 단위는 머리글이 말한다 = 숫자만(bare)
       +'</tr>';
