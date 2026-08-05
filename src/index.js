@@ -1059,6 +1059,120 @@ __name(handleDgmDelete, "handleDgmDelete");
 
 // === [DB통합/이관] 운영 데이터를 프로모 엑셀(통합 문서1.xlsm)의 "운영_*" 시트에 저장 (source of truth, Workbook API 읽기·쓰기 OK 검증됨). dash 파일은 501이라 dash가 push만 함. ===
 function opsSheetName(s){ return "운영_" + String(s).replace(/[()（）]/g, ""); }
+
+// === [260805 장도 위젯] 공개 조회 공용부 — /api/public/jangdo(JSON)·/api/public/jangdo.svg(이미지)가 함께 쓴다 ===
+// 왜 SVG까지 내주나: 홈페이지(yeulmaru.org) 글 저장 필터가 **iframe을 삭제**한다(260805 실측 — 저장 후 본문에 태그·도메인 문자열 0).
+//  살아남는 건 `<img>`·`<a>`·인라인 style뿐이라, 서버가 오늘 시간을 그려 이미지로 내주면 새 창 없이 글 안에서 바로 보인다.
+async function jangdoPublicRows(env, fresh) {
+  const KV_KEY = "jangdo-public:v1";
+  if (!fresh) { try { const kv = await env.ops_kv.get(KV_KEY); if (kv) return JSON.parse(kv).rows || []; } catch (e) {} }
+  const token = await getToken(env);
+  const opsName = opsSheetName("장도");
+  if (fresh) delete opsCache[opsName];
+  const { rows } = await getOpsCached(token, opsName);
+  const list = [];
+  for (const r of rows) {
+    let d = String(r["날짜"] || "").trim();
+    if (!d) continue;
+    const a = d.split("-");                                   // 시트가 2026-8-5로 와도 키를 맞춘다(제로패딩 정규화)
+    if (a.length === 3) d = a[0] + "-" + ("0" + a[1]).slice(-2) + "-" + ("0" + a[2]).slice(-2);
+    list.push({ d, t: String(r["입도가능시간"] || "").trim() });
+  }
+  try { await env.ops_kv.put(KV_KEY, JSON.stringify({ rows: list }), { expirationTtl: 3600 }); } catch (e) {}
+  return list;
+}
+__name(jangdoPublicRows, "jangdoPublicRows");
+
+// "6:00~8:32, 10:32~20:31" → [[360,512],[632,1231]] · 형식 밖 텍스트(통제 공지 등)는 null = 원문 그대로 표시
+function jangdoRanges(t) {
+  if (!t) return null;
+  const out = [];
+  for (const seg of String(t).split(/[,·]/)) {
+    const m = seg.trim().match(/^(\d{1,2})\s*:\s*(\d{2})\s*[~∼–-]\s*(\d{1,2})\s*:\s*(\d{2})$/);
+    if (!m) return null;
+    out.push([+m[1] * 60 + +m[2], +m[3] * 60 + +m[4]]);
+  }
+  return out.length ? out : null;
+}
+__name(jangdoRanges, "jangdoRanges");
+
+// 홈페이지 본문 인라인용 카드 이미지. 값 = docs/디자인기틀.md §1 팔레트 그대로(신규 색 0 · jangdo.html과 같은 매핑):
+//  #4A4DE7=--accent · #1A1A2E=--text · #888=--dim · #bbb=--muted · #fff=--surface-solid · #1A6B3C=--green · #E24B4A=--danger-btn.
+//  ⚠ `<img>`로 실리므로 SVG 내부 스크립트는 브라우저가 실행하지 않는다 = 상태 계산·조판 전부 서버(여기)에서 끝낸다.
+//  rgba()는 SVG 1.1 미지원 → fill-opacity로 표현(같은 토큰 alpha 변주 = 기틀 §3.5②).
+export function buildJangdoSvg(rows, nowKst) {
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  const fmt = (m) => Math.floor(m / 60) + ":" + ("0" + (m % 60)).slice(-2);
+  const map = {};
+  for (const r of rows) map[r.d] = r.t;
+  const addDay = (ymd, n) => {
+    const a = ymd.split("-");
+    return new Date(Date.UTC(+a[0], +a[1] - 1, +a[2] + n)).toISOString().slice(0, 10);
+  };
+  const label = (ymd) => {
+    const a = ymd.split("-");
+    const d = new Date(Date.UTC(+a[0], +a[1] - 1, +a[2]));
+    return +a[1] + "월 " + +a[2] + "일 (" + "일월화수목금토"[d.getUTCDay()] + ")";
+  };
+  const today = nowKst.ymd, tmrw = addDay(today, 1);
+  const rawT = map[today], ranges = jangdoRanges(rawT);
+
+  // 세로는 **내용만큼만** 자란다(줄 커서 y) — 시간이 없는 날 고정 높이로 그리면 카드 아래가 빈 채로 남는다.
+  const W = 760;
+  let y = 40, body = "";
+  body += '<text x="30" y="' + y + '" font-size="17" font-weight="800" fill="#1A1A2E">장도 입도 가능 시간</text>';
+  y += 26;
+  body += '<text x="30" y="' + y + '" font-size="13.5" fill="#888">' + esc(label(today)) +
+          ' <tspan fill="#4A4DE7" font-weight="700">오늘</tspan></text>';
+
+  if (ranges) {
+    y += 46;
+    body += '<text x="30" y="' + y + '" font-size="31" font-weight="800" fill="#1A1A2E">';
+    ranges.forEach((r, i) => {
+      if (i) body += '<tspan fill="#bbb" font-weight="400"> · </tspan>';
+      body += "<tspan>" + fmt(r[0]) + " ~ " + fmt(r[1]) + "</tspan>";
+    });
+    body += "</text>";
+    let dot = "#bbb", txt = "오늘 입도 시간이 종료됐어요", col = "#888";
+    for (const r of ranges) {
+      if (nowKst.min >= r[0] && nowKst.min < r[1]) { dot = col = "#1A6B3C"; txt = "지금 입도 가능 · " + fmt(r[1]) + "까지"; break; }
+      if (nowKst.min < r[0]) { dot = col = "#E24B4A"; txt = "지금은 입도 불가 · " + fmt(r[0]) + "부터 입도 가능"; break; }
+    }
+    y += 32;
+    body += '<circle cx="35" cy="' + (y - 5) + '" r="5" fill="' + dot + '"/>';
+    body += '<text x="48" y="' + y + '" font-size="14.5" font-weight="700" fill="' + col + '">' + esc(txt) + "</text>";
+  } else {
+    y += 44;
+    body += '<text x="30" y="' + y + '" font-size="' + (rawT ? 20 : 16) + '" font-weight="' + (rawT ? 700 : 600) + '" fill="' +
+            (rawT ? "#1A1A2E" : "#888") + '">' + esc(rawT || "오늘 입도 시간이 아직 등록되지 않았어요") + "</text>";
+  }
+
+  const tR = jangdoRanges(map[tmrw]);
+  if (tR) {
+    y += 33;
+    body += '<text x="30" y="' + y + '" font-size="13" fill="#888">내일 ' + esc(label(tmrw)) + "  " +
+            esc(tR.map((r) => fmt(r[0]) + " ~ " + fmt(r[1])).join(" · ")) + "</text>";
+  }
+  y += 23;
+  body += '<text x="30" y="' + y + '" font-size="11.5" fill="#bbb">위 시간 외에는 진섬다리가 물에 잠겨 출입이 불가합니다. 아래 월별 캘린더도 함께 확인해 주세요.</text>';
+
+  const H = y + 16;
+  return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + W + " " + H + '" width="' + W + '" height="' + H +
+    '" role="img" aria-label="장도 입도 가능 시간" font-family="\'Noto Sans KR\',\'Apple SD Gothic Neo\',\'Malgun Gothic\',sans-serif">' +
+    '<rect x="1" y="1" width="' + (W - 2) + '" height="' + (H - 2) + '" rx="16" fill="#fff" stroke="#000" stroke-opacity="0.09"/>' +
+    body + "</svg>";
+}
+__name(buildJangdoSvg, "buildJangdoSvg");
+
+// 방문자 기기 시간대와 무관하게 Asia/Seoul 고정(Worker 런타임 = UTC)
+function jangdoNowKst() {
+  const d = new Date(Date.now() + 9 * 3600 * 1000);
+  return {
+    ymd: d.toISOString().slice(0, 10),
+    min: d.getUTCHours() * 60 + d.getUTCMinutes()
+  };
+}
+__name(jangdoNowKst, "jangdoNowKst");
 async function ensureSheet(token, sheetName, headers){
   const { driveId, itemId } = await findFile(token);
   const ws = await graphGet(token, `/drives/${driveId}/items/${itemId}/workbook/worksheets`);
@@ -2423,30 +2537,28 @@ var index_default = {
       //  — 홈페이지 방문 트래픽이 Graph를 안 때린다. 시트 갱신 반영 = 최대 ~70분(조수 시간표 = 월 단위 선입력이라 충분) · 즉시 = ?fresh=1.
       if (url.pathname === "/api/public/jangdo" && request.method === "GET") {
         try {
-          const KV_KEY = "jangdo-public:v1";
-          const fresh = url.searchParams.get("fresh") === "1";
-          let out = null;
-          if (!fresh) { try { const kv = await env.ops_kv.get(KV_KEY); if (kv) out = JSON.parse(kv); } catch (e) {} }
-          if (!out) {
-            const token = await getToken(env);
-            const opsName = opsSheetName("장도");
-            if (fresh) delete opsCache[opsName];
-            const { rows } = await getOpsCached(token, opsName);
-            const list = [];
-            for (const r of rows) {
-              const d = String(r["날짜"] || "").trim();
-              if (d) list.push({ d, t: String(r["입도가능시간"] || "").trim() });
-            }
-            out = { rows: list };
-            try { await env.ops_kv.put(KV_KEY, JSON.stringify(out), { expirationTtl: 3600 }); } catch (e) {}
-          }
-          return new Response(JSON.stringify({ ok: true, count: out.rows.length, rows: out.rows }), {
+          const list = await jangdoPublicRows(env, url.searchParams.get("fresh") === "1");
+          return new Response(JSON.stringify({ ok: true, count: list.length, rows: list }), {
             status: 200,
             headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=600", ...corsHeaders(env) }
           });
         } catch (e) {
           console.error("[public/jangdo]", e);
           return json({ ok: false, error: "unavailable" }, env, 503);
+        }
+      }
+
+      // 같은 데이터의 **이미지 판**(홈페이지 본문 <img> 임베드용 — iframe이 저장 필터에 지워지는 대응).
+      // max-age 120 = 「지금 입도 가능」 상태 문구가 최대 2분까지만 낡는다(데이터 자체는 KV 1시간 축 그대로).
+      // 실패해도 이미지 자리는 비워야 하니 502가 아니라 '안내 문구를 그린 SVG'를 200으로 내준다(깨진 이미지 아이콘 방지).
+      if (url.pathname === "/api/public/jangdo.svg" && request.method === "GET") {
+        const svgHead = { "Content-Type": "image/svg+xml; charset=utf-8", "Cache-Control": "public, max-age=120", ...corsHeaders(env) };
+        try {
+          const list = await jangdoPublicRows(env, url.searchParams.get("fresh") === "1");
+          return new Response(buildJangdoSvg(list, jangdoNowKst()), { status: 200, headers: svgHead });
+        } catch (e) {
+          console.error("[public/jangdo.svg]", e);
+          return new Response(buildJangdoSvg([], jangdoNowKst()), { status: 200, headers: svgHead });
         }
       }
 
