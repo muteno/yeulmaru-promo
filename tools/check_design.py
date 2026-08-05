@@ -73,7 +73,11 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # 1551 → 1550 = 호버 반응 통일(운영자 260805-26 「모든 곳에 반영해」) — 「준비 중」 모달의 인라인 스타일 확인 버튼을
 #               정본 컴포넌트 1(`.btn btn--primary btn--md`)로 교체하며 그 안 `color:#fff` 리터럴 1개 동반 청산.
 #               나머지 호버 배선(선택 상태 translateY · 밴드 버튼)은 기존 토큰·기존 수치 계승이라 hex 증감 0.
-BASE_HEX_INDEX = 1550
+# 1550 → 1548 = 사업 목록 표 정본화(운영자 260807-8 「사업 목록 리스트는 항상 저렇게 표기되게 고정 ·
+#   서로 참조값 가지도록」) — 모달 `_bizRender`가 따로 타이핑하고 있던 표를 3면과 **같은 빌더**
+#   (`_bizListTable`)로 갈아끼우면서, 그 표에만 남아 있던 raw hex 잉크(테두리·줄무늬·글자 7개 자리)가
+#   토큰 조합으로 대체됐다. 신규 색 반입 0 · 순수 청산.
+BASE_HEX_INDEX = 1548
 BASE_HEX_SIGNAGE = 2          # signage/index.html: #000·#333
 BASE_ROOT_INDEX = 2           # L46(기본 팔레트 34토큰) + L1653(뉴트럴·z·c1~c6 27토큰) — 260803 실측 정정(구 표기 L14/32·L1322/26은 위치·개수 모두 stale)
 BASE_ROOT_SIGNAGE = 0
