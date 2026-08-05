@@ -158,6 +158,26 @@ async function main() {
     console.log(JSON.stringify(probe, null, 1));
     if (errs.length) console.log('PAGE ERRORS: ' + errs.slice(0, 6).join(' | '));
 
+    // ZONEPROBE — 구획 경계가 진행중 사업을 실제로 품는지(운영자 260805) 실측
+    const zone = await page.evaluate(`(()=>{
+      const out={};
+      try{
+        const Y=_bizmState.year, ax=_bizMonthAxis(Y,false);
+        const rows=_bizExhibRows(Y);
+        out.cut=Math.round(_bizZoneCut(rows,Y,ax.x0,ax.x1));
+        out.cutDate=new Date(Y,0,out.cut).toISOString().slice(0,10);
+        out.ex=rows.map(g=>({n:g.name.slice(0,18),st:g._st,col:g._col,
+          s:g.start?g.start.toISOString().slice(0,10):null,
+          inZone:g.start?(_bizXDay(g.start,Y)>=out.cut-0.5):null}));
+        const ed=_bizEduMonthRows(Y);
+        out.eduCut=Math.round(_bizZoneCut(ed,Y,ax.x0,ax.x1));
+        out.eduCutDate=new Date(Y,0,out.eduCut).toISOString().slice(0,10);
+        out.edu=ed.map(g=>({i:g._idx,n:g.name.slice(0,14),st:g._st,inZone:_bizXDay(g.start,Y)>=out.eduCut-0.5}));
+      }catch(e){ out.err=String(e); }
+      return out;
+    })()`);
+    console.log('ZONE ' + JSON.stringify(zone, null, 1));
+
     const box = await page.$('#biz-main');
     await box.screenshot({ path: OUT });
     const card = await page.$('#bizm-chart');

@@ -7062,6 +7062,17 @@ function _bizmRepaint(){
     if(pair){ try{ _railYrmRender(); }catch(_e){} }
   });
 }
+// [260805 운영자 「캘린더에 전시마다 테마색 있는데 항상 링킹되게(색깔이)」] 전시 색 = **캘린더 전시선과 같은 정본**.
+//   캘린더 전시선 색의 SSOT = `_EX_SPACE`(7층·장도·야외 공간색) + 판정 `_exLaneOf(이름,장소)` — 그 둘을 그대로 부른다
+//   = 두 화면이 같은 함수를 지나므로 색이 갈릴 수 없다(값 복사 0 · 신규 hex 0).
+//   ⚠ 야외 칩은 `var(--accent)` 표기라 Plotly에 그대로 못 준다(CSS var 미해석) → 런타임 해석값으로 환산.
+function _bizExCol(name,place){
+  try{
+    var c=String((_EX_SPACE[_exLaneOf(name,place)]||{}).c||'');
+    var m=c.match(/^var\((--[\w-]+)\)$/);
+    return (m?(_yrCss(m[1])||''):c)||(_yrCss('--peach-text')||'');
+  }catch(_e){ return _yrCss('--peach-text')||''; }
+}
 // 전시 행 정규화 — 공연 막대·표가 쓰는 필드명으로 맞춘다([260804] 그리기 = 누적범위 음영 `_bizDrawExhibFlow` · 필드 계약은 그대로).
 //   소스 = `_anaExhibBuild()`(전시마스터+전시일일 · 레일 6시트가 이미 받아 둔 캐시) · 여기서 새로 집계하지 않는다.
 //   ⚠ 전시엔 장르·오픈석·점유율 축이 없다 → 장르 자리 = 분야색 고정(`_col`) · 점유율 자리 = **목표관객 대비 달성률**.
@@ -7077,7 +7088,7 @@ function _bizExhibRows(year){
       if(y!==year)return;
       var paid=_salesNum(e.최종유료)||0, tot=_salesNum(e.최종총인원)||0, goal=_salesNum(e.목표관객)||0, rev=_salesNum(e.최종매출)||0;
       var head=tot||paid;
-      out.push({name:e.name,genre:'전시',_col:(_yrCss('--peach-text')||''),   // ⚠ Plotly는 CSS var()를 못 읽는다(모달 차트와 같은 규약) → 토큰을 런타임 해석한 값으로 넘긴다 = 소스 raw hex 0
+      out.push({name:e.name,genre:'전시',_col:_bizExCol(e.name,''),   // [260805 운영자] 색 = **캘린더 전시선과 같은 것**(_EX_SPACE·_exLaneOf 정본 공유) · ⚠ Plotly는 CSS var()를 못 읽어 런타임 해석값으로 넘긴다 = 소스 raw hex 0
         start:sd||ed||null,end:ed||sd||null,cnt:_salesNum(e.운영일수)||0,
         paid:head,seat:goal,
         avg:(goal>0)?(head/goal*100):(parseFloat(e.occ)||0),
@@ -7093,13 +7104,13 @@ function _bizExhibRows(year){
   try{
     if(typeof EXHIB_DAILY_2026!=='undefined'&&EXHIB_DAILY_2026&&EXHIB_DAILY_2026.year===year){
       var _mHave=out.map(function(g){return _uName(g.name||'');});
-      var _mCol=(_yrCss('--peach-text')||''), _mTdy=new Date(); _mTdy.setHours(0,0,0,0);
+      var _mTdy=new Date(); _mTdy.setHours(0,0,0,0);
       (EXHIB_DAILY_2026.list||[]).forEach(function(m){
         if(m.free)return;                                        // 무료 = 판매 축 밖(_anaExhibBuild 규칙 계승)
         var k=_uName(m.name||''); if(!k)return;
         if(_mHave.some(function(h){ return h===k||(k.length>=6&&h.indexOf(k)>=0); }))return;
         var sd=_salesDate(m.start), ed=_salesDate(m.end);
-        out.push({name:m.name,genre:'전시',_col:_mCol,
+        out.push({name:m.name,genre:'전시',_col:_bizExCol(m.name,''),
           start:sd||ed||null,end:ed||sd||null,cnt:m.days||0,
           paid:(m.tot||m.paid||0),seat:0,avg:0,                  // 목표관객 축 없음(거울엔 목표 「매출」뿐) → 달성률 생략
           _rev:((m.rev>0)?m.rev:null),_sold:((m.tot>0)?m.tot:null),
@@ -7210,6 +7221,7 @@ function _bizBreakShapes(brk,spans,ink,fill,cyc){
 //   ③ dom='edu' = 값 축 없는 **월별 일정 게이지** — 교육은 프로그램 단위 수강생 원천이 없어(연간 거울 총계뿐) 전 항목을
 //      「값 없음」 파선 문법으로 세운다(y축 숨김 · 툴팁 = 일정·집계 전 명시 · 수치 창작 0).
 //   ④ 구 orient='h'(가로 모드·전시/교육 반쪽)는 호출부 소멸로 폐지 — 전시는 누적범위 그래프(_bizDrawExhibFlow)로 이관.
+var _ED_YMAX=400;   // [260805 운영자 「예술교육은 단위를 일단 100부터 400까지로」] 교육 값 축 상한 — 눈금 100·200·300·400
 function _bizYearDays(y){ return Math.round((new Date(y+1,0,1)-new Date(y,0,1))/86400000); }
 function _bizXDay(d,y){ if(!d)return null; var t=(d-new Date(y,0,1))/86400000+1; return Math.max(0.5,Math.min(_bizYearDays(y)+0.5,t)); }   // 연 밖(이월 전시 등) = 축 가장자리 클램프
 function _bizMonthAxis(y,thin){   // thin = 반쪽 카드처럼 좁은 폭 — 짝수달 라벨만 생략(눈금 12개는 유지 = 격자 감각 보존)
@@ -7217,15 +7229,30 @@ function _bizMonthAxis(y,thin){   // thin = 반쪽 카드처럼 좁은 폭 — �
   for(m=0;m<12;m++){ tv.push(_bizXDay(new Date(y,m,1),y)); tt.push((thin&&m%2===1)?'':((m+1)+'월')); }
   return {x0:-3,x1:_bizYearDays(y)+4,tickvals:tv,ticktext:tt};
 }
-// 진행 완료 │ 진행·예정 음영 — 경계 = 오늘 날짜(선택 연도가 통째로 과거/미래면 음영 한 장). 색 = 기존 토큰 알파 변주만(--past-bg · peach 0.09).
-function _bizYearZones(y,x0,x1,dim){
+// 진행 완료 │ 진행·예정 음영 — 색 = 기존 토큰 알파 변주만(--past-bg · 분야색 0.09 · 기틀 §3.5②).
+// [260805 운영자 「진행하고 예정에 현재 진행중인게 포함이 안되있는데 그 점도 확인좀」·「진행 예정인 부분 포함하게」]
+//   경계 = 구판의 **오늘 날짜**가 아니라 **아직 안 끝난 사업(진행중·예정) 중 가장 이른 시작일**(_bizZoneCut).
+//   구판은 7/21 시작·11/1 종료인 진행중 전시가 오늘(8/5) 왼쪽에서 시작해 곡선 대부분이 「진행 완료」 음영에 깔렸다
+//   = 진행중인 사업이 완료 영역에 있는 모순. 사업 단위로 자르면 그 사업이 통째로 「진행·예정」에 들어간다.
+//   tone = 그 카드의 분야색(전시 = 강조색2 peach · 교육 = 그린 · 공연 = 종전 peach) — 운영자 지시.
+function _bizZoneCut(rows,y,x0,x1){
   var t=new Date(); t.setHours(0,0,0,0);
-  var tx=(t<new Date(y,0,1))?x0:((t>new Date(y,11,31))?x1:_bizXDay(t,y));
+  var live=null;
+  (rows||[]).forEach(function(g){
+    var s=g.start||g.end, e=g.end||g.start;
+    if(!s||(e&&e<t))return;                      // 이미 끝난 사업 = 진행 완료 쪽
+    var x=_bizXDay(s,y); if(live==null||x<live)live=x;
+  });
+  if(live==null)live=(t<new Date(y,0,1))?x0:((t>new Date(y,11,31))?x1:_bizXDay(t,y));   // 진행중·예정이 하나도 없으면 종전대로 오늘 경계
+  return Math.max(x0,Math.min(x1,live));
+}
+function _bizYearZones(y,x0,x1,dim,cut,tone){
+  var tx=(cut==null)?_bizZoneCut(null,y,x0,x1):cut;
   var sh=[],an=[];
   var box=function(a,b,f){ sh.push({type:'rect',xref:'x',yref:'paper',layer:'below',x0:a,x1:b,y0:0,y1:1,fillcolor:f,line:{width:0}}); };
   var note=function(a,b,txt){ if(b-a<30)return; an.push({xref:'x',x:(a+b)/2,xanchor:'center',yref:'paper',y:.995,yanchor:'top',text:txt,showarrow:false,font:{size:9.5,color:dim},opacity:.85}); };   // 좁은 구획(연초·연말 며칠)엔 라벨 생략 — 음영 밖으로 삐져나오지 않게
   if(tx>x0){ box(x0,tx,_yrCss('--past-bg')||'rgba(0,0,0,0.02)'); note(x0,tx,'진행 완료'); }
-  if(tx<x1){ box(tx,x1,_yrHexA(_yrCss('--peach-text'),0.09)); note(tx,x1,'진행·예정'); }   // 강조 = 진행·예정 쪽(운영자 260806)
+  if(tx<x1){ box(tx,x1,_yrHexA(_yrCss(tone||'--peach-text'),0.09)); note(tx,x1,'진행·예정'); }   // 강조 = 진행·예정 쪽(운영자 260806) · 색 = 분야색(운영자 260805)
   return {shapes:sh,notes:an};
 }
 function _bizDrawSalesBars(divId,list,hgt,dom){
@@ -7281,10 +7308,13 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
   var vMax=Math.max.apply(null,vals.filter(function(v){return v!=null&&isFinite(v);}).concat([1]));
   var xAx={tickmode:'array',tickvals:ax.tickvals,ticktext:ax.ticktext,tickfont:{size:10.5,color:dim},
     range:[ax.x0,ax.x1],fixedrange:true,zeroline:false,showgrid:false,automargin:false};
-  var yAx=ED?{visible:false,range:[0,1],fixedrange:true}   // 교육 = 값 축 없음(일정 게이지) — 눈금 숨김이 정직 표기
+  // [260805 운영자 「예술교육은 단위를 일단 100부터 400까지로 잡아서 표기해줘」] 교육 = 수강생 눈금 100·200·300·400을 **미리** 세운다
+  //   (프로그램 단위 실값이 들어오면 그 자에 그대로 얹힌다). 지금 게이지는 값이 없어 파선이고, 높이는 전 항목 **동일**(눈금 사이 =
+  //   특정 눈금값과 겹치지 않는 자리)이라 값으로 읽히지 않는다 — 툴팁도 「수강생 집계 전」을 계속 말한다.
+  var yAx=ED?{range:[0,_ED_YMAX],tickmode:'array',tickvals:[100,200,300,400],tickfont:{size:10.5,color:dim},gridcolor:grid,zeroline:false,fixedrange:true}
     :{title:{text:unit,font:{size:10.5,color:dim}},tickfont:{size:10.5,color:dim},gridcolor:grid,zeroline:false,fixedrange:true,rangemode:'tozero'};
-  var lay={height:hgt,margin:{l:ED?14:52,r:10,t:18,b:34},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',showlegend:false,xaxis:xAx,yaxis:yAx};
-  var zone=_bizYearZones(Y,ax.x0,ax.x1,dim);
+  var lay={height:hgt,margin:{l:ED?38:52,r:10,t:18,b:34},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',showlegend:false,xaxis:xAx,yaxis:yAx};
+  var zone=_bizYearZones(Y,ax.x0,ax.x1,dim,_bizZoneCut(rows,Y,ax.x0,ax.x1),ED?'--green':'--peach-text');   // [260805] 경계 = 진행중 포함 · 교육 음영 = 그린(운영자)
   lay.shapes=zone.shapes; lay.annotations=zone.notes;
   var note=(div.parentNode&&div.parentNode.querySelector)?div.parentNode.querySelector('[data-bizbrknote]'):null;
   if(brk){
@@ -7314,8 +7344,8 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
   //   (marker.line에 dash 없음) 도형으로 그리고, 그 자리에 **투명 채움 막대**를 겹쳐 호버(사업명·상태)를 살린다.
   var pidx=[],i2; for(i2=0;i2<rows.length;i2++)if((ED||plan(rows[i2])||vals[i2]==null)&&xs[i2]!=null)pidx.push(i2);
   if(pidx.length){
-    var axTop=brk?brk.rng:(ED?1:vMax*1.12);
-    var pY=ED?0.52:axTop*0.07, hw=W/2;   // 교육 = 반높이 게이지 세로선(운영자) · 값 축은 종전 7% 자리
+    var axTop=brk?brk.rng:(ED?_ED_YMAX:vMax*1.12);
+    var pY=ED?(_ED_YMAX*0.62):axTop*0.07, hw=W/2;   // 교육 = 눈금 사이(248 ≈ 200~300 중간) 고정 높이 = 값으로 안 읽힌다 · 값 축은 종전 7% 자리
     var psh=pidx.map(function(i){ return {type:'rect',xref:'x',yref:'y',layer:'above',x0:xs[i]-hw,x1:xs[i]+hw,y0:0,y1:pY,fillcolor:'rgba(0,0,0,0)',line:{color:gcol(rows[i]),width:1.2,dash:'dash'}}; });
     lay.shapes=lay.shapes.concat(psh);
     // [260805 운영자] 교육 색인(①②③… = _bizEduMonthRows가 시작일순으로 부여) — 게이지 열 머리에 단다.
@@ -7368,25 +7398,39 @@ function _bizDrawExhibFlow(divId,list,hgt){
     built.push({g:g,xy:xy,peak:peak});
     if(peak[1]>maxV)maxV=peak[1];
   });
-  var yTop=maxV*1.22, data=[],notes=[],shapes=[];
-  var zone=_bizYearZones(Y,ax.x0,ax.x1,dim);
+  // [260805 운영자 「3927이면 4천이 맥시멈이 아니라 5천까지 봐야할 것 같고」] 축 상한 = 최댓값 위 **눈금 사다리 한 칸**
+  //   (_bizNiceStep — 공연 축 중략이 쓰는 그 사다리 그대로). 3,827 → 4,133(여유 8%) → **5,000**. 구판 maxV×1.22는
+  //   Plotly가 4,000에서 눈금을 끊어 최댓값 라벨이 축 밖 언저리에 떠 있었다.
+  var yTop=_bizNiceStep(maxV*1.08), data=[],notes=[],shapes=[];
+  var zone=_bizYearZones(Y,ax.x0,ax.x1,dim,_bizZoneCut(rows,Y,ax.x0,ax.x1),'--peach-text');   // [260805] 경계 = 진행중 포함 · 강조색2(peach) = 운영자
   shapes=zone.shapes; notes=zone.notes;
-  var fill=_yrHexA(pc,0.18);
+  // [260805 운영자 「전시별로 색상을 다르게 · 캘린더 전시마다 테마색 있는데 항상 링킹되게」]
+  //   선·채움 색 = 그 전시의 캘린더 색(_bizExCol → _EX_SPACE 공간색). 같은 공간 전시가 여럿이면 **같은 색**이 되므로
+  //   채움 알파를 순번별로 낮춰 층을 가른다(.20/.15/.11/.08 · 기틀 §3.5② 같은 토큰 alpha 변주 = 새 색 0).
+  //   ⚠ 색을 새로 배정하지 않는다 — 캘린더와 갈리는 순간 「링킹」 요구가 깨진다. 개별 식별은 피크 동그라미·값 라벨·툴팁이 진다.
+  var _seen={}, ALPHA=[0.20,0.15,0.11,0.08];
+  var colOf=function(g){ return g._col||pc; };
   built.forEach(function(b){
-    var g=b.g;
+    var g=b.g, col=colOf(g);
     if(b.plan){
       var x0=_bizXDay(b.s,Y),x1=_bizXDay(b.e,Y);
       if(x1-x0<2.4){ var c=(x0+x1)/2; x0=c-1.2; x1=c+1.2; }   // 하루짜리도 보이는 최소 폭
-      shapes.push({type:'rect',xref:'x',yref:'y',layer:'above',x0:x0,x1:x1,y0:0,y1:yTop*0.07,fillcolor:'rgba(0,0,0,0)',line:{color:pc,width:1.2,dash:'dash'}});
+      shapes.push({type:'rect',xref:'x',yref:'y',layer:'above',x0:x0,x1:x1,y0:0,y1:yTop*0.07,fillcolor:'rgba(0,0,0,0)',line:{color:col,width:1.2,dash:'dash'}});
       data.push({type:'scatter',mode:'markers',x:[(x0+x1)/2],y:[yTop*0.035],marker:{size:16,color:'rgba(0,0,0,0)'},showlegend:false,hoverinfo:'text',
         text:g.name+'\n'+md(b.s)+'~'+md(b.e)+' · 예정\n전시 시작 전'});
       return;
     }
     var st=(g._st==='active')?'진행중':'종료';
+    var n=(_seen[col]=(_seen[col]||0)+1);
+    var tip=g.name+'\n'+md(g.start||g.end)+'~'+md(g.end||g.start)+' · '+st+'\n누적 판매 '+Math.round(b.peak[1]).toLocaleString()+'명'+(g.seat>0?('\n달성률 '+(g.avg||0).toFixed(1)+'%'):'');
     data.push({type:'scatter',mode:'lines',x:b.xy.map(function(p){return p[0];}),y:b.xy.map(function(p){return p[1];}),
-      fill:'tozeroy',fillcolor:fill,line:{color:pc,width:1.6},showlegend:false,hoverinfo:'text',hoveron:'points+fills',
-      text:g.name+'\n'+md(g.start||g.end)+'~'+md(g.end||g.start)+' · '+st+'\n누적 판매 '+Math.round(b.peak[1]).toLocaleString()+'명'+(g.seat>0?('\n달성률 '+(g.avg||0).toFixed(1)+'%'):'')});
-    notes.push({xref:'x',x:b.peak[0],xanchor:'center',yref:'y',y:b.peak[1],yanchor:'bottom',text:Math.round(b.peak[1]).toLocaleString(),showarrow:false,font:{size:9.5,color:dim}});   // 꼭대기 = 최종(종료)/현재(진행) 누계 명
+      fill:'tozeroy',fillcolor:_yrHexA(col,ALPHA[Math.min(n-1,ALPHA.length-1)]),line:{color:col,width:1.6},showlegend:false,hoverinfo:'text',hoveron:'points+fills',text:tip});
+    // [260805 운영자 「피크를 찍은 구간은 동그라미로 한번 더 표기(마지막이 피크 · 진행중인 전시는 진행중인 것 마지막)」]
+    //   곡선이 단조 증가(누계)라 **마지막 점 = 피크**다 — 종료 전시는 종료일의 최종, 진행중 전시는 지금까지의 누계.
+    //   테두리 = 카드 바탕(--surface-solid)이라 곡선이 겹쳐도 동그라미가 서로 먹지 않는다.
+    data.push({type:'scatter',mode:'markers',x:[b.peak[0]],y:[b.peak[1]],
+      marker:{size:8,color:col,line:{color:_yrCss('--surface-solid'),width:1.6}},showlegend:false,hoverinfo:'text',text:tip});
+    notes.push({xref:'x',x:b.peak[0],xanchor:'center',yref:'y',y:b.peak[1],yanchor:'bottom',yshift:6,text:Math.round(b.peak[1]).toLocaleString(),showarrow:false,font:{size:9.5,color:col}});   // 꼭대기 = 최종(종료)/현재(진행) 누계 명 · 잉크 = 그 전시 색(동그라미와 한 몸)
   });
   var lay={height:hgt,margin:{l:46,r:10,t:18,b:30},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',showlegend:false,
     xaxis:{tickmode:'array',tickvals:ax.tickvals,ticktext:ax.ticktext,tickfont:{size:10.5,color:dim},range:[ax.x0,ax.x1],fixedrange:true,zeroline:false,showgrid:false,automargin:false},
