@@ -46,6 +46,27 @@ for (const h of ['회원키', '이용일시', '장르1', '최종정상매수', '
   if (!src.headers.includes(h)) { console.error(`✗ 원본에 없는 컬럼: ${h} — 중단`); process.exit(1); }
 }
 
+// ── 주문상태 감시선 ────────────────────────────────────────────────────────
+// 이 스크립트는 주문상태로 행을 **거르지 않는다**. 260805 실측이 근거다:
+//   상태값 = 정상 39,588 · 부분취소 840 · 공란 1 뿐(전체취소 없음)이고,
+//   회원 연결분의 부분취소 516행은 **전부 최종정상매수>0**이다.
+//   즉 최종정상매수가 이미 취소분을 뺀 순액이라, 부분취소 행도 실제 관람이 맞다.
+//   (연결분 중 최종정상매수<=0 행 = 0건으로 재확인)
+// 그래서 「거르지 않는 게 맞다」는 결론은 **상태값 집합이 그대로일 때만** 참이다.
+// 원천에 전체취소류가 새로 생기면 취소 주문이 조용히 관람으로 집계되므로, 여기서 멈춘다.
+const KNOWN_STATES = new Set(['정상', '부분취소', '']);
+const unknown = new Map();
+for (const r of src.rows) {
+  const s = String(r['주문상태'] || '').trim();
+  if (!KNOWN_STATES.has(s)) unknown.set(s, (unknown.get(s) || 0) + 1);
+}
+if (unknown.size) {
+  console.error('✗ 처음 보는 주문상태 — 관람으로 셀지 판단이 필요하다. 중단:');
+  for (const [s, n] of [...unknown].sort((a, b) => b[1] - a[1])) console.error(`    ${s} ${n.toLocaleString()}행`);
+  console.error('  → 취소류면 아래 루프에 제외 조건을 넣고, 아니면 KNOWN_STATES에 추가할 것.');
+  process.exit(1);
+}
+
 const agg = new Map();
 let skipped = 0;
 for (const r of src.rows) {
