@@ -98,7 +98,12 @@ async function main() {
                            last:{fill:ps[ps.length-1].style.fill,stroke:ps[ps.length-1].style.stroke}}:null;
        }).filter(Boolean):null;
        // 누적 집계 면 — fillcolor(고유색 알파 .5) 실측.
-       out.ex.areas=d?[...d.querySelectorAll('.scatterlayer .trace .js-fill')].map(f=>f.style.fill).filter(Boolean):null;}
+       out.ex.areas=d?[...d.querySelectorAll('.scatterlayer .trace .js-fill')].map(f=>f.style.fill).filter(Boolean):null;
+       // [260805] 보조 스택 계약 실측 — stackgroup 트레이스의 선 모양이 **hvh**여야 한다(운영자 5차
+       //   「네모박스 각각 가운데 기준해서 꺾은선 꼭짓점」). hv면 값이 점에서 오른쪽으로 뻗어 반 달 밀린다.
+       out.ex.bgShape=(()=>{ try{
+         return (d._fullData||[]).filter(t=>t.stackgroup).map(t=>(t.line&&t.line.shape)||'?');
+       }catch(e){ return String(e).slice(0,60); } })();}
       out.edu={ bars:gg('bizm-edu-chart','.barlayer .point path'),
                 shapes:gg('bizm-edu-chart','.shapelayer path'),
                 yTicks:tx('bizm-edu-chart','.yaxislayer-above text'),
