@@ -7140,6 +7140,30 @@ function _bizEduEmptyHtml(year){
     +'<div style="margin-top:8px;font-size:11.5px;color:var(--muted);line-height:1.7">프로그램 시트에 <b style="color:var(--green)">예술교육</b>으로 등록되면<br>1월~12월 축의 그 달 자리에 표시됩니다.</div>'
     +'</div>';
 }
+// [260805 운영자] 운영대장 교육 행 색인 — 끝난 교육의 **정본**(공연이 운영대장을 정본으로 삼는 것과 같은 축).
+//   `_bizClean`은 사업구분 '교육·특강'을 통째로 걸러낸다(그건 **공연** 목록 함수라 그게 맞다) → 교육은 여기서 따로 읽는다.
+//   값 = 발권유료 합(= 그 프로그램 수강 인원) · 무료 티켓 행은 공연과 같은 규칙으로 제외 · 취소분 제외.
+//   ⚠ 새 집계 규칙을 만들지 않는다 — 필드·정규화 전부 `_bizClean`이 쓰는 그 함수들(`_bizNorm`·`_bizNum`)이다.
+function _bizEduOpsIdx(year){
+  try{
+    var raw=(_bizState&&_bizState.raw&&_bizState.raw.rows)||[];
+    if(!raw.length)return null;
+    var idx={};
+    raw.map(_bizNorm).forEach(function(r){
+      if(['교육','특강'].indexOf(String(r['사업구분']||'').trim())<0)return;
+      if(String(r['상태']||'').trim()==='취소공연')return;
+      if(String(r['티켓구분']||'').trim()==='무료')return;
+      var y=Math.trunc(_bizNum(r['년도']!=null?r['년도']:r['연도'])||0); if(y!==year)return;
+      var nm=String(r['공연명']||'').trim(); if(!nm)return;
+      var m=parseInt(String(r['월']||'').replace(/[^0-9]/g,''),10), d=parseInt(String(r['일']||'').replace(/[^0-9]/g,''),10);
+      var dt=(!isNaN(m)&&!isNaN(d))?new Date(y,m-1,d):null;
+      var k=_uName(nm), e=idx[k]||(idx[k]={name:nm,paid:0,cnt:0,start:dt,end:dt,genre:String(r['장르1']||'').trim()});
+      e.paid+=(_bizNum(r['발권유료'])||0); e.cnt++;
+      if(dt){ if(!e.start||dt<e.start)e.start=dt; if(!e.end||dt>e.end)e.end=dt; }
+    });
+    return idx;
+  }catch(_e){ console.warn('[biz edu ops]',_e); return null; }
+}
 function _bizEduMonthRows(year){
   // [260808 운영자 「전시랑 교육이 처음 로딩될 때 오류처럼 나온다 · 바로 못 받아오면 로딩처럼」]
   //   ⚠ **프로그램 시트 미도착 = 「없어요」 확정 금지**(로딩 유지) — 이 반쪽의 유일한 소스가 PERFS인데
@@ -7151,14 +7175,40 @@ function _bizEduMonthRows(year){
   if(typeof _perfReady!=='undefined'&&!_perfReady)return null;
   var out=[], col=_yrCss('--green')||'';
   var tdy=new Date(); tdy.setHours(0,0,0,0);
+  // [260805 운영자 「화요살롱 … 160개 팔렸다고 · db에도 동일하게」] 수강생 **실값 조인** — 공연 목록이 쓰는 그 축을 그대로 쓴다.
+  //   ① 운영대장(세부운영관리대장) 교육 행 = 끝난 교육의 정본(발권유료 = 그 프로그램 수강 인원)
+  //   ② 판매 축(_salesBuild → _bizSalesIdx) = 지금 팔고 있는 교육(일일입력 누계)
+  //   ⚠ 여기서 새로 집계하지 않는다 — ①은 원본 행 합, ②는 정본 산출물 조회. 값이 **둘 다 없으면 종전대로 파선**(창작 0).
+  var opsIdx=_bizEduOpsIdx(year), sx=null;
+  try{ sx=_bizSalesIdx(year); }catch(_e){}
+  var attach=function(g){
+    var k=_uName(g.name||'');
+    var o=opsIdx?opsIdx[k]:null, p=(sx&&sx[k])?sx[k]:null;
+    var v=(o&&o.paid>0)?o.paid:((p&&isFinite(p.seats)&&p.seats>0)?p.seats:null);
+    if(v!=null){ g.paid=v; g._sold=v; }
+    if(o&&o.genre)g._g2=o.genre;
+    if(p&&isFinite(p.money)&&p.money>0)g._rev=p.money;
+    return g;
+  };
+  var seen={};
   ((typeof PERFS!=='undefined'&&PERFS)||[]).forEach(function(p){
     if(!p||p.t!=='a'||!p.s)return;
     var sd=_salesDate(p.s); if(!sd||sd.getFullYear()!==year)return;
     var ed=p.e?(_salesDate(p.e)||sd):sd;
     var nm=String(p.f||p.n||'').trim(); if(!nm)return;
-    out.push({name:nm,genre:'교육',_col:col,start:sd,end:ed,cnt:0,paid:0,seat:0,avg:0,
-      _rev:null,_sold:null,   // 값 없음 = 파선 게이지(_bizDrawSalesBars dom='edu') — 수강생 창작 금지
-      _st:(ed<tdy)?'ended':((sd>tdy)?'planned':'active')});
+    seen[_uName(nm)]=1;
+    out.push(attach({name:nm,genre:'교육',_col:col,start:sd,end:ed,cnt:0,paid:0,seat:0,avg:0,
+      _g2:String(p.g2||p.g||'').trim()||'',   // 프로그램 시트 장르(예: 인문학) — 툴팁이 말한다
+      _rev:null,_sold:null,   // 조인 실패 = 파선 게이지(_bizDrawSalesBars dom='edu') — 수강생 창작 금지
+      _st:(ed<tdy)?'ended':((sd>tdy)?'planned':'active')}));
+  });
+  // 프로그램 시트엔 없고 운영대장에만 있는 교육(과거 소급 등)도 싣는다 — 공연 목록의 ∪ 규칙과 같은 축.
+  if(opsIdx)Object.keys(opsIdx).forEach(function(k){
+    if(seen[k])return;
+    var o=opsIdx[k]; if(!o||!o.start)return;
+    out.push({name:o.name,genre:'교육',_col:col,start:o.start,end:o.end||o.start,cnt:o.cnt||0,
+      paid:o.paid||0,seat:0,avg:0,_g2:o.genre||'',_rev:null,_sold:(o.paid>0?o.paid:null),
+      _st:((o.end||o.start)<tdy)?'ended':'active'});
   });
   out.sort(function(a,b){ return (a.start-b.start)||(a.name<b.name?-1:1); });
   // [260805 운영자 「교육, 별도의 인덱싱 열 부여해줘」] 각 교육 게이지(세로 열)에 고유 순번을 단다 —
@@ -7280,8 +7330,10 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
   var hasRev=rows.some(function(g){return g._rev!=null&&g._rev>0;});
   // ⚠ 매출 미조인(_rev==null)은 **0이 아니라 null** — 0으로 떨어뜨리면 "0.0" 막대가 깔려 「하나도 안 팔렸다」로 읽힌다(평의회6).
   //   null = 막대 없음 → 아래 파선 자리(값 없음)가 그 사업의 자리를 지킨다(시간축엔 이름 눈금이 없어, 안 그리면 통째로 사라진다).
-  var valOf=function(g){ if(ED)return null; return hasRev?((g._rev!=null)?(g._rev/1e6):null):((g._sold!=null&&g._sold>0)?g._sold:(g.paid>0?g.paid:null)); };
-  var unit=hasRev?'백만 원':'명';
+  // [260805 운영자] 교육도 **실값이 있으면 막대**로 — 축은 수강생(명) 하나뿐이라 매출 축으로 갈아타지 않는다(카드 눈금 100~400과 어긋나면 안 된다).
+  var valOf=function(g){ if(ED)return (g._sold!=null&&g._sold>0)?g._sold:null;
+    return hasRev?((g._rev!=null)?(g._rev/1e6):null):((g._sold!=null&&g._sold>0)?g._sold:(g.paid>0?g.paid:null)); };
+  var unit=(hasRev&&!ED)?'백만 원':'명';
   var plan=function(g){ return g._st==='planned'; };
   var _fix=ED?(_yrCss('--green')||''):'';
   var gcol=function(g){ return g._col||_fix||_BIZ_GENRE_COLORS[g.genre||'기타']||_BIZ_GENRE_COLORS['기타']; };   // [260805] _col/_fix = 분야색 고정(교육엔 장르 축이 없다)
@@ -7317,16 +7369,23 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
   var tr={type:'bar',x:xs,y:yv,width:W,
     text:labs, textposition:'outside', cliponaxis:false, textfont:{size:9.5,color:dim},
     marker:{color:rows.map(gcol),line:{width:0}},   // [260806 2차] 상태별 opacity·테두리 폐지 = 막대 농도 전부 동일 · 상태는 음영 구획이 말한다
-    customdata:rows.map(function(g){return [g.name,g.genre||'-',Math.round((g._sold!=null&&g._sold>0)?g._sold:g.paid),(g._rev!=null?_bizMoney(g._rev):'—'),(g.avg||0).toFixed(1),stName(g),dTxt(g)];}),
+    customdata:rows.map(function(g){return [g.name,(ED?(g._g2||'예술교육'):(g.genre||'-')),Math.round((g._sold!=null&&g._sold>0)?g._sold:g.paid),(g._rev!=null?_bizMoney(g._rev):'—'),(g.avg||0).toFixed(1),stName(g),dTxt(g)];}),   // [260805] 교육 = 프로그램 시트/운영대장 장르(예: 인문학)
     hovertemplate:'<b>%{customdata[0]}</b><br>%{customdata[6]} · %{customdata[5]} · %{customdata[1]}<br>'   // 눈금엔 달만 남는다 → 사업명·정확한 일자는 툴팁이 진다
-      +'판매 %{customdata[2]:,}명<br>매출 %{customdata[3]}<br>점유율 %{customdata[4]}%<extra></extra>'};
+      +(ED?'수강생 %{customdata[2]:,}명<extra></extra>'   // [260805] 교육은 좌석·점유율 축이 없다 = 수강생 한 줄
+          :'판매 %{customdata[2]:,}명<br>매출 %{customdata[3]}<br>점유율 %{customdata[4]}%<extra></extra>')};
   var vMax=Math.max.apply(null,vals.filter(function(v){return v!=null&&isFinite(v);}).concat([1]));
   var xAx={tickmode:'array',tickvals:ax.tickvals,ticktext:ax.ticktext,tickfont:{size:10.5,color:dim},
     range:[ax.x0,ax.x1],fixedrange:true,zeroline:false,showgrid:false,automargin:false};
   // [260805 운영자 「예술교육은 단위를 일단 100부터 400까지로 잡아서 표기해줘」] 교육 = 수강생 눈금 100·200·300·400을 **미리** 세운다
   //   (프로그램 단위 실값이 들어오면 그 자에 그대로 얹힌다). 지금 게이지는 값이 없어 파선이고, 높이는 전 항목 **동일**(눈금 사이 =
   //   특정 눈금값과 겹치지 않는 자리)이라 값으로 읽히지 않는다 — 툴팁도 「수강생 집계 전」을 계속 말한다.
-  var yAx=ED?{range:[0,_ED_YMAX],tickmode:'array',tickvals:[100,200,300,400],tickfont:{size:10.5,color:dim},gridcolor:grid,zeroline:false,fixedrange:true}
+  //   ⚠ 실값이 400을 넘으면 축을 넓힌다(안 그러면 막대가 잘려 **작아 보인다** = 오독) — 눈금 간격은 100 유지, 넓어지면 사다리로.
+  var _edTop=_ED_YMAX, _edTick=[100,200,300,400];
+  if(ED){
+    var _edMax=Math.max.apply(null,rows.map(valOf).filter(function(v){return v!=null&&isFinite(v);}).concat([0]));
+    if(_edMax>_ED_YMAX*0.94){ _edTop=_bizNiceStep(_edMax*1.12); var _st2=Math.max(100,_bizNiceStep(_edTop/4)); _edTick=[]; for(var _t=_st2;_t<=_edTop+1e-6;_t+=_st2)_edTick.push(Math.round(_t)); }
+  }
+  var yAx=ED?{range:[0,_edTop],tickmode:'array',tickvals:_edTick,tickfont:{size:10.5,color:dim},gridcolor:grid,zeroline:false,fixedrange:true}
     :{title:{text:unit,font:{size:10.5,color:dim}},tickfont:{size:10.5,color:dim},gridcolor:grid,zeroline:false,fixedrange:true,rangemode:'tozero'};
   var lay={height:hgt,margin:{l:ED?38:52,r:10,t:18,b:34},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',showlegend:false,xaxis:xAx,yaxis:yAx};
   var zone=_bizYearZones(Y,ax.x0,ax.x1,dim,_bizZoneCut(rows,Y,ax.x0,ax.x1),ED?'--green':'--peach-text');   // [260805] 경계 = 진행중 포함 · 교육 음영 = 그린(운영자)
@@ -7357,23 +7416,26 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
   } else if(note) note.textContent='';                           // 재그리기로 중략이 풀렸는데 각주만 남는 것 차단
   // [260805] 값이 없는 사업 = **빈 파선 자리**로만(예정 · 매출 미조인 · 교육 일정). 파선은 Plotly 막대 테두리로 못 그려서
   //   (marker.line에 dash 없음) 도형으로 그리고, 그 자리에 **투명 채움 막대**를 겹쳐 호버(사업명·상태)를 살린다.
-  var pidx=[],i2; for(i2=0;i2<rows.length;i2++)if((ED||plan(rows[i2])||vals[i2]==null)&&xs[i2]!=null)pidx.push(i2);
+  //   [260805] 교육도 **값이 있는 항목은 파선이 아니라 실막대**다 → 파선 자리 = 값이 없는 것만(vals[i]==null).
+  var pidx=[],i2; for(i2=0;i2<rows.length;i2++)if((plan(rows[i2])||vals[i2]==null)&&xs[i2]!=null)pidx.push(i2);
+  var axTop=brk?brk.rng:(ED?_edTop:vMax*1.12);
+  var pY=ED?(_edTop*0.62):axTop*0.07, hw=W/2;   // 교육 = 눈금 사이(축 상한의 62% = 특정 눈금과 안 겹침) 고정 높이 = 값으로 안 읽힌다 · 값 축은 종전 7% 자리
   if(pidx.length){
-    var axTop=brk?brk.rng:(ED?_ED_YMAX:vMax*1.12);
-    var pY=ED?(_ED_YMAX*0.62):axTop*0.07, hw=W/2;   // 교육 = 눈금 사이(248 ≈ 200~300 중간) 고정 높이 = 값으로 안 읽힌다 · 값 축은 종전 7% 자리
     var psh=pidx.map(function(i){ return {type:'rect',xref:'x',yref:'y',layer:'above',x0:xs[i]-hw,x1:xs[i]+hw,y0:0,y1:pY,fillcolor:'rgba(0,0,0,0)',line:{color:gcol(rows[i]),width:1.2,dash:'dash'}}; });
     lay.shapes=lay.shapes.concat(psh);
-    // [260805 운영자] 교육 색인(①②③… = _bizEduMonthRows가 시작일순으로 부여) — 게이지 열 머리에 단다.
-    //   원문자 = 「(단위: 명)」 아래에서 값 숫자로 오독되지 않는 색인 표기 · 잉크 = 그 게이지 색(분야색) = 한 몸으로 읽힌다.
-    if(ED)lay.annotations=lay.annotations.concat(pidx.filter(function(i){return rows[i]._idx!=null;}).map(function(i){
-      return {xref:'x',x:xs[i],xanchor:'center',yref:'y',y:pY,yanchor:'bottom',yshift:2,text:String(rows[i]._idx),showarrow:false,font:{size:10,color:gcol(rows[i])}};
-    }));
     tr2={type:'bar',width:W,marker:{color:'rgba(0,0,0,0)',line:{width:0}},showlegend:false,hoverinfo:'text',textposition:'none',
       x:pidx.map(function(i){return xs[i];}),y:pidx.map(function(){return pY;}),
       text:pidx.map(function(i){ var g=rows[i]; return ED?((g._idx?g._idx+' ':'')+g.name+'\n'+dTxt(g)+' · '+stName(g)+'\n수강생 집계 전')
         :(g.name+'\n'+dTxt(g)+' · '+(g.genre||'-')+'\n'+(plan(g)?'예정 · 티켓 오픈 전':stName(g)+' · 자료 없음')); })};
   }
-  try{ Plotly.newPlot(div,ED?(tr2?[tr2]:[]):(tr2?[tr,tr2]:[tr]),lay,{displayModeBar:false,responsive:true}); }catch(_e){ console.warn('[biz bars]',_e); }
+  // [260805 운영자] 교육 색인(①②③… = _bizEduMonthRows가 시작일순으로 부여) — **모든** 교육 열 머리에 단다
+  //   (실막대는 막대 꼭대기 위 · 값 라벨과 겹치지 않게 한 칸 더 · 파선은 게이지 끝). 원문자 = 값 숫자로 오독되지 않는 색인 표기.
+  if(ED)lay.annotations=lay.annotations.concat(rows.map(function(g,i){ return (g._idx==null||xs[i]==null)?null:{
+      xref:'x',x:xs[i],xanchor:'center',yref:'y',y:(vals[i]!=null?vals[i]:pY),yanchor:'bottom',yshift:(vals[i]!=null?13:2),
+      text:String(g._idx),showarrow:false,font:{size:10,color:gcol(g)}}; }).filter(Boolean));
+  var _traces=ED?(vals.some(function(v){return v!=null;})?[tr]:[]):[tr];   // 교육 = 값이 하나도 없으면 실막대 트레이스 자체를 안 싣는다(0 막대 오독 방지)
+  if(tr2)_traces.push(tr2);
+  try{ Plotly.newPlot(div,_traces,lay,{displayModeBar:false,responsive:true}); }catch(_e){ console.warn('[biz bars]',_e); }
 }
 // ── [260804 운영자] 기획 전시 = **세로 누적범위 음영 그래프** ────────────────────────────────
 //   지시: *"전시는 장기간이니까 누적범위 그래프로 · (전시간에 중첩될 수도 있음) · 꼭대기는 항상 최종인원 판매로
