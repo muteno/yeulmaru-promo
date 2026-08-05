@@ -7,12 +7,13 @@ const findChromium = () => { const b = process.env.PLAYWRIGHT_BROWSERS_PATH || '
 const OUT = process.argv[2];
 const pairs = process.argv.slice(3).map(s => s.split('|'));
 const b64 = p => 'data:image/png;base64,' + readFileSync(p).toString('base64');
-const rows = pairs.map(([title, a, b]) => `
+// 라벨은 기본이 전/후 — 5·6번째 인자를 주면 그 자리 이름을 바꾼다(같은 판의 두 갈래를 나란히 볼 때: "데이터(파랑)|디자인(빨강)")
+const rows = pairs.map(([title, a, b, la, lb]) => `
   <section>
     <h2>${title}</h2>
     <div class="pair">
-      <figure><figcaption><span class="tag before">전 (BEFORE)</span></figcaption><img src="${b64(a)}"></figure>
-      <figure><figcaption><span class="tag after">후 (AFTER)</span></figcaption><img src="${b64(b)}"></figure>
+      <figure><figcaption><span class="tag before">${la || '전 (BEFORE)'}</span></figcaption><img src="${b64(a)}"></figure>
+      <figure><figcaption><span class="tag after">${lb || '후 (AFTER)'}</span></figcaption><img src="${b64(b)}"></figure>
     </div>
   </section>`).join('');
 const html = `<!doctype html><meta charset="utf-8"><style>
