@@ -181,6 +181,15 @@ async function main() {
     })()`);
     console.log('ZONE ' + JSON.stringify(zone, null, 1));
 
+    // LABELPROBE — 막대 위 값 라벨 실크기·색(운영자 260805 「숫자를 써줘」)
+    const lab = await page.evaluate(`(()=>{
+      const get=(id)=>{const d=document.getElementById(id); if(!d)return null;
+        const t=[...d.querySelectorAll('.barlayer text, g.points text')];
+        return t.slice(0,4).map(n=>({txt:n.textContent, fs:getComputedStyle(n).fontSize, fill:n.getAttribute('fill')||getComputedStyle(n).fill}));};
+      return {perf:get('bizm-chart'), edu:get('bizm-edu-chart')};
+    })()`);
+    console.log('LABEL ' + JSON.stringify(lab));
+
     const box = await page.$('#biz-main');
     await box.screenshot({ path: OUT });
     const card = await page.$('#bizm-chart');
