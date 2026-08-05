@@ -98,6 +98,26 @@ BASE_LOWCONTRAST_INDEX = 49   # index.html 같은블록 리터럴 쌍 95 중 4.5
 BASE_LAYOUT_TRANS_INDEX = 15  # index.html — FLIP 모프 4 · 아코디언 2 · 게이지 폭 5 · 기타 4(주석 줄 제외)
 BASE_LAYOUT_TRANS_SIGNAGE = 0 # signage — 현재 0(잰크는 사이니지도 동일 기준 = 대형 화면일수록 리플로가 비싸다)
 
+# ── ⑦ 정본 컴포넌트 부품 일치 — 260805-15 신설 ────────────────────────────────
+# 왜 = ①~⑥은 전부 「색·수치가 토큰인가」 축이다. 「정본 컴포넌트가 정본 부품으로 조립됐나」는
+#   아무도 안 물었다. 실제 사고(운영자 260805 지적): 「AI 홍보·점검」 모달의 닫기 X가 앱의 나머지
+#   52곳(`✕` U+2715)과 달리 `×`(U+00D7 곱셈기호)로 나갔는데 **①~⑥ 전건 통과**했다 —
+#   색(--accent)·배경·자리(우변21/상변29)·대비가 전부 정본이었으니 색 축 게이트엔 걸릴 게 없다.
+#   `.modal-x`는 CSS(클래스)만 정본이고 **내용(글자)은 52곳에 문자열로 복붙**돼 SSOT가 없었다 = 구멍.
+#   유입 경로도 실측됨: 260805-11 세션이 실측 하네스(`tools/scratch/probe_modalx_canon.mjs`)에서
+#   대조군 버튼을 `&times;`로 **다시 타이핑**했고, 그 글자가 그대로 실코드로 새어들었다.
+# 판정 = ⓐ 닫기 X 글자 하드 0(정본 1종뿐 · 위반 시 차단) ⓑ aria-label 누락은 래칫(기존 22건 동결).
+#   ⓐ가 하드 0인 근거 = 고칠 대상이 「정본 글자로 바꾼다」 하나뿐이라 청산 비용이 0이다(색 부채와 다름).
+#   ⚠ 대상 = `class="modal-x"` 버튼 중 **닫기**(title/aria-label에 '닫기')만. 같은 부품을 모양으로
+#   재사용하는 ↓(저장)·↗(새 창)·‹(목록으로)는 제외 — 그것들은 뜻이 다른 버튼이다.
+#   ⚠ `.bp-x`(예약 프로세스·에니어그램 2곳 `×`)는 **다른 클래스**라 대상 밖 — 자기들끼리는 일치한다.
+#      기틀 §2에 없는 부품이라 정본 승격·통합 여부는 운영자 판단(§6 부채 축).
+MODALX_CLOSE_GLYPH = '✕'  # ✕ — 기틀 §2 컴포넌트 7 「모달」 정본 글자(앱 실측 만장일치)
+BASE_MODALX_NO_ARIA = 22       # aria-label 없는 .modal-x — 래칫(신규 누락만 차단 · 청산은 별건)
+MODALX_RE = re.compile(r'<button\b[^>]*\bclass="modal-x[^"]*"[^>]*>(.*?)</button>', re.S)
+MODALX_ATTR_RE = re.compile(r'\b(title|aria-label)="([^"]*)"')
+TAG_RE = re.compile(r'<[^>]*>')
+
 CONTRAST_MIN = 4.5            # WCAG 2.x AA 본문 기준(국제 표준 상수)
 BLOCK_RE = re.compile(r'\{([^{}]*)\}')
 FG_RE = re.compile(r'(?<!-)\bcolor\s*:\s*(#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{3})\b)')
@@ -136,6 +156,22 @@ def _lowcontrast_pairs(src):
         if ratio < CONTRAST_MIN:
             out.append((ratio, fg.group(1), bg.group(1), src.count('\n', 0, m.start()) + 1))
     return out
+
+
+def _modalx_parts(src):
+    """정본 `.modal-x` 조립 실측 → (닫기인데 글자가 정본이 아닌 [(줄, 글자, 코드포인트)], aria-label 누락 수)."""
+    bad, no_aria = [], 0
+    for m in MODALX_RE.finditer(src):
+        head = m.group(0)[:m.group(0).find('>') + 1]
+        attrs = dict(MODALX_ATTR_RE.findall(head))
+        if 'aria-label' not in attrs:
+            no_aria += 1
+        label = TAG_RE.sub('', m.group(1)).strip()
+        is_close = '닫기' in (attrs.get('title', '') + attrs.get('aria-label', ''))
+        if is_close and label != MODALX_CLOSE_GLYPH:
+            code = ' '.join('U+%04X' % ord(c) for c in label) or '(빈 라벨)'
+            bad.append((src.count('\n', 0, m.start()) + 1, label, code))
+    return bad, no_aria
 
 
 def _layout_transitions(src):
@@ -243,6 +279,22 @@ def main():
         fails.append('잰크 전이 증가(signage): %d → %d. 사이니지도 동일 기준(대형 화면일수록 리플로가 비싸다).'
                      % (BASE_LAYOUT_TRANS_SIGNAGE, len(lt_sig)))
 
+    # ⑦ 정본 컴포넌트 부품 일치 — 색이 아니라 「부품이 정본인가」(위 주석 참조)
+    mx_bad, mx_no_aria = _modalx_parts(idx)
+    if mx_bad:
+        detail = ', '.join('L%d 「%s」(%s)' % (ln, g, c) for ln, g, c in mx_bad)
+        fails.append('모달 닫기 X 글자가 정본이 아님: %s — 정본은 「%s」(U+2715) 하나뿐이다(앱 전건 일치). '
+                     '기틀 §2 컴포넌트 7 참조. ⚠ 실측 하네스·시안에서 정본 부품을 손으로 다시 타이핑하지 마라 '
+                     '— 이 위반의 유입 경로가 정확히 그것이었다(`&times;` 대조군 → 실코드).'
+                     % (detail, MODALX_CLOSE_GLYPH))
+    if mx_no_aria > BASE_MODALX_NO_ARIA:
+        fails.append('.modal-x aria-label 누락 증가: %d → %d (+%d). 아이콘 전용 버튼은 글자가 스크린리더에 '
+                     '안 읽힌다 — `title="닫기" aria-label="닫기"` 한 벌로 붙여라.'
+                     % (BASE_MODALX_NO_ARIA, mx_no_aria, mx_no_aria - BASE_MODALX_NO_ARIA))
+    elif mx_no_aria < BASE_MODALX_NO_ARIA:
+        infos.append('.modal-x aria-label 누락 감소: %d → %d — 청산 성과. BASE_MODALX_NO_ARIA 하향 갱신 권장(사유 주석 필수).'
+                     % (BASE_MODALX_NO_ARIA, mx_no_aria))
+
     # ── 리포트 ────────────────────────────────────────────────────────────
     if fails:
         print('✗ 디자인 기틀 위반 %d건 — docs/디자인기틀.md 참조' % len(fails), file=sys.stderr)
@@ -252,11 +304,12 @@ def main():
         return 1
 
     print('✓ 디자인 기틀 통과 — raw hex index=%d/%d signage=%d/%d · :root %d/%d · 고아 %d(기존) · 이중정의 %d(기존) '
-          '· 대비 AA미달 %d/%d · 잰크 전이 %d/%d(sig %d/%d)'
+          '· 대비 AA미달 %d/%d · 잰크 전이 %d/%d(sig %d/%d) · 모달X 글자 %d위반 · X aria누락 %d/%d'
           % (hex_idx, BASE_HEX_INDEX, hex_sig, BASE_HEX_SIGNAGE,
              len(roots_idx), n_root_sig, len(orphans), len(dups),
              len(lc), BASE_LOWCONTRAST_INDEX,
-             len(lt_idx), BASE_LAYOUT_TRANS_INDEX, len(lt_sig), BASE_LAYOUT_TRANS_SIGNAGE))
+             len(lt_idx), BASE_LAYOUT_TRANS_INDEX, len(lt_sig), BASE_LAYOUT_TRANS_SIGNAGE,
+             len(mx_bad), mx_no_aria, BASE_MODALX_NO_ARIA))
     for i in infos:
         print('  ℹ ' + i)
     return 0
