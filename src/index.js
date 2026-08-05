@@ -2920,7 +2920,7 @@ var index_default = {
         const slmId = (v) => String(v || "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 64);
         // 2종 화이트리스트 — 미일치 = 400 거절(office 의 3종 화이트리스트와 같은 문법, 경로 조작 차단 동일).
         const slmExt = (n) => { const m = String(n || "").match(/\.(pdf|hwp)$/i); return m ? m[1].toLowerCase() : null; };
-        const slmLevel = (v) => (["screen", "std", "hq"].includes(String(v || "")) ? String(v) : "std");
+        const slmLevel = (v) => (["std", "screen", "small", "min"].includes(String(v || "")) ? String(v) : "std");   // index.html `_SL_LV`·slim_runner LEVELS 와 같은 집합(260805 게이지 개정 — hq 폐지·small/min 신설)
 
         if (url.pathname === "/api/slim/upload" && request.method === "POST") {
           let b = {};
