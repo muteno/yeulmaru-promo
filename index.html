@@ -14639,6 +14639,7 @@ function markMsgRead(id){
     if(e.key !== 'Escape') return;
     const ccm = document.getElementById('cell-context-menu');
     if(ccm){
+      e._ccmClosedByEsc = true;   // [260805] 이 Esc는 메뉴가 이미 먹었다 — 뒤에 도는 다중선택 해제(22781 축)가 같은 타건으로 선택까지 지우지 않게 하는 표식
       if(typeof closeCellContextMenu === 'function') closeCellContextMenu();
       else ccm.remove();
       return;
@@ -22769,7 +22770,10 @@ function _evSelBar(){
 }
 document.addEventListener('keydown',function(e){
   if(e.key!=='Escape'||!_evSel.size)return;
-  if(document.getElementById('cell-context-menu'))return;   // 메뉴가 먼저 닫힌다
+  // 메뉴가 먼저 닫힌다 — 단 「지금 열려 있나」만 보면 안 된다. 부트 중 먼저 등록된 전역 Esc(L14638)가
+  // **같은 타건에서** 이미 메뉴를 지우고 지나가므로 여기 오면 항상 null = Esc 한 번에 메뉴+선택이 통째로 날아갔다
+  // (260805 실측 · 앱지침 「Esc는 메뉴가 먼저 닫힘」 규약 위반). 그 핸들러가 남긴 표식을 같이 본다.
+  if(e._ccmClosedByEsc||document.getElementById('cell-context-menu'))return;
   _evSelClear();
 });
 
@@ -22824,16 +22828,23 @@ function onEvContextMenu(event,rowIndex,dateKey){
 
   let menuHtml='';
 
-  // [260804] 선택된 블록을 우클릭 = 선택 전체에 대한 일괄 메뉴 (선택 밖 블록은 종전 단건 메뉴 그대로)
-  if(userRole==='admin'&&_evSel.size>0&&_evSel.has(rowIndex)){
+  // [260804] 선택된 블록을 우클릭 = 선택 전체에 대한 일괄 머리 + **종전 단건 메뉴 그대로** (선택 밖 블록은 완전 무변)
+  //   ⚠ [260805 회귀 수정] 운영자 「삭제 등 기존에 하나 클릭할 때 있었던 게 그대로 나와야 되는데 그게 없다」 —
+  //   구판은 단건 메뉴를 일괄 3줄로 **갈아끼우고 return** 했다. 그래서 선택이 1건이라도 있으면
+  //   변경·완료(단건)·취소·복사·삭제·이어쓰기가 통째로 사라졌다(일정관리 보드 [변경] 버튼도 같은 함수라 같이 막혔다).
+  //   지금은 **감싸기만** 한다 — 위 = 선택 전체(N건 명시) · 아래 = 종전 단건 분기 무변 · 꼬리 = 선택 해제 2종.
+  const _selOn=(userRole==='admin'&&_evSel.size>0&&_evSel.has(rowIndex));
+  let _bulkHead='',_selTail='';
+  if(_selOn){
     const _n=_evSel.size;
-    menuHtml='<div style="padding:9px 12px;font-size:12px;line-height:1.4;background:var(--accent-light);border-radius:8px;margin:2px 2px 4px;max-width:220px"><div style="color:var(--accent);font-weight:700">'+_n+'건 선택됨</div><span style="color:var(--neutral-text);font-size:11px">결과 입력창은 하나씩 뜨고, 저장은 마지막에 한 번</span></div>'+
+    _bulkHead='<div style="padding:9px 12px;font-size:12px;line-height:1.4;background:var(--accent-light);border-radius:8px;margin:2px 2px 4px;max-width:220px"><div style="color:var(--accent);font-weight:700">'+_n+'건 선택됨</div><span style="color:var(--neutral-text);font-size:11px">결과 입력창은 하나씩 뜨고, 저장은 마지막에 한 번</span></div>'+
       '<div class="ccm-item" onclick="closeCellContextMenu();adminBulkCompleteSelected()"><span class="emo">✅</span>완료 처리 ('+_n+'건 일괄)</div>'+
       '<div class="ccm-divider"></div>'+
+      // 아래 항목이 「선택 3건」이 아니라 「우클릭한 이 한 건」에 걸린다는 걸 못 박는다(취소·삭제가 걸려 있어 범위 오해 = 사고).
+      '<div style="padding:3px 14px 4px;font-size:11px;font-weight:700;color:var(--neutral-text)">이 항목만</div>';
+    _selTail='<div class="ccm-divider"></div>'+
       '<div class="ccm-item" onclick="closeCellContextMenu();_evSelToggle('+rowIndex+')"><span class="emo">☐</span>이 항목만 선택 해제</div>'+
       '<div class="ccm-item" onclick="closeCellContextMenu();_evSelClear()"><span class="emo" style="color:var(--danger)">✕</span>선택 모두 해제</div>';
-    _ccmShow(menuHtml,event);
-    return;
   }
 
   if(userRole==='admin'){
@@ -22850,7 +22861,8 @@ function onEvContextMenu(event,rowIndex,dateKey){
         '<div class="ccm-item" onclick="closeCellContextMenu();cancelWithReason('+rowIndex+')"><span class="emo" style="color:var(--danger)">✕</span>취소</div>'+
         '<div class="ccm-divider"></div>'+
         // [260804] 마우스만으로도 여러 건을 모을 수 있는 자리(Ctrl·⌘·Shift+클릭은 단축 경로)
-        '<div class="ccm-item" onclick="closeCellContextMenu();_evSelToggle('+rowIndex+')"><span class="emo">☑</span>선택에 추가'+(_evSel.size?' <span style="color:var(--accent);font-weight:700">'+_evSel.size+'건</span>':'')+'</div>'+
+        //   이미 선택된 건이면 이 줄은 뺀다 — 꼬리(_selTail)의 [이 항목만 선택 해제]가 같은 토글을 이어받는다(중복 금지).
+        (_selOn?'':'<div class="ccm-item" onclick="closeCellContextMenu();_evSelToggle('+rowIndex+')"><span class="emo">☑</span>선택에 추가'+(_evSel.size?' <span style="color:var(--accent);font-weight:700">'+_evSel.size+'건</span>':'')+'</div>')+
         '<div class="ccm-item" onclick="closeCellContextMenu();copyRec('+rowIndex+',\''+dateKey+'\')"><span class="emo">📋</span>복사</div>';
     }else if(adminStatus==='보류'){
       // 보류 — 변경 / 승인 / 삭제
@@ -22903,7 +22915,7 @@ function onEvContextMenu(event,rowIndex,dateKey){
     }
   }
 
-  _ccmShow(menuHtml,event);
+  _ccmShow(_bulkHead+menuHtml+_selTail,event);
 }
 // 컨텍스트 메뉴 띄우기(위치 보정 + 닫기 트리거) — 기존 onEvContextMenu 꼬리를 그대로 뽑은 것(동작 동일)
 function _ccmShow(menuHtml,event){

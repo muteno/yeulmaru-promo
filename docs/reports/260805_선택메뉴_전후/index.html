@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>260805 다중선택 중 우클릭 — 사라졌던 단건 메뉴(삭제·변경·취소·복사) 복구 · 전후</title>
+<style>
+  body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;max-width:1060px;margin:30px auto;padding:0 20px;color:#1A1A2E;line-height:1.6}
+  h1{font-size:20px} h2{font-size:16px;margin-top:34px}
+  img{max-width:100%;border:1px solid rgba(0,0,0,0.12);border-radius:12px;display:block;margin:10px 0}
+  .dim{color:#888;font-size:12.5px} code{background:rgba(74,77,231,0.08);padding:1px 5px;border-radius:5px;font-size:12px}
+  table{border-collapse:collapse;font-size:13px;margin:10px 0;width:100%} td,th{border:1px solid rgba(0,0,0,0.12);padding:6px 10px;text-align:left;vertical-align:top}
+  th{background:rgba(0,0,0,0.02)}
+  .c1{color:#4A4DE7;font-weight:700} .c2{color:#D88455;font-weight:700} .c3{color:#1A6B3C;font-weight:700}
+  .ba{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start}
+  .ba .lb{font-size:12px;font-weight:700;color:#888;margin-bottom:2px}
+  .ba .lb b{color:#1A1A2E}
+  .note{background:rgba(74,77,231,0.05);border-left:3px solid #4A4DE7;padding:10px 14px;border-radius:0 8px 8px 0;font-size:12.5px;margin:12px 0}
+  .warn{background:rgba(226,75,74,0.05);border-left:3px solid #E24B4A;padding:10px 14px;border-radius:0 8px 8px 0;font-size:12.5px;margin:12px 0}
+  @media(max-width:820px){.ba{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<h1>260805 — 선택 중 우클릭에서 <span class="c2">사라졌던 단건 메뉴</span> 복구</h1>
+<p class="dim">지시(운영자): <b>「이게 되었다고 승인할 수는 있는데, <u>삭제 등 기존에 하나 클릭할 때 있었던 게 그대로 나와야 되는데</u> 그게 없네. 확인 좀 해주라.」</b></p>
+<p class="dim">스냅샷 = 정본 하네스(<code>tools/smoke_layout.mjs</code>) 방식으로 <code>?qa=admin#cal</code> 목데이터를 1500×900 헤드리스에 띄워 찍은 것 — 실API·실데이터 미접촉.
+「전」은 <code>git show HEAD:index.html</code>을 그대로 서빙해 <b>같은 시나리오를 두 판본에서</b> 돌렸다. 촬영·실측 = <code>tools/scratch/probe_selmenu_ba.mjs</code>.</p>
+
+<h2>1. 원인 — 일괄 메뉴가 단건 메뉴를 「덧붙인」 게 아니라 「갈아끼웠다」</h2>
+<p class="dim">260804 일괄 완료를 넣을 때 <code>onEvContextMenu</code> 머리에 분기를 하나 세웠는데, 그게 단건 메뉴를 만들기 <b>전에 return</b> 했다:</p>
+<pre class="dim" style="background:rgba(0,0,0,0.03);padding:10px 14px;border-radius:8px;font-size:12px;overflow:auto">if(userRole==='admin' &amp;&amp; _evSel.size&gt;0 &amp;&amp; _evSel.has(rowIndex)){
+  menuHtml = 「N건 선택됨」 + 「완료 처리(N건 일괄)」 + 「이 항목만 선택 해제」 + 「선택 모두 해제」;
+  _ccmShow(menuHtml,event); <b>return;</b>          ← 아래 상태별 단건 메뉴를 통째로 건너뛴다
+}</pre>
+<p class="dim">그래서 선택이 <b>1건이라도</b> 있으면 그 블록에서는 <b>변경·완료(단건)·취소·복사</b>가 사라지고,
+상태가 다른 건(보류·임시·완료/취소)에 걸리면 <b>삭제·이어쓰기</b>까지 같이 사라졌다.
+같은 함수를 쓰는 <b>일정관리 보드의 [변경] 버튼</b>과 <b>패널 카드 우클릭</b>도 같이 막혔다(경로 3곳 공통).</p>
+
+<h2>2. 전 → 후 (선택 3건 · 선택된 블록 우클릭)</h2>
+<div class="ba">
+  <div><div class="lb">전 — <b>3줄뿐</b>(단건 메뉴 실종)</div><img src="before_ctx_sel3.png" alt="전: 3건 선택됨 / 완료 처리(3건 일괄) / 이 항목만 선택 해제 / 선택 모두 해제"></div>
+  <div><div class="lb">후 — <b>일괄 + 「이 항목만」 단건 메뉴 그대로</b></div><img src="after_ctx_sel3.png" alt="후: 3건 선택됨 / 완료 처리(3건 일괄) / 이 항목만 / 변경 / 완료 / 취소 / 복사 / 이 항목만 선택 해제 / 선택 모두 해제"></div>
+</div>
+<div class="note"><b>「이 항목만」 캡션을 왜 넣었나</b> — 메뉴 한 장에 <code>완료 처리(3건 일괄)</code>과 <code>완료</code>가 같이 있으면 범위를 헷갈린다.
+아래 묶음이 <b>우클릭한 그 한 건</b>에만 걸린다는 걸 못 박는 회색 소제목 한 줄(새 색·새 클래스 0 — <code>--neutral-text</code> 11px, 메뉴 안 기존 안내문 타이포 계승).</div>
+
+<h2>3. 삭제가 뜨는 상태(보류)에서도 안 삼킨다</h2>
+<div class="ba">
+  <div><div class="lb">전 — 보류 건인데 <b>삭제 없음</b></div><img src="before_ctx_hold.png" alt="전: 4건 선택됨 / 완료 처리(4건 일괄) / 이 항목만 선택 해제 / 선택 모두 해제"></div>
+  <div><div class="lb">후 — <b>변경 / 승인(예정으로) / 🗑️ 삭제</b> 복귀</div><img src="after_ctx_hold.png" alt="후: 4건 선택됨 / 완료 처리(4건 일괄) / 이 항목만 / 변경 / 승인(예정으로) / 삭제 / 이 항목만 선택 해제 / 선택 모두 해제"></div>
+</div>
+<div class="warn"><b>짚어둘 것 — 「예정」 블록의 우클릭 메뉴엔 원래 <u>삭제가 없다</u></b>(취소가 그 자리 · <code>index.html</code> 상태별 분기).
+캘린더에서 고를 수 있는 건 <b>예정</b>뿐이라(<code>_evSelable</code>), 실제로 선택 중에 사라졌던 건 <b>변경·완료·취소·복사 4개</b>다.
+삭제는 <b>보류·임시·완료·취소</b> 메뉴와 <b>패널 카드의 ✕ 버튼</b>에 있고, 위 3장은 그 경로가 이제 안 삼켜진다는 실측이다.
+<b>예정 블록 메뉴에도 [삭제]를 넣을지는 운영자 판단</b> — 지금은 종전 그대로(취소) 뒀다.</div>
+
+<h2>4. 선택을 안 쓰거나 선택 밖 블록 = 픽셀 단위로 전과 동일</h2>
+<div class="ba">
+  <div><div class="lb">전 — <b>선택 0 · 단건 우클릭</b></div><img src="before_ctx_single.png" alt="전 단건: 변경 / 완료 / 취소 / 선택에 추가 / 복사"></div>
+  <div><div class="lb">후 — <b>동일</b>(변경 없음)</div><img src="after_ctx_single.png" alt="후 단건: 변경 / 완료 / 취소 / 선택에 추가 / 복사"></div>
+</div>
+<p class="dim">선택 3건을 유지한 채 <b>선택 밖</b> 블록을 우클릭한 경우도 전/후 동일 — <code>변경 / 완료 / 취소 / 선택에 추가 3건 / 복사</code>.</p>
+
+<h2>5. 메뉴 항목 DOM 실측 (<code>_measure.json</code>)</h2>
+<table>
+<tr><th>시나리오</th><th>전</th><th>후</th></tr>
+<tr><td>선택 0 · 예정 블록</td><td>변경 / 완료 / 취소 / 선택에 추가 / 복사</td><td class="c3">동일</td></tr>
+<tr><td>선택 3 · <b>선택된</b> 블록</td><td class="c2">완료 처리(3건 일괄) / 이 항목만 선택 해제 / 선택 모두 해제</td><td class="c3">완료 처리(3건 일괄) / <b>변경 / 완료 / 취소 / 복사</b> / 이 항목만 선택 해제 / 선택 모두 해제</td></tr>
+<tr><td>선택 3 · 선택 <b>밖</b> 블록</td><td>변경 / 완료 / 취소 / 선택에 추가 3건 / 복사</td><td class="c3">동일</td></tr>
+<tr><td>선택에 든 <b>보류</b> 건</td><td class="c2">완료 처리(4건 일괄) / 이 항목만 선택 해제 / 선택 모두 해제</td><td class="c3">완료 처리(4건 일괄) / <b>변경 / 승인(예정으로) / 삭제</b> / 이 항목만 선택 해제 / 선택 모두 해제</td></tr>
+</table>
+<p class="dim">중복 정리 1건: 선택된 건에서는 단건 메뉴의 <code>선택에 추가</code> 줄을 빼고, 꼬리의 <code>이 항목만 선택 해제</code>가 같은 토글을 이어받는다(같은 동작 두 줄 금지).</p>
+
+<h2>6. 덤으로 잡은 것 — Esc 한 번에 메뉴 + 선택이 <span class="c2">같이</span> 날아가던 문제</h2>
+<p class="dim">앱지침 규약은 <b>「Esc: 컨텍스트 메뉴가 열려 있으면 메뉴가 먼저 닫힌다」</b>인데, 실측은 그렇지 않았다.
+부트 중 먼저 등록되는 전역 Esc 핸들러(<code>index.html</code> L14638)가 <b>같은 타건에서</b> 메뉴를 이미 지우고 지나가기 때문에,
+뒤에 도는 선택 해제 핸들러가 「메뉴 없네」로 보고 <b>선택까지 통째로 지웠다</b> — 메뉴 한 번 열었다 닫으면 모아둔 선택이 증발.</p>
+<table>
+<tr><th>Esc</th><th>전(실측)</th><th>후(실측)</th></tr>
+<tr><td>메뉴 열고 1회</td><td class="c2">메뉴 닫힘 · 선택 3 → <b>0</b></td><td class="c3">메뉴 닫힘 · 선택 <b>3 유지</b></td></tr>
+<tr><td>이어서 2회</td><td>선택 0</td><td class="c3">선택 0 (규약대로)</td></tr>
+</table>
+<p class="dim">고친 방법 = 메뉴를 닫은 핸들러가 <code>e._ccmClosedByEsc</code> 표식을 남기고, 선택 해제 핸들러가 그 표식을 같이 본다(2줄).</p>
+
+<h2>7. 게이트</h2>
+<p class="dim"><code>python3 tools/check_design.py</code> ✓ (raw hex 1578/1578 — 신규 색 0) · <code>python3 tools/check_refs.py</code> ✓ · <code>node tools/build_annual_yr.mjs</code> ✓</p>
+</body>
+</html>
