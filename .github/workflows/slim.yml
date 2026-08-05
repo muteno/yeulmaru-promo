@@ -1,0 +1,146 @@
+name: 앱 용량 줄이기 (PDF·구형 hwp · repository_dispatch)
+
+# 앱(index.html ▸ 콘텐츠 제작 ▸ 용량 줄이기)이 Worker /api/slim/dispatch 로 던지면
+# tools/slim_runner.mjs 가 문서의 사진을 다시 인코딩해 결과를 커밋한다.
+# 구조·계약 = office-edit.yml 미러 — 다만 **여기 오는 건 .pdf 와 구형 .hwp 둘뿐**이다.
+# 나머지 7종(xlsx/xlsm/xltx/docx/dotx/pptx/potx/hwpx)은 전부 ZIP 컨테이너라 브라우저가 직접 줄이고
+# 이 워크플로를 타지 않는다(파일 무반출 · 8MB 업로드 상한 무관 · 1초 이내).
+#
+#  입력 : drafts/slim/<id>.in.<ext>   (Worker /api/slim/upload 가 미리 커밋 · ext = pdf|hwp)
+#  출력 : drafts/slim/<id>.out.<ext>  (앱이 /api/slim/file 로 수령)
+#         drafts/<id>.json            (앱 폴링 = 블로그·한글문서·오피스문서와 같은 /api/blog/draft 경로 재사용)
+#
+# ⚠️ **claude -p 를 안 쓴다** — office-edit.yml·hwp-edit.yml 과 갈리는 지점. 압축은 결정적 처리라 판단할 게 없고,
+#    따라서 구독 OAuth 계정 체인·쿼터를 **전혀 안 먹는다**(이 파일엔 CLAUDE_CODE_OAUTH_TOKEN_* 시크릿이 없다).
+#    「모델을 태울 이유가 없는 일에 모델을 태우지 않는다」 — 신설 시크릿 0.
+# ⚠️ Ghostscript 는 ubuntu-latest 러너에 이미 있다(`gs --version`으로 확인하고 없을 때만 설치 — 있는 걸
+#    무조건 apt-get 하면 매 런 수십 초를 버린다).
+
+on:
+  repository_dispatch:
+    types: [slim]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: slim
+  cancel-in-progress: false
+
+env:
+  # 압축 엔진 고정 버전 — 업스트림이 깨지면 여기만 내린다(office-edit.yml 의 OFFICECLI_VERSION 과 같은 축).
+  CFB_VERSION: '1.2.2'      # SheetJS cfb — .hwp = CFB 복합문서 컨테이너 읽기·쓰기(왕복 바이트 동일 실측 260805)
+  SHARP_VERSION: '0.34.4'   # 이미지 재인코딩(libvips 프리빌드 · 러너에서 컴파일 없음)
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10   # 결정적 처리라 짧다(에이전트 왕복이 없다) · 프론트 폴 한도(12분)보다 짧게
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: 압축 엔진 준비 (Ghostscript · cfb · sharp)
+        run: |
+          set -e
+          if command -v gs >/dev/null 2>&1; then
+            echo "Ghostscript 있음: $(gs --version)"
+          else
+            sudo apt-get update -qq && sudo apt-get install -y -qq ghostscript
+            echo "Ghostscript 설치함: $(gs --version)"
+          fi
+          npm install --no-save "cfb@${CFB_VERSION}" "sharp@${SHARP_VERSION}"
+          echo "압축 엔진 준비 완료"
+      - name: 문서 압축 (tools/slim_runner.mjs)
+        uses: actions/github-script@v7
+        with:
+          retries: 3
+          script: |
+            const { execFileSync } = require('child_process');
+            const fs = require('fs');
+            const path = require('path');
+            const _cp = context.payload.client_payload || {};
+            const p = (_cp && typeof _cp.d === 'object' && _cp.d) ? _cp.d : _cp;
+            const id = String(p.id || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 80) || ('x' + Date.now());
+            const ext = ((String(p.ext || '').toLowerCase().match(/^(pdf|hwp)$/) || [])[1]) || '';
+            const level = ['std', 'screen', 'small', 'min'].includes(String(p.level || '')) ? String(p.level) : 'std';
+            const docName = String(p.name || ('문서.' + (ext || 'pdf'))).slice(0, 160);
+            const LABEL = { std: '표준', screen: '화면용', small: '작게', min: '최소' };
+            const work = process.env.RUNNER_TEMP;
+            const inRepo = 'drafts/slim/' + id + '.in.' + ext;
+
+            fs.mkdirSync('drafts/slim', { recursive: true });
+            const fail = (msg) => {
+              fs.writeFileSync('drafts/' + id + '.json', JSON.stringify({ id, mode: 'slim', ok: false, error: String(msg).slice(0, 600), ts: new Date().toISOString() }));
+            };
+
+            // ---- 원본 확보 (업로드 커밋과의 레이스 대비 — 없으면 리베이스 후 재시도 · office-edit.yml 과 동일) ----
+            let srcBuf = null;
+            if (ext) {
+              for (let i = 0; i < 4 && !srcBuf; i++) {
+                if (fs.existsSync(inRepo)) { srcBuf = fs.readFileSync(inRepo); break; }
+                try { execFileSync('git', ['pull', '--rebase', 'origin', 'main'], { stdio: 'ignore' }); } catch (e) {}
+              }
+            }
+
+            if (!ext) { fail('이 형식은 서버에서 줄이지 않아요(.pdf·.hwp만)'); }
+            else if (!srcBuf) { fail('원본 문서를 찾지 못했어요(' + inRepo + ')'); }
+            else {
+              const target = path.join(work, 'input.' + ext);
+              const outPath = path.join(work, 'output.' + ext);
+              fs.writeFileSync(target, srcBuf);
+
+              let r = null;
+              try {
+                const raw = execFileSync('node', [
+                  path.join(process.env.GITHUB_WORKSPACE, 'tools/slim_runner.mjs'),
+                  '--in', target, '--out', outPath, '--level', level,
+                ], { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 });
+                r = JSON.parse(String(raw).trim().split('\n').pop());
+              } catch (e) {
+                // 스크립트는 실패해도 stdout 에 JSON 한 줄을 남긴다 — 그걸 먼저 읽고, 없으면 예외 문구를 쓴다.
+                const out = String((e && e.stdout) || '').trim();
+                try { r = JSON.parse(out.split('\n').pop()); } catch (e2) { r = null; }
+                if (!r) fail(String((e && e.message) || e).slice(0, 300));
+              }
+
+              if (r && r.ok === false) fail(r.error || '압축 실패');
+              else if (!r) { /* 위에서 이미 fail 기록 */ }
+              else if (!fs.existsSync(outPath) || fs.statSync(outPath).size < 512) {
+                fail('결과 파일이 만들어지지 않았어요');
+              } else {
+                const outRepo = 'drafts/slim/' + id + '.out.' + ext;
+                fs.copyFileSync(outPath, outRepo);
+                const outName = docName.replace(/(\.(pdf|hwp))$/i, '') + '_' + (LABEL[level] || '표준') + '.' + ext;
+                fs.writeFileSync('drafts/' + id + '.json', JSON.stringify({
+                  id, mode: 'slim', ok: true, name: outName, path: outRepo,
+                  bytes: fs.statSync(outRepo).size, from: r.from, to: r.to, kept: !!r.kept,
+                  log: Array.isArray(r.log) ? r.log.slice(0, 200) : [],
+                  ts: new Date().toISOString()
+                }));
+              }
+            }
+
+            // ---- 원본 회수 ----
+            try { if (fs.existsSync(inRepo)) fs.unlinkSync(inRepo); } catch (e) {}
+            // ---- 산출물 회수 — 기능별 **최근 3개**만 남긴다(공용 회수기 `shared/drafts_retain.mjs`) ----
+            // ⚠️ 구 방식(id에 박힌 시각 TTL)은 두 군데서 실패해 왔다: nb는 아예 무접촉이었고, `(\d+)`가 16자리
+            //    id를 통째로 잡아 비교가 늘 음수라 회수가 한 번도 안 돌았다. 개수 기준은 그 함정을 안 밟는다.
+            //    이 레포는 공개 레포라 남겨 두는 개수 = 노출 면적이다(상세 = shared/drafts_retain.mjs 머리말).
+            try {
+              const { retainDrafts } = await import('file://' + path.join(process.env.GITHUB_WORKSPACE, 'shared/drafts_retain.mjs'));
+              const rr = retainDrafts({ root: process.env.GITHUB_WORKSPACE, keep: 3, protect: id });
+              core.info('[drafts] 회수 ' + rr.removed.length + '건 · 기능별 최근 ' + rr.keep + '건 유지');
+            } catch (e) { core.warning('[drafts] 회수 건너뜀: ' + e.message); }
+
+            execFileSync('git', ['config', 'user.name', 'github-actions[bot]']);
+            execFileSync('git', ['config', 'user.email', '41898282+github-actions[bot]@users.noreply.github.com']);
+            execFileSync('git', ['add', '-A', 'drafts']);
+            execFileSync('git', ['commit', '-m', 'chore(slim): ' + id + ' [skip ci]']);
+            let pushed = false;
+            for (let i = 0; i < 6; i++) {
+              try { execFileSync('git', ['push', 'origin', 'HEAD:main']); pushed = true; break; }
+              catch (e) { try { execFileSync('git', ['pull', '--rebase', 'origin', 'main']); } catch (e2) {} }
+            }
+            if (!pushed) core.setFailed('push 실패');

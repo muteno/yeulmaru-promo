@@ -3,7 +3,7 @@
 """
 디자인 기틀 게이트 — 디자인 드리프트 3층 방어의 공용 검사기 (stdlib only, 260703)
 
-검사 6종 (baseline 래칫 — "지금보다 나빠지지만 마라"):
+검사 7종 (①~⑥ = baseline 래칫 — "지금보다 나빠지지만 마라"):
   ① raw hex 총량: index.html ≤ BASE_HEX_INDEX, signage/*.html 합 ≤ BASE_HEX_SIGNAGE
      (새 색은 반드시 :root 토큰으로. 기존 raw hex 청산은 언제든 환영 → baseline 하향 갱신)
   ② :root 블록 수: index.html == 2, signage == 0 (블록 추가/삭제 = 구조 변경 → 운영자 승인 필요)
@@ -13,6 +13,9 @@
      4.5:1 미달 쌍이 BASE_LOWCONTRAST를 넘으면 실패. (260804 impeccable 8인 평의회 선별이식 ②)
   ⑥ 레이아웃 유발 transition(잰크): transition 값에 width/height/padding/margin이 들어간 선언 수가
      BASE_LAYOUT_TRANS를 넘으면 실패. (같은 평의회 선별이식 ①)
+  ⑦ 정본 부품 일치(**하드 0** · 260805-16): 라벨이 X 한 글자인 버튼은 클래스와 무관하게 전부
+     글자 `✕`(U+2715) + `title`·`aria-label` 한 벌이어야 한다. 접근명 '값'은 자리의 뜻대로
+     (닫기/삭제/제거/해제) — 게이트는 있는지만 묻는다. ①~⑥이 못 잡는 「색은 정본인데 부품이 어긋난」 축.
 
 baseline 갱신 규칙: 실측치가 늘어난 정당한 사유(PR·운영자 승인)가 있으면 숫자를 갱신하고
 반드시 아래 주석에 사유를 남긴다. 원인 불명 증가는 운영자 보고 후 진행.
@@ -98,6 +101,34 @@ BASE_LOWCONTRAST_INDEX = 49   # index.html 같은블록 리터럴 쌍 95 중 4.5
 BASE_LAYOUT_TRANS_INDEX = 15  # index.html — FLIP 모프 4 · 아코디언 2 · 게이지 폭 5 · 기타 4(주석 줄 제외)
 BASE_LAYOUT_TRANS_SIGNAGE = 0 # signage — 현재 0(잰크는 사이니지도 동일 기준 = 대형 화면일수록 리플로가 비싸다)
 
+# ── ⑦ 정본 컴포넌트 부품 일치 — 260805-16 신설 ────────────────────────────────
+# 왜 = ①~⑥은 전부 「색·수치가 토큰인가」 축이다. 「정본 컴포넌트가 정본 부품으로 조립됐나」는
+#   아무도 안 물었다. 실제 사고(운영자 260805 지적): 「AI 홍보·점검」 모달의 닫기 X가 앱의 나머지
+#   52곳(`✕` U+2715)과 달리 `×`(U+00D7 곱셈기호)로 나갔는데 **①~⑥ 전건 통과**했다 —
+#   색(--accent)·배경·자리(우변21/상변29)·대비가 전부 정본이었으니 색 축 게이트엔 걸릴 게 없다.
+#   `.modal-x`는 CSS(클래스)만 정본이고 **내용(글자)은 52곳에 문자열로 복붙**돼 SSOT가 없었다 = 구멍.
+#   유입 경로도 실측됨: 260805-11 세션이 실측 하네스(`tools/scratch/probe_modalx_canon.mjs`)에서
+#   대조군 버튼을 `&times;`로 **다시 타이핑**했고, 그 글자가 그대로 실코드로 새어들었다.
+#
+# [260805-16 2차 · 운영자 「게이트로 저런것들 일괄 처리해줘」] 대상을 **클래스에서 떼어냈다**.
+#   1차는 `class="modal-x"`만 봤는데, 그러면 **인라인으로 직접 그린 X 버튼**(클래스 없이
+#   style로 원을 그린 것 4곳 — 실측상 전부 `×`에 title·aria 0)은 영원히 안 잡힌다.
+#   그래서 지금 판정 기준 = **「보이는 라벨이 X 한 글자인 버튼」 전부**(클래스 무관 · 태그 벗겨서 판정).
+#   실측 82개 전건 대상. 미래에 누가 클래스 없이 인라인 X를 그려도 자동으로 걸린다.
+# 판정(둘 다 **하드 0** — 일괄 청산을 마쳐 잔여가 0이므로 래칫이 불필요):
+#   ⓐ **글자 = `✕`(U+2715) 하나.** 고칠 방법이 「정본 글자로 바꾼다」뿐 = 청산 비용 0(색 부채와 다름).
+#   ⓑ **`title`·`aria-label` 둘 다 필수.** 아이콘 전용 버튼은 글자가 스크린리더에 안 읽힌다.
+#      ⚠ **값은 게이트가 안 정한다** — 같은 X라도 자리마다 뜻이 다르다(닫기 / 삭제 / 제거 / 비교 제거 /
+#      영역 삭제 / 해제). 일괄 청산도 **기존 `title`을 그대로 미러**해 넣었지 뜻을 지어내지 않았다.
+#      title·aria가 **둘 다** 없던 8곳만 실측으로 뜻을 확인해(전부 닫기) 부여했다.
+#   ⚠ 라벨이 X가 **아닌** 버튼은 대상 밖 — ↓(저장)·↗(새 창)·‹(목록으로)는 뜻이 다른 버튼이고,
+#     「취소」·「닫기」 같은 **글자 버튼**은 이미 이름이 읽히므로 이 검사의 축이 아니다.
+CANON_X_GLYPH = '✕'            # 기틀 §2 컴포넌트 7 — X 아이콘 버튼 정본 글자(앱 82곳 만장일치)
+X_FAMILY = '×✕✖✗✘╳⨯'          # X로 읽히는 글자들 — 이 중 정본은 ✕ 하나
+XBTN_RE = re.compile(r'<button\b[^>]*?>(.*?)</button>', re.S)
+XBTN_ATTR_RE = re.compile(r'\b(title|aria-label)="([^"]*)"')
+TAG_RE = re.compile(r'<[^>]*>')
+
 CONTRAST_MIN = 4.5            # WCAG 2.x AA 본문 기준(국제 표준 상수)
 BLOCK_RE = re.compile(r'\{([^{}]*)\}')
 FG_RE = re.compile(r'(?<!-)\bcolor\s*:\s*(#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{3})\b)')
@@ -136,6 +167,27 @@ def _lowcontrast_pairs(src):
         if ratio < CONTRAST_MIN:
             out.append((ratio, fg.group(1), bg.group(1), src.count('\n', 0, m.start()) + 1))
     return out
+
+
+def _x_buttons(src):
+    """라벨이 X 한 글자인 버튼 전수(클래스 무관) → (총개수, [(줄, 사유들)])."""
+    total, bad = 0, []
+    for m in XBTN_RE.finditer(src):
+        label = TAG_RE.sub('', m.group(1)).strip()
+        if len(label) != 1 or label not in X_FAMILY:
+            continue
+        total += 1
+        head = m.group(0)[:m.group(0).find('>') + 1]
+        attrs = dict(XBTN_ATTR_RE.findall(head))
+        why = []
+        if label != CANON_X_GLYPH:
+            why.append('글자 「%s」(U+%04X)' % (label, ord(label)))
+        for a in ('title', 'aria-label'):
+            if a not in attrs:
+                why.append('%s 없음' % a)
+        if why:
+            bad.append((src.count('\n', 0, m.start()) + 1, ' · '.join(why)))
+    return total, bad
 
 
 def _layout_transitions(src):
@@ -243,6 +295,18 @@ def main():
         fails.append('잰크 전이 증가(signage): %d → %d. 사이니지도 동일 기준(대형 화면일수록 리플로가 비싸다).'
                      % (BASE_LAYOUT_TRANS_SIGNAGE, len(lt_sig)))
 
+    # ⑦ 정본 컴포넌트 부품 일치 — 색이 아니라 「부품이 정본인가」(위 주석 참조)
+    x_total, x_bad = _x_buttons(idx)
+    if x_bad:
+        detail = ' / '.join('L%d %s' % (ln, why) for ln, why in x_bad[:8])
+        more = '' if len(x_bad) <= 8 else ' … 외 %d건' % (len(x_bad) - 8)
+        fails.append('X 아이콘 버튼 정본 미달 %d건: %s%s — 정본은 글자 「%s」(U+2715) 하나 + '
+                     '`title`·`aria-label` 한 벌이다(앱 %d곳 전건 일치). 기틀 §2 컴포넌트 7 참조. '
+                     '접근명 값은 자리의 뜻대로(닫기/삭제/제거/해제) — 게이트는 있는지만 묻는다. '
+                     '⚠ 실측 하네스·시안에서 정본 부품을 손으로 다시 타이핑하지 마라 '
+                     '— 이 검사가 생긴 위반의 유입 경로가 정확히 그것이었다(`&times;` 대조군 → 실코드).'
+                     % (len(x_bad), detail, more, CANON_X_GLYPH, x_total))
+
     # ── 리포트 ────────────────────────────────────────────────────────────
     if fails:
         print('✗ 디자인 기틀 위반 %d건 — docs/디자인기틀.md 참조' % len(fails), file=sys.stderr)
@@ -252,11 +316,12 @@ def main():
         return 1
 
     print('✓ 디자인 기틀 통과 — raw hex index=%d/%d signage=%d/%d · :root %d/%d · 고아 %d(기존) · 이중정의 %d(기존) '
-          '· 대비 AA미달 %d/%d · 잰크 전이 %d/%d(sig %d/%d)'
+          '· 대비 AA미달 %d/%d · 잰크 전이 %d/%d(sig %d/%d) · X아이콘 버튼 %d개 전건 정본(미달 %d)'
           % (hex_idx, BASE_HEX_INDEX, hex_sig, BASE_HEX_SIGNAGE,
              len(roots_idx), n_root_sig, len(orphans), len(dups),
              len(lc), BASE_LOWCONTRAST_INDEX,
-             len(lt_idx), BASE_LAYOUT_TRANS_INDEX, len(lt_sig), BASE_LAYOUT_TRANS_SIGNAGE))
+             len(lt_idx), BASE_LAYOUT_TRANS_INDEX, len(lt_sig), BASE_LAYOUT_TRANS_SIGNAGE,
+             x_total, len(x_bad)))
     for i in infos:
         print('  ℹ ' + i)
     return 0

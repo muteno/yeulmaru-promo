@@ -47,21 +47,14 @@ const salesRows = DATA.shows.filter(s => s.paid > 0)
   .map(s => ({ name: s.name, money: s.rev, seats: s.paid, occ: s.occ, totalOpen: s.open, _rcEst: 1, genre: s.genre,
     startDate: D26(s.date), endDate: D26(s.dateEnd), status: s.status === '판매중' ? 'active' : 'ended' }));
 
-// 전시 목 — 종료 1(일일 누계 곡선) · 진행중 1(GS칼텍스 형태) · 예정 1(값 없음)
+// 전시DB 목 = 진행중 GS 1건만(운영 실측 형태 — 상반기 전시는 DB에 없다) → 상반기는 거울(data/exhib_daily_2026.js)이
+//   보충하고, GS는 거울에도 있어(「숨 쉬는 SUM」) DB 정본 우선 중복 제거 경로가 같이 실측된다.
 const EXM = { headers: [], rows: [
-  { '전시ID': 'EXA', '전시명': '2026 봄 기획전 <결>', '연도': 2026, '상태': '종료', '무료여부': '',
-    '목표관객': '1500', '목표금액': '', '최종유료': '820', '최종무료': '410', '최종총인원': '1230', '최종매출': '9840000',
-    '시작일': '2026-03-05', '종료일': '2026-05-11', '운영일수': '58', '최종점유율': '' },
   { '전시ID': 'EXB', '전시명': 'GS칼텍스 예울마루 기획전시 <숨: 쉬는 SUM>', '연도': 2026, '상태': '진행중', '무료여부': '',
     '목표관객': '2000', '목표금액': '', '최종유료': '155', '최종무료': '0', '최종총인원': '155', '최종매출': '1150000',
-    '시작일': '2026-07-21', '종료일': '2026-11-01', '운영일수': '90', '최종점유율': '' },
-  { '전시ID': 'EXC', '전시명': '겨울 공예전 <손>', '연도': 2026, '상태': '예정', '무료여부': '',
-    '목표관객': '', '목표금액': '', '최종유료': '', '최종무료': '', '최종총인원': '', '최종매출': '',
-    '시작일': '2026-11-20', '종료일': '2026-12-28', '운영일수': '', '최종점유율': '' }
+    '시작일': '2026-07-21', '종료일': '2026-11-01', '운영일수': '90', '최종점유율': '' }
 ] };
 const exd = [];
-[['20260312', 90], ['20260328', 260], ['20260415', 520], ['20260430', 840], ['20260511', 1230]]
-  .forEach(([d, v]) => exd.push({ '전시ID': 'EXA', '전시명': '2026 봄 기획전 <결>', '기준일자': d, '누계유료': String(Math.round(v * 0.66)), '누계무료': '', '누계총인원': String(v), '누계금액': '', '점유율': '' }));
 [['20260726', 60], ['20260728', 90], ['20260730', 124], ['20260801', 155]]
   .forEach(([d, v]) => exd.push({ '전시ID': 'EXB', '전시명': 'GS칼텍스 예울마루 기획전시 <숨: 쉬는 SUM>', '기준일자': d, '누계유료': String(v), '누계무료': '0', '누계총인원': String(v), '누계금액': '', '점유율': '' }));
 const EXD = { headers: [], rows: exd };
@@ -70,12 +63,15 @@ const EXD = { headers: [], rows: exd };
 const PERFS_STUB = DATA.shows.filter(s => s.status === '예정')
   .map(s => ({ s: s.date, e: s.dateEnd, n: s.name, f: s.name, t: 'c', g: s.gu || '', g2: s.genre || '', rc: 1, id: '' }))
   .concat([
-    { s: '2026-03-10', e: '2026-06-25', n: '아카데미 봄', f: '예울마루 아카데미 봄학기', t: 'a', g: '', g2: '', rc: 0, id: 'EDU1' },
-    { s: '2026-04-08', e: '2026-04-08', n: '해설음악회', f: '청소년 해설 음악회', t: 'a', g: '', g2: '', rc: 0, id: 'EDU2' },
-    { s: '2026-07-29', e: '2026-08-22', n: '여름예술캠프', f: '어린이 여름 예술캠프', t: 'a', g: '', g2: '', rc: 0, id: 'EDU3' },
-    { s: '2026-09-02', e: '2026-11-27', n: '아카데미 가을', f: '예울마루 아카데미 가을학기', t: 'a', g: '', g2: '', rc: 0, id: 'EDU4' },
-    { s: '2026-10-16', e: '2026-10-17', n: '무대예술워크숍', f: '무대예술 워크숍', t: 'a', g: '', g2: '', rc: 0, id: 'EDU5' }
+    // [260805 운영자] 교육 = 「화요살롱」(인문학 장르) 1건 · 6월 · 종료 · 수강생 160명(운영대장 교육 행으로 조인)
+    { s: '2026-06-09', e: '2026-06-30', n: '화요살롱', f: '화요살롱', t: 'a', g: '인문학', g2: '인문학', rc: 0, id: 'EDU1' }
   ]);
+
+// 운영대장 교육 행 — 끝난 교육의 정본(발권유료 = 수강 인원). 화요살롱 4회 × 40명 = 160명
+[9, 16, 23, 30].forEach(d => opsRows.push({
+  '상태': '', '사업구분': '교육', '티켓구분': '유료', '기본좌석': 50, '발권유료': 40,
+  '년도': 2026, '월': 6, '일': d, '공연구분': '기획', '장르1': '인문학', '공연명': '화요살롱', '수익성': ''
+}));
 
 const INIT = `(function(){
   window.__MOCK_OPS=${JSON.stringify({ rows: opsRows, headers: Object.keys(opsRows[0]) })};
@@ -164,6 +160,35 @@ async function main() {
     })()`);
     console.log(JSON.stringify(probe, null, 1));
     if (errs.length) console.log('PAGE ERRORS: ' + errs.slice(0, 6).join(' | '));
+
+    // ZONEPROBE — 구획 경계가 진행중 사업을 실제로 품는지(운영자 260805) 실측
+    const zone = await page.evaluate(`(()=>{
+      const out={};
+      try{
+        const Y=_bizmState.year, ax=_bizMonthAxis(Y,false);
+        const rows=_bizExhibRows(Y);
+        out.cut=Math.round(_bizZoneCut(rows,Y,ax.x0,ax.x1));
+        out.cutDate=new Date(Y,0,out.cut).toISOString().slice(0,10);
+        out.ex=rows.map(g=>({n:g.name.slice(0,18),st:g._st,col:g._col,
+          s:g.start?g.start.toISOString().slice(0,10):null,
+          inZone:g.start?(_bizXDay(g.start,Y)>=out.cut-0.5):null}));
+        const ed=_bizEduMonthRows(Y);
+        out.eduCut=Math.round(_bizZoneCut(ed,Y,ax.x0,ax.x1));
+        out.eduCutDate=new Date(Y,0,out.eduCut).toISOString().slice(0,10);
+        out.edu=ed.map(g=>({i:g._idx,n:g.name.slice(0,14),st:g._st,inZone:_bizXDay(g.start,Y)>=out.eduCut-0.5}));
+      }catch(e){ out.err=String(e); }
+      return out;
+    })()`);
+    console.log('ZONE ' + JSON.stringify(zone, null, 1));
+
+    // LABELPROBE — 막대 위 값 라벨 실크기·색(운영자 260805 「숫자를 써줘」)
+    const lab = await page.evaluate(`(()=>{
+      const get=(id)=>{const d=document.getElementById(id); if(!d)return null;
+        const t=[...d.querySelectorAll('.barlayer text, g.points text')];
+        return t.slice(0,4).map(n=>({txt:n.textContent, fs:getComputedStyle(n).fontSize, fill:n.getAttribute('fill')||getComputedStyle(n).fill}));};
+      return {perf:get('bizm-chart'), edu:get('bizm-edu-chart')};
+    })()`);
+    console.log('LABEL ' + JSON.stringify(lab));
 
     const box = await page.$('#biz-main');
     await box.screenshot({ path: OUT });
