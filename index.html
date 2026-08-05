@@ -974,6 +974,12 @@ button{font-family:inherit;cursor:pointer}
 .sp-chip.selected{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600}
 .sp-chip.selected.red{background:var(--danger-btn);border-color:var(--danger-btn)}
 .sp-chip.selected.red:hover{background:#c93f3e;border-color:#c93f3e}
+/* [260805-26 운영자 「모든 곳에 반영해」] 선택 상태 호버 되살리기 — 호버 감사 실측에서 **선택된 칩 8종이 전부
+   호버 변화 0**이었다(형제인 비선택 칩은 전부 살아 있음). 원인 = `.X.on/.active/.selected` 규칙이 `.X:hover`보다
+   뒤에 와서 호버가 바꾸던 색·테두리를 그대로 덮기 때문. **색을 새로 만들지 않고**, 이 레포의 「채워진 버튼」
+   호버 정본 `.m-btn:hover{transform:translateY(-1px)}`(L1589 · `.m-btn.save` 등 accent 채움 버튼이 쓰는 그 값)만
+   그대로 얹어 반응을 되살린다. 신규 색·신규 수치 0 · `.sp-chip.selected.red:hover`(위 줄) 전례와 같은 축. */
+.nb-chip.on:hover,.ana-chip.on:hover,.prog-tab.active:hover,.sp-chip.selected:hover,.sp-time-unset.active:hover,.fbar-seg button.on:hover{transform:translateY(-1px)}
 .sp-chip-divider{display:inline-block;width:1px;height:18px;background:#ddd;margin:0 4px;vertical-align:middle}
 .sp-other-input{padding:7px 12px;border-radius:14px;border:1.5px solid var(--accent);background:rgba(74,77,231,0.06);color:var(--accent);font-size:12.5px;font-weight:600;outline:none;font-family:inherit;width:130px;box-sizing:border-box;line-height:1}
 .sp-time-unset{padding:5px 10px;border-radius:8px;border:1px solid var(--glass-bd);background:var(--glass-surface);backdrop-filter:blur(8px);box-shadow:var(--glass-shadow);color:var(--text);font-size:11px;cursor:pointer;font-family:inherit;transition:all 0.15s;white-space:nowrap;flex-shrink:0;line-height:1}
@@ -1635,7 +1641,7 @@ table.promo-board-table th:last-child .col-resize-handle{display:none}
 .nb-row{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
 .nb-note{font-size:11.5px;color:#a4a4b0;line-height:1.7;margin-top:10px;background:#f7f7fb;border-radius:9px;padding:9px 12px}
 /* 블로그 도우미 — 타겟 칩·아바타·라벨우측 행 */
-.nb-chip{display:inline-flex;align-items:center;gap:4px;padding:5px 11px;border-radius:999px;border:1px solid var(--glass-bd);background:var(--glass-surface);backdrop-filter:blur(8px);box-shadow:var(--glass-shadow);color:var(--text);font-size:12px;cursor:pointer;font-family:inherit;line-height:1;user-select:none;transition:background .12s,border-color .12s,color .12s}
+.nb-chip{display:inline-flex;align-items:center;gap:4px;padding:5px 11px;border-radius:999px;border:1px solid var(--glass-bd);background:var(--glass-surface);backdrop-filter:blur(8px);box-shadow:var(--glass-shadow);color:var(--text);font-size:12px;cursor:pointer;font-family:inherit;line-height:1;user-select:none;transition:background .12s,border-color .12s,color .12s,transform .12s}
 .nb-chip:hover{border-color:#c5c5d6}
 .nb-chip.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
 .nb-chiprow{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-start}
@@ -1738,7 +1744,8 @@ table.promo-board-table th:last-child .col-resize-handle{display:none}
 .cm-empty:hover{color:rgba(255,255,255,.8)}
 .cm-stage.drop{outline:2px dashed var(--accent);outline-offset:-4px}
 .cm-tools{position:absolute;top:8px;right:8px;display:flex;gap:6px;z-index:3}
-.cm-tool{width:30px;height:30px;display:grid;place-items:center;padding:0;color:var(--accent);background:var(--surface-solid);border:0;border-radius:8px;cursor:pointer;transition:transform .12s}   /* 창 안 우상단 도구 = 에디터 .cpv-tool 배치 계승(불투명 플레이트 위 강조색 픽토) */
+.cm-tool{width:30px;height:30px;display:grid;place-items:center;padding:0;color:var(--accent);background:var(--surface-solid);border:0;border-radius:8px;cursor:pointer;transition:transform .12s}
+.cm-tool:hover{transform:translateY(-1px)}   /* [260805-26] 자기 transition에 transform을 선언해 놓고 :hover가 없어 반응 0이었다 — 정본 `.m-btn:hover` 값 계승 */   /* 창 안 우상단 도구 = 에디터 .cpv-tool 배치 계승(불투명 플레이트 위 강조색 픽토) */
 .cm-tool:active{transform:scale(.86)}
 .cm-tool:disabled{opacity:.45;cursor:default}
 .cm-tool svg{width:15px;height:15px;display:block}
@@ -4489,8 +4496,9 @@ function _mhead(title, sub, pr, extra){
 // 머리줄 위 조작 버튼 한 벌 — 밴드(강조색)에서도 읽히게 흰 알약 + 원래 의미색 잉크/테두리. 색은 넘겨받은 토큰 그대로(신규 0).
 function _mheadBtn(onclick, label, color, title){
   return '<button onclick="'+onclick+'"'+(title?' title="'+title+'"':'')
+    +' onmouseover="this.style.background=\'var(--accent-light)\'" onmouseout="this.style.background=\'var(--surface-solid)\'"'
     +' style="padding:6px 13px;border-radius:8px;border:1.5px solid '+color+';background:var(--surface-solid);color:'+color
-    +';font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap">'+label+'</button>';
+    +';font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;transition:background .15s">'+label+'</button>';
 }
 
 // === CSV 다운로드 헬퍼 ===
@@ -5458,7 +5466,7 @@ function openAnnualCalendar(){
   // [260731] 우상단 버튼 3종 = 같은 .modal-x 부품·같은 60px 피치(right 22/82/142 — 버튼 간 간격 28px 균등 실측).
   //   [260731 운영자 「원 4분할 ↔ 픽토 4분할 중심 일치」] 글리프 3종 모두 잉크중심을 원 중심에 맞춤 — measure_align 잉크프로브 실측 보정(원·배경은 무이동).
   //   실측(보정 전, 원 중심 기준 잉크Δ dx/dy): ↓ 0.01/+1.36 · ↗ +0.73/-1.67 · ✕ -0.43/-0.26 → 각 −Δ만큼 span translate. (구 ↓ -3px 단독보정은 1.64px 과보정이라 폐기)
-  el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeAnnualCalendar)"><div class="modal annual-modal" style="width:96vw;max-width:1400px;height:92vh;max-height:92vh;--mpad-y:0;--mpad-x:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:#FDFCFB"><button class="modal-x" onclick="_ycDownload()" title="HTML 파일로 저장" aria-label="HTML 파일로 저장" style="position:absolute;top:14px;right:142px;float:none;margin:0;z-index:30;background:rgba(255,255,255,0.95);color:var(--accent);box-shadow:0 2px 10px rgba(74,77,231,0.25)"><span style="display:block;transform:translate(-0.01px,-1.36px)">↓</span></button><button class="modal-x" onclick="window.open(location.pathname+\'?annual\',\'_blank\',\'noopener\')" title="새 창에서 열기" aria-label="새 창에서 열기" style="position:absolute;top:14px;right:82px;float:none;margin:0;z-index:30;background:rgba(255,255,255,0.95);color:var(--accent);box-shadow:0 2px 10px rgba(74,77,231,0.25)"><span style="display:block;transform:translate(-0.73px,1.67px)">↗</span></button><button class="modal-x" onclick="closeAnnualCalendar()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;float:none;margin:0;z-index:30"><span style="display:block;transform:translate(0.43px,0.26px)">✕</span></button>'+_mhead('연간 일정','한 해 공연·전시를 한 줄로 훑어봐요',174)+'<div id="yc-scroll" style="flex:1;overflow-y:auto;overscroll-behavior:contain;padding-right:2px"></div></div></div>';
+  el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeAnnualCalendar)"><div class="modal annual-modal" style="width:96vw;max-width:1400px;height:92vh;max-height:92vh;--mpad-y:0;--mpad-x:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:#FDFCFB"><button class="modal-x" onclick="_ycDownload()" title="HTML 파일로 저장" aria-label="HTML 파일로 저장" style="position:absolute;top:14px;right:142px;float:none;margin:0;z-index:30"><span style="display:block;transform:translate(-0.01px,-1.36px)">↓</span></button><button class="modal-x" onclick="window.open(location.pathname+\'?annual\',\'_blank\',\'noopener\')" title="새 창에서 열기" aria-label="새 창에서 열기" style="position:absolute;top:14px;right:82px;float:none;margin:0;z-index:30"><span style="display:block;transform:translate(-0.73px,1.67px)">↗</span></button><button class="modal-x" onclick="closeAnnualCalendar()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;float:none;margin:0;z-index:30"><span style="display:block;transform:translate(0.43px,0.26px)">✕</span></button>'+_mhead('연간 일정','한 해 공연·전시를 한 줄로 훑어봐요',174)+'<div id="yc-scroll" style="flex:1;overflow-y:auto;overscroll-behavior:contain;padding-right:2px"></div></div></div>';
   const wrap=document.getElementById('yc-wrap');
   const sc=document.getElementById('yc-scroll');
   if(wrap&&sc)sc.appendChild(wrap);
@@ -12664,7 +12672,7 @@ function openDidPartnersMap(){
   if(!document.getElementById('did-partners-style')){
     const ss = document.createElement('style');
     ss.id = 'did-partners-style';
-    ss.textContent = '.did-filter-btn{padding:6px 12px;border:1.5px solid #eee;background:#fff;color:#666;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;transition:all .15s}.did-filter-btn:hover{border-color:var(--accent);color:var(--accent)}.did-filter-btn.on{background:var(--accent);color:#fff;border-color:var(--accent)}.did-list-item{padding:10px 12px;border-radius:8px;cursor:pointer;margin-bottom:4px;background:#fff;transition:all .12s;border:1px solid transparent}.did-list-item:hover{background:var(--peach-light);border-color:var(--peach)}.did-list-item.on{background:var(--accent);color:#fff;border-color:var(--accent)}.did-list-item.on .did-li-addr{color:rgba(255,255,255,0.85)}.did-li-name{font-size:13px;font-weight:700;display:flex;align-items:center;gap:6px}.did-li-addr{font-size:11px;color:#888;margin-top:3px}.did-status-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;display:inline-block}.did-status-dot.done{background:#22a06b}.did-status-dot.pending{background:#FFC107}';
+    ss.textContent = '.did-filter-btn{padding:6px 12px;border:1.5px solid #eee;background:#fff;color:#666;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;transition:all .15s}.did-filter-btn:hover{border-color:var(--accent);color:var(--accent)}.did-filter-btn.on{background:var(--accent);color:#fff;border-color:var(--accent)}.did-list-item{padding:10px 12px;border-radius:8px;cursor:pointer;margin-bottom:4px;background:#fff;transition:all .12s;border:1px solid transparent}.did-list-item:hover{background:var(--peach-light);border-color:var(--peach)}.did-list-item.on{background:var(--accent);color:#fff;border-color:var(--accent)}.did-list-item.on .did-li-addr{color:rgba(255,255,255,0.85)}.did-li-name{font-size:13px;font-weight:700;display:flex;align-items:center;gap:6px}.did-li-addr{font-size:11px;color:#888;margin-top:3px}.did-status-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;display:inline-block}.did-status-dot.done{background:#22a06b}.did-status-dot.pending{background:#FFC107}.did-filter-btn.on:hover{transform:translateY(-1px)}';
     document.head.appendChild(ss);
   }
   _renderDidPartnersList();
@@ -14088,7 +14096,7 @@ function backToAdminMenu(){openAdminPanel();}
 
 // === Coming Soon 모달 (미구현 메뉴용) ===
 function showComingSoon(label){
-  const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeComingSoon)"><div class="modal" style="width:auto;min-width:320px;max-width:90vw;--mpad-y:36px;--mpad-x:40px;text-align:center">'+_mhead(label,'아직 준비 중이에요')+'<div style="font-size:56px;margin-bottom:12px;line-height:1">😉</div><button onclick="closeComingSoon()" style="padding:10px 32px;background:var(--accent);color:#fff;border:0;border-radius:10px;cursor:pointer;font-weight:600;font-size:13px">확인</button></div></div>';
+  const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeComingSoon)"><div class="modal" style="width:auto;min-width:320px;max-width:90vw;--mpad-y:36px;--mpad-x:40px;text-align:center">'+_mhead(label,'아직 준비 중이에요')+'<div style="font-size:56px;margin-bottom:12px;line-height:1">😉</div><button onclick="closeComingSoon()" class="btn btn--primary btn--md">확인</button></div></div>';
   let el=document.getElementById('coming-soon');
   if(!el){el=document.createElement('div');el.id='coming-soon';document.body.appendChild(el);}
   el.innerHTML=html;
