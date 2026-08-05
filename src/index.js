@@ -1099,7 +1099,7 @@ __name(jangdoRanges, "jangdoRanges");
 // 홈페이지 본문 인라인용 카드 이미지. 값 = docs/디자인기틀.md §1 팔레트 그대로(신규 색 0 · jangdo.html과 같은 매핑):
 //  #4A4DE7=--accent · #1A1A2E=--text · #888=--dim · #bbb=--muted · #fff=--surface-solid · #E24B4A=--danger-btn ·
 //  #E1DFEC=--neutral-d(게이지 트랙 = 물에 잠긴 시간).
-//  ⚠ [260805-3 운영자 「그린을 코발트로」] 「가능」 신호 = --green(#1A6B3C) → **--accent(#4A4DE7)**. 그래서 「지금」 마커는
+//  ⚠ [260805-39 운영자 「그린을 코발트로」] 「가능」 신호 = --green(#1A6B3C) → **--accent(#4A4DE7)**. 그래서 「지금」 마커는
 //    --text(#1A1A2E)로 뺐다 — 마커까지 코발트로 두면 코발트 막대 위에서 묻혀 안 보인다. 「불가」 빨강(--danger-btn)은 그대로.
 //  ⚠ `<img>`로 실리므로 SVG 내부 **스크립트**는 브라우저가 실행하지 않는다 = 상태 계산·조판 전부 서버(여기)에서 끝낸다.
 //    단 SMIL `<animate>`·CSS는 `<img>` 안에서도 재생된다(스크립트만 차단) → 게이지 채움·「지금」 마커 박동에 SMIL을 쓴다.
@@ -1109,7 +1109,7 @@ __name(jangdoRanges, "jangdoRanges");
 //  rgba()는 SVG 1.1 미지원 → fill-opacity로 표현(같은 토큰 alpha 변주 = 기틀 §3.5②).
 export function buildJangdoSvg(rows, nowKst, dayOffset) {
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
-  // [260805-3 개정 · 운영자 지시] 표기 = 한국어 「오전/오후 N시 M분」. 내부 계산은 그대로 분(minute) 24시간.
+  // [260805-39 개정 · 운영자 지시] 표기 = 한국어 「오전/오후 N시 M분」. 내부 계산은 그대로 분(minute) 24시간.
   //  ⚠ **정오는 「낮 12시」** — 운영자 지적(「pm 12:21 이라고 하면 헷갈려」)대로 12:21을 「오후 12시 21분」이라 쓰면
   //    점심때를 밤처럼 읽는다. 오전/오후/낮 세 갈래로 갈라 12시대만 「낮」을 쓴다.
   const half = (m) => { const h = Math.floor(m / 60) % 24; return h < 12 ? 0 : (h === 12 ? 1 : 2); };   // 0=오전 1=낮12시대 2=오후
@@ -1218,7 +1218,7 @@ export function buildJangdoSvg(rows, nowKst, dayOffset) {
             (rawT ? "#1A1A2E" : "#888") + '">' +
             esc(rawT || (isToday ? "오늘" : "이 날짜의") + " 입도 시간이 아직 등록되지 않았어요") + "</text>";
   }
-  // [260805-3] 「내일」 줄은 뺐다(운영자 지시) — 내일은 같은 카드의 ?d=1 판으로 내고 홈페이지에서 접었다 편다.
+  // [260805-39] 「내일」 줄은 뺐다(운영자 지시) — 내일은 같은 카드의 ?d=1 판으로 내고 홈페이지에서 접었다 편다.
   y += 26;
   body += '<text x="' + PAD + '" y="' + y + '" font-size="13" fill="#bbb">위 시간 외에는 진섬다리가 물에 잠겨 출입이 불가합니다. 아래 월별 캘린더도 함께 확인해 주세요.</text>';
 
