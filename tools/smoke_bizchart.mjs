@@ -20,6 +20,10 @@
  *      ⓑ 막대 꼭대기↔숫자 **세로 간격 Δ ≤ 1.5px**(서브픽셀 반올림 여유 · 기구가 둘이면 여기서 5px가 튄다)
  *      ⓒ 값이 있는 막대 중 **숫자 없는 것 0**(생략 금지 · 겹치면 가로로 비킨다) ⓓ 잉크 **1갈래**(흐린 검정 한 벌)
  *      ⓔ 숫자끼리 **포갬 0** — 「다 보이게」의 반대편 축(비키다 못해 겹쳐 버리면 그것도 실패다)
+ *   ⑥ 그라데이션이 **다시 그려도 살아 있다**(운영자 260813 「다시 그라데이션 수치가 빠졌거든?」) — 예상 칸·빈 자리는
+ *      투명으로 태어나 렌더 후 덧칠이 유일한 잉크라, Plotly가 한 번 다시 그리면 칠만 증발하고 **숫자는 예상 높이에 그대로
+ *      남는다**(= 운영자가 본 화면). `relayout(height)`·`Plots.resize` 뒤 칠해진 칸 수가 줄면 FAIL.
+ *      ⚠ defs의 `<linearGradient>` 개수로 재지 마라 — 지워지는 건 칠이라 defs는 그대로다(그걸 세면 통과해 버린다).
  *
  * fail-soft: playwright-core·chromium 미탐지, 렌더 실패 = SKIP(차단 안 함). 계약 위반만 rc=1.
  * 데이터 = 커밋된 스냅샷(docs/reports/260803_…플레이그라운드.html 안 DATA) — 실API·PII 미접촉.
@@ -111,7 +115,7 @@ const MEASURE = `(()=>{
     const b=p.getBoundingClientRect(); if(b.height<0.5)return;
     bars.push({ti,cx:rr(b.x+b.width/2-R.x),top:rr(b.y-R.y),bot:rr(b.y+b.height-R.y)});
   }));
-  const num=t=>/^[0-9,]+$/.test(t.textContent.trim());
+  const num=t=>/^[0-9,]+(\\([0-9,]+\\))?$/.test(t.textContent.trim());   // [260813] 예상 칸 라벨 = \`예측치(현재치)\` — 괄호꼴도 값 라벨이다(안 세면 ⓒ「숫자 없는 막대」가 오탐한다)
   const grab=(sel,src)=>[...d.querySelectorAll(sel)].filter(num).map(t=>{ const b=t.getBoundingClientRect();
     return {src,t:t.textContent.trim(),cx:rr(b.x+b.width/2-R.x),w:rr(b.width),bot:rr(b.y+b.height-R.y),fill:getComputedStyle(t).fill}; });
   const labs=grab('.barlayer text','trace').concat(grab('.annotation text','anno'));   // ⚠ Plotly 주석은 .infolayer > g.annotation
@@ -126,8 +130,17 @@ const MEASURE = `(()=>{
   const lab={n:labs.length, trace:labs.filter(L=>L.src==='trace').length, nolab, ovl,
     inks:[...new Set(labs.map(L=>L.fill))],
     gapSpread:gaps.length?rr(Math.max(...gaps)-Math.min(...gaps)):null};
-  return {barmode:fl.barmode, groups, dash, maint, want, cal, constMs, lab};
+  return {barmode:fl.barmode, groups, dash, maint, want, cal, constMs, lab, fade:FADE()};
 })()`;
+
+// ⑥ 그라데이션 「살아 있나」 — 예상 칸·빈 자리는 **투명으로 태어나** 렌더 후 덧칠이 유일한 잉크다(기틀 §2 #18).
+//   defs의 <linearGradient> 개수가 아니라 **실제로 그 url을 물고 있는 막대 수**를 센다 — 지워지는 건 칠(fill)이지 defs가 아니라서,
+//   defs만 세면 「그라데이션 5개 있음」이라고 답하면서 화면은 텅 빈 상태를 통과시킨다(260813 실측이 정확히 그 모습이었다).
+const FADE_FN = `window.FADE=function(){ const d=document.getElementById('bizm-chart');
+  const url=p=>((p.style&&p.style.fill)||'').indexOf('url(')>=0;
+  const gs=[...d.querySelectorAll('.barlayer > .trace')].map(g=>{const ps=[...g.querySelectorAll('.point > path')];
+    return {n:ps.length, painted:ps.filter(url).length};});
+  return {gs, defs:d.querySelectorAll('defs linearGradient[id^="bz"]').length}; };`;
 
 async function main() {
   const { chromium } = await import('playwright-core');
@@ -176,7 +189,18 @@ async function main() {
     await page.waitForTimeout(2200);
     await page.evaluate('try{_bizInlineRender()}catch(e){}');
     await page.waitForTimeout(2500);
+    await page.evaluate(FADE_FN);
     m = await page.evaluate(MEASURE);
+    // ⑥ 재렌더 뒤에도 살아 있나 — 앱이 실제로 부르는 두 축(fit의 `Plotly.relayout(height)` · 반응형 `Plots.resize`)을 그대로 태운다.
+    //   ⚠ 함수를 직접 부르지 않고 **Plotly 공개 API**로 재는 이유 = 지우는 주체가 Plotly의 재렌더 자체라, 어떤 앱 함수가
+    //     그걸 불렀는지와 무관하게 같은 결과가 나와야 한다(호출자를 쫓으면 새 호출자가 생길 때마다 게이트가 샌다).
+    await page.evaluate(`(()=>{const d=document.getElementById('bizm-chart');
+      return Plotly.relayout(d,{height:Math.round(d.getBoundingClientRect().height)-6});})()`);
+    await page.waitForTimeout(700);
+    m.fadeRelayout = await page.evaluate('FADE()');
+    await page.evaluate(`Plotly.Plots.resize(document.getElementById('bizm-chart'))`);
+    await page.waitForTimeout(700);
+    m.fadeResize = await page.evaluate('FADE()');
   } finally { await browser.close(); }
 
   if (!m || m.err) throw new Error(m ? m.err : '실측 실패');
@@ -229,6 +253,19 @@ async function main() {
     infos.push(`⑤ 값 라벨 ${L.n}개 · 전부 주석 · 간격 Δ${L.gapSpread}px · 숫자 없는 막대 ${L.nolab} · 잉크 ${(L.inks || []).length}갈래 · 포갬 ${(L.ovl || []).length}`);
   }
 
+  // ⑥ 그라데이션 = 다시 그려도 살아 있다(운영자 260813 「다시 그라데이션 수치가 빠졌거든?」)
+  const paintOf = f => (f && f.gs || []).reduce((a, g) => a + g.painted, 0);
+  const base = paintOf(m.fade);
+  if (!base) {
+    infos.push('⑥ 그라데이션 표본 0 — 이 데이터엔 칠할 페이드 칸이 없다(계약 검사 생략).');
+  } else {
+    [['relayout', m.fadeRelayout], ['resize', m.fadeResize]].forEach(([nm, f]) => {
+      const n = paintOf(f);
+      if (n < base) fails.push(`⑥ ${nm} 뒤 그라데이션이 ${base} → ${n}칸으로 지워졌다(defs는 ${(f || {}).defs}개 그대로) — 페이드는 렌더 후 덧칠이라 **다시 그릴 때마다 다시 칠해야** 한다(\`plotly_afterplot\` 훅 · 기틀 §2 #18).`);
+    });
+    infos.push(`⑥ 그라데이션 ${base}칸 · relayout 뒤 ${paintOf(m.fadeRelayout)} · resize 뒤 ${paintOf(m.fadeResize)}`);
+  }
+
   if (fails.length) {
     console.error(`[bizchart] FAIL — 자리 계약 위반 ${fails.length}건:`);
     fails.forEach(f => console.error('  · ' + f));
@@ -236,7 +273,7 @@ async function main() {
     return 1;
   }
   infos.forEach(i => console.log('  ℹ ' + i));
-  console.log('[bizchart] PASS — 연간 사업 차트 자리 계약 유지(barmode overlay · 겹칸 x정렬 · 파선 0 · 보수 라벨 중심 · 일정 동기 · 값 라벨 한 벌).');
+  console.log('[bizchart] PASS — 연간 사업 차트 자리 계약 유지(barmode overlay · 겹칸 x정렬 · 파선 0 · 보수 라벨 중심 · 일정 동기 · 값 라벨 한 벌 · 그라데이션 생존).');
   return 0;
 }
 
