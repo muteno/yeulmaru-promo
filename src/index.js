@@ -2430,6 +2430,223 @@ async function promoDetailGet(env, rawUrl, opt) {
 }
 __name(promoDetailGet, "promoDetailGet");
 
+// ══ AI 홍보 ▸ 자동 브리핑 (260806 운영자 「누르지 않더라도 자동으로 그날그날 추론」) ═══════════════
+// 매일 KST 08:30 틱(scheduled)에 Worker가 포트폴리오 팩을 서버측에서 조립해 promo-advise 레일로 디스패치한다
+// (모델 = opus 5 · effort high — 운영자 260806 지정 · 수동 추론은 종전 max 유지).
+// 왜 Worker 조립인가: 브라우저 없이 도는 자리이면서 Graph(시트)·KV(캐시·포인터)·GITHUB_PAT(커밋/디스패치)를
+// 이미 다 가진 유일한 곳 = 시크릿 신설 0 (Actions 러너엔 Graph 자격증명이 없어 조립 불가). 개인정보 경계 동일 —
+// 집계는 서버 안에서 끝나고 팩엔 숫자만 실린다(회원·예매 원본 행이 밖으로 안 나간다).
+// ⚠ 집계 = 「축약판」 — 화면 판매현황(_salesBuild)의 5신호 분모 사다리 전부가 아니라
+//   {회차 오픈좌석 합(전 회차 기재 시) → 마스터 총오픈석 → 기준석×회차 수} 3단까지만 온다.
+//   그 사실을 팩 note에 명시한다(없는 정밀을 가장하지 않는다 · 정밀 축 = 화면 수동 추론).
+function paSerialISO(v) {
+  if (v === "" || v == null) return "";
+  const n = Number(v);
+  if (!isFinite(n) || n < 20000 || n > 60000) { const s = String(v).trim(); return /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10) : ""; }
+  const d = new Date((n - 25569) * 86400 * 1000);   // 프런트 excelSerialToISO와 같은 식
+  return isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
+}
+__name(paSerialISO, "paSerialISO");
+function paKstToday() { return new Date(Date.now() + 9 * 3600 * 1e3).toISOString().slice(0, 10); }
+__name(paKstToday, "paKstToday");
+// 조인 정규화 — 프런트 _uName의 서버 사본(값이 어긋나면 조인이 「끊길」 뿐 오조인은 안 난다 = 안전측)
+function paNorm(s) { return String(s || "").replace(/\s*[-–—]\s*여수\s*$/, "").replace(/[〈〉<>「」『』\[\]（）()]/g, "").replace(/[_\-–—·.,'’"~!:：]/g, "").replace(/\s+/g, "").toLowerCase(); }
+__name(paNorm, "paNorm");
+function paNum(v) { if (v === null || v === undefined || v === "") return null; const n = parseFloat(String(v).replace(/[^0-9.\-]/g, "")); return isNaN(n) ? null : n; }
+__name(paNum, "paNum");
+function paBdDate(v) { const s = String(paNum(v) || ""); if (s.length !== 8) return null; const d = new Date(+s.slice(0, 4), +s.slice(4, 6) - 1, +s.slice(6, 8)); return isNaN(d.getTime()) ? null : d; }
+__name(paBdDate, "paBdDate");
+function paCurve14(pts) { if (pts.length <= 14) return pts; const st = Math.ceil(pts.length / 13), o = []; for (let i = 0; i < pts.length; i += st) o.push(pts[i]); if (o[o.length - 1] !== pts[pts.length - 1]) o.push(pts[pts.length - 1]); return o; }
+__name(paCurve14, "paCurve14");
+
+// GitHub 커밋·디스패치 한 벌 — 수동 라우트(/api/promo/upload·dispatch)와 자동 브리핑(크론)이 같은 함수를 쓴다.
+async function paGhCommitPack(cfg, id, packStr) {
+  const ghHdr = { "Authorization": "Bearer " + cfg.pat, "Accept": "application/vnd.github+json", "User-Agent": "yeulmaru-promo-worker", "Content-Type": "application/json" };
+  const b64 = kkoB64(new TextEncoder().encode(packStr).buffer);
+  const gr = await fetch(`https://api.github.com/repos/${cfg.repo}/contents/drafts/promo/${id}.in.json`, {
+    method: "PUT", headers: ghHdr,
+    body: JSON.stringify({ message: `chore(promo): ${id} 입력 팩 [skip ci]`, content: b64, branch: cfg.branch })
+  });
+  if (gr.ok) return { ok: true };
+  return { ok: false, err: { error: gr.status === 401 || gr.status === 403 ? "github_denied" : "upload_failed", status: gr.status, note: (await gr.text()).slice(0, 200) } };
+}
+__name(paGhCommitPack, "paGhCommitPack");
+async function paGhDispatchAdvise(cfg, d) {
+  const ghHdr = { "Authorization": "Bearer " + cfg.pat, "Accept": "application/vnd.github+json", "User-Agent": "yeulmaru-promo-worker", "Content-Type": "application/json" };
+  const gr = await fetch(`https://api.github.com/repos/${cfg.repo}/dispatches`, {
+    method: "POST", headers: ghHdr, body: JSON.stringify({ event_type: "promo-advise", client_payload: { d } })
+  });
+  if (gr.ok) return { ok: true };
+  return { ok: false, err: { error: gr.status === 401 || gr.status === 403 ? "github_denied" : "dispatch_failed", status: gr.status, note: (await gr.text()).slice(0, 200) } };
+}
+__name(paGhDispatchAdvise, "paGhDispatchAdvise");
+
+// 포트폴리오 팩 서버 조립 — 프런트 _paBuildPack(portfolio)과 같은 스키마(프롬프트 SSOT = promo-advise.yml 공유)
+async function paBuildServerPack(env, token) {
+  const today = paKstToday();
+  const typeLabel = (t) => (t === "전시" ? "전시" : (t === "예술교육" ? "교육" : "공연"));
+  const progs = (await getProgramsCached(token)).map((p) => ({
+    f: String(p["풀네임"] || "").trim(), n: String(p["줄임말"] || "").trim(),
+    t: String(p["콘텐츠구분"] || "").trim(), id: String(p["프로그램ID"] || p["공연ID"] || "").trim(),
+    s: paSerialISO(p["시작일"]), e: paSerialISO(p["종료일"]),
+    ss: paSerialISO(p["판매시작일"]), se: paSerialISO(p["판매종료일"]), ps: paSerialISO(p["홍보시작일"]),
+    g: String(p["구분"] || "").trim(), g2: String(p["장르"] || "").trim(), l: String(p["장소"] || "").trim()
+  })).filter((p) => p.f && !/^R\d{6}_/.test(p.id))                    // R접두 = 대관 편입 행 제외(프런트 PERFS_GC 분리와 같은 계약 = 기획만)
+    .filter((p) => { const end = p.se || p.e; return end && end >= today; })
+    .sort((a, b) => String(a.ss || a.s || "9999").localeCompare(String(b.ss || b.s || "9999")))
+    .slice(0, 20);
+  if (!progs.length) return { v: 1, today, scope: "portfolio", auto: 1, programs: [] };
+
+  let daily = null, master = null, rounds = null, exDaily = null, exMaster = null, recs = [];
+  try { daily = await getOpsCached(token, "운영_일일입력"); } catch (e) {}
+  try { master = await getOpsCached(token, "운영_공연마스터"); } catch (e) {}
+  try { rounds = await getOpsCached(token, "운영_회차상세"); } catch (e) {}
+  try { exDaily = await getOpsCached(token, "운영_전시일일"); } catch (e) {}
+  try { exMaster = await getOpsCached(token, "운영_전시마스터"); } catch (e) {}
+  try { recs = await handleGetRecords(token); } catch (e) {}
+
+  const dmap = {};
+  ((daily && daily.rows) || []).forEach((r) => { const k = paNorm(r["공연명"]); if (!k || paNum(r["기준일자"]) === null) return; (dmap[k] = dmap[k] || []).push(r); });
+  Object.keys(dmap).forEach((k) => dmap[k].sort((a, b) => (paNum(a["기준일자"]) || 0) - (paNum(b["기준일자"]) || 0)));
+  const mmap = {};
+  ((master && master.rows) || []).forEach((r) => { const k = paNorm(r["공연명"]); if (k && !mmap[k]) mmap[k] = r; });
+  const rmap = {};
+  ((rounds && rounds.rows) || []).forEach((r) => { const id = String(r["ID"] || r["공연ID"] || "").trim(); if (!id) return; const e = rmap[id] = rmap[id] || { n: 0, sum: 0, filled: 0 }; e.n++; const s = paNum(r["오픈좌석"]); if (s != null && s > 0) { e.sum += s; e.filled++; } });
+  const exd = {};
+  ((exDaily && exDaily.rows) || []).forEach((r) => { const id = String(r["전시ID"] || "").trim(); if (!id) return; (exd[id] = exd[id] || []).push(r); });
+  Object.keys(exd).forEach((k) => exd[k].sort((a, b) => String(a["기준일자"]).localeCompare(String(b["기준일자"]))));
+  const exm = {};
+  ((exMaster && exMaster.rows) || []).forEach((r) => { const k = paNorm(r["전시명"]); if (k && !exm[k]) exm[k] = r; });
+
+  const salesFor = (p) => {
+    if (p.t === "전시") {
+      const m = exm[paNorm(p.f)];
+      if (!m) return { none: true, why: "전시DB(운영_전시마스터) 미매칭" };
+      const ds = exd[String(m["전시ID"] || "").trim()] || [];
+      const occs = ds.map((r) => ({ d: String(paNum(r["기준일자"]) || ""), v: paNum(r["점유율"]) })).filter((x) => x.d.length === 8 && x.v != null);
+      return { status: String(m["상태"] || "").trim() || "?", occ: occs.length ? occs[occs.length - 1].v : (paNum(m["최종점유율"]) || null), curve: paCurve14(occs.map((x) => [x.d.slice(4, 6) + "-" + x.d.slice(6, 8), x.v])), note: "전시 = 점유율% 축(전시DB 자동집계)" };
+    }
+    if (p.t === "예술교육") return { none: true, why: "교육은 판매 원장 없음" };
+    const rows = dmap[paNorm(p.f)] || [];
+    const m = mmap[paNorm(p.f)];
+    if (!rows.length && !m) return { none: true, why: "일일입력·공연마스터 미등록(집계 전)" };
+    const seats = rows.length ? (paNum(rows[rows.length - 1]["합계좌석"]) || 0) : 0;
+    const base = (m && paNum(m["기준석"])) || 926;
+    const rc = Math.max((m && paNum(m["총회차"])) || 1, (m && rmap[String(m["ID"] || "").trim()] ? rmap[String(m["ID"] || "").trim()].n : 0), 1);
+    const rs = m ? rmap[String(m["ID"] || "").trim()] : null;
+    const rsOk = !!(rs && rs.n > 0 && rs.filled === rs.n && (!((m && paNum(m["총회차"])) > 1) || paNum(m["총회차"]) === rs.n));
+    const totalOpen = rsOk ? rs.sum : ((m && paNum(m["총오픈석"])) ? paNum(m["총오픈석"]) : base * rc);
+    let fcNum = 0, fcDen = 0;
+    for (let i = 1; i < rows.length; i++) {
+      const ex = String(rows[i]["예측제외"] || "").trim().toUpperCase();
+      if (ex && ex !== "N" && ex !== "FALSE" && ex !== "0") continue;
+      const a = paBdDate(rows[i - 1]["기준일자"]), b = paBdDate(rows[i]["기준일자"]);
+      fcNum += (paNum(rows[i]["합계좌석"]) || 0) - (paNum(rows[i - 1]["합계좌석"]) || 0);
+      fcDen += (a && b) ? Math.max(1, Math.round((b - a) / 86400000)) : 1;
+    }
+    const dday = p.s ? Math.round((new Date(p.s + "T00:00:00") - new Date(today + "T00:00:00")) / 86400000) : null;
+    return {
+      status: (p.ss && p.ss <= today && today <= (p.se || p.e || today)) ? "active" : (p.ss && p.ss > today ? "notyet" : "unknown"),
+      seats, totalOpen: totalOpen || null, occ: totalOpen ? Math.round(seats / totalOpen * 1000) / 10 : null,
+      target: (m && paNum(m["목표점유율"])) || null, dday,
+      fcRate: (rows.length >= 2 && fcDen > 0) ? Math.round(fcNum / fcDen * 10) / 10 : null,
+      last7: rows.slice(-7).map((r) => { const s = String(paNum(r["기준일자"]) || ""); return { d: s.length === 8 ? s.slice(4, 6) + "-" + s.slice(6, 8) : s, seat: paNum(r["합계좌석"]) || 0 }; }),
+      curve: paCurve14(rows.map((r) => { const s = String(paNum(r["기준일자"]) || ""); return [s.length === 8 ? s.slice(4, 6) + "-" + s.slice(6, 8) : s, paNum(r["합계좌석"]) || 0]; })),
+      note: "서버 축약 집계(분모 3단 사다리) — 정밀 축은 화면 판매현황"
+    };
+  };
+  const recDate = (r) => { const y = r["연도"] ? String(r["연도"]) : ""; const mm = String(r["월"] || "").padStart(2, "0"); const dd = String(r["일"] || "").padStart(2, "0"); const d = y + "-" + mm + "-" + dd; return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : ""; };
+  const slotRecs = recs.filter((r) => { const st = String(r["진행 상태"] || "").trim(); return st === "신청 중" || st === "예정" || st === "완료"; });
+  const promoFor = (p) => {
+    const hist = [], plan = []; let last = "";
+    slotRecs.forEach((r) => {
+      if (String(r["프로그램"] || "").trim() !== p.f) return;
+      const d = recDate(r); if (!d) return;
+      const it = { d, ch: String(r["플랫폼 1"] || "").trim().slice(0, 14), t: String(r["콘텐츠 제목"] || "").slice(0, 40), st: String(r["진행 상태"] || "").trim() };
+      if (d < today) { hist.push(it); if (d > last) last = d; } else plan.push(it);
+    });
+    hist.sort((a, b) => a.d < b.d ? -1 : 1); plan.sort((a, b) => a.d < b.d ? -1 : 1);
+    return { history: hist.slice(-40), planned: plan, lastDate: last };
+  };
+  const lim = new Date(today + "T00:00:00"); lim.setDate(lim.getDate() + 21);
+  const limK = lim.toISOString().slice(0, 10), calBy = {};
+  slotRecs.forEach((r) => {
+    const d = recDate(r); if (!d || d < today || d > limK) return;
+    const ch = String(r["플랫폼 1"] || "");
+    const isK = /카카오/.test(ch), isS = /문자|SMS|LMS/i.test(ch);
+    if (!isK && !isS) return;
+    const tag = (isS ? ("문자(" + String(r["플랫폼 2"] || "전체").trim() + ")") : "카카오") + " 「" + String(r["콘텐츠 제목"] || r["프로그램"] || "").slice(0, 24) + "」";
+    (calBy[d] = calBy[d] || []).push(tag);
+  });
+
+  // 고객 집계 — 예매집계(장르별 관람 1회+/2회+)와 회원(연령·시도 TOP). 원본 행은 여기서 소멸, 숫자만 팩에 남는다.
+  let audience = null;
+  try {
+    const agg = await getOpsCached(token, "운영_예매집계");
+    const genreTot = {}; let allRepeat = 0, n = 0;
+    ((agg && agg.rows) || []).forEach((r) => {
+      const k = String(r["회원키"] || "").trim(); if (!k) return; n++;
+      const per = {};
+      String(r["분포"] || "").split(";").forEach((pair) => {
+        const i = pair.lastIndexOf(":"); if (i < 1) return;
+        const key = pair.slice(0, i); const cnt = parseInt(pair.slice(i + 1), 10) || 0;
+        const gi = key.indexOf("|"); const g = gi >= 0 ? key.slice(gi + 1) : key;
+        per[g] = (per[g] || 0) + cnt;
+      });
+      let tot = 0;
+      for (const g in per) { tot += per[g]; const e = genreTot[g] = genreTot[g] || { any: 0, rep: 0 }; e.any++; if (per[g] >= 2) e.rep++; }
+      if (tot >= 2) allRepeat++;
+    });
+    if (n) {
+      audience = {
+        sampleNote: "예매기록에 회원이 확정 연결된 " + n.toLocaleString() + "명 표본(2020~2025) = 하한 · 전체 구매회원 환산 ×1.53 배까지만",
+        allRepeat, genres: Object.keys(genreTot).sort((a, b) => genreTot[b].any - genreTot[a].any).slice(0, 6).map((g) => ({ g, any: genreTot[g].any, rep: genreTot[g].rep }))
+      };
+      let mem = null;
+      try { const kv = await env.ops_kv.get("membersheet:v1"); if (kv) mem = JSON.parse(kv); } catch (e) {}
+      if (!mem) { mem = await memberSheetRead(token, "운영_회원"); try { await env.ops_kv.put("membersheet:v1", JSON.stringify(mem), { expirationTtl: 3600 }); } catch (e) {} }
+      if (mem && mem.rows) {
+        const age = {}, sido = {};
+        mem.rows.forEach((r) => { const a = String(r["연령대"] || "").trim(); if (a && a !== "미상") age[a] = (age[a] || 0) + 1; const s = String(r["주소1"] || "").trim(); if (s) sido[s] = (sido[s] || 0) + 1; });
+        audience.memberN = mem.rows.length;
+        audience.age = Object.keys(age).sort((a, b) => age[b] - age[a]).slice(0, 4).map((k) => [k, age[k]]);
+        audience.city = Object.keys(sido).sort((a, b) => sido[b] - sido[a]).slice(0, 5).map((k) => [k, sido[k]]);   // 시도 기준(프런트 시 단위 합산과 축이 다름 — basis에 그대로 표기)
+      }
+    }
+  } catch (e) { audience = null; }
+
+  return {
+    v: 1, today, scope: "portfolio", auto: 1,
+    programs: progs.map((p) => ({ name: p.f, short: p.n, type: typeLabel(p.t), genre: p.g2 || p.g, place: p.l, period: { show: [p.s, p.e], sale: [p.ss, p.se], promoStart: p.ps }, sales: salesFor(p), promo: promoFor(p) })),
+    calendar: { busy: Object.keys(calBy).sort().map((d) => ({ d, what: calBy[d].join(" · ") })) },
+    audience,
+    note: "서버 자동 조립(매일 KST 08:30) — 판매 분모는 축약 3단 사다리 · 고객 거주지는 시도 기준"
+  };
+}
+__name(paBuildServerPack, "paBuildServerPack");
+
+// 자동 브리핑 1회 실행 — 크론(매일 08:30 KST)과 /api/promo/auto-run(admin 수동)이 같은 함수를 쓴다.
+async function paAutoBrief(env, opt) {
+  opt = opt || {};
+  const cfg = ghBlogCfg(env);
+  if (!cfg.pat) return { ok: false, error: "no_github_pat" };
+  const ymd = paKstToday().replace(/-/g, "");
+  const guardKey = "pa:auto:day:" + ymd;
+  if (!opt.force) { try { if (await env.ops_kv.get(guardKey)) return { ok: false, skipped: "이미 오늘 브리핑을 만들었어요" }; } catch (e) {} }
+  const token = opt.token || await getToken(env);
+  const pack = await paBuildServerPack(env, token);
+  if (!pack.programs || !pack.programs.length) return { ok: false, skipped: "판매창이 살아있는 기획 프로그램이 없어요" };
+  const id = "pa" + Date.now() + "a";   // 13자리 ms + a(auto) — drafts_retain ID_RE 규약 유지
+  const up = await paGhCommitPack(cfg, id, JSON.stringify(pack));
+  if (!up.ok) return { ok: false, error: up.err && up.err.error, note: up.err && up.err.note };
+  const dp = await paGhDispatchAdvise(cfg, { id, effort: "high", auto: 1 });   // 자동 = opus 5 · high(운영자 260806)
+  if (!dp.ok) return { ok: false, error: dp.err && dp.err.error, note: dp.err && dp.err.note };
+  try { await env.ops_kv.put(guardKey, "1", { expirationTtl: 172800 }); } catch (e) {}
+  try { await env.ops_kv.put("pa:auto:latest", JSON.stringify({ id, ymd: paKstToday(), ts: Date.now() })); } catch (e) {}
+  return { ok: true, id };
+}
+__name(paAutoBrief, "paAutoBrief");
+
 // b = {url, program, title, date, extra, count}. 반환 = {items:[{tone,text,len}], ocrText, pageText, images, source, over}
 async function suggestKakaoLines(env, b) {
   const limit = 76;   // 앱 입력칸 maxlength와 같은 값 — 길이는 textarea와 같게 UTF-16 .length로 센다(이모지 = 2)
@@ -2531,6 +2748,11 @@ var index_default = {
         try { const t = await getToken(env); await gcalSyncPrograms(env, t, {}); }
         catch (e) { console.error("gcal sync (cron)", e); }
       })());
+    }
+    // [260806 운영자] AI 홍보 자동 브리핑 — 매일 KST 08:30 틱에 서버가 포트폴리오 팩을 조립해 추론 디스패치
+    //   (「누르지 않더라도 자동으로 그날그날」 · 총론 + 7/30/90일 시계 · opus 5 high). 중복 방어 = KV 일자 가드.
+    if (h === 8 && kst.getUTCMinutes() >= 30 && kst.getUTCMinutes() < 45) {
+      ctx.waitUntil(paAutoBrief(env, {}).then((r) => console.log("[promo-auto]", JSON.stringify(r))).catch((e) => console.error("promo auto brief", e)));
     }
   },
   async fetch(request, env, ctx) {   // [260801] ctx = /api/gcal의 stale-while-revalidate(응답 뒤 갱신)에 필요
@@ -3196,64 +3418,25 @@ var index_default = {
         }
       }
 
-      // === AI 홍보 ▸ 전략 추론 (260806 운영자) — 「AI 홍보」 대메뉴의 LLM 축(「점검」= 규칙 스캔의 짝) ===
-      // 엔진 = 블로그 초안과 같은 구독 OAuth 축(시크릿 신설 0): 데이터 팩 업로드(커밋) → repository_dispatch[promo-advise]
-      // → Actions(promo-advise.yml)의 claude -p(5계정 폴오버)가 조언 JSON을 drafts/<id>.json 으로 커밋 → 공용 /api/blog/draft 폴링.
-      // 팩 = 프론트가 조립한 「집계 수치만」(개인정보 행 0 — 회원·예매 원본은 여길 지나지 않는다). 입력 팩은 워크플로 끝에 즉시 삭제(hwp 관례).
+      // === AI 홍보 ▸ 전략 추론(총론 브리핑) — 「AI 홍보」 대메뉴의 LLM 축(「점검」= 규칙 스캔의 짝) ===
+      // [260806 운영자 확정] 자동 그날그날(크론 08:30 KST) · 총론 + 7/30/90일 · 개별 추론은 「일단 지금 필요없음」.
+      // 조립·디스패치는 전부 서버(paAutoBrief — 크론과 admin 수동 실행이 같은 함수 1벌). 결과는 공용 /api/blog/draft 폴링.
+      // ⚠ 구 개별 축 라우트(detail/upload/dispatch)는 호출자 소멸로 제거(260806 2차) — 복원 지점 = PR #716.
+      //   상세페이지 KV 캐시(promoDetailGet)는 카카오 76자(/api/content/kakao)가 계속 쓴다(제거 아님).
       if (url.pathname.startsWith("/api/promo/")) {
-        // ① 상세페이지 추출(캐시) — 프로그램 시트 K열 URL → 본문 텍스트 + 포스터·상세 이미지 OCR. KV 영구 캐시(fresh=1 = 재추출).
-        //    OCR 키가 하나도 없으면 ocrText만 비고 페이지 텍스트는 나간다(kkoOcrImages가 장별 실패를 삼킨다) = 조용한 강등, 죽지 않는다.
-        if (url.pathname === "/api/promo/detail" && request.method === "POST") {
-          let b = {};
-          try { b = await request.json(); } catch (e) {}
-          if (!String(b.url || "").trim()) return json({ error: "상세 링크가 필요해요 — 프로그램 관리에서 URL을 넣어주세요" }, env, 400);
-          try {
-            const d = await promoDetailGet(env, b.url, { fresh: b.fresh === 1 || b.fresh === "1" });
-            return json({ ok: true, cached: !!d.cached, ts: d.ts, url: d.url, text: d.text, ocrText: d.ocrText || "", images: d.images || [] }, env);
-          } catch (e) {
-            return json({ error: String((e && e.message) || e) }, env, 502);
-          }
+        // 최신 자동 브리핑 포인터 — 로그인 사용자 전체(브리핑 열람은 admin 전용이 아니다)
+        if (url.pathname === "/api/promo/auto-latest" && request.method === "GET") {
+          try { const v = await env.ops_kv.get("pa:auto:latest"); return json(v ? Object.assign({ ok: true }, JSON.parse(v)) : { ok: false }, env); }
+          catch (e) { return json({ ok: false }, env); }
         }
-        // ②③ 팩 업로드·디스패치 — 한글문서 편집(/api/hwp/*) 문법 미러(PAT는 서버 시크릿만 · 브라우저에 GitHub 토큰 0)
-        const cfg = ghBlogCfg(env);
-        if (!cfg.pat) return json({ error: "no_github_pat", note: "Worker에 GITHUB_PAT 시크릿 미설정" }, env, 503);
-        const ghHdr = { "Authorization": "Bearer " + cfg.pat, "Accept": "application/vnd.github+json", "User-Agent": "yeulmaru-promo-worker" };
-        const paId = (v) => String(v || "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 64);
-        if (url.pathname === "/api/promo/upload" && request.method === "POST") {
-          let b = {};
-          try { b = await request.json(); } catch (e) {}
-          const id = paId(b.id);
-          if (!id) return json({ error: "id required" }, env, 400);
-          if (!b.pack || typeof b.pack !== "object") return json({ error: "빈 데이터 팩이에요" }, env, 400);
-          const packStr = JSON.stringify(b.pack);
-          if (packStr.length > 400000) return json({ error: "데이터 팩이 너무 커요(400KB 이하)" }, env, 413);
-          const b64 = kkoB64(new TextEncoder().encode(packStr).buffer);   // UTF-8 → base64 (contents API 규격)
+        // 즉시 1회 실행(admin) — 오늘분 재생성 허용(force) · 크론과 같은 함수라 결과 형태도 동일
+        if (url.pathname === "/api/promo/auto-run" && request.method === "POST") {
           try {
-            const gr = await fetch(`https://api.github.com/repos/${cfg.repo}/contents/drafts/promo/${id}.in.json`, {
-              method: "PUT",
-              headers: { ...ghHdr, "Content-Type": "application/json" },
-              body: JSON.stringify({ message: `chore(promo): ${id} 입력 팩 [skip ci]`, content: b64, branch: cfg.branch })
-            });
-            if (!gr.ok) return json({ error: gr.status === 401 || gr.status === 403 ? "github_denied" : "upload_failed", status: gr.status, note: (await gr.text()).slice(0, 200) }, env, 502);
-            return json({ ok: true, id }, env);
-          } catch (e) {
-            return json({ error: String((e && e.message) || e) }, env, 502);
-          }
-        }
-        // 트리거 — 전용 event_type(promo-advise)이라 블로그·한글·오피스 큐(concurrency)에 안 막힌다.
-        if (url.pathname === "/api/promo/dispatch" && request.method === "POST") {
-          let b = {};
-          try { b = await request.json(); } catch (e) {}
-          const id = paId(b.id);
-          if (!id) return json({ error: "id required" }, env, 400);
-          try {
-            const gr = await fetch(`https://api.github.com/repos/${cfg.repo}/dispatches`, {
-              method: "POST",
-              headers: { ...ghHdr, "Content-Type": "application/json" },
-              body: JSON.stringify({ event_type: "promo-advise", client_payload: { d: { id } } })
-            });
-            if (gr.ok) return json({ ok: true, id }, env);
-            return json({ error: gr.status === 401 || gr.status === 403 ? "github_denied" : "dispatch_failed", status: gr.status, note: (await gr.text()).slice(0, 200) }, env, 502);
+            const tkn = await getToken(env);
+            const aAuth = await checkAdmin(request, env, tkn);
+            if (!aAuth.admin) return json({ error: "Admin only" }, env, 403);
+            const r = await paAutoBrief(env, { force: true, token: tkn });
+            return json(r, env, r.ok ? 200 : 500);
           } catch (e) {
             return json({ error: String((e && e.message) || e) }, env, 502);
           }

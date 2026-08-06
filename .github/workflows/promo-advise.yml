@@ -1,9 +1,12 @@
 name: AI 홍보 전략 추론 (claude -p · repository_dispatch)
 
-# 앱 「AI 홍보 ▸ 전략 추론」 탭이 데이터 팩(drafts/promo/<id>.in.json — Worker /api/promo/upload가 커밋)을 올리고
-# repository_dispatch[promo-advise]를 던지면, claude -p(구독 OAuth 5계정 폴오버 — nb-blog와 같은 엔진)가
-# 홍보 전략 조언 JSON을 만들어 drafts/<id>.json 으로 커밋한다. 앱은 공용 /api/blog/draft 폴링으로 받는다.
-# 팩 = 프론트가 조립한 집계 수치만(개인정보 행 0). 입력 팩은 이 런 끝에 즉시 삭제(hwp-edit 원본 삭제 관례 —
+# [260806 운영자 확정] AI 홍보 자동 브리핑 — Worker 크론(매일 KST 08:30 · paAutoBrief)이 포트폴리오 팩
+# (drafts/promo/<id>.in.json)을 서버에서 조립·커밋하고 repository_dispatch[promo-advise]를 던지면,
+# claude -p(구독 OAuth 5계정 폴오버 · opus 5 · effort = payload 지정, 자동 = high)가 **총론 + 7/30/90일 시계**
+# 조언 JSON을 drafts/<id>.json 으로 커밋한다. 앱 「AI 홍보 ▸ 전략 추론」 탭이 KV 포인터로 최신분을 자동 표시.
+# 폐루프 = 조언 회차 원장(data/promo_ai/advice_runs/YYYY-MM.jsonl · 기록자 = 이 워크플로 단독)을 다음 회차가
+# 입력으로 받아 「지난 제안이 실행됐나(홍보 이력 대조)·판매가 반응했나」까지 본다. Δ·트렌드는 원장에 안 굽는다(절대값만).
+# 팩 = 집계 수치만(개인정보 행 0). 입력 팩은 이 런 끝에 즉시 삭제(hwp-edit 원본 삭제 관례 —
 # 공개 레포라 남은 파일이 곧 노출 면적). 결과는 공용 회수기(shared/drafts_retain.mjs)가 접두별 최근 3개만 유지.
 
 on:
@@ -49,6 +52,9 @@ jobs:
             const id = String(p.id || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 64);
             if (!id) { core.setFailed('id 없음'); return; }
             const inPath = 'drafts/promo/' + id + '.in.json';
+            // 자동 브리핑(크론·auto-run) = opus 5 · effort high(운영자 260806 「opus 5.0 high」) — payload로 지정돼 온다.
+            const effort = (p.effort === 'high' || p.effort === 'max') ? p.effort : 'max';
+            const isAuto = !!p.auto;
 
             // ---- 커밋/푸시 공용 (결과 없이도 앱이 폴링 타임아웃 대신 에러를 받게, 실패도 항상 파일로 남긴다) ----
             const landOut = (out) => {
@@ -64,6 +70,8 @@ jobs:
                 execFileSync('git', ['config', 'user.name', 'github-actions[bot]']);
                 execFileSync('git', ['config', 'user.email', '41898282+github-actions[bot]@users.noreply.github.com']);
                 execFileSync('git', ['add', '-A', 'drafts']);
+                try { if (fs.existsSync('data/promo_ai')) execFileSync('git', ['add', '-A', 'data/promo_ai']); } catch (e) {}   // 조언 회차 원장 동반 커밋
+
                 execFileSync('git', ['commit', '-m', 'chore(promo): ' + id + ' 전략 추론 [skip ci]']);
                 let pushed = false;
                 for (let i = 0; i < 6; i++) {
@@ -81,6 +89,16 @@ jobs:
               await landOut({ id, mode: 'promoAdvice', ok: false, error: '입력 팩을 찾지 못했어요(업로드 직후 다시 시도해 주세요)', ts: new Date().toISOString() });
               return;
             }
+
+            // ---- 조언 회차 원장 읽기(폐루프 입력 · 운영자 260806 「아이디어도 배선」) — 최근 2회차 ----
+            const ledgerDir = 'data/promo_ai/advice_runs';
+            let prevRuns = [];
+            try {
+              const shards = fs.readdirSync(ledgerDir).filter((f) => /^\d{4}-\d{2}\.jsonl$/.test(f)).sort().slice(-2);
+              const lines = [];
+              for (const sh of shards) lines.push(...fs.readFileSync(path.join(ledgerDir, sh), 'utf8').split('\n').filter(Boolean));
+              prevRuns = lines.slice(-2).map((l) => { try { return JSON.parse(l); } catch (e) { return null; } }).filter(Boolean);
+            } catch (e) { /* 원장 없음 = 첫 회차 */ }
 
             // ---- 팩 → 프롬프트 섹션 (사람이 읽는 압축 서술 — 원시 JSON 덤프보다 모델이 정확히 읽는다) ----
             const S = (v, n) => String(v == null ? '' : v).slice(0, n || 400);
@@ -159,6 +177,16 @@ jobs:
               dataSec += '# 같은 기간 자체 기획 프로그램(홍보 슬롯·관객을 나눠 쓰는 상대)\n' + pack.context.competing.map((c) => '- ' + S(c.name, 80) + ' (' + S(c.type, 8) + (c.period ? ' · ' + S(c.period, 30) : '') + ')').join('\n') + '\n\n';
             }
             if (pack.ask) dataSec += '# 담당자 요청(우선 반영)\n' + S(pack.ask, 800) + '\n\n';
+            if (prevRuns.length) {
+              dataSec += '# 지난 조언 회차 (원장 — 이번 브리핑은 여기서 이어진다)\n';
+              prevRuns.forEach((rn) => {
+                dataSec += '## ' + S(rn.ts, 10) + (rn.auto ? ' 자동' : ' 수동') + ' 회차\n';
+                ((rn.key) || []).slice(0, 12).forEach((k) => { dataSec += '- 그때 ' + S(k.name, 60) + ': 누적 ' + (k.seats != null ? k.seats + '석' : '?') + (k.occ != null ? ' (' + k.occ + '%)' : '') + (k.fcRate != null ? ' · 페이스 ' + k.fcRate + '석/일' : '') + '\n'; });
+                if (rn.advice && rn.advice.verdict) dataSec += '- 그때 총론: ' + S(rn.advice.verdict, 500) + '\n';
+                ((rn.advice && rn.advice.actions) || []).forEach((a, i) => { dataSec += '- 그때 제안' + (i + 1) + (a.h ? '(' + a.h + ')' : '') + ': ' + [a.program, a.when, a.channel, a.message].filter(Boolean).map((x) => S(x, 60)).join(' · ') + '\n'; });
+                dataSec += '\n';
+              });
+            }
 
             // ---- 전략가 프롬프트 (이 파일이 프롬프트 SSOT — 산출이 이상하면 여기를 고친다) ----
             let prompt = '';
@@ -174,20 +202,24 @@ jobs:
             prompt += '5. 고객 수치는 「확정 연결된 표본의 하한」이다 — 동봉된 표본 설명을 그대로 존중하고 임의로 환산·과장하지 않는다.\n';
             prompt += '6. 메시지 각도는 상세페이지 재료(본문·OCR)에 실제로 있는 표현·사실에서만 뽑는다. 재료가 없으면 「재료 부족」이라고 쓰고 만들어내지 않는다.\n';
             prompt += '7. 과장 수식(「최고의」 「완벽한」)과 근거 없는 확신 금지. 판매 페이스 해석은 남은 기간·총오픈석 대비로 정량적으로.\n';
-            prompt += '8. 이미 예정된 홍보와 중복인 제안은 하지 않는다 — 예정분을 보완·조정하는 제안은 가능(그렇다고 명시).\n\n';
+            prompt += '8. 이미 예정된 홍보와 중복인 제안은 하지 않는다 — 예정분을 보완·조정하는 제안은 가능(그렇다고 명시).\n';
+            prompt += '9. 지난 조언 회차가 있으면: ⓐ 그 제안이 실행됐는지 「예정된 홍보·지난 홍보」에서 확인하고(제안한 날짜·채널이 이력에 있으면 실행된 것) ⓑ 실행분은 그때→지금 수치 변화로 효과를 총론에 한 줄 평가 ⓒ 미실행 제안을 그대로 반복하지 말 것 — 아직 유효하면 시기를 조정해 다시, 아니면 접은 이유를 말한다.\n\n';
             if (scope === 'portfolio') {
-              prompt += '# 이번 요청 = 전체 포트폴리오 진단\n';
-              prompt += '프로그램별 상세 조언이 아니라 「어디에 홍보 자원을 집중할지」의 배분 판단이 핵심입니다. ';
-              prompt += '판매 페이스가 남은 기간 대비 처지는 프로그램, 판매 임박(티켓오픈·마감)인 프로그램을 가려내세요.\n\n';
+              prompt += '# 이번 요청 = 전체 총론 (운영자: 「공연을 나눠서가 아니라 총론」)\n';
+              prompt += '프로그램별 소제목으로 나눠 쓰지 말고, 포트폴리오 전체를 한 번에 보고 「지금 홍보 운영이 어디에 서 있고, 무엇부터 움직여야 하는가」를 한 편의 브리핑으로 말하세요. ';
+              prompt += '다만 개별 액션이 특정 프로그램을 가리키면 program 필드에 이름을 명시하세요.\n';
+              prompt += '시계 3단(운영자: 「7일 30일 90일」) = d7 앞으로 7일(당장 실행 — 비어 있는 카카오·문자 슬롯을 날짜로 지정할 수준) · d30 앞으로 30일(한 달 캠페인 축 — 임박 오픈·마감·타겟 활용) · d90 앞으로 90일(분기 축 — 시즌 흐름·판매 시작 전 빌드업·재관람층 관계). 슬롯 상세 데이터는 3주 창까지만 제공되므로 그 밖은 주 단위로 제안하세요.\n\n';
             }
             prompt += dataSec;
             prompt += '# 출력 형식 (JSON 객체만 — 설명·머리말·코드블록 없이)\n';
             if (scope === 'portfolio') {
-              prompt += '{ "verdict": "전체 현황 진단 2~4문장",\n';
-              prompt += '  "priorities": [ { "name": "프로그램명", "level": "집중|유지|최소", "why": "근거 데이터" } ],\n';
-              prompt += '  "actions": [ { "program": "프로그램명", "when": "시기", "channel": "채널", "target": "타겟", "message": "메시지 각도 한 줄", "why": "근거가 된 데이터 수치·사실" } ],\n';
+              prompt += '{ "verdict": "총론 3~5문장 — 전체 판매·홍보 운영이 어디에 서 있고 무엇부터 움직일지(지난 회차가 있으면 그 평가 한 줄 포함)",\n';
+              prompt += '  "horizons": {\n';
+              prompt += '    "d7":  [ { "when": "구체 날짜", "channel": "채널", "target": "타겟", "message": "메시지 각도 한 줄", "why": "근거 데이터", "program": "해당 프로그램명(있을 때만)" } ],\n';
+              prompt += '    "d30": [ { "when": "주 단위 시기", "channel": "채널", "target": "타겟", "message": "메시지 각도", "why": "근거", "program": "해당 시" } ],\n';
+              prompt += '    "d90": [ { "when": "달·분기 시기", "channel": "채널", "target": "타겟", "message": "메시지 각도", "why": "근거", "program": "해당 시" } ] },\n';
               prompt += '  "avoid": [ "지금 하지 말아야 할 것" ], "gaps": [ "부족했던 데이터" ] }\n';
-              prompt += 'actions는 우선순위순 4~6개.\n';
+              prompt += 'd7 = 2~4개 · d30 = 2~4개 · d90 = 1~3개, 각 시계 안에서 우선순위순.\n';
             } else {
               prompt += '{ "verdict": "현황 진단 2~3문장 — 판매 페이스 vs 남은 기간, 핵심 문제/기회",\n';
               prompt += '  "actions": [ { "when": "실행 시기", "channel": "채널", "target": "타겟(근거 데이터 기반)", "message": "메시지 각도 한 줄", "why": "근거가 된 데이터 수치·사실" } ],\n';
@@ -199,7 +231,7 @@ jobs:
             // 1턴 순수 추론 — 데이터는 팩에 전부 있으므로 웹 도구 불필요(환각 표면 최소화).
             // cwd = 러너 임시폴더 — 레포 CLAUDE.md(앱 개발 지침)가 전략 컨텍스트에 섞이지 않게 격리(nb-blog 관례).
             const { runClaudeWithFailover } = require(path.join(process.env.GITHUB_WORKSPACE, 'shared/claude_failover.js'));
-            const _r = runClaudeWithFailover({ args: ['-p', '--model', 'claude-opus-5', '--effort', 'max', '--max-turns', '1'], input: prompt, cwd: process.env.RUNNER_TEMP || '/tmp' });
+            const _r = runClaudeWithFailover({ args: ['-p', '--model', 'claude-opus-5', '--effort', effort, '--max-turns', '1'], input: prompt, cwd: process.env.RUNNER_TEMP || '/tmp' });
             const raw = _r.ok ? String(_r.raw || '').trim() : '';
 
             // ---- 결과 파싱 — JSON 이탈 시에도 원문을 버리지 않는다(형식 실패 ≠ 내용 실패) ----
@@ -210,11 +242,28 @@ jobs:
               let t = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
               let adv = null;
               try { adv = JSON.parse(t); } catch (e) { const m = t.match(/\{[\s\S]*\}/); if (m) { try { adv = JSON.parse(m[0]); } catch (e2) {} } }
-              if (adv && typeof adv === 'object' && (adv.verdict || Array.isArray(adv.actions))) {
-                out = { id, mode: 'promoAdvice', ok: true, scope, advice: adv, ts: new Date().toISOString() };
+              // 근거 요약(basis) — 앱 [근거 데이터 보기]가 그대로 보여준다(AI가 무엇을 보고 판단했는지 투명성 축)
+              const keyOf = (g) => { const s = (g && g.sales) || {}; return { name: g && g.name, seats: s.seats != null ? s.seats : null, totalOpen: s.totalOpen != null ? s.totalOpen : null, occ: s.occ != null ? s.occ : null, dday: s.dday != null ? s.dday : null, fcRate: s.fcRate != null ? s.fcRate : null }; };
+              const keys = scope === 'program' ? (pack.program ? [keyOf(pack.program)] : []) : (pack.programs || []).map(keyOf);
+              const basisL = ['오늘 ' + S(pack.today, 10) + ' · ' + (scope === 'portfolio' ? '포트폴리오 ' + keys.length + '개(총론 · 7/30/90일)' : '프로그램 1개') + (isAuto ? ' · 자동(서버 조립 · 축약 집계)' : '') + ' · opus5/' + effort];
+              keys.slice(0, 12).forEach((k) => basisL.push('· ' + S(k.name, 60) + ' — 누적 ' + (k.seats != null ? (k.seats + (k.totalOpen ? '석/' + k.totalOpen + '석' : '석')) : '?') + (k.occ != null ? ' (' + k.occ + '%)' : '') + (k.dday != null ? ' · D-' + k.dday : '') + (k.fcRate != null ? ' · ' + k.fcRate + '석/일' : '')));
+              basisL.push('· 3주 내 카카오·문자 점유일 ' + (((pack.calendar || {}).busy) || []).length + '일' + (pack.audience ? ' · 고객 집계 동봉' : ' · 고객 집계 미포함'));
+              if (prevRuns.length) basisL.push('· 지난 조언 ' + prevRuns.length + '회차 반영(폐루프)');
+              const basis = basisL.join('\n');
+              if (adv && typeof adv === 'object' && (adv.verdict || adv.horizons || Array.isArray(adv.actions))) {
+                out = { id, mode: 'promoAdvice', ok: true, scope, auto: isAuto ? 1 : 0, advice: adv, basis, ts: new Date().toISOString() };
+                // ---- 조언 회차 원장 적재(기계산출물 · 기록자 = 이 워크플로 단독 · 월 샤딩 · Δ·트렌드는 안 굽는다 = nomute algo_runs 문법) ----
+                try {
+                  fs.mkdirSync(ledgerDir, { recursive: true });
+                  const flat = [];
+                  if (adv.horizons) ['d7', 'd30', 'd90'].forEach((hk) => ((adv.horizons[hk] || []).forEach((a) => flat.push({ h: hk, program: a.program, when: a.when, channel: a.channel, message: a.message }))));
+                  else (adv.actions || []).forEach((a) => flat.push({ program: a.program, when: a.when, channel: a.channel, message: a.message }));
+                  const shard = path.join(ledgerDir, new Date().toISOString().slice(0, 7) + '.jsonl');
+                  fs.appendFileSync(shard, JSON.stringify({ ts: new Date().toISOString(), id, scope, auto: isAuto ? 1 : 0, model: 'claude-opus-5', effort, key: keys, calBusy: (((pack.calendar || {}).busy) || []).length, advice: { verdict: adv.verdict, actions: flat.slice(0, 10), avoid: adv.avoid } }) + '\n');
+                } catch (e) { core.warning('[ledger] 적재 건너뜀: ' + e.message); }
               } else {
-                // 형식 이탈 — 조언 원문을 텍스트로 전달(프론트가 본문 그대로 렌더). 「완료」로 부르되 형식 실패를 명시.
-                out = { id, mode: 'promoAdvice', ok: true, scope, advice: null, text: raw.slice(0, 12000), formatMiss: true, ts: new Date().toISOString() };
+                // 형식 이탈 — 조언 원문을 텍스트로 전달(프론트가 본문 그대로 렌더). 「완료」로 부르되 형식 실패를 명시. 원장엔 안 굽는다(구조 없는 회차 = 다음 회차 입력으로 못 쓴다).
+                out = { id, mode: 'promoAdvice', ok: true, scope, auto: isAuto ? 1 : 0, advice: null, text: raw.slice(0, 12000), formatMiss: true, basis, ts: new Date().toISOString() };
               }
             }
             await landOut(out);
