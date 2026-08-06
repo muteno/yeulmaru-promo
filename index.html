@@ -27401,7 +27401,7 @@ var _memState=null,_memLoading=false,_memEscH=null,_memQT=null,_memEpoch=0;
 // [260731 운영자 "바로 안 열려요"] PII 재적재 가드를 「#member-lookup 존재」 → 「purge 에포크」로 교체.
 //   구 가드는 회원 조회 모달이 DOM에 없으면(= 회원 분포로 곧장 들어온 경우) 응답을 통째로 버려서 개요가 항상 "못 불러왔어요"였다.
 //   에포크 = _memPurge(로그아웃·유휴잠금)가 증가 → await 중 purge된 응답만 정확히 폐기(보안 의도 동일, 진입 경로 무관).
-function _memPurge(){_memState=null;_memLoading=false;_bkState=null;_bkLoading=false;_memEpoch++;_memAiHist=[];_memAiBusy=false;
+function _memPurge(){_memState=null;_memLoading=false;_bkState=null;_bkLoading=false;_bkP=null;_memEpoch++;_memAiHist=[];_memAiBusy=false;   /* [260806] _bkP(비행 중 적재)도 끊는다 — 안 끊으면 purge 뒤 첫 호출이 **폐기 예정인 옛 요청**에 합류해 빈손으로 돌아온다 */
   /* [260808] 고객 분류(AI 홍보 3탭) = 이름·휴대폰·관람이력이 한 표에 뜨는 자리라 같은 위생을 건다 —
      상태(_segLast·_bkAsk)와 **이미 그려진 DOM** 둘 다 지운다. 상태만 지우면 화면의 명단은 그대로 남는다. */
   _segLast=null;_bkAsk=null;var pc=document.getElementById('promo-check');if(pc)pc.innerHTML='';
@@ -27880,7 +27880,7 @@ function _memAiChip(sfx,t){var i=document.getElementById('mem-ai-q-'+sfx);if(i)i
 //   (docs/260804_booking_ingest.mjs 회원 조인 → docs/260804_booking_agg.mjs 회원키 집계).
 // 분포를 연도·장르 **교차표**로 들고 있는 이유 = 「23~24년에 클래식을 2회 이상」이 교차 조건이라
 //   연도별 합·장르별 합을 따로 저장하면 답이 안 나온다.
-var _bkState=null,_bkLoading=false;
+var _bkState=null,_bkLoading=false,_bkP=null;   // _bkP = 비행 중인 적재 요청 — 선로딩(_bkWarm)과 질문이 겹칠 때 **합류**할 손잡이
 
 // 확대 추정 배수 — 식별 표본을 「구매 경험 회원」으로 환산할 때 곱한다.
 //   ⚠ 표본 10,119명은 **구매했기 때문에 식별된** 사람들이라 무작위 표본이 아니다. 전체 회원 29,752로
@@ -27892,9 +27892,21 @@ var _BK_SCALE=1.53;
 var _BK_GENRES=['클래식','뮤지컬','발레/연극','어린이·가족','대중','국악','시즌','기타'];
 var _BK_ALIAS={'연극':'발레/연극','발레':'발레/연극','무용':'발레/연극','오페라':'클래식','가족':'어린이·가족','어린이':'어린이·가족','아동':'어린이·가족'};
 
-async function _bkLoad(force){
-  if(_bkLoading||(_bkState&&!force))return _bkState;
+// [260806 운영자 「AI 홍보 메뉴에선 확인되는데 예울이에선 안 나온다 — 붙여줘」] 적재 진입점 = **합류형**.
+//   구판은 `if(_bkLoading||(_bkState&&!force))return _bkState;` — 비행 중이면 아직 null인 _bkState를 그 자리에서
+//   돌려줬다. 그래서 `await _bkLoad(...)`로 기다린 줄 안 호출측이 **빈손으로** 다음 줄에 갔다(고객 분류 탭도 같은 구멍).
+//   실제로 걸리는 순서: 대시보드 「고객 분석」에 마우스가 스치면 _memWarm→_bkWarm이 먼저 적재를 띄운다 →
+//   화면이 열리고 사용자가 질문 → 그 적재가 아직 비행 중 → 구판은 즉시 null → 「아직 안 불러왔어요」.
+//   이제는 그 요청에 합류해 **끝날 때까지 같이 기다린다**(중복 fetch 0 = 단일 비행 규약은 그대로).
+function _bkLoad(force){
+  if(_bkP)return _bkP;                              // 비행 중 = 합류(force여도 두 벌 띄우지 않는다 — 구판과 같은 규약)
+  if(_bkState&&!force)return Promise.resolve(_bkState);
   _bkLoading=true;
+  var p=_bkFetch(force),done=function(){ if(_bkP===p){_bkP=null;_bkLoading=false;} };   // 항등 확인 = purge 뒤 새로 뜬 적재를 옛 비행이 끄지 않게
+  _bkP=p;p.then(done,done);
+  return p;
+}
+async function _bkFetch(force){
   var ep=_memEpoch;
   try{
     var d=await api('GET','/api/ops?sheet='+encodeURIComponent('예매집계')+(force?'&fresh=1':''));
@@ -27923,8 +27935,7 @@ async function _bkLoad(force){
     });
     _bkState={by:by,n:n,ym:ym,lo:lo,hi:hi,ts:Date.now()};
   }catch(e){ console.warn('[booking]',e); _bkState={by:{},n:0,err:String(e&&e.message||e)}; }
-  finally{ _bkLoading=false; }
-  return _bkState;
+  return _bkState;   // _bkLoading·_bkP 해제 = _bkLoad의 done(합류 손잡이와 한자리에서 푼다)
 }
 function _bkWarm(){ if(userRole!=='admin'||_bkState||_bkLoading)return; try{_bkLoad(false);}catch(e){} }
 
@@ -28005,9 +28016,16 @@ function _bkCount(rec,win,g){
   }
   return c;
 }
+// 「이 질문은 예매집계가 있어야 답이 나온다」의 단일 판정(SSOT) — _bkAnswer가 답할 질문인지, 그리고
+//   채팅(_memAiSend)이 **먼저 적재를 기다릴지**를 같은 한 벌로 정한다. 두 곳에 따로 적으면
+//   「기다리기는 했는데 답은 다른 경로로 새는」(또는 그 반대) 어긋남이 난다.
+function _bkIsQ(q){ return /관람|구매|샀|산\s|예매|티켓|본\s*사람|보신|재구매|단골|몇\s*번|회\s*이상|명단|리스트|추출|뽑아/.test(q); }
 // 예매 질의 답변 — 집계 밖 질문이면 null을 돌려 기존 흐름(지역·연령 규칙 → 예울이 AI)에 양보한다.
 function _bkAnswer(q){
-  if(!/관람|구매|샀|산\s|예매|티켓|본\s*사람|보신|재구매|단골|몇\s*번|회\s*이상|명단|리스트|추출|뽑아/.test(q))return null;
+  if(!_bkIsQ(q))return null;
+  // [260806] 여기 오면 적재는 이미 끝나 있다 — 냉시동 대기는 호출측(_memAiSend)이 AI 홍보 ▸ 고객 분류(_segRun)와
+  //   **같은 await _bkLoad**로 처리한다. 아래 줄은 그래도 남기는 안전판(예: 다른 진입로가 생겼을 때)이지
+  //   정상 경로가 아니다 — 구판은 이 자리가 정상 경로였고, 그래서 같은 시트인데 한쪽 화면만 답했다.
   if(!_bkState){ _bkWarm(); return '예매 이력을 아직 안 불러왔어요 — 잠시 뒤 다시 물어봐 주세요.'; }
   if(!_bkState.n)return '예매 이력이 비어 있어요'+(_bkState.err?' ('+_memEsc(_bkState.err)+')':'')+' — 운영_예매집계 시트를 확인해 주세요.';
   var win=_bkWin(q),g=_bkGenre(q),by=_bkState.by;
@@ -28314,7 +28332,7 @@ function _memAiCtx(idx){
   }
   return s;
 }
-function _memAiSend(sfx){
+async function _memAiSend(sfx){
   var inp=document.getElementById('mem-ai-q-'+sfx);if(!inp)return;
   var q=(inp.value||'').trim();if(!q||_memAiBusy)return;
   var idx=_memAiIdx();
@@ -28323,8 +28341,24 @@ function _memAiSend(sfx){
   if(_memAiHist.length>60)_memAiHist=_memAiHist.slice(-40);   // 세션 메모리 무한 누적 방지
   _memAiHist.push({u:q});
   var nowT=new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});   // [260804 2차] 말풍선 시각 = 레포 정본 포맷(「오전 11:24」) 그대로
+  // [260806 운영자 「예매데이터 — AI 홍보쪽 메뉴에서는 확인 가능한데, 여기랑 붙여줘」]
+  //   예매 질의인데 집계가 아직 없으면 **기다렸다가 답한다** = AI 홍보 ▸ 고객 분류(_segRun)와 똑같은 레일.
+  //   구판은 여기서 안 기다리고 _bkAnswer가 「아직 안 불러왔어요 — 잠시 뒤 다시」로 끝냈다(캡처 260806 오후 1:26).
+  //   같은 시트·같은 앱인데 한 화면만 답하는 상태였고, 재질문 안내도 소용없었다 — 뒤에서 덥히는 _bkWarm은
+  //   admin이 아니면 아예 안 돌아, 그 문장에서 영영 못 벗어나는 경로가 실재했다.
+  //   대기 줄은 답이 **그 자리에서 갈음**한다(줄이 둘로 늘지 않게 · 아래 AI 폴백의 pend와 같은 문법).
+  var warm=null;
+  if(_bkIsQ(q)&&!_bkState){
+    var ep=_memEpoch;
+    warm={b:_ldHtml(12)+'예매 이력을 불러오는 중이에요. 잠깐만요.',t:nowT};
+    _memAiHist.push(warm);_memAiBusy=true;_memAiPaintAll();
+    try{ await _bkLoad(false); }catch(e){ console.warn('[mem-ai booking]',e); }
+    _memAiBusy=false;
+    if(ep!==_memEpoch)return;   // 대기 중 로그아웃·유휴잠금 = PII를 그리지 않는다(_segRun·_bkFetch와 같은 규약)
+  }
   var ans=null;try{ans=_memAiLocal(q,idx);}catch(e){console.warn('[mem-ai local]',e);}
-  if(ans){_memAiHist.push({b:ans,t:nowT});_memAiPaintAll();return;}
+  if(ans){if(warm)warm.b=ans;else _memAiHist.push({b:ans,t:nowT});_memAiPaintAll();return;}
+  if(warm){var wi=_memAiHist.indexOf(warm);if(wi>=0)_memAiHist.splice(wi,1);}   // 예매어는 있었지만 집계 밖 질문 = 아래 AI 경로가 자기 대기 줄을 세운다
   var deepQ=_yeulAiDeep(q);   // [260803 운영자] 복잡 질문 = opus 딥 라우팅 — 「기다려 달라」를 츤 결로 먼저(v3 「음 귀찮은 걸 물어보시네요?」 급)
   var wait=deepQ?'음, 귀찮은 걸 물어보시네요? …그래도 제대로 생각해드릴게요. 조금 기다리세요.':'…생각 중이에요. 잠깐만요.';
   var pend={b:_ldHtml(12)+wait,t:nowT};   // 집계 밖 질문 = 예울이 AI(깃 Actions claude — _yeulAiAsk 공용 브레인)
