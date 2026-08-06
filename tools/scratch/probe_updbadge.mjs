@@ -88,14 +88,32 @@ async function main() {
     console.log('CAL ' + JSON.stringify(await page.evaluate(CAL), null, 1));
     // 감지 배선 단위 확인 — ETag가 바뀌면 빨강이 뜨는가(첫 샘플 baseline → 바뀐 값 주입)
     console.log('DETECT ' + JSON.stringify(await page.evaluate(`(async()=>{
-      _hideUpdateBadge(); _designSeenTag=null;
+      _hideUpdateBadge(); _designSeenTag=null; _designPending=false;
+      var m0=document.getElementById('modal'); if(m0)m0.classList.add('show');   // 자동 리로드를 막고 감지만 본다
       await _checkForDesign();                       // 첫 샘플 = baseline
       const base=_designSeenTag;
       _designSeenTag='"changed-deploy"';             // 배포가 바뀐 상황 재현
       await _checkForDesign();
       const el=document.getElementById('update-badge');
-      return {baseline:base, 배지:_updateBadgeShown, 클래스:el?el.className:null};
+      if(m0)m0.classList.remove('show');
+      return {baseline:base, 배지:_updateBadgeShown, 대기:_designPending, 클래스:el?el.className:null};
     })()`)));
+    // [260806-14] 자동 반영 단위 — ① 모달이 떠 있으면 리로드 대신 배지+대기 ② 안전해지면 스스로 리로드
+    let navs = 0; page.on('framenavigated', f => { if (f === page.mainFrame()) navs++; });
+    console.log('AUTO1 ' + JSON.stringify(await page.evaluate(`(async()=>{
+      _hideUpdateBadge(); _designPending=false; try{ sessionStorage.removeItem('_ymDesignReload'); }catch(e){}
+      var m=document.getElementById('modal'); if(m)m.classList.add('show');       // 창이 떠 있는 상황 재현
+      _designSeenTag='"old"';
+      window.fetch=function(){ return Promise.resolve({headers:{get:function(k){ return k==='etag'?'"new-deploy"':null; }}}); };
+      await _checkForDesign();
+      var el=document.getElementById('update-badge');
+      return {안전:_designSafeNow(), 대기:_designPending, 배지:_updateBadgeShown, 클래스:el?el.className:null};
+    })()`)));
+    const navBefore = navs;
+    await page.evaluate(`(()=>{ var m=document.getElementById('modal'); if(m)m.classList.remove('show'); })()`);
+    await page.evaluate(`_checkForDesign()`).catch(() => {});   // 안전해짐 → 스스로 리로드(문서 이동)
+    await page.waitForTimeout(1200);
+    console.log('AUTO2 ' + JSON.stringify({ 리로드발생: navs > navBefore }));
     if (errs.length) console.log('PAGE ERRORS: ' + errs.slice(0, 4).join(' | '));
     console.log('shots → ' + OUT + '_{data,design,full}.png');
   } finally { await browser.close(); }
