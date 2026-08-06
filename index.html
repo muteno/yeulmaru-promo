@@ -2351,7 +2351,7 @@ table.promo-board-table thead th:last-child{border-top-right-radius:11px}
      안에서 가로 스크롤한다(정본 = _yrmTable의 표 감싸개). 실측: 1220~1920 전 구간 바 스윙 0.0px · 문서 가로 넘침도 0.
    biz(대시보드) 모드로만 한정 = 캘린더 모드(레일 숨김·전체 폭)는 종전 거동 그대로(회귀 0). */
 #app.biz-mode #main-area{min-width:0}
-@media(max-width:1200px){#sales-rail{display:none}}
+@media(max-width:1364px){#sales-rail{display:none}}   /* [260807-10] 2열 하한 `_BIZ_WIDE_MIN`(1365)의 CSS 짝 — JS는 「≥1365 = 2열」, 여기는 「≤1364 = 레일 숨김」. 둘이 어긋나면 레일만 뜬 반쪽 레이아웃이 된다(게이트 tools/check_wide_threshold.py가 대조) */
 /* [260731 운영자] 캘린더 모드 = 판매 레일 없음 — 「캘린더 누를 때 사업 판매현황이 있을 필요가 없다」.
    260708 판매 레일 도입(PR 139) 이전 화면 복원: 캘린더가 전체 폭을 쓰고, 날짜 클릭 시 우측 360px 사이드바(#panel)가 살아나며 캘린더가 그만큼 밀린다(_panelRailReflow).
    레일 마크업·데이터·렌더러(.srail/#srail-uha/#rail-yrm)는 전부 보존 — biz(대시보드) 모드에선 그대로 노출되고, 판매현황 전체 보드는 nav 「판매 현황」이 담당. */
@@ -2738,6 +2738,16 @@ html::-webkit-scrollbar-thumb{background:rgba(0,0,0,.15)}
        본문 _bizZoomApply·리사이즈·모드전환이 같은 함수를 재사용한다(값 이원화 금지). script 요소는 UA display:none = 부모 flex 항목 아님.
        _mainView는 아직 선언 전(뒤 스크립트 블록) → sessionStorage 원본(mvView)에서 같은 규칙으로 읽는다. */
     var _BIZ_ZOOM_STEPS=[.25,.33,.5,.67,.75,.8,.9,1,1.1,1.25,1.5,1.75,2,2.5,3,4,5];   // 크로미움 페이지 줌 단계
+    /* [260807-10 운영자 승인 「다 배선」] 대시보드 **2열 하한** = 이 한 곳이 정본(구 1200 · 8곳에 흩어져 있던 매직넘버).
+       왜 올렸나: 2열은 화면을 반으로 갈라 쓰는데 그 반쪽 칸이 「판매현황 상세」 표(바닥폭 612.5px)보다 좁으면
+       맨 오른쪽 매출 열이 카드 밖으로 밀려 통째로 사라진다 — 게다가 `.ry-grp-bd::-webkit-scrollbar{height:0}`(L2341 아래)라
+       넘쳤다는 신호도 손잡이도 없다. 실측(무패치 스윕 · tools/scratch/probe_wide_threshold.mjs):
+         1201 넘침 82px · 1280 43 · 1340 13 · 1360 3 · 1364 1 · **1365 = 0**(매출 열 복귀) → 하한 = 1365.
+       ⚠ 리포트 1판의 「1281」은 **그 뒤 260807-7 열 간격 확대(_colGap 12→22 · 5열)로 표가 42px 넓어지기 전** 수치다.
+         승인된 건 「잘림이 없어지는 폭까지 올린다」이므로 낡은 숫자가 아니라 다시 잰 값을 쓴다.
+       여기(첫 페인트 전 블록)에 두는 이유 = 바로 아래 _bizZoomTarget이 본문 스크립트보다 먼저 실행된다(값 이원화 금지).
+       짝 = 레일 숨김 미디어쿼리(L2341 · max-width 1364px = 이 수의 여집합) — 게이트 tools/check_wide_threshold.py가 둘을 대조한다. */
+    var _BIZ_WIDE_MIN=1365;
     /* [260801] 브라우저 줌 배율 추정 — outerWidth는 페이지 줌에 영향받지 않는 창 폭이라 outerWidth/innerWidth ≈ 줌 배율.
        창 테두리·스크롤바 오차(~1%)는 실제 줌 단계로 스냅해 흡수하고, 어느 단계와도 6% 밖이면 보정을 포기(=1)해 오작동보다 무보정을 택한다. */
     function _bizBrowserZoom(){
@@ -2747,11 +2757,11 @@ html::-webkit-scrollbar-thumb{background:rgba(0,0,0,.15)}
       for(var i=0;i<_BIZ_ZOOM_STEPS.length;i++){ var s=_BIZ_ZOOM_STEPS[i], d=Math.abs(raw-s)/s; if(d<bd){bd=d;best=s;} }
       return bd<=.06?best:1;
     }
-    /* 목표 줌 = 브라우저 줌 배율만 상쇄(100% = 1 → 확대 없음·종전 유동 레이아웃) · 캘린더 모드·좁은 폭(≤1200)은 해제 */
+    /* 목표 줌 = 브라우저 줌 배율만 상쇄(100% = 1 → 확대 없음·종전 유동 레이아웃) · 캘린더 모드·좁은 폭(2열 하한 미만)은 해제 */
     function _bizZoomTarget(){
       var v='biz';
       try{ v=(typeof _mainView!=='undefined'&&_mainView)?_mainView:(sessionStorage.getItem('mvView')==='cal'?'cal':'biz'); }catch(_e){}
-      if(v!=='biz'||window.innerWidth<=1200)return 1;
+      if(v!=='biz'||window.innerWidth<_BIZ_WIDE_MIN)return 1;
       var z=Math.max(.75,Math.min(2.2,1/_bizBrowserZoom()));   // 클램프 = 과축소 가독 하한 .75 / 상한 2.2
       z=Math.round(z*1000)/1000;
       return Math.abs(z-1)<.003?1:z;
@@ -5984,8 +5994,8 @@ function _srailEls(){ return { body:document.getElementById('srail-body'), cnt:d
 // [260725 운영자] "100% 화면 기준으로 스크롤 안 내려도 다 보이게" — 대시보드 전체가 뷰포트를 넘으면 그만큼 차트를 줄인다.
 // 줄이는 대상 = 「연도별 관람·수강 추이」 차트 하나뿐(KPI·실적표·목록은 값이라 못 줄인다). 최소 240px까지만 줄이고 그 아래로는 안 내린다.
 // 넘치는 양 = documentElement.scrollHeight - innerHeight (QA 배너·챗봇 FAB는 position:fixed라 안 잡힌다). 좌를 줄이면 우가 따라오므로 2패스면 수렴한다.
-// 레일이 숨는 좁은 폭(≤1200)에선 세로로 쌓이는 구조라 미적용(그 경우엔 스크롤이 정상).
-// [260731 운영자 "줌 배율 따라 레이아웃 규격이 따로 논다"] 대시보드 규격 고정 — biz 모드(레일 표시 폭 >1200)에서 #body-wrap에
+// 레일이 숨는 좁은 폭(2열 하한 `_BIZ_WIDE_MIN` 미만)에선 세로로 쌓이는 구조라 미적용(그 경우엔 스크롤이 정상).
+// [260731 운영자 "줌 배율 따라 레이아웃 규격이 따로 논다"] 대시보드 규격 고정 — biz 모드(레일 표시 폭 = 2열 하한 이상)에서 #body-wrap에
 //   CSS zoom = 뷰포트폭/1920 을 걸어 항상 1920 기준 디자인 공간에서 레이아웃한다. 100%(FHD) = z1 → 종전과 완전 동일(무변),
 //   브라우저 80% 축소 = z1.25 → 물리 렌더가 100% 화면과 동일 구도(차트 상한 걸림·하단 여백·"확대하면 오히려 작아짐" 역전 해소).
 //   좌표계 실측(Chrome 141, probe): gBCR=시각좌표(×z) · offsetWidth/clientWidth/scrollTop/computedStyle=레이아웃 단위(비스케일) ·
@@ -6260,7 +6270,7 @@ function _srailAlignTop(){
           _rl.style.height=_nw+'px'; _rl.style.maxHeight=_nw+'px';
         }
       } else if(_rl&&_live){
-        // 이젤 꺼짐(좁은 화면 폭 1200 초과~낮은 높이 등) = 박스가 자연 높이 → 종전(260731) 좌 앵커 공식 그대로(회귀 0)
+        // 이젤 꺼짐(2열 하한 미만~낮은 높이 등) = 박스가 자연 높이 → 종전(260731) 좌 앵커 공식 그대로(회귀 0)
         try{ _rlCard.style.marginBottom=''; }catch(_em2){}   // [260802f] 이젤 전용 여백 0 규약 해제(자연 높이 모드는 정본 14 그대로)
         var _ctEl=_rlCard.querySelector('.ct'), _ctH=_ctEl?_ctEl.getBoundingClientRect().height:0;
         var _tgt=_boxed?_rbox:_rlCard;   // 하단선을 좌 앵커에 붙일 우측 대상
@@ -6412,9 +6422,9 @@ function _srailInit(force,_fetchGate,allowNarrow){
   if(typeof _salesState==='undefined'||!_salesState)return;   // 부트 파싱중 방어(분신술 4호 HIGH — initApp의 setTimeout과 이중 안전)
   var els=_srailEls(); if(!els.body)return;
   _srailArmResize();
-  // 레일이 숨는 폭(≤1200px)에선 데이터도 안 당긴다(모바일 낭비 방지, 분신술 1호 LOW) — 넓어지면 resize에서 1회 재시도
+  // 레일이 숨는 폭(2열 하한 `_BIZ_WIDE_MIN` 미만)에선 데이터도 안 당긴다(모바일 낭비 방지, 분신술 1호 LOW) — 넓어지면 resize에서 1회 재시도
   // [260731 4차] 예외 = allowNarrow(책 2면 「판매 실적」이 좁은 화면에서 좌 보드로 나올 때) — 6시트 파이프라인은 이 한 곳만 쓴다(제2 fetch 경로 금지 · 페이블 검수 4)
-  if(window.innerWidth<=1200&&!allowNarrow)return;
+  if(!_bizBookWide()&&!allowNarrow)return;
   _srailAlignTop();
   // 전시 캐시 = 분석 보드와 공유(_anaState._exDaily/_exMaster) — 레일이 선채우면 분석 보드 전시 탭도 즉시 열림
   _anaState=_anaState||{screen:1,cat:'공연',genre:'전체',year:null,drillName:null,xstep:3,cmp:{tray:[],bars:false}};
@@ -6486,22 +6496,22 @@ function _srailArmResize(){
     _srailAlignTop();
     try{_bizFitViewport();}catch(_e){}   // [260725 운영자] 창 크기 바뀌면 한 화면에 다시 맞춘다 · [260802e] 이젤(박스 높이) 재고정 **후** 맞춰야 새 박스 기준(순서 이동) + 시즌 차트도 동축
     try{_bizFitSeason();}catch(_e){}
-    if(window.innerWidth<=1200)_srailCarStop();   // 레일 CSS 숨김되면 캐러셀 전역 리스너·타이머 철거(감사2 LOW — 숨은 레일 유휴 리스너 잔존 방지)
-    if(window.innerWidth>1200&&_salesState&&!_salesState.daily&&!_srailBusy)_srailInit();
-    // [260731 4차] 1200 경계 넘나듦 = 책 판형 전환(펼침 2면 ↔ 한 면) — 좌·우 열 재렌더(면 매핑·점줄 개수·바 중앙이 판형에 묶여 있다)
+    if(!_bizBookWide())_srailCarStop();   // 레일 CSS 숨김되면 캐러셀 전역 리스너·타이머 철거(감사2 LOW — 숨은 레일 유휴 리스너 잔존 방지)
+    if(_bizBookWide()&&_salesState&&!_salesState.daily&&!_srailBusy)_srailInit();
+    // [260731 4차] 2열 하한 경계 넘나듦 = 책 판형 전환(펼침 2면 ↔ 한 면) — 좌·우 열 재렌더(면 매핑·점줄 개수·바 중앙이 판형에 묶여 있다)
     try{ var _bw=_bizBookWide(); if(window._bookWideLast===undefined)window._bookWideLast=_bw; if(_bw!==window._bookWideLast){ window._bookWideLast=_bw; if(typeof _mainView!=='undefined'&&_mainView==='biz')_bizBookRender(); } }catch(_e){}
-    if(typeof panelOpen!=='undefined'&&panelOpen)_panelRailReflow();   // 1200px 경계 리사이즈 시 열린 패널 폭 stale 방지(분신술 1호 LOW)
+    if(typeof panelOpen!=='undefined'&&panelOpen)_panelRailReflow();   // 2열 하한 경계 리사이즈 시 열린 패널 폭 stale 방지(분신술 1호 LOW)
     // [260710] 차트 = 실측 폭 렌더 → 폭이 24px 이상 변하면 디바운스 재렌더(글자 왜곡 없는 1:1 유지)
     clearTimeout(window._srailRzT);
     window._srailRzT=setTimeout(function(){
       var b=_srailEls().body; if(!b)return;
-      if(window.innerWidth>1200&&_salesState&&_salesState.daily&&Math.abs((_srailChartW||0)-((b.clientWidth||0)-56))>24)_srailRender();
+      if(_bizBookWide()&&_salesState&&_salesState.daily&&Math.abs((_srailChartW||0)-((b.clientWidth||0)-56))>24)_srailRender();
     },200);
   });
 }
 // 날짜 패널 위치 계산 — resize·모드전환 공용.
 //  · 레일이 보일 때(biz 모드) = 기존대로 캘린더 위 오버레이. 패널 오른쪽 끝을 레일 왼쪽 경계에 맞추고 main-area는 안 밀림(운영자 260708).
-//  · 레일이 숨을 때(캘린더 모드·≤1200) = 구(260708 이전) 우측 사이드바 복원. 패널이 우측 끝에 서고 캘린더(main-area)가 360px 밀린다(운영자 260731).
+//  · 레일이 숨을 때(캘린더 모드 · 2열 하한 미만) = 구(260708 이전) 우측 사이드바 복원. 패널이 우측 끝에 서고 캘린더(main-area)가 360px 밀린다(운영자 260731).
 //    ≤768 모바일은 CSS가 하단시트 + main-area margin-right:0 !important로 승 — 여기 값은 무시된다.
 function _panelRailReflow(){
   var p=document.getElementById('panel'); if(!p)return;
@@ -6610,7 +6620,7 @@ function _mvApply(noRail){
   if(noRail)return;   // initApp 부트 = 레일 fetch는 기존 게이트(_calP 뒤 _srailInit)가 담당 — 네트워크 우선권(260711) 불변
   // 레일 콘텐츠 = 모드에 맞게 재구성(카드 ⇄ 표). 데이터 있으면 즉시, 없으면 기존 로딩 플로우가 채움.
   if(typeof _salesState!=='undefined'&&_salesState&&_salesState.daily&&_salesState.master&&!_srailBusy){ try{_srailRender();}catch(_e){} }
-  else if(window.innerWidth>1200&&typeof _salesState!=='undefined'&&_salesState&&!_salesState.daily&&!_srailBusy){ try{_srailInit();}catch(_e){} }
+  else if(_bizBookWide()&&typeof _salesState!=='undefined'&&_salesState&&!_salesState.daily&&!_srailBusy){ try{_srailInit();}catch(_e){} }
 }
 // 우측 판매현황 컴팩트 표 — 분석 보드 스크린1(.ana-tbl) 계승 · 정렬 = 공연일 순(운영자: 날짜순) · 서브 1줄 = 장소(프로그램 시트 l) · 2줄 = 일시·장르 · 행 클릭 = 레일 인라인 드릴(기존).
 // 색 = 대표 토큰만(--green/--danger/--dim — 모달의 동결 초록·회색 리터럴은 신규 사용 금지 §0④).
@@ -6783,13 +6793,13 @@ function _yrmTable(){
 }
 // ── [260731 운영자 4차] 대시보드 = 「책 4면」 ────────────────────────────────────────────
 // 면 = 1 연간 실적 · 2 판매 실적(구 우측 레일 '판매 현황' 개명) · 3 사업 결과 비교(구 좌 2면 '사업 현황') · 4 고객 분석(구 '회원 분포' 인라인化 · admin 전용 — 비admin은 3면 책).
-// 넓은 화면(>1200, 레일 노출) = 펼침 2면씩: 펼침1=[1|2](현행 배치 그대로), 펼침2=[3|4] — 좌 #biz-main=홀수면 · 우 #rail-yrm=짝수면, 넘김은 두 열이 같이(책넘김).
-// 좁은 화면(≤1200, 레일 숨김) = 1→2→3→4 한 면씩.
+// 넓은 화면(2열 하한 `_BIZ_WIDE_MIN` 이상, 레일 노출) = 펼침 2면씩: 펼침1=[1|2](현행 배치 그대로), 펼침2=[3|4] — 좌 #biz-main=홀수면 · 우 #rail-yrm=짝수면, 넘김은 두 열이 같이(책넘김).
+// 좁은 화면(하한 미만, 레일 숨김) = 1→2→3→4 한 면씩.
 // 하단 바 = 1개(#bizm-dots-row) — 넓을 땐 펼침 전체(두 열)의 가운데(_srailAlignTop이 translateX 보정), 좁을 땐 좌 보드 가운데.
 //   [260805 2차~260808] 넓은 화면 점 = **슬라이드 자리 1개 점등**(구 「펼침 두 면 동시 점등」 폐지 · 점 수 = _BIZ_SLIDES 칸 수 = admin 5·비admin 4).
 //   우 레일 하단 점줄 바(.srail-uha-bar)는 260731 폐지 — 사업 넘김은 상세 카드 헤더 ‹ n / N ›(별도 축).
 function _bizBookN(){ return (typeof userRole!=='undefined'&&userRole==='admin')?4:3; }
-function _bizBookWide(){ return window.innerWidth>1200; }
+function _bizBookWide(){ return window.innerWidth>=_BIZ_WIDE_MIN; }   // [260807-10] 값은 _BIZ_WIDE_MIN 한 곳(첫 페인트 전 블록) — 폭 비교는 앱 전체가 이 함수만 부른다(구 `innerWidth>1200` 산재 8곳 청산)
 // [260801 운영자] 면 성격 — 'pin' = 우 열 고정면(2 판매 실적, 넘김에 안 흔들린다) · 'solo' = 좌 열만 촤르르(우는 그대로 2)
 //   · 'pair' = 내용이 한 열에 안 들어가 n-1/n-2로 자른 면 = 두 열이 「짝수단위로 같이」 바뀐다(좌 n-1 · 우 n-2).
 //   운영자 지시 원문: "2는 고정이니 1만 책넘기듯이 촤르르 · 흰색 부분에 나올게 많으면 3-1, 3-2개념으로 자를게 · -n으로 엮인거는 짝수단위로 같이".
@@ -7402,12 +7412,13 @@ function _bizListTable(list){
       // [260805] 예정(오픈 전) 행 = 실적 칸을 0으로 채우지 않고 「오픈 전」·「—」로 — 0은 「안 팔렸다」로 읽힌다
       +'<td style="padding:7px 12px 7px '+_colGap+'px;text-align:right;color:var(--peach-text);font-weight:600;font-variant-numeric:tabular-nums">'+(g._st==='planned'?'<span style="color:var(--muted);font-weight:500">오픈 전</span>':Math.round((g._sold!=null&&g._sold>0)?g._sold:g.paid).toLocaleString())+'</td>'
       // 오픈석(회차) — 부차 정보임은 **괄호가 말한다**(잉크로 더 내리지 않는다).
-      //   ⚠ 대비 이력: 회차 값은 구 독립 열에서 `--neutral-text` **5.23:1**(AA 통과)이었고, 이 열로 옮기며 열 잉크
-      //     `--dim` **3.54:1**(제브라 행 3.40:1 · AA 미달)로 **내려간다**. 더 흐린 `--muted` 시안은 **1.92:1**이라
-      //     기각했다. 지금 값 = 오픈석 숫자와 **같은 가독 수준**(이 열 전체가 원래 --dim = §6-5 그레이 축 부채 안) —
-      //     회차만 더 진하게 하면 부값이 주값보다 진해져 위계가 뒤집힌다. 열 전체를 올리는 건 이 지시 밖 = 운영자 판단.
+      //   [260807-10 운영자 승인 「다 배선」] 열 잉크 `--dim` → **`--neutral-text`**. 이 열만 머리글과 같은 잉크라
+      //     본문이 안내 문구 층위로 읽혔다 = 위계 역전. 승격 후 흰 행 **5.23:1** · 제브라 행 **5.01:1**(둘 다 AA 통과 ·
+      //     구 3.54:1 / 3.40:1은 미달이었다). 대가 = 오픈석이 일시·장르와 같은 무게가 된다(표 안 회색 2종 → 1종) — 승인됨.
+      //   대비 이력: 회차 값은 구 독립 열에서 원래 `--neutral-text`였다가 이 열로 합치며 `--dim`으로 내려갔던 것 = **원위치**.
+      //     더 흐린 `--muted` 시안은 1.92:1이라 기각. 머리글·단위줄은 `--dim` 그대로(본문만 올려 위계를 정상화 · 머리글 축은 별건).
       //   게이트 ⑤는 리터럴 hex 쌍만 채점해 var() 조합을 못 본다 → 통과 여부는 근거가 못 된다(손으로 계산한 값).
-      +'<td style="padding:7px 12px 7px '+_colGap+'px;text-align:right;color:var(--dim);white-space:nowrap;font-variant-numeric:tabular-nums">'+(g.seat>0?Math.round(g.seat).toLocaleString():'<span style="color:var(--muted);font-weight:500">—</span>')+'('+g.cnt+')</td>'
+      +'<td style="padding:7px 12px 7px '+_colGap+'px;text-align:right;color:var(--neutral-text);white-space:nowrap;font-variant-numeric:tabular-nums">'+(g.seat>0?Math.round(g.seat).toLocaleString():'<span style="color:var(--muted);font-weight:500">—</span>')+'('+g.cnt+')</td>'
       +'<td style="padding:7px 12px 7px '+_colGap+'px;text-align:right;color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums">'+(g._st==='planned'?'—':g.avg.toFixed(1))+'</td>'
       +'<td style="padding:7px 14px 7px '+_colGap+'px;text-align:right;color:var(--green);font-weight:600;font-variant-numeric:tabular-nums">'+((g._rev!=null&&g._rev>0)?_bizMoney(g._rev,true):'—')+'</td>'   // [260803 선택값] 열: 매출 = 표시(진행바·최근 7일 = 끔) · [260805] 단위는 머리글이 말한다 = 숫자만(bare)
       +'</tr>';
@@ -8503,7 +8514,7 @@ function _bizExhibRetry(){ window._bizmExFail=0; try{_bizExhibEnsure();}catch(_e
 function _bizExhibEnsure(){
   if(window._bizmExBusy)return;
   window._bizmExBusy=1;
-  // 전시 캐시는 분석 보드와 **공유 그릇**(_anaState)에 담긴다 — 레일이 숨는 폭(≤1200)에선 그 그릇 자체가 아직 없어서
+  // 전시 캐시는 분석 보드와 **공유 그릇**(_anaState)에 담긴다 — 레일이 숨는 폭(2열 하한 미만)에선 그 그릇 자체가 아직 없어서
   //   받아 온 시트를 넣을 데가 없었다(구 260805 경로의 잠복 결함 = 좁은 화면 전시 반쪽이 로딩에서 안 벗어난다 · 1100 실측).
   //   초기값은 레일(_srailInit)이 쓰는 그것과 **같은 한 벌**로 만든다(값 이원화 금지).
   if(typeof _anaState==='undefined'||!_anaState)_anaState={screen:1,cat:'공연',genre:'전체',year:null,drillName:null,xstep:3,cmp:{tray:[],bars:false}};
@@ -8546,8 +8557,8 @@ function _bizCompRender(el,half){
   if(typeof requestAnimationFrame==='function')requestAnimationFrame(function(){try{_srailAlignTop();}catch(_e){}});
   if(!_bizState.raw){
     _bizmSwap(el,'<div style="position:relative">'+_bizmHead('',TTL,SUB,1)+_BIZM_BOX+_ldGlass('운영 데이터 불러오는 중','',300)+'</div>'+DOTS+'</div>');   // [260802] 프레임 유지 · [PR 357 타 세션] 빔 스윕 로딩 통일 채택(양쪽 보존) · [260802g] height:100% = 이젤 박스 전면(스윕·문구 정중앙 — 4면 로더와 동일 규약, 데이터 도착 시 _bizmSwap이 통째 교체라 원복 불요) · [260806] 스윕 = 카드 전면(머리줄 ld=1 + _ldGlass) 정본 빌더로 통일
-    // 레일이 숨는 폭(≤1200) = 레일 6시트 fetch가 없어 자체 확보 — 넓은 화면은 레일 플로우(res[3]→_bizState.raw)가 채움(중복 fetch 방지)
-    if(window.innerWidth<=1200&&!window._bizmBusy){
+    // 레일이 숨는 폭(2열 하한 미만) = 레일 6시트 fetch가 없어 자체 확보 — 넓은 화면은 레일 플로우(res[3]→_bizState.raw)가 채움(중복 fetch 방지)
+    if(!_bizBookWide()&&!window._bizmBusy){
       window._bizmBusy=1;
       api('GET','/api/ops?sheet='+encodeURIComponent('세부운영관리대장(정리)')).then(function(d){
         window._bizmBusy=0;_bizState.raw=d;
