@@ -21734,27 +21734,42 @@ async function _paAutoNow(){
     if(out)out.innerHTML='<div class="u-empty">'+escapeHtml(String(e&&e.message||e))+'</div>';
   }finally{ _paState.busy=false;_btnBusy(btn,false,'오늘 브리핑 지금 생성'); }
 }
+// 브리핑 본문 서식기 — 운영자 260806 「중학생 난이도 · 수치 강조 · 요약식」의 표시 축.
+//   ①escapeHtml 뒤 `**…**`(프롬프트 강조 계약) → <b> ②「숫자→숫자」 변화 표기는 화살표 뒤(지금 값)를 자동 굵게
+//   — ②는 프롬프트 개정 전에 저장된 회차(밋밋한 서술형)에도 소급 적용된다(재생성 없이 강조가 산다).
+function _paEm(s){
+  var t=escapeHtml(String(s==null?'':s));
+  t=t.replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>');
+  t=t.replace(/(→\s*)((?:<b>)?[0-9][0-9,.]*\s*[%가-힣]{0,4}(?:<\/b>)?)/g,function(m,a,b){return a+(b.indexOf('<b>')===0?b:'<b>'+b+'</b>');});
+  return t;
+}
 function _paRenderResult(){
   var out=document.getElementById('pa-out'); if(!out||!_paState.last)return;
   var r=_paState.last.res,adv=r.advice,h=[];
   var actRow=function(x,i,hot){
-    var main=(x.program?'<b>'+escapeHtml(String(x.program))+'</b> · ':'')+escapeHtml(String(x.when||''))+(x.channel?' · '+escapeHtml(String(x.channel)):'')+(x.message?' — '+escapeHtml(String(x.message)):'');
-    var sub=(x.target?'타겟: '+escapeHtml(String(x.target)):'')+(x.why?((x.target?' · ':'')+'근거: '+escapeHtml(String(x.why))):'');
+    var main=(x.program?'<b>'+escapeHtml(String(x.program))+'</b> · ':'')+_paEm(x.when||'')+(x.channel?' · '+_paEm(x.channel):'')+(x.message?' — '+_paEm(x.message):'');
+    var sub=(x.target?'타겟: '+_paEm(x.target):'')+(x.why?((x.target?' · ':'')+'근거: '+_paEm(x.why)):'');
     return _pcRow(String(i+1),main,sub,hot);
   };
   if(!adv&&r.text){   // 형식 이탈 폴백 — 내용은 살리고 형식 실패를 숨기지 않는다
     h.push(_pcCard('브리핑 (원문)','JSON 형식을 벗어나 원문으로 표시해요',
       '<div style="white-space:pre-wrap;font-size:13px;line-height:1.75;padding-top:8px">'+escapeHtml(r.text)+'</div>'));
   }else if(adv){
-    if(adv.verdict)h.push(_pcCard('총론','','<div style="font-size:13px;line-height:1.75;padding-top:8px">'+escapeHtml(String(adv.verdict))+'</div>'));
+    if(adv.verdict||adv.headline){
+      // 총론 = 헤드라인 한 줄(있으면) + 문단들(빈 줄 분리 — 구 회차의 통짜 서술은 문단 1개로 그대로)
+      var paras=String(adv.verdict||'').split(/\n{2,}/).map(function(x){return x.trim();}).filter(Boolean);
+      var vh=(adv.headline?'<div style="font-size:13.5px;font-weight:800;padding-top:8px">'+_paEm(adv.headline)+'</div>':'');
+      vh+=paras.map(function(pp,i){return '<div style="font-size:13px;line-height:1.8;padding-top:'+(i===0&&!adv.headline?8:9)+'px">'+_paEm(pp)+'</div>';}).join('');
+      h.push(_pcCard('총론','',vh));
+    }
     var HZ=[['d7','앞으로 7일','당장 실행 — 빈 슬롯 지정 수준'],['d30','앞으로 30일','한 달 캠페인 축'],['d90','앞으로 90일','분기 축 — 빌드업·고객 관계']];
     if(adv.horizons)HZ.forEach(function(z){
       var arr=adv.horizons[z[0]];
       if(Array.isArray(arr)&&arr.length)h.push(_pcCard(z[1],z[2],arr.map(function(x,i){return actRow(x,i,z[0]==='d7'&&i===0);}).join('')));
     });
     if(!adv.horizons&&Array.isArray(adv.actions)&&adv.actions.length)h.push(_pcCard('추천 액션','우선순위순',adv.actions.map(function(x,i){return actRow(x,i,i===0);}).join('')));
-    if(Array.isArray(adv.avoid)&&adv.avoid.length)h.push(_pcCard('피할 것','',adv.avoid.map(function(x){return _pcRow('주의',escapeHtml(String(x)),'',false);}).join('')));
-    if(Array.isArray(adv.gaps)&&adv.gaps.length)h.push(_pcCard('부족했던 데이터','채우면 다음 브리핑이 좋아져요',adv.gaps.map(function(x){return _pcRow('미확보',escapeHtml(String(x)),'',false);}).join('')));
+    if(Array.isArray(adv.avoid)&&adv.avoid.length)h.push(_pcCard('피할 것','',adv.avoid.map(function(x){return _pcRow('주의',_paEm(x),'',false);}).join('')));
+    if(Array.isArray(adv.gaps)&&adv.gaps.length)h.push(_pcCard('부족했던 데이터','채우면 다음 브리핑이 좋아져요',adv.gaps.map(function(x){return _pcRow('미확보',_paEm(x),'',false);}).join('')));
   }
   var when=new Date(_paState.last.at).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
   h.push('<div style="font-size:11.5px;color:var(--dim);display:flex;gap:10px;align-items:center;flex-wrap:wrap">'
