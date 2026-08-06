@@ -22,6 +22,7 @@
  *      ⓔ 숫자끼리 포갬 = **정보만**(260813-3 개정 — 가로 비킴이 폐지돼 포갬은 일어날 수 있다 · 지켜야 할 건 ⓕ)
  *      ⓕ **가려진 라벨은 흰 반투명 판을 인다**(막대 관통·옆 숫자 포갬 둘 다) · 안 가려졌는데 판을 이면 잉여 = FAIL
  *      ⓖ 값 라벨 중심 == 제 **막대 정중앙**(Δ ≤ 2px · 운영자 260813-3 「차트 옆에 있는건 실패임」)
+ *      ⓗ 예상 줄 `(N)`은 **본체보다 밝은 잉크 + 기울임**(운영자 260813-4 「(7)은 더 연하게 - 기울임체」)
  *   ⑥ 그라데이션이 **다시 그려도 살아 있다**(운영자 260813 「다시 그라데이션 수치가 빠졌거든?」) — 예상 칸·빈 자리는
  *      투명으로 태어나 렌더 후 덧칠이 유일한 잉크라, Plotly가 한 번 다시 그리면 칠만 증발하고 **숫자는 예상 높이에 그대로
  *      남는다**(= 운영자가 본 화면). `relayout(height)`·`Plots.resize` 뒤 칠해진 칸 수가 줄면 FAIL.
@@ -161,7 +162,21 @@ const MEASURE = `(()=>{
   const gaps=labs.map(L=>L.gap).filter(g=>g!=null);
   const ovl=[]; for(let a=0;a<labs.length;a++)for(let b=a+1;b<labs.length;b++)
     if(Math.abs(labs[a].cx-labs[b].cx)<(labs[a].w+labs[b].w)/2&&Math.abs(labs[a].bot-labs[b].bot)<13)ovl.push(labs[a].t+'↔'+labs[b].t);
+  // ⑤ⓗ 예상 줄 = **연한 잉크 + 기울임**(운영자 260813-4 「(7)은 더 연하게 - 기울임체」).
+  //   「연하다」를 눈으로 정하지 않는다 — 상대 휘도로 잰다(본체보다 밝아야 한다). 색 이름·값은 여기 안 적는다(정본은 토큰 하나).
+  const lum=c=>{const m=String(c).match(/[0-9.]+/g)||['0','0','0'];
+    const f=v=>{v=+v/255;return v<=0.03928?v/12.92:Math.pow((v+0.055)/1.055,2.4);};
+    return 0.2126*f(m[0])+0.7152*f(m[1])+0.0722*f(m[2]);};
+  const sub=[...d.querySelectorAll('.annotation')].map(a=>{
+    const t=a.querySelector('text'); if(!t||!num(t))return null;
+    const txt=t.textContent.trim(); if(txt.indexOf('(')<0)return null;
+    const base=getComputedStyle(t).fill;
+    const sp=[...t.querySelectorAll('tspan')].filter(x=>/^\\(.*\\)$/.test(x.textContent.trim()));
+    const ok=sp.some(x=>{const c=getComputedStyle(x);return c.fontStyle==='italic'&&lum(c.fill)>lum(base)+0.02;});
+    return {t:txt, ok, n:sp.length};
+  }).filter(Boolean);
   const lab={n:labs.length, trace:labs.filter(L=>L.src==='trace').length, nolab, ovl,
+    sub:sub.length, subBad:sub.filter(x=>!x.ok).map(x=>x.t+(x.n?'':'(줄 없음)')),
     inks:[...new Set(labs.map(L=>L.fill))],
     hidBare:plate.filter(p=>p.hid&&!p.bg).map(p=>p.t),      // 가려졌는데 판이 없다 = FAIL
     plateFree:plate.filter(p=>p.far&&p.bg).map(p=>p.t),      // 막대에서 확실히 떨어졌는데 판을 이고 있다 = 잉여(화면이 시끄러워진다)
@@ -295,8 +310,9 @@ async function main() {
     if ((L.hidBare || []).length) fails.push(`⑤ⓕ 막대에 가려졌는데 흰 반투명 판이 없는 라벨 ${L.hidBare.length}개(${L.hidBare.slice(0, 4).join(' · ')}) — 「차트에 가려지면 판을 깐다」(운영자 260813-2 · 기틀 §2 #18).`);
     if ((L.plateFree || []).length) fails.push(`⑤ⓕ 안 가려졌는데 판을 이고 있는 라벨 ${L.plateFree.length}개(${L.plateFree.slice(0, 4).join(' · ')}) — 판은 **가려질 때만**이다(전 라벨에 깔면 화면이 시끄러워진다).`);
     // ⓖ 「숫자는 제 막대 정중앙 위」(운영자 260813-3 「상단에 무조건 숫자가 있어야 함 · 차트 옆에 있는건 실패임」)
+    if ((L.subBad || []).length) fails.push(`⑤ⓗ 예상 줄이 **연한 기울임**이 아닌 라벨 ${L.subBad.length}개(${L.subBad.slice(0, 4).join(' · ')}) — 「(7)은 더 연하게 - 기울임체」(운영자 260813-4 · 본체보다 밝아야 하고 font-style: italic이어야 한다).`);
     if ((L.offBad || []).length) fails.push(`⑤ⓖ 제 막대에서 옆으로 비켜 선 값 라벨 ${L.offBad.length}개(${L.offBad.slice(0, 4).join(' · ')}) — 숫자는 **언제나 제 막대 정중앙 위**다(가로 비킴 폐지 · 겹치면 판을 깐다).`);
-    infos.push(`⑤ 값 라벨 ${L.n}개 · 전부 주석 · 간격 Δ${L.gapSpread}px · 숫자 없는 막대 ${L.nolab} · 잉크 ${(L.inks || []).length}갈래 · 포갬 ${(L.ovl || []).length} · 가려진 라벨 ${L.hid}개(전건 판) · 막대 중심 이탈 최대 ${L.offMax}px`);
+    infos.push(`⑤ 값 라벨 ${L.n}개 · 전부 주석 · 간격 Δ${L.gapSpread}px · 숫자 없는 막대 ${L.nolab} · 잉크 ${(L.inks || []).length}갈래 · 포갬 ${(L.ovl || []).length} · 가려진 라벨 ${L.hid}개(전건 판) · 막대 중심 이탈 최대 ${L.offMax}px · 예상 줄 ${L.sub}개(전건 연한 기울임)`);
   }
 
   // ⑥ 그라데이션 = 다시 그려도 살아 있다(운영자 260813 「다시 그라데이션 수치가 빠졌거든?」)
