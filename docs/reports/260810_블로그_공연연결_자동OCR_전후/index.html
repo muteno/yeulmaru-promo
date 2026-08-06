@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>260810 블로그 도우미 ▸ 연결된 공연 고르기 = 자동 OCR — 전후</title>
+<style>
+  body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;max-width:1000px;margin:30px auto;padding:0 20px;color:#1A1A2E;line-height:1.6}
+  h1{font-size:20px} h2{font-size:16px;margin-top:30px} h3{font-size:13.5px;margin:18px 0 4px;color:#4A4DE7}
+  img{max-width:100%;border:1px solid rgba(0,0,0,0.12);border-radius:12px;display:block;margin:8px 0}
+  .dim{color:#888;font-size:12.5px} code{background:rgba(74,77,231,0.08);padding:1px 5px;border-radius:5px;font-size:12px}
+  table{border-collapse:collapse;font-size:13px;margin:10px 0;width:100%} td,th{border:1px solid rgba(0,0,0,0.12);padding:6px 10px;text-align:left}
+  .chg{color:#D88455;font-weight:700} .keep{color:#888}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
+  .two img{margin:6px 0}
+  @media(max-width:760px){.two{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<h1>260810 — 블로그 글쓰기 도우미 3️⃣ <b>「연결된 공연 고르기 → 자동 OCR」</b></h1>
+<p class="dim">지시(운영자 260810): <b>「공연 내용 상세페이지 업로드있잖아. 이거 연결된 공연 고르도록 카카오채널 톡 만드는거 처럼 연결해줄래? 자동 ocr하도록」</b></p>
+<p class="dim">화면 = QA 진입로(<code>?qa=admin</code>) 목데이터 · 실API·실데이터·PII 미접촉. 1500×1000 · deviceScaleFactor 2.
+  서버 왕복(<code>/api/content/detail</code>)만 샘플 응답으로 대체했고 화면 로직은 실제 코드 그대로 탔다.</p>
+
+<h2>1. 전 / 후 — 3️⃣ 공연 내용</h2>
+<p class="dim">전 = 상세페이지를 사람이 <b>캡처해 올려야만</b> OCR 원문이 채워졌다. 후 = 그 공연의 상세 링크가 이미 프로그램 시트(K열)에 있으므로
+  <b>공연을 고르면</b> 서버가 링크를 열어 ①페이지 본문 ②포스터·상세 이미지 OCR을 읽어 넣는다. 업로드 버튼은 그대로 남는다(링크 없는 공연·현장 리플릿용).</p>
+<div class="two">
+  <div><h3>전 — 업로드만</h3><img src="전_업로드만.png" alt="전 — 상세 페이지 업로드 버튼만 있는 3️⃣ 공연 내용"></div>
+  <div><h3>후 — 공연 고르기 추가(고르기 전)</h3><img src="후_고르기전.png" alt="후 — 공연 선택 드롭다운이 업로드 버튼 위에 추가된 모습"></div>
+</div>
+
+<h2>2. 고르는 순간 = 자동 OCR</h2>
+<p class="dim">버튼을 한 번 더 누르게 하지 않는다 — <code>onchange</code>에서 바로 읽는다. 로딩 표기는 정본(dots 픽토그램 + <code>~중</code>).</p>
+<div class="two">
+  <div><h3>읽는 중</h3><img src="후_읽는중.png" alt="후 — 상세페이지와 포스터를 읽는 중 로딩"></div>
+  <div><h3>읽기 완료 — OCR 원문 채워짐</h3><img src="후_읽기완료.png" alt="후 — 링크 항목이 큐에 쌓이고 OCR 원문 276자가 채워진 모습"></div>
+</div>
+
+<h2>3. 무엇을 새로 만들지 않았나</h2>
+<table>
+  <tr><th>축</th><th>재사용한 정본</th><th>신설</th></tr>
+  <tr><td>공연 목록</td><td><code>_kmPerfs()</code> — 카카오채널 톡과 <b>한 벌</b>(상세 링크가 있는 프로그램만)</td><td class="keep">0</td></tr>
+  <tr><td>추출·OCR</td><td>Worker <code>promoDetailGet</code>(<code>kkoFetchPage</code>+<code>kkoOcrImages</code>+<code>runExternalOcr</code>)</td><td class="keep">0 · 수집기·시크릿 신설 없음</td></tr>
+  <tr><td>캐시</td><td>같은 KV(<code>pdext:v1:*</code> · 24h maxAge) — 카카오에서 이미 읽은 링크면 <b>재OCR 0</b>으로 즉시</td><td class="keep">0</td></tr>
+  <tr><td>화면 부품</td><td><code>.nb-input</code>(select) · <code>.nb-btn ghost</code> · <code>_ldHtml</code> 로더 · 기존 파일 큐 행</td><td class="keep">0 · 새 CSS 클래스·새 raw hex 0</td></tr>
+  <tr><td>엔드포인트</td><td>—</td><td class="chg">1 · <code>POST /api/content/detail</code>(추출만 · LLM 미경유)</td></tr>
+</table>
+
+<h2>4. 실측(헤드리스)</h2>
+<table>
+  <tr><th>확인</th><th>결과</th></tr>
+  <tr><td>상세 링크 없는 프로그램 제외</td><td>목록 3건 중 링크 있는 2건만 · 0건이면 「상세 링크가 있는 프로그램이 없어요」</td></tr>
+  <tr><td>고르면 자동 OCR</td><td>OCR 원문 = <code>[상세페이지 본문]…[포스터·상세 이미지 OCR]…</code></td></tr>
+  <tr><td>업로드 3장 상한</td><td>링크 항목은 상한에 안 센다(<code>_nbOcrUploads()</code>=0)</td></tr>
+  <tr><td>다시 읽기</td><td><code>fresh:1</code> 전송 · 링크 항목은 한 칸 유지(중복 누적 0)</td></tr>
+  <tr><td>공연 갈아타기</td><td>링크 항목이 새 공연으로 교체(누적 0)</td></tr>
+  <tr><td>링크 항목 삭제</td><td>선택·링크·OCR 원문 함께 비움(같은 공연 다시 고를 수 있음)</td></tr>
+  <tr><td>세대 가드</td><td>응답 도착 전 모달을 닫으면 결과가 새 상태를 안 건드림(빈 상태 유지)</td></tr>
+  <tr><td>pageerror</td><td>0</td></tr>
+  <tr><td>게이트</td><td>check_design·check_refs·check_modal_head·check_exchart·parity·bizchart·wizard·layout·modalhead 스모크 전건 PASS</td></tr>
+</table>
+</body>
+</html>

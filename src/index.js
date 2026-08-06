@@ -3044,6 +3044,25 @@ var index_default = {
         }
       }
 
+      // === ⑤ 공연 상세페이지 추출 — 상세 링크 → 페이지 본문 + 포스터·상세 이미지 OCR (LLM 안 거침) ===
+      // ④ 카카오 76자와 **같은 추출·같은 KV 캐시**(promoDetailGet · 24h maxAge) 그대로 — 수집기·캐시 신설 0.
+      // 쓰는 곳 = 블로그 도우미 3️⃣ 「연결된 공연 고르기」(사람이 캡처해 올리던 자리를 자동 OCR로).
+      // 같은 링크를 카카오에서 이미 읽었으면 cached:true로 즉시 온다. fresh=1이면 캐시를 무시하고 다시 읽는다.
+      if (url.pathname === "/api/content/detail" && request.method === "POST") {
+        const hasExternal = env.GEMINI_API_KEY || (env.CLOVA_OCR_INVOKE_URL && env.CLOVA_OCR_SECRET) || env.GOOGLE_VISION_KEY || (env.GOOGLE_SA_EMAIL && env.GOOGLE_SA_PRIVATE_KEY);
+        if (!hasExternal) return json({ error: "no_ocr_provider", note: "GEMINI_API_KEY / CLOVA_OCR_* / GOOGLE_VISION_KEY / GOOGLE_SA_* 중 하나 필요" }, env, 503);
+        let bb = {};
+        try { bb = await request.json(); } catch (e) {}
+        if (!String(bb.url || "").trim()) return json({ error: "공연 상세 링크가 필요해요" }, env, 400);
+        try {
+          const d = await promoDetailGet(env, bb.url, { maxAgeMs: 24 * 3600 * 1e3, fresh: !!bb.fresh });
+          return json({ url: d.url, text: d.text || "", ocrText: d.ocrText || "", images: d.images || [], cached: !!d.cached }, env);
+        } catch (e) {
+          console.error("[content/detail]", e);
+          return json({ error: String((e && e.message) || e) }, env, 502);
+        }
+      }
+
       // === ③ 로고 제작 — 이름·형태·스타일·색 → 로고 이미지 (Gemini 이미지 생성) ===
       // 인증은 위 전역 게이트(X-App-Password)가 이미 통과시킨 사용자만 — 이미지 생성은 유료 호출이라 공개면 안 된다.
       if (url.pathname === "/api/content/logo" && request.method === "POST") {
