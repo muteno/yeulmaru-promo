@@ -68,6 +68,7 @@ const PERFS_STUB = DATA.shows.filter(s => s.status === '예정')
   .map(s => ({ s: s.date, e: s.dateEnd, n: s.name, f: s.name, t: 'c', g: s.gu || '', g2: s.genre || '', rc: 1, id: '' }));
 
 const FEED = `(()=>{
+  globalThis.__FCR=${process.env.FCR||1.6};
   var process_FC=${process.env.FC?'true':'false'};
   try{ PERFS = ${JSON.stringify(PERFS_STUB)}; }catch(e){ console.warn('PERFS stub', e); }
   if(typeof _bizState!=='undefined'&&_bizState)_bizState.raw=window.__MOCK_OPS;
@@ -75,7 +76,7 @@ const FEED = `(()=>{
     _salesState.daily={rows:[]}; _salesState.master={rows:[]}; }
   window._salesBuild=function(){ return window.__MOCK_SALES; };
   if(typeof _bizmState!=='undefined'&&_bizmState)_bizmState.year=${YEAR};
-  if(process_FC)window._bizFcSeat=function(p){ return (p&&p.seats>0&&p.status==='active')?Math.round(p.seats*1.6):null; };   // [260806-9] 예상 최종석 스텁 = 2단 페이드 재현(라이브는 일일 실측에서 나온다)
+  if(process_FC)window._bizFcSeat=function(p){ return (p&&p.seats>0&&p.status==='active')?Math.round(p.seats*(+(globalThis.__FCR||1.6))):null; };   // [260806-9] 예상 최종석 스텁 = 2단 페이드 재현(라이브는 일일 실측에서 나온다)
 })()`;
 
 // ── 실측 ①②를 한 번에: 막대 트레이스별 채움 · 파선 도형 · 보수 라벨 잉크 픽셀 ──────────────
