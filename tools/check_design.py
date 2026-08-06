@@ -3,7 +3,7 @@
 """
 디자인 기틀 게이트 — 디자인 드리프트 3층 방어의 공용 검사기 (stdlib only, 260703)
 
-검사 7종 (①~⑥ = baseline 래칫 — "지금보다 나빠지지만 마라"):
+검사 8종 (①~⑥ = baseline 래칫 — "지금보다 나빠지지만 마라"):
   ① raw hex 총량: index.html ≤ BASE_HEX_INDEX, signage/*.html 합 ≤ BASE_HEX_SIGNAGE
      (새 색은 반드시 :root 토큰으로. 기존 raw hex 청산은 언제든 환영 → baseline 하향 갱신)
   ② :root 블록 수: index.html == 2, signage == 0 (블록 추가/삭제 = 구조 변경 → 운영자 승인 필요)
@@ -16,6 +16,13 @@
   ⑦ 정본 부품 일치(**하드 0** · 260805-16): 라벨이 X 한 글자인 버튼은 클래스와 무관하게 전부
      글자 `✕`(U+2715) + `title`·`aria-label` 한 벌이어야 한다. 접근명 '값'은 자리의 뜻대로
      (닫기/삭제/제거/해제) — 게이트는 있는지만 묻는다. ①~⑥이 못 잡는 「색은 정본인데 부품이 어긋난」 축.
+  ⑧ CSS 파싱 온전성(**하드 0** · 260805-32): <style> 안 주석·중괄호가 성해서 브라우저가 규칙을 다 살려두나.
+     ①~⑦은 전부 「소스에 글자가 있나」를 묻는다 — 실사고에서 주석 여는 `/*` 하나가 빠지자 파서가 복구하며
+     바로 뒤의 정본 규칙을 통째로 버렸는데 ①~⑦도, 패리티 스모크도 전건 PASS였다(모든 모달이 똑같이
+     깨져 있으면 패리티는 「다 같다」로 통과한다). 보는 것 = 닫히지 않은 `/*` · 짝 없는 `*/` ·
+     중괄호 불균형 · **주석이 진짜 규칙을 삼킨 자국**(닫는 `*/`만 지우면 표시 짝은 다시 맞아 앞 셋으로 안 잡힌다).
+     킬테스트 = 이 파일의 CSS 주석 404개 전부에 대해 여는 `/*` 제거 404/404 · 닫는 `*/` 제거로 규칙을
+     실제로 잃는 345건 345/345 검출 · 현행 파일 오탐 0.
 
 baseline 갱신 규칙: 실측치가 늘어난 정당한 사유(PR·운영자 승인)가 있으면 숫자를 갱신하고
 반드시 아래 주석에 사유를 남긴다. 원인 불명 증가는 운영자 보고 후 진행.
@@ -226,6 +233,79 @@ TOKEN_DEF_RE = re.compile(r'(--[\w-]+)\s*:')
 TOKEN_USE_RE = re.compile(r'var\(\s*(--[\w-]+)')
 
 
+STYLE_RE = re.compile(r'<style[^>]*>(.*?)</style>', re.S | re.I)
+# 「들여쓰기 0에서 시작하는 셀렉터 + `{`」 = 파일 바닥 들여쓰기의 **진짜 규칙** 한 줄.
+# `{` 앞은 **ASCII 셀렉터 글자만** 허용한다 — 한글이 섞이면 산문이지 규칙이 아니다(백틱 인용도 여기서 걸러진다).
+RULE_LINE_RE = re.compile(r'^[ \t]*[.#:@*a-zA-Z\[][A-Za-z0-9 \t.#:,>~*\[\]()="\'^$|+%-]*\{')
+
+
+def _css_parse_faults(src, label):
+    """⑧ CSS 파싱 온전성 — 「소스에 글자는 있는데 브라우저는 그 규칙을 버린 상태」를 잡는다.
+
+    실사고(260805-32) = 주석 여는 표시 `/*`를 빠뜨려 그 다음 줄부터 본문이 CSS 토큰으로 읽혔고,
+    파서가 복구하며 **바로 뒤의 정본 규칙(`.modal:has(>.mhead)>.modal-x{…}`)을 통째로 버렸다**.
+    그때 ①~⑦도, 패리티 스모크도 전건 PASS였다 — 정적 검사는 「글자가 있나」만 봤고,
+    패리티는 **모든 모달이 똑같이 깨져** 있으면 「다 같다」로 통과하기 때문이다.
+
+    보는 것 셋(전부 하드 0 · 추측 0 · 문자열/`url()` 안은 세지 않는다):
+      ⓐ 닫히지 않은 `/*`      — 뒤쪽 CSS가 통째로 주석으로 먹힌다
+      ⓑ 짝 없는 `*/`          — 위 실사고의 지문. 그 앞이 통째로 규칙으로 오독됐다는 뜻
+      ⓒ 중괄호 불균형          — 규칙 하나가 열린 채 끝나면 그 뒤가 전부 그 규칙 안으로 들어간다
+    """
+    faults = []
+    for m in STYLE_RE.finditer(src):
+        css, off = m.group(1), m.start(1)
+        i, n = 0, len(css)
+        depth = 0
+        while i < n:
+            c = css[i]
+            if c == '/' and i + 1 < n and css[i + 1] == '*':
+                end = css.find('*/', i + 2)
+                if end < 0:
+                    faults.append((src.count('\n', 0, off + i) + 1, '닫히지 않은 `/*` — 뒤쪽 CSS가 통째로 주석으로 먹힌다'))
+                    i = n
+                    break
+                # ⓓ 주석이 **진짜 규칙**을 삼켰나 — 닫는 `*/` 하나만 지워도 주석은 그냥 다음 `*/`까지 늘어나
+                #    표시 짝은 다시 맞는다(ⓐⓑ로 안 잡힌다). 그때 그 사이의 규칙들이 조용히 사라진다.
+                #    지문 = 주석 본문에 **들여쓰기 0에서 시작하는 셀렉터 + `{`** 줄이 있다.
+                #    손으로 쓴 주석은 전부 들여쓰여 있고, CSS를 인용할 때도 백틱 안 한 줄이라 이 모양이 안 나온다.
+                for cl in css[i + 2:end].split('\n'):
+                    if RULE_LINE_RE.match(cl):
+                        faults.append((src.count('\n', 0, off + i) + 1,
+                                       '주석이 실제 규칙을 삼켰다 — 본문에 `%s…` 가 들어 있다(닫는 `*/`가 지워지면 '
+                                       '주석이 다음 `*/`까지 늘어나 그 사이 규칙이 조용히 사라진다)' % cl.strip()[:48]))
+                        break
+                i = end + 2
+                continue
+            if c == '*' and i + 1 < n and css[i + 1] == '/':
+                faults.append((src.count('\n', 0, off + i) + 1,
+                               '짝 없는 `*/` — 그 앞이 주석이 아니라 CSS로 읽히는 중이다(뒤 규칙이 버려진다)'))
+                i += 2
+                continue
+            if c in '"\'':
+                j = i + 1
+                while j < n and css[j] != c:
+                    j += 2 if css[j] == '\\' else 1
+                i = j + 1
+                continue
+            if css.startswith('url(', i):
+                j = css.find(')', i)
+                i = (j + 1) if j >= 0 else n
+                continue
+            if c == '{':
+                depth += 1
+            elif c == '}':
+                depth -= 1
+                if depth < 0:
+                    faults.append((src.count('\n', 0, off + i) + 1, '짝 없는 `}`'))
+                    depth = 0
+            i += 1
+        if depth > 0:
+            faults.append((src.count('\n', 0, m.end(1)) + 1,
+                           '<style> 끝에서 중괄호가 %d개 열린 채다 — 그 뒤 규칙이 전부 그 안으로 들어간다' % depth))
+    return faults
+
+
 def _read(path):
     with open(path, encoding='utf-8') as f:
         return f.read()
@@ -322,6 +402,18 @@ def main():
                      '— 이 검사가 생긴 위반의 유입 경로가 정확히 그것이었다(`&times;` 대조군 → 실코드).'
                      % (len(x_bad), detail, more, CANON_X_GLYPH, x_total))
 
+    # ⑧ CSS 파싱 온전성 — 「글자는 있는데 브라우저는 버린 규칙」(위 주석 참조)
+    css_bad = _css_parse_faults(idx, 'index.html')
+    for p in sig_paths:
+        css_bad += _css_parse_faults(_read(p), os.path.basename(p))
+    if css_bad:
+        detail = ' / '.join('L%d %s' % (ln, why) for ln, why in css_bad[:6])
+        more = '' if len(css_bad) <= 6 else ' … 외 %d건' % (len(css_bad) - 6)
+        fails.append('CSS 파싱 파손 %d건: %s%s — 소스에 글자가 있어도 브라우저는 그 규칙을 **버린다**. '
+                     '260805-32 실사고 = 주석 여는 `/*` 하나가 빠져 정본 규칙이 통째로 삼켜졌는데 '
+                     '①~⑦도 패리티 스모크도 전건 PASS였다(다 같이 깨지면 「다 같다」로 통과한다).'
+                     % (len(css_bad), detail, more))
+
     # ── 리포트 ────────────────────────────────────────────────────────────
     if fails:
         print('✗ 디자인 기틀 위반 %d건 — docs/디자인기틀.md 참조' % len(fails), file=sys.stderr)
@@ -331,7 +423,7 @@ def main():
         return 1
 
     print('✓ 디자인 기틀 통과 — raw hex index=%d/%d signage=%d/%d · :root %d/%d · 고아 %d(기존) · 이중정의 %d(기존) '
-          '· 대비 AA미달 %d/%d · 잰크 전이 %d/%d(sig %d/%d) · X아이콘 버튼 %d개 전건 정본(미달 %d)'
+          '· 대비 AA미달 %d/%d · 잰크 전이 %d/%d(sig %d/%d) · X아이콘 버튼 %d개 전건 정본(미달 %d) · CSS 파싱 파손 0'
           % (hex_idx, BASE_HEX_INDEX, hex_sig, BASE_HEX_SIGNAGE,
              len(roots_idx), n_root_sig, len(orphans), len(dups),
              len(lc), BASE_LOWCONTRAST_INDEX,
