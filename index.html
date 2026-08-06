@@ -1481,6 +1481,22 @@ table.promo-board-table th:last-child .col-resize-handle{display:none}
 .cb-name{font-size:10.5px;color:var(--dim);font-weight:700;padding-left:2px}
 .cb-brow{display:flex;align-items:flex-end;gap:6px;min-width:0}
 .cb-time{flex:none;font-size:10.5px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap;padding-bottom:2px}
+/* [260813 운영자 「예울이에 마우스 포인터가 올라가면 대화창이 위에 거주지 TOP5 있는 구간까지 쭉 올라가게 · 자연스럽게 이징 · 대화를 통해 고객질의」]
+   고객 분석(4면·모달) 우 열의 예울이 카드 = **바닥에 붙은 채 위로 자란다**. 접힘 = 종전과 같은 한 칸, 펼침 = 열 전체(= 막대 카드 「거주지 TOP 5」 윗선).
+   ⚠ 높이·마진 전이는 안 쓴다(게이트 ⑥ 잰크 = 프레임마다 리플로 · check_design BASE_LAYOUT_TRANS_INDEX 계약) —
+     카드를 **처음부터 열 전체 높이**로 깔고 아래 `--rise-h`만큼만 `clip-path`로 보여준 뒤, 펼침 = 그 잘라내기가 0으로 가는 것뿐이다.
+     리플로 0 · 합성만 · 입력줄은 한 픽셀도 안 움직인다(바닥 고정) = 「대화창이 위로 자란다」가 그대로 보인다.
+   문법 계승 = 모바일 네비 패널의 `clip-path` 말림(L390 `.55s`)과 같은 축 · 커브 = 이 파일 주력 `cubic-bezier(.215,.61,.355,1)`(.dd-menu·.nav-hover-bg 계승) · 신규 색·토큰 0.
+   자리 확보 = 열의 `padding-bottom`(= 접힘 칸 + 간격) → 위 막대 카드는 종전과 **같은 높이**를 갖는다(실측 1500×1000: 열 651 · 막대 414 · 카드 223 = 변경 전과 Δ0).
+   접힘 칸 `--rise-h` = 로그창(`--rise-log` = 종전 `clamp(96px,16vh,190px)` 그대로) + 입력줄+테두리(`--rise-foot` = _memAiPaint가 `.cb-foot` 실측으로 덮어씀 · 실측 61+2=63).
+   호버 지연 = 들어올 때 .1s(지나가는 마우스에 안 열림) · 나갈 때 0s는 급하니 .18s(스치듯 벗어나도 안 닫힘). `:focus-within` = 터치·키보드(입력칸 탭) 진입로. */
+.cb-rise-col{position:relative;--rise-log:clamp(96px,16vh,190px);--rise-foot:63px;--rise-h:calc(var(--rise-log) + var(--rise-foot));padding-bottom:calc(var(--rise-h) + var(--rise-gap,14px))}
+.cb-rise{position:absolute;left:0;right:0;top:0;bottom:0;z-index:1;
+  clip-path:inset(max(0px,calc(100% - var(--rise-h))) 0 0 0 round var(--radius));
+  transition:clip-path .46s cubic-bezier(.215,.61,.355,1) .18s,box-shadow .46s cubic-bezier(.215,.61,.355,1) .18s}
+.cb-rise:hover,.cb-rise:focus-within{clip-path:inset(0 0 0 0 round var(--radius));box-shadow:var(--elev);transition-delay:.1s}
+.cb-rise>.cb-body>:first-child{margin-top:auto}   /* 대화가 짧아도 입력줄 바로 위에 붙는다 — 로그창은 늘 열 전체 높이라 위로 붙이면 접힘 칸이 빈 칸이 된다 */
+@media (prefers-reduced-motion:reduce){.cb-rise{transition:none}}
 @keyframes cbIn{from{transform:translateY(10px) scale(0.96);opacity:0}to{transform:translateY(0) scale(1);opacity:1}}
 .cb-msg.bot a{color:var(--accent);font-weight:700}
 .cb-msg.bot .cb-card-t{font-weight:800;font-size:13.5px;color:var(--text);margin-bottom:3px}
@@ -28071,7 +28087,9 @@ function _memOvRender(targetId){   // [260731 4차] targetId = 인라인 4면(me
     //   구판은 예울이가 **줄 밖 전폭 자리**를 먹어서 ① 맵이 그 위에서 끊기고(하단선까지 못 감) ② 예울이 오른쪽이 통째로 빈 유리였다.
     //   → 예울이를 막대 카드 아래(우 열)로 옮기면 줄이 남는 높이를 전부 갖고, 맵은 align-items:stretch로 **같은 하단선(안선)**까지 늘어난다.
     //   막대 = flex:1 1 auto(남는 몫 흡수) · 예울이 = flex:0 0 auto(고정) → 마지막 흰 도형 하단 = 줄 하단 = 안선(계약 ②③ 유지).
-    +'<div style="flex:1 1 280px;min-width:250px;min-height:0'+(FIT?';max-height:100%':'')+';display:flex;flex-direction:column">'
+    // [260813 운영자 「예울이에 마우스가 올라가면 대화창이 거주지 TOP5 구간까지 쭉」] 이 열이 곧 예울이의 **자라는 자리**(.cb-rise-col = position:relative + 접힘 칸 padding 확보).
+    //   간격(막대 카드 ↔ 예울이)은 종전 카드 margin-top 자리 = --rise-gap(FIT 14 · 비FIT 24)로 옮겼다(카드가 절대배치라 margin이 안 먹는다).
+    +'<div class="cb-rise-col" style="--rise-gap:'+(FIT?14:24)+'px;flex:1 1 280px;min-width:250px;min-height:0'+(FIT?';max-height:100%':'')+';display:flex;flex-direction:column">'
     // [260804 2차 운영자 「좌측에 여백 더 주고, 타이틀도 그 여백에 맞춰서 우측으로」] 좌 안쪽 여백 17 → 26.
     //   제목·부제·도넛이 **전부 이 패딩 안**이라 한 값만 올리면 넷이 같은 선으로 함께 밀린다(제목 따로 미는 매직 오프셋 0).
     +'<div style="flex:1 1 auto;min-height:0;background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius);padding:13px 17px 13px 26px'+(FIT?';display:flex;flex-direction:column;overflow:hidden':'')+'">'+topHtml+ageHtml+'</div>'
@@ -28188,8 +28206,13 @@ function _memAiCardHtml(sfx,fit,col){
   // [260804 2차 운영자 「예울이를 가로 차트 아래로」] col = 우 열(막대 카드 아래) 스택 모드 — 폭은 **열이 이미 정한다**(=100%),
   //   위 ②의 40% 축소는 「전폭 줄에 홀로 놓일 때」의 규약이라 열 안에서는 오히려 빈 유리를 만든다(적용 제외).
   //   높이는 fit 여부와 무관하게 고정(flex:0 0 auto) = 막대 카드가 남는 몫을 갖고 예울이는 자기 크기만 쓴다.
-  return '<div style="margin-top:'+(fit?14:24)+'px;width:'+(col?'100%':'min(100%,max(300px,40%))')+';background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden'+((fit||col)?';flex:0 0 auto;display:flex;flex-direction:column':'')+'">'
-    +'<div id="mem-ai-log-'+sfx+'" class="cb-body" style="'+(fit?'flex:0 0 auto;height:clamp(96px,16vh,190px)':'min-height:96px;max-height:190px')+';overflow-y:auto;padding:12px 14px"></div>'
+  // [260813 운영자 「마우스 포인터가 올라가면 대화창이 위에 거주지 TOP5 있는 구간까지 쭉 올라가게 — 대화로 고객질의하게」]
+  //   col 모드 = 카드가 **열 전체 높이로 깔리고**(.cb-rise = 절대배치 inset 0) 평소엔 아래 --rise-h 칸만 `clip-path`로 보인다.
+  //   호버·포커스 = 잘라내기가 0으로 가며 열 끝(거주지 TOP 5 윗선)까지 열린다 — 모양·커브 SSOT = CSS `.cb-rise`(위 정의 · 인라인 재타이핑 0).
+  //   로그창은 늘 카드 전체를 채우고(flex:1 1 auto) 대화는 아래에 붙는다(.cb-rise>.cb-body>:first-child{margin-top:auto}) =
+  //   접힘 칸에 보이는 것도, 펼친 뒤 이어 보는 것도 **같은 한 벌**이라 스크롤이 튀지 않는다(칸 높이가 안 변한다).
+  return '<div'+(col?' id="mem-ai-card-'+sfx+'" class="cb-rise"':'')+' style="'+(col?'':'margin-top:'+(fit?14:24)+'px;')+'width:'+(col?'100%':'min(100%,max(300px,40%))')+';background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden'+((fit||col)?';flex:0 0 auto;display:flex;flex-direction:column':'')+'">'
+    +'<div id="mem-ai-log-'+sfx+'" class="cb-body" style="'+(col?'flex:1 1 auto;min-height:0':(fit?'flex:0 0 auto;height:clamp(96px,16vh,190px)':'min-height:96px;max-height:190px'))+';overflow-y:auto;padding:12px 14px"></div>'
     // 입력줄 = FAB 예울이 정본 부품(.cb-foot/.cb-in/.cb-send) 그대로 — 「질문」 글자 버튼 → 종이비행기 픽토그램(정본 svg 동일 path)
     +'<div class="cb-foot">'
     +'<input id="mem-ai-q-'+sfx+'" class="cb-in" maxlength="200" placeholder="예: 순천 20대 회원 몇 명이야?" onkeydown="if(event.key===\'Enter\'&&!event.isComposing)_memAiSend(\''+sfx+'\')">'
@@ -28213,6 +28236,14 @@ function _memAiPaint(sfx){
   // [260804] 첫 화면(대화 0)은 맨 위 고정 — 종전처럼 바닥으로 밀면 좁아진 칸에서 **인사 말풍선이 위로 잘려 나간다**(실측: 칩 2행이 칸을 넘김).
   //   대화가 시작된 뒤에만 최신 줄로 따라간다(종전 동작 그대로).
   log.scrollTop=_memAiHist.length?log.scrollHeight:0;
+  // [260813] 접힘 칸의 아랫단(입력줄 + 카드 위·아래 테두리) = **실측으로 못 박는다**. CSS의 `--rise-foot:63px`은 폴백이고,
+  //   활자·줌·브라우저가 바뀌어 입력줄 높이가 달라지면 접힘 칸이 그만큼 어긋난다(입력줄이 잘리거나 빈 띠가 남는다).
+  //   innerHTML 직후 **같은 태스크**에서 재고 넣으니 첫 페인트 전에 반영된다 = 깜빡임 0.
+  var card=document.getElementById('mem-ai-card-'+sfx),col=card&&card.parentElement;
+  if(col&&col.classList&&col.classList.contains('cb-rise-col')){
+    var ft=card.querySelector('.cb-foot');
+    if(ft&&ft.offsetHeight)col.style.setProperty('--rise-foot',(ft.offsetHeight+2)+'px');
+  }
 }
 function _memAiPaintAll(){_memAiPaint('i');_memAiPaint('m');}
 function _memAiChip(sfx,t){var i=document.getElementById('mem-ai-q-'+sfx);if(i)i.value=t;_memAiSend(sfx);}
