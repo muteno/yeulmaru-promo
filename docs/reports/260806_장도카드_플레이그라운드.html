@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>260806 장도 입도 카드 — 플레이그라운드 (축 72)</title>
+<style>
+  /* 색 = docs/디자인기틀.md §0·§1 팔레트 값 그대로(신규 색 0):
+     #4A4DE7 --accent · #E8E8FD --accent-light · #D88455 --peach-text · #F0C4B8 --peach · #FDF6F3 --peach-bg
+     · #1A1A2E --text · #6B6B7B --neutral-text · #888 --dim · #bbb --muted · #EEEDF3 --neutral · #E1DFEC --neutral-d
+     · #E24B4A --danger-btn · #1A6B3C --green · #fff --surface-solid · rgba(0,0,0,.09) --border */
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Noto Sans KR','Apple SD Gothic Neo','Malgun Gothic',system-ui,sans-serif;color:#1A1A2E;background:#FDF6F3;padding:20px 14px 60px}
+  .head{max-width:1560px;margin:0 auto 16px}
+  h1{font-size:19px;font-weight:800;letter-spacing:-.3px}
+  .head p{font-size:12.5px;color:#888;margin-top:6px;line-height:1.65}
+  .head p b{color:#1A1A2E}
+  .wrap{max-width:1560px;margin:0 auto;display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap}
+  .stagewrap{flex:1 1 620px;min-width:320px;position:sticky;top:14px}
+  .console{flex:0 0 430px;max-width:100%;display:flex;flex-direction:column;gap:12px}
+  @media (max-width:1080px){.stagewrap{position:static}.console{flex:1 1 100%}}
+
+  .frame{background:#fff;border:1px solid rgba(0,0,0,.09);border-radius:16px;overflow:hidden}
+  .frame .bar{font-size:12px;font-weight:700;color:#6B6B7B;padding:9px 14px;border-bottom:1px solid rgba(0,0,0,.09);display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .frame .bar em{font-style:normal;color:#bbb;font-weight:400}
+  .post{padding:16px;background:rgba(0,0,0,.02)}
+  .post .ttl{font-size:15px;font-weight:800;margin-bottom:12px}
+  .lab{font-size:11px;font-weight:700;color:#888;margin:0 0 6px}
+  .lab.now{color:#4A4DE7}
+  .cardbox{margin:0 auto}
+  .cardbox img{width:100%;height:auto;display:block;border-radius:12px}
+  .ph{height:64px;border:1px dashed #bbb;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:11.5px;color:#bbb;margin-top:8px}
+  .stagecap{font-size:11.5px;color:#888;line-height:1.6;padding:10px 4px 0}
+
+  .csec{background:#fff;border:1px solid rgba(0,0,0,.09);border-radius:14px;padding:12px 14px}
+  .csec h3{font-size:12px;font-weight:800;margin-bottom:9px;display:flex;justify-content:space-between;align-items:center}
+  .csec h3 span{font-weight:400;color:#bbb;font-size:11px}
+  .row{display:flex;align-items:center;gap:8px;margin:5px 0}
+  .row label{flex:0 0 128px;font-size:11.5px;color:#6B6B7B;line-height:1.3}
+  .row label b{color:#1A1A2E;font-weight:700}
+  .row input[type=range]{flex:1;min-width:80px;accent-color:#4A4DE7;height:18px}
+  .row select{flex:1;min-width:80px;font:inherit;font-size:11.5px;padding:4px 6px;border:1px solid rgba(0,0,0,.12);border-radius:8px;background:#fff;color:#1A1A2E}
+  .val{flex:0 0 62px;text-align:right;font-size:11.5px;font-weight:700;font-variant-numeric:tabular-nums;color:#1A1A2E}
+  .row.warn label b,.row.warn .val{color:#D88455}
+  .row.warn::after{content:'⚠';flex:0 0 12px;font-size:11px;color:#D88455}
+  .row:not(.warn)::after{content:'';flex:0 0 12px}
+  .grp{font-size:10.5px;font-weight:800;color:#bbb;margin:12px 0 4px;letter-spacing:.4px}
+  .grp:first-child{margin-top:0}
+  .pills{display:flex;gap:6px;flex-wrap:wrap}
+  .pill{font:inherit;font-size:12px;font-weight:700;padding:7px 12px;border-radius:10px;border:1px solid rgba(0,0,0,.12);background:#fff;color:#6B6B7B;cursor:pointer}
+  .pill.on{background:#4A4DE7;border-color:#4A4DE7;color:#fff}
+  .pill.star{border-color:#4A4DE7;color:#4A4DE7}
+  .pill.star.on{color:#fff}
+  .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+  pre#out{background:#1A1A2E;color:#E8E8FD;font-size:11px;line-height:1.65;padding:12px 13px;border-radius:10px;overflow-x:auto;white-space:pre-wrap;word-break:break-all;max-height:280px;overflow-y:auto}
+  .btnrow{display:flex;gap:8px;margin-top:9px}
+  .btn{font:inherit;font-size:12.5px;font-weight:700;padding:9px 14px;border-radius:10px;border:1px solid rgba(0,0,0,.12);background:#fff;color:#6B6B7B;cursor:pointer}
+  .btn.pri{background:#4A4DE7;border-color:#4A4DE7;color:#fff;flex:1}
+  .note{font-size:11px;color:#888;line-height:1.7}
+  .note b{color:#D88455}
+  .cnt{font-size:11px;font-weight:700;color:#D88455}
+  .cnt.ok{color:#6B6B7B}
+  .modal{position:fixed;inset:0;background:rgba(26,26,46,.42);display:none;align-items:center;justify-content:center;padding:20px;z-index:2000}
+  .modal.on{display:flex}
+  .mbox{background:#fff;border-radius:20px;max-width:520px;width:100%;max-height:84vh;overflow:auto;box-shadow:0 20px 56px rgba(74,77,231,.16),0 6px 18px rgba(26,26,46,.07)}
+  .mhead{background:#4A4DE7;color:#fff;padding:14px 18px}
+  .mhead b{font-size:14px;font-weight:800;display:block}
+  .mhead span{font-size:11.5px;opacity:.85}
+  .mbody{padding:16px 18px;font-size:12.5px;line-height:1.75}
+  .mbody ul{margin:8px 0 0 18px}
+  .mbody li{margin:3px 0}
+  .mbody .tag{color:#D88455;font-weight:700}
+</style>
+</head>
+<body>
+<div class="head">
+  <h1>장도 입도 카드 — 플레이그라운드 <span style="font-size:12px;color:#bbb;font-weight:400">축 72개 · 폰트 포함</span></h1>
+  <p>홈페이지 글 1733 본문에 <code>&lt;img&gt;</code>로 실리는 카드(<code>/api/public/jangdo.svg</code>)를 <b>실물과 같은 조건</b>으로 재현했습니다 —
+  실제로 SVG를 그려 <code>&lt;img&gt;</code>에 넣으므로 스크립트는 죽고 애니메이션(SMIL)만 도는 것까지 같습니다.
+  <b>위 = 튜닝본 · 아래 = 현행(비교 기준·고정)</b>. 다 만지신 뒤 <b>[선택값 복사]</b>를 눌러 답장에 붙여 주시면 그대로 배선합니다.</p>
+</div>
+
+<div class="wrap">
+  <div class="stagewrap">
+    <div class="frame">
+      <div class="bar"><span>홈페이지 본문 재현</span><em id="dims">—</em></div>
+      <div class="post">
+        <div class="ttl">장도 입도가능 시간 안내</div>
+        <div class="lab now">튜닝본</div>
+        <div class="cardbox" id="boxA"><img id="cardA" alt="튜닝본"></div>
+        <div class="lab" style="margin-top:14px">현행 (비교 기준 · 고정)</div>
+        <div class="cardbox" id="boxB"><img id="cardB" alt="현행"></div>
+        <div class="ph">월별 캘린더 이미지 ×5 (기존 · 그대로 유지)</div>
+      </div>
+    </div>
+    <div class="stagecap">임베드 폭·시각·날짜·데이터 상황을 아래 [보기]에서 바꿔가며 확인하세요. 게이지 애니메이션은 카드가 다시 그려질 때마다 처음부터 재생됩니다.</div>
+  </div>
+
+  <aside class="console">
+    <div class="csec">
+      <h3>보기 <span>복사값에 안 들어감</span></h3>
+      <div class="grp">임베드 폭 (홈페이지 max-width)</div>
+      <div class="tabs" id="wtabs"></div>
+      <div class="grp">날짜 · 데이터 상황</div>
+      <div class="tabs" id="dtabs"></div>
+      <div class="tabs" id="ctabs"></div>
+      <div class="row"><label>지금 시각</label><input type="range" id="nowr" min="240" max="1410" step="15"><div class="val" id="nowv">—</div></div>
+    </div>
+
+    <div class="csec">
+      <h3>프리셋 <span>현행 포함 · ★ = 추천</span></h3>
+      <div class="pills" id="presets"></div>
+    </div>
+
+    <div class="csec">
+      <h3>미세조정 <span id="axcount">축 72</span></h3>
+      <div id="sliders"></div>
+    </div>
+
+    <div class="csec">
+      <h3>선택값 <span id="warncnt" class="cnt ok">기틀 이탈 0축</span></h3>
+      <pre id="out"></pre>
+      <div class="btnrow">
+        <button class="btn pri" id="copy">선택값 복사</button>
+        <button class="btn" id="reset">현행으로</button>
+      </div>
+    </div>
+
+    <div class="csec">
+      <h3>재현 한계 (읽어주세요)</h3>
+      <div class="note">
+        <b>① 폰트는 「방문자 기기에 있는 것」만 뜹니다.</b> <code>&lt;img&gt;</code>로 실린 SVG는 웹폰트를 못 받아옵니다(외부 요청 차단). 그래서 폰트 축은 <b>스택 순서를 고르는 것</b>이지 폰트를 심는 게 아닙니다 — 윈도우는 맑은 고딕, 맥·아이폰은 애플 SD 산돌고딕, 안드로이드는 노토로 각각 떨어집니다. <b>이 화면에 보이는 모양 = 지금 이 기기 기준</b>이라 다른 기기에선 다르게 보입니다. 폰트를 진짜로 고정하려면 글립을 추려 SVG 안에 심는 별도 작업이 필요합니다(가능 · 미착수).<br><br>
+        <b>② 애니메이션</b>은 실물과 같은 SMIL입니다. 다만 안 도는 환경 대비로 정적값을 「끝 상태」에 두었으므로, 애니메이션이 꺼진 곳에서는 게이지가 <b>처음부터 채워진 채로</b> 보입니다(빈 채로가 아니라).<br><br>
+        <b>③ 활자 사다리</b> — 슬라이더 눈금은 <code>index.html</code>에서 실측한 실존 크기를, 카드가 1000폭으로 그려져 760에 축소돼 실리는 것을 감안해 <b>환산해</b> 얹은 것입니다. <b>현행 카드 값 4축(제목·시간·상태 크기, 카드 모서리)은 이미 사다리 칸 사이</b>에 있습니다 — 카드가 앱 DOM이 아니라 독립 이미지라 자체 배율을 쓰기 때문입니다. 이건 <b>이번 제안과 무관한 선재 사항</b>이라 ⚠로 세지 않고 선택값 맨 아래 「ℹ 선재」로만 알립니다(맞출지는 운영자 판단). ⚠는 <b>이번에 값을 바꿔서 새로 생긴 이탈</b>에만 붙습니다.<br><br>
+        <b>④ 색</b>은 기틀 팔레트에서만 고르게 잠갔습니다(자유 hex 없음). 역할을 바꾸면(예: 「가능」을 초록에서 다른 칩으로) <span class="tag">⚠</span>가 붙고, 복사할 때 「기틀 갱신 역제안」으로 나갑니다.
+      </div>
+    </div>
+  </aside>
+</div>
+
+<div class="modal" id="modal"><div class="mbox">
+  <div class="mhead"><b>기틀 이탈 축이 있습니다</b><span>이대로 복사하면 「기틀 갱신 역제안」이 함께 나갑니다</span></div>
+  <div class="mbody">
+    <div>아래 축은 <code>docs/디자인기틀.md</code>의 확립값·팔레트 역할에서 벗어납니다. 회신하시면 <b>이 카드만</b>이 아니라 해당 축의 <b>기틀 자체를 바꾸는</b> 승인 경로로 들어갑니다.</div>
+    <ul id="mlist"></ul>
+    <div class="btnrow" style="margin-top:14px">
+      <button class="btn pri" id="mAll">역제안 포함 복사</button>
+      <button class="btn" id="mKeep">계승분만 복사</button>
+      <button class="btn" id="mCancel">취소</button>
+    </div>
+  </div>
+</div></div>
+
+<script>
+/* ═══ 팔레트 (기틀 §0 폐쇄형 — 이 칩이 전부) ═══ */
+var PAL=[['--accent','#4A4DE7','인디고'],['--accent-light','#E8E8FD','인디고 틴트'],['--peach-text','#D88455','살몬'],
+['--peach','#F0C4B8','살몬 틴트'],['--peach-light','#FBF0EC','살몬 연틴트'],['--peach-bg','#FDF6F3','살몬 배경'],
+['--green','#1A6B3C','딥그린'],['--c4','#C02872','마젠타'],['--c5','#2D8AB3','시안블루'],['--c6','#F5B400','옐로'],
+['--danger-btn','#E24B4A','위험 레드'],['--text','#1A1A2E','본문'],['--neutral-text','#6B6B7B','중립 텍스트'],
+['--dim','#888','흐린 텍스트'],['--muted','#bbb','더 흐린 텍스트'],['--neutral','#EEEDF3','뉴트럴'],
+['--neutral-d','#E1DFEC','뉴트럴 진한'],['--surface-solid','#fff','흰 면']];
+var HEX2TOK={};PAL.forEach(function(p){if(!HEX2TOK[p[1]])HEX2TOK[p[1]]=p[0]});
+/* index.html 실측 활자 사다리 */
+var FS_LADDER=[8,9,10,10.5,11,11.5,12,12.5,13,13.5,14,15,16,18,20,22,26,30];
+var FW_LADDER=[400,500,600,700,800,900];
+var R_LADDER=[2,4,6,7,8,9,10,12,14,999];
+var FONTS=[
+ ["'Noto Sans KR','Apple SD Gothic Neo','Malgun Gothic',sans-serif","현행 — 노토 우선"],
+ ["'Apple SD Gothic Neo','Noto Sans KR','Malgun Gothic',sans-serif","애플 SD 고딕 우선"],
+ ["'Malgun Gothic','Apple SD Gothic Neo','Noto Sans KR',sans-serif","맑은 고딕 우선"],
+ ["'Pretendard','Pretendard Variable','Noto Sans KR','Apple SD Gothic Neo',sans-serif","프리텐다드 우선"],
+ ["system-ui,-apple-system,'Segoe UI','Noto Sans KR',sans-serif","시스템 UI"],
+ ["'Gothic A1','Noto Sans KR','Apple SD Gothic Neo',sans-serif","고딕 A1"],
+ ["'NanumGothic','Nanum Gothic','Noto Sans KR',sans-serif","나눔고딕"],
+ ["'NanumSquare','Noto Sans KR','Apple SD Gothic Neo',sans-serif","나눔스퀘어"],
+ ["'AppleMyungjo','Batang','Nanum Myeongjo',serif","명조 (세리프)"],
+ ["'Apple SD Gothic Neo','Noto Sans KR',sans-serif","좁은 스택 (2종)"]];
+var EASES=[["0.22 1 0.36 1","현행 — 빠르게 붙는"],["0 0 1 1","등속"],["0.65 0 0.35 1","가운데 빠른"],["0.33 1 0.68 1","부드럽게"],["0.34 1.56 0.64 1","살짝 튕김"]];
+
+/* ═══ 현행값 (src/index.js buildJangdoSvg 실측 — 기본값은 반드시 현행) ═══ */
+var D={
+ W:1000,pad:36,radius:16,yTitle:52,gapTime:52,lhTime:1.34,gapStat:38,gapGauge:28,gapTick:22,gapNote:26,padBot:20,
+ font:0,fsTitle:22,fwTitle:800,lsTitle:0,fsDate:17,fwDate:400,fsTime:32,fwTime:800,lsTime:0,fsStat:19,fwStat:700,
+ fsTick:13,fwTick:400,fsLeg:13.5,fsNote:13,fwNote:400,
+ barH:30,barR:15,segMin:3,tickStep:120,tickLen:5,tickShow:1,mkW:2.5,mkOver:7,mkDotR:4.5,mkDotY:11,
+ pingMax:15,pingDur:2.2,pingOn:1,wipeDur:0.95,wipeEase:0,wipeOn:1,dotR:6.5,dotPulse:1,
+ legShow:1,legSide:1,legSw:13,legSwR:3.5,
+ cOk:'#4A4DE7',aOk:1,cTrack:'#E1DFEC',cMk:'#1A1A2E',aMk:1,cTitle:'#1A1A2E',cTime:'#1A1A2E',cDate:'#888',
+ cBadge:'#4A4DE7',cStatOk:'#4A4DE7',cStatNo:'#E24B4A',cStatEnd:'#888',cTick:'#bbb',cNote:'#bbb',cCard:'#fff',aBorder:0.09,
+ noonStyle:0,endPrefix:0,zeroMin:0,tickFmt:0,noteShow:1,tildeStyle:0,dateShow:1
+};
+/* 색 축의 「현행 역할」 — 여기서 벗어나면 역할 재지정 = ⚠ */
+var COLOR_KEYS=['cOk','cTrack','cMk','cTitle','cTime','cDate','cBadge','cStatOk','cStatNo','cStatEnd','cTick','cNote','cCard'];
+
+/* ═══ 축 정의 (72) ═══ */
+var AX=[
+ {g:'레이아웃·간격'},
+ {k:'W',n:'카드 캔버스 폭',min:700,max:1300,step:20,u:'px',d:'viewBox 폭'},
+ {k:'pad',n:'좌우 여백',min:16,max:72,step:2,u:'px'},
+ {k:'radius',n:'카드 모서리',min:0,max:32,step:1,u:'px',lad:'r'},
+ {k:'yTitle',n:'상단 여백(제목 기준선)',min:32,max:80,step:2,u:'px'},
+ {k:'gapTime',n:'제목 → 시간',min:30,max:80,step:2,u:'px'},
+ {k:'lhTime',n:'시간 줄간격(배수)',min:1.0,max:1.9,step:0.02,u:'×'},
+ {k:'gapStat',n:'시간 → 상태줄',min:22,max:60,step:2,u:'px'},
+ {k:'gapGauge',n:'상태줄 → 게이지',min:12,max:56,step:2,u:'px'},
+ {k:'gapTick',n:'게이지 → 눈금',min:12,max:40,step:1,u:'px'},
+ {k:'gapNote',n:'눈금 → 각주',min:14,max:50,step:2,u:'px'},
+ {k:'padBot',n:'하단 여백',min:8,max:44,step:2,u:'px'},
+
+ {g:'활자 (확립 축 — 눈금 = 앱 실존값 환산)'},
+ {k:'font',n:'폰트 스택',sel:FONTS,warnIf:function(s){return s.font!==0}},
+ {k:'fsTitle',n:'제목 크기',min:14,max:40,step:0.5,u:'px',lad:'fs'},
+ {k:'fwTitle',n:'제목 굵기',min:300,max:900,step:100,lad:'fw'},
+ {k:'lsTitle',n:'제목 자간',min:-1,max:2,step:0.1,u:'px'},
+ {k:'fsDate',n:'날짜 크기',min:11,max:28,step:0.5,u:'px',lad:'fs'},
+ {k:'fwDate',n:'날짜 굵기',min:300,max:900,step:100,lad:'fw'},
+ {k:'fsTime',n:'시간 크기 (주역)',min:18,max:56,step:1,u:'px',lad:'fs'},
+ {k:'fwTime',n:'시간 굵기',min:300,max:900,step:100,lad:'fw'},
+ {k:'lsTime',n:'시간 자간',min:-2,max:3,step:0.1,u:'px'},
+ {k:'fsStat',n:'상태줄 크기',min:12,max:30,step:0.5,u:'px',lad:'fs'},
+ {k:'fwStat',n:'상태줄 굵기',min:300,max:900,step:100,lad:'fw'},
+ {k:'fsTick',n:'눈금 글자 크기',min:8,max:22,step:0.5,u:'px',lad:'fs'},
+ {k:'fwTick',n:'눈금 글자 굵기',min:300,max:900,step:100,lad:'fw'},
+ {k:'fsLeg',n:'범례 크기',min:9,max:20,step:0.5,u:'px',lad:'fs'},
+ {k:'fsNote',n:'각주 크기',min:9,max:20,step:0.5,u:'px',lad:'fs'},
+ {k:'fwNote',n:'각주 굵기',min:300,max:900,step:100,lad:'fw'},
+
+ {g:'게이지 · 마커'},
+ {k:'barH',n:'막대 높이',min:10,max:56,step:2,u:'px'},
+ {k:'barR',n:'막대 모서리',min:0,max:28,step:1,u:'px'},
+ {k:'segMin',n:'구간 최소 폭',min:1,max:14,step:1,u:'px'},
+ {k:'tickStep',n:'눈금 간격',min:60,max:240,step:60,u:'분'},
+ {k:'tickLen',n:'눈금선 길이',min:0,max:14,step:1,u:'px'},
+ {k:'tickShow',n:'눈금 표시',min:0,max:1,step:1,bool:1},
+ {k:'mkW',n:'「지금」 선 굵기',min:1,max:7,step:.5,u:'px'},
+ {k:'mkOver',n:'「지금」 선 여유',min:0,max:20,step:1,u:'px'},
+ {k:'mkDotR',n:'「지금」 점 크기',min:0,max:11,step:.5,u:'px'},
+ {k:'mkDotY',n:'「지금」 점 높이',min:0,max:26,step:1,u:'px'},
+ {k:'pingMax',n:'박동 최대 반지름',min:5,max:34,step:1,u:'px'},
+ {k:'pingDur',n:'박동 주기',min:0.8,max:5,step:.1,u:'s'},
+ {k:'pingOn',n:'박동 켜기',min:0,max:1,step:1,bool:1},
+ {k:'wipeDur',n:'게이지 차오름 시간',min:0,max:2.5,step:.05,u:'s'},
+ {k:'wipeEase',n:'차오름 이징',sel:EASES},
+ {k:'wipeOn',n:'차오름 켜기',min:0,max:1,step:1,bool:1},
+ {k:'dotR',n:'상태 점 크기',min:0,max:12,step:.5,u:'px'},
+ {k:'dotPulse',n:'상태 점 깜빡임',min:0,max:1,step:1,bool:1},
+ {k:'legShow',n:'범례 표시',min:0,max:1,step:1,bool:1},
+ {k:'legSide',n:'범례 위치',sel:[['0','왼쪽'],['1','오른쪽 (현행)']]},
+ {k:'legSw',n:'범례 색칩 크기',min:8,max:22,step:1,u:'px'},
+ {k:'legSwR',n:'범례 색칩 모서리',min:0,max:11,step:.5,u:'px'},
+
+ {g:'색 (팔레트 폐쇄 — 역할 바꾸면 ⚠)'},
+ {k:'cOk',n:'「가능」 구간',col:1},
+ {k:'aOk',n:'「가능」 투명도',min:.2,max:1,step:.02,u:''},
+ {k:'cTrack',n:'「물에 잠김」 트랙',col:1},
+ {k:'cMk',n:'「지금」 마커',col:1},
+ {k:'aMk',n:'「지금」 마커 투명도',min:.2,max:1,step:.02,u:''},
+ {k:'cTitle',n:'제목 글자',col:1},
+ {k:'cTime',n:'시간 글자',col:1},
+ {k:'cDate',n:'날짜 글자',col:1},
+ {k:'cBadge',n:'「오늘/내일」 배지',col:1},
+ {k:'cStatOk',n:'상태 — 가능',col:1},
+ {k:'cStatNo',n:'상태 — 불가',col:1},
+ {k:'cStatEnd',n:'상태 — 종료',col:1},
+ {k:'cTick',n:'눈금 글자',col:1},
+ {k:'cNote',n:'각주 글자',col:1},
+ {k:'cCard',n:'카드 바탕',col:1},
+ {k:'aBorder',n:'카드 테두리 진하기',min:0,max:.3,step:.01,u:''},
+
+ {g:'표기'},
+ {k:'noonStyle',n:'정오 표기',sel:[['0','낮 12시 (현행)'],['1','오후 12시'],['2','12시 (생략)']]},
+ {k:'endPrefix',n:'끝 시각 오전/오후',sel:[['0','넘어갈 때만 (현행)'],['1','항상 붙임'],['2','절대 안 붙임']]},
+ {k:'zeroMin',n:'정각의 「00분」',sel:[['0','생략 — 10시 (현행)'],['1','표기 — 10시 00분']]},
+ {k:'tickFmt',n:'눈금 라벨',sel:[['0','오전6시 (현행)'],['1','오전 6'],['2','6시'],['3','06:00']]},
+ {k:'tildeStyle',n:'구간 기호',sel:[['0','~ (현행)'],['1','–'],['2','부터 … 까지']]},
+ {k:'noteShow',n:'맨 아래 각주',min:0,max:1,step:1,bool:1},
+ {k:'dateShow',n:'우상단 날짜',min:0,max:1,step:1,bool:1}
+];
+
+/* ═══ 프리셋 (현행 포함 · ★ 1개) ═══ */
+var PRESETS=[
+ {nm:'현행',st:{}},
+ {nm:'★ 크게·차분히',star:1,st:{fsTime:36,fwTime:800,lsTime:-.4,fsTitle:20,fsStat:18,barH:34,barR:17,gapGauge:32,gapTick:24,pingMax:13,wipeDur:1.1,fsTick:13.5,cDate:'#6B6B7B'}},
+ {nm:'담백 (움직임 최소)',st:{pingOn:0,dotPulse:0,wipeDur:0,wipeOn:0,barH:22,barR:11,mkDotR:3.5,pingMax:8,legSw:11,fsTime:29}},
+ {nm:'큰 글씨 우선 (시니어)',st:{fsTime:40,fwTime:900,fsTitle:24,fsStat:22,fwStat:800,fsTick:15,fwTick:600,fsNote:15,cNote:'#888',cTick:'#888',barH:36,barR:18,lhTime:1.42}},
+ {nm:'게이지 주역',st:{fsTime:24,barH:44,barR:22,gapGauge:34,gapTick:26,fsTick:14,legSw:15,mkW:3.5,mkDotR:6,pingMax:20}}
+];
+
+/* ═══ 데이터 상황 ═══ */
+var CASES=[
+ {nm:'정상 (2구간)',rows:[{d:'2026-08-06',t:'6:00~12:21, 14:45~22:00'},{d:'2026-08-07',t:'6:00~13:32, 15:36~22:00'}]},
+ {nm:'3구간',rows:[{d:'2026-08-06',t:'6:00~8:10, 10:30~14:20, 16:40~22:00'},{d:'2026-08-07',t:'7:00~13:00, 15:00~21:00'}]},
+ {nm:'통상 창 밖',rows:[{d:'2026-08-06',t:'5:00~11:40, 13:20~23:00'},{d:'2026-08-07',t:'6:00~12:00'}]},
+ {nm:'통제 공지',rows:[{d:'2026-08-06',t:'기상 악화로 통제'}]},
+ {nm:'미등록',rows:[]}
+];
+var WIDTHS=[['760','760 (지금 홈페이지)'],['900','900'],['1000','1000 (권장)'],['0','폭 100%']];
+
+/* ═══ 카드 빌더 — src/index.js buildJangdoSvg의 JS 포팅(튜닝 축만 변수화) ═══ */
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+function parseRanges(t){if(!t)return null;var out=[],segs=String(t).split(/[,·]/);
+ for(var i=0;i<segs.length;i++){var m=segs[i].trim().match(/^(\d{1,2})\s*:\s*(\d{2})\s*[~∼–-]\s*(\d{1,2})\s*:\s*(\d{2})$/);
+ if(!m)return null;out.push([+m[1]*60+ +m[2],+m[3]*60+ +m[4]])}return out.length?out:null}
+function ymdAdd(y,n){var a=y.split('-');return new Date(Date.UTC(+a[0],+a[1]-1,+a[2]+n)).toISOString().slice(0,10)}
+function ymdLabel(y){var a=y.split('-'),d=new Date(Date.UTC(+a[0],+a[1]-1,+a[2]));
+ return (+a[1])+'월 '+(+a[2])+'일 ('+'일월화수목금토'[d.getUTCDay()]+')'}
+
+function build(S,ctx){
+  var half=function(m){var h=Math.floor(m/60)%24;return h<12?0:(h===12?1:2)};
+  var pre=function(m){var b=half(m);if(b===1)return S.noonStyle==0?'낮 ':(S.noonStyle==1?'오후 ':'');return b===0?'오전 ':'오후 '};
+  var hm=function(m){var h=(Math.floor(m/60)%12)||12,mm=m%60;
+    return h+'시'+(mm?' '+mm+'분':(S.zeroMin==1?' 00분':''))};
+  var at=function(m){return pre(m)+hm(m)};
+  var tilde=[' ~ ',' – ','부터 '];
+  var rng=function(r){
+    var showEnd = S.endPrefix==1 ? 1 : (S.endPrefix==2 ? 0 : (half(r[1])===half(r[0])||half(r[1])===1?0:1));
+    var tail=(showEnd?at(r[1]):hm(r[1]))+(S.tildeStyle==2?'까지':'');
+    return at(r[0])+tilde[S.tildeStyle]+tail};
+  var tickLabel=function(m){var h24=Math.floor(m/60)%24,h=(h24%12)||12,p=pre(m).trim();
+    if(S.tickFmt==0)return p+h+'시'; if(S.tickFmt==1)return p+' '+h;
+    if(S.tickFmt==2)return h+'시'; return ('0'+h24).slice(-2)+':00'};
+  var estEm=function(s){var w=0;for(var i=0;i<s.length;i++){var c=s[i];
+    w+= /[가-힣]/.test(c)?1:(c===' '?0.28:0.62)}return w};
+
+  var map={};ctx.rows.forEach(function(r){map[r.d]=r.t});
+  var day=ymdAdd(ctx.today,ctx.off),isToday=ctx.off===0;
+  var rawT=map[day],ranges=parseRanges(rawT);
+  var AX0=360,AX1=1320;
+  if(ranges)ranges.forEach(function(r){AX0=Math.min(AX0,r[0]);AX1=Math.max(AX1,r[1])});
+  AX0=Math.floor(AX0/60)*60;AX1=Math.ceil(AX1/60)*60;
+  var W=S.W,PAD=S.pad,GX=PAD,GW=W-PAD*2;
+  var px=function(m){return GX+(Math.max(AX0,Math.min(AX1,m))-AX0)/(AX1-AX0)*GW};
+  var y=S.yTitle,body='',defs='';
+  var badge=ctx.off===0?'오늘':(ctx.off===1?'내일':'');
+  body+='<text x="'+PAD+'" y="'+y+'" font-size="'+S.fsTitle+'" font-weight="'+S.fwTitle+'" letter-spacing="'+S.lsTitle+'" fill="'+S.cTitle+'">장도 입도 가능 시간</text>';
+  if(S.dateShow==1)body+='<text x="'+(W-PAD)+'" y="'+y+'" text-anchor="end" font-size="'+S.fsDate+'" font-weight="'+S.fwDate+'" fill="'+S.cDate+'">'+esc(ymdLabel(day))+(badge?' <tspan fill="'+S.cBadge+'" font-weight="700">'+badge+'</tspan>':'')+'</text>';
+
+  if(ranges){
+    var lines=ranges.map(rng),mx=0;lines.forEach(function(l){mx=Math.max(mx,estEm(l))});
+    var fs=Math.min(S.fsTime,Math.max(16,Math.floor(GW/mx)));
+    lines.forEach(function(ln,i){
+      y+= i===0?S.gapTime:Math.round(fs*S.lhTime);
+      body+='<text x="'+PAD+'" y="'+y+'" font-size="'+fs+'" font-weight="'+S.fwTime+'" letter-spacing="'+S.lsTime+'" fill="'+S.cTime+'">'+esc(ln)+'</text>'});
+    y+= isToday?S.gapStat:Math.round(S.gapStat*0.79);
+    if(isToday){
+      var dot=S.cStatEnd,txt='오늘 입도 시간이 종료됐어요',col=S.cStatEnd,live=0;
+      for(var i=0;i<ranges.length;i++){var r=ranges[i];
+        if(ctx.now>=r[0]&&ctx.now<r[1]){dot=col=S.cStatOk;txt='지금 입도 가능 · '+at(r[1])+'까지';live=1;break}
+        if(ctx.now<r[0]){dot=col=S.cStatNo;txt='지금은 입도 불가 · '+at(r[0])+'부터 입도 가능';break}}
+      if(S.dotR>0)body+='<circle cx="'+(PAD+S.dotR)+'" cy="'+(y-6)+'" r="'+S.dotR+'" fill="'+dot+'">'+((live&&S.dotPulse==1)?'<animate attributeName="opacity" values="1;0.35;1" dur="2.2s" repeatCount="indefinite"/>':'')+'</circle>';
+      body+='<text x="'+(PAD+(S.dotR>0?S.dotR*2+10:0))+'" y="'+y+'" font-size="'+S.fsStat+'" font-weight="'+S.fwStat+'" fill="'+col+'">'+esc(txt)+'</text>'}
+    if(S.legShow==1){
+      var lx=S.legSide==1?(W-PAD-164):PAD, sw=S.legSw;
+      body+='<rect x="'+lx+'" y="'+(y-sw-2)+'" width="'+sw+'" height="'+sw+'" rx="'+S.legSwR+'" fill="'+S.cOk+'" fill-opacity="'+S.aOk+'"/>'
+        +'<text x="'+(lx+sw+5)+'" y="'+(y-4)+'" font-size="'+S.fsLeg+'" fill="'+S.cDate+'">입도 가능</text>'
+        +'<rect x="'+(lx+sw+72)+'" y="'+(y-sw-2)+'" width="'+sw+'" height="'+sw+'" rx="'+S.legSwR+'" fill="'+S.cTrack+'"/>'
+        +'<text x="'+(lx+sw*2+77)+'" y="'+(y-4)+'" font-size="'+S.fsLeg+'" fill="'+S.cDate+'">물에 잠김</text>'}
+
+    var BT=y+S.gapGauge,BH=S.barH,BR=Math.min(S.barR,BH/2);
+    var wipeOn=(S.wipeOn==1&&S.wipeDur>0);
+    if(wipeOn)defs+='<clipPath id="wipe"><rect x="'+GX+'" y="'+(BT-40)+'" width="'+GW+'" height="'+(BH+80)+'">'
+      +'<animate attributeName="width" values="0;'+GW+'" keyTimes="0;1" dur="'+S.wipeDur+'s" begin="0s" calcMode="spline" keySplines="'+EASES[S.wipeEase][0]+'" fill="freeze"/></rect></clipPath>';
+    body+='<rect x="'+GX+'" y="'+BT+'" width="'+GW+'" height="'+BH+'" rx="'+BR+'" fill="'+S.cTrack+'"/>';
+    var segs='';
+    ranges.forEach(function(r){var x0=px(r[0]),x1=px(r[1]);
+      segs+='<rect x="'+x0.toFixed(1)+'" y="'+BT+'" width="'+Math.max(S.segMin,x1-x0).toFixed(1)+'" height="'+BH+'" rx="'+BR+'" fill="'+S.cOk+'" fill-opacity="'+S.aOk+'"/>'});
+    if(isToday&&ctx.now>=AX0&&ctx.now<=AX1){
+      var nx=px(ctx.now).toFixed(1);
+      if(S.mkW>0)segs+='<line x1="'+nx+'" y1="'+(BT-S.mkOver)+'" x2="'+nx+'" y2="'+(BT+BH+S.mkOver)+'" stroke="'+S.cMk+'" stroke-opacity="'+S.aMk+'" stroke-width="'+S.mkW+'" stroke-linecap="round"/>';
+      if(S.mkDotR>0){
+        if(S.pingOn==1)segs+='<circle cx="'+nx+'" cy="'+(BT-S.mkDotY)+'" r="'+S.mkDotR+'" fill="'+S.cMk+'" fill-opacity="'+(S.aMk*0.42).toFixed(2)+'">'
+          +'<animate attributeName="r" values="'+S.mkDotR+';'+S.pingMax+'" dur="'+S.pingDur+'s" repeatCount="indefinite"/>'
+          +'<animate attributeName="fill-opacity" values="'+(S.aMk*0.42).toFixed(2)+';0" dur="'+S.pingDur+'s" repeatCount="indefinite"/></circle>';
+        segs+='<circle cx="'+nx+'" cy="'+(BT-S.mkDotY)+'" r="'+S.mkDotR+'" fill="'+S.cMk+'" fill-opacity="'+S.aMk+'"/>'}}
+    body+= wipeOn?('<g clip-path="url(#wipe)">'+segs+'</g>'):segs;
+
+    var TY=BT+BH+S.gapTick;
+    if(S.tickShow==1){
+      for(var m=AX0;m<=AX1;m+=S.tickStep){
+        var tx=px(m),txs=tx.toFixed(1),an=tx<GX+18?'start':(tx>GX+GW-18?'end':'middle');
+        if(S.tickLen>0)body+='<line x1="'+txs+'" y1="'+(BT+BH+3)+'" x2="'+txs+'" y2="'+(BT+BH+3+S.tickLen)+'" stroke="#000" stroke-opacity="0.09" stroke-width="1"/>';
+        body+='<text x="'+txs+'" y="'+TY+'" text-anchor="'+an+'" font-size="'+S.fsTick+'" font-weight="'+S.fwTick+'" fill="'+S.cTick+'">'+tickLabel(m)+'</text>'}
+      y=TY}else{y=BT+BH+4}
+  }else{
+    y+=50;
+    body+='<text x="'+PAD+'" y="'+y+'" font-size="'+(rawT?S.fsTime*0.8:S.fsTime*0.62)+'" font-weight="700" fill="'+(rawT?S.cTime:S.cDate)+'">'
+      +esc(rawT||((isToday?'오늘':'이 날짜의')+' 입도 시간이 아직 등록되지 않았어요'))+'</text>'}
+
+  if(S.noteShow==1){y+=S.gapNote;
+    body+='<text x="'+PAD+'" y="'+y+'" font-size="'+S.fsNote+'" font-weight="'+S.fwNote+'" fill="'+S.cNote+'">위 시간 외에는 진섬다리가 물에 잠겨 출입이 불가합니다. 아래 월별 캘린더도 함께 확인해 주세요.</text>'}
+  var H=Math.round(y+S.padBot);
+  return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+W+' '+H+'" width="'+W+'" height="'+H+'" role="img" aria-label="장도 입도 가능 시간" font-family="'+esc(FONTS[S.font][0])+'">'
+   +(defs?'<defs>'+defs+'</defs>':'')
+   +'<rect x="1" y="1" width="'+(W-2)+'" height="'+(H-2)+'" rx="'+S.radius+'" fill="'+S.cCard+'" stroke="#000" stroke-opacity="'+S.aBorder+'"/>'
+   +body+'</svg>'}
+
+function toImg(svg){return 'data:image/svg+xml;base64,'+btoa(unescape(encodeURIComponent(svg)))}
+
+/* ═══ 상태 ═══ */
+var S=Object.assign({},D);
+var V={embedW:'1000',off:0,cs:0,now:15*60+30};
+var TODAY='2026-08-06';
+var el=function(i){return document.getElementById(i)};
+
+/* ═══ 판정 ═══ */
+function nearLad(v,lad){for(var i=0;i<lad.length;i++)if(Math.abs(v-lad[i])<0.401)return 1;return 0}
+function ladOf(ax){                          /* 카드 캔버스 → 760 환산 사다리 */
+  if(ax.lad==='fs')return FS_LADDER.map(function(v){return +(v*S.W/760).toFixed(1)});
+  if(ax.lad==='fw')return FW_LADDER;
+  if(ax.lad==='r')return R_LADDER;return null}
+function isWarn(ax){
+  if(ax.col)return S[ax.k]!==D[ax.k];
+  if(ax.warnIf)return ax.warnIf(S)?1:0;
+  var l=ladOf(ax);if(!l)return 0;
+  if(ax.lad==='fs')return nearLad(S[ax.k]*760/S.W,FS_LADDER)?0:1;
+  return nearLad(S[ax.k],l)?0:1}
+/* ⚠는 두 종류다 — ①운영자가 이번에 만든 이탈(= 역제안 대상) ②현행부터 있던 것(= 선재 부채, 알리기만).
+   가르지 않으면 아무것도 안 바꿨는데도 「이탈 4축」이 떠서 위반처럼 읽힌다(카드는 앱 DOM이 아니라 독립
+   이미지라 자체 배율을 쓰고, 그래서 현행 활자 일부가 앱 사다리 칸 사이에 있다). */
+function warnList(){var o=[];AX.forEach(function(ax){if(ax.g||!isWarn(ax))return;
+  if(S[ax.k]===D[ax.k])return;                       // 안 바꾼 축 = 선재 부채이지 이번 제안이 아니다
+  var cur=ax.col?(HEX2TOK[D[ax.k]]||D[ax.k]):D[ax.k], nw=ax.col?(HEX2TOK[S[ax.k]]||S[ax.k]):S[ax.k];
+  if(ax.sel){cur=ax.sel[D[ax.k]][1];nw=ax.sel[S[ax.k]][1]}
+  o.push({n:ax.n,from:cur,to:nw,col:!!ax.col,fs:ax.lad==='fs'})});return o}
+function baseWarnList(){var o=[];AX.forEach(function(ax){if(ax.g||ax.col||!isWarn(ax))return;
+  if(S[ax.k]!==D[ax.k])return;
+  o.push({n:ax.n,v:D[ax.k],rendered:ax.lad==='fs'?+(D[ax.k]*760/S.W).toFixed(1):null})});return o}
+
+/* ═══ 그리기 ═══ */
+function render(){
+  var ctx={rows:CASES[V.cs].rows,today:TODAY,off:V.off,now:V.now};
+  var a=build(S,ctx), b=build(D,ctx);
+  el('cardA').src=toImg(a); el('cardB').src=toImg(b);
+  var w=V.embedW==='0'?'none':V.embedW+'px';
+  el('boxA').style.maxWidth=w; el('boxB').style.maxWidth=w;
+  var vb=a.match(/viewBox="0 0 (\d+) (\d+)"/);
+  el('dims').textContent=vb?(vb[1]+'×'+vb[2]+' · 표시 '+(V.embedW==='0'?'100%':V.embedW+'px')):'—';
+  var wl=warnList(),bw=baseWarnList();
+  el('warncnt').textContent='새 이탈 '+wl.length+'축'+(bw.length?' · 현행부터 '+bw.length+'축':'');
+  el('warncnt').className='cnt'+(wl.length?'':' ok');
+  buildOut(wl,bw)}
+
+function fmtV(ax){var v=S[ax.k];
+  if(ax.sel)return '';                                   // 셀렉트는 그 자체가 값 표시 — 옆에 또 쓰면 줄이 접힌다
+  if(ax.col)return (HEX2TOK[v]||v).replace('--','');
+  if(ax.bool)return v?'켬':'끔';
+  return v+(ax.u||'')}
+function fmtVout(ax){var v=S[ax.k];                      // 복사 출력용(라벨 그대로)
+  if(ax.sel)return ax.sel[v][1].replace(/ \(현행\)/,'');
+  if(ax.col)return (HEX2TOK[v]||v);
+  if(ax.bool)return v?'켬':'끔';
+  return v+(ax.u||'')}
+function buildOut(wl,bw){
+  var L=['[장도 입도 카드 — 선택값]','(빈 줄 = 현행 그대로 · → 가 있는 줄만 바뀐 값)',''];
+  var cur='';
+  AX.forEach(function(ax){
+    if(ax.g){cur=ax.g;return}
+    if(S[ax.k]===D[ax.k])return;
+    var d=ax.sel?ax.sel[D[ax.k]][1]:(ax.col?(HEX2TOK[D[ax.k]]||D[ax.k]):(ax.bool?(D[ax.k]?'켬':'끔'):D[ax.k]+(ax.u||'')));
+    var n=fmtVout(ax);
+    var tag=(isWarn(ax)&&S[ax.k]!==D[ax.k])?'   ⚠':(ax.col?'   (팔레트 계승)':'');
+    L.push('· ['+cur+'] '+ax.n+' : '+d+' → '+n+tag)});
+  if(L.length===3)L.push('(바꾼 축 없음 — 현행 그대로)');
+  L.push('');L.push('보기 상태(참고): 임베드 폭 '+(V.embedW==='0'?'100%':V.embedW)+' · '+(V.off?'내일':'오늘')+' · '+CASES[V.cs].nm);
+  if(wl.length){L.push('');L.push('🔁 기틀 갱신 역제안 '+wl.length+'건 — 회신 = 이 카드만이 아니라 해당 축의 기틀 자체를 바꾸는 승인');
+    wl.forEach(function(w){L.push('   · '+w.n+' : 기틀 '+w.from+' → 제안 '+w.to+(w.col?'  [역할 재지정 · 적용 범위 = 전 앱 동축]':'  [실존 사다리 밖]'))})}
+  if(bw&&bw.length){L.push('');L.push('ℹ 선재 — 현행부터 앱 활자·라운드 사다리 밖인 축 '+bw.length+'건 (이번 제안과 무관 · 맞출지는 운영자 판단)');
+    bw.forEach(function(w){L.push('   · '+w.n+' : '+w.v+(w.rendered!==null?'  (760폭 환산 '+w.rendered+'px)':''))})}
+  el('out').textContent=L.join('\n')}
+
+/* ═══ UI 조립 ═══ */
+function mkTabs(host,items,get,set){
+  host.innerHTML='';
+  items.forEach(function(it,i){
+    var b=document.createElement('button');b.className='pill'+(get()===it[0]?' on':'');
+    b.textContent=it[1];b.onclick=function(){set(it[0]);
+      Array.prototype.forEach.call(host.children,function(c){c.classList.remove('on')});
+      b.classList.add('on');render()};
+    host.appendChild(b)})}
+
+mkTabs(el('wtabs'),WIDTHS,function(){return V.embedW},function(v){V.embedW=v});
+mkTabs(el('dtabs'),[['0','오늘'],['1','내일 (?d=1)']],function(){return String(V.off)},function(v){V.off=+v});
+mkTabs(el('ctabs'),CASES.map(function(c,i){return [String(i),c.nm]}),function(){return String(V.cs)},function(v){V.cs=+v});
+
+var nowr=el('nowr');nowr.value=V.now;
+function nowLab(){var h=Math.floor(V.now/60)%24,mm=V.now%60,p=h<12?'오전 ':(h===12?'낮 ':'오후 ');
+  el('nowv').textContent=p+((h%12)||12)+':'+('0'+mm).slice(-2)}
+nowr.oninput=function(){V.now=+this.value;nowLab();render()};
+
+var sl=el('sliders'),rowsByKey={};
+AX.forEach(function(ax){
+  if(ax.g){var g=document.createElement('div');g.className='grp';g.textContent=ax.g;sl.appendChild(g);return}
+  var row=document.createElement('div');row.className='row';
+  var lab=document.createElement('label');lab.innerHTML='<b>'+ax.n+'</b>';
+  var val=document.createElement('div');val.className='val';
+  var ctl;
+  if(ax.sel||ax.col){
+    ctl=document.createElement('select');
+    var opts=ax.col?PAL.map(function(p){return [p[1],p[0]+' '+p[2]]}):ax.sel.map(function(o,i){return [ax.col?o[0]:String(i),o[1]]});
+    opts.forEach(function(o){var op=document.createElement('option');op.value=o[0];op.textContent=o[1];ctl.appendChild(op)});
+    ctl.value=ax.col?S[ax.k]:String(S[ax.k]);
+    ctl.onchange=function(){S[ax.k]=ax.col?this.value:+this.value;markCustom();sync();render()}
+  }else{
+    ctl=document.createElement('input');ctl.type='range';
+    ctl.min=ax.min;ctl.max=ax.max;ctl.step=ax.step;ctl.value=S[ax.k];
+    var l=ladOf(ax);
+    if(l){var dl=document.createElement('datalist');dl.id='dl-'+ax.k;
+      l.forEach(function(v){if(v>=ax.min&&v<=ax.max){var o=document.createElement('option');o.value=v;dl.appendChild(o)}});
+      row.appendChild(dl);ctl.setAttribute('list',dl.id)}
+    ctl.oninput=function(){S[ax.k]=+this.value;markCustom();sync();render()}}
+  row.appendChild(lab);row.appendChild(ctl);row.appendChild(val);
+  sl.appendChild(row);rowsByKey[ax.k]={row:row,ctl:ctl,val:val,ax:ax}});
+
+function sync(){
+  for(var k in rowsByKey){var o=rowsByKey[k];
+    if(o.ax.sel||o.ax.col)o.ctl.value=o.ax.col?S[k]:String(S[k]);else o.ctl.value=S[k];
+    o.val.textContent=fmtV(o.ax);
+    o.row.className='row'+((isWarn(o.ax)&&S[k]!==D[k])?' warn':'')}}
+
+var pHost=el('presets');
+function drawPresets(sel){
+  pHost.innerHTML='';
+  PRESETS.forEach(function(p,i){var b=document.createElement('button');
+    b.className='pill'+(p.star?' star':'')+(sel===i?' on':'');b.textContent=p.nm;
+    b.onclick=function(){S=Object.assign({},D,p.st);drawPresets(i);sync();render()};
+    pHost.appendChild(b)})}
+function markCustom(){drawPresets(-1)}
+drawPresets(0);
+
+el('reset').onclick=function(){S=Object.assign({},D);drawPresets(0);sync();render()};
+
+/* ═══ 복사 (⚠ 있으면 모달) ═══ */
+function doCopy(txt){
+  if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(txt).then(ok,fb)}else fb();
+  function ok(){el('copy').textContent='복사됨 ✓';setTimeout(function(){el('copy').textContent='선택값 복사'},1400)}
+  function fb(){var ta=document.createElement('textarea');ta.value=txt;document.body.appendChild(ta);ta.select();
+    try{document.execCommand('copy');ok()}catch(e){alert('복사에 실패했습니다. 아래 상자를 길게 눌러 직접 복사해 주세요.')}
+    document.body.removeChild(ta)}}
+el('copy').onclick=function(){
+  var wl=warnList();
+  if(!wl.length){doCopy(el('out').textContent);return}
+  var ul=el('mlist');ul.innerHTML='';
+  wl.forEach(function(w){var li=document.createElement('li');
+    li.innerHTML='<b>'+w.n+'</b> — 기틀 '+w.from+' → 제안 '+w.to+' <span class="tag">'+(w.col?'역할 재지정':'사다리 밖')+'</span>';
+    ul.appendChild(li)});
+  el('modal').classList.add('on')};
+el('mCancel').onclick=function(){el('modal').classList.remove('on')};
+el('mAll').onclick=function(){el('modal').classList.remove('on');doCopy(el('out').textContent)};
+el('mKeep').onclick=function(){el('modal').classList.remove('on');
+  var t=el('out').textContent.split('\n🔁')[0].split('\n').filter(function(l){return l.indexOf('⚠')<0}).join('\n');
+  doCopy(t+'\n(기틀 이탈 축은 제외하고 계승분만 복사했습니다)')};
+
+el('axcount').textContent='축 '+AX.filter(function(a){return !a.g}).length;
+nowLab();sync();render();
+</script>
+</body>
+</html>
