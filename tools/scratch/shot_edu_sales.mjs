@@ -117,6 +117,11 @@ async function main() {
       const out={};
       const gg=(id,sel)=>{const d=document.getElementById(id);return d?d.querySelectorAll(sel).length:null;};
       const tx=(id,sel)=>{const d=document.getElementById(id);return d?[...d.querySelectorAll(sel)].map(t=>t.textContent):null;};
+      // [260809-2] 값 라벨 잉크 갈래 — 「숫자는 조금 흐린 검정 한 벌」(운영자) 전/후 자
+      const ink=id=>{const d=document.getElementById(id); if(!d)return null;
+        const t=[...d.querySelectorAll('.infolayer .annotation text,.barlayer text')]
+          .filter(n=>/^[0-9,]+$/.test(n.textContent.trim()));
+        const m={}; t.forEach(n=>{const c=getComputedStyle(n).fill; m[c]=(m[c]||0)+1;}); return m;};
       out.edu={ bars:gg('bizm-edu-chart','.barlayer .point path'),
                 lines:gg('bizm-edu-chart','.scatterlayer .js-line'),
                 fills:gg('bizm-edu-chart','.scatterlayer .js-fill'),
@@ -124,7 +129,8 @@ async function main() {
                 shapes:gg('bizm-edu-chart','.shapelayer path'),
                 yTicks:tx('bizm-edu-chart','.yaxislayer-above text'),
                 annos:tx('bizm-edu-chart','.infolayer .annotation text'),
-                labels:tx('bizm-edu-chart','.barlayer text') };
+                labels:tx('bizm-edu-chart','.barlayer text'), inks:ink('bizm-edu-chart') };
+      out.exInks=ink('bizm-ex-chart');
       try{
         const Y=_bizmState.year;
         out.eduRows=(_bizEduMonthRows(Y)||[]).map(g=>({i:g._idx,n:g.name.slice(0,20),st:g._st,sold:g._sold,mo:(g._mo||null),src:g._vsrc||''}));
