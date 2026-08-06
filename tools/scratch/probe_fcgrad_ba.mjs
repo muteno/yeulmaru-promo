@@ -100,9 +100,14 @@ const MEASURE = `(()=>{
   const url=p=>((p.style&&p.style.fill)||'').indexOf('url(')>=0;
   const gs=[...d.querySelectorAll('.barlayer > .trace')].map(g=>{const ps=[...g.querySelectorAll('.point > path')];
     return {n:ps.length, painted:ps.filter(url).length};});
-  const LB=[...d.querySelectorAll('.annotation text')].filter(t=>/^[0-9,]+(\\([0-9,]+\\))?$/.test(t.textContent.trim()))
-    .map(t=>{const b=t.getBoundingClientRect();return {t:t.textContent.trim(),x0:b.x,x1:b.x+b.width,y:b.y+b.height};});
-  const labs=LB.map(L=>L.t);
+  const NN='[0-9,]+(?:\\\\.[0-9]+)?';   // [260813-2] 0은 소수 한 자리(0.0/0.4)
+  const RE=new RegExp('^'+NN+'(?:\\\\('+NN+'\\\\))?$');   // ⚠ 템플릿 리터럴 → 페이지 문자열 → RegExp = 백슬래시 두 겹
+  const LB=[...d.querySelectorAll('.annotation')].filter(a=>{const t=a.querySelector('text');return t&&RE.test(t.textContent.trim());})
+    .map(a=>{const t=a.querySelector('text'),b=t.getBoundingClientRect(),r=a.querySelector('rect.bg');
+      let bg=false; if(r){const cs=getComputedStyle(r),f=String(cs.fill||''),o=(cs.fillOpacity==null||cs.fillOpacity==='')?1:+cs.fillOpacity;
+        bg=!!f&&f!=='none'&&o>0.05&&!/,\\s*0\\s*\\)$/.test(f);}
+      return {t:t.textContent.trim(),x0:b.x,x1:b.x+b.width,y:b.y+b.height,bg:bg};});
+  const labs=LB.map(L=>L.t+(L.bg?'[판]':''));
   const ovl=[]; for(let a=0;a<LB.length;a++)for(let b=a+1;b<LB.length;b++)
     if(LB[a].x1>LB[b].x0&&LB[b].x1>LB[a].x0&&Math.abs(LB[a].y-LB[b].y)<13)
       ovl.push(LB[a].t+'↔'+LB[b].t+' ('+(Math.min(LB[a].x1,LB[b].x1)-Math.max(LB[a].x0,LB[b].x0)).toFixed(1)+'px 겹침)');
