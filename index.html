@@ -28099,7 +28099,10 @@ function _memOvMap(geo,fit){   // fit = 모달의 「창 높이 채움」 모드
 // ⚠ 산출물 drafts/yc*.json = 공개 레포 커밋(블로그 초안과 동일 축) — 민감 내용 질문 금지 · 워크플로가 3일 지난 산출물 자동 정리.
 var _YEULAI_LS='yeulai_persona';
 function _yeulAiPersona(){try{return String(localStorage.getItem(_YEULAI_LS)||'').slice(0,6000);}catch(_e){return '';}}
-// [260803 운영자] 복잡 질문 판정 — 기본 = 소넷5·high(속도 우선) / deep = opus5·medium + 「기다려 달라」 안내 선표시(라우팅 실행은 워크플로)
+// [260806 운영자 「sonnet 5 low 로 일단 배선 · 어려운 거면 opus 5.0 medium 전환」] 복잡 질문 판정.
+//   기본 = 소넷5·**low**(뭐든 빠르게) / deep = opus5·medium + 「기다려 달라」 안내 선표시.
+//   ⚠ 여기는 **판정만** 한다 — 모델명·effort의 SSOT는 `.github/workflows/nb-blog.yml` 라우팅 2줄(cmodel·ceffort).
+//     앱이 모델명을 들고 있으면 두 곳이 갈려 「고쳤는데 안 바뀐다」가 난다.
 function _yeulAiDeep(q){q=String(q||'');return q.length>=60||/전략|기획|분석|설계|보고서|제안서?|비교|계획|정리해|작성해?\s*줘|써\s*줘|만들어|장단점|로드맵|개선안/.test(q);}
 async function _yeulAiAsk(q,ctx,onTick){
   var id='yc'+Date.now()+'r'+Math.floor(Math.random()*1e4);
@@ -33521,11 +33524,14 @@ function _chatbotMount(){
   fab.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>';
   fab.onclick=_cbToggle;
   document.body.appendChild(fab);
+  // [260806] 입력줄 Enter에 isComposing 가드 — 없으면 **한글 조합 중 Enter가 조합 중인 글자를 잘라 전송**한다
+  //   (실측 260806: 질문이 「줄바꾸ㅁ」으로 나가 예울이가 "질문이 중간에 끊긴 것 같은데요?"라고 답했다).
+  //   고객 분석 입력줄(_memAiCardHtml)이 이미 쓰던 정본 가드를 그대로 계승 — 새 문법 0.
   const win=document.createElement('div');
   win.id='cb-win';win.className='cb-win';
   win.innerHTML='<div class="cb-hdr"><div class="cb-ava"><img src="image/yeul.png" alt="" style="width:100%;height:100%;border-radius:50%;object-fit:cover"></div><div class="cb-titles"><div class="cb-title">예울이</div><div class="cb-sub">자동응답 · 규정/프로그램 · 그 외엔 AI</div></div><button class="cb-close" onclick="_cbClear()" title="대화 지우기" style="font-size:15px">⟲</button><button class="cb-close" onclick="_cbToggle()" title="닫기" aria-label="닫기">✕</button></div>'+
     '<div class="cb-body" id="cb-body"></div>'+
-    '<div class="cb-foot"><input class="cb-in" id="cb-in" placeholder="궁금한 내용을 입력하세요" onkeydown="if(event.key===\'Enter\')_cbSend()"><button class="cb-send" onclick="_cbSend()"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg></button></div>';
+    '<div class="cb-foot"><input class="cb-in" id="cb-in" placeholder="궁금한 내용을 입력하세요" onkeydown="if(event.key===\'Enter\'&&!event.isComposing)_cbSend()"><button class="cb-send" onclick="_cbSend()"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg></button></div>';
   document.body.appendChild(win);
   // 바깥(캘린더/모달 등) 클릭 시 자동 닫힘 — 창/FAB 내부 클릭은 유지
   document.addEventListener('click',function(e){
@@ -33741,6 +33747,10 @@ async function _cbLoadRules(){
   return _cb.rules;
 }
 const _CB_FILLER=['관련','해서','해줘','해주','사용','방법','알려','알려줘','알려주','궁금','며칠','몇일','주세요','주나요','얼마나','어떻게','언제','뭐야','뭔가','무엇','우리','회사','규정','문의','질문','대해','대한','있나','있나요','인가요','인지','하는','해야','어때','그리고','하면','되나','지급','금액','내역'];
+// [260806 운영자 「뭐든 물어봐도 대답」] 규정 카드를 내놓을 최소 점수. 미만이면 규정 검색은 **답을 내지 않고** 후보만 AI에 넘긴다.
+//   4로 잡은 근거(_cbRulesSearch 배점 실측): 제목 부분일치 1개 = 4 · 본문 토큰 2개 = 1.5×2 + hit보너스 3 = 6 → 진짜 규정 질문은 통과
+//   («경조 휴가는 며칠?» 14 · «연차는 어떻게 생겨?» 5.5), 본문에 단어 하나만 스친 질문은 탈락(«여수 맛집 추천해줘» 1.5).
+const _CB_RULE_MIN=4;
 const _CB_SYN={'부모님':'부모','아버지':'부모','어머니':'부모','돌아가':'사망','별세':'사망','장례':'사망 경조','상을당':'사망','결혼식':'결혼','월급':'급여','봉급':'급여','연봉':'급여','휴무':'휴가','쉬는날':'휴가','퇴사':'퇴직','그만두':'퇴직','빌리':'대관','대여':'대관','임신':'출산','야근':'연장근무 보상휴가','출장가':'출장','출장비':'출장 여비','교통비':'여비 출장','숙박비':'여비 출장','식비':'여비 출장'};
 function _cbTokens(q){
   let s=String(q||'');
@@ -33809,21 +33819,26 @@ function _cbShowRule(r){
   });
   _cbLog('규정',(r['조항']||'')+' '+(r['제목']||''),String(r['본문']).slice(0,80),(r['규정명']||'')+' '+(r['조항']||''));
 }
+// 약한 규정 후보를 AI에 넘길 때의 참고 요약 — 「관련 있으면 쓰고 아니면 무시하라」. 히트 0이면 빈 문자열(동봉 안 함).
+//   왜 버리지 않고 넘기나: 문턱 미달이어도 정답 조항이 섞여 있을 수 있다 → 규정 카드로 **단정**하지만 않을 뿐 정보는 손실 0.
+//   길이 = 3건×200자 ≈ 750자 (_yeulAiAsk의 ctx 상한 1200자 안). 조항 본문은 공개 레포 커밋에 실리는 값이 아니다(질문·ctx는 payload로만 이동).
+function _cbRuleCtx(hits){
+  if(!hits||!hits.length)return '';
+  return '아래는 사내 규정 검색이 뽑은 참고 후보인데, 질문과 맞는지는 확실하지 않다. 관련 있을 때만 인용하고 아니면 무시하고 답한다.\n'
+    +hits.slice(0,3).map(function(h){
+      return '· '+(h.r['규정명']||'')+' '+(h.r['조항']||'')+' '+(h.r['제목']||'')+' — '+String(h.r['본문']||'').replace(/\s+/g,' ').slice(0,200);
+    }).join('\n');
+}
 function _cbRulesAnswer(q,qn){
   const done=function(rules){
     const res=_cbRulesSearch(rules,q);
-    if(res.clarify){
-      _cbBot('음, 조금만 더 구체적으로 물어봐 주실래요? 🙂\n키워드가 있으면 바로 찾아드려요. 예를 들면 —');
-      _cbChips([
-        {label:'경조 휴가는 며칠?',fn:function(){_cbAsk('경조 휴가는 며칠?');}},
-        {label:'연차는 어떻게 생겨?',fn:function(){_cbAsk('연차는 어떻게 생겨?');}},
-        {label:'출장비 지급 기준',fn:function(){_cbAsk('출장비 지급 기준');}},
-        {label:'처음으로',fn:_cbHome,ghost:true}
-      ]);
-      _cbLog('자유입력',q,'','모호질문');
-      return;
-    }
-    if(!res.hits.length){_cbAiAnswer(q);return;}   // [260803 운영자] 규정·FAQ 미스 = 「미응답」 데드엔드 폐지 → 예울이 AI(전사 자유질문·_yeulAiAsk 공용 브레인)
+    // [260806 운영자 「뭐든 물어봐도 대답할 수 있게」] 규정 검색이 답을 **가로막지 않는다** — 데드엔드 2곳을 예울이 AI로 흘린다.
+    //   ① clarify(토큰 0 = 조사·필러만 남은 짧은 질문) — 구판은 「구체적으로 물어봐 주실래요?」로 끝냈다. 되묻기 자체가
+    //      대화의 끝이라 자유질문이 AI에 **도달조차 못 했다**(운영자 체감 「아예 모델이 배선 안 된 듯」의 실체 ①).
+    //   ② 약한 히트(< _CB_RULE_MIN) — 구판은 s>0이기만 하면 규정 카드를 뱉었다. 본문에 단어 하나만 스쳐도(s=1.5)
+    //      「여수 맛집」 같은 질문에 사무처리규정 조항이 나왔다(실체 ②). 이제 후보는 ctx로 동봉해 AI가 판단한다.
+    //   ⚠ 문턱 이상(진짜 규정 질문)은 **종전 그대로 규칙 엔진 즉답** — 40초 AI 왕복으로 후퇴시키지 않는다.
+    if(res.clarify||!res.hits.length||res.hits[0].s<_CB_RULE_MIN){_cbAiAnswer(q,_cbRuleCtx(res.hits));return;}
     const best=res.hits[0];
     // [세분화 260611] 다항목 조항이면 되묻기 — 항목(자식 청크) 칩 제시 후 단정 답변
     {
@@ -33860,14 +33875,18 @@ function _cbRulesAnswer(q,qn){
 }
 // [260803 운영자] 규칙 기반 미스 → 예울이 AI 폴백 — 루시봇 컨셉(persona/yeuli.md 카드 + 깃 Actions claude · 공용 _yeulAiAsk).
 //   결과·실패는 챗봇로그에 그대로 적재(기존 '미응답' 자리를 'AI답변'/'AI실패'가 대체).
-function _cbAiAnswer(q){
+// ctx = 약한 규정 후보 요약(_cbRuleCtx) — 없으면 빈 문자열. 모델·effort는 여기서 안 정한다(SSOT = nb-blog.yml 라우팅 2줄),
+//   앱은 「어려운 질문인가」 판정(_yeulAiDeep)만 payload.deep으로 실어 보낸다.
+function _cbAiAnswer(q,ctx){
   const deepQ=_yeulAiDeep(q);   // [260803 운영자 v3] 복잡 질문 = opus 딥 — 「기다려 달라」를 츤 결로 먼저
   _cbBot(deepQ?'음, 귀찮은 걸 물어보시네요? 규정·FAQ에도 없는 거라 직접 생각해봐야 해요 — 조금 걸리니까 기다리세요.':'규정·FAQ엔 없네요. …하는 수 없죠, 제가 생각해서 알려드릴게요. 잠깐이면 돼요.');
   const b=document.getElementById('cb-body');
   const w=document.createElement('div');w.className='cb-msg bot';w.innerHTML=_ldHtml(12)+'…생각 중이에요.';
   if(b){b.appendChild(w);_cbScroll();}
-  _yeulAiAsk(q,'',function(sec){w.innerHTML=_ldHtml(12)+'…생각 중이에요. '+sec+'초';})
-    .then(function(t){w.innerHTML=escapeHtml(String(t)).slice(0,4000);_cbScroll();_cbLog('AI답변',q,String(t).slice(0,80),'claude·yeulchat');})
+  _yeulAiAsk(q,ctx||'',function(sec){w.innerHTML=_ldHtml(12)+'…생각 중이에요. '+sec+'초';})
+    // [260806] 로그 매칭칸에 **어느 모델이 답했는가**를 남긴다 — 챗봇로그 시트만 보고 라우팅 실동작을 확인할 수 있게
+    //   (운영자가 「모델이 배선 안 된 듯」이라고 본 이유 = 지금까지 어디에도 모델명이 안 남았다). 표기는 nb-blog.yml 라우팅과 같은 값.
+    .then(function(t){w.innerHTML=escapeHtml(String(t)).slice(0,4000);_cbScroll();_cbLog('AI답변',q,String(t).slice(0,80),'claude·'+(deepQ?'opus5·medium':'sonnet5·low'));})
     .catch(function(e){w.innerHTML='죄송해요, 지금은 답을 못 가져왔어요 🙏 '+escapeHtml(String(e&&e.message||e).slice(0,110));_cbScroll();_cbLog('자유입력',q,'','AI실패');})
     .then(function(){_cbChips([{label:'다른 질문',fn:function(){_cbPickCat('회사');}},{label:'처음으로',fn:_cbHome,ghost:true}]);});
 }
