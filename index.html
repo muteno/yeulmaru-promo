@@ -8070,26 +8070,44 @@ var _BIZ_AXB=50;   // 아래 여백 = 월 라벨 + 분기 라벨 + 숨구멍(구
 //     겹치면 **가로로 비킨다**(기틀 §2 #16 ⑦ 「생략이 아니라 뒤집기」의 막대판 · 막대는 W≈5px라 세로 자리가 뜻을 진다).
 var _BIZ_LAB_DY=3;     // 막대 꼭대기 ↔ 숫자 아랫변(주석 yshift) — 260805 교육 값 라벨·260806-11 예상 칸이 이미 쓰던 그 값(새 수치 0)
 var _BIZ_LAB_FS=10.5;  // 값 라벨 활자 — 260805 운영자 확정(9.5 → 10.5)
-var _BIZ_LAB_DX=12;    // 가로 비킴 상한 = 두 자리 폭(6×2) · 이보다 더 밀면 숫자가 제 막대에서 떨어져 보인다
-// 글상자 폭(px) ≈ 자릿수×6 + 쉼표×3 + 괄호×3.5 + 숨구멍 6 — 구 상수 29(= 「4자 라벨 + 숨구멍」)를 자릿수별로 편 것(같은 자·새 수치 0)
+// [260813-3 운영자 「**상단에 무조건 숫자가 있어야 함 · 차트 옆에 있는건 실패임** · 단 가려질 경우 흰색 반투명」]
+//   구 `_BIZ_LAB_DX`(가로 비킴 상한 12px) **폐지** — 260809 ⓒ「겹치면 가로로 비킨다」가 이 지시로 뒤집혔다.
+//   왜 = 옆으로 비킨 숫자는 **「제 막대의 값」으로 안 읽힌다**(운영자 판정 「실패」). 숫자의 뜻은 자리가 지니까,
+//   자리를 옮겨 겹침을 푸는 건 뜻을 버리고 모양을 얻는 것이다. → 값 라벨은 **언제나 제 막대 꼭대기 정중앙 위**(xshift 0)이고,
+//   겹침(막대에 가리든 옆 숫자에 가리든)은 **흰 반투명 판**이 진다.
+// [260813-2 운영자 「차트에 가려지면 **흰색 반투명 배경**을 깔자」] 가려진 값 라벨 뒤에 까는 판.
+//   왜 = 이 차트는 막대가 W≈5px 세로 게이지라 **키 큰 이웃 막대가 옆 라벨을 관통**한다(실측 = 9월 「6(3)」의 괄호 안을
+//   135짜리 초록 막대가 그대로 뚫고 지나갔다). 라벨을 세로로 옮기면 260809 「간격은 한 값」 계약이 깨지고, 가로로 더 밀면
+//   제 막대에서 떨어진다 → **글자는 그대로 두고 뒤에 판을 깐다**(자리·간격·잉크 무접촉).
+//   ⚠ 색 = 새로 만들지 않는다 — `--surface-solid`(카드 바탕) **알파 변주**(§3.5②)이고, 알파 0.88은 이 파일 판매 차트
+//     주석들이 이미 쓰던 그 값이다(`_salesDrawTarget`·`_salesDrawBench` 등) = **계승 · 새 값 0**.
+//   ⚠ **가려질 때만** 깐다(운영자 어휘 「가려지면」) — 전 라벨에 깔면 안 가려진 15개까지 흰 상자를 이고 서서 화면이 시끄러워진다.
+//   ⚠ 가림은 **두 갈래**(260813-3) = ⓐ 키 큰 이웃 **막대**가 관통 ⓑ 몰린 달에서 **옆 숫자**와 포갬. 둘 다 판을 깐다.
+//     ⓑ는 260809 ⓒ(가로 비킴)가 풀던 자리인데 그 규칙이 폐지돼(위 참조) 이제 판이 유일한 답이다 —
+//     겹친 쌍은 **나중에 그려지는 쪽이 위**라, 값이 큰 라벨이 위로 오도록 **작은 값부터** 싣는다(눈이 먼저 가는 수가 안 가려진다).
+//   ⚠ 판을 깔면 Plotly가 글상자 높이를 다른 자로 잡아 같은 `yshift`에서 글자가 **~2px 내려간다**(실측 = 판 없는 라벨 간격
+//     4.6~5.5px · 판 붙이면 2.9~3.5px) → 그만큼 올려 되돌린다. 안 되돌리면 판 있는 라벨만 간격이 갈려
+//     260809 ⓑ(간격 한 값) 계약이 깨진다(게이트 `smoke_bizchart` ⑤ⓑ가 잡는다).
+var _BIZ_LAB_PLATE_A=0.88, _BIZ_LAB_PLATE_PAD=1;
+var _BIZ_LAB_H=13;     // 값 라벨 글상자 높이(10.5px 활자) — 자리잡기 세로 임계 19 = 이 13 + 숨구멍 6과 **같은 자**(수치 이원화 0)
+// 글상자 폭(px) ≈ 자릿수×6 + 쉼표·소수점×3 + 괄호×3.5 + 숨구멍 6 — 구 상수 29(= 「4자 라벨 + 숨구멍」)를 자릿수별로 편 것(같은 자·새 수치 0)
 //   [260813] 괄호 3.5 = 이 차트 활자(10.5px)에서 **실측한 글자 폭**이다(헤드리스 `getComputedTextLength`: 숫자 5.84 · 쉼표 2.92 · 괄호 3.50 —
 //   앞 두 항의 6·3이 이미 그 실측의 반올림이라 같은 자로 잰 것뿐 = 새 수치 창작 0). 예측치 라벨 `70(33)`이 괄호 몫을 안 세면
 //   글상자가 7px 좁게 잡혀 옆 숫자와 **겹친 채로 「안 겹쳤다」고 판정**된다(겹침 회피의 유일한 자가 이 함수다).
-function _bizLabW(t){ var s=String(t); return s.replace(/[^0-9]/g,'').length*6+(s.split(',').length-1)*3+(s.replace(/[^()]/g,'').length)*3.5+6; }
-// 글상자 한 칸 자리잡기 — box{x,y,w}(px) · placed = 이미 선 글상자들. 돌려주는 값 = **가로 비킴(px)**.
-//   세로 임계 19 = 10.5px 글상자 ≈13 + 숨구멍 6(기틀 §2 #16 ⑦과 같은 자) · 가로는 두 글상자가 실제로 겹칠 때만 민다.
-//   ⚠ 끝내 못 비키면 **제자리에 그대로 세운다**(숫자를 지우지 않는다 = 운영자 260809 「다 숫자가 나오게」).
+function _bizLabW(t){ var s=String(t); return s.replace(/[^0-9]/g,'').length*6+s.replace(/[^,.]/g,'').length*3+s.replace(/[^()]/g,'').length*3.5+6; }   // [260813-2] 소수점(0.4 표기)도 쉼표와 같은 폭 — 실측 2.92px
+// 글상자 한 칸 등록 — box{x,y,w}(px) · placed = 이미 선 글상자들. 돌려주는 값 = **옆 숫자와 겹치는가**(판을 깔 이유).
+//   [260813-3] 구판은 여기서 **가로로 밀었다**(돌려주는 값이 비킴 px였다). 운영자 판정 「차트 옆에 있는건 실패」로
+//   그 축이 폐지돼, 이제 이 함수는 **자리를 안 건드리고 겹침만 알려 준다**(자리는 언제나 제 막대 정중앙 위).
+//   세로 임계 19 = 10.5px 글상자 ≈13 + 숨구멍 6(기틀 §2 #16 ⑦과 같은 자).
+//   ⚠ 가로는 **잉크끼리** 잰다(글상자 − 숨구멍 6) — 숨구멍은 「안 닿게 하려고」 붙인 여유라 그것까지 겹침으로 세면
+//     3px 떨어진 라벨에도 판이 깔린다(실측 「16」).
+//   ⚠ 먼저 선 글상자도 **거슬러 표시한다**(`ovl`) — 겹침은 쌍이라 뒤에 온 쪽만 판을 이면 아래 깔린 숫자가 그대로 묻힌다.
 function _bizLabFit(box,placed){
-  var hit=function(d){ var a0=box.x+d-box.w/2,a1=box.x+d+box.w/2,k,p;
-    for(k=0;k<placed.length;k++){ p=placed[k]; if(Math.abs(p.y-box.y)<19&&a1>p.x0&&a0<p.x1)return p; } return null; };
-  var d=0,p,i;
-  if(hit(0)){
-    for(i=0;i<4&&(p=hit(d));i++)d=p.x1-(box.x-box.w/2)+0.5;                                  // 오른쪽으로 최소치
-    if(hit(d)||d>_BIZ_LAB_DX){ d=0; for(i=0;i<4&&(p=hit(d));i++)d=p.x0-(box.x+box.w/2)-0.5;  // 막히면 왼쪽으로
-      if(hit(d)||d<-_BIZ_LAB_DX)d=0; }
-  }
-  placed.push({x0:box.x+d-box.w/2,x1:box.x+d+box.w/2,y:box.y});
-  return d;
+  var a0=box.x-(box.w-6)/2, a1=box.x+(box.w-6)/2, k, p, hit=false;
+  for(k=0;k<placed.length;k++){ p=placed[k];
+    if(Math.abs(p.y-box.y)<19&&a1>p.x0&&a0<p.x1){ hit=true; p.ovl=true; } }
+  placed.push({x0:a0,x1:a1,y:box.y,ovl:hit});
+  return hit;
 }
 function _bizQuarterNotes(y,x0,x1,dim){
   var a=[],q,qa,qb;
@@ -8212,7 +8230,12 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
   // [260806-11 운영자 「항상 표현은 **반올림해서 소숫점 없이** 표기하게」] 값 라벨 = 정수 한 벌.
   //   구판은 매출 축에서 100 미만이면 `toFixed(1)`(13.6·65.9·2.5…) — 같은 차트 안에서 「486」과 「2.5」가
   //   다른 자릿수 문법으로 서서 눈이 두 번 읽었다. 반올림은 표기에서만 한다(값·툴팁·집계는 원값 그대로).
-  var vfmt=function(v){ return Math.round(v).toLocaleString(); };
+  // [260813-2 운영자 「**0일때는 0.n으로 별도로 표기**」] 반올림해서 0이 되는 값만 **소수 한 자리**로 적는다.
+  //   왜 = 「0」 한 글자는 두 가지를 같은 얼굴로 말한다 — ⓐ 진짜 0(티켓은 열렸는데 아직 0원) ⓑ 반올림 전 작은 값(40만원 = 0.4백만).
+  //   막대 높이가 둘 다 사실상 0이라 그림으로도 안 갈린다 → 그 자리만 자릿수를 한 칸 열어 `0.0` ↔ `0.4`로 구분한다.
+  //   ⚠ 구 260806-11 「항상 반올림해서 소숫점 없이」의 **0 한 칸 예외**다(1 이상은 종전 그대로 정수 · 두 문법이 섞이지 않는다).
+  //   ⚠ 교육·관객수 축은 사람 수(정수 ≥1)라 이 가지에 애초에 안 걸린다 = 「0.0명」은 생기지 않는다.
+  var vfmt=function(v){ return (Math.round(v)===0)?v.toFixed(1):Math.round(v).toLocaleString(); };
   // [260804] 축 중략 — 그릴 자리만 접는다(값·라벨·툴팁은 실값). plotPx = 실제 그림 높이(위 18 · 아래 34 여백 제외 — 45° 이름축 폐지로 아래 여백 96→34)
   var plotPx=Math.max(60,hgt-(18+_BIZ_AXB));   // [260806-5] 위 여백 18 + 아래 여백 _BIZ_AXB — 상수 34를 박아두면 아래 여백을 늘린 만큼 중략이 없는 자리를 있다고 착각한다(그림 영역 = 높이 − 두 여백) · [260809] 값 라벨 겹침도 이 자로 px 환산한다(자가 둘이면 판정이 갈린다)
   var brk=ED?null:_bizBarBreak(vals,plotPx);
@@ -8334,15 +8357,53 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
   //     본문 바로 아래 한 단 · 분기 라벨 260806-6이 이미 쓴 그 자 = 새 회색 창작 0). 구판의 막대색 4갈래 폐지 —
   //     ⚠ 이로써 260805 「값 라벨 = 그 막대 색」 판정은 **개정**된다(막대와 숫자는 자리로 이미 묶여 있다).
   var _lbInk=_yrCss('--neutral-text')||dim, _lbBox=[], _lbPxY=plotPx/(axTop||1);
-  rows.map(function(g,i){ return i; }).filter(function(i){ return labs[i]&&xs[i]!=null; })
+  // [260813-2] 「가려지는가」를 재는 자 = **자리잡기와 같은 px 좌표**(x는 축 시작에서 오른쪽 · y는 바닥에서 위로).
+  //   막대 한 칸 = 제 x 중심 ±폭/2 · 바닥 0 ~ 꼭대기(예상 칸이 얹힌 행은 그 꼭대기까지가 한 덩이로 그려진다).
+  var _lbPlate=_yrHexA(_yrCss('--surface-solid'),_BIZ_LAB_PLATE_A), _lbBars=[];   // 토큰 해석값 → 알파 변주(소스 raw hex 0 · `_bizYearZones`가 쓰는 그 문법 그대로)
+  rows.forEach(function(g,i){
+    if(xs[i]==null)return;
+    var top=(fcOf[i]!=null)?_mapv(fcOf[i]):yv[i];
+    if(top==null||!isFinite(top)||!(top>0))return;
+    _lbBars.push({i:i,x0:(xs[i]-W/2)*pxPerDay,x1:(xs[i]+W/2)*pxPerDay,top:top*_lbPxY});
+  });
+  //   ⚠ **제 막대는 세지 않는다** — 라벨은 언제나 제 꼭대기 위(`_BIZ_LAB_DY`)에 서니까 겹칠 수가 없고,
+  //     세면 전 라벨이 「가려짐」으로 잡혀 판이 15개 깔린다(= 운영자가 말한 「가려지면」이 아니다).
+  var _lbHidden=function(i,cx,w,y0){
+    var a0=cx-w/2, a1=cx+w/2, k, r;
+    for(k=0;k<_lbBars.length;k++){ r=_lbBars[k];
+      if(r.i===i)continue;
+      if(a1>r.x0&&a0<r.x1&&r.top>y0)return true; }   // 세로 = 막대는 바닥부터 서 있으니 「꼭대기가 글자 아랫변보다 위」면 겹친다
+    return false;
+  };
+  // [260813-3] 싣는 순서 = **작은 값부터**(구판은 큰 값부터 — 그때는 「큰 값이 제자리를 먼저 잡는다」가 뜻이 있었다).
+  //   가로 비킴이 폐지된 지금 순서가 정하는 건 **누가 위에 그려지는가** 하나뿐이라, 겹친 쌍에서 **값이 큰 쪽이 위로**
+  //   오게 뒤집는다(눈이 먼저 가는 수가 안 가려진다). 판은 양쪽 다 이므로 아래 깔린 쪽도 제 판 위에서 읽힌다.
+  var _lbList=rows.map(function(g,i){ return i; }).filter(function(i){ return labs[i]&&xs[i]!=null; })
     .map(function(i){ var f=fcOf[i], ft=(f!=null)?vfmt(f):null;   // [260813] 예상 칸이 얹힌 행 = `예측치(현재치)` · 반올림 동일이면 예측치 한 벌
-      return {i:i,y:(f!=null)?_mapv(f):yv[i],t:(ft==null||ft===labs[i])?(ft||labs[i]):(ft+'('+labs[i]+')')}; })
-    .sort(function(a,b){ return b.y-a.y; })
-    .forEach(function(L){
-      var dx=_bizLabFit({x:xs[L.i]*pxPerDay,y:L.y*_lbPxY,w:_bizLabW(L.t)},_lbBox);
-      lay.annotations.push({xref:'x',x:xs[L.i],xanchor:'center',xshift:dx,yref:'y',y:L.y,yanchor:'bottom',yshift:_BIZ_LAB_DY,
-        text:L.t,showarrow:false,font:{size:_BIZ_LAB_FS,color:_lbInk}});
-    });
+      var t=(ft==null||ft===labs[i])?(ft||labs[i]):(ft+'('+labs[i]+')');
+      return {i:i,y:(f!=null)?_mapv(f):yv[i],t:t,w:_bizLabW(t)}; })
+    .sort(function(a,b){ return a.y-b.y; });
+  //   1패스 = 글상자 등록 + 겹침 표시(쌍 양쪽에 표시된다) · 2패스 = 주석. 두 패스인 이유 = 뒤에 오는 라벨이
+  //   앞 라벨을 가리는 것도 앞 라벨 입장에선 「가려짐」이라, 한 번에 그리면 앞 라벨이 판 없이 묻힌다.
+  _lbList.forEach(function(L){
+    L.px=xs[L.i]*pxPerDay; L.py=L.y*_lbPxY+_BIZ_LAB_DY;
+    L.hid=_bizLabFit({x:L.px,y:L.y*_lbPxY,w:L.w},_lbBox)||_lbHidden(L.i,L.px,Math.max(2,L.w-6),L.py);
+    L.bi=_lbBox.length-1;   // 제 글상자 자리 — 뒤에 오는 라벨이 나를 가리면 여기 `ovl`이 켜진다
+  });
+  // [260813-2] 가려지는 라벨만 흰 반투명 판 — ⓐ 이웃 막대가 관통 ⓑ 옆 숫자와 포갬(뒤에 온 라벨이 가린 경우 포함).
+  //   ⚠ 세로 보정 = **실측값**이다(이론값 아님) — 배경이 붙으면 Plotly가 글상자 높이를 다른 자로 잡아
+  //     같은 yshift에서 글자가 ~2px **내려간다**(실측 = 판 없는 라벨 간격 4.6~5.5px · 판 붙이면 2.9~3.5px).
+  //     그만큼 올려 되돌린다 = 260809 ⓑ(간격은 한 값) 계약 유지(게이트 `smoke_bizchart` ⑤ⓑ가 잰다).
+  var _lbPlateOn=function(an){
+    if(!an||an.bgcolor)return an;
+    an.bgcolor=_lbPlate; an.borderpad=_BIZ_LAB_PLATE_PAD; an.borderwidth=0; an.yshift+=_BIZ_LAB_PLATE_PAD; return an;
+  };
+  _lbList.forEach(function(L){
+    L.an={xref:'x',x:xs[L.i],xanchor:'center',yref:'y',y:L.y,yanchor:'bottom',yshift:_BIZ_LAB_DY,
+      text:L.t,showarrow:false,font:{size:_BIZ_LAB_FS,color:_lbInk}};   // [260813-3] xshift 없음 = 언제나 제 막대 정중앙 위
+    if(L.hid)_lbPlateOn(L.an);
+    lay.annotations.push(L.an);
+  });
   var note=(div.parentNode&&div.parentNode.querySelector)?div.parentNode.querySelector('[data-bizbrknote]'):null;
   if(brk){
     // 눈금 라벨 자릿수 = step의 소수 자리에 맞춘다(구판은 0.15 눈금에 "0.2"를 찍어 눈금선과 글자가 어긋났다 — 평의회3)
@@ -8423,17 +8484,24 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
             +dTxt(g)+' · '+stName(g)+' · '+(g._g2||'예술교육'); })});
       lnTip.push({i:i,x:lx[lx.length-1],y:ly[ly.length-1],col:col});
     });
-    // 꼭자락 라벨 = 큰 값 우선 — [260809] 자리잡기는 **막대 값 라벨과 같은 글상자 목록**(`_lbBox`)에서 잰다.
+    // 꼭자락 라벨 — [260809] 겹침은 **막대 값 라벨과 같은 글상자 목록**(`_lbBox`)에서 잰다.
     //   구판은 이 반쪽만 자기 `_placed`를 따로 들고 있어 ⓐ 막대 숫자와 선 숫자가 서로를 못 보고 ⓑ 겹치면 지웠다
-    //   (운영자 260809 「다 숫자가 나오게」). 이제 한 목록에서 재고, 부딪히면 가로로 비킨다(생략 0).
+    //   (운영자 260809 「다 숫자가 나오게」). [260813-3] 이제 **비키지도 않는다** — 숫자는 제 점 위 정중앙이고
+    //   겹치면 판이 진다(운영자 「상단에 무조건 숫자가 있어야 함 · 차트 옆에 있는건 실패임 · 단 가려질 경우 흰색 반투명」).
     //   ⚠ yshift만 7 — 점(마커 지름 7)의 **가운데**가 기준이라 막대 꼭대기와 물리적 기준이 다르다(같은 벌의 예외 아님).
-    lnTip.sort(function(a,b){ return b.y-a.y; }).forEach(function(L){
-      var t=Math.round(L.y).toLocaleString();
-      var dx=_bizLabFit({x:L.x*pxPerDay,y:L.y*_lbPxY,w:_bizLabW(t)},_lbBox);
-      lay.annotations.push({xref:'x',x:L.x,xanchor:'center',xshift:dx,yref:'y',y:L.y,yanchor:'bottom',yshift:7,
-        text:t,showarrow:false,font:{size:_BIZ_LAB_FS,color:_lbInk}});   // [260809-2 운영자 승인] 선 끝 숫자도 막대와 같은 흐린 검정(구 선색 = 260805 판정의 개정 · #16 ⓐ)
+    lnTip.sort(function(a,b){ return a.y-b.y; }).forEach(function(L){   // [260813-3] 작은 값부터 = 큰 값이 위에 그려진다
+      var t=Math.round(L.y).toLocaleString(), w=_bizLabW(t);
+      var hid=_bizLabFit({x:L.x*pxPerDay,y:L.y*_lbPxY,w:w},_lbBox)||_lbHidden(-1,L.x*pxPerDay,Math.max(2,w-6),L.y*_lbPxY+7);
+      var an={xref:'x',x:L.x,xanchor:'center',yref:'y',y:L.y,yanchor:'bottom',yshift:7,
+        text:t,showarrow:false,font:{size:_BIZ_LAB_FS,color:_lbInk}};   // [260809-2 운영자 승인] 선 끝 숫자도 막대와 같은 흐린 검정(구 선색 = 260805 판정의 개정 · #16 ⓐ)
+      if(hid)_lbPlateOn(an);
+      lay.annotations.push(an);
     });
   }
+  // [260813-3] 마지막 한 패스 — **나중에 실린 라벨이 앞 라벨을 가린 경우**에 판을 얹는다.
+  //   겹침은 쌍이라 앞뒤 순서와 무관하게 양쪽 다 판이 필요한데, 앞 라벨의 주석은 이미 만들어져 있다
+  //   (특히 교육 반쪽은 선 끝 숫자가 막대 숫자 **뒤에** 실린다). 주석은 객체 참조라 여기서 얹으면 그대로 반영된다.
+  _lbList.forEach(function(L){ if(_lbBox[L.bi]&&_lbBox[L.bi].ovl)_lbPlateOn(L.an); });
   // [260806-11 운영자 「교육 위에 1 동그라미 저건 없어도 될 듯」] 교육 색인(①②③…) **표기 철거** —
   //   260805에 「별도의 인덱싱 열 부여」로 붙였던 원문자 라벨. 열이 적을 땐 이름을 툴팁으로 바로 확인할 수 있어
   //   색인이 한 겹 더 얹힌 잉크였다(운영자 판정). 자리·값 라벨·툴팁은 그대로 — 지운 건 원문자 주석뿐이다.
