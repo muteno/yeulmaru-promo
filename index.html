@@ -1172,6 +1172,23 @@ table.promo-board-table th:last-child .col-resize-handle{display:none}
 .modal:has(>.mhead){position:relative}
 .modal:has(>.mhead)>.modal-x{position:absolute;top:14px;right:22px;float:none;margin:0;z-index:10;color:var(--surface-solid);background:rgba(255,255,255,.12)}
 .modal:has(>.mhead)>.modal-x:hover{color:var(--surface-solid);background:rgba(255,255,255,.25)}
+/* [260806 운영자 「최소화랑 X 사분할해서 중심점을 광학 잉크 단위로 수평 선에 맞춰줘」] — 두 단계로 맞춘다.
+   ① **상자 줄맞춤**: 밴드 안에 버튼이 서면 그 줄 높이는 32(버튼 지름)로 고정된다. `.mhead`의 음수 마진이
+      모달 패딩을 정확히 상쇄해 **밴드 top = 모달 패딩박스 top**이므로, 흐름 버튼의 상자 top = 밴드 자기
+      padding-top = **18**. 절대 자리 X의 `top:14`는 「제목만 있는 밴드」(줄 높이 ≈19)에 맞춘 값이라
+      버튼이 서는 순간 4px 어긋난다(실측: X 상자중심 361 · ─ 상자중심 365). 버튼이 있을 때만 18로 옮긴다.
+      ⚠ 호출부에 `style="top:14px"`가 인라인으로 남아 있으면 이 규칙이 안 먹는다(인라인 우선) — 그 재타이핑을
+      걷어내는 게 정본 준수다(기틀 규칙 6·7).
+   ② **광학 잉크 줄맞춤**(운영자가 말한 「광학 잉크 단위」): 상자를 맞춰도 **글자마다 잉크가 상자 안에서 다른
+      높이에 앉는다**. 32px 상자 안 실측(4배율 PNG 픽셀 디코딩) = `✕` 잉크중심 **15.15**(상자중심 16.00 대비 −0.85)
+      · `─` 잉크중심 **16.48**(+0.48) → 잉크끼리 **1.33px** 어긋난다. 그래서 X의 상자를 18이 아니라
+      **18 + 1.33 = 19.33**에 세운다 = 두 **잉크**가 정확히 한 수평선에 선다(운영자가 지정한 단위가 상자가 아니라 잉크다).
+      · 가로는 이미 맞다 — `✕` −0.97 · `─` −0.73, 둘 사이 **0.24px**(사분할 세로선 기준 무시 가능).
+      ⚠ 상자(원)는 그 대가로 1.33px 어긋난다. 상자·잉크를 **둘 다** 맞추려면 글자마다 비대칭 패딩이 필요한데
+        `paddingTop/Bottom`은 패리티 서명 항목이라 `.modal-x`가 두 갈래로 갈린다(260805-24 계약) → 운영자 판단 사항.
+      ⚠ 보정값은 UI 폰트(Pretendard 계열) 실측이다. 폰트가 갈리면 잔차가 남지만 보정 전(1.33px)보다 나빠지지 않는다.
+        픽토그램 교체 길은 260805-15 「정본 글자 `✕` 복원」과 충돌해 쓰지 않는다. */
+.modal:has(>.mhead .modal-x)>.modal-x{top:19.33px}
 /* [260805-30 운영자 「정리해줘」] 머리줄 예약폭 매직넘버(74/106/112/130/200) 폐지 —
    닫기 `✕`만 절대 자리(right:22)에 남기고 **나머지 버튼은 밴드 안 흐름**으로 넣는다(`_mhead`의 extra).
    그러면 `.mhead`의 오른쪽 예약은 **언제나 74px 하나**뿐 = 패리티 갈래가 자리 수만큼 늘어나던 축이 붕괴한다.
@@ -6497,7 +6514,7 @@ function _srailPgOf(idx,id,name){ if(!idx)return null; return (id&&idx.byId[Stri
 // 캘린더·레일·필터·패널 로직 무수정 — 좌 보드 = openBusinessBoard 축약 인라인(_bizClean·_bizDrawChart 재사용) · 우 표 = _salesBuild+_anaSpark 재사용(재fetch 0).
 // F5 세션복원 = 부트 IIFE가 파싱 중 initApp 동기 호출 → 이 var들이 할당 전일 수 있어 initApp은 setTimeout(0)에서 _mvApply(분신술 4호 TDZ 전례 계승).
 var _mainView=(function(){try{return sessionStorage.getItem('mvView')==='cal'?'cal':'biz';}catch(_e){return 'biz';}})();   // [260723c 선택값] 상태 저장 = 이번 접속만(sessionStorage) · 새 접속 = 항상 사업 실적(운영자 「항상 메인」)
-var _bizmState={year:null,types:{},page:3,rdet:0,live:0,leftId:null,rightId:null};   // 인라인 보드 전용 상태(page: 좌 열이 그리는 면 · [260808] leftId·rightId = 두 열이 **지금 화면에 들고 있는 내용의 신원** — 넘김 때 「바뀐 열만 다시 그린다」 판정의 정본(_bizLeftNeedsRedraw·_bizRightNeedsRedraw) · [260805 2차] rdet: 우 열이 「판매현황 상세」(3-2)인가 0|1 — 좌 면과 분리된 축 · [260806] live: 3면 「전체(0) ↔ 판매중(1)」 토글 — 구 domain(분야 축)은 칩 철거와 함께 폐지) — 모달(_bizState·_yrState 'yr')과 분리·공유는 _yrState뿐(동기 재렌더)
+var _bizmState={year:null,types:{},page:3,rdet:0,live:0,metric:'rev',leftId:null,rightId:null};   // 인라인 보드 전용 상태(page: 좌 열이 그리는 면 · [260806-9] metric: 3면 「매출(rev) ↔ 관객수(aud)」 토글 — 기본 = 매출(운영자 「지금이 매출이고」) · [260808] leftId·rightId = 두 열이 **지금 화면에 들고 있는 내용의 신원** — 넘김 때 「바뀐 열만 다시 그린다」 판정의 정본(_bizLeftNeedsRedraw·_bizRightNeedsRedraw) · [260805 2차] rdet: 우 열이 「판매현황 상세」(3-2)인가 0|1 — 좌 면과 분리된 축 · [260806] live: 3면 「전체(0) ↔ 판매중(1)」 토글 — 구 domain(분야 축)은 칩 철거와 함께 폐지) — 모달(_bizState·_yrState 'yr')과 분리·공유는 _yrState뿐(동기 재렌더)
 var _BIZ_HALF_CH=230, _BIZ_HALF_CH_MIN=150;   // [260806] 3면 하단 반반 줄의 막대 높이 — 공연 막대(430)의 절반 급 · [260806 2차] 낮은 화면에선 _bizFitSeason이 MIN까지만 줄인다(늘리진 않는다)
 //   [260805 2차 운영자] 첫 화면 = **3면(사업 결과 비교)** — 구 기본값 1(연간 실적)과 자리 교체(「이 페이지가 메인화면에 연간 실적이랑 교체되게」).
 function setMainView(v,skipFade){
@@ -7335,8 +7352,26 @@ function _bizmLiveTrigger(){
     +' title="'+(on?'판매·진행중인 사업만 보는 중 — 눌러서 전체로':'전체(종료·예정 포함)를 보는 중 — 눌러서 판매중만')+'">'+(on?'판매중':'전체')+'</button>';
 }
 function _bizmLiveToggle(){ _bizmState.live=!_bizmState.live; _bizmRepaint(); }
+// ── [260806-9 운영자] 「매출 ↔ 관객수」 글자 토글 — 조작부 셋째 칸 ──────────────────────────
+//   지시: *"좌측상단에 2026, 전체 그 옆에 구분자 하나 더 만들어서 매출로 해줄 수 있어? 지금이 매출이고, 누르면 관객수.
+//         이렇게 두가지를 볼 수 있도록 자연스럽게 토글될때마다 전환되면 될듯."*
+//   = 이웃 「전체 ↔ 판매중」과 **같은 부품 한 벌**(`.ry-hd-div` 구분선 + `.ry-live-tg` 글자 토글) 재사용 · 신규 CSS·색·값 0.
+//   왜 = 이 면의 세 분야 차트 중 공연만 축이 **백만 원**이고 전시·교육은 **명**이라, 한 화면에 두 자가 섞여 있었다.
+//     관객수로 바꾸면 셋이 같은 자(명) 위에 서서 「몇 명이 왔나」로 통째 비교가 된다 — 매출로 되돌리면 종전 화면 그대로.
+//   ⚠ 라벨 = **지금 보고 있는 축**(이웃 토글과 같은 문법) · 강조(--accent/800)는 갈아탄 상태(관객수)가 진다.
+function _bizmAudMode(){ return _bizmState.metric==='aud'; }   // 기본 'rev' = 매출(운영자 「지금이 매출이고」)
+function _bizmMetricTrigger(){
+  var on=_bizmAudMode();
+  return '<button type="button" class="ry-live-tg" role="switch" aria-checked="'+(on?'true':'false')+'" onclick="_bizmMetricToggle()"'
+    +' title="'+(on?'관객수(명)로 보는 중 — 눌러서 매출로':'매출(백만 원)로 보는 중 — 눌러서 관객수로')+'">'+(on?'관객수':'매출')+'</button>';
+}
+// 바뀌는 건 **좌 열 차트의 값 축 하나**뿐 → 우 열(판매현황 상세 표)은 재렌더하지 않는다.
+//   그 표는 관객수·매출을 **늘 같이** 적고 있어 바뀔 값이 없다(_bizListTable) = 까닭 없는 깜빡임 0.
+//   결(디졸브)은 연도·필터 전환과 같은 것을 그대로 쓴다(운영자 「자연스럽게 전환」).
+function _bizmMetricToggle(){ _bizmState.metric=_bizmAudMode()?'rev':'aud'; _bizmDissolve(['biz-main'],_bizInlineRender); }
 // 조작부 한 벌 — 좌 열 헤더 우측에만 놓는다(같은 상태를 두 열에 그리지 않는 종전 규약).
-function _bizmTools(){ return _bizmYearTrigger()+'<span class="ry-hd-div" aria-hidden="true"></span>'+_bizmLiveTrigger(); }
+function _bizmTools(){ return _bizmYearTrigger()+'<span class="ry-hd-div" aria-hidden="true"></span>'+_bizmLiveTrigger()
+  +'<span class="ry-hd-div" aria-hidden="true"></span>'+_bizmMetricTrigger(); }
 // 좌·우 동시 갱신 — 이 면의 두 열은 **같은 목록**을 그린다(좌 = KPI·막대·전시/교육 · 우 = 판매현황 상세).
 //   조작부가 바뀌면 둘 다 다시 그려야 우 표가 옛 연도·옛 필터로 남지 않는다. 결 = 책 넘김과 같은 디졸브(_bizmDissolve 계승).
 function _bizmRepaint(){
@@ -7832,7 +7867,13 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
   if(!ED)rows=rows.filter(function(g){ return g._st!=='planned'; });
   if(!rows.length){ try{Plotly.purge(div);}catch(_e0){} return; }
   var dim=_yrCss('--dim'), grid=_yrCss('--border'), Y=_bizmState.year;
-  var hasRev=rows.some(function(g){return g._rev!=null&&g._rev>0;});
+  // [260806-9 운영자 「지금이 매출이고, 누르면 관객수」] 축 전환 = **이미 있는 갈래를 손으로 잡는 것**뿐이다 —
+  //   이 함수는 원래 「매출이 조인됐으면 매출(백만 원) · 아니면 판매 인원(명)」으로 갈리게 돼 있었고(폴백 경로),
+  //   값·라벨 서식·y축 제목·툴팁·축 중략이 전부 그 갈림목 하나(hasRev)를 보고 있다. 관객수 모드 = 그 갈림목을
+  //   **명 쪽으로 고정**한다 = 새 계산·새 축·새 형태 0(집계값은 종전 그대로 · 창작 0).
+  //   ⚠ 교육 반쪽(ED)은 애초에 수강생(명) 한 축뿐이라 이 토글 밖이다(카드 눈금 100~400 계약 유지).
+  var AUD=(!ED&&_bizmAudMode());
+  var hasRev=!AUD&&rows.some(function(g){return g._rev!=null&&g._rev>0;});
   // ⚠ 매출 미조인(_rev==null)은 **0이 아니라 null** — 0으로 떨어뜨리면 "0.0" 막대가 깔려 「하나도 안 팔렸다」로 읽힌다(평의회6).
   //   null = 막대 없음 → 아래 파선 자리(값 없음)가 그 사업의 자리를 지킨다(시간축엔 이름 눈금이 없어, 안 그리면 통째로 사라진다).
   // [260805 운영자] 교육도 **실값이 있으면 막대**로 — 축은 수강생(명) 하나뿐이라 매출 축으로 갈아타지 않는다(카드 눈금 100~400과 어긋나면 안 된다).
@@ -20997,7 +21038,7 @@ function openPromoCheck(){
   //   [260805-15] X 글자 = 정본 `✕`(U+2715) 유지 — check_design ⑦(정본 부품 일치)이 커밋에서 강제.
   //   📡·📭 이모지는 운영자 「이모지 가능한 안 씀」으로 제거(위 body 조립부).
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closePromoCheck)">'
-    + '<div class="modal" style="width:min(760px,94vw);max-height:88vh;--mpad-y:0;--mpad-x:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:var(--surface-solid)">'
+    + '<div class="modal" style="width:min(760px,94vw);max-height:88vh;--mpad-y:0;--mpad-x:0;position:relative;display:flex;flex-direction:column;overflow:hidden">'
     + '<button class="modal-x" onclick="closePromoCheck()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;z-index:10">✕</button>'
     + _mhead('AI 홍보 · 점검','홍보 기록과 프로그램 시트를 훑어 지금 손볼 곳을 찾아요')
     + '<div style="overflow:auto;flex:1;min-height:0;padding:18px 24px 20px">'+body+'</div></div></div>';
@@ -30057,8 +30098,8 @@ function openFileSlimmer(){
   // 게이지바 · 그 바로 아래에 줄이기 버튼 … 그러면 위에 문서 제목, 아래에 게이지바 영역까지 줄일 수 있을 텐데」).
   // 좌 = 첨부·파일명·도구(교체·삭제·내려받기) · 우 = 세기 게이지 + [용량 줄이기] + 상태 한 줄.
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeFileSlimmer)">'
-    +'<div class="modal" style="width:min(94vw,560px);height:auto;max-height:88vh;--mpad-y:0;--mpad-x:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:var(--surface-solid)">'
-    +'<button class="modal-x" onclick="closeFileSlimmer()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;z-index:10">✕</button>'
+    +'<div class="modal" style="width:min(94vw,560px);height:auto;max-height:88vh;--mpad-y:0;--mpad-x:0;position:relative;display:flex;flex-direction:column;overflow:hidden">'
+    +'<button class="modal-x" onclick="closeFileSlimmer()" title="닫기" aria-label="닫기">✕</button>'   /* 자리·층은 정본 `.modal:has(>.mhead)>.modal-x`가 준다 — 인라인 재타이핑 금지(기틀 규칙 6·7) */
     +_mhead('용량 줄이기','무거운 파일을 가볍게 만들어요','<button class="modal-x" onclick="_tminHide(\'sl-board\',\'용량 줄이기\')" title="최소화" aria-label="최소화">─</button>')
     +'<div style="flex:1;display:flex;flex-direction:column;min-height:0;padding:13px 16px 16px">'
       // 무대 하나로 통합 — 위 파일 줄(.hw-bar)·아래 게이지 줄(.hw-ask)을 이 안으로 접어 넣어 두 줄만큼 창이 낮아진다.
