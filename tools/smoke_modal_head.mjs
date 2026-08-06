@@ -105,9 +105,12 @@ const MEASURE = `(()=>{
       const rb=b.getBoundingClientRect();
       return +((rb.top+rb.height/2)-(rt.top+rt.height/2)).toFixed(1);
     }),
-    // ⑦ 상단 테두리 = 밴드와 같은 색(운영자 260805-32 「상단부는 모두 코발트로」).
-    //    흰 유리 테두리가 밴드 위를 지나면 강조색 위에 밝은 실선으로 보인다.
-    topBorderOk: cm.borderTopColor===cs.backgroundColor,
+    // ⑦ 밴드 위를 지나는 밝은 실선 0(운영자 260805-32 「상단부는 모두 코발트로」 → 35 「좌우도 음영만」).
+    //    통과 조건 둘 중 하나 = **테두리가 아예 없다**(음영만 · 260805-35 채택) 또는 색이 밴드와 같다.
+    //    테두리는 길이의 일부만 색을 달리할 수 없어서, 윗변만 밴드색으로 칠하면 좌·우가 밴드 옆 흰 실선으로 남는다.
+    topBorderOk: (parseFloat(cm.borderTopWidth)||0)===0
+              || (cm.borderTopColor===cs.backgroundColor
+                  && cm.borderLeftColor===cs.backgroundColor && cm.borderRightColor===cs.backgroundColor),
   };
 })()`;
 
@@ -172,7 +175,7 @@ async function main() {
       if (m.dXTop !== null && Math.abs(m.dXTop) > TOL_OPT) fails.push(`${name}: 닫기 X 윗선이 머리줄 첫 줄과 Δ${m.dXTop}px — 제목·조작 버튼과 중심선이 어긋난다.`);
       if (m.dXH !== null && Math.abs(m.dXH) > TOL) fails.push(`${name}: 닫기 X 높이가 제목 줄높이와 Δ${m.dXH}px — 같은 칸이 아니다(첫 줄 높이 한 갈래 계약 파손).`);
       (m.dBtn || []).forEach((d, i) => { if (Math.abs(d) > TOL) fails.push(`${name}: 머리줄 조작 버튼 ${i + 1}의 세로 중심이 제목과 Δ${d}px.`); });
-      if (m.topBorderOk === false) fails.push(`${name}: 모달 윗변 테두리 색 ≠ 밴드 색 — 강조색 위에 흰 실선이 지나간다(운영자 260805-32).`);
+      if (m.topBorderOk === false) fails.push(`${name}: 머리줄 옆으로 유리 테두리가 지나간다 — 강조색 위에 밝은 실선으로 보인다. 테두리 0(음영만)이거나 밴드와 같은 색이어야 한다(운영자 260805-32·35).`);
       if (!styles.has(m.style)) styles.set(m.style, []);
       styles.get(m.style).push(name);
     }
