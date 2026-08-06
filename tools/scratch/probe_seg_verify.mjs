@@ -48,7 +48,7 @@ const pure = await page.evaluate(`(()=>({
 }))()`);
 console.log('pure =', JSON.stringify(pure, null, 1));
 T(JSON.stringify(pure.man) === JSON.stringify([385, 72, 1, 1, 0]), '금액 만원 올림: 3,844,200→385 · 720,000→72 · 1원→1 · 10,000→1 · 0→0');
-T(pure.dayK[0] === '2020년 10월 16일' && pure.dayK[1] === '2020년 10월 16일' && pure.dayK[2] === '2020년 10월 16일', '날짜 3표기 모두 「2020년 10월 16일」');
+T(pure.dayK[0] === '20년 10월 16일' && pure.dayK[1] === '20년 10월 16일' && pure.dayK[2] === '20년 10월 16일', '날짜 3표기(20201016:·2020-10-16·2020.10.16) 모두 「20년 10월 16일」');
 T(pure.dayK[3] === '' && pure.dayK[4] === '없음', '못 읽는 날짜는 원문 그대로(창작 0)');
 T(pure.dayIso[0] === '2020-10-16' && pure.dayIso[1] === '2020-10-16', 'CSV 날짜 = ISO 정규화');
 T(JSON.stringify(pure.sido) === JSON.stringify(['전남광주', '서울', '경기', '부산', '경남', '제주']), '시도 줄임말 6종');
@@ -135,6 +135,52 @@ T(csv.resetBtn, '「필터·정렬 초기화」 버튼 노출');
 const reset = await page.evaluate(`(()=>{_segRun();return new Promise(r=>setTimeout(()=>r({f:Object.keys(_segLast.f).length,s:_segLast.sort.by,n:_segLast._view.length}),600));})()`);
 console.log('reset =', JSON.stringify(reset));
 T(reset.f === 0 && reset.s === '' && reset.n === 12, '새 조회 = 앞 조회의 열 필터·정렬을 물려받지 않는다');
+
+// ── [260813] 연도 2자리 + 표 잡고 끌기 ────────────────────────────────────
+const y2 = await page.evaluate(`(()=>({
+  k:[_segDayK('20201016:1'),_segDayK('2020-10-16'),_segDayK('2026-01-05')],
+  iso:_segDayIso('20201016:1'),
+  ord:[_segKDayNum('20년 10월 16일'),_segKDayNum('25년 9월 3일'),_segKDayNum('2020년 10월 16일'),_segKDayNum('없음')]
+}))()`);
+console.log('y2 =', JSON.stringify(y2));
+T(y2.k[0] === '20년 10월 16일' && y2.k[1] === '20년 10월 16일' && y2.k[2] === '26년 1월 5일', '화면 연도 = 뒤 2자리(20년 10월 16일)');
+T(y2.iso === '2020-10-16', 'CSV 날짜는 네 자리 그대로(2020-10-16)');
+T(y2.ord[0] === 20201016 && y2.ord[1] === 20250903 && y2.ord[2] === 20201016 && y2.ord[3] === 0, '필터 목록 날짜 정렬 키 = 2자리/4자리 둘 다 · 못 읽으면 0');
+
+const pan = await page.evaluate(`(()=>{
+  _segClear();
+  document.getElementById('seg-result').style.width='520px';      // 좁은 창 재현 = 표(min-width 860)가 상자를 넘는다
+  _segRender();
+  const b2=document.getElementById('seg-scroll'); if(!b2)return {no:1};
+  const over=b2.scrollWidth>b2.clientWidth+1;
+  const cur0=b2.style.cursor;
+  const pd=(t,x)=>{const e=new PointerEvent(t,{clientX:x,clientY:300,button:0,pointerId:1,pointerType:'mouse',bubbles:true});b2.dispatchEvent(e);};
+  pd('pointerdown',900); pd('pointermove',898); const early=b2.scrollLeft;   // 2px = 아직 안 끈다
+  pd('pointermove',700); const after=b2.scrollLeft;                          // 200px 끌기
+  const curDrag=b2.style.cursor;
+  pd('pointerup',700);
+  // 끌고 난 직후의 click 한 번은 삼켜지나
+  let fired=0; const th=document.querySelector('#seg-result th[data-col="name"]');
+  const spy=()=>{fired++;}; th.addEventListener('click',spy);
+  th.click(); const first=fired;
+  th.click(); const second=fired;
+  th.removeEventListener('click',spy);
+  return {over,cur0,early,after,curDrag,curEnd:b2.style.cursor,first,second,pop:!!document.getElementById('colf-pop')};
+})()`);
+console.log('pan =', JSON.stringify(pan));
+T(pan.over && pan.cur0 === 'grab', '숨은 열이 있으면 상자에 grab 커서');
+T(pan.early === 0, '2px 흔들림은 끌기로 안 친다(오작동 방지 문턱 4px)');
+T(pan.after === 200, `우측으로 당기면 표가 따라온다(scrollLeft ${pan.after}px)`);
+T(pan.curDrag === 'grabbing' && pan.curEnd === 'grab', '끄는 중 grabbing → 떼면 grab 복귀');
+T(pan.first === 0 && pan.second === 1, '끈 직후 click 1회는 삼키고, 그 다음 click은 정상 통과');
+
+// ⚠ 이 표는 1500×1050 기본 창에서도 숨은 열이 있다(10열 · min-width 860 + 2단 머리) — 그래서 「넘치지 않는 상태」는
+//   폭을 넉넉히 줘서 일부러 만든다. 안 그러면 「거짓말 0」 계약이 실제로 밟히는지 한 번도 못 잰다.
+const noover = await page.evaluate(`(()=>{document.getElementById('seg-result').style.width='1600px';_segRender();const b=document.getElementById('seg-scroll');
+  const r={over:b.scrollWidth>b.clientWidth+1, cur:b.style.cursor};
+  document.getElementById('seg-result').style.width=''; _segRender(); return r;})()`);
+console.log('noover =', JSON.stringify(noover));
+T(!noover.over && !noover.cur, '숨은 열이 없으면 grab 커서를 안 붙인다(거짓말 0)');
 
 // ── 회귀: 홍보 신청·확인 표의 엑셀식 컬럼 필터(같은 팝업 정본) ──────────────
 await page.evaluate(PROMO_MOCK);
