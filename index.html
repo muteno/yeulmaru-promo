@@ -717,8 +717,26 @@ button{font-family:inherit;cursor:pointer}
 /* .sk-sweep = 캘린더 스켈레톤 + 판매 레일 로딩 공용(운영자 260710 "좌측 스캔 모션 우측에도" — .cal-skel 스코프 해제, 규칙 내용 불변) */
 .sk-sweep{position:absolute;inset:0;pointer-events:none;overflow:hidden}
 /* 스윕은 transform 애니(컴포지터 전용) — left 애니는 매 프레임 layout+paint로 backdrop-filter 재계산 유발(분신술 5호 MED) */
-.sk-sweep::after{content:'';position:absolute;top:0;bottom:0;left:0;width:34%;background:linear-gradient(100deg,transparent 0%,rgba(255,255,255,.5) 50%,transparent 100%);transform:translateX(-120%);will-change:transform;animation:skSweep 1.5s ease-in-out infinite}
-@keyframes skSweep{to{transform:translateX(400%)}}
+/* [260806-16 운영자 「10시 방향에서 4시 방향으로 쓸어내리게 · 이징되게 · 16대 9 화면이 더 많으니까」] 대각 쓸어내림.
+   ① 방향 = 그라데이션 **120deg** = 수평에서 30° 아래 = 시계 10시→4시. 16:9 화면의 모서리 대각이 29.36°라 그 대각과 사실상 같은 각.
+      ⚠ **지각되는 이동 방향은 그라데이션 축이 정한다**(줄무늬의 구경 문제) — translate는 그 축으로의 투영만 보인다.
+   ② 판(plate) = 기준 사각의 **2배**를 깔고 그 위 띠를 민다. 구판처럼 「폭 34% 세로 띠」를 쓰면 대각 띠의 양 끝이 제 판에 잘린다.
+      띠 두께 = 판의 12%(= 기준 사각 그라데이션 길이 L의 0.24배 ≈ 구판 34% 폭과 같은 체감 두께).
+   ③ 이징이 눈에 남게 = 여정을 **딱 필요한 만큼만**(±33% 판 = 기준 사각의 ±0.66배 → 축 투영 0.66L). 띠가 양끝 밖으로
+      겨우 빠지는 최소 여정이라 **여정 전체 = 보이는 구간**이다. 구판은 -120%→400%라 여정의 절반 이상이 화면 밖 =
+      화면 안에서는 곡선의 가장 빠른 중간 구간만 지나가 **등속으로 보였다**(운영자 「이징되게」의 정체).
+      커브 = **`ease-in-out` 그대로**(이 규칙에 이미 있던 값 · 신규 창작 0). 여정을 줄인 것만으로 좌우 대칭 가감속이
+      그대로 눈에 남는다. ⚠ 주력 `cubic-bezier(0.4,0,0.2,1)`도 후보였지만 그건 **도착·안착**용이라 앞이 빠르고 뒤가 길게 늘어져
+      쓸어내림이 오른쪽 아래에서 멎어 보인다(실측 t=50%에 이미 여정의 80% 지점) — 연속 반복인 스윕엔 대칭 곡선이 맞다.
+   ④ 여러 칸(머리줄+유리박스 · 펼침 두 열)이 **한 띠**로 보이려면 판이 같은 전역 사각에 앵커돼야 한다 → `--sw-x/y/w/h`(JS 실측 `_ldSweepSpan`).
+      값이 없으면(캘린더 스켈레톤·판매 보드 등 한 칸짜리) 자기 칸이 곧 기준 사각 = 종전과 같은 자기완결 동작. */
+.sk-sweep::after{content:'';position:absolute;
+  left:calc(var(--sw-x,0px) - var(--sw-w,100%)/2);top:calc(var(--sw-y,0px) - var(--sw-h,100%)/2);
+  width:calc(var(--sw-w,100%)*2);height:calc(var(--sw-h,100%)*2);
+  background:linear-gradient(120deg,transparent 44%,rgba(255,255,255,.5) 50%,transparent 56%);
+  transform:translate(-33%,-33%);will-change:transform;
+  animation:skSweep var(--sw-dur,1.5s) ease-in-out infinite}
+@keyframes skSweep{to{transform:translate(33%,33%)}}
 @media (max-width:768px){.cal-skel{grid-auto-rows:64px}.cal-skel .sk-b{height:7px;margin-bottom:6px}}
 @media (prefers-reduced-motion:reduce){.sk-sweep::after{animation:none}}
 /* [260806 운영자 「빗살을 창 전체에 — 창 = 저 블러 된 독립 박스」] 사업 보드 카드(머리줄+유리박스)용 스윕 자리 2종.
@@ -727,13 +745,9 @@ button{font-family:inherit;cursor:pointer}
      → 같은 .sk-sweep을 두 칸에 한 벌씩 같은 프레임에 삽입 = 같은 위상·같은 폭(둘 다 카드 폭) = 눈에는 띠 하나가 카드 전체를 쓸고 지나간다. */
 .sk-sweep.sk-sweep-hd{z-index:-1}                                            /* 머리줄 = 제 칸 배경 위·제목 글자 아래(음수 z — 정지한 제목이 스켈레톤처럼 번쩍이지 않게) · 클립 = 머리줄 자신의 overflow+라운드 */
 .sk-sweep.sk-sweep-gl{border-radius:0 0 var(--radius-lg) var(--radius-lg)}   /* 유리박스 = 패딩까지 전면 · 박스엔 overflow가 없으니 스윕 자신의 아래 라운드로 클립(카드 아래 두 모서리) */
-/* [260806-14 운영자 「양면이 로딩중일 때는 모든 양면을 기준해서 빗살이 쓸어가게」] 펼침 기준 스윕.
-   두 열이 동시에 로딩이면 띠의 **좌표계를 카드 → 펼침(좌 카드 왼끝~우 카드 오른끝)으로 옮긴다**:
-   폭 = 펼침 폭의 34%(정본 비율 그대로) · left = -(자기 칸 왼끝 − 펼침 왼끝) → 네 칸(좌·우 카드 × 머리줄·박스)이
-   **같은 띠 하나**를 각자 자기 자리만큼 보여주는 창이 된다. 값은 JS 실측(_ldSweepSpan)이 넣는다.
-   duration도 펼침 배수만큼 늘린다 = 초당 이동 픽셀 = 카드 한 장 때와 동일(범위만 넓어지고 템포는 안 변한다). */
-.sk-sweep.sk-span::after{left:var(--sw-x,0);width:var(--sw-w,34%);animation-duration:var(--sw-dur,1.5s)}
-.sk-sweep.sk-rst::after{animation:none}   /* 위상 재장전용 1프레임 표식 — 두 열의 띠가 같은 시각에 출발해야 「띠 하나」로 보인다 */
+/* [260806-14 운영자 「양면이 로딩중일 때는 모든 양면을 기준해서 빗살이 쓸어가게」] 기준 사각 = 카드 한 장 / 양면 동시 로딩이면 펼침.
+   `_ldSweepSpan`이 `--sw-x/y/w/h`(칸 → 기준 사각 앵커)와 `--sw-dur`를 실측해 넣는다. 위 ④와 한 몸. */
+.sk-sweep.sk-rst::after{animation:none}   /* 위상 재장전용 1프레임 표식 — 여러 칸의 띠가 같은 시각에 출발해야 「띠 하나」로 보인다 */
 /* 캘린더 로딩 중앙 표시 — 판매 레일과 동일 강조색 dots+문구(운영자 260708). accent+opacity.75(계승) */
 .cal-skel .cal-load-msg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--accent);opacity:.75;font-size:14px;font-weight:600;z-index:2;pointer-events:none}
 /* 요일 바 배경 .43→.9: 스크롤 시 밑을 지나는 셀 비침 차단(운영자 260707 버그 신고 — 일정관리 thead 불투명화 전례 계승, 흰 alpha 변주 §3.5②) */
@@ -7123,10 +7137,11 @@ function _ldSweepOff(node){
     _ldSpanSoon();   // 참여 칸이 줄었다 = 펼침 기준 해제(한 열만 로딩이면 다시 카드 기준)
   }catch(_e){}
 }
-// ── [260806-14 운영자 「양면이 로딩중일 때는 모든 양면을 기준해서 빗살이 쓸어가게」] ─────────────────
-// **두 열이 동시에 로딩일 때만** 띠의 기준을 카드 → 펼침으로 넓힌다(한 열만 로딩 = 종전 카드 기준 그대로).
-//   좌 카드 왼끝~우 카드 오른끝을 한 벌의 좌표계로 삼고, 네 칸(좌·우 × 머리줄·박스)에 **같은 띠**를 심는다
-//   = 눈에는 띠 하나가 펼침 전체를 가로지른다(칸 사이 빈 곳은 유리가 없어 안 보일 뿐 같은 여정).
+// ── [260806-14 「양면이 로딩중일 때는 모든 양면을 기준해서」 · 260806-15 대각 쓸어내림] 기준 사각 앵커 ─────
+// 띠가 **한 줄로** 보이려면 참여 칸들이 같은 전역 사각(기준 사각) 위에 판을 깔아야 한다.
+//   · 기준 사각 = 그 열의 **카드 한 장**(머리줄+유리박스 합집합) · **양면 동시 로딩이면 펼침 전체**(운영자 260806-14).
+//   · 대각(260806-15) 이후로는 **한 열만 로딩이어도** 앵커가 필수다 — 머리줄과 박스는 높이가 달라, 각자 제 칸을
+//     기준으로 그리면 그라데이션 위상이 어긋나 두 칸 경계에서 띠가 **꺾인다**(가로 띠 시절엔 안 드러나던 축).
 // ⚠ 위상 = 같은 시각 출발이어야 한 줄로 보인다 — 참여 칸이 바뀐 순간에만 .sk-rst 한 프레임으로 전원 재장전
 //   (매 패스 재장전하면 정렬 재계산 때마다 띠가 튄다).
 // ⚠ 좌표는 gBCR = **시각좌표(×zoom)** → CSS px(디자인 단위)로 넣으려면 전부 /_z 환산(biz 분기 정본 규약).
@@ -7134,34 +7149,40 @@ function _ldSpanSoon(){ try{ if(typeof requestAnimationFrame==='function')reques
 function _ldSweepSpan(){
   try{
     var all=document.querySelectorAll('#biz-main .sk-sweep,#rail-yrm .sk-sweep');
-    var list=[], hasL=0, hasR=0;
+    var cols={L:[],R:[]};
     for(var i=0;i<all.length;i++){
       var el=all[i]; if(el.offsetParent===null)continue;
       var r=el.getBoundingClientRect(); if(!(r.width>1))continue;
-      list.push({el:el,r:r});
-      if(el.closest('#biz-main'))hasL=1; else hasR=1;
+      cols[el.closest('#biz-main')?'L':'R'].push({el:el,r:r});
     }
-    var both=hasL&&hasR;
-    var key=both?('S'+list.length):'';
-    if(!both){
-      for(var j=0;j<list.length;j++){ var e0=list[j].el; e0.classList.remove('sk-span'); e0.style.removeProperty('--sw-x'); e0.style.removeProperty('--sw-w'); e0.style.removeProperty('--sw-dur'); }
-      window._ldSpanKey=key; return;
-    }
+    var list=cols.L.concat(cols.R);
+    if(!list.length){ window._ldSpanKey=''; return; }
     var z=(typeof _bizZ==='function')?(_bizZ()||1):1;
-    var L=Infinity, R=-Infinity, W=0;
-    list.forEach(function(o){ if(o.r.left<L)L=o.r.left; if(o.r.right>R)R=o.r.right; if(o.r.width>W)W=o.r.width; });
-    var S=(R-L)/z, Wc=W/z;
-    if(!(S>0)||!(Wc>0))return;
-    list.forEach(function(o){
-      o.el.style.setProperty('--sw-w',(Math.round(S*0.34*10)/10)+'px');            // 정본 비율 34% — 기준만 펼침으로
-      o.el.style.setProperty('--sw-x',(Math.round((L-o.r.left)/z*10)/10)+'px');    // 자기 칸을 펼침 좌표계로 밀어 맞춤
-      o.el.style.setProperty('--sw-dur',(Math.round(1.5*S/Wc*100)/100)+'s');       // 초당 이동 픽셀 = 카드 한 장 때와 동일
-      o.el.classList.add('sk-span');
+    var uni=function(a){ var o={l:Infinity,t:Infinity,r:-Infinity,b:-Infinity};
+      a.forEach(function(x){ if(x.r.left<o.l)o.l=x.r.left; if(x.r.top<o.t)o.t=x.r.top; if(x.r.right>o.r)o.r=x.r.right; if(x.r.bottom>o.b)o.b=x.r.bottom; }); return o; };
+    // 그라데이션 여정 길이 L(120deg 기준) = |W·sin120| + |H·cos120| = .866W + .5H — 템포(초당 이동 px) 고정의 잣대
+    var lineOf=function(o){ return (0.866*(o.r-o.l)+0.5*(o.b-o.t))/z; };
+    var both=cols.L.length&&cols.R.length;
+    var groups=both?[{ref:uni(list),panes:list}]
+                   :[cols.L.length?{ref:uni(cols.L),panes:cols.L}:null,cols.R.length?{ref:uni(cols.R),panes:cols.R}:null].filter(Boolean);
+    var cardL=Math.max(cols.L.length?lineOf(uni(cols.L)):0, cols.R.length?lineOf(uni(cols.R)):0);   // 「카드 한 장」 여정 = 템포 기준
+    var rnd=function(v){ return Math.round(v*10)/10; };
+    groups.forEach(function(g){
+      var w=(g.ref.r-g.ref.l)/z, h=(g.ref.b-g.ref.t)/z; if(!(w>0)||!(h>0))return;
+      var dur=(cardL>0)?(Math.round(1.5*lineOf(g.ref)/cardL*100)/100):1.5;   // 펼침이면 그만큼 길게 = 초당 이동 px 동일
+      g.panes.forEach(function(o){
+        o.el.style.setProperty('--sw-x',rnd((g.ref.l-o.r.left)/z)+'px');     // 자기 칸을 기준 사각 좌표계로 밀어 맞춤
+        o.el.style.setProperty('--sw-y',rnd((g.ref.t-o.r.top)/z)+'px');
+        o.el.style.setProperty('--sw-w',rnd(w)+'px');
+        o.el.style.setProperty('--sw-h',rnd(h)+'px');
+        o.el.style.setProperty('--sw-dur',dur+'s');
+      });
     });
-    if(key!==window._ldSpanKey){                                                   // 참여 칸 변화 = 위상 재장전 1회
+    var key=(both?'S':'C')+list.length;
+    if(key!==window._ldSpanKey){                                             // 참여 칸 변화 = 위상 재장전 1회
       window._ldSpanKey=key;
       list.forEach(function(o){ o.el.classList.add('sk-rst'); });
-      void document.body.offsetWidth;                                              // 리플로우 1회 = 애니 재장전(_bizmAnimate와 같은 관용구)
+      void document.body.offsetWidth;                                        // 리플로우 1회 = 애니 재장전(_bizmAnimate와 같은 관용구)
       list.forEach(function(o){ o.el.classList.remove('sk-rst'); });
     }
   }catch(_e){ console.warn('[ld span]',_e); }
