@@ -7978,6 +7978,30 @@ function _bizZoneAlpha(hex){
 //   부품·값 = `_bizYearZones`의 구획 라벨(`note`) 문법 그대로 — 9.5px · `--dim` · xref 데이터좌표 중앙 정렬(새 문법 0).
 //   다른 건 세로 자리뿐: yref 'paper' y0 아래로 `yshift`(월 라벨 한 줄 아래). 분기 경계선은 안 긋는다(달 경계선이 이미 그 자리).
 var _BIZ_AXB=50;   // 아래 여백 = 월 라벨 + 분기 라벨 + 숨구멍(구 34 = 월 라벨만 있던 값)
+// ── [260809 운영자 「각각 다 **숫자 간격이 다르거든**? 그 부분 해결해주고, **모든 올라와 있는 차트가 다 숫자가 나오게**」] ──
+//   연간 사업 차트 값 라벨 = **한 벌**(기구·간격·잉크·자리잡기). 아래 셋이 그 한 벌의 SSOT다.
+//   ⚠ 세로 간격은 오직 `_BIZ_LAB_DY` 하나 — 라벨을 **위아래로 옮겨 겹침을 푸는 짓 금지**(그 순간 간격이 갈린다).
+//     겹치면 **가로로 비킨다**(기틀 §2 #16 ⑦ 「생략이 아니라 뒤집기」의 막대판 · 막대는 W≈5px라 세로 자리가 뜻을 진다).
+var _BIZ_LAB_DY=3;     // 막대 꼭대기 ↔ 숫자 아랫변(주석 yshift) — 260805 교육 값 라벨·260806-11 예상 칸이 이미 쓰던 그 값(새 수치 0)
+var _BIZ_LAB_FS=10.5;  // 값 라벨 활자 — 260805 운영자 확정(9.5 → 10.5)
+var _BIZ_LAB_DX=12;    // 가로 비킴 상한 = 두 자리 폭(6×2) · 이보다 더 밀면 숫자가 제 막대에서 떨어져 보인다
+// 글상자 폭(px) ≈ 자릿수×6 + 쉼표×3 + 숨구멍 6 — 구 상수 29(= 「4자 라벨 + 숨구멍」)를 자릿수별로 편 것(같은 자·새 수치 0)
+function _bizLabW(t){ var s=String(t); return s.replace(/[^0-9]/g,'').length*6+(s.split(',').length-1)*3+6; }
+// 글상자 한 칸 자리잡기 — box{x,y,w}(px) · placed = 이미 선 글상자들. 돌려주는 값 = **가로 비킴(px)**.
+//   세로 임계 19 = 10.5px 글상자 ≈13 + 숨구멍 6(기틀 §2 #16 ⑦과 같은 자) · 가로는 두 글상자가 실제로 겹칠 때만 민다.
+//   ⚠ 끝내 못 비키면 **제자리에 그대로 세운다**(숫자를 지우지 않는다 = 운영자 260809 「다 숫자가 나오게」).
+function _bizLabFit(box,placed){
+  var hit=function(d){ var a0=box.x+d-box.w/2,a1=box.x+d+box.w/2,k,p;
+    for(k=0;k<placed.length;k++){ p=placed[k]; if(Math.abs(p.y-box.y)<19&&a1>p.x0&&a0<p.x1)return p; } return null; };
+  var d=0,p,i;
+  if(hit(0)){
+    for(i=0;i<4&&(p=hit(d));i++)d=p.x1-(box.x-box.w/2)+0.5;                                  // 오른쪽으로 최소치
+    if(hit(d)||d>_BIZ_LAB_DX){ d=0; for(i=0;i<4&&(p=hit(d));i++)d=p.x0-(box.x+box.w/2)-0.5;  // 막히면 왼쪽으로
+      if(hit(d)||d<-_BIZ_LAB_DX)d=0; }
+  }
+  placed.push({x0:box.x+d-box.w/2,x1:box.x+d+box.w/2,y:box.y});
+  return d;
+}
 function _bizQuarterNotes(y,x0,x1,dim){
   var a=[],q,qa,qb;
   for(q=0;q<4;q++){
@@ -8101,7 +8125,8 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
   //   다른 자릿수 문법으로 서서 눈이 두 번 읽었다. 반올림은 표기에서만 한다(값·툴팁·집계는 원값 그대로).
   var vfmt=function(v){ return Math.round(v).toLocaleString(); };
   // [260804] 축 중략 — 그릴 자리만 접는다(값·라벨·툴팁은 실값). plotPx = 실제 그림 높이(위 18 · 아래 34 여백 제외 — 45° 이름축 폐지로 아래 여백 96→34)
-  var brk=ED?null:_bizBarBreak(vals,Math.max(60,hgt-(18+_BIZ_AXB)));   // [260806-5] 위 여백 18 + 아래 여백 _BIZ_AXB — 상수 34를 박아두면 아래 여백을 늘린 만큼 중략이 없는 자리를 있다고 착각한다(그림 영역 = 높이 − 두 여백)
+  var plotPx=Math.max(60,hgt-(18+_BIZ_AXB));   // [260806-5] 위 여백 18 + 아래 여백 _BIZ_AXB — 상수 34를 박아두면 아래 여백을 늘린 만큼 중략이 없는 자리를 있다고 착각한다(그림 영역 = 높이 − 두 여백) · [260809] 값 라벨 겹침도 이 자로 px 환산한다(자가 둘이면 판정이 갈린다)
+  var brk=ED?null:_bizBarBreak(vals,plotPx);
   var yv=brk?vals.map(function(v){return v==null?null:brk.map(v);}):vals;
   // ── [260808-2 운영자 「판매중 공연의 **예상 판매율**을 그라데이션으로」] 2단 표기(기틀 §2 #18 미완 항 완결) ──
   //   막대 = **팔린 만큼 진한 실선**(종전 그대로 · 값 라벨·툴팁 전부 실값) + 그 위에 **예상 만큼 페이드** 한 칸.
@@ -8118,32 +8143,29 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
     var r=g._fc/cur; if(!(r>1.0001))return;
     fcIdx.push([i,vals[i]*r]);
   });
-  // 값 라벨 = 큰 값 우선 배치 — 몰린 구간에서 겹치면 작은 값 라벨을 생략(정확값은 툴팁). 간격 26px ≈ 4자 라벨(9.5px) + 숨구멍(1920 실측 — 34px는 15일 떨어진 38.3까지 지웠다).
+  // ── [260809 운영자 「각각 다 **숫자 간격이 다르거든**? 그 부분 해결해주고, **모든 올라와 있는 차트가 다 숫자가 나오게** ·
+  //     숫자는 **색이 각기 다른 게 아니라, 조금 흐린 검정으로**」] 값 라벨 = 한 벌 ──────────────────────────
+  //   구판이 어긋나 있던 자리 셋(실측 260809 · `tools/scratch/probe_barlabel.mjs`):
+  //     ① **기구가 둘** — 실막대는 Plotly `textposition:'outside'`(글상자 간격 **Δ0.00px**), 예상 칸·교육 막대는
+  //        주석 `yshift:3`(**Δ5.0px**). 같은 뜻의 숫자가 한 차트 안에서 두 간격으로 섰다.
+  //     ② **겹침 = 생략** — x 29px 하나만 보고 지웠다(y는 안 봤다). 값이 있는 막대 16개 중 **6개가 숫자 없이** 서 있었다.
+  //     ③ **잉크 = 막대색**(인디고·그린·핑크·주황 4갈래) — 운영자 판정 「각기 다른 색이 아니라 조금 흐린 검정」.
+  //   → 기구는 **주석 한 벌**(아래 `_bizLabFit` 자리잡기 블록)로 모으고(간격 = `_BIZ_LAB_DY` 하나), 겹치면 **가로로 비키고**(생략 0),
+  //     잉크는 중립 사다리 한 단(`--neutral-text` · 분기 라벨 260806-6이 이미 쓴 그 자 = 새 회색 창작 0)로 통일한다.
+  //   ⚠ 값·자리(x·y)·툴팁·히트존은 **무접촉** — 바뀌는 건 숫자를 그리는 기구와 잉크뿐이다.
   var labs=rows.map(function(g,i){ return vals[i]==null?'':vfmt(vals[i]); });
-  var labGap=29/pxPerDay, placedX=[];   // [260805] 라벨 10.5px로 키운 만큼 간격도 26→29(4자 라벨 폭 + 숨구멍)
-  rows.map(function(g,i){return i;}).filter(function(i){return vals[i]!=null;})
-    .sort(function(a,b){return vals[b]-vals[a];})
-    .forEach(function(i){ var ok=placedX.every(function(p){return Math.abs(p-xs[i])>=labGap;}); if(ok)placedX.push(xs[i]); else labs[i]=''; });
-  // [260808-2] 예상 페이드가 얹힌 막대 = 값 라벨을 **막대 위가 아니라 옆으로**(실판매 꼭대기 높이).
-  //   위에 두면 라벨이 그대로 페이드 칸 **안**에 잠긴다(실측 = 「4.9」가 페이드에 묻혔다) — 같은 색 잉크 위 같은 색 글자.
-  //   옆·꼭대기 높이 = 「여기까지 팔렸다」는 경계에 값이 붙는다 = 2단의 뜻과 라벨 자리가 일치한다.
-  //   자리 문법(xanchor left · xshift 9 · yanchor middle)은 아래 교육 색인의 「천장 근접 = 옆으로」와 **같은 벌**(새 형태 0).
-  //   겹침 판정(placedX)은 위에서 이미 끝났다 = 라벨 수·생략 규칙은 무변, 그리는 자리만 옮긴다.
-  var fcLab=[];
-  // [260806-13 운영자 「응 적용 맞고, **수치에 맞게끔만 차트 배선**하면 될 듯」] 라벨 값 = **그 자리가 뜻하는 값**.
-  //   구판은 자리는 예상 꼭대기인데 글자는 **실판매값**이라(135가 216 높이에 서 있었다) 숫자와 높이가 어긋났다 —
-  //   같은 차트에서 다른 막대는 「그 높이 = 그 숫자」인데 이 칸만 규칙이 달랐다. 이제 둘이 같은 값에서 나온다.
+  // [260806-13 운영자 「응 적용 맞고, **수치에 맞게끔만 차트 배선**하면 될 듯」] 예상 2단이 얹힌 행 = 그 행의 숫자는
+  //   **예상 꼭대기**에 서고 값도 **예상값**이다(구판은 자리는 예상 꼭대기인데 글자는 실판매값이라 135가 216 높이에 섰다).
   //   ⚠ 실판매값은 **툴팁**이 그대로 말한다(「이 추세면 예상 최종 N석 (지금 M석 · +K)」) — 막대에 숫자를 둘 달지 않는다(번잡).
-  //   ⚠ 겹침 판정(placedX)은 위에서 이미 끝났다 = 라벨 수·생략 규칙 무변, 바뀌는 건 글자 내용과 자리뿐.
-  fcIdx.forEach(function(a){ var i=a[0]; if(!labs[i])return; fcLab.push({x:xs[i],y:_mapv(a[1]),t:vfmt(a[1]),c:gcol(rows[i])}); labs[i]=''; });
-  // [260805 운영자 「교육도 그 위에 명수 숫자를 써줘 · 공연 차트도 각각 맨 위에 (백만 단위로)」]
-  //   값 라벨 = 9.5px·--dim(3.32:1 · 화면에서 거의 안 읽혔다) → **10.5px + 그 막대 색**(전시 피크 라벨과 같은 문법 =
-  //   숫자와 막대가 한 몸으로 읽힌다 · 장르색·분야색은 --dim보다 대비가 높다). 단위는 축 제목(백만 원)·카드 우상단(명)이 말한다.
-  // [260805] 교육 반쪽만 값 라벨을 **주석(annotation)으로** 뽑는다 — Plotly는 막대 밖 글자를 **막대 폭에 맞춰 줄여** 그려서
-  //   (게이지 굵기 ≈5px) 「340」이 실제로는 5~6px로 찍힌다. 옆에 선 꼭자락 라벨(주석·10.5px)과 나란히 서니 크기가 갈렸다.
-  //   주석은 폭 제약이 없어 지정한 10.5px 그대로 = 한 카드 안 숫자 크기가 한 벌. 공연 차트는 막대가 굵어 종전대로 둔다(회귀 0).
+  //   ⚠ [260809] 구판이 이 칸만 「옆으로」(xanchor left · xshift 9) 뺐던 이유(페이드 칸 안에 잠김)는 260806-11이
+  //     자리를 페이드 **위**로 올리며 이미 해소됐다 → 이제 다른 값 라벨과 **완전히 같은 벌**(위·가운데·같은 간격)이다.
+  var fcOf={}; fcIdx.forEach(function(a){ fcOf[a[0]]=a[1]; });
+  // [260805 운영자 「교육도 그 위에 명수 숫자를 써줘 · 공연 차트도 각각 맨 위에 (백만 단위로)」] 값 라벨 = 10.5px.
+  // [260809] 그리는 기구 = **주석 한 벌**(교육 반쪽이 260805부터 쓰던 그 기구를 공연까지 확장). Plotly 막대 텍스트
+  //   (`text`+`textposition:'outside'`)는 폐지 — ⓐ 간격이 주석과 갈리고(Δ0 vs Δ5.0px · 위 ① 실측) ⓑ `constraintext`
+  //   기본값이 라벨을 막대 폭(W≈5px)에 맞춰 줄여 260806 2차에 이미 한 번 사고를 냈다(그 방어 `constraintext:'none'`도
+  //   같이 폐지 — 막대 텍스트 자체가 없으면 줄일 것도 없다). 주석은 폭 제약이 없어 지정 활자 그대로 찍힌다.
   var tr={type:'bar',x:xs,y:yv,width:W,
-    text:(ED?labs.map(function(){return '';}):labs), textposition:'outside', cliponaxis:false, constraintext:'none', textfont:{size:10.5,color:rows.map(gcol)},   // [260806 2차 · 평의회5 렌더 실측] `constraintext` 기본값 `'both'`는 라벨을 **막대 폭에 맞춰 축소**한다 — 이 차트의 막대폭은 게이지 규격이라 W≈5px여서 선언 10.5px 라벨이 실제로는 **5.8×3.0px**(글자 높이 3px)로 찍혔다(대조 실측 = `'none'`이면 26.4×12px 정상 · 전 분포·전 높이 동일). 값·색·기하 창작 0 = Plotly 기본 축소만 해제. ⚠ 이 축이 죽어 있으면 축 중략의 정당화 근거(「값·눈금·라벨·툴팁은 전부 실값」)가 화면에서 성립하지 않는다 — 접힌 막대의 값을 읽을 수단이 라벨뿐인 높이 구간이 있다
     marker:{color:rows.map(gcol),line:{width:0}},   // [260806 2차] 상태별 opacity·테두리 폐지 = 막대 농도 전부 동일 · 상태는 음영 구획이 말한다
     customdata:rows.map(function(g){return [g.name,(ED?(g._g2||'예술교육'):(g.genre||'-')),Math.round((g._sold!=null&&g._sold>0)?g._sold:g.paid),(g._rev!=null?_bizMoney(g._rev):'—'),(g.avg||0).toFixed(1),stName(g),dTxt(g),((ED&&g._vsrc)?(' · '+g._vsrc+'값'):'')];}),   // [260805] 교육 = 프로그램 시트/운영대장 장르(예: 인문학) · [7] = 값 출처 꼬리표(DB 미조인 폴백일 때만 · _BIZ_EDU_SOLD 주석)
     hovertemplate:'<b>%{customdata[0]}</b><br>%{customdata[6]} · %{customdata[5]} · %{customdata[1]}<br>'   // 눈금엔 달만 남는다 → 사업명·정확한 일자는 툴팁이 진다
@@ -8163,6 +8185,15 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
       .concat(rows.map(function(g){ var m=lnOf(g); return m?m[m.length-1][1]:null; }).filter(function(v){return v!=null&&isFinite(v);})).concat([0]));
     if(_edMax>_ED_YMAX*0.94){ _edTop=_bizNiceStep(_edMax*1.12); var _st2=Math.max(100,_bizNiceStep(_edTop/4)); _edTick=[]; for(var _t=_st2;_t<=_edTop+1e-6;_t+=_st2)_edTick.push(Math.round(_t)); }
   }
+  // [260809] 축 상한 = **한 곳에서** 정한다 — 값 라벨 자리잡기(px 환산)와 빈 자리 높이(pY)가 같은 자를 봐야 한다.
+  //   구판은 pY만 이 식을 갖고 있었고, 예상 칸이 축을 넓히는 경우는 `lay.yaxis.range` 쪽에서 따로 계산해 **두 곳이 갈렸다**.
+  //   라벨을 픽셀로 재기 시작하면 그 갈림이 곧바로 겹침 오판(축이 실제보다 낮다고 보고 라벨을 붙여 세움)으로 나온다.
+  // [260808-2] 예상 페이드 꼭대기가 접힌 축 상한을 넘으면 축을 그만큼 넓힌다 — 자르면 「예상이 낮다」로 오독된다.
+  //   [260806-11] 여유 = 값 라벨 한 줄이 **그림 안에** 서는 만큼(글자 10.5 + 띄움 3 + 숨구멍 2.5 ≈ 16px)을 축 단위로 환산.
+  //   고정 배수를 새로 정하지 않는다 — 그림 높이가 달라지면 필요한 비율도 달라지므로 픽셀에서 역산한다.
+  var axTop=brk?brk.rng:(ED?_edTop:vMax*1.12);
+  if(brk&&fcIdx.length){ var _fcTop=Math.max.apply(null,fcIdx.map(function(a){return brk.map(a[1]);}))*(1+16/plotPx);
+    if(_fcTop>axTop)axTop=_fcTop; }
   // [260806-10] y축 **세로 제목 철거** — 단위는 카드 우상단 「(단위: …)」이 가로로 말한다(전시·교육과 같은 자리·같은 문법).
   var yAx=ED?{range:[0,_edTop],tickmode:'array',tickvals:_edTick,tickfont:{size:10.5,color:dim},gridcolor:grid,zeroline:false,fixedrange:true}
     :{tickfont:{size:10.5,color:dim},gridcolor:grid,zeroline:false,fixedrange:true,rangemode:'tozero'};
@@ -8196,13 +8227,24 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
       }));
     }
   }   // [260806-5] 월 라벨 **아랫줄** = 1Q~4Q. ⚠ 이 줄은 위 `lay.annotations=zone.notes` **뒤**여야 한다 — 앞에 두면 그 할당이 통째로 덮어써서 분기 라벨이 조용히 사라진다(첫 렌더 실측)   // [260805] 달 경계선 = 음영보다 먼저(둘 다 below · 경계가 음영 위에 얹히지 않게)
-  // [260806-11 운영자 「차트 위에 (그라데이션 있어도 **그 끝 점 위에** 그라데이션이랑 **중첩 안 되게**) 숫자를 적어줘」]
-  //   2단 막대의 값 라벨(실값) = **예상 꼭대기 바로 위**. 260808-2가 「옆」으로 뺀 이유(같은 색 잉크 위 같은 색 글자가
-  //   페이드 칸 **안**에 잠긴다)는 자리를 페이드 **밖**으로 올리면 그대로 해소된다 — 겹칠 잉크가 없다.
-  //   자리 문법 = 다른 값 라벨과 같은 벌(xanchor center · yanchor bottom · yshift 3 = 막대 꼭대기에서 한 칸) = 새 값 0.
-  if(fcLab.length)lay.annotations=lay.annotations.concat(fcLab.map(function(L){
-    return {xref:'x',x:L.x,xanchor:'center',yref:'y',y:L.y,yanchor:'bottom',yshift:3,
-      text:L.t,showarrow:false,font:{size:10.5,color:L.c}}; }));
+  // ── [260809] 값 라벨 = 여기 한 곳에서 전부 낸다(공연·교육 · 실막대·예상 2단) ─────────────────────────
+  //   [260806-11 운영자 「차트 위에 (그라데이션 있어도 **그 끝 점 위에** 그라데이션이랑 **중첩 안 되게**) 숫자를 적어줘」]
+  //     = 숫자는 언제나 **그 막대(그라데이션 포함) 꼭대기 위**. 자리 문법 한 벌 = xanchor center · yanchor bottom ·
+  //       yshift `_BIZ_LAB_DY` — **세로 간격은 전 라벨이 이 한 값**이다(구판의 Δ0 vs Δ5.0px 갈림 청산).
+  //   [260809 운영자 「모든 올라와 있는 차트가 다 숫자가 나오게」] 겹치면 **가로로 비킨다**(생략 0).
+  //     큰 값이 먼저 제자리를 잡고(눈이 먼저 가는 쪽이 정위치), 부딪히는 쪽만 `_bizLabFit`이 최소치로 민다.
+  //   [260809 운영자 「숫자는 색이 각기 다른 게 아니라, 조금 흐린 검정으로」] 잉크 = `--neutral-text`(중립 사다리에서
+  //     본문 바로 아래 한 단 · 분기 라벨 260806-6이 이미 쓴 그 자 = 새 회색 창작 0). 구판의 막대색 4갈래 폐지 —
+  //     ⚠ 이로써 260805 「값 라벨 = 그 막대 색」 판정은 **개정**된다(막대와 숫자는 자리로 이미 묶여 있다).
+  var _lbInk=_yrCss('--neutral-text')||dim, _lbBox=[], _lbPxY=plotPx/(axTop||1);
+  rows.map(function(g,i){ return i; }).filter(function(i){ return labs[i]&&xs[i]!=null; })
+    .map(function(i){ var f=fcOf[i]; return {i:i,y:(f!=null)?_mapv(f):yv[i],t:(f!=null)?vfmt(f):labs[i]}; })
+    .sort(function(a,b){ return b.y-a.y; })
+    .forEach(function(L){
+      var dx=_bizLabFit({x:xs[L.i]*pxPerDay,y:L.y*_lbPxY,w:_bizLabW(L.t)},_lbBox);
+      lay.annotations.push({xref:'x',x:xs[L.i],xanchor:'center',xshift:dx,yref:'y',y:L.y,yanchor:'bottom',yshift:_BIZ_LAB_DY,
+        text:L.t,showarrow:false,font:{size:_BIZ_LAB_FS,color:_lbInk}});
+    });
   var note=(div.parentNode&&div.parentNode.querySelector)?div.parentNode.querySelector('[data-bizbrknote]'):null;
   if(brk){
     // 눈금 라벨 자릿수 = step의 소수 자리에 맞춘다(구판은 0.15 눈금에 "0.2"를 찍어 눈금선과 글자가 어긋났다 — 평의회3)
@@ -8221,15 +8263,9 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
       if(isTop||py-lastPx>=12){ tv.push(brk.map(v)); tt.push(axn(v)); lastPx=py; }   // [260806 2차 · 평의회4 D2 · 평의회5 ②] 압축 구간 눈금은 **본체와 다른 자**로 잰다 — 본체 18(글상자 12 + 숨구멍 6)을 압축 구간에도 쓰면 접힌 막대에 기준자가 안 서서 「최댓값 하나로 선형 보간 = 오차 +49%」 상태가 된다(실측 = 압축 9건에 눈금 4개 · 낮은 화면에선 라이브 분포조차 1개). 12 = 글상자 높이 = 겹침이 시작되는 물리적 하한(새 수치 창작 아님 · 후보 단계 `k*12>topPx` 상한과 같은 자)
     });
     lay.yaxis.tickmode='array'; lay.yaxis.tickvals=tv; lay.yaxis.ticktext=tt;
-    lay.yaxis.range=[0,brk.rng]; delete lay.yaxis.rangemode;
-    // [260808-2] 예상 페이드 꼭대기가 접힌 축의 상한을 넘으면 축을 그만큼 넓힌다 — 자르면 「예상이 낮다」로 오독된다.
+    // 축 상한 = 위에서 한 번 정한 `axTop`(예상 칸이 넘치면 이미 넓혀져 있다 · 260808-2 · 260806-11 여유 포함).
     //   눈금(tickvals)은 손대지 않는다 = 눈금 사다리·중략 발동 계약(`check_break_rule`)은 무접촉.
-    if(fcIdx.length){ var _fcTop=Math.max.apply(null,fcIdx.map(function(a){return brk.map(a[1]);}));
-      // [260806-11] 여유 = 값 라벨 한 줄이 **그림 안에** 서는 만큼(글자 10.5 + 띄움 3 + 숨구멍 2.5 ≈ 16px)을 축 단위로 환산.
-      //   구판 1.02는 페이드가 안 잘리는 최소치였는데, 라벨이 꼭대기 **위**로 올라오면서(운영자 260806-11) 그 위가 필요해졌다.
-      //   고정 배수를 새로 정하지 않는다 — 그림 높이가 달라지면 필요한 비율도 달라지므로 픽셀에서 역산한다.
-      var _lblRoom=1+16/Math.max(60,hgt-_BIZ_AXB-18);
-      if(_fcTop*_lblRoom>brk.rng)lay.yaxis.range=[0,_fcTop*_lblRoom]; }
+    lay.yaxis.range=[0,axTop]; delete lay.yaxis.rangemode;
     // ≈ 표식 = **차트 전폭 1줄**(국제 관례). 축 옆 스텁으로 두면 끊을 축선이 없어 「≈ 80 = 약 80」으로 읽힌다(평의회7).
     var cyc=Math.max(2,Math.min(16,Math.round(plotSpan/28)));       // 파장 ≈28px(넓은 카드는 16주기 상한에 걸려 최대 ≈45px) — 폭이 달라져도 같은 기호로 보이게
     lay.shapes=lay.shapes.concat(_bizBreakShapes(brk,[[ax.x0,ax.x1]],dim,_yrCss('--surface-solid'),cyc));
@@ -8247,8 +8283,7 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
   //   ⚠ 꺾은선으로 그리는 항목(isLn)은 여기서 뺀다 — 선이 이미 그 사업의 자리를 지키고 있어서, 빈 자리까지 세우면
   //     같은 프로그램이 두 자리(선 + 빈 게이지)를 차지한다.
   var pidx=[],i2; for(i2=0;i2<rows.length;i2++)if(!isLn[i2]&&vals[i2]==null&&xs[i2]!=null)pidx.push(i2);   // [260806-3] 빈 자리 = **값이 없을 때만**. 구판은 `plan(row)||값없음`이라 값이 있는 진행·예정에도 자리 표식을 겹쳐 그렸다 — 그 자리는 막대 자신의 페이드(`_bizFadePlanned`)가 말한다
-  var axTop=brk?brk.rng:(ED?_edTop:vMax*1.12);
-  var pY=ED?(_edTop*0.62):axTop*0.07;   // 교육 = 눈금 사이(축 상한의 62% = 특정 눈금과 안 겹침) 고정 높이 = 값으로 안 읽힌다 · 값 축은 종전 7% 자리
+  var pY=ED?(_edTop*0.62):axTop*0.07;   // [260809] axTop = 위에서 한 번만 정한 그 값(구판은 이 줄이 두 번째 계산이라 예상 칸이 축을 넓힌 경우 빈 자리 높이가 실축과 갈렸다)   // 교육 = 눈금 사이(축 상한의 62% = 특정 눈금과 안 겹침) 고정 높이 = 값으로 안 읽힌다 · 값 축은 종전 7% 자리
   if(pidx.length){
     tr2={type:'bar',width:W,marker:{color:'rgba(0,0,0,0)',line:{width:0}},showlegend:false,hoverinfo:'text',textposition:'none',
       x:pidx.map(function(i){return xs[i];}),y:pidx.map(function(){return pY;}),
@@ -8290,23 +8325,21 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
             +dTxt(g)+' · '+stName(g)+' · '+(g._g2||'예술교육'); })});
       lnTip.push({i:i,x:lx[lx.length-1],y:ly[ly.length-1],col:col});
     });
-    // 꼭자락 라벨 = 큰 값 우선 · 겹치면 생략(정확값은 툴팁) — 전시 반쪽의 그 판정 그대로(x·y 둘 다 본다).
-    var _pxY=Math.max(60,hgt-52)/(_edTop||1), _placed=[];
+    // 꼭자락 라벨 = 큰 값 우선 — [260809] 자리잡기는 **막대 값 라벨과 같은 글상자 목록**(`_lbBox`)에서 잰다.
+    //   구판은 이 반쪽만 자기 `_placed`를 따로 들고 있어 ⓐ 막대 숫자와 선 숫자가 서로를 못 보고 ⓑ 겹치면 지웠다
+    //   (운영자 260809 「다 숫자가 나오게」). 이제 한 목록에서 재고, 부딪히면 가로로 비킨다(생략 0).
+    //   ⚠ yshift만 7 — 점(마커 지름 7)의 **가운데**가 기준이라 막대 꼭대기와 물리적 기준이 다르다(같은 벌의 예외 아님).
     lnTip.sort(function(a,b){ return b.y-a.y; }).forEach(function(L){
-      L.lab=_placed.every(function(p){ return Math.abs(p.x-L.x)*pxPerDay>=30||Math.abs(p.y-L.y)*_pxY>=14; });
-      if(L.lab)_placed.push(L);
+      var t=Math.round(L.y).toLocaleString();
+      var dx=_bizLabFit({x:L.x*pxPerDay,y:L.y*_lbPxY,w:_bizLabW(t)},_lbBox);
+      lay.annotations.push({xref:'x',x:L.x,xanchor:'center',xshift:dx,yref:'y',y:L.y,yanchor:'bottom',yshift:7,
+        text:t,showarrow:false,font:{size:_BIZ_LAB_FS,color:L.col}});
     });
-    lay.annotations=lay.annotations.concat(lnTip.filter(function(L){return L.lab;}).map(function(L){
-      return {xref:'x',x:L.x,xanchor:'center',yref:'y',y:L.y,yanchor:'bottom',yshift:7,
-        text:Math.round(L.y).toLocaleString(),showarrow:false,font:{size:10.5,color:L.col}}; }));
   }
   // [260806-11 운영자 「교육 위에 1 동그라미 저건 없어도 될 듯」] 교육 색인(①②③…) **표기 철거** —
   //   260805에 「별도의 인덱싱 열 부여」로 붙였던 원문자 라벨. 열이 적을 땐 이름을 툴팁으로 바로 확인할 수 있어
   //   색인이 한 겹 더 얹힌 잉크였다(운영자 판정). 자리·값 라벨·툴팁은 그대로 — 지운 건 원문자 주석뿐이다.
-  // 교육 막대 값 라벨 = 주석판(위 tr.text 주석) · 자리·겹침 판정은 위 labs가 이미 끝냈다(같은 규칙 두 벌 금지).
-  if(ED)lay.annotations=lay.annotations.concat(rows.map(function(g,i){ return (!labs[i]||xs[i]==null)?null:{
-      xref:'x',x:xs[i],xanchor:'center',yref:'y',y:vals[i],yanchor:'bottom',yshift:3,
-      text:labs[i],showarrow:false,font:{size:10.5,color:gcol(g)}}; }).filter(Boolean));
+  // [260809] 교육 전용 값 라벨 블록 **폐지** — 공연·교육이 같은 한 곳(위 `_bizLabFit` 자리잡기 블록)에서 나온다(같은 규칙 두 벌 금지).
   var _traces=ED?(vals.some(function(v){return v!=null;})?[tr]:[]):[tr];   // 교육 = 값이 하나도 없으면 실막대 트레이스 자체를 안 싣는다(0 막대 오독 방지)
   if(lnTr.length)_traces=lnTr.concat(_traces);   // 면·선이 아래층 · 막대(끝난 교육)가 위층 — 전시 반쪽의 「끝난 게 위로」와 같은 축
   if(trFc)_traces.push(trFc);   // [260808-2] 예상 칸은 실막대 **다음** · 자리 트레이스(tr2)보다 **앞** — tr2가 막대 트레이스의 맨 마지막이라는 `_bizFadeSlots` 규약을 깨지 않는다
@@ -27409,7 +27442,7 @@ var _memState=null,_memLoading=false,_memEscH=null,_memQT=null,_memEpoch=0;
 // [260731 운영자 "바로 안 열려요"] PII 재적재 가드를 「#member-lookup 존재」 → 「purge 에포크」로 교체.
 //   구 가드는 회원 조회 모달이 DOM에 없으면(= 회원 분포로 곧장 들어온 경우) 응답을 통째로 버려서 개요가 항상 "못 불러왔어요"였다.
 //   에포크 = _memPurge(로그아웃·유휴잠금)가 증가 → await 중 purge된 응답만 정확히 폐기(보안 의도 동일, 진입 경로 무관).
-function _memPurge(){_memState=null;_memLoading=false;_bkState=null;_bkLoading=false;_memEpoch++;_memAiHist=[];_memAiBusy=false;
+function _memPurge(){_memState=null;_memLoading=false;_bkState=null;_bkLoading=false;_bkP=null;_memEpoch++;_memAiHist=[];_memAiBusy=false;   /* [260806] _bkP(비행 중 적재)도 끊는다 — 안 끊으면 purge 뒤 첫 호출이 **폐기 예정인 옛 요청**에 합류해 빈손으로 돌아온다 */
   /* [260808] 고객 분류(AI 홍보 3탭) = 이름·휴대폰·관람이력이 한 표에 뜨는 자리라 같은 위생을 건다 —
      상태(_segLast·_bkAsk)와 **이미 그려진 DOM** 둘 다 지운다. 상태만 지우면 화면의 명단은 그대로 남는다. */
   _segLast=null;_bkAsk=null;var pc=document.getElementById('promo-check');if(pc)pc.innerHTML='';
@@ -27888,7 +27921,7 @@ function _memAiChip(sfx,t){var i=document.getElementById('mem-ai-q-'+sfx);if(i)i
 //   (docs/260804_booking_ingest.mjs 회원 조인 → docs/260804_booking_agg.mjs 회원키 집계).
 // 분포를 연도·장르 **교차표**로 들고 있는 이유 = 「23~24년에 클래식을 2회 이상」이 교차 조건이라
 //   연도별 합·장르별 합을 따로 저장하면 답이 안 나온다.
-var _bkState=null,_bkLoading=false;
+var _bkState=null,_bkLoading=false,_bkP=null;   // _bkP = 비행 중인 적재 요청 — 선로딩(_bkWarm)과 질문이 겹칠 때 **합류**할 손잡이
 
 // 확대 추정 배수 — 식별 표본을 「구매 경험 회원」으로 환산할 때 곱한다.
 //   ⚠ 표본 10,119명은 **구매했기 때문에 식별된** 사람들이라 무작위 표본이 아니다. 전체 회원 29,752로
@@ -27900,9 +27933,21 @@ var _BK_SCALE=1.53;
 var _BK_GENRES=['클래식','뮤지컬','발레/연극','어린이·가족','대중','국악','시즌','기타'];
 var _BK_ALIAS={'연극':'발레/연극','발레':'발레/연극','무용':'발레/연극','오페라':'클래식','가족':'어린이·가족','어린이':'어린이·가족','아동':'어린이·가족'};
 
-async function _bkLoad(force){
-  if(_bkLoading||(_bkState&&!force))return _bkState;
+// [260806 운영자 「AI 홍보 메뉴에선 확인되는데 예울이에선 안 나온다 — 붙여줘」] 적재 진입점 = **합류형**.
+//   구판은 `if(_bkLoading||(_bkState&&!force))return _bkState;` — 비행 중이면 아직 null인 _bkState를 그 자리에서
+//   돌려줬다. 그래서 `await _bkLoad(...)`로 기다린 줄 안 호출측이 **빈손으로** 다음 줄에 갔다(고객 분류 탭도 같은 구멍).
+//   실제로 걸리는 순서: 대시보드 「고객 분석」에 마우스가 스치면 _memWarm→_bkWarm이 먼저 적재를 띄운다 →
+//   화면이 열리고 사용자가 질문 → 그 적재가 아직 비행 중 → 구판은 즉시 null → 「아직 안 불러왔어요」.
+//   이제는 그 요청에 합류해 **끝날 때까지 같이 기다린다**(중복 fetch 0 = 단일 비행 규약은 그대로).
+function _bkLoad(force){
+  if(_bkP)return _bkP;                              // 비행 중 = 합류(force여도 두 벌 띄우지 않는다 — 구판과 같은 규약)
+  if(_bkState&&!force)return Promise.resolve(_bkState);
   _bkLoading=true;
+  var p=_bkFetch(force),done=function(){ if(_bkP===p){_bkP=null;_bkLoading=false;} };   // 항등 확인 = purge 뒤 새로 뜬 적재를 옛 비행이 끄지 않게
+  _bkP=p;p.then(done,done);
+  return p;
+}
+async function _bkFetch(force){
   var ep=_memEpoch;
   try{
     var d=await api('GET','/api/ops?sheet='+encodeURIComponent('예매집계')+(force?'&fresh=1':''));
@@ -27931,8 +27976,7 @@ async function _bkLoad(force){
     });
     _bkState={by:by,n:n,ym:ym,lo:lo,hi:hi,ts:Date.now()};
   }catch(e){ console.warn('[booking]',e); _bkState={by:{},n:0,err:String(e&&e.message||e)}; }
-  finally{ _bkLoading=false; }
-  return _bkState;
+  return _bkState;   // _bkLoading·_bkP 해제 = _bkLoad의 done(합류 손잡이와 한자리에서 푼다)
 }
 function _bkWarm(){ if(userRole!=='admin'||_bkState||_bkLoading)return; try{_bkLoad(false);}catch(e){} }
 
@@ -28013,9 +28057,16 @@ function _bkCount(rec,win,g){
   }
   return c;
 }
+// 「이 질문은 예매집계가 있어야 답이 나온다」의 단일 판정(SSOT) — _bkAnswer가 답할 질문인지, 그리고
+//   채팅(_memAiSend)이 **먼저 적재를 기다릴지**를 같은 한 벌로 정한다. 두 곳에 따로 적으면
+//   「기다리기는 했는데 답은 다른 경로로 새는」(또는 그 반대) 어긋남이 난다.
+function _bkIsQ(q){ return /관람|구매|샀|산\s|예매|티켓|본\s*사람|보신|재구매|단골|몇\s*번|회\s*이상|명단|리스트|추출|뽑아/.test(q); }
 // 예매 질의 답변 — 집계 밖 질문이면 null을 돌려 기존 흐름(지역·연령 규칙 → 예울이 AI)에 양보한다.
 function _bkAnswer(q){
-  if(!/관람|구매|샀|산\s|예매|티켓|본\s*사람|보신|재구매|단골|몇\s*번|회\s*이상|명단|리스트|추출|뽑아/.test(q))return null;
+  if(!_bkIsQ(q))return null;
+  // [260806] 여기 오면 적재는 이미 끝나 있다 — 냉시동 대기는 호출측(_memAiSend)이 AI 홍보 ▸ 고객 분류(_segRun)와
+  //   **같은 await _bkLoad**로 처리한다. 아래 줄은 그래도 남기는 안전판(예: 다른 진입로가 생겼을 때)이지
+  //   정상 경로가 아니다 — 구판은 이 자리가 정상 경로였고, 그래서 같은 시트인데 한쪽 화면만 답했다.
   if(!_bkState){ _bkWarm(); return '예매 이력을 아직 안 불러왔어요 — 잠시 뒤 다시 물어봐 주세요.'; }
   if(!_bkState.n)return '예매 이력이 비어 있어요'+(_bkState.err?' ('+_memEsc(_bkState.err)+')':'')+' — 운영_예매집계 시트를 확인해 주세요.';
   var win=_bkWin(q),g=_bkGenre(q),by=_bkState.by;
@@ -28322,7 +28373,7 @@ function _memAiCtx(idx){
   }
   return s;
 }
-function _memAiSend(sfx){
+async function _memAiSend(sfx){
   var inp=document.getElementById('mem-ai-q-'+sfx);if(!inp)return;
   var q=(inp.value||'').trim();if(!q||_memAiBusy)return;
   var idx=_memAiIdx();
@@ -28331,8 +28382,24 @@ function _memAiSend(sfx){
   if(_memAiHist.length>60)_memAiHist=_memAiHist.slice(-40);   // 세션 메모리 무한 누적 방지
   _memAiHist.push({u:q});
   var nowT=new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});   // [260804 2차] 말풍선 시각 = 레포 정본 포맷(「오전 11:24」) 그대로
+  // [260806 운영자 「예매데이터 — AI 홍보쪽 메뉴에서는 확인 가능한데, 여기랑 붙여줘」]
+  //   예매 질의인데 집계가 아직 없으면 **기다렸다가 답한다** = AI 홍보 ▸ 고객 분류(_segRun)와 똑같은 레일.
+  //   구판은 여기서 안 기다리고 _bkAnswer가 「아직 안 불러왔어요 — 잠시 뒤 다시」로 끝냈다(캡처 260806 오후 1:26).
+  //   같은 시트·같은 앱인데 한 화면만 답하는 상태였고, 재질문 안내도 소용없었다 — 뒤에서 덥히는 _bkWarm은
+  //   admin이 아니면 아예 안 돌아, 그 문장에서 영영 못 벗어나는 경로가 실재했다.
+  //   대기 줄은 답이 **그 자리에서 갈음**한다(줄이 둘로 늘지 않게 · 아래 AI 폴백의 pend와 같은 문법).
+  var warm=null;
+  if(_bkIsQ(q)&&!_bkState){
+    var ep=_memEpoch;
+    warm={b:_ldHtml(12)+'예매 이력을 불러오는 중이에요. 잠깐만요.',t:nowT};
+    _memAiHist.push(warm);_memAiBusy=true;_memAiPaintAll();
+    try{ await _bkLoad(false); }catch(e){ console.warn('[mem-ai booking]',e); }
+    _memAiBusy=false;
+    if(ep!==_memEpoch)return;   // 대기 중 로그아웃·유휴잠금 = PII를 그리지 않는다(_segRun·_bkFetch와 같은 규약)
+  }
   var ans=null;try{ans=_memAiLocal(q,idx);}catch(e){console.warn('[mem-ai local]',e);}
-  if(ans){_memAiHist.push({b:ans,t:nowT});_memAiPaintAll();return;}
+  if(ans){if(warm)warm.b=ans;else _memAiHist.push({b:ans,t:nowT});_memAiPaintAll();return;}
+  if(warm){var wi=_memAiHist.indexOf(warm);if(wi>=0)_memAiHist.splice(wi,1);}   // 예매어는 있었지만 집계 밖 질문 = 아래 AI 경로가 자기 대기 줄을 세운다
   var deepQ=_yeulAiDeep(q);   // [260803 운영자] 복잡 질문 = opus 딥 라우팅 — 「기다려 달라」를 츤 결로 먼저(v3 「음 귀찮은 걸 물어보시네요?」 급)
   var wait=deepQ?'음, 귀찮은 걸 물어보시네요? …그래도 제대로 생각해드릴게요. 조금 기다리세요.':'…생각 중이에요. 잠깐만요.';
   var pend={b:_ldHtml(12)+wait,t:nowT};   // 집계 밖 질문 = 예울이 AI(깃 Actions claude — _yeulAiAsk 공용 브레인)
