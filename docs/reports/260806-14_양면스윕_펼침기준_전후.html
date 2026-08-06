@@ -1,0 +1,129 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>양면 동시 로딩 = 펼침 기준 빗살 — 전후 (260806-14)</title>
+<style>*{box-sizing:border-box}
+:root{--accent:#4A4DE7;--accent-light:#E8E8FD;--peach-text:#D88455;
+--bg:linear-gradient(135deg,#FDF6F3 0%,#F0EBF5 50%,#EBF0F8 100%);--surface-solid:#fff;
+--glass:rgba(255,255,255,0.55);--glass-surface:rgba(255,255,255,.78);--glass-bd:var(--glass);
+--glass-shadow:0 8px 32px rgba(74,77,231,0.08),0 2px 8px rgba(0,0,0,0.04);
+--border:rgba(0,0,0,0.09);--text:#1A1A2E;--dim:#888;--muted:#bbb;--neutral:#EEEDF3;--neutral-text:#6B6B7B;
+--green:#1A6B3C;--danger-btn:#E24B4A;--radius:16px;--radius-lg:20px}
+body{margin:0;background:var(--bg);color:var(--text);font-family:'Pretendard',-apple-system,BlinkMacSystemFont,system-ui,sans-serif;line-height:1.6}
+.wrap{max-width:1180px;margin:0 auto;padding:30px 20px 70px}
+h1{font-size:22px;margin:0 0 6px;letter-spacing:-.3px}
+.lead{color:var(--neutral-text);font-size:13px;margin:0 0 20px}
+section{background:var(--glass-surface);border:1px solid var(--glass-bd);border-radius:var(--radius-lg);box-shadow:var(--glass-shadow);padding:18px 20px 22px;margin:0 0 18px}
+section>h2{margin:0 0 4px;font-size:14px;font-weight:800;color:var(--accent);display:flex;align-items:center;gap:8px}
+section>h2::before{content:"";width:4px;height:14px;border-radius:2px;background:var(--accent)}
+section>.desc{margin:0 0 14px;font-size:12px;color:var(--neutral-text)}
+.ba{display:grid;grid-template-columns:1fr;gap:14px}
+.card{background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.card>.hd{font-size:11.5px;font-weight:800;letter-spacing:.3px;padding:8px 12px;border-bottom:1px solid var(--border)}
+.hd.b{color:var(--danger-btn)}.hd.a{color:var(--green)}
+.card img{display:block;width:100%}
+table{width:100%;border-collapse:collapse;font-size:12px;background:var(--surface-solid);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+th,td{padding:7px 9px;border-top:1px solid var(--border);text-align:left;vertical-align:top}
+th{background:var(--neutral);color:var(--neutral-text);font-size:11px;font-weight:700;border-top:0;white-space:nowrap}
+td.c{text-align:center;white-space:nowrap}
+td.k{white-space:nowrap;font-weight:700;color:var(--accent);font-variant-numeric:tabular-nums}
+.ok{color:var(--green);font-weight:800}
+.no{color:var(--danger-btn);font-weight:800}
+ul{margin:8px 0 0;padding-left:18px;font-size:12.5px}li{margin:3px 0}
+code{background:var(--neutral);padding:1px 5px;border-radius:5px;font-size:11.5px}
+.warn{border-left:3px solid var(--peach-text);background:var(--surface-solid);border-radius:0 12px 12px 0;padding:10px 14px;font-size:12.5px;margin-top:12px}
+/* 살아 움직이는 미니 재현 — 펼침 두 칸 */
+.mini{position:relative;border-radius:var(--radius-lg);background:linear-gradient(135deg,#c9d8e8,#e8dcd6 55%,#bcd3cf);padding:14px;overflow:hidden;display:flex;gap:12px}
+.mcol{flex:1;position:relative}
+.mhd{display:flex;align-items:center;min-height:30px;padding:0 10px;background:rgba(255,255,255,.9);backdrop-filter:blur(11px);-webkit-backdrop-filter:blur(11px);border:1px solid var(--glass);border-bottom:1px solid rgba(0,0,0,.07);border-radius:var(--radius-lg) var(--radius-lg) 0 0;box-shadow:inset 0 1px 0 rgba(255,255,255,.6);overflow:hidden;font-size:11px;font-weight:800;color:var(--accent)}
+.mbox{position:relative;background:rgba(255,255,255,.15);backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px);border:1px solid rgba(255,255,255,.7);border-top:none;border-radius:0 0 var(--radius-lg) var(--radius-lg);box-shadow:var(--glass-shadow);padding:12px;height:150px}
+.mld{position:relative;height:100%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:var(--accent);opacity:.75}
+.sk{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.sk::after{content:'';position:absolute;top:0;bottom:0;left:0;width:34%;background:linear-gradient(100deg,transparent 0%,rgba(255,255,255,.5) 50%,transparent 100%);transform:translateX(-120%);animation:skS 1.5s ease-in-out infinite}
+@keyframes skS{to{transform:translateX(400%)}}
+.sk-hd{z-index:-1}
+.sk-gl{border-radius:0 0 var(--radius-lg) var(--radius-lg)}
+/* 펼침 기준 = 실앱 .sk-sweep.sk-span과 같은 형태(폭·duration은 묶음, 오프셋은 칸마다) */
+.span .sk::after{width:var(--sw-w);animation-duration:var(--sw-dur);left:var(--sw-x1,0)}
+.mlab{font-size:11px;font-weight:800;letter-spacing:.3px;margin:0 0 8px}
+</style></head><body><div class="wrap">
+<h1>양면 동시 로딩 = <b style="color:var(--accent)">펼침 기준</b> 빗살 — 전후</h1>
+<p class="lead">운영자 지시 260806-14 「양면이 로딩중일 때는 <b>모든 양면을 기준해서</b> 빗살이 쓸어가게」 ·
+앞 단계(260806-12 = 빗살을 카드 한 장 전면으로) 위에 얹는 후속 · 화면 = <code>?qa=admin</code> 목데이터 · 1920×1080 ·
+좌 = 3면 「사업 결과 비교」(운영 데이터 미도착) · 우 = 「판매 실적」(판매중 목록 미도착) · 스윕 위상 <code>translateX(60%)</code> 고정 컷.</p>
+
+<section>
+<h2>1. 전후 — 띠가 둘이냐, 하나냐</h2>
+<div class="ba">
+  <div class="card"><div class="hd b">전 — 카드마다 자기 띠(둘이 나란히 지나간다)</div><img src="260806-14_양면스윕_펼침기준_전.png" alt="전 — 카드별 띠 두 개"></div>
+  <div class="card"><div class="hd a">후 — 펼침 하나를 가로지르는 띠 하나</div><img src="260806-14_양면스윕_펼침기준_후.png" alt="후 — 펼침 기준 띠 하나"></div>
+</div>
+<div class="warn">전은 두 카드가 <b>각자 34%</b> 폭의 띠를 <b>각자 같은 상대 위치</b>로 굴린다 → 같은 순간에 좌·우에 띠가 하나씩, 둘이 나란히 간다.
+후는 좌 카드 왼끝~우 카드 오른끝을 <b>한 좌표계</b>로 삼아 <b>띠 하나</b>가 지나간다(칸 사이 빈 곳은 유리가 없어 안 보일 뿐 같은 여정).</div>
+</section>
+
+<section>
+<h2>2. 방법 — 띠의 좌표계를 카드 → 펼침으로 옮긴다</h2>
+<p class="desc">네 칸(좌·우 카드 × 머리줄·유리박스)은 각자 <code>backdrop-filter</code>라 서로의 영역을 넘지 못한다(260806-12와 같은 제약).
+그래서 <b>같은 띠</b>를 네 칸에 심고, 각 칸은 그 띠의 <b>자기 구간만 보여주는 창</b>이 된다.</p>
+<table>
+<tr><th style="width:110px">변수</th><th style="width:230px">값(1920×1080 실측)</th><th>뜻</th></tr>
+<tr><td><code>--sw-w</code></td><td class="k">638.5px</td><td>띠 폭 = <b>펼침 폭</b>(1878) × 34% — 정본 비율은 그대로, 기준만 펼침으로</td></tr>
+<tr><td><code>--sw-x</code></td><td class="k">좌 0px · 우 −940px</td><td>자기 칸 왼끝을 펼침 원점으로 미는 값 = −(칸 왼끝 − 펼침 왼끝)</td></tr>
+<tr><td><code>--sw-dur</code></td><td class="k">3s</td><td>1.5s × 펼침/카드(1878/938) = <b>초당 이동 픽셀 동일</b> — 범위만 넓어지고 템포는 안 변한다</td></tr>
+</table>
+<p class="desc" style="margin:12px 0 6px">실측 = 네 칸이 그리는 띠의 <b>전역 시작 x</b>가 하나로 모이는가:</p>
+<table>
+<tr><th style="width:150px"></th><th>좌 머리줄</th><th>좌 유리박스</th><th>우 머리줄</th><th>우 유리박스</th><th style="width:96px">서로 다른 값</th></tr>
+<tr><td class="no">전</td><td class="c">21</td><td class="c">21</td><td class="c">961</td><td class="c">961</td><td class="c no">2가지</td></tr>
+<tr><td class="ok">후</td><td class="c">21</td><td class="c">21</td><td class="c">21</td><td class="c">21</td><td class="c ok">1가지</td></tr>
+</table>
+<ul>
+<li><b>위상</b> = 같은 시각 출발이어야 한 줄로 보인다. 두 열의 로더는 도착 시각이 달라 따로 출발한다(실측 시차 1.2s) → 참여 칸이 바뀐 순간 <code>.sk-rst</code> 한 프레임으로 <b>전원 재장전</b>. 재장전 후 실측 = 네 칸 <code>currentTime</code> <b>450 / 450 / 450 / 450ms</b> · 띠 왼끝 전역 x <b>−595 전건 동일</b>.</li>
+<li>매 패스 재장전하면 정렬 재계산(<code>_srailAlignTop</code>)마다 띠가 튄다 → <b>참여 칸 집합이 바뀔 때만</b> 재장전한다.</li>
+<li><b>한 열만 로딩이면 종전 그대로</b>(카드 기준 · 1.5s). 좁은 화면(≤1200 = 레일 숨김)도 항상 카드 기준.</li>
+</ul>
+</section>
+
+<section>
+<h2>3. 살아 움직이는 재현</h2>
+<p class="desc">위 = 전(카드 기준 · 띠 둘) · 아래 = 후(펼침 기준 · 띠 하나). 실제 CSS 계승본(34% · ease-in-out · 100deg).</p>
+<p class="mlab" style="color:var(--danger-btn)">전 — 카드마다 자기 띠</p>
+<div class="mini">
+  <div class="mcol c1"><div class="mhd"><span class="sk sk-hd"></span>사업 결과 비교</div><div class="mbox"><span class="sk sk-gl"></span><div class="mld">••• 운영 데이터 불러오는 중</div></div></div>
+  <div class="mcol c2"><div class="mhd"><span class="sk sk-hd"></span>판매 실적</div><div class="mbox"><span class="sk sk-gl"></span><div class="mld">••• 사업 실적 불러오는 중</div></div></div>
+</div>
+<p class="mlab" style="color:var(--green);margin-top:16px">후 — 펼침 하나를 가로지르는 띠 하나</p>
+<div class="mini span" id="spanDemo">
+  <div class="mcol c1"><div class="mhd"><span class="sk sk-hd"></span>사업 결과 비교</div><div class="mbox"><span class="sk sk-gl"></span><div class="mld">••• 운영 데이터 불러오는 중</div></div></div>
+  <div class="mcol c2"><div class="mhd"><span class="sk sk-hd"></span>판매 실적</div><div class="mbox"><span class="sk sk-gl"></span><div class="mld">••• 사업 실적 불러오는 중</div></div></div>
+</div>
+</section>
+
+<section>
+<h2>4. 재현 한계 각주</h2>
+<ul>
+<li>스크린샷은 애니를 <code>translateX(60%)</code>에서 정지시킨 한 컷 — 실제로는 계속 지나간다(§3이 그 모션).</li>
+<li>§3 「후」의 <code>--sw-*</code>는 실앱 <code>_ldSweepSpan</code>과 <b>같은 식</b>으로 이 페이지에서 실측해 넣는다(아래 스크립트 · 리사이즈 추종) · 다만 배경은 사진 대신 근사 그라데이션(자기완결 1파일 = 외부 자산 0).</li>
+<li>이미지 배율 0.6 · 실측 수치는 배율 1 기준 CSS px · 목데이터 경로라 카드 내용은 실운영 값과 다르다(재는 것은 <b>띠의 기하·위상</b>뿐).</li>
+<li>앞 단계 전후(빗살 = 카드 한 장 전면) = <code>docs/reports/260806-12_로딩스윕_창전면_전후.html</code>.</li>
+</ul>
+</section>
+</div>
+<script>
+// 실앱 _ldSweepSpan과 같은 식 — 펼침 왼끝/오른끝을 재서 띠 폭·칸별 오프셋·duration을 넣는다.
+function spanDemo(){
+  var d=document.getElementById('spanDemo'); if(!d)return;
+  var sw=[].slice.call(d.querySelectorAll('.sk')); if(!sw.length)return;
+  var L=Infinity,R=-Infinity,W=0;
+  sw.forEach(function(e){var r=e.getBoundingClientRect(); if(r.left<L)L=r.left; if(r.right>R)R=r.right; if(r.width>W)W=r.width;});
+  var S=R-L; if(!(S>0)||!(W>0))return;
+  d.style.setProperty('--sw-w',(Math.round(S*0.34*10)/10)+'px');
+  d.style.setProperty('--sw-dur',(Math.round(1.5*S/W*100)/100)+'s');
+  sw.forEach(function(e){ e.style.setProperty('--sw-x1',(Math.round((L-e.getBoundingClientRect().left)*10)/10)+'px'); });
+}
+// 칸별 오프셋은 각 .sk가 자기 값을 갖는다 — CSS의 .c1/.c2 분기 대신 요소 스코프로 통일
+document.querySelectorAll('#spanDemo .sk').forEach(function(e){e.classList.add('skx');});
+spanDemo(); window.addEventListener('resize',spanDemo);
+if(document.fonts&&document.fonts.ready)document.fonts.ready.then(spanDemo);
+</script>
+</body></html>
