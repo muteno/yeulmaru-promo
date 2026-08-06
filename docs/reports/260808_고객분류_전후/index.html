@@ -1,0 +1,73 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>전후 비교 — AI 홍보 ▸ 고객 분류 신설 (260808)</title>
+<style>
+:root{--accent:#4A4DE7;--peach-text:#D88455;--text:#1A1A2E;--dim:#888;--border:rgba(0,0,0,0.09);--surface:#fff;--green:#1A6B3C;--bg:linear-gradient(135deg,#FDF6F3 0%,#F0EBF5 50%,#EBF0F8 100%)}
+*{box-sizing:border-box}body{margin:0;font-family:'Pretendard','Noto Sans KR',system-ui,sans-serif;background:var(--bg);color:var(--text);padding:28px 4vw 60px}
+h1{font-size:21px;margin:0 0 6px}h2{font-size:16px;margin:38px 0 4px;color:var(--accent)}
+.sub{color:var(--dim);font-size:12.5px;line-height:1.7;margin-bottom:10px}
+.pair{display:flex;gap:14px;flex-wrap:wrap}
+.pane{flex:1;min-width:340px;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:12px;box-shadow:0 2px 10px rgba(74,77,231,.05)}
+.pane b{display:block;font-size:12px;margin-bottom:8px}
+.pane.before b{color:#B04A49}.pane.after b{color:var(--green)}
+.pane img{width:100%;border-radius:8px;border:1px solid var(--border)}
+.note{background:var(--surface);border:1px solid var(--border);border-left:4px solid var(--accent);border-radius:10px;padding:12px 16px;font-size:13px;line-height:1.8;margin:14px 0}
+.warn{border-left-color:var(--peach-text)}
+table{border-collapse:collapse;font-size:12.5px;background:var(--surface);border-radius:10px;overflow:hidden;margin-top:10px}
+td,th{border:1px solid var(--border);padding:7px 12px;text-align:left}th{background:rgba(74,77,231,.06)}
+code{background:rgba(74,77,231,.08);padding:1px 5px;border-radius:4px;font-size:11.5px}
+</style></head><body>
+<h1>AI 홍보 ▸ 「고객 분류」 탭 신설 — 예매 이력 × 회원 정보로 이름까지 역추출</h1>
+<div class="sub">260808 운영자 지시 「예매 데이터에 있는 휴대폰번호 &gt; 회원 정보에 있는 휴대폰번호 싱크 맞춰서 누군지 … 3년 이내 공연 5회 이상 관람한 사람 하면 리스트업이 되는지」 · 「가능한 범위 최대한 3년이 아니라 5년이면 5년으로」 · 「최대한 다 나오게」 · 배선 = 「ai 홍보로 할게. 누르면 나오는 세부메뉴로 — 고객 분류 로」.<br>
+캡처 = 헤드리스 1500×1020 · <code>?qa=admin</code> · 하네스 <code>tools/scratch/probe_seg.mjs</code> · 전 = origin/main(c1ff786) · 후 = 본 PR.<br>
+<b>⚠ 캡처의 이름·휴대폰·주소는 전부 지어낸 QA 목</b>(<code>tools/qa_mock_ops.mjs</code>) — 실데이터·PII 미접촉.</div>
+
+<h2>1. 전 / 후 — 탭</h2>
+<div class="pair">
+<div class="pane before"><b>전 — 2탭(점검 · 전략 추론). 「누가 봤는지」를 묻는 자리가 없다</b><img src="전_탭.png" alt="전"></div>
+<div class="pane after"><b>후 — 3탭. 「고객 분류」 신설(admin 전용 — 일반 계정엔 탭 자체가 안 그려진다)</b><img src="후_탭.png" alt="후"></div>
+</div>
+
+<h2>2. 후 — 조건 / 결과</h2>
+<div class="pair">
+<div class="pane after"><b>조건 — 「최근 N년/개월 이내에 · 장르 · N회 이상 관람」</b><img src="후_조건.png" alt="조건"></div>
+<div class="pane after"><b>결과 — 최근 3년 · 5회 이상 = 3명(이름·휴대폰·지역까지)</b><img src="후_명단.png" alt="명단"></div>
+</div>
+<div class="pane after" style="margin-top:14px"><b>임의 N 실증 — 「최근 5년 · 3회 이상」으로 바꾸면 10명 (운영자 「3년이 아니라 5년이면 5년으로」) · 10열 전부 노출</b><img src="후_명단_5년3회.png" alt="5년3회"></div>
+
+<h2>3. 무엇이 바뀌었나</h2>
+<div class="note">
+<b>① 이름 역추출 = 새 조인이 아니라 색인 한 번</b> — 조인은 이미 반입 때 끝나 있었다(<code>260804_booking_ingest.mjs</code>가 <code>회원키</code> 열에 휴대폰 11자리를 박아둠). 화면은 그 값을 회원 시트 <code>휴대폰정규화</code>로 되짚기만 한다(<code>_segMemIdx()</code>) — 3만×1만 퍼지 매칭을 다시 돌지 않는다.<br>
+<b>② 시간 축 = 연(YYYY) → 연월(YYYYMM)</b> — 구판 <code>분포</code>는 달력연도만 들고 있어 「3년 이내」가 <b>원리적으로 불가능</b>했다(연 단위 근사만 가능). <code>260804_booking_agg.mjs</code>의 분포 키를 <code>202312|클래식:2</code> 형태로 바꿨다. 행 수는 안 늘어난다 — 한 사람의 분포 쌍 수는 그 사람 <b>주문 수</b>가 상한이다.<br>
+<b>③ 구·신 포맷을 둘 다 읽는다</b> — <code>_bkLoad</code>가 키 길이 4/6으로 갈라서, agg 재실행 <b>전에도</b> 연 단위 근사로 답이 나오고(그 사실을 화면에 적는다) 재실행하는 순간 재배포 없이 월 정밀로 올라간다. 화면이 반입 순서에 안 묶인다.<br>
+<b>④ 기준점 = 오늘이 아니라 데이터 마지막 달</b> — 원장은 2020~2025인데 오늘은 2026-08이라, 오늘에 걸면 「3년 이내」가 2023.09~2026.08 = 실제 데이터로는 <b>2년 4개월치</b>만 잡혀 조용히 짧아진다. 데이터 끝에 걸면 언제나 온전한 N년치가 잡히고, 새 연도가 반입되면 창도 저절로 따라온다.
+</div>
+
+<h2>4. PII 취급</h2>
+<div class="note warn">
+이 탭은 앱에서 <b>개인 단위 관람 이력이 이름과 함께 표에 뜨는 유일한 자리</b>다. 그래서 셋을 건다:<br>
+① <b>admin 전용</b> — 탭·뷰를 아예 안 그린다(숨기기가 아니라 없는 것). 데이터 두 시트 모두 Worker <code>PII_SHEETS</code> 게이트 뒤.<br>
+② <b>외부로 안 나간다</b> — <code>_bkAnswer</code>와 같은 로컬 전용 축이라 <code>_yeulAiAsk</code>(GitHub Actions 왕복)에 명단이 실리지 않는다.<br>
+③ <b>로그아웃·유휴잠금 소거</b> — <code>_memPurge</code>가 상태(<code>_segLast</code>·<code>_bkAsk</code>)와 <b>이미 그려진 DOM</b>을 함께 지운다(상태만 지우면 화면의 명단은 그대로 남는다).
+</div>
+
+<h2>5. 실측</h2>
+<table>
+<tr><th>항목</th><th>전</th><th>후</th></tr>
+<tr><td>AI 홍보 탭</td><td>2 (점검 · 전략 추론)</td><td><b>3</b> (+ 고객 분류)</td></tr>
+<tr><td>「3년 이내」 질의</td><td>파싱 실패 → 조용히 <b>전 기간</b>(2020~2025)으로 답</td><td><b>최근 3년(2023.01~2025.12)</b></td></tr>
+<tr><td>임의 N년</td><td>불가(연도 구간·올해·작년만)</td><td><b>가능</b> — 5년 → 2021.03~2025.12</td></tr>
+<tr><td>명단(이름)</td><td><b>없음</b> — 인원 수만</td><td>3명(3년·5회) / 10명(5년·3회) · <b>10열</b></td></tr>
+<tr><td>CSV 내보내기</td><td>없음</td><td>12열(주소 3단·장르 분포 포함)</td></tr>
+<tr><td>raw hex 총량</td><td>1546</td><td><b>1546</b>(무변 — 새 색 0)</td></tr>
+<tr><td>잰크 전이</td><td>15</td><td><b>15</b>(무변)</td></tr>
+<tr><td>모달 머리줄 정본</td><td>61개 전건</td><td><b>61개 전건</b></td></tr>
+<tr><td>콘솔 에러</td><td>0</td><td><b>0</b></td></tr>
+</table>
+
+<h2>6. 남은 한 걸음(운영자 몫)</h2>
+<div class="note warn">
+<b><code>node docs/260804_booking_agg.mjs</code> 재실행</b> — 라이브 <code>운영_예매집계</code>는 아직 <b>연 단위</b>다. 재실행해야 월 정밀이 되고, 그전까지 화면은 「연 단위 근사」라고 스스로 밝힌다(값을 지어내지 않는다). <code>YM_PIN</code>이 필요해 세션이 못 돌린다.<br>
+연결률 <b>57.1%</b> 한계는 그대로다 — 원본 휴대폰이 마스킹된 주문은 이름을 못 붙여 명단에서 빠지고, 화면 꼬리줄이 그 사실을 항상 적는다(운영자 확인 260808 「한계는 알고있음」).
+</div>
+</body></html>
