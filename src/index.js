@@ -1142,91 +1142,118 @@ export function buildJangdoSvg(rows, nowKst, dayOffset) {
   if (ranges) for (const r of ranges) { AX0 = Math.min(AX0, r[0]); AX1 = Math.max(AX1, r[1]); }
   AX0 = Math.floor(AX0 / 60) * 60; AX1 = Math.ceil(AX1 / 60) * 60;
 
-  // 가로는 넓게(운영자 지시) — 폰트도 같은 비율로 키워 임베드 max-width가 760이어도 기존과 같은 크기로 보이고,
-  // 1000으로 넓히면 그만큼 커진다. 세로는 **내용만큼만** 자란다(줄 커서 y).
-  const W = 1000, PAD = 36, GX = PAD, GW = W - PAD * 2;
+  // ── [260806 운영자 선택값] 조판 상수 = 여기 한 블록이 SSOT.
+  //    출처 = 플레이그라운드 `docs/reports/260806_장도카드_플레이그라운드.html`(축 72) 회신분을 그대로 배선.
+  //    다음 튜닝 라운드도 **이 블록만** 갈아끼우면 된다(본문 조판식은 전부 T를 참조).
+  //    ⚠ 신규 색 0 — 전부 기틀 §0 팔레트 칩. 이번 라운드 역할 재지정 2건(제목·날짜 = --text/--dim → --accent)은
+  //      **이 카드 안에서만** 적용한다. 「전 앱 동축 일괄」은 운영자가 카드를 튜닝한 맥락을 넘어서므로 손대지 않는다.
+  const T = {
+    W: 1300, pad: 44, radius: 7, yTitle: 70, gapTime: 66, lhTime: 1.74,
+    gapStat: 60, gapGauge: 34, gapTick: 40, gapNote: 50, padBot: 42,
+    font: "'Apple SD Gothic Neo','Noto Sans KR','Malgun Gothic',sans-serif",
+    fsTitle: 22.5, fwTitle: 500, lsTitle: -0.5, fsDate: 21, fwDate: 800,
+    fsTime: 34, fwTime: 800, lsTime: -0.5, fsStat: 19, fwStat: 500,
+    fsTick: 16.5, fwTick: 900, fsLeg: 13.5, fsNote: 16, fwNote: 500,
+    barH: 26, barR: 21, segMin: 8, tickStep: 180, tickLen: 5,
+    mkW: 2.5, mkOver: 7, mkDotR: 4.5, mkDotY: 11, pingMax: 15, pingDur: 2.2,
+    wipeDur: 0.95, wipeEase: "0.22 1 0.36 1", dotR: 12, legSw: 15, legSwR: 3.5,
+    cOk: "#4A4DE7", cTrack: "#E1DFEC", cMk: "#1A1A2E", cTitle: "#4A4DE7", cTime: "#1A1A2E",
+    cDate: "#4A4DE7", cBadge: "#4A4DE7", cStatOk: "#4A4DE7", cStatNo: "#E24B4A", cStatEnd: "#888",
+    cNone: "#888", cTick: "#bbb", cNote: "#bbb", cCard: "#fff", aBorder: 0.2
+  };
+  const W = T.W, PAD = T.pad, GX = PAD, GW = W - PAD * 2;
   const px = (m) => GX + (Math.max(AX0, Math.min(AX1, m)) - AX0) / (AX1 - AX0) * GW;
-  let y = 52, body = "", defs = "";
+  let y = T.yTitle, body = "", defs = "";
   const badge = off === 0 ? "오늘" : off === 1 ? "내일" : "";
-  body += '<text x="' + PAD + '" y="' + y + '" font-size="22" font-weight="800" fill="#1A1A2E">장도 입도 가능 시간</text>';
-  body += '<text x="' + (W - PAD) + '" y="' + y + '" text-anchor="end" font-size="17" fill="#888">' + esc(label(day)) +
-          (badge ? ' <tspan fill="#4A4DE7" font-weight="700">' + badge + "</tspan>" : "") + "</text>";
+  body += '<text x="' + PAD + '" y="' + y + '" font-size="' + T.fsTitle + '" font-weight="' + T.fwTitle +
+          '" letter-spacing="' + T.lsTitle + '" fill="' + T.cTitle + '">장도 입도 가능 시간</text>';
+  body += '<text x="' + (W - PAD) + '" y="' + y + '" text-anchor="end" font-size="' + T.fsDate +
+          '" font-weight="' + T.fwDate + '" fill="' + T.cDate + '">' + esc(label(day)) +
+          (badge ? ' <tspan fill="' + T.cBadge + '" font-weight="700">' + badge + "</tspan>" : "") + "</text>";
 
   if (ranges) {
     // 구간마다 **한 줄**(운영자 예시가 두 줄) — 한 줄에 이어 붙이면 「~」가 두 번 나와 어디서 끊기는지 눈에 안 들어온다.
     const lines = ranges.map(korRange);
-    const fs = Math.min(32, Math.max(19, Math.floor(GW / Math.max.apply(null, lines.map(estEm)))));
+    const fs = Math.min(T.fsTime, Math.max(16, Math.floor(GW / Math.max.apply(null, lines.map(estEm)))));
     lines.forEach((ln, i) => {
-      y += i === 0 ? 52 : Math.round(fs * 1.34);
-      body += '<text x="' + PAD + '" y="' + y + '" font-size="' + fs + '" font-weight="800" fill="#1A1A2E">' + esc(ln) + "</text>";
+      y += i === 0 ? T.gapTime : Math.round(fs * T.lhTime);
+      body += '<text x="' + PAD + '" y="' + y + '" font-size="' + fs + '" font-weight="' + T.fwTime +
+              '" letter-spacing="' + T.lsTime + '" fill="' + T.cTime + '">' + esc(ln) + "</text>";
     });
 
-    y += isToday ? 38 : 30;
+    y += isToday ? T.gapStat : Math.round(T.gapStat * 0.79);
     if (isToday) {                                   // 「지금」 상태는 오늘 카드에만 — 내일 카드에 붙이면 거짓말이 된다
-      let dot = "#bbb", txt = "오늘 입도 시간이 종료됐어요", col = "#888", live = false;
+      let dot = T.cStatEnd, txt = "오늘 입도 시간이 종료됐어요", col = T.cStatEnd, live = false;
       for (const r of ranges) {
-        if (nowKst.min >= r[0] && nowKst.min < r[1]) { dot = col = "#4A4DE7"; txt = "지금 입도 가능 · " + korAt(r[1]) + "까지"; live = true; break; }
-        if (nowKst.min < r[0]) { dot = col = "#E24B4A"; txt = "지금은 입도 불가 · " + korAt(r[0]) + "부터 입도 가능"; break; }
+        if (nowKst.min >= r[0] && nowKst.min < r[1]) { dot = col = T.cStatOk; txt = "지금 입도 가능 · " + korAt(r[1]) + "까지"; live = true; break; }
+        if (nowKst.min < r[0]) { dot = col = T.cStatNo; txt = "지금은 입도 불가 · " + korAt(r[0]) + "부터 입도 가능"; break; }
       }
-      body += '<circle cx="' + (PAD + 6.5) + '" cy="' + (y - 6) + '" r="6.5" fill="' + dot + '">' +   // 가능=코발트 · 불가=빨강 유지
+      body += '<circle cx="' + (PAD + T.dotR) + '" cy="' + (y - 6) + '" r="' + T.dotR + '" fill="' + dot + '">' +
               (live ? '<animate attributeName="opacity" values="1;0.35;1" dur="2.2s" repeatCount="indefinite"/>' : "") + "</circle>";
-      body += '<text x="' + (PAD + 23) + '" y="' + y + '" font-size="19" font-weight="700" fill="' + col + '">' + esc(txt) + "</text>";
+      body += '<text x="' + (PAD + T.dotR * 2 + 10) + '" y="' + y + '" font-size="' + T.fsStat +
+              '" font-weight="' + T.fwStat + '" fill="' + col + '">' + esc(txt) + "</text>";
     }
-    // 범례 — 게이지 두 색이 무엇인지 (오른쪽 · 오늘/내일 카드 공통)
-    body += '<rect x="800" y="' + (y - 15) + '" width="13" height="13" rx="3.5" fill="#4A4DE7"/>' +
-            '<text x="818" y="' + (y - 4) + '" font-size="13.5" fill="#888">입도 가능</text>' +
-            '<rect x="888" y="' + (y - 15) + '" width="13" height="13" rx="3.5" fill="#E1DFEC"/>' +
-            '<text x="906" y="' + (y - 4) + '" font-size="13.5" fill="#888">물에 잠김</text>';
+    // 범례 — 자리를 폭·색칩 크기 식으로 잡는다(하드코딩하면 W나 칩 크기를 바꿀 때마다 어긋난다)
+    const LX = W - PAD - 164, SW = T.legSw;
+    body += '<rect x="' + LX + '" y="' + (y - SW - 2) + '" width="' + SW + '" height="' + SW + '" rx="' + T.legSwR + '" fill="' + T.cOk + '"/>' +
+            '<text x="' + (LX + SW + 5) + '" y="' + (y - 4) + '" font-size="' + T.fsLeg + '" fill="' + T.cDate + '">입도 가능</text>' +
+            '<rect x="' + (LX + SW + 72) + '" y="' + (y - SW - 2) + '" width="' + SW + '" height="' + SW + '" rx="' + T.legSwR + '" fill="' + T.cTrack + '"/>' +
+            '<text x="' + (LX + SW * 2 + 77) + '" y="' + (y - 4) + '" font-size="' + T.fsLeg + '" fill="' + T.cDate + '">물에 잠김</text>';
 
-    // 게이지 — 트랙 전체 = 하루 통행 창, 초록 = 건널 수 있는 시간, 회색 = 다리가 잠겨 못 건너는 시간
-    const BT = y + 28, BH = 30;
-    defs += '<clipPath id="wipe"><rect x="' + GX + '" y="' + (BT - 34) + '" width="' + GW + '" height="' + (BH + 68) + '">' +
-            '<animate attributeName="width" values="0;' + GW + '" keyTimes="0;1" dur="0.95s" begin="0s"' +
-            ' calcMode="spline" keySplines="0.22 1 0.36 1" fill="freeze"/></rect></clipPath>';
-    body += '<rect x="' + GX + '" y="' + BT + '" width="' + GW + '" height="' + BH + '" rx="' + (BH / 2) + '" fill="#E1DFEC"/>';
+    // 게이지 — 트랙 전체 = 하루 통행 창, 채움 = 건널 수 있는 시간, 회색 = 다리가 잠겨 못 건너는 시간
+    const BT = y + T.gapGauge, BH = T.barH, BR = Math.min(T.barR, BH / 2);   // 모서리 상한 = 높이 절반(그 위는 같은 모양)
+    defs += '<clipPath id="wipe"><rect x="' + GX + '" y="' + (BT - 40) + '" width="' + GW + '" height="' + (BH + 80) + '">' +
+            '<animate attributeName="width" values="0;' + GW + '" keyTimes="0;1" dur="' + T.wipeDur + 's" begin="0s"' +
+            ' calcMode="spline" keySplines="' + T.wipeEase + '" fill="freeze"/></rect></clipPath>';
+    body += '<rect x="' + GX + '" y="' + BT + '" width="' + GW + '" height="' + BH + '" rx="' + BR + '" fill="' + T.cTrack + '"/>';
     let segs = "";
     for (const r of ranges) {
       const x0 = px(r[0]), x1 = px(r[1]);
-      segs += '<rect x="' + x0.toFixed(1) + '" y="' + BT + '" width="' + Math.max(3, x1 - x0).toFixed(1) +
-              '" height="' + BH + '" rx="' + (BH / 2) + '" fill="#4A4DE7"/>';
+      segs += '<rect x="' + x0.toFixed(1) + '" y="' + BT + '" width="' + Math.max(T.segMin, x1 - x0).toFixed(1) +
+              '" height="' + BH + '" rx="' + BR + '" fill="' + T.cOk + '"/>';
     }
     // 「지금」 마커 — 와이프 안에 넣어 게이지가 채워지며 함께 드러난다. 박동(ping)은 무한 반복.
     if (isToday && nowKst.min >= AX0 && nowKst.min <= AX1) {
       const nx = px(nowKst.min).toFixed(1);
-      segs += '<line x1="' + nx + '" y1="' + (BT - 7) + '" x2="' + nx + '" y2="' + (BT + BH + 7) +
-              '" stroke="#1A1A2E" stroke-width="2.5" stroke-linecap="round"/>' +
-              '<circle cx="' + nx + '" cy="' + (BT - 11) + '" r="4.5" fill="#1A1A2E" fill-opacity="0.42">' +
-              '<animate attributeName="r" values="4.5;15" dur="2.2s" repeatCount="indefinite"/>' +
-              '<animate attributeName="fill-opacity" values="0.42;0" dur="2.2s" repeatCount="indefinite"/></circle>' +
-              '<circle cx="' + nx + '" cy="' + (BT - 11) + '" r="4.5" fill="#1A1A2E"/>';
+      segs += '<line x1="' + nx + '" y1="' + (BT - T.mkOver) + '" x2="' + nx + '" y2="' + (BT + BH + T.mkOver) +
+              '" stroke="' + T.cMk + '" stroke-width="' + T.mkW + '" stroke-linecap="round"/>' +
+              '<circle cx="' + nx + '" cy="' + (BT - T.mkDotY) + '" r="' + T.mkDotR + '" fill="' + T.cMk + '" fill-opacity="0.42">' +
+              '<animate attributeName="r" values="' + T.mkDotR + ';' + T.pingMax + '" dur="' + T.pingDur + 's" repeatCount="indefinite"/>' +
+              '<animate attributeName="fill-opacity" values="0.42;0" dur="' + T.pingDur + 's" repeatCount="indefinite"/></circle>' +
+              '<circle cx="' + nx + '" cy="' + (BT - T.mkDotY) + '" r="' + T.mkDotR + '" fill="' + T.cMk + '"/>';
     }
     body += '<g clip-path="url(#wipe)">' + segs + "</g>";
 
-    // 눈금 — 2시간 간격(와이프 밖 = 처음부터 보인다)
-    const TY = BT + BH + 22;
-    for (let m = AX0; m <= AX1; m += 120) {
+    // 눈금 (와이프 밖 = 처음부터 보인다)
+    const TY = BT + BH + T.gapTick;
+    for (let m = AX0; m <= AX1; m += T.tickStep) {
       const tx = px(m).toFixed(1);
       const anchor = px(m) < GX + 18 ? "start" : px(m) > GX + GW - 18 ? "end" : "middle";
-      body += '<line x1="' + tx + '" y1="' + (BT + BH + 3) + '" x2="' + tx + '" y2="' + (BT + BH + 8) +
+      body += '<line x1="' + tx + '" y1="' + (BT + BH + 3) + '" x2="' + tx + '" y2="' + (BT + BH + 3 + T.tickLen) +
               '" stroke="#000" stroke-opacity="0.09" stroke-width="1"/>' +
-              '<text x="' + tx + '" y="' + TY + '" text-anchor="' + anchor + '" font-size="13" fill="#bbb">' + fmtTick(m) + "</text>";
+              '<text x="' + tx + '" y="' + TY + '" text-anchor="' + anchor + '" font-size="' + T.fsTick +
+              '" font-weight="' + T.fwTick + '" fill="' + T.cTick + '">' + fmtTick(m) + "</text>";
     }
     y = TY;
   } else {
     y += 50;
-    body += '<text x="' + PAD + '" y="' + y + '" font-size="' + (rawT ? 26 : 20) + '" font-weight="' + (rawT ? 700 : 600) + '" fill="' +
-            (rawT ? "#1A1A2E" : "#888") + '">' +
+    // ⚠ 미등록·통제 공지 문구는 **--dim 고정**(cNone) — 플레이그라운드에선 이 자리가 「날짜 글자」 축에 묶여 있었지만,
+    //   운영자가 바꾼 건 우상단 날짜지 이 안내 문구가 아니다. 묶어두면 안내가 강조색으로 튄다.
+    body += '<text x="' + PAD + '" y="' + y + '" font-size="' + (rawT ? T.fsTime * 0.8 : T.fsTime * 0.62) +
+            '" font-weight="700" fill="' + (rawT ? T.cTime : T.cNone) + '">' +
             esc(rawT || (isToday ? "오늘" : "이 날짜의") + " 입도 시간이 아직 등록되지 않았어요") + "</text>";
   }
   // [260805-39] 「내일」 줄은 뺐다(운영자 지시) — 내일은 같은 카드의 ?d=1 판으로 내고 홈페이지에서 접었다 편다.
-  y += 26;
-  body += '<text x="' + PAD + '" y="' + y + '" font-size="13" fill="#bbb">위 시간 외에는 진섬다리가 물에 잠겨 출입이 불가합니다. 아래 월별 캘린더도 함께 확인해 주세요.</text>';
+  y += T.gapNote;
+  body += '<text x="' + PAD + '" y="' + y + '" font-size="' + T.fsNote + '" font-weight="' + T.fwNote +
+          '" fill="' + T.cNote + '">위 시간 외에는 진섬다리가 물에 잠겨 출입이 불가합니다. 아래 월별 캘린더도 함께 확인해 주세요.</text>';
 
-  const H = y + 20;
+  const H = Math.round(y + T.padBot);
   return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + W + " " + H + '" width="' + W + '" height="' + H +
-    '" role="img" aria-label="장도 입도 가능 시간" font-family="\'Noto Sans KR\',\'Apple SD Gothic Neo\',\'Malgun Gothic\',sans-serif">' +
+    '" role="img" aria-label="장도 입도 가능 시간" font-family="' + esc(T.font) + '">' +
     (defs ? "<defs>" + defs + "</defs>" : "") +
-    '<rect x="1" y="1" width="' + (W - 2) + '" height="' + (H - 2) + '" rx="16" fill="#fff" stroke="#000" stroke-opacity="0.09"/>' +
+    '<rect x="1" y="1" width="' + (W - 2) + '" height="' + (H - 2) + '" rx="' + T.radius + '" fill="' + T.cCard +
+    '" stroke="#000" stroke-opacity="' + T.aBorder + '"/>' +
     body + "</svg>";
 }
 __name(buildJangdoSvg, "buildJangdoSvg");
