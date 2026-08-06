@@ -4762,7 +4762,7 @@ async function initApp(){
     loadAllMasters().catch(function(e){console.warn('[initApp loadAllMasters]',e);}),
     loadCafeJangdo().catch(function(e){console.warn('[initApp loadCafeJangdo]',e);}),
     loadApplySettings().catch(function(e){console.warn('[initApp loadApplySettings]',e);})
-  ]);
+  ]).then(function(){ try{_memBootWarm();}catch(_e){console.warn('[initApp memBootWarm]',_e);} });   // [260810 운영자] 고객 분석(회원·예매집계) 선로딩 = 첫 화면 로더가 다 끝난 뒤 출발 — 사유·가드는 _memBootWarm 주석
   // MS(OneDrive) 토큰 미리 확보 — 폴더 선택 때 팝업 안 뜨게 (재방문 silent / 첫 로그인 popup 1회)
   _msalPrefetch();
 }
@@ -27448,6 +27448,18 @@ function _memPurge(){_memState=null;_memLoading=false;_bkState=null;_bkLoading=f
 //   클릭 시점엔 이미 캐시라 즉시 그려진다. 중복 발사는 _memLoading·_memState 가드로 차단(추가 API 호출 0).
 function _memWarm(){ if(userRole!=='admin')return; try{_bkWarm();}catch(e){}   /* [260804] 예매 집계도 같이 덥힌다 — 첫 예매 질문에서 「아직 안 불러왔어요」가 안 뜨게 */
   if(_memState||_memLoading)return; try{_memLoad(false);}catch(e){} }
+// [260810 운영자 「대시보드를 불러오는 순간 고객분석 데이터까지 다 · 애초에 이 웹앱이 열려있으면 데이터는 불러오게」]
+//   **부팅 선로딩** — 구판의 출발 신호는 세부메뉴 **호버**(위 _memWarm)와 책 4면 도착(_bizMemberEnsure) 둘뿐이라,
+//   책을 4면까지 넘겨야 그제서야 회원 시트를 부르기 시작했다. 신호를 「앱에 들어온 순간」(initApp)으로 앞당긴다.
+//   새 API·새 캐시·새 상태 **0** = 위 _memWarm을 부팅에서 한 번 더 부르는 것뿐(회원 + 예매집계 · admin 게이트와
+//   _memState/_memLoading 중복 가드가 그대로 걸린다 → 호버·4면 경로와 겹쳐도 추가 fetch 0).
+//   ⚠ **네트워크 우선권**(260711 「캘린더에 우선권」) 유지 = 회원 시트가 6.7MB라 첫 화면 fetch와 겹치면 보이는 화면이 늦어진다
+//     → initApp 병렬조(프로그램·마스터·카페장도·접수설정)가 **끝난 뒤** + 한 박자(레일 6시트는 _calP 뒤 출발이라 그때도 비행 중일 수 있다).
+//   ⚠ **잠금 중이면 안 부른다** = 유휴잠금이 _memPurge로 비운 PII를 이 타이머가 되채우는 창 차단(잠금 해제는 initApp을 다시 타므로 그때 채워진다).
+function _memBootWarm(){
+  if(typeof userRole==='undefined'||userRole!=='admin')return;   // 비admin = 4면 자체가 없다(_bizBookN=3) · 서버도 PII 시트에 admin 강제
+  setTimeout(function(){ if(typeof _locked!=='undefined'&&_locked)return; try{_memWarm();}catch(e){console.warn('[boot warm]',e);} },1200);
+}
 function closeMemberLookup(){var bg=document.getElementById('member-lookup');if(bg)bg.classList.remove('show');if(_memEscH){document.removeEventListener('keydown',_memEscH);_memEscH=null;}}
 async function openMemberLookup(){
   if(userRole!=='admin'){showToast('회원 조회는 관리자 전용이에요','error');return;}
