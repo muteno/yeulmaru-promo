@@ -1,0 +1,229 @@
+name: AI 홍보 전략 추론 (claude -p · repository_dispatch)
+
+# 앱 「AI 홍보 ▸ 전략 추론」 탭이 데이터 팩(drafts/promo/<id>.in.json — Worker /api/promo/upload가 커밋)을 올리고
+# repository_dispatch[promo-advise]를 던지면, claude -p(구독 OAuth 5계정 폴오버 — nb-blog와 같은 엔진)가
+# 홍보 전략 조언 JSON을 만들어 drafts/<id>.json 으로 커밋한다. 앱은 공용 /api/blog/draft 폴링으로 받는다.
+# 팩 = 프론트가 조립한 집계 수치만(개인정보 행 0). 입력 팩은 이 런 끝에 즉시 삭제(hwp-edit 원본 삭제 관례 —
+# 공개 레포라 남은 파일이 곧 노출 면적). 결과는 공용 회수기(shared/drafts_retain.mjs)가 접두별 최근 3개만 유지.
+
+on:
+  repository_dispatch:
+    types: [promo-advise]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: promo-advise
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10   # 1턴 추론이라 리서치 멀티턴(nb-blog 12분)보다 짧게 — 프론트 폴 한도(8분)와 정렬
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code
+      - name: Advise via claude -p
+        uses: actions/github-script@v7
+        env:
+          # 계정 선택은 여기서만 — ACTIVE_ACCOUNT 부터 체인 순환(shared/claude_failover.js). 각 계정 토큰을 ACC_<계정명> 으로.
+          ACTIVE_ACCOUNT: ${{ vars.ACTIVE_ACCOUNT || 'EMS1130G' }}
+          ACC_EMS1130G: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN_EMS1130G }}
+          ACC_EMS1130N: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN_EMS1130N }}
+          ACC_MUTENO: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN_MUTENO }}
+          ACC_MUTENONA: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN_MUTENONA }}
+          ACC_NOMUTEFB: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN_NOMUTEFB }}
+        with:
+          retries: 3
+          script: |
+            const { execFileSync } = require('child_process');
+            const fs = require('fs');
+            const path = require('path');
+            const _cp = context.payload.client_payload || {};
+            const p = (_cp && typeof _cp.d === 'object' && _cp.d) ? _cp.d : _cp;
+            const id = String(p.id || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 64);
+            if (!id) { core.setFailed('id 없음'); return; }
+            const inPath = 'drafts/promo/' + id + '.in.json';
+
+            // ---- 커밋/푸시 공용 (결과 없이도 앱이 폴링 타임아웃 대신 에러를 받게, 실패도 항상 파일로 남긴다) ----
+            const landOut = (out) => {
+              fs.mkdirSync('drafts', { recursive: true });
+              fs.writeFileSync('drafts/' + id + '.json', JSON.stringify(out));
+              try { if (fs.existsSync(inPath)) fs.rmSync(inPath); } catch (e) {}   // 입력 팩 즉시 삭제(공개 레포 노출 면적 최소화)
+              return (async () => {
+                try {
+                  const { retainDrafts } = await import('file://' + path.join(process.env.GITHUB_WORKSPACE, 'shared/drafts_retain.mjs'));
+                  const rr = retainDrafts({ root: process.env.GITHUB_WORKSPACE, keep: 3, protect: id });
+                  core.info('[drafts] 회수 ' + rr.removed.length + '건 · 기능별 최근 ' + rr.keep + '건 유지');
+                } catch (e) { core.warning('[drafts] 회수 건너뜀: ' + e.message); }
+                execFileSync('git', ['config', 'user.name', 'github-actions[bot]']);
+                execFileSync('git', ['config', 'user.email', '41898282+github-actions[bot]@users.noreply.github.com']);
+                execFileSync('git', ['add', '-A', 'drafts']);
+                execFileSync('git', ['commit', '-m', 'chore(promo): ' + id + ' 전략 추론 [skip ci]']);
+                let pushed = false;
+                for (let i = 0; i < 6; i++) {
+                  try { execFileSync('git', ['push', 'origin', 'HEAD:main']); pushed = true; break; }
+                  catch (e) { try { execFileSync('git', ['pull', '--rebase', 'origin', 'main']); } catch (e2) {} }
+                }
+                if (!pushed) core.setFailed('push 실패');
+              })();
+            };
+
+            // ---- 입력 팩 읽기 ----
+            let pack = null;
+            try { pack = JSON.parse(fs.readFileSync(inPath, 'utf8')); } catch (e) {}
+            if (!pack || typeof pack !== 'object') {
+              await landOut({ id, mode: 'promoAdvice', ok: false, error: '입력 팩을 찾지 못했어요(업로드 직후 다시 시도해 주세요)', ts: new Date().toISOString() });
+              return;
+            }
+
+            // ---- 팩 → 프롬프트 섹션 (사람이 읽는 압축 서술 — 원시 JSON 덤프보다 모델이 정확히 읽는다) ----
+            const S = (v, n) => String(v == null ? '' : v).slice(0, n || 400);
+            const NUM = (v) => (v == null || v === '' || isNaN(v)) ? null : Math.round(Number(v) * 10) / 10;
+            const fmtSales = (s) => {
+              if (!s || s.none) return '판매 데이터 없음' + (s && s.why ? ' — ' + S(s.why, 200) : '');
+              const L = [];
+              if (s.status) L.push('상태 ' + S(s.status, 20));
+              if (s.seats != null) L.push('누적 판매 ' + s.seats + '석' + (s.totalOpen ? ' / 총오픈 ' + s.totalOpen + '석 (점유율 ' + (NUM(s.occ) == null ? '?' : NUM(s.occ)) + '%)' : ''));
+              if (s.target != null) L.push('목표 점유율 ' + s.target + '%');
+              if (s.dday != null) L.push('공연 시작까지 D-' + s.dday);
+              if (s.fcRate != null) L.push('최근 판매 페이스 일평균 ' + NUM(s.fcRate) + '석/일');
+              if (s.groupSeats) L.push('단체 유입 ' + s.groupSeats + '석');
+              let out = L.join(' · ');
+              if (Array.isArray(s.last7) && s.last7.length) out += '\n  최근 실측(누적석): ' + s.last7.map((r) => S(r.d, 10) + '=' + r.seat).join(', ');
+              if (Array.isArray(s.curve) && s.curve.length) out += '\n  누적 곡선(일자=누적): ' + s.curve.map((c) => S(c[0], 10) + '=' + c[1]).join(', ');
+              if (s.note) out += '\n  비고: ' + S(s.note, 300);
+              return out;
+            };
+            const fmtPromo = (pr) => {
+              if (!pr) return '홍보 이력 없음';
+              const L = [];
+              if (Array.isArray(pr.history) && pr.history.length) L.push('지난 홍보(' + pr.history.length + '건): ' + pr.history.map((h) => S(h.d, 10) + ' ' + S(h.ch, 12) + (h.t ? '「' + S(h.t, 30) + '」' : '') + (h.st === '완료' ? '' : '(' + S(h.st, 6) + ')')).join(' / '));
+              else L.push('지난 홍보 0건');
+              if (Array.isArray(pr.planned) && pr.planned.length) L.push('예정된 홍보: ' + pr.planned.map((h) => S(h.d, 10) + ' ' + S(h.ch, 12) + (h.t ? '「' + S(h.t, 30) + '」' : '')).join(' / '));
+              if (pr.lastDate) L.push('마지막 홍보일 ' + S(pr.lastDate, 10));
+              return L.join('\n');
+            };
+            const fmtCal = (cal) => {
+              if (!cal || !Array.isArray(cal.busy) || !cal.busy.length) return '앞으로 3주 카카오톡·문자 슬롯: 전부 비어 있음';
+              return '앞으로 3주 이미 점유된 슬롯(카카오톡·문자는 하루 1건 전 프로그램 공용):\n' + cal.busy.map((d) => '  ' + S(d.d, 10) + ' — ' + S(d.what, 120)).join('\n');
+            };
+            const fmtAud = (a) => {
+              if (!a) return '고객 데이터 미포함(관리자 로그인에서만 동봉됨)';
+              const L = [];
+              if (a.sampleNote) L.push('⚠ 표본 설명(그대로 존중): ' + S(a.sampleNote, 300));
+              if (a.genre) L.push('이 프로그램 장르(' + S(a.genre, 12) + ') 재관람(2회+) 회원: ' + a.gRepeat + '명 · 그 장르 누적 ' + a.gTix + '매');
+              if (a.allRepeat != null) L.push('전 장르 재관람(2회+) 회원: ' + a.allRepeat + '명');
+              if (Array.isArray(a.age) && a.age.length) L.push('회원 연령대 TOP: ' + a.age.map((x) => S(x[0], 8) + ' ' + x[1] + '명').join(', '));
+              if (Array.isArray(a.city) && a.city.length) L.push('회원 거주지 TOP: ' + a.city.map((x) => S(x[0], 10) + ' ' + x[1] + '명').join(', '));
+              if (a.memberN) L.push('회원 전체 ' + a.memberN + '명');
+              return L.length ? L.join('\n') : '고객 데이터 없음';
+            };
+            const fmtProg = (g, withDetail) => {
+              const L = [];
+              L.push('이름: ' + S(g.name, 120) + (g.short ? ' (줄임말 ' + S(g.short, 40) + ')' : ''));
+              L.push('구분: ' + S(g.type, 10) + (g.genre ? ' · 장르 ' + S(g.genre, 30) : '') + (g.place ? ' · 장소 ' + S(g.place, 40) : ''));
+              if (g.period) {
+                if (g.period.show) L.push('공연·행사 기간: ' + S(g.period.show[0], 10) + ' ~ ' + S(g.period.show[1], 10));
+                if (g.period.sale) L.push('판매 기간: ' + S(g.period.sale[0], 10) + ' ~ ' + S(g.period.sale[1], 10) + ' ← 홍보는 이 안에서만 의미가 있다');
+                if (g.period.promoStart) L.push('홍보 시작일: ' + S(g.period.promoStart, 10));
+              }
+              L.push('판매: ' + fmtSales(g.sales));
+              L.push('홍보: ' + fmtPromo(g.promo));
+              if (withDetail && g.detail) {
+                L.push('상세페이지 본문(사실·표현 재료 — 여기 있는 것만 인용):\n' + S(g.detail.text, 2600));
+                if (g.detail.ocr) L.push('포스터·상세이미지 OCR 원문:\n' + S(g.detail.ocr, 2600));
+              } else if (withDetail) {
+                L.push('상세페이지: 없음(URL 미등록 — 메시지 각도 재료 부족)');
+              }
+              return L.join('\n');
+            };
+
+            const scope = pack.scope === 'portfolio' ? 'portfolio' : 'program';
+            let dataSec = '';
+            if (scope === 'program' && pack.program) {
+              dataSec += '# 대상 프로그램\n' + fmtProg(pack.program, true) + '\n\n';
+            } else {
+              const list = Array.isArray(pack.programs) ? pack.programs.slice(0, 20) : [];
+              dataSec += '# 판매 중·예정 기획 프로그램 전체 (' + list.length + '개)\n\n';
+              list.forEach((g, i) => { dataSec += '## ' + (i + 1) + '. ' + S(g.name, 120) + '\n' + fmtProg(g, false) + '\n\n'; });
+            }
+            dataSec += '# 홍보 캘린더 점유 현황\n' + fmtCal(pack.calendar) + '\n\n';
+            dataSec += '# 고객 데이터(집계 — 개인정보 없음)\n' + fmtAud(pack.audience) + '\n\n';
+            if (pack.context && Array.isArray(pack.context.competing) && pack.context.competing.length) {
+              dataSec += '# 같은 기간 자체 기획 프로그램(홍보 슬롯·관객을 나눠 쓰는 상대)\n' + pack.context.competing.map((c) => '- ' + S(c.name, 80) + ' (' + S(c.type, 8) + (c.period ? ' · ' + S(c.period, 30) : '') + ')').join('\n') + '\n\n';
+            }
+            if (pack.ask) dataSec += '# 담당자 요청(우선 반영)\n' + S(pack.ask, 800) + '\n\n';
+
+            // ---- 전략가 프롬프트 (이 파일이 프롬프트 SSOT — 산출이 이상하면 여기를 고친다) ----
+            let prompt = '';
+            prompt += '당신은 GS칼텍스 예울마루(전남 여수의 복합문화예술공간)의 홍보·판매 전략 분석가입니다.\n';
+            prompt += '아래는 이 공연장의 실제 운영 데이터입니다(집계 수치만 — 개인정보 없음). 이 데이터만 근거로, ';
+            prompt += '판매율을 효과적으로 높이기 위해 「앞으로 어떤 홍보를 언제 어디서 어떻게 할지」를 조언하세요.\n';
+            prompt += '오늘 날짜: ' + S(pack.today, 10) + '\n\n';
+            prompt += '# 원칙 (어기면 실패작)\n';
+            prompt += '1. 사실만 — 데이터에 없는 수치·사실·고객 반응을 지어내지 않는다. 근거가 없으면 그 조언은 빼고, 부족한 데이터는 gaps에 적는다.\n';
+            prompt += '2. 조언은 「달력에 옮길 수 있는」 수준으로 구체적으로 — 시기(가능하면 날짜, 아니면 주 단위), 채널, 타겟, 메시지 각도까지 채운다.\n';
+            prompt += '3. 채널 규칙: 카카오톡·문자는 하루 1건(전 프로그램 공용 슬롯) — 캘린더 점유 현황과 겹치지 않는 비어 있는 날을 고른다. 그 외 채널(인스타그램·블로그·홈페이지·B2B·현수막 등)은 지난 홍보 이력에 실제로 등장한 채널 안에서 고른다.\n';
+            prompt += '4. 홍보는 판매 촉진 수단 — 판매종료일 이후는 계획하지 않는다(이 조직의 확정 규칙: 판매 종료 = 홍보 목적 소멸).\n';
+            prompt += '5. 고객 수치는 「확정 연결된 표본의 하한」이다 — 동봉된 표본 설명을 그대로 존중하고 임의로 환산·과장하지 않는다.\n';
+            prompt += '6. 메시지 각도는 상세페이지 재료(본문·OCR)에 실제로 있는 표현·사실에서만 뽑는다. 재료가 없으면 「재료 부족」이라고 쓰고 만들어내지 않는다.\n';
+            prompt += '7. 과장 수식(「최고의」 「완벽한」)과 근거 없는 확신 금지. 판매 페이스 해석은 남은 기간·총오픈석 대비로 정량적으로.\n';
+            prompt += '8. 이미 예정된 홍보와 중복인 제안은 하지 않는다 — 예정분을 보완·조정하는 제안은 가능(그렇다고 명시).\n\n';
+            if (scope === 'portfolio') {
+              prompt += '# 이번 요청 = 전체 포트폴리오 진단\n';
+              prompt += '프로그램별 상세 조언이 아니라 「어디에 홍보 자원을 집중할지」의 배분 판단이 핵심입니다. ';
+              prompt += '판매 페이스가 남은 기간 대비 처지는 프로그램, 판매 임박(티켓오픈·마감)인 프로그램을 가려내세요.\n\n';
+            }
+            prompt += dataSec;
+            prompt += '# 출력 형식 (JSON 객체만 — 설명·머리말·코드블록 없이)\n';
+            if (scope === 'portfolio') {
+              prompt += '{ "verdict": "전체 현황 진단 2~4문장",\n';
+              prompt += '  "priorities": [ { "name": "프로그램명", "level": "집중|유지|최소", "why": "근거 데이터" } ],\n';
+              prompt += '  "actions": [ { "program": "프로그램명", "when": "시기", "channel": "채널", "target": "타겟", "message": "메시지 각도 한 줄", "why": "근거가 된 데이터 수치·사실" } ],\n';
+              prompt += '  "avoid": [ "지금 하지 말아야 할 것" ], "gaps": [ "부족했던 데이터" ] }\n';
+              prompt += 'actions는 우선순위순 4~6개.\n';
+            } else {
+              prompt += '{ "verdict": "현황 진단 2~3문장 — 판매 페이스 vs 남은 기간, 핵심 문제/기회",\n';
+              prompt += '  "actions": [ { "when": "실행 시기", "channel": "채널", "target": "타겟(근거 데이터 기반)", "message": "메시지 각도 한 줄", "why": "근거가 된 데이터 수치·사실" } ],\n';
+              prompt += '  "avoid": [ "지금 하지 말아야 할 것·주의점" ], "gaps": [ "이번 판단에서 부족했던 데이터" ] }\n';
+              prompt += 'actions는 우선순위순 3~5개.\n';
+            }
+
+            // ---- claude -p 실행 (활성 계정부터 체인 순환 폴오버 — nb-blog와 같은 엔진) ----
+            // 1턴 순수 추론 — 데이터는 팩에 전부 있으므로 웹 도구 불필요(환각 표면 최소화).
+            // cwd = 러너 임시폴더 — 레포 CLAUDE.md(앱 개발 지침)가 전략 컨텍스트에 섞이지 않게 격리(nb-blog 관례).
+            const { runClaudeWithFailover } = require(path.join(process.env.GITHUB_WORKSPACE, 'shared/claude_failover.js'));
+            const _r = runClaudeWithFailover({ args: ['-p', '--model', 'claude-opus-5', '--effort', 'max', '--max-turns', '1'], input: prompt, cwd: process.env.RUNNER_TEMP || '/tmp' });
+            const raw = _r.ok ? String(_r.raw || '').trim() : '';
+
+            // ---- 결과 파싱 — JSON 이탈 시에도 원문을 버리지 않는다(형식 실패 ≠ 내용 실패) ----
+            let out;
+            if (!raw) {
+              out = { id, mode: 'promoAdvice', ok: false, error: (_r.error || '빈 응답'), ts: new Date().toISOString() };
+            } else {
+              let t = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+              let adv = null;
+              try { adv = JSON.parse(t); } catch (e) { const m = t.match(/\{[\s\S]*\}/); if (m) { try { adv = JSON.parse(m[0]); } catch (e2) {} } }
+              if (adv && typeof adv === 'object' && (adv.verdict || Array.isArray(adv.actions))) {
+                out = { id, mode: 'promoAdvice', ok: true, scope, advice: adv, ts: new Date().toISOString() };
+              } else {
+                // 형식 이탈 — 조언 원문을 텍스트로 전달(프론트가 본문 그대로 렌더). 「완료」로 부르되 형식 실패를 명시.
+                out = { id, mode: 'promoAdvice', ok: true, scope, advice: null, text: raw.slice(0, 12000), formatMiss: true, ts: new Date().toISOString() };
+              }
+            }
+            await landOut(out);
+
+      # 활성 계정이 이번 런에 쿼터로 폴오버됐으면 누적 → THRESHOLD(2)회+ 면 다음 계정으로 자동 전진.
+      # GH_VARS_TOKEN 없으면 no-op = 라이브 무해. 신호(.nomute_active_quota)는 같은 job workspace 공유로 자동 일치.
+      - name: 활성 계정 자동 승격(쿼터 누적 시)
+        if: always()
+        env:
+          GH_VARS_TOKEN: ${{ secrets.GH_VARS_TOKEN }}
+          ACTIVE_ACCOUNT: ${{ vars.ACTIVE_ACCOUNT || 'EMS1130G' }}
+        run: python3 shared/account_failover.py

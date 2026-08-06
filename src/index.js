@@ -1116,9 +1116,10 @@ export function buildJangdoSvg(rows, nowKst, dayOffset) {
   const pre = ["오전 ", "낮 ", "오후 "];
   const hm = (m) => { const h = (Math.floor(m / 60) % 12) || 12, mm = m % 60; return h + "시" + (mm ? " " + mm + "분" : ""); };
   const korAt = (m) => pre[half(m)] + hm(m);                                    // 단독 시각 — "오후 10시"
-  //  구간은 **시작에만** 오전/오후를 붙인다(운영자 예시 「오전 6시 29분 ~ 12시 21분」). 단 끝이 다른 반나절로 넘어가면
-  //  안 붙이는 쪽이 거꾸로 헷갈리니 그때만 붙인다(6:00~14:00 = 「오전 6시 ~ 오후 2시」). 오전→낮12시대는 예시 그대로 생략.
-  const korRange = (r) => korAt(r[0]) + " ~ " + (half(r[1]) === half(r[0]) || half(r[1]) === 1 ? hm(r[1]) : korAt(r[1]));
+  //  끝 시각도 오전/오후를 **붙인다** — 운영자 260806 「이거 열시만 오후 열시라고 하면 될듯」(「오후 3시 36분 ~ 10시」의 그 10시).
+  //  ⚠ 예외는 **낮 12시대 하나**뿐 — 운영자 최초 예시가 「오전 6시 29분 ~ 12시 21분」이었고, 정오는 앞머리 없이도
+  //    안 헷갈린다(오히려 「낮 12시 21분」까지 쓰면 장황). 즉 「같은 반나절이면 생략」 규칙은 폐기하고 12시대만 남긴다.
+  const korRange = (r) => korAt(r[0]) + " ~ " + (half(r[1]) === 1 ? hm(r[1]) : korAt(r[1]));
   const fmtTick = (m) => pre[half(m)].trim() + ((Math.floor(m / 60) % 12) || 12) + "시";
   // 글자폭 어림(한글 1em · 나머지 비율) — 시간이 긴 날 큰 글씨가 카드 밖으로 나가지 않게 자동 축소한다.
   const estEm = (s) => { let w = 0; for (const c of s) w += /[가-힣]/.test(c) ? 1 : c === " " ? 0.28 : 0.62; return w; };
@@ -2395,12 +2396,47 @@ async function kkoOcrImages(env, urls) {
 }
 __name(kkoOcrImages, "kkoOcrImages");
 
+// ── AI 홍보 ▸ 상세페이지 추출 캐시 (260806) ───────────────────────────────
+// 「한 번 조회했으면 그걸 가지고 있어야 한다」(운영자 260806) — 추출(본문 텍스트+이미지 OCR)을 KV(ops_kv)에
+// 영구 저장하고 fresh=1 로만 다시 읽는다. 카카오 76자(suggestKakaoLines)와 AI 홍보 전략(/api/promo/*)이
+// 같은 저장소를 공유한다 — 같은 URL = 같은 추출본 = 재OCR 0. 키는 프로그램ID가 아니라 URL 축(URL이 정체성).
+function pdKey(u) {
+  const s = String(u || "").trim();
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = (h * 33 ^ s.charCodeAt(i)) >>> 0;   // djb2 — 짧은 결정적 키(충돌 보강 = 길이 접미)
+  return "pdext:v1:" + h.toString(36) + ":" + s.length;
+}
+__name(pdKey, "pdKey");
+async function promoDetailGet(env, rawUrl, opt) {
+  opt = opt || {};
+  const key = pdKey(rawUrl);
+  if (!opt.fresh) {
+    try {
+      const hit = await env.ops_kv.get(key);
+      if (hit) {
+        const d = JSON.parse(hit);
+        // maxAgeMs 지정 호출(카카오 문구 = 24h)은 그보다 낡은 캐시를 재추출 — 가격·할인 갱신이 문구에 늦게 반영되지 않게.
+        // AI 홍보 전략은 무기한(수동 「새로 읽기」로만 갱신) — 상세페이지는 게시 후 거의 안 바뀐다.
+        if (d && d.ts && (!opt.maxAgeMs || Date.now() - d.ts < opt.maxAgeMs)) { d.cached = true; return d; }
+      }
+    } catch (e) { /* 캐시 읽기 실패 = 새로 추출로 진행 */ }
+  }
+  const src = await kkoFetchPage(rawUrl);
+  const ocrText = await kkoOcrImages(env, src.images);
+  const d = { url: src.url, text: src.text, images: src.images, ocrText, ts: Date.now() };
+  try { await env.ops_kv.put(key, JSON.stringify(d)); } catch (e) { /* 저장 실패해도 추출본은 반환 */ }
+  d.cached = false;
+  return d;
+}
+__name(promoDetailGet, "promoDetailGet");
+
 // b = {url, program, title, date, extra, count}. 반환 = {items:[{tone,text,len}], ocrText, pageText, images, source, over}
 async function suggestKakaoLines(env, b) {
   const limit = 76;   // 앱 입력칸 maxlength와 같은 값 — 길이는 textarea와 같게 UTF-16 .length로 센다(이모지 = 2)
   const count = Math.min(8, Math.max(1, parseInt(b.count, 10) || 5));
-  const src = await kkoFetchPage(b.url);
-  const ocrText = await kkoOcrImages(env, src.images);
+  // [260806] 추출은 공용 캐시 경유 — 24h 안에 같은 링크를 다시 부르면 재수집·재OCR 없이 즉시(AI 홍보 전략과 한 저장소)
+  const src = await promoDetailGet(env, b.url, { maxAgeMs: 24 * 3600 * 1e3 });
+  const ocrText = src.ocrText || "";
   if (!src.text && !ocrText) throw new Error("링크에서 읽어낸 내용이 없어요 (페이지 구조 확인 필요)");
   const facts = [
     b.program ? "프로그램: " + String(b.program).slice(0, 200) : "",
@@ -3158,6 +3194,71 @@ var index_default = {
             return json({ error: String((e && e.message) || e) }, env, 502);
           }
         }
+      }
+
+      // === AI 홍보 ▸ 전략 추론 (260806 운영자) — 「AI 홍보」 대메뉴의 LLM 축(「점검」= 규칙 스캔의 짝) ===
+      // 엔진 = 블로그 초안과 같은 구독 OAuth 축(시크릿 신설 0): 데이터 팩 업로드(커밋) → repository_dispatch[promo-advise]
+      // → Actions(promo-advise.yml)의 claude -p(5계정 폴오버)가 조언 JSON을 drafts/<id>.json 으로 커밋 → 공용 /api/blog/draft 폴링.
+      // 팩 = 프론트가 조립한 「집계 수치만」(개인정보 행 0 — 회원·예매 원본은 여길 지나지 않는다). 입력 팩은 워크플로 끝에 즉시 삭제(hwp 관례).
+      if (url.pathname.startsWith("/api/promo/")) {
+        // ① 상세페이지 추출(캐시) — 프로그램 시트 K열 URL → 본문 텍스트 + 포스터·상세 이미지 OCR. KV 영구 캐시(fresh=1 = 재추출).
+        //    OCR 키가 하나도 없으면 ocrText만 비고 페이지 텍스트는 나간다(kkoOcrImages가 장별 실패를 삼킨다) = 조용한 강등, 죽지 않는다.
+        if (url.pathname === "/api/promo/detail" && request.method === "POST") {
+          let b = {};
+          try { b = await request.json(); } catch (e) {}
+          if (!String(b.url || "").trim()) return json({ error: "상세 링크가 필요해요 — 프로그램 관리에서 URL을 넣어주세요" }, env, 400);
+          try {
+            const d = await promoDetailGet(env, b.url, { fresh: b.fresh === 1 || b.fresh === "1" });
+            return json({ ok: true, cached: !!d.cached, ts: d.ts, url: d.url, text: d.text, ocrText: d.ocrText || "", images: d.images || [] }, env);
+          } catch (e) {
+            return json({ error: String((e && e.message) || e) }, env, 502);
+          }
+        }
+        // ②③ 팩 업로드·디스패치 — 한글문서 편집(/api/hwp/*) 문법 미러(PAT는 서버 시크릿만 · 브라우저에 GitHub 토큰 0)
+        const cfg = ghBlogCfg(env);
+        if (!cfg.pat) return json({ error: "no_github_pat", note: "Worker에 GITHUB_PAT 시크릿 미설정" }, env, 503);
+        const ghHdr = { "Authorization": "Bearer " + cfg.pat, "Accept": "application/vnd.github+json", "User-Agent": "yeulmaru-promo-worker" };
+        const paId = (v) => String(v || "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 64);
+        if (url.pathname === "/api/promo/upload" && request.method === "POST") {
+          let b = {};
+          try { b = await request.json(); } catch (e) {}
+          const id = paId(b.id);
+          if (!id) return json({ error: "id required" }, env, 400);
+          if (!b.pack || typeof b.pack !== "object") return json({ error: "빈 데이터 팩이에요" }, env, 400);
+          const packStr = JSON.stringify(b.pack);
+          if (packStr.length > 400000) return json({ error: "데이터 팩이 너무 커요(400KB 이하)" }, env, 413);
+          const b64 = kkoB64(new TextEncoder().encode(packStr).buffer);   // UTF-8 → base64 (contents API 규격)
+          try {
+            const gr = await fetch(`https://api.github.com/repos/${cfg.repo}/contents/drafts/promo/${id}.in.json`, {
+              method: "PUT",
+              headers: { ...ghHdr, "Content-Type": "application/json" },
+              body: JSON.stringify({ message: `chore(promo): ${id} 입력 팩 [skip ci]`, content: b64, branch: cfg.branch })
+            });
+            if (!gr.ok) return json({ error: gr.status === 401 || gr.status === 403 ? "github_denied" : "upload_failed", status: gr.status, note: (await gr.text()).slice(0, 200) }, env, 502);
+            return json({ ok: true, id }, env);
+          } catch (e) {
+            return json({ error: String((e && e.message) || e) }, env, 502);
+          }
+        }
+        // 트리거 — 전용 event_type(promo-advise)이라 블로그·한글·오피스 큐(concurrency)에 안 막힌다.
+        if (url.pathname === "/api/promo/dispatch" && request.method === "POST") {
+          let b = {};
+          try { b = await request.json(); } catch (e) {}
+          const id = paId(b.id);
+          if (!id) return json({ error: "id required" }, env, 400);
+          try {
+            const gr = await fetch(`https://api.github.com/repos/${cfg.repo}/dispatches`, {
+              method: "POST",
+              headers: { ...ghHdr, "Content-Type": "application/json" },
+              body: JSON.stringify({ event_type: "promo-advise", client_payload: { d: { id } } })
+            });
+            if (gr.ok) return json({ ok: true, id }, env);
+            return json({ error: gr.status === 401 || gr.status === 403 ? "github_denied" : "dispatch_failed", status: gr.status, note: (await gr.text()).slice(0, 200) }, env, 502);
+          } catch (e) {
+            return json({ error: String((e && e.message) || e) }, env, 502);
+          }
+        }
+        return json({ error: "unknown promo route" }, env, 404);
       }
 
       const token = await getToken(env);

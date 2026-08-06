@@ -44,7 +44,7 @@
 
 ### 1-b. Actions Secret `CLAUDE_CODE_OAUTH_TOKEN_*` (5계정) — 초안 생성 엔진 + 순환 폴오버
 - **무엇**: Claude **구독(Max) OAuth 토큰** (`sk-ant-oat…`) 5개. 계정·순서(체인) = `EMS1130G`(활성 기본) → `EMS1130N` → `MUTENO` → `MUTENONA` → `NOMUTEFB`.
-- **용도**: `nb-blog.yml`·`blog-draft.yml`에서 `claude -p --model claude-opus-5 --effort max` 실행 = **실제 글쓰기 엔진** (Max 구독이라 초안당 추가비용 0). 활성 계정(`vars.ACTIVE_ACCOUNT`, 없으면 EMS1130G)이 주간 쿼터로 막히면 `shared/claude_failover.js`가 체인의 다음 계정으로 **순환 폴오버**해 결과물을 확보.
+- **용도**: `nb-blog.yml`·`blog-draft.yml`에서 `claude -p --model claude-opus-5 --effort max` 실행 = **실제 글쓰기 엔진** (Max 구독이라 초안당 추가비용 0). 같은 체인을 `hwp-edit.yml`·`office-edit.yml`·`promo-advise.yml`(AI 홍보 전략 추론 · 260806)도 쓴다. 활성 계정(`vars.ACTIVE_ACCOUNT`, 없으면 EMS1130G)이 주간 쿼터로 막히면 `shared/claude_failover.js`가 체인의 다음 계정으로 **순환 폴오버**해 결과물을 확보.
 - **위치**: Repo → Settings → Secrets and variables → **Actions** → `CLAUDE_CODE_OAUTH_TOKEN_<계정명>` (각 계정 1개).
 - **발급/회전**: 각 계정 로컬에서 `claude setup-token` → 출력된 `sk-ant-oat…`를 해당 secret에 갱신.
 - **주의**: 구독 OAuth는 **Actions의 `claude -p`에서만** 동작(원시 Messages API 불가). 만료되면 그 계정만 폴오버로 건너뛰고, 전 계정 만료 시 초안 생성 실패.
