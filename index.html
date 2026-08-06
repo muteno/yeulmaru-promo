@@ -4,6 +4,44 @@
 <meta charset="UTF-8">
 <!-- [운영자 260723] HTTP 접속 = HTTPS로 자동 승격 (Teams/MSAL 로그인은 https 필수). GitHub Pages는 서버 리다이렉트 불가 → head 최상단 클라이언트 승격 · 엣지 강제(301+HSTS)는 repo Settings▸Pages▸"Enforce HTTPS" 병행 권장 -->
 <script>if(location.protocol==='http:')location.replace('https://'+location.host+location.pathname+location.search+location.hash);</script>
+<!-- [260806 운영자 승인 「관리자에게만 토스트」] 전역 에러 포착 — 「눌러도 아무 일도 안 일어남」을 관리자에게 알린다.
+     왜 = 260806 실사고(홍보 위저드 사망 · PR 725번). onclick 핸들러가 TypeError로 죽어도 앱이 **완전히 조용해서**
+       「새 콘텐츠 등록이 안 먹는다」가 하루를 갔다 — 그때 앱엔 window.onerror가 0건이었다(실측).
+     범위 = **관리자만** 화면 알림. 일반 사용자 화면은 종전 그대로(무해한 외부 예외로 겁주지 않는다 · 운영자 선택).
+     자리 = head 최상단. 리스너는 **등록된 뒤**의 것만 잡으므로, 본체 스크립트의 파싱 에러까지 덮으려면 여기여야 한다.
+     새 디자인 0 = 정본 `showToast(msg,'error')` 재사용(`.toast.error` 그대로) · 상세는 역할 무관 항상 console.error.
+     ⚠ userRole은 본체의 top-level `let`(전역 렉시컬 바인딩 = window 속성이 아니고 TDZ가 있다) → typeof까지 try로 감싼다. -->
+<script>
+(function(){
+  var seen={}, shown=0, MAX=5;   // 같은 문구 반복·루프 도배 차단(콘솔 기록은 안 막는다 — 화면만 조인다)
+  function isAdmin(){
+    try{ if(typeof userRole!=='undefined' && userRole) return userRole==='admin'; }catch(e){}   // TDZ면 아래 폴백
+    try{ return sessionStorage.getItem('role')==='admin'; }catch(e){}
+    return false;
+  }
+  function report(kind, msg, detail){
+    // 남의 오리진 스크립트는 브라우저가 본문을 가려 'Script error.'만 준다 = 우리 코드 아님·손댈 것 없음 →
+    //   화면은 물론 **기록도 남기지 않는다**(브라우저가 이미 콘솔에 제 몫으로 찍는다 = 우리 줄은 순수 중복 잡음).
+    //   ⚠ 이 걸러내기는 console.error **위**에 있어야 한다 — 아래에 두면 잡음만 두 배가 된다(260806 게이트가 실제로 잡아냈다).
+    if(!msg || /^script error\.?$/i.test(String(msg).trim())) return;
+    try{ console.error('[전역 '+kind+']', msg, detail||''); }catch(e){}   // 기록은 역할 무관 항상(관리자만인 건 화면 안내뿐)
+    if(!isAdmin() || typeof showToast!=='function') return;
+    var key=kind+'|'+msg;
+    if(seen[key] || shown>=MAX) return;
+    seen[key]=1; shown++;
+    showToast('화면 오류가 났어요 · 콘솔(F12) 확인','error');   // 데스크톱 .toast는 nowrap = 문구를 길게 안 만든다(상세는 콘솔)
+  }
+  window.addEventListener('error', function(e){
+    // <img>/<script> 로드 실패도 같은 이벤트로 온다(target이 엘리먼트 · e.error 없음) = 스크립트 예외가 아니므로 제외
+    if(e && e.target && e.target!==window && e.target.nodeType===1) return;
+    report('에러', e && e.message, e && e.error);
+  }, true);
+  window.addEventListener('unhandledrejection', function(e){
+    var r = e && e.reason;
+    report('처리 안 된 거절', (r && (r.message || String(r))) || '(사유 없음)', r);
+  });
+})();
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, viewport-fit=cover">
 <title>GS칼텍스 예울마루 사업 대시보드</title>
 <meta name="description" content="GS칼텍스 예울마루 사업 대시보드 — 사업 실적·판매 현황·홍보 관리">
@@ -8071,8 +8109,11 @@ var _BIZ_AXB=50;   // 아래 여백 = 월 라벨 + 분기 라벨 + 숨구멍(구
 var _BIZ_LAB_DY=3;     // 막대 꼭대기 ↔ 숫자 아랫변(주석 yshift) — 260805 교육 값 라벨·260806-11 예상 칸이 이미 쓰던 그 값(새 수치 0)
 var _BIZ_LAB_FS=10.5;  // 값 라벨 활자 — 260805 운영자 확정(9.5 → 10.5)
 var _BIZ_LAB_DX=12;    // 가로 비킴 상한 = 두 자리 폭(6×2) · 이보다 더 밀면 숫자가 제 막대에서 떨어져 보인다
-// 글상자 폭(px) ≈ 자릿수×6 + 쉼표×3 + 숨구멍 6 — 구 상수 29(= 「4자 라벨 + 숨구멍」)를 자릿수별로 편 것(같은 자·새 수치 0)
-function _bizLabW(t){ var s=String(t); return s.replace(/[^0-9]/g,'').length*6+(s.split(',').length-1)*3+6; }
+// 글상자 폭(px) ≈ 자릿수×6 + 쉼표×3 + 괄호×3.5 + 숨구멍 6 — 구 상수 29(= 「4자 라벨 + 숨구멍」)를 자릿수별로 편 것(같은 자·새 수치 0)
+//   [260813] 괄호 3.5 = 이 차트 활자(10.5px)에서 **실측한 글자 폭**이다(헤드리스 `getComputedTextLength`: 숫자 5.84 · 쉼표 2.92 · 괄호 3.50 —
+//   앞 두 항의 6·3이 이미 그 실측의 반올림이라 같은 자로 잰 것뿐 = 새 수치 창작 0). 예측치 라벨 `70(33)`이 괄호 몫을 안 세면
+//   글상자가 7px 좁게 잡혀 옆 숫자와 **겹친 채로 「안 겹쳤다」고 판정**된다(겹침 회피의 유일한 자가 이 함수다).
+function _bizLabW(t){ var s=String(t); return s.replace(/[^0-9]/g,'').length*6+(s.split(',').length-1)*3+(s.replace(/[^()]/g,'').length)*3.5+6; }
 // 글상자 한 칸 자리잡기 — box{x,y,w}(px) · placed = 이미 선 글상자들. 돌려주는 값 = **가로 비킴(px)**.
 //   세로 임계 19 = 10.5px 글상자 ≈13 + 숨구멍 6(기틀 §2 #16 ⑦과 같은 자) · 가로는 두 글상자가 실제로 겹칠 때만 민다.
 //   ⚠ 끝내 못 비키면 **제자리에 그대로 세운다**(숫자를 지우지 않는다 = 운영자 260809 「다 숫자가 나오게」).
@@ -8241,8 +8282,16 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
   //   ⚠ 값·자리(x·y)·툴팁·히트존은 **무접촉** — 바뀌는 건 숫자를 그리는 기구와 잉크뿐이다.
   var labs=rows.map(function(g,i){ return vals[i]==null?'':vfmt(vals[i]); });
   // [260806-13 운영자 「응 적용 맞고, **수치에 맞게끔만 차트 배선**하면 될 듯」] 예상 2단이 얹힌 행 = 그 행의 숫자는
-  //   **예상 꼭대기**에 서고 값도 **예상값**이다(구판은 자리는 예상 꼭대기인데 글자는 실판매값이라 135가 216 높이에 섰다).
-  //   ⚠ 실판매값은 **툴팁**이 그대로 말한다(「이 추세면 예상 최종 N석 (지금 M석 · +K)」) — 막대에 숫자를 둘 달지 않는다(번잡).
+  //   **예상 꼭대기**에 선다(구판은 자리는 예상 꼭대기인데 글자는 실판매값이라 135가 216 높이에 섰다).
+  // [260813 운영자 「그라데이션(예측치)는 예를들어 **70(33)** · 예측치(현재치) 이렇게 되어야할거같거든? 그렇게
+  //   차트(그라데이션있는)에 표기되어야 할듯」] 그 행의 글자 = **`예측치(현재치)` 한 덩이**.
+  //   ⚠ 구 260806-13의 「막대에 숫자를 둘 달지 않는다(번잡) · 실판매값은 툴팁이 말한다」는 이 지시로 **개정**된다 —
+  //     툴팁은 마우스를 올려야 나오는데, 그라데이션 칸은 「어디서 어디까지가 예상인가」가 곧 그 칸의 뜻이라
+  //     바닥값이 화면에 없으면 페이드 시작점을 눈으로 되짚어야 했다. 괄호 한 덩이 = 자리(꼭대기)는 그대로 두고
+  //     **글자 안에서** 두 값을 잇는다 = 라벨 기구·간격·잉크 계약(260809 「한 벌」)은 무접촉.
+  //   ⚠ 두 값이 **반올림해서 같으면 괄호를 안 붙인다**(`135(135)`) — 그 자리는 페이드 칸 자체가 1px 미만이라
+  //     보여 줄 「범위」가 없다. 같은 수를 두 번 적는 건 뜻이 0이고 글상자만 넓어져 옆 숫자를 밀어낸다.
+  //   ⚠ 툴팁은 종전 그대로(「이 추세면 예상 최종 N석 (지금 M석 · +K)」) — 좌석·매출 두 축을 다 말하는 자리는 거기다.
   //   ⚠ [260809] 구판이 이 칸만 「옆으로」(xanchor left · xshift 9) 뺐던 이유(페이드 칸 안에 잠김)는 260806-11이
   //     자리를 페이드 **위**로 올리며 이미 해소됐다 → 이제 다른 값 라벨과 **완전히 같은 벌**(위·가운데·같은 간격)이다.
   var fcOf={}; fcIdx.forEach(function(a){ fcOf[a[0]]=a[1]; });
@@ -8324,7 +8373,8 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
   //     ⚠ 이로써 260805 「값 라벨 = 그 막대 색」 판정은 **개정**된다(막대와 숫자는 자리로 이미 묶여 있다).
   var _lbInk=_yrCss('--neutral-text')||dim, _lbBox=[], _lbPxY=plotPx/(axTop||1);
   rows.map(function(g,i){ return i; }).filter(function(i){ return labs[i]&&xs[i]!=null; })
-    .map(function(i){ var f=fcOf[i]; return {i:i,y:(f!=null)?_mapv(f):yv[i],t:(f!=null)?vfmt(f):labs[i]}; })
+    .map(function(i){ var f=fcOf[i], ft=(f!=null)?vfmt(f):null;   // [260813] 예상 칸이 얹힌 행 = `예측치(현재치)` · 반올림 동일이면 예측치 한 벌
+      return {i:i,y:(f!=null)?_mapv(f):yv[i],t:(ft==null||ft===labs[i])?(ft||labs[i]):(ft+'('+labs[i]+')')}; })
     .sort(function(a,b){ return b.y-a.y; })
     .forEach(function(L){
       var dx=_bizLabFit({x:xs[L.i]*pxPerDay,y:L.y*_lbPxY,w:_bizLabW(L.t)},_lbBox);
@@ -8431,9 +8481,31 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
   if(trFc)_traces.push(trFc);   // [260808-2] 예상 칸은 실막대 **다음** · 자리 트레이스(tr2)보다 **앞** — tr2가 막대 트레이스의 맨 마지막이라는 `_bizFadeSlots` 규약을 깨지 않는다
   if(tr2)_traces.push(tr2);
   try{ Plotly.newPlot(div,_traces,lay,{displayModeBar:false,responsive:true}); }catch(_e){ console.warn('[biz bars]',_e); }
-  try{ _bizFadePlanned(div,rows,plan,gcol); }catch(_e){ console.warn('[biz fade]',_e); }   // [260806-3] 진행·예정 게이지 = 페이드(아래 참조)
-  if(fcIdx.length)try{ _bizFadeProj(div,fcIdx.map(function(a){ return gcol(rows[a[0]]); }),1); }catch(_e){ console.warn('[biz fade proj]',_e); }   // [260808-2] 예상 판매분 = 같은 페이드 · 막대 트레이스 **index 1**(0 = 실막대 · 꺾은선은 barlayer 밖이라 안 센다)
-  if(pidx.length)try{ _bizFadeSlots(div,pidx.map(function(i){ return gcol(rows[i]); })); }catch(_e){ console.warn('[biz fade slot]',_e); }   // [260806-7] 값 없는 자리도 같은 페이드(구 파선)
+  // ── [260813 운영자 「**다시 그라데이션 수치가 빠졌거든?** 그거 확인해주고, 그거가 들어갔을때의 위치에 각 숫자가
+  //     있는거 같음」] 페이드 재도색 = **Plotly가 다시 그릴 때마다** ────────────────────────────────────────
+  //   증상의 정체(헤드리스 실측 260813) = 페이드는 「그리고 나서 SVG를 덧칠하는」 후처리인데(#18 ⚠ Plotly bar는
+  //   `marker.color`가 단색뿐), 그 칸의 막대는 **투명(`rgba(0,0,0,0)`)으로 태어나** 덧칠이 유일한 잉크다.
+  //   그래서 Plotly가 한 번이라도 다시 그리면 `path.style.fill`이 원래대로(투명) 돌아가 **그라데이션만 증발**하고,
+  //   자리·라벨은 그대로 남는다 = 운영자가 본 「숫자만 예상 높이에 떠 있는」 화면 그 자체다.
+  //   실측(1600×900 · `defs`의 `<linearGradient>`는 5개 그대로인데 칠해진 막대만 5 → **0**):
+  //     `Plotly.relayout(차트,{height:…})` 직후 0 · `Plotly.Plots.resize` 직후 0.
+  //   그걸 부르는 자리가 이 앱엔 상시로 있다 — `_bizFitSeason()`(박스 안선에 차트 높이를 맞추는 fit)이
+  //   `Plotly.relayout`을 태우고, 그 함수는 **창 크기 변경·책 넘김 500ms 뒤 1패스·레일 렌더**에서 다시 돈다.
+  //   첫 그리기 직후엔 아래 8921행이 「높이가 20px 넘게 바뀌었으면 다시 그린다」로 우연히 되살리지만,
+  //   그 뒤에 오는 fit 패스(높이 변화 2~20px)는 **덧칠만 지우고 다시 그리지 않는다** = 그때부터 그라데이션이 없다.
+  //   → 고치는 자리 = 「누가 지웠나」를 쫓지 않고 **다시 그려질 때마다 자동으로 덧칠**한다(`plotly_afterplot`).
+  //     Plotly가 자기 렌더를 끝낼 때마다 부르는 그 훅이 relayout·resize·restyle을 **한 자리에서** 덮는다.
+  //   ⚠ 덧칠은 `path.style.fill`만 건드려 재렌더를 부르지 않는다 = 되먹임 없음. 값·좌표·라벨·툴팁 무접촉.
+  //   ⚠ 리스너는 **갈아 끼운다**(remove → on) — 이 함수는 한 화면에서 두 번 그려진다(430 → fit 높이). 쌓아 두면
+  //     낡은 recipe(옛 rows·색 배열)가 새 그림에 덧칠돼 엉뚱한 막대를 칠한다. 최신 한 벌만 남긴다.
+  var _fadeAll=function(){
+    try{ _bizFadePlanned(div,rows,plan,gcol); }catch(_e){ console.warn('[biz fade]',_e); }   // [260806-3] 진행·예정 게이지 = 페이드(아래 참조)
+    if(fcIdx.length)try{ _bizFadeProj(div,fcIdx.map(function(a){ return gcol(rows[a[0]]); }),1); }catch(_e){ console.warn('[biz fade proj]',_e); }   // [260808-2] 예상 판매분 = 같은 페이드 · 막대 트레이스 **index 1**(0 = 실막대 · 꺾은선은 barlayer 밖이라 안 센다)
+    if(pidx.length)try{ _bizFadeSlots(div,pidx.map(function(i){ return gcol(rows[i]); })); }catch(_e){ console.warn('[biz fade slot]',_e); }   // [260806-7] 값 없는 자리도 같은 페이드(구 파선)
+  };
+  div.__bizFade=_fadeAll; _fadeAll();
+  try{ if(div.removeAllListeners)div.removeAllListeners('plotly_afterplot');
+       if(div.on)div.on('plotly_afterplot',function(){ try{ if(div.__bizFade)div.__bizFade(); }catch(_e2){} }); }catch(_e1){}
 }
 // ── [260806-3 운영자 「이거를 디자인 정본에 넣으셈」] 진행·예정 공연 게이지 = **페이드 그라데이션** ──────
 //   계약(정본 = docs/디자인기틀.md §2 #18) = 아직 안 끝난 공연의 막대는 **위로 갈수록 사라지는 같은 색**으로 그린다.
@@ -28029,7 +28101,10 @@ function _memOvMap(geo,fit){   // fit = 모달의 「창 높이 채움」 모드
 // ⚠ 산출물 drafts/yc*.json = 공개 레포 커밋(블로그 초안과 동일 축) — 민감 내용 질문 금지 · 워크플로가 3일 지난 산출물 자동 정리.
 var _YEULAI_LS='yeulai_persona';
 function _yeulAiPersona(){try{return String(localStorage.getItem(_YEULAI_LS)||'').slice(0,6000);}catch(_e){return '';}}
-// [260803 운영자] 복잡 질문 판정 — 기본 = 소넷5·high(속도 우선) / deep = opus5·medium + 「기다려 달라」 안내 선표시(라우팅 실행은 워크플로)
+// [260806 운영자 「sonnet 5 low 로 일단 배선 · 어려운 거면 opus 5.0 medium 전환」] 복잡 질문 판정.
+//   기본 = 소넷5·**low**(뭐든 빠르게) / deep = opus5·medium + 「기다려 달라」 안내 선표시.
+//   ⚠ 여기는 **판정만** 한다 — 모델명·effort의 SSOT는 `.github/workflows/nb-blog.yml` 라우팅 2줄(cmodel·ceffort).
+//     앱이 모델명을 들고 있으면 두 곳이 갈려 「고쳤는데 안 바뀐다」가 난다.
 function _yeulAiDeep(q){q=String(q||'');return q.length>=60||/전략|기획|분석|설계|보고서|제안서?|비교|계획|정리해|작성해?\s*줘|써\s*줘|만들어|장단점|로드맵|개선안/.test(q);}
 async function _yeulAiAsk(q,ctx,onTick){
   var id='yc'+Date.now()+'r'+Math.floor(Math.random()*1e4);
@@ -33822,11 +33897,14 @@ function _chatbotMount(){
   fab.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>';
   fab.onclick=_cbToggle;
   document.body.appendChild(fab);
+  // [260806] 입력줄 Enter에 isComposing 가드 — 없으면 **한글 조합 중 Enter가 조합 중인 글자를 잘라 전송**한다
+  //   (실측 260806: 질문이 「줄바꾸ㅁ」으로 나가 예울이가 "질문이 중간에 끊긴 것 같은데요?"라고 답했다).
+  //   고객 분석 입력줄(_memAiCardHtml)이 이미 쓰던 정본 가드를 그대로 계승 — 새 문법 0.
   const win=document.createElement('div');
   win.id='cb-win';win.className='cb-win';
   win.innerHTML='<div class="cb-hdr"><div class="cb-ava"><img src="image/yeul.png" alt="" style="width:100%;height:100%;border-radius:50%;object-fit:cover"></div><div class="cb-titles"><div class="cb-title">예울이</div><div class="cb-sub">자동응답 · 규정/프로그램 · 그 외엔 AI</div></div><button class="cb-close" onclick="_cbClear()" title="대화 지우기" style="font-size:15px">⟲</button><button class="cb-close" onclick="_cbToggle()" title="닫기" aria-label="닫기">✕</button></div>'+
     '<div class="cb-body" id="cb-body"></div>'+
-    '<div class="cb-foot"><input class="cb-in" id="cb-in" placeholder="궁금한 내용을 입력하세요" onkeydown="if(event.key===\'Enter\')_cbSend()"><button class="cb-send" onclick="_cbSend()"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg></button></div>';
+    '<div class="cb-foot"><input class="cb-in" id="cb-in" placeholder="궁금한 내용을 입력하세요" onkeydown="if(event.key===\'Enter\'&&!event.isComposing)_cbSend()"><button class="cb-send" onclick="_cbSend()"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg></button></div>';
   document.body.appendChild(win);
   // 바깥(캘린더/모달 등) 클릭 시 자동 닫힘 — 창/FAB 내부 클릭은 유지
   document.addEventListener('click',function(e){
@@ -34042,6 +34120,10 @@ async function _cbLoadRules(){
   return _cb.rules;
 }
 const _CB_FILLER=['관련','해서','해줘','해주','사용','방법','알려','알려줘','알려주','궁금','며칠','몇일','주세요','주나요','얼마나','어떻게','언제','뭐야','뭔가','무엇','우리','회사','규정','문의','질문','대해','대한','있나','있나요','인가요','인지','하는','해야','어때','그리고','하면','되나','지급','금액','내역'];
+// [260806 운영자 「뭐든 물어봐도 대답」] 규정 카드를 내놓을 최소 점수. 미만이면 규정 검색은 **답을 내지 않고** 후보만 AI에 넘긴다.
+//   4로 잡은 근거(_cbRulesSearch 배점 실측): 제목 부분일치 1개 = 4 · 본문 토큰 2개 = 1.5×2 + hit보너스 3 = 6 → 진짜 규정 질문은 통과
+//   («경조 휴가는 며칠?» 14 · «연차는 어떻게 생겨?» 5.5), 본문에 단어 하나만 스친 질문은 탈락(«여수 맛집 추천해줘» 1.5).
+const _CB_RULE_MIN=4;
 const _CB_SYN={'부모님':'부모','아버지':'부모','어머니':'부모','돌아가':'사망','별세':'사망','장례':'사망 경조','상을당':'사망','결혼식':'결혼','월급':'급여','봉급':'급여','연봉':'급여','휴무':'휴가','쉬는날':'휴가','퇴사':'퇴직','그만두':'퇴직','빌리':'대관','대여':'대관','임신':'출산','야근':'연장근무 보상휴가','출장가':'출장','출장비':'출장 여비','교통비':'여비 출장','숙박비':'여비 출장','식비':'여비 출장'};
 function _cbTokens(q){
   let s=String(q||'');
@@ -34110,21 +34192,26 @@ function _cbShowRule(r){
   });
   _cbLog('규정',(r['조항']||'')+' '+(r['제목']||''),String(r['본문']).slice(0,80),(r['규정명']||'')+' '+(r['조항']||''));
 }
+// 약한 규정 후보를 AI에 넘길 때의 참고 요약 — 「관련 있으면 쓰고 아니면 무시하라」. 히트 0이면 빈 문자열(동봉 안 함).
+//   왜 버리지 않고 넘기나: 문턱 미달이어도 정답 조항이 섞여 있을 수 있다 → 규정 카드로 **단정**하지만 않을 뿐 정보는 손실 0.
+//   길이 = 3건×200자 ≈ 750자 (_yeulAiAsk의 ctx 상한 1200자 안). 조항 본문은 공개 레포 커밋에 실리는 값이 아니다(질문·ctx는 payload로만 이동).
+function _cbRuleCtx(hits){
+  if(!hits||!hits.length)return '';
+  return '아래는 사내 규정 검색이 뽑은 참고 후보인데, 질문과 맞는지는 확실하지 않다. 관련 있을 때만 인용하고 아니면 무시하고 답한다.\n'
+    +hits.slice(0,3).map(function(h){
+      return '· '+(h.r['규정명']||'')+' '+(h.r['조항']||'')+' '+(h.r['제목']||'')+' — '+String(h.r['본문']||'').replace(/\s+/g,' ').slice(0,200);
+    }).join('\n');
+}
 function _cbRulesAnswer(q,qn){
   const done=function(rules){
     const res=_cbRulesSearch(rules,q);
-    if(res.clarify){
-      _cbBot('음, 조금만 더 구체적으로 물어봐 주실래요? 🙂\n키워드가 있으면 바로 찾아드려요. 예를 들면 —');
-      _cbChips([
-        {label:'경조 휴가는 며칠?',fn:function(){_cbAsk('경조 휴가는 며칠?');}},
-        {label:'연차는 어떻게 생겨?',fn:function(){_cbAsk('연차는 어떻게 생겨?');}},
-        {label:'출장비 지급 기준',fn:function(){_cbAsk('출장비 지급 기준');}},
-        {label:'처음으로',fn:_cbHome,ghost:true}
-      ]);
-      _cbLog('자유입력',q,'','모호질문');
-      return;
-    }
-    if(!res.hits.length){_cbAiAnswer(q);return;}   // [260803 운영자] 규정·FAQ 미스 = 「미응답」 데드엔드 폐지 → 예울이 AI(전사 자유질문·_yeulAiAsk 공용 브레인)
+    // [260806 운영자 「뭐든 물어봐도 대답할 수 있게」] 규정 검색이 답을 **가로막지 않는다** — 데드엔드 2곳을 예울이 AI로 흘린다.
+    //   ① clarify(토큰 0 = 조사·필러만 남은 짧은 질문) — 구판은 「구체적으로 물어봐 주실래요?」로 끝냈다. 되묻기 자체가
+    //      대화의 끝이라 자유질문이 AI에 **도달조차 못 했다**(운영자 체감 「아예 모델이 배선 안 된 듯」의 실체 ①).
+    //   ② 약한 히트(< _CB_RULE_MIN) — 구판은 s>0이기만 하면 규정 카드를 뱉었다. 본문에 단어 하나만 스쳐도(s=1.5)
+    //      「여수 맛집」 같은 질문에 사무처리규정 조항이 나왔다(실체 ②). 이제 후보는 ctx로 동봉해 AI가 판단한다.
+    //   ⚠ 문턱 이상(진짜 규정 질문)은 **종전 그대로 규칙 엔진 즉답** — 40초 AI 왕복으로 후퇴시키지 않는다.
+    if(res.clarify||!res.hits.length||res.hits[0].s<_CB_RULE_MIN){_cbAiAnswer(q,_cbRuleCtx(res.hits));return;}
     const best=res.hits[0];
     // [세분화 260611] 다항목 조항이면 되묻기 — 항목(자식 청크) 칩 제시 후 단정 답변
     {
@@ -34161,14 +34248,18 @@ function _cbRulesAnswer(q,qn){
 }
 // [260803 운영자] 규칙 기반 미스 → 예울이 AI 폴백 — 루시봇 컨셉(persona/yeuli.md 카드 + 깃 Actions claude · 공용 _yeulAiAsk).
 //   결과·실패는 챗봇로그에 그대로 적재(기존 '미응답' 자리를 'AI답변'/'AI실패'가 대체).
-function _cbAiAnswer(q){
+// ctx = 약한 규정 후보 요약(_cbRuleCtx) — 없으면 빈 문자열. 모델·effort는 여기서 안 정한다(SSOT = nb-blog.yml 라우팅 2줄),
+//   앱은 「어려운 질문인가」 판정(_yeulAiDeep)만 payload.deep으로 실어 보낸다.
+function _cbAiAnswer(q,ctx){
   const deepQ=_yeulAiDeep(q);   // [260803 운영자 v3] 복잡 질문 = opus 딥 — 「기다려 달라」를 츤 결로 먼저
   _cbBot(deepQ?'음, 귀찮은 걸 물어보시네요? 규정·FAQ에도 없는 거라 직접 생각해봐야 해요 — 조금 걸리니까 기다리세요.':'규정·FAQ엔 없네요. …하는 수 없죠, 제가 생각해서 알려드릴게요. 잠깐이면 돼요.');
   const b=document.getElementById('cb-body');
   const w=document.createElement('div');w.className='cb-msg bot';w.innerHTML=_ldHtml(12)+'…생각 중이에요.';
   if(b){b.appendChild(w);_cbScroll();}
-  _yeulAiAsk(q,'',function(sec){w.innerHTML=_ldHtml(12)+'…생각 중이에요. '+sec+'초';})
-    .then(function(t){w.innerHTML=escapeHtml(String(t)).slice(0,4000);_cbScroll();_cbLog('AI답변',q,String(t).slice(0,80),'claude·yeulchat');})
+  _yeulAiAsk(q,ctx||'',function(sec){w.innerHTML=_ldHtml(12)+'…생각 중이에요. '+sec+'초';})
+    // [260806] 로그 매칭칸에 **어느 모델이 답했는가**를 남긴다 — 챗봇로그 시트만 보고 라우팅 실동작을 확인할 수 있게
+    //   (운영자가 「모델이 배선 안 된 듯」이라고 본 이유 = 지금까지 어디에도 모델명이 안 남았다). 표기는 nb-blog.yml 라우팅과 같은 값.
+    .then(function(t){w.innerHTML=escapeHtml(String(t)).slice(0,4000);_cbScroll();_cbLog('AI답변',q,String(t).slice(0,80),'claude·'+(deepQ?'opus5·medium':'sonnet5·low'));})
     .catch(function(e){w.innerHTML='죄송해요, 지금은 답을 못 가져왔어요 🙏 '+escapeHtml(String(e&&e.message||e).slice(0,110));_cbScroll();_cbLog('자유입력',q,'','AI실패');})
     .then(function(){_cbChips([{label:'다른 질문',fn:function(){_cbPickCat('회사');}},{label:'처음으로',fn:_cbHome,ghost:true}]);});
 }
