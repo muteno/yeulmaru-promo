@@ -28378,6 +28378,23 @@ function _bkCount(rec,win,g){
   }
   return c;
 }
+// 그 창에서 **g가 아닌** 장르 관람 횟수 — 「클래식만 본 사람」(전용)의 판정축.
+//   ⚠ 장르 미상(`미상`) 키도 「다른 것을 봤다」로 센다 — 무엇인지 모르는 것과 안 본 것은 다르다.
+//     그래서 「그 장르만」은 **모르는 관람이 하나라도 있으면 거짓**이다(넓게 잡아 명단에 넣는 쪽보다 안전).
+function _bkCountOther(rec,win,g){ return g?(_bkCount(rec,win,null)-_bkCount(rec,win,g)):0; }
+// 임의 구간 창 — 「기타(달력)」이 주는 두 연월(YYYY-MM)에서 만든다. `_bkWinN`과 **같은 모양**을 돌려준다.
+//   ⚠ 데이터가 덮는 범위 밖으로는 넓히지 않는다(`_bkWinN`과 같은 규약 — 없는 기간을 있는 척하지 않음).
+function _bkWinRange(fromYm,toYm){
+  var st=_bkState||{};
+  var lo=parseInt(String(fromYm||'').replace(/\D/g,'').slice(0,6),10),hi=parseInt(String(toYm||'').replace(/\D/g,'').slice(0,6),10);
+  if(!lo||!hi)return null;
+  if(lo>hi){var t=lo;lo=hi;hi=t;}
+  if(st.lo&&lo<st.lo)lo=st.lo;
+  if(st.hi&&hi>st.hi)hi=st.hi;
+  if(st.ym)return {lo:lo,hi:hi,unit:'m',from:lo,to:hi,label:_bkYm(lo)+'~'+_bkYm(hi)};
+  var a=Math.floor(lo/100),b=Math.floor(hi/100);
+  return {lo:a,hi:b,unit:'y',from:lo,to:hi,approx:true,label:a+'~'+b+'년(연 단위 근사)'};
+}
 // 「이 질문은 예매집계가 있어야 답이 나온다」의 단일 판정(SSOT) — _bkAnswer가 답할 질문인지, 그리고
 //   채팅(_memAiSend)이 **먼저 적재를 기다릴지**를 같은 한 벌로 정한다. 두 곳에 따로 적으면
 //   「기다리기는 했는데 답은 다른 경로로 새는」(또는 그 반대) 어긋남이 난다.
@@ -28390,16 +28407,28 @@ function _bkAnswer(q){
   //   정상 경로가 아니다 — 구판은 이 자리가 정상 경로였고, 그래서 같은 시트인데 한쪽 화면만 답했다.
   if(!_bkState){ _bkWarm(); return '예매 이력을 아직 안 불러왔어요 — 잠시 뒤 다시 물어봐 주세요.'; }
   if(!_bkState.n)return '예매 이력이 비어 있어요'+(_bkState.err?' ('+_memEsc(_bkState.err)+')':'')+' — 운영_예매집계 시트를 확인해 주세요.';
-  var win=_bkWin(q),g=_bkGenre(q),by=_bkState.by;
-  var m=q.match(/(\d+)\s*회\s*이상/)||q.match(/(\d+)\s*번\s*이상/);
-  var thr=m?parseInt(m[1],10):(/재구매|단골|여러\s*번|2회|두\s*번/.test(q)?2:1);
-  var hit=0,tix=0;
-  for(var k in by){var c=_bkCount(by[k],win,g);if(c>=thr){hit++;tix+=by[k].tix;}}
-  var span=win?win.label:_bkSpanAll();
-  var what=(g?g+' ':'')+'공연';
+  // [260813] 조건 해석 = **고객 분류 폼과 같은 한 벌**(`_segParseLocal`)로 올렸다 — 구판은 여기서 기간·장르·횟수를
+  //   따로 읽어 「그 장르만」·거주지를 못 봤고, 그래서 채팅과 명단이 서로 다른 조건을 뜻할 수 있었다.
+  var pl=(typeof _segParseLocal==='function')?_segParseLocal(q):null;
+  var ask;
+  if(pl)ask=pl.q;
+  else{                           // 축이 하나만 잡힌 짧은 질문(「단골 몇 명이야?」) — 잡힌 것만 쓰고 나머지는 전 기간·전 장르
+    var w0=_bkWin(q),tm=q.match(/(\d+)\s*회\s*이상/)||q.match(/(\d+)\s*번\s*이상/);
+    ask=_segQNorm({span:(w0&&w0.n)?'n':'all',n:w0&&w0.n,u:w0&&w0.u,g:_bkGenre(q),
+      thr:tm?tm[1]:(/재구매|단골|여러\s*번|2회|두\s*번/.test(q)?2:1)});
+    if(w0&&!w0.n){ask.span='range';ask.from=String(w0.lo).length===4?(w0.lo+'01'):String(w0.lo);ask.to=String(w0.hi).length===4?(w0.hi+'12'):String(w0.hi);}
+  }
+  var win=_segQWin(ask),g=ask.g,by=_bkState.by,thr=ask.thr;
+  var hit=0,tix=0,byIdx=(ask.region?_segMemIdx():null);
+  for(var k in by){
+    var c=_bkCount(by[k],win,g);if(c<thr)continue;
+    if(ask.only&&_bkCountOther(by[k],win,g)>0)continue;
+    if(byIdx){var mm=byIdx[k];if(!mm||_segRegionOf(mm)!==ask.region)continue;}
+    hit++;tix+=by[k].tix;
+  }
   var est=Math.round(hit*_BK_SCALE);
-  _bkAsk={thr:thr,g:g,win:win};   // 「명단 보기」가 이 조건을 그대로 이어받는다(질의를 두 번 해석하지 않는다)
-  return span+' '+what+'을 '+thr+'회 이상 관람한 회원은 <b>'+_memAiFmt(hit)+'명</b>이에요'
+  _bkAsk=ask;                     // 「명단 보기」가 이 조건을 그대로 이어받는다(질의를 두 번 해석하지 않는다)
+  return _segQLabel(ask)+' 관람한 회원은 <b>'+_memAiFmt(hit)+'명</b>이에요'
     +' · 이분들 누적 '+_memAiFmt(tix)+'매'
     +(hit&&userRole==='admin'?'<br><button type="button" class="btn btn--primary btn--sm" style="margin-top:9px" onclick="_segFromAsk()">명단 보기</button>':'')
     +'<br><span style="font-size:11px;color:var(--dim)">※ 예매기록에 회원이 확정 연결된 '+_memAiFmt(_bkState.n)+'명 기준이라 <b>하한</b>이에요 '
@@ -28509,17 +28538,57 @@ function _segView(){
   }
   return out;
 }
+// ===== 조건 한 벌(SSOT · 260813) =====
+// 폼 · 자연어 파서 · 예울이 채팅이 **같은 객체**를 주고받는다 — 조건을 각자 해석하면 같은 질문에 답이 둘이 된다.
+//   {span:'n'|'all'|'range', n, u:'년'|'개월', from:'YYYY-MM', to:'YYYY-MM', g, only, region, thr}
+//   · only   = 「그 장르**만**」(다른 장르 0회) · g가 없으면 뜻이 없다
+//   · region = 회원 시트의 시 이름(`_memCityName` 산출값) — 데이터에 실존하는 값만(창작 지명 0)
+function _segQNorm(q){
+  q=q||{};
+  var out={span:(q.span==='all'||q.span==='range')?q.span:'n',
+    n:Math.max(1,Math.min(99,parseInt(q.n,10)||3)),
+    u:(q.u==='개월')?'개월':'년',
+    from:String(q.from||''),to:String(q.to||''),
+    g:(q.g&&_BK_GENRES.indexOf(q.g)>=0)?q.g:null,
+    only:!!q.only,region:q.region?String(q.region):null,
+    thr:Math.max(1,Math.min(99,parseInt(q.thr,10)||1))};
+  if(!out.g)out.only=false;                                    // 장르가 없으면 「~만」은 말이 안 된다
+  return out;
+}
+function _segQWin(q){ return q.span==='all'?null:(q.span==='range'?_bkWinRange(q.from,q.to):_bkWinN(q.n,q.u)); }
+// 회원 시트에 실존하는 시 목록 — 폼 select와 자연어 파서가 같은 목록을 본다(둘이 갈리면 폼엔 있는데 말로는 안 되는 지역이 생긴다)
+function _segCities(){
+  var idx=(typeof _memAiIdx==='function')?_memAiIdx():null;
+  return idx?Object.keys(idx.byCity).sort(function(a,b){return idx.byCity[b]-idx.byCity[a];}):[];
+}
+function _segRegionOf(m){ return _memCityName(String(m['주소1']||'').trim(),String(m['주소2']||'').trim()); }
+
 // 폼 인라인 문법 = 회원 조회 필터줄(openMemberLookup) **계승** — 새 클래스·새 색 0(전부 기존 토큰).
 var _SEG_IN='padding:9px 12px;border:1px solid var(--border2);border-radius:var(--r-btn);font-size:13px;font-family:inherit;background:var(--surface-solid);color:var(--text)';
 function _segViewHtml(){
   var gopt='<option value="">장르 전체</option>'+_BK_GENRES.map(function(g){return '<option value="'+_memEsc(g)+'">'+_memEsc(g)+'</option>';}).join('');
+  var ropt='<option value="">거주지 전체</option>'+_segCities().map(function(c){return '<option value="'+_memEsc(c)+'">'+_memEsc(c)+'</option>';}).join('');
   return _pcCard('누가 봤는지 뽑아요','예매기록의 휴대폰을 회원 정보와 맞춰 이름까지 되찾아요',
-      '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding-top:11px">'
-    + '<select id="seg-span" onchange="_segSpanToggle()" style="'+_SEG_IN+';width:auto"><option value="n">최근</option><option value="all">전 기간</option></select>'
+      // ① 자연어 한 줄 — **폼을 채우는 입력**이다(답을 대신 만들지 않는다).
+      //   로컬 해석이 0초로 먼저 붙고, 못 읽은 것만 예울이(claude-opus-5·medium)가 조건으로 번역한다.
+      '<div style="display:flex;gap:8px;align-items:center;padding-top:11px">'
+    + '<input id="seg-nl" maxlength="120" placeholder="말로 물어보세요 — 예: 3년간 클래식만 본 여수 사람 3회 이상" style="'+_SEG_IN+';flex:1;min-width:0" onkeydown="if(event.key===\'Enter\'&&!event.isComposing)_segNlGo()">'
+    + '<button type="button" id="seg-nl-btn" class="btn btn--ghost btn--sm" style="flex:none" onclick="_segNlGo()">조건 만들기</button>'
+    + '</div>'
+    + '<div id="seg-nl-note" style="font-size:11.5px;color:var(--dim);padding:6px 2px 0"></div>'
+      // ② 폼 = 위가 만든 조건이 **눈에 보이는 자리**. 틀렸으면 여기서 손으로 고치고 조회한다.
+    + '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding-top:11px">'
+    + '<select id="seg-span" onchange="_segSpanToggle()" style="'+_SEG_IN+';width:auto">'
+    +   '<option value="n">최근</option><option value="all">전 기간</option><option value="range">기간 지정</option></select>'
     + '<input id="seg-num" type="number" min="1" max="99" value="3" style="'+_SEG_IN+';width:62px;text-align:center">'
     + '<select id="seg-unit" style="'+_SEG_IN+';width:auto"><option value="년">년</option><option value="개월">개월</option></select>'
+    + '<input id="seg-from" type="month" style="'+_SEG_IN+';width:auto;display:none">'
+    + '<span id="seg-tilde" style="font-size:12.5px;color:var(--neutral-text);display:none">~</span>'
+    + '<input id="seg-to" type="month" style="'+_SEG_IN+';width:auto;display:none">'
     + '<span style="font-size:12.5px;color:var(--neutral-text)">이내에</span>'
-    + '<select id="seg-genre" style="'+_SEG_IN+';width:auto;max-width:150px">'+gopt+'</select>'
+    + '<select id="seg-region" style="'+_SEG_IN+';width:auto;max-width:150px">'+ropt+'</select>'
+    + '<select id="seg-genre" onchange="_segOnlyToggle()" style="'+_SEG_IN+';width:auto;max-width:150px">'+gopt+'</select>'
+    + '<label id="seg-only-wrap" style="display:flex;align-items:center;gap:5px;font-size:12.5px;color:var(--neutral-text);cursor:pointer;opacity:.45" title="그 장르 외에는 한 번도 안 본 사람만"><input type="checkbox" id="seg-only" disabled style="accent-color:var(--accent)">그 장르만</label>'
     + '<input id="seg-min" type="number" min="1" max="99" value="5" style="'+_SEG_IN+';width:62px;text-align:center">'
     + '<span style="font-size:12.5px;color:var(--neutral-text)">회 이상 관람</span>'
     + '<button type="button" class="btn btn--primary btn--sm" onclick="_segRun()">조회</button>'
@@ -28527,8 +28596,43 @@ function _segViewHtml(){
     + '<div id="seg-result"></div>';
 }
 function _segSpanToggle(){
-  var sp=document.getElementById('seg-span'),all=!!sp&&sp.value==='all';
-  ['seg-num','seg-unit'].forEach(function(id){var e=document.getElementById(id);if(e){e.disabled=all;e.style.opacity=all?'.45':'';}});
+  var sp=document.getElementById('seg-span'),v=sp?sp.value:'n';
+  ['seg-num','seg-unit'].forEach(function(id){var e=document.getElementById(id);if(e){e.disabled=(v!=='n');e.style.opacity=(v==='n')?'':'.45';}});
+  ['seg-from','seg-tilde','seg-to'].forEach(function(id){var e=document.getElementById(id);if(e)e.style.display=(v==='range')?'':'none';});
+  if(v==='range'){                                   // 빈 칸으로 조회하면 창이 null이 된다 — 데이터가 덮는 범위로 채워 둔다
+    var st=_bkState||{},f=document.getElementById('seg-from'),t=document.getElementById('seg-to');
+    var fmt=function(v6){return Math.floor(v6/100)+'-'+String(v6%100).padStart(2,'0');};
+    if(f&&!f.value&&st.lo)f.value=fmt(st.lo);
+    if(t&&!t.value&&st.hi)t.value=fmt(st.hi);
+  }
+}
+// 「그 장르만」은 장르를 골랐을 때만 쓸 수 있다 — 전체 장르에 「~만」은 뜻이 없다
+function _segOnlyToggle(){
+  var g=(document.getElementById('seg-genre')||{}).value,cb=document.getElementById('seg-only'),wr=document.getElementById('seg-only-wrap');
+  if(!cb||!wr)return;
+  cb.disabled=!g; wr.style.opacity=g?'':'.45';
+  if(!g)cb.checked=false;
+}
+function _segQFromForm(){
+  var gv=(document.getElementById('seg-genre')||{}).value||null;
+  return _segQNorm({span:(document.getElementById('seg-span')||{}).value,
+    n:(document.getElementById('seg-num')||{}).value,u:(document.getElementById('seg-unit')||{}).value,
+    from:(document.getElementById('seg-from')||{}).value,to:(document.getElementById('seg-to')||{}).value,
+    g:gv,only:!!(document.getElementById('seg-only')||{}).checked,
+    region:(document.getElementById('seg-region')||{}).value||null,
+    thr:(document.getElementById('seg-min')||{}).value});
+}
+function _segQToForm(q){
+  q=_segQNorm(q);
+  var set=function(id,v){var e=document.getElementById(id);if(e)e.value=v;};
+  set('seg-span',q.span);set('seg-num',q.n);set('seg-unit',q.u);
+  if(q.from)set('seg-from',q.from);if(q.to)set('seg-to',q.to);
+  set('seg-genre',q.g||'');set('seg-min',q.thr);
+  var rs=document.getElementById('seg-region');
+  if(rs){var ok=false;for(var i=0;i<rs.options.length;i++)if(rs.options[i].value===(q.region||'')){ok=true;break;}rs.value=ok?(q.region||''):'';}
+  _segSpanToggle();_segOnlyToggle();
+  var cb=document.getElementById('seg-only');if(cb&&!cb.disabled)cb.checked=!!q.only;
+  return q;
 }
 async function _segRun(){
   if(userRole!=='admin'){showToast('고객 분류는 관리자 전용이에요','error');return;}
@@ -28537,30 +28641,44 @@ async function _segRun(){
   var ep=_memEpoch;
   try{ if(!_bkState)await _bkLoad(false); if(!_memState)await _memLoad(false); }catch(e){ console.warn('[seg]',e); }
   if(ep!==_memEpoch)return;                         // 로딩 중 로그아웃·유휴잠금 = PII를 그리지 않는다(_bkLoad와 같은 규약)
-  host=document.getElementById('seg-result');if(!host)return;
+  host=document.getElementById('seg-result');host=host||document.getElementById('seg-result');if(!host)return;
   if(!_bkState||!_bkState.n){host.innerHTML='<div class="u-empty">예매 집계를 못 불러왔어요'+(_bkState&&_bkState.err?' ('+_memEsc(_bkState.err)+')':'')+'</div>';return;}
   if(!_segMemIdx()){host.innerHTML='<div class="u-empty">회원 시트를 못 불러왔어요 — 이름을 붙이려면 회원 정보가 있어야 해요</div>';return;}
-  var sp=document.getElementById('seg-span'),all=!!sp&&sp.value==='all';
-  var n=parseInt((document.getElementById('seg-num')||{}).value,10)||3;
-  var u=(document.getElementById('seg-unit')||{}).value||'년';
-  var g=(document.getElementById('seg-genre')||{}).value||null;
-  var thr=Math.max(1,parseInt((document.getElementById('seg-min')||{}).value,10)||1);
-  _segCompute(all?null:_bkWinN(n,u),g,thr);
+  _segFillRegions();                                // 회원 시트를 이제 막 받았을 수 있다 — 거주지 목록을 그때 채운다
+  _segCompute(_segQFromForm());
   _segRender();
 }
+// 거주지 목록은 회원 시트가 와야 만들 수 있다(탭을 그릴 땐 아직 없을 수 있음) — 비어 있을 때만 채운다
+function _segFillRegions(){
+  var rs=document.getElementById('seg-region');if(!rs||rs.options.length>1)return;
+  var cur=rs.value,cs=_segCities();if(!cs.length)return;
+  rs.innerHTML='<option value="">거주지 전체</option>'+cs.map(function(c){return '<option value="'+_memEsc(c)+'">'+_memEsc(c)+'</option>';}).join('');
+  rs.value=cur;
+}
 // 조건 → 명단. 이름 역추출은 회원키(휴대폰) 한 번의 색인 조회뿐 — 퍼지 매칭은 반입 때 이미 끝났다.
-function _segCompute(win,g,thr){
-  var by=_bkState.by,idx=_segMemIdx(),out=[],nomem=0;
+//   [260813] 인자가 `(win,g,thr)` 셋에서 **조건 객체 하나**로 바뀌었다 — 축이 늘 때마다 인자를 늘리면
+//   부르는 자리(폼·자연어·예울이)가 서로 다른 개수를 넘기기 시작한다.
+function _segCompute(q){
+  q=_segQNorm(q);
+  var win=_segQWin(q),by=_bkState.by,idx=_segMemIdx(),out=[],nomem=0,noreg=0,notonly=0;
   for(var k in by){
-    var rec=by[k],c=_bkCount(rec,win,g);
-    if(c<thr)continue;
+    var rec=by[k],c=_bkCount(rec,win,q.g);
+    if(c<q.thr)continue;
+    if(q.only&&_bkCountOther(rec,win,q.g)>0){notonly++;continue;}   // 「그 장르만」 = 그 창에서 다른 장르 0회
     var m=idx[k];
     if(!m){nomem++;continue;}                       // 회원키가 회원 시트에 없다 = 이름을 못 붙인다(지어내지 않고 세어서 밝힌다)
+    if(q.region&&_segRegionOf(m)!==q.region){noreg++;continue;}
     out.push({key:k,c:c,rec:rec,m:m});
   }
   out.sort(function(a,b){return b.c-a.c||b.rec.tix-a.rec.tix;});
   // 새 조회 = 새 표. 앞 조회에 걸어 둔 열 필터·정렬을 물려주지 않는다(딴 조건에 남은 필터 = 조용히 빠진 사람들)
-  _segLast={rows:out,win:win,g:g,thr:thr,nomem:nomem,f:{},sort:{by:'',dir:'asc'},mask:true,open:{}};
+  _segLast={rows:out,q:q,win:win,g:q.g,thr:q.thr,nomem:nomem,noreg:noreg,notonly:notonly,f:{},sort:{by:'',dir:'asc'},mask:true,open:{}};
+}
+// 조건 → 사람이 읽는 한 줄. 결과 머리줄과 예울이 답변이 **같은 문장**을 쓴다.
+function _segQLabel(q){
+  q=_segQNorm(q);var win=_segQWin(q);
+  return (win?win.label:_bkSpanAll())+' · '+(q.region?q.region+' 거주 · ':'')
+    +(q.g?(q.g+(q.only?'만 ':' ')):'')+'공연 '+q.thr+'회 이상';
 }
 // 표 머리 = 2단(운영자 260812 「관람을 2행으로 인덱싱행을 구성」). 1행 높이는 여기 한 곳에서만 정한다 —
 //   2단 sticky의 아랫단이 `top`으로 그 값을 그대로 쓰기 때문에 갈리면 머리 두 줄이 겹치거나 벌어진다.
@@ -28659,7 +28777,7 @@ function _segRender(){
   var host=document.getElementById('seg-result');if(!host||!_segLast)return;
   var L=_segLast,view=_segView(),LIM=300,shown=view.slice(0,LIM);
   L._view=view;                                    // 칸 클릭(번호 열기·이력 펼치기)이 **화면과 같은 배열**을 본다
-  var cond=(L.win?L.win.label:_bkSpanAll())+' · '+(L.g?L.g+' ':'')+'공연 '+L.thr+'회 이상';
+  var cond=_segQLabel(L.q);                        // 조건 문장 = 한 벌(`_segQLabel`) — 머리줄·예울이 답변이 같은 말을 한다
   if(!L.rows.length){host.innerHTML=_pcCard('결과',_memEsc(cond),'<div class="u-empty">조건에 맞는 사람이 없어요</div>');return;}
   var nf=Object.keys(L.f||{}).length,narrowed=nf||(L.sort&&L.sort.by);
   var td='padding:6px 10px;font-size:12px;border-top:1px solid var(--border);white-space:nowrap';
@@ -28703,6 +28821,8 @@ function _segRender(){
     +(view.length>LIM?'화면엔 상위 '+LIM+'명만 보여요 — CSV로 받으면 '+_memAiFmt(view.length)+'명 전부 나와요 · ':'')
     +'예매기록에 회원이 확정 연결된 '+_memAiFmt(_bkState.n)+'명 안에서 고른 결과라 <b>하한</b>이에요 — 원본 휴대폰이 가려진 주문은 이름을 못 붙여 명단에서 빠져요'
     +(L.nomem?' · 회원 시트에서 못 찾은 회원키 '+_memAiFmt(L.nomem)+'건 제외':'')
+    +(L.notonly?' · 「'+_memEsc(L.q.g)+'만」에 걸려 빠진 사람 '+_memAiFmt(L.notonly)+'명(다른 장르도 봄)':'')
+    +(L.noreg?' · 거주지가 「'+_memEsc(L.q.region)+'」가 아니라 빠진 사람 '+_memAiFmt(L.noreg)+'명':'')
     +'<br>금액은 <b>만 원 단위 올림</b>(만 원 미만 절상) · 지역은 시도 줄임말 · 휴대폰은 가운데 가림 — <b>CSV는 셋 다 원 표기</b>예요(번호는 위 체크로 고름)'
     +(L.win&&L.win.approx?'<br>⚠ 예매집계가 아직 연 단위라 기간이 <b>근사</b>예요 — <code>node docs/260804_booking_agg.mjs</code>를 다시 돌리면 월 단위로 정확해져요':'')
     +'</div>';
@@ -28730,20 +28850,105 @@ function _segCsv(){
   showToast(_memAiFmt(rows.length)+'명 CSV로 받았어요'+(mask?' (휴대폰 가림)':' (휴대폰 원본)'),'success');
 }
 // 예울이 답변의 「명단 보기」 → 같은 조건 그대로 이 탭으로. 질의를 두 번 해석하지 않는다(해석이 갈리면 답이 둘이 된다).
+//   [260813] `_bkAsk`가 이제 **조건 객체 한 벌**(`_segQNorm` 산출물)이라 폼 채우기·계산이 같은 것을 본다.
 function _segFromAsk(){
   if(userRole!=='admin'||!_bkAsk)return;
-  var a=_bkAsk;
   openPromoCheck();_pcTab('seg');
-  var sp=document.getElementById('seg-span'),nu=document.getElementById('seg-num'),un=document.getElementById('seg-unit'),
-      ge=document.getElementById('seg-genre'),mi=document.getElementById('seg-min');
-  if(sp)sp.value=(a.win&&a.win.n)?'n':'all';
-  if(nu&&a.win&&a.win.n)nu.value=a.win.n;
-  if(un&&a.win&&a.win.u)un.value=a.win.u;
-  if(ge)ge.value=a.g||'';
-  if(mi)mi.value=a.thr;
-  _segSpanToggle();
-  _segCompute(a.win,a.g,a.thr);   // 폼이 아니라 **질문이 만든 창** 그대로 계산 — 머리줄 문구가 실제 조건을 말한다
+  _segFillRegions();
+  var q=_segQToForm(_bkAsk);
+  _segCompute(q);                 // 폼이 아니라 **질문이 만든 조건** 그대로 계산 — 머리줄 문구가 실제 조건을 말한다
   _segRender();
+}
+
+// ===== 자연어 한 줄 → 조건 (260813 운영자 「아예 llm으로 · oauth있으니까 배선해봐」) =====
+// 설계 한 줄 = **LLM은 번역기지 계산기가 아니다.** 질문 문장만 밖으로 나가고(조건 JSON을 받아온다),
+//   명단·숫자는 지금처럼 브라우저 안에서 센다. 그래서 ① 이름·전화가 담긴 표는 절대 안 나가고
+//   ② LLM이 숫자를 안 세니 환각이 원천적으로 0이며 ③ 해석 결과가 폼에 **보여서** 틀리면 손으로 고칠 수 있다.
+// 경로 = 이미 배포된 예울이 배선 그대로(`/api/blog/dispatch` → nb-blog.yml `segparse` 분기 → drafts 폴링).
+//   모델 = claude-opus-5 · --effort medium(운영자 260813 지시 · 워크플로가 SSOT).
+// ⚠ 30초~2분 걸린다(Actions 큐) — 그래서 **로컬 해석이 먼저**고, 로컬이 읽은 질문은 LLM을 아예 안 부른다.
+// ⚠ 이 경로의 산출물은 **공개 레포에 커밋**된다(drafts/*.json) — 질문 문장도 함께 남는다.
+//   그래서 개인을 특정하는 문자열(휴대폰 번호꼴)이 섞이면 **보내지 않는다**. 조건 질의에 번호는 필요 없다.
+function _segAiSafe(q){ return !/01[016-9][-\s.]?\d{3,4}[-\s.]?\d{4}|\d{10,}/.test(String(q||'')); }
+// 로컬 해석 — 이미 있는 해석기(`_bkWin`·`_bkGenre`·`_memAiRegions`)를 모아 쓴다. 새 파서를 또 만들지 않는다.
+//   못 읽으면 null → 그때만 LLM. 「무엇을 읽었나」를 같이 돌려줘 화면이 근거를 말할 수 있게 한다.
+function _segParseLocal(s){
+  var q=String(s||'').trim();if(!q)return null;
+  var got=[],out={span:'all',thr:1};
+  var win=_bkWin(q);
+  if(win){ if(win.n){out.span='n';out.n=win.n;out.u=win.u;} else {out.span='range';out.from=String(win.lo)+(String(win.lo).length===4?'01':'');out.to=String(win.hi)+(String(win.hi).length===4?'12':'');}
+    got.push('기간 '+win.label); }
+  var g=_bkGenre(q);
+  if(g){ out.g=g;got.push('장르 '+g);
+    // 「클래식만」·「클래식만 본」 = 전용. 장르 뒤에 바로 붙는 「만」이거나, 관람 동사 앞의 「만」.
+    if(q.indexOf(g+'만')>=0||/만\s*(예매|관람|보|본|봤|보신|구매|산)/.test(q)){out.only=true;got.push('그 장르만');}
+  }
+  var idx=(typeof _memAiIdx==='function')?_memAiIdx():null;
+  if(idx){ var rs=_memAiRegions(q,idx).filter(function(r){return r.kind==='city';});
+    if(rs.length===1){out.region=_memCityName('',rs[0].name)||rs[0].name;
+      if(_segCities().indexOf(rs[0].name)>=0)out.region=rs[0].name;
+      got.push('거주지 '+out.region);} }
+  var m=q.match(/(\d+)\s*회\s*이상/)||q.match(/(\d+)\s*번\s*이상/);
+  if(m){out.thr=parseInt(m[1],10);got.push(out.thr+'회 이상');}
+  else if(/재구매|단골|여러\s*번|두\s*번/.test(q)){out.thr=2;got.push('2회 이상');}
+  if(got.length<2)return null;                      // 하나만 읽혔으면 「읽었다」고 하기 어렵다 → LLM에 넘긴다
+  return {q:_segQNorm(out),why:got.join(' · ')};
+}
+// LLM 해석 — 질문 문장 + 고를 수 있는 값 목록(장르·거주지·데이터 범위)만 보낸다. 개인 데이터 0.
+async function _segParseAI(s,onTick){
+  var st=_bkState||{};
+  var ctx='장르 목록: '+_BK_GENRES.join(', ')
+    +'\n거주지 목록(이 중 하나만): '+_segCities().slice(0,60).join(', ')
+    +'\n데이터가 덮는 기간: '+(st.lo?_bkYm(st.lo)+'~'+_bkYm(st.hi):'미상');
+  var id='sp'+Date.now()+'r'+Math.floor(Math.random()*1e4);
+  var d0=await api('POST','/api/blog/dispatch',{payload:{segparse:1,id:id,q:String(s||'').slice(0,300),ctx:ctx}});
+  if(!d0||!d0.ok)throw new Error((d0&&d0.error)||'요청 실패');
+  var t0=Date.now();
+  while(Date.now()-t0<240000){
+    await new Promise(function(r){setTimeout(r,6000);});
+    if(onTick)try{onTick(Math.round((Date.now()-t0)/1000));}catch(_e){}
+    var d=null;
+    try{ d=await api('GET','/api/blog/draft?id='+encodeURIComponent(id)); }
+    catch(e){ var msg=String(e&&e.message||e);
+      if(msg.indexOf('404')===0||msg.indexOf('502')===0||msg.indexOf('429')===0||/network|fetch/i.test(msg))continue;
+      throw e; }
+    if(d&&d.ready&&d.draft){
+      if(d.draft.ok===false)throw new Error(d.draft.error||'해석 실패');
+      var raw=d.draft.cond||d.draft.text;
+      var obj=(raw&&typeof raw==='object')?raw:JSON.parse(String(raw||'').replace(/^[^{]*/,'').replace(/[^}]*$/,''));
+      return _segQNorm(obj);
+    }
+  }
+  throw new Error('시간 초과(4분) — Actions 큐가 밀렸을 수 있어요');
+}
+var _segNlBusy=false;
+function _segNlNote(h){var e=document.getElementById('seg-nl-note');if(e)e.innerHTML=h;}
+async function _segNlGo(){
+  if(userRole!=='admin'){showToast('고객 분류는 관리자 전용이에요','error');return;}
+  if(_segNlBusy)return;
+  var inp=document.getElementById('seg-nl'),s=inp?String(inp.value||'').trim():'';
+  if(!s){_segNlNote('');return;}
+  // 해석에도 회원·집계가 필요하다(거주지 목록·데이터 기간) — 조회와 같은 적재 레일을 먼저 탄다
+  try{ if(!_bkState)await _bkLoad(false); if(!_memState)await _memLoad(false); }catch(e){ console.warn('[seg nl]',e); }
+  _segFillRegions();
+  var loc=_segParseLocal(s);
+  if(loc){
+    _segQToForm(loc.q);
+    _segNlNote('읽은 조건 — <b style="color:var(--text)">'+_memEsc(_segQLabel(loc.q))+'</b> <span style="color:var(--muted)">(앱이 바로 읽음 · '+_memEsc(loc.why)+')</span>');
+    _segRun();return;
+  }
+  if(!_segAiSafe(s)){_segNlNote('<b style="color:var(--danger)">전화번호가 섞여 있어 예울이에게 안 보냈어요</b> — 이 경로는 질문이 공개 저장소에 남아요. 번호 없이 조건만 적어 주세요.');return;}
+  var btn=document.getElementById('seg-nl-btn');
+  _segNlBusy=true;if(btn)btn.disabled=true;
+  _segNlNote(_ldHtml(13)+' 예울이가 조건으로 옮기는 중 — 30초~2분 걸려요(GitHub Actions 왕복)');
+  try{
+    var q=await _segParseAI(s,function(sec){_segNlNote(_ldHtml(13)+' 예울이가 조건으로 옮기는 중 — '+sec+'초 지났어요(보통 30초~2분)');});
+    _segQToForm(q);
+    _segNlNote('읽은 조건 — <b style="color:var(--text)">'+_memEsc(_segQLabel(q))+'</b> <span style="color:var(--muted)">(예울이 해석 · 틀리면 아래에서 고치고 다시 조회하세요)</span>');
+    _segRun();
+  }catch(e){
+    _segNlNote('<b style="color:var(--danger)">해석 실패</b> — '+_memEsc(String(e&&e.message||e))+' · 아래 폼으로 직접 골라 조회해 주세요.');
+  }finally{ _segNlBusy=false;if(btn)btn.disabled=false; }
 }
 
 function _memAiIdx(){

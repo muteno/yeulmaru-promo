@@ -135,7 +135,9 @@ async function main() {
 
     // ② 두 화면 일치 — 채팅이 말한 인원 vs 고객 분류 탭 계산(_segCompute = 명단 화면과 같은 함수)
     const chatN = ans && (ans.match(/회원은\s*([\d,]+)명/) || [])[1];
-    const segN = await page.evaluate(`(()=>{ try{ _segCompute({lo:2023,hi:2024,unit:'y'},'클래식',2); return _segLast?_segLast.rows.length+_segLast.nomem:null; }catch(e){ return 'ERR:'+e.message; } })()`);
+    // [260813] `_segCompute`가 (win,g,thr) 셋 → **조건 객체 하나**로 바뀌었다(축이 늘어 인자로는 못 버틴다).
+    //   재는 것은 그대로 = 「같은 조건에서 두 화면이 같은 수를 말하는가」. 조건 표기만 새 한 벌로 옮긴다.
+    const segN = await page.evaluate(`(()=>{ try{ _segCompute({span:'range',from:'2023-01',to:'2024-12',g:'클래식',thr:2}); return _segLast?_segLast.rows.length+_segLast.nomem:null; }catch(e){ return 'ERR:'+e.message; } })()`);
     if (chatN != null && typeof segN === 'number') {
       const c = parseInt(String(chatN).replace(/,/g, ''), 10);
       if (c !== segN) fails.push(`② 두 화면 불일치 — 채팅 ${c}명 vs 고객 분류 ${segN}명. 같은 조건에서 답이 갈리면 어느 쪽도 못 믿는다.`);
