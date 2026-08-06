@@ -1096,6 +1096,13 @@ table.promo-board-table th:last-child .col-resize-handle{display:none}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 .toast.success::before{content:"✓ ";color:#0F8B4C;font-weight:700;margin-right:4px}
 .toast.error::before{content:"✕ ";color:var(--danger);font-weight:700;margin-right:4px}
+/* 업데이트 알림 배지(운영자 260806-8 「알림 토글 항상 위에 뜨는데 아래에 뜨게 · 반투명 글래스모피즘 · 아래 창하고 간격」)
+   — 자리(하단 중앙 32px · 모바일은 하단 네비 위로 80px)·유리·모서리·그림자·활자 전부 `.toast` 정본을 **같은 클래스로** 계승한다.
+   `.toast`와 다른 건 두 가지뿐: 계속 떠 있고(자동 3초 없음) 눌린다(`pointer-events`). 색은 잉크·테두리 **토큰 변주만**(새 색 0).
+   ⚠ 구판은 `top:14px` 인라인 cssText 한 벌(그라데이션·그림자 리터럴 포함)이었다 — 정본 밖 자리·정본 밖 값 = 패리티 부채였다. */
+.toast.ub{pointer-events:auto;cursor:pointer;font-weight:700}
+.toast.ub-data{color:var(--accent);border-color:var(--accent)}       /* 데이터 갱신 = 파랑(기존 뜻 유지) */
+.toast.ub-design{color:var(--danger);border-color:var(--danger)}     /* 새 디자인 배포 = 빨강(운영자 260806-8) */
 /* 콘텐츠 제작 최소화 복원 독(운영자 260805) — 칩 = .bp-tbtn 정본 재사용 · z = --z-toast(모달 백드롭 위 = 다른 화면이 떠 있어도 복원 가능) · 신규 색 0 */
 #tmin-dock{position:fixed;left:14px;bottom:14px;z-index:var(--z-toast);display:flex;gap:8px;flex-wrap:wrap;max-width:min(92vw,560px)}
 /* 새 메시지 알림 토스트 (요청4 · 260710 선택값 배선) — 체크(✓) 눌러야 닫힘·자동 타이머 없음.
@@ -5305,7 +5312,7 @@ function _lockMinChange(v){
 //     (렌더러 1벌 = 서식 드리프트 0 · 스냅샷 손편집 금지 — 값은 시트를 고치고 빌더를 돌린다).
 // YC-BUILD-START  ← 이 구간은 tools/build_annual.mjs가 통째로 eval해 재사용한다. DOM 접근 금지(순수 문자열 조립).
 var _YC_YEAR=2026;
-var _YC_MAINT=[{ms:[3,4],t:'대·소극장<br>유지보수'},{ms:[7,8],t:'대·소극장<br>유지보수'}];   // 공연 없는 정비 구간(편집 상수 — 시트에 없는 편집 정보) · [260807-7 운영자 「보수 기간 … 34월 78월인데 정확한 곳에 있지 않아」] 첫 구간 2~3월 → **3~4월** 정정(둘째 7~8월은 이미 맞음). 이 상수가 SSOT — 월 섹션 병합·타임라인 마크업·`?annual` 스냅샷이 전부 여기서 파생된다
+var _YC_MAINT=[{ms:[2,3],t:'대·소극장<br>유지보수'},{ms:[7,8],t:'대·소극장<br>유지보수'}];   // 공연 없는 정비 구간(편집 상수 — 시트에 없는 편집 정보) · **1-based 달 번호**. 이 상수가 SSOT — 월 섹션 병합·타임라인 마크업·`?annual` 스냅샷·연간 차트 보수 라벨이 전부 여기서 파생된다. ⚠ 값 이력: 원래 2~3월 → 260807-7에 3~4월로 정정 → **260806-8 운영자 「보수기간 2,3월인데 3,4월로 잘못말함」으로 2~3월 환원**(운영자 본인 정정 · 둘째 7~8월은 전 이력 동일). 값은 **운영자 지시로만** 바꾼다 — 화면이 어긋나 보이면 상수가 아니라 읽는 쪽(0/1-based)을 먼저 의심할 것(실측 260806-7에 차트가 0-based로 읽어 한 달 밀렸던 전례)
 var _YC_MON=['JANUARY','FEBRUARY','MARCH','APRIL','MAY','JUNE','JULY','AUGUST','SEPTEMBER','OCTOBER','NOVEMBER','DECEMBER'];
 var _YC_DOW='일월화수목금토';
 // 장르 태그 = 프로그램 시트 「구분」 → 연간 일정 태그(기존 8종 클래스 그대로 · 매칭 없으면 태그 생략)
@@ -7209,6 +7216,68 @@ function _bizHallBadge(x){
   return '<span title="'+escapeHtml(tip)+'" aria-label="'+escapeHtml(lab)+'" style="position:absolute;left:'+_BIZ_HALL_BADGE_L+'px;top:50%;transform:translateY(-50%);user-select:none;-webkit-user-select:none;display:inline-flex;align-items:center;justify-content:center;min-width:'+_BIZ_HALL_BADGE_W+'px;height:'+_BIZ_HALL_BADGE_W+'px;border-radius:50%;font-size:9px;font-weight:700;line-height:1;'
     +'background:var(--accent-light);color:var(--accent)">'+x.h+'</span>';
 }
+// ── [260807-8 운영자 「사업 목록 리스트는 항상 저렇게 표기되게 고정 · 서로 참조값 가지도록」] ─────────
+//   사업 목록 = **집계도 표기도 한 곳**에서 만든다. 종전엔 3면 인라인과 모달 `_bizRender`가 같은 집계를
+//   손복사하고(코드 주석이 「한쪽 수정 시 반드시 동시 수정」이라 경고하고 있었다), 표는 아예 따로 타이핑돼
+//   있었다 — 모달은 구 `01.09(금)` 날짜 · 회차 독립 열 · 「판매좌석」 · raw hex 잉크 그대로였다. 그래서 한쪽만 고치면 소리 없이 갈렸다(실제로 260807 개정 6차가 전부 3면에만 걸렸다).
+//   이제 두 화면이 아래 두 함수를 부른다 = **하나를 고치면 다른 것도 바뀐다.**
+//   _bizListBuild = 집계(운영대장 gmap + 판매 축 조인) · _bizListTable = 표기(머리글·행 마크업).
+function _bizListBuild(yrRecs,year){
+  var gmap={};
+  yrRecs.forEach(function(r){ if(!gmap[r._name])gmap[r._name]={name:r._name,occs:[],paid:0,seat:0,cnt:0,start:r._date,end:r._date,genre:r._genre,type:r._type}; var g=gmap[r._name]; g.occs.push(r._occ); g.paid+=r._paid; g.seat+=r._seat; g.cnt++; if(r._date<g.start)g.start=r._date; if(r._date>g.end)g.end=r._date; });
+  var list=Object.keys(gmap).map(function(k){var g=gmap[k];g.avg=g.occs.reduce(function(a,b){return a+b;},0)/g.occs.length;return g;}).sort(function(a,b){return a.end-b.end;});
+  // [260803 운영자 선택값] 판매 축(일일입력·공연마스터) 조인 — 매출·관객수·상태. 6시트 미로드(좁은 화면)면 null → 운영대장 축만으로 그린다(폴백 명시).
+  var _sx=_bizSalesIdx(year);
+  list.forEach(function(g){
+    var p=_sx?(_sx[_uName(g.name)]||null):null;
+    g._rev=(p&&isFinite(p.money))?p.money:null; g._sold=(p&&isFinite(p.seats))?p.seats:null; g._st=p?p.status:null;
+  });
+  return list;
+}
+function _bizListTable(list){
+  var h='<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="color:var(--dim);font-size:12px;text-align:left">';
+  var _nameHdPad=_BIZ_HALL_BADGE_L+_BIZ_HALL_BADGE_W+_BIZ_HALL_BADGE_GAP;
+  // [260807-7 운영자 「공연 란을 좀 침범해도 되니까 인덱싱 간 간격을 좀 더 벌려줘」] 장르~매출 다섯 열의 **좌패딩**을
+  //   12 → 22로 키운다 = 이웃 열 사이 시각 간격 24 → 34px. 이 열들은 내용폭 고정(nowrap)이라 늘어난 몫은
+  //   전부 공연명 칸(남는 폭을 먹는 유일한 열)에서 나온다 = 운영자가 허락한 「침범」. 머리글·값에 같은 값을 먹여
+  //   세로축이 안 어긋나게 한다(260731 「머리글·본문에 같은 값」 규약과 동일 축).
+  var _colGap=22;
+  [['일시',''],['공연명',''],['장르',''],['관객수','명'],['오픈석','명, 회'],['점유율','%'],['매출','만원']].forEach(function(c,i){h+='<td style="padding:8px 12px;position:sticky;top:0;z-index:1;background:var(--surface-solid);box-shadow:inset 0 -2px 0 var(--border);vertical-align:top;'+(i>=2?'text-align:right;padding-left:'+_colGap+'px;':'')+(i===0?'padding-left:14px;':'')+(i===1?'padding-left:'+_nameHdPad+'px;':'')+(i===6?'padding-right:14px;':'')+'white-space:nowrap">'+c[0]+(c[1]?'<div style="font-size:10.5px;font-weight:400;margin-top:2px">(단위: '+c[1]+')</div>':'')+'</td>';});
+  h+='</tr></thead><tbody>';
+  // ⚠ 오픈석 칸은 `3,892(4)` **한 덩어리**를 오른쪽 정렬한다(운영자 원문 그대로). 그래서 회차 자릿수가 섞인 해에는
+  //   좌석 숫자 끝자리가 1자리 ↔ 2자리에서 7.2px 어긋난다(실데이터 1,307공연 중 10회 이상 **13건**).
+  //   괄호를 고정폭 상자에 담아 그걸 맞추는 시안을 넣었다가 **철회했다** — `ch`(='0' 폭)가 괄호보다 넓어
+  //   셀 오른쪽에 5.8~13.0px가 남고, 그 결과 **이 열만 머리글 우끝과 값 우끝이 13px 어긋났다**(실측 · 이웃 4열은 Δ0).
+  //   전 행·전 연도에 보이는 13px 어긋남 ≫ 13/1307 행에만 나는 7.2px 어긋남 → 열 정렬을 살리고 덩어리 정렬을 택한다.
+  list.forEach(function(g,idx){
+    // 단일일 판정 = **날짜가 같은가**만 본다. 구판의 `g.cnt===1 ||` 는 회차 1인데 기간이 이틀 이상인 행
+    //   (판매 축·예정 행: 회차 열 공란 → cnt 1로 낙하)에서 **시작일을 통째로 지웠다**(1/24~1/25가 `01.25`로만 표기).
+    //   운영대장 행은 cnt 1이면 날짜도 하나라 이 절이 애초에 무용 = 회귀 0, 갭만 닫힌다.
+    var dr=_bizDateCell(g.start,g.end,g.start.getTime()===g.end.getTime());
+    h+='<tr style="border-bottom:1px solid var(--border);'+(idx%2===1?'background:var(--past-bg);':'')+'">'
+      +'<td style="padding:7px 12px;padding-left:14px;white-space:nowrap;color:var(--neutral-text);font-variant-numeric:tabular-nums">'+dr+'</td>'
+      // 제목 = **무조건 1행**(운영자) — max-width:0 + width:100%로 「남는 폭 전부, 그러나 다른 열은 안 밀침」이 되고,
+      //   넘치는 만큼만 말줄임(…)으로 잘린다. 말줄임은 **칸 자체**에 건다(래퍼 div 금지 — 인라인 flex 래퍼는 표 복사를
+      //   행마다 4줄로 쪼갠다 · 실측 14행→55줄). 배지는 흐름 밖(절대 배치)이고 그 자리는 좌패딩 33이 낸다.
+      +'<td style="padding:7px 12px 7px '+_nameHdPad+'px;max-width:0;width:100%;position:relative;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;color:var(--text)" title="'+escapeHtml(g.name)+'">'
+      +_bizHallBadge(_bizHallOf(g))+escapeHtml(g.name)+'</td>'
+      +'<td style="padding:7px 12px 7px '+_colGap+'px;text-align:right;color:var(--neutral-text);white-space:nowrap">'+escapeHtml(g.genre||'-')+'</td>'
+      // [260805] 예정(오픈 전) 행 = 실적 칸을 0으로 채우지 않고 「오픈 전」·「—」로 — 0은 「안 팔렸다」로 읽힌다
+      +'<td style="padding:7px 12px 7px '+_colGap+'px;text-align:right;color:var(--peach-text);font-weight:600;font-variant-numeric:tabular-nums">'+(g._st==='planned'?'<span style="color:var(--muted);font-weight:500">오픈 전</span>':Math.round((g._sold!=null&&g._sold>0)?g._sold:g.paid).toLocaleString())+'</td>'
+      // 오픈석(회차) — 부차 정보임은 **괄호가 말한다**(잉크로 더 내리지 않는다).
+      //   ⚠ 대비 이력: 회차 값은 구 독립 열에서 `--neutral-text` **5.23:1**(AA 통과)이었고, 이 열로 옮기며 열 잉크
+      //     `--dim` **3.54:1**(제브라 행 3.40:1 · AA 미달)로 **내려간다**. 더 흐린 `--muted` 시안은 **1.92:1**이라
+      //     기각했다. 지금 값 = 오픈석 숫자와 **같은 가독 수준**(이 열 전체가 원래 --dim = §6-5 그레이 축 부채 안) —
+      //     회차만 더 진하게 하면 부값이 주값보다 진해져 위계가 뒤집힌다. 열 전체를 올리는 건 이 지시 밖 = 운영자 판단.
+      //   게이트 ⑤는 리터럴 hex 쌍만 채점해 var() 조합을 못 본다 → 통과 여부는 근거가 못 된다(손으로 계산한 값).
+      +'<td style="padding:7px 12px 7px '+_colGap+'px;text-align:right;color:var(--dim);white-space:nowrap;font-variant-numeric:tabular-nums">'+(g.seat>0?Math.round(g.seat).toLocaleString():'<span style="color:var(--muted);font-weight:500">—</span>')+'('+g.cnt+')</td>'
+      +'<td style="padding:7px 12px 7px '+_colGap+'px;text-align:right;color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums">'+(g._st==='planned'?'—':g.avg.toFixed(1))+'</td>'
+      +'<td style="padding:7px 14px 7px '+_colGap+'px;text-align:right;color:var(--green);font-weight:600;font-variant-numeric:tabular-nums">'+((g._rev!=null&&g._rev>0)?_bizMoney(g._rev,true):'—')+'</td>'   // [260803 선택값] 열: 매출 = 표시(진행바·최근 7일 = 끔) · [260805] 단위는 머리글이 말한다 = 숫자만(bare)
+      +'</tr>';
+  });
+    h+='</tbody></table>';
+  return h;
+}
 // ── [260806 운영자] 3면 조작부 = 「연도 ▾ │ 전체·판매중」 토글 한 벌 ────────────────────────
 //   지시: *"공연 전시 교육 2026년 기획 자세히보기 이거 모두 삭제해주고 첨부와 같은 토글만 넣어줘"* +
 //        *"전체 > 판매중 > 전체 > 판매중 이렇게 토글되고 전체가 기본값"*.
@@ -8269,19 +8338,11 @@ function _bizCompRender(el,half){
   if(!any&&types.length)_bizmState.types[types[0]]=true;
   var selTypes=types.filter(function(t){return _bizmState.types[t];});
   var yrRecs=yearAll.filter(function(r){return selTypes.indexOf(r._type)>=0;});
-  // ⚠ 쌍둥이: 아래 gmap 집계 = 모달 _bizRender와 동치 손복사([260723 평의회2] — 한쪽 수정 시 반드시 동시 수정, 괴리 = 좌 보드 값 드리프트)
-  var gmap={};
-  yrRecs.forEach(function(r){ if(!gmap[r._name])gmap[r._name]={name:r._name,occs:[],paid:0,seat:0,cnt:0,start:r._date,end:r._date,genre:r._genre,type:r._type}; var g=gmap[r._name]; g.occs.push(r._occ); g.paid+=r._paid; g.seat+=r._seat; g.cnt++; if(r._date<g.start)g.start=r._date; if(r._date>g.end)g.end=r._date; });
-  var list=Object.keys(gmap).map(function(k){var g=gmap[k];g.avg=g.occs.reduce(function(a,b){return a+b;},0)/g.occs.length;return g;}).sort(function(a,b){return a.end-b.end;});
+  var list=_bizListBuild(yrRecs,_bizmState.year);   // [260807-8] 집계·판매축 조인 = 정본 한 곳(모달 _bizRender와 같은 함수)
+  var _sx=_bizSalesIdx(_bizmState.year);   // 아래 「판매 축 합류」(_bizListBuild 밖 · 3면 전용 union)가 쓰는 인덱스 — 같은 캐시라 재계산 아님
   var right=L?_bizmTools():'';   // [260806 운영자] 조작부 = 「연도 ▾ │ 전체·판매중」 한 벌만(분야 칩·연도 셀렉트·분류 체크·자세히 보기 철거) · 전반 열 헤더에만 = 같은 상태를 두 열에 그리지 않는다
   var h='<div style="position:relative">'+_bizmHead(right,TTL,SUB)+_BIZM_BOX;   // [260731 4차] 3면 이름 = 세부메뉴와 동일어(구 기본값 '사업 현황')
   var kc=function(lab,val,tk){return '<div class="bizm-kpi" style="--kpitok:var('+(tk||'--accent')+')"><div class="lab">'+lab+'</div><div class="val">'+val+'</div></div>';};   // [260723f Opus] 글래스 KPI 통일(1·2면 동일 시각언어)
-  // [260803 운영자 선택값] 판매 축(일일입력·공연마스터) 조인 — 매출·판매 고객·상태. 6시트 미로드(좁은 화면)면 null → 운영대장 축만으로 그린다(폴백 명시).
-  var _sx=_bizSalesIdx(_bizmState.year);
-  list.forEach(function(g){
-    var p=_sx?(_sx[_uName(g.name)]||null):null;
-    g._rev=(p&&isFinite(p.money))?p.money:null; g._sold=(p&&isFinite(p.seats))?p.seats:null; g._st=p?p.status:null;
-  });
   // [260804] 「판매현황」인데 운영대장(= 공연이 끝난 뒤 남기는 기록)만 그리면 **지금 팔고 있는 사업이 한 건도 안 나온다**
   //   (실측: 260730 스냅샷 2026년 운영대장 = 1월 2건뿐 · 판매중 6건은 전부 부재 → 「테두리 = 판매중」 범례가 발화 0).
   //   선택값 데이터 배선 「막대 = 일일입력 누적 유료좌석(판매중) ∪ 운영대장 발권유료(종료 폴백)」의 ∪ 쪽을 잇는다.
@@ -8392,69 +8453,10 @@ function _bizCompRender(el,half){
   // [260802e] data-bizmfill = 마지막 흰 도형을 박스 안선(패딩 18 위)까지 늘리는 마킹(_srailAlignTop) — 행이 적어도(1월 2건 등) 흰 라인이 좌 열과 같은 하단선에서 끝난다(운영자 「없던 있든 흰색 라인 다 맞춰줘」)
   // [260803 운영자 「전체로 선택하면 화면이 넘어선다 → 목록 안에서 스크롤」] data-bizmcap = 상한도 안선에 고정(행이 많아도 박스·흰선을 **절대** 넘지 않음).
   //   스크롤러는 정본 .ry-grp-bd 그대로 계승(오버레이 스크롤바·호버 리빌·gutter 안정 — 이 열이 #rail-yrm 안이라 호버 규칙도 그대로 먹는다) = 신규 CSS 0.
-  var _tbl='<div data-bizmfill data-bizmcap style="border:1px solid var(--border);border-radius:12px;background:var(--surface-solid);display:flex;flex-direction:column;overflow:hidden"><div class="ry-grp-bd" style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="color:var(--dim);font-size:12px;text-align:left">';
-  // [260804] 열 이름·값을 KPI 「누적 판매 고객」과 같은 식으로 통일 — 구 「판매좌석」은 운영대장 고정이라 Σ열 ≠ KPI였다(평의회6)
-  // [260805 운영자] 수치 열 **전부**(회차 포함 5종)는 머리글이 **단위를 말한다**(이름 아랫줄) → 값 칸은 숫자만(공식 보고서 문법 · 918명/98.1%/3,828만처럼 칸마다 단위를 붙이지 않는다).
-  //   회차만 빼면 「단위를 적는 열/안 적는 열」이 갈려 원래 고치려던 어긋남이 그대로 남는다(운영자 「회차도 넣어버려」).
-  //   아랫줄로 내리는 이유 = 이름 뒤에 붙이면 열이 가로로 자라 좁은 우 열에서 가로 스크롤이 생긴다. 세로는 머리글 한 줄분(≈14px)만 자란다.
-  //   잉크·크기 = 머리글 색(--dim) 상속 + 10.5px(차트 눈금과 같은 급) — 신규 토큰·색 0.
-  // [260807 운영자] 열 구성 개정 — 「공연일→일시」·「판매 고객→유료 관객」(이름) · **회차 열 폐지 → 오픈석 값에 괄호 병기**
-  //   (`3,704(4)` = 오픈석(회차) · 그래서 이 열 머리글 단위가 「명」 → 「명, 회」로 늘어난다).
-  //   회차를 없앤 폭 + 일시가 줄어든 폭은 전부 **공연명**이 가져간다 = 제목이 1행 안에서 최대한 길게 보인다.
-  //   장르는 구 회차 자리까지 밀어 **우측 정렬**(운영자 「장르가 회차랑 거의 맞먹는 수준으로 우측으로」) — 이 열부터
-  //   오른쪽 끝까지가 한 덩어리로 오른쪽 정렬이라, 제목 칸의 오른쪽 경계선이 한 줄로 선다.
-  //   ⚠ 공연명 머리글은 **배지 폭만큼 들여쓴다**(12+16+5=33) — 머리글이 배지에 붙으면 아래 제목 글자들과 한 줄이
-  //     안 맞는다. 열의 세로선은 「눈에 띄는 글자」(제목)를 기준으로 세운다 = 체크박스 목록과 같은 정렬 규약.
-  //     이래야 260801 운영자 규약(「머리글 첫 글자와 값 첫 글자가 한 세로선에서 시작」 ~L8410)이 실제로 성립한다(실측 Δ0).
-  //   ⚠ [260807-6 운영자 「관객수로 정정하자」] 이 열은 **「유료 관객」이 될 수 없다** — 값이 유료만이 아니다.
-  //     판매중 사업 값 = 일일입력 `합계좌석`인데 그 시트 불변식이 **합계좌석 = 유료좌석 + 무료좌석**이고
-  //     (열 정의 · `docs/260618_daily_ingest.mjs` 「불변식 유지」), 실측 42공연 중 **12건에 무료가 섞여** 있다
-  //     (2026 국립심포니 〈피터와 늑대 & 어미 거위〉 유료 257 / 무료 120 → 화면 **377** · 2025 예울마루 위크
-  //     〈On Island〉는 유료 0 / 무료 850인데 **850**). 종료 사업(운영대장 발권유료)만 유료 전용이라
-  //     한 열이 두 정의를 담는다 → **이름을 값에 맞춘다**(값 무접촉 = 운영자가 읽던 수가 안 바뀐다).
-  //   ⚠ 단위 문자열은 이 네 열이 **한 템플릿**(`'(단위: '+c[1]+')'`)에서 뽑아 쓰는 공용 조각이다 — 운영자 원문의
-  //     `(단위 : 명, 회)`(콜론 앞 공백)를 오픈석에만 넣으면 형제 3열(유료 관객·점유율·매출)과 어긋난다.
-  //     레포 실측 `(단위: ` 3건 / `(단위 :` 0건 → **관례 계승**. 원문 표기로 되돌리려면 네 열을 같이 바꾼다.
-  var _nameHdPad=_BIZ_HALL_BADGE_L+_BIZ_HALL_BADGE_W+_BIZ_HALL_BADGE_GAP;
-  // [260807-7 운영자 「공연 란을 좀 침범해도 되니까 인덱싱 간 간격을 좀 더 벌려줘」] 장르~매출 다섯 열의 **좌패딩**을
-  //   12 → 22로 키운다 = 이웃 열 사이 시각 간격 24 → 34px. 이 열들은 내용폭 고정(nowrap)이라 늘어난 몫은
-  //   전부 공연명 칸(남는 폭을 먹는 유일한 열)에서 나온다 = 운영자가 허락한 「침범」. 머리글·값에 같은 값을 먹여
-  //   세로축이 안 어긋나게 한다(260731 「머리글·본문에 같은 값」 규약과 동일 축).
-  var _colGap=22;
-  [['일시',''],['공연명',''],['장르',''],['관객수','명'],['오픈석','명, 회'],['점유율','%'],['매출','만원']].forEach(function(c,i){_tbl+='<td style="padding:8px 12px;position:sticky;top:0;z-index:1;background:var(--surface-solid);box-shadow:inset 0 -2px 0 var(--border);vertical-align:top;'+(i>=2?'text-align:right;padding-left:'+_colGap+'px;':'')+(i===0?'padding-left:14px;':'')+(i===1?'padding-left:'+_nameHdPad+'px;':'')+(i===6?'padding-right:14px;':'')+'white-space:nowrap">'+c[0]+(c[1]?'<div style="font-size:10.5px;font-weight:400;margin-top:2px">(단위: '+c[1]+')</div>':'')+'</td>';});
-  _tbl+='</tr></thead><tbody>';
-  // ⚠ 오픈석 칸은 `3,892(4)` **한 덩어리**를 오른쪽 정렬한다(운영자 원문 그대로). 그래서 회차 자릿수가 섞인 해에는
-  //   좌석 숫자 끝자리가 1자리 ↔ 2자리에서 7.2px 어긋난다(실데이터 1,307공연 중 10회 이상 **13건**).
-  //   괄호를 고정폭 상자에 담아 그걸 맞추는 시안을 넣었다가 **철회했다** — `ch`(='0' 폭)가 괄호보다 넓어
-  //   셀 오른쪽에 5.8~13.0px가 남고, 그 결과 **이 열만 머리글 우끝과 값 우끝이 13px 어긋났다**(실측 · 이웃 4열은 Δ0).
-  //   전 행·전 연도에 보이는 13px 어긋남 ≫ 13/1307 행에만 나는 7.2px 어긋남 → 열 정렬을 살리고 덩어리 정렬을 택한다.
-  list.forEach(function(g,idx){
-    // 단일일 판정 = **날짜가 같은가**만 본다. 구판의 `g.cnt===1 ||` 는 회차 1인데 기간이 이틀 이상인 행
-    //   (판매 축·예정 행: 회차 열 공란 → cnt 1로 낙하)에서 **시작일을 통째로 지웠다**(1/24~1/25가 `01.25`로만 표기).
-    //   운영대장 행은 cnt 1이면 날짜도 하나라 이 절이 애초에 무용 = 회귀 0, 갭만 닫힌다.
-    var dr=_bizDateCell(g.start,g.end,g.start.getTime()===g.end.getTime());
-    _tbl+='<tr style="border-bottom:1px solid var(--border);'+(idx%2===1?'background:var(--past-bg);':'')+'">'
-      +'<td style="padding:7px 12px;padding-left:14px;white-space:nowrap;color:var(--neutral-text);font-variant-numeric:tabular-nums">'+dr+'</td>'
-      // 제목 = **무조건 1행**(운영자) — max-width:0 + width:100%로 「남는 폭 전부, 그러나 다른 열은 안 밀침」이 되고,
-      //   넘치는 만큼만 말줄임(…)으로 잘린다. 말줄임은 **칸 자체**에 건다(래퍼 div 금지 — 인라인 flex 래퍼는 표 복사를
-      //   행마다 4줄로 쪼갠다 · 실측 14행→55줄). 배지는 흐름 밖(절대 배치)이고 그 자리는 좌패딩 33이 낸다.
-      +'<td style="padding:7px 12px 7px '+_nameHdPad+'px;max-width:0;width:100%;position:relative;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;color:var(--text)" title="'+escapeHtml(g.name)+'">'
-      +_bizHallBadge(_bizHallOf(g))+escapeHtml(g.name)+'</td>'
-      +'<td style="padding:7px 12px 7px '+_colGap+'px;text-align:right;color:var(--neutral-text);white-space:nowrap">'+escapeHtml(g.genre||'-')+'</td>'
-      // [260805] 예정(오픈 전) 행 = 실적 칸을 0으로 채우지 않고 「오픈 전」·「—」로 — 0은 「안 팔렸다」로 읽힌다
-      +'<td style="padding:7px 12px 7px '+_colGap+'px;text-align:right;color:var(--peach-text);font-weight:600;font-variant-numeric:tabular-nums">'+(g._st==='planned'?'<span style="color:var(--muted);font-weight:500">오픈 전</span>':Math.round((g._sold!=null&&g._sold>0)?g._sold:g.paid).toLocaleString())+'</td>'
-      // 오픈석(회차) — 부차 정보임은 **괄호가 말한다**(잉크로 더 내리지 않는다).
-      //   ⚠ 대비 이력: 회차 값은 구 독립 열에서 `--neutral-text` **5.23:1**(AA 통과)이었고, 이 열로 옮기며 열 잉크
-      //     `--dim` **3.54:1**(제브라 행 3.40:1 · AA 미달)로 **내려간다**. 더 흐린 `--muted` 시안은 **1.92:1**이라
-      //     기각했다. 지금 값 = 오픈석 숫자와 **같은 가독 수준**(이 열 전체가 원래 --dim = §6-5 그레이 축 부채 안) —
-      //     회차만 더 진하게 하면 부값이 주값보다 진해져 위계가 뒤집힌다. 열 전체를 올리는 건 이 지시 밖 = 운영자 판단.
-      //   게이트 ⑤는 리터럴 hex 쌍만 채점해 var() 조합을 못 본다 → 통과 여부는 근거가 못 된다(손으로 계산한 값).
-      +'<td style="padding:7px 12px 7px '+_colGap+'px;text-align:right;color:var(--dim);white-space:nowrap;font-variant-numeric:tabular-nums">'+(g.seat>0?Math.round(g.seat).toLocaleString():'<span style="color:var(--muted);font-weight:500">—</span>')+'('+g.cnt+')</td>'
-      +'<td style="padding:7px 12px 7px '+_colGap+'px;text-align:right;color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums">'+(g._st==='planned'?'—':g.avg.toFixed(1))+'</td>'
-      +'<td style="padding:7px 14px 7px '+_colGap+'px;text-align:right;color:var(--green);font-weight:600;font-variant-numeric:tabular-nums">'+((g._rev!=null&&g._rev>0)?_bizMoney(g._rev,true):'—')+'</td>'   // [260803 선택값] 열: 매출 = 표시(진행바·최근 7일 = 끔) · [260805] 단위는 머리글이 말한다 = 숫자만(bare)
-      +'</tr>';
-  });
-  _tbl+='</tbody></table></div></div>';   // 스크롤러(.ry-grp-bd) + 흰 카드(data-bizmfill·cap) 두 겹을 닫는다
+  // [260802e] data-bizmfill = 마지막 흰 도형을 박스 안선까지 늘리는 마킹 · [260803] data-bizmcap = 상한도 안선 고정.
+  //   스크롤러는 정본 .ry-grp-bd 계승. **표 자체는 정본 빌더 _bizListTable이 만든다**(모달과 같은 함수).
+  var _tbl='<div data-bizmfill data-bizmcap style="border:1px solid var(--border);border-radius:12px;background:var(--surface-solid);display:flex;flex-direction:column;overflow:hidden"><div class="ry-grp-bd" style="overflow-x:auto">'
+    +_bizListTable(list)+'</div></div>';
   // [260806 운영자] 배분 = 3-1(좌) KPI·판매현황·**전시│교육 반반** / 3-2(우) **목록 표 단독**(박스 전면 = data-bizmfill+cap이 안선까지 채운다)
   //   좌 열 마지막 흰 도형 = 반반 줄(자연 높이) → 남는 몫은 _bizFitSeason이 판매현황 차트를 키워 흡수한다(구 축적 카드가 지던 역할).
   //   half 0(좁은 화면 한 열) = 같은 순서 그대로(KPI→판매현황→전시│교육→표) · 폭이 좁으면 반반 줄이 위아래로 접힌다(flex-wrap)
@@ -12277,17 +12279,10 @@ function _bizRender(){
   if(!anyChecked&&types.length)_bizState.types[types[0]]=true;
   const selTypes=types.filter(function(t){return _bizState.types[t];});
   const yrRecs=yearAll.filter(function(r){return selTypes.indexOf(r._type)>=0;});
-  // ⚠ 쌍둥이: 이 gmap 집계 = 메인 인라인 _bizInlineRender와 동치([260723 평의회2] — 한쪽 수정 시 반드시 동시 수정)
-  const gmap={};
-  yrRecs.forEach(function(r){
-    if(!gmap[r._name])gmap[r._name]={name:r._name,occs:[],paid:0,seat:0,cnt:0,start:r._date,end:r._date,genre:r._genre,type:r._type};
-    const g=gmap[r._name];g.occs.push(r._occ);g.paid+=r._paid;g.seat+=r._seat;g.cnt++;
-    if(r._date<g.start)g.start=r._date;if(r._date>g.end)g.end=r._date;
-  });
-  const list=Object.keys(gmap).map(function(k){const g=gmap[k];g.avg=g.occs.reduce(function(a,b){return a+b;},0)/g.occs.length;return g;}).sort(function(a,b){return a.end-b.end;});
-  const WD=['일','월','화','수','목','금','토'];
-  function dfmt(d){return ('0'+(d.getMonth()+1)).slice(-2)+'.'+('0'+d.getDate()).slice(-2)+'('+WD[d.getDay()]+')';}
-  function drange(g){if(g.cnt===1||g.start.getTime()===g.end.getTime())return dfmt(g.end);return dfmt(g.start)+'~'+dfmt(g.end);}
+  // [260807-8] 집계 = 정본 한 곳(_bizListBuild) — 구판은 3면 인라인과 **손복사**라 「한쪽 수정 시 반드시 동시 수정」
+  //   경고를 달고 살았다. 이제 같은 함수를 부르므로 갈릴 수가 없다. 날짜 포맷터(WD·dfmt·drange)도 함께 폐지 —
+  //   표기는 _bizListTable이 지고, 그 안 _bizDateCell이 정본이다.
+  const list=_bizListBuild(yrRecs,_bizState.year);
   let h='';
   h+='<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:16px">';
   h+='<select onchange="_bizSetYear(this.value)" style="padding:7px 12px;border-radius:8px;border:1.5px solid #ddd;font-size:13px;font-family:inherit;background:#fff">';
@@ -12303,21 +12298,10 @@ function _bizRender(){
   h+='<div style="font-size:13px;font-weight:700;color:#333;margin:6px 0 4px">시즌(연도)별 장르 점유율 추세 <span style="font-weight:400;color:#999;font-size:11px">— 장르별 연평균 점유율(기획·발권유료÷기준석) · 큰점='+_bizState.year+'년 · 위 분류/필터 반영</span></div><div id="biz-season-chart" style="height:300px;margin-bottom:18px"></div>';
   const total=list.length,avgAll=list.reduce(function(a,g){return a+g.avg;},0)/list.length,maxAll=Math.max.apply(null,list.map(function(g){return g.avg;}));
   h+='<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">'+_bizCard('총 공연',total+'건')+_bizCard('평균 점유율',avgAll.toFixed(1)+'%')+_bizCard('최고 점유율',maxAll.toFixed(1)+'%')+'</div>';
-  h+='<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="border-bottom:2px solid #eee;color:#888;font-size:11px;text-align:left">';
-  ['공연일','공연명','장르','회차','판매좌석','오픈석','점유율'].forEach(function(c,i){h+='<td style="padding:8px 10px;'+(i>=3?'text-align:right':'')+'">'+c+'</td>';});
-  h+='</tr></thead><tbody>';
-  list.forEach(function(g,idx){
-    h+='<tr style="border-bottom:1px solid #f0f0f0;'+(idx%2===1?'background:#fafafa':'')+'">';
-    h+='<td style="padding:8px 10px;white-space:nowrap;color:#555">'+drange(g)+'</td>';
-    h+='<td style="padding:8px 10px;font-weight:600;color:#222">'+escapeHtml(g.name)+'</td>';
-    h+='<td style="padding:8px 10px;color:#666;white-space:nowrap">'+escapeHtml(g.genre||'-')+'</td>';
-    h+='<td style="padding:8px 10px;text-align:right;color:#666">'+g.cnt+'</td>';
-    h+='<td style="padding:8px 10px;text-align:right;color:var(--peach-text);font-weight:600;font-variant-numeric:tabular-nums">'+Math.round(g.paid).toLocaleString()+'</td>';
-    h+='<td style="padding:8px 10px;text-align:right;color:#999;font-variant-numeric:tabular-nums">'+Math.round(g.seat).toLocaleString()+'</td>';
-    h+='<td style="padding:8px 10px;text-align:right;color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums">'+g.avg.toFixed(1)+'</td>';
-    h+='</tr>';
-  });
-  h+='</tbody></table>';
+  // [260807-8] 표 = 정본 한 곳(_bizListTable) — 3면 우 열과 **같은 마크업**. 구판은 여기 따로 타이핑돼
+  //   구 `01.09(금)` 날짜 · 회차 독립 열 · 「판매좌석」 · raw hex(#eee·#f0f0f0·#fafafa·#555·#222·#666·#999)로
+  //   남아 있었다 = 260807 개정 6차가 전부 3면에만 걸렸다. 이제 한쪽을 고치면 둘 다 바뀐다.
+  h+=_bizListTable(list);
   const sa=(_bizState.raw&&_bizState.raw.syncedAt)?_bizState.raw.syncedAt:null;
   if(sa)h+='<div style="text-align:right;color:#bbb;font-size:11px;margin-top:10px">동기화: '+escapeHtml(sa)+'</div>';
   body.innerHTML=h;
@@ -22478,17 +22462,28 @@ async function _checkForUpdates(){
     if(mod > _lastSeenMod){ _showUpdateBadge(); }
   }catch(e){}
 }
-function _showUpdateBadge(){
-  _updateBadgeShown = true;
+// [260806-8 운영자 「디자인이 변경되면 새로운 디자인 있다고 알림 — 이거는 붉은색으로(데이터 업데이트는 파란색으로 앎)」
+//   + 「알림 토글 항상 위에 뜨는데 아래에 뜨게 · 반투명 글래스모피즘 · 아래 창하고 어느 정도 간격」]
+//   한 자리(배지 하나)에 뜻 두 가지 = 색으로 가른다: **파랑 = 데이터 갱신**(누르면 시트만 다시 읽는다) ·
+//   **빨강 = 새 디자인 배포**(누르면 페이지를 새로 받는다). 둘이 동시에 걸리면 **빨강이 이긴다** — 페이지를 새로
+//   받으면 데이터도 같이 새로 읽히므로 파랑이 할 일을 포함한다(배지 두 개를 쌓아 자리를 새로 만들지 않는다).
+//   ⚠ 모양은 `.toast` 정본을 **같은 클래스로** 계승(하단 중앙·유리·모서리·그림자·모바일 하단 네비 회피까지 한 벌).
+//     구판의 `top:14px` 인라인 cssText(그라데이션·그림자 리터럴)는 폐지 = 정본 밖 자리·값이 사라졌다.
+var _UB={data:{cls:'ub-data',html:'🔄 새 데이터가 도착했어요 — 눌러서 새로고침'},
+         design:{cls:'ub-design',html:'🎨 새로운 디자인이 있어요 — 눌러서 새로고침'}};
+function _showUpdateBadge(kind){
+  var k=(kind==='design')?'design':'data';
+  if(_updateBadgeShown==='design'&&k==='data')return;   // 빨강이 떠 있으면 파랑으로 내려가지 않는다
+  _updateBadgeShown = k;
   let el = document.getElementById('update-badge');
   if(!el){
     el = document.createElement('div');
     el.id = 'update-badge';
-    el.onclick = _applyUpdate;
-    el.style.cssText = 'position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:99980;background:linear-gradient(135deg,var(--accent) 0%,#6366F1 100%);color:#fff;padding:9px 18px;border-radius:999px;font-size:12.5px;font-weight:700;cursor:pointer;box-shadow:0 6px 20px rgba(74,77,231,0.35);font-family:inherit;white-space:nowrap';
     document.body.appendChild(el);
   }
-  el.innerHTML = '🔄 새 업데이트가 있어요 — 클릭해서 새로고침';
+  el.onclick = (k==='design') ? _applyDesignUpdate : _applyUpdate;
+  el.className = 'toast show ub '+_UB[k].cls;
+  el.innerHTML = _UB[k].html;
   el.style.display = '';
 }
 function _hideUpdateBadge(){
@@ -22505,7 +22500,29 @@ async function _applyUpdate(){
     try{ if(typeof renderPromoBoard==='function') renderPromoBoard(); }catch(_e){}
   }catch(e){ console.warn('[update]',e); }
 }
-(function(){ setInterval(function(){ try{ _checkForUpdates(); }catch(e){} }, 45000); })();
+// [260806-8] 새 디자인(= 프론트 배포) 감지 — **배포된 `index.html`의 ETag 한 줄**로 잰다.
+//   GitHub Pages가 파일마다 `etag`/`last-modified`를 주므로(실측 `etag: "6a73c927-290f1d"`), HEAD 한 번이면
+//   본문(1MB+)을 안 받고도 「내가 띄운 화면 뒤에 새 배포가 있었나」를 안다. 새 버전 파일·빌드 스탬프를 따로 만들지 않는다.
+//   ⚠ 첫 샘플 = baseline(데이터 폴링의 그 문법 그대로) · 서비스워커는 GET만 가로채므로 HEAD는 항상 네트워크로 나간다.
+//   ⚠ 디자인만이 아니라 **`index.html`이 바뀐 배포 전부**가 걸린다(디자인 변경은 항상 이 파일로 나간다 = 놓치지 않는 쪽).
+let _designSeenTag = null;
+async function _checkForDesign(){
+  const app=document.getElementById('app');
+  if(!app || app.style.display==='none') return;   // 앱 화면일 때만(데이터 배지와 같은 가드)
+  if(_updateBadgeShown==='design') return;         // 이미 빨강이면 skip
+  try{
+    const r = await fetch(location.pathname.replace(/[^/]*$/,'')+'index.html',{method:'HEAD',cache:'no-store'});
+    const tag = r.headers.get('etag') || r.headers.get('last-modified');
+    if(!tag) return;
+    if(_designSeenTag === null){ _designSeenTag = tag; return; }   // 첫 샘플 = baseline
+    if(tag !== _designSeenTag) _showUpdateBadge('design');
+  }catch(e){}
+}
+function _applyDesignUpdate(){   // 새 디자인 = 페이지를 새로 받는다(HTML은 SW가 네트워크 우선이라 리로드만으로 최신이 온다)
+  _hideUpdateBadge();
+  try{ location.reload(); }catch(e){ console.warn('[design update]',e); }
+}
+(function(){ setInterval(function(){ try{ _checkForUpdates(); }catch(e){} try{ _checkForDesign(); }catch(e){} }, 45000); })();
 
 function excelToKey(v){if(!v)return'';if(typeof v==='number'){const d=new Date((v-25569)*86400000);return dk(d);}return String(v);}
 function dk(d){return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
@@ -33063,7 +33080,11 @@ document.getElementById('confirm-modal').addEventListener('click',e=>{if(e.targe
   </div>
 </div>
 
-<div class="yc-mo" id="yc-m2" data-month="2"><div class="yc-mo-n">2</div><div class="yc-mo-l">FEBRUARY</div></div>
+<div class="yc-mo" id="yc-m2" data-month="2"><div class="yc-mo-n">2–3</div><div class="yc-mo-l">FEB-MAR</div></div>
+
+<div class="yc-mt">
+  <div class="yc-mt-t">대·소극장<br>유지보수</div>
+</div>
 
 <div class="yc-ex yc-L">
   <div class="yc-ex-bar"></div>
@@ -33077,12 +33098,6 @@ document.getElementById('confirm-modal').addEventListener('click',e=>{if(e.targe
   </div>
 </div>
 
-<div class="yc-mo" id="yc-m3" data-month="3"><div class="yc-mo-n">3–4</div><div class="yc-mo-l">MAR-APR</div></div>
-
-<div class="yc-mt">
-  <div class="yc-mt-t">대·소극장<br>유지보수</div>
-</div>
-
 <div class="yc-ex yc-R">
   <div class="yc-ex-bar"></div>
   <div class="yc-ex-v"></div>
@@ -33094,6 +33109,8 @@ document.getElementById('confirm-modal').addEventListener('click',e=>{if(e.targe
     <a href="https://www.yeulmaru.org/exhibition/v/?u=235" target="_blank" class="yc-ev-link">전시 상세 →</a>
   </div>
 </div>
+
+<div class="yc-mo" id="yc-m4" data-month="4"><div class="yc-mo-n">4</div><div class="yc-mo-l">APRIL</div></div>
 
 <div class="yc-ev yc-L yc-brunch">
   <div class="yc-ev-dot"></div>
@@ -33647,7 +33664,7 @@ function resumeNow(){   // ①+③ — 비활성→활성 전환의 단일 진�
 document.addEventListener('visibilitychange',function(){ if(!document.hidden)resumeNow(); });
 window.addEventListener('focus',function(){ resumeNow(); });
 window.addEventListener('pageshow',function(e){ if(e.persisted){ lastKick=0; resumeNow(); } });   // bfcache 복귀 = vis 미발화 경로 · 가드 해제
-if(typeof window.nmRefresh!=='function')window.nmRefresh=function(){ try{ if(typeof _checkForUpdates==='function')_checkForUpdates(); }catch(_e){} };   // 이 앱 정본 재동기 훅 = 방식B 즉시 확인(로그인 전·뱃지 표시 중 가드는 _checkForUpdates 자체 내장)
+if(typeof window.nmRefresh!=='function')window.nmRefresh=function(){ try{ if(typeof _checkForUpdates==='function')_checkForUpdates(); }catch(_e){} try{ if(typeof _checkForDesign==='function')_checkForDesign(); }catch(_e){} };   // 이 앱 정본 재동기 훅 = 방식B 즉시 확인(로그인 전·뱃지 표시 중 가드는 각 함수 자체 내장) · [260806-8] 새 디자인 확인도 같은 훅에서(복귀 순간 = 배포가 있었는지 제일 알고 싶은 때)
 window.nmSyncBusy=function(){   // [평의회6 C-2 + 평의회1 D2] 셀렉터가 원리적으로 못 보는 축 = 비행 중 쓰기·대기 타이머·MSAL·AI 응답 — 페이지측 선언 훅(노뮤트 계약 그대로)
   try{
     return !!( (typeof _apiWrites!=='undefined'&&_apiWrites>0)                                    // Graph 쓰기 비행 중(api 카운터 · finally 감산)
