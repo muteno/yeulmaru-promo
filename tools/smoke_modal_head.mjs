@@ -27,6 +27,12 @@ import { INIT_SCRIPT } from './qa_mock_ops.mjs';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const W = 1500, H = 1000;
 const TOL = 1.0;   // 가장자리 밀착 허용 오차(px) — 보더·반올림 잔차만
+// 닫기 X **상자** 윗선의 허용 오차 — 상자를 딱 맞추면 안 되는 자리가 정본에 있다:
+// 260805-31 광학 잉크 보정(`.modal:has(>.mhead .modal-x)>.modal-x{top:19.33px}`)은 `✕` 잉크중심(−0.85)과
+// `─` 잉크중심(+0.48)의 1.33px 차를 상자로 상쇄해 **잉크끼리** 한 줄에 세운 것이다(운영자가 지정한 단위 = 잉크).
+// 그래서 여기서 재는 건 「칸을 벗어났나」지 「상자가 0인가」가 아니다 — 규칙이 통째로 삼켜지거나(Δ−7)
+// 첫 줄 높이 계약이 깨지는(Δ11) 진짜 파손은 이 폭으로도 전부 잡힌다(킬테스트 3/3).
+const TOL_OPT = 2.0;
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.jfif': 'image/jpeg', '.svg': 'image/svg+xml', '.woff2': 'font/woff2' };
 
 // 헤드리스에서 네트워크 없이 열리는 모달들 — 구조 계열(보드/대화상자/도구/지도/폼)을 고루 덮는다.
@@ -80,6 +86,8 @@ const MEASURE = `(()=>{
   const bl=parseFloat(cm.borderLeftWidth)||0, br=parseFloat(cm.borderRightWidth)||0, bt=parseFloat(cm.borderTopWidth)||0;
   const x=m.querySelector(':scope > .modal-x');
   const rx=x?x.getBoundingClientRect():null;
+  const t=h.querySelector(':scope > span:first-child');
+  const rt=t?t.getBoundingClientRect():rh;
   return {
     open:true, head:true,
     style:[cs.backgroundColor, cs.color, cs.fontSize, cs.fontWeight, cs.paddingTop, cs.paddingBottom, cs.paddingLeft].join('|'),
@@ -88,6 +96,18 @@ const MEASURE = `(()=>{
     dTop:+(rh.top-(rm.top+bt)).toFixed(1),
     xIn: rx? (rx.top+rx.height/2 >= rh.top-1 && rx.top+rx.height/2 <= rh.bottom+1) : null,
     leak: /_mhead\\(/.test(m.textContent||''),
+    // ⑥ 광학 정렬(260805-31 운영자 「좌측 타이틀·버튼·X 중심부가 수평선에 있는지」) —
+    //    기준값을 여기 안 적는다. 밴드 자신의 padding-top과 제목 상자에서 **그 자리에서 유도**해 비교한다:
+    //    첫 줄 = 밴드 padding-top에서 시작하는 한 칸이고, 제목·조작 버튼·절대배치 X는 전부 그 칸에 들어가야 한다.
+    dXTop: rx? +(rx.top-(rh.top+(parseFloat(cs.paddingTop)||0))).toFixed(1) : null,
+    dXH:   rx&&t? +(rx.height-t.getBoundingClientRect().height).toFixed(1) : null,
+    dBtn: [...h.querySelectorAll(':scope > * > button, :scope > button')].map(b=>{
+      const rb=b.getBoundingClientRect();
+      return +((rb.top+rb.height/2)-(rt.top+rt.height/2)).toFixed(1);
+    }),
+    // ⑦ 상단 테두리 = 밴드와 같은 색(운영자 260805-32 「상단부는 모두 코발트로」).
+    //    흰 유리 테두리가 밴드 위를 지나면 강조색 위에 밝은 실선으로 보인다.
+    topBorderOk: cm.borderTopColor===cs.backgroundColor,
   };
 })()`;
 
@@ -148,7 +168,11 @@ async function main() {
       if (Math.abs(m.dLeft) > TOL) fails.push(`${name}: 머리줄 좌측이 모달 안쪽선과 Δ${m.dLeft}px (가장자리 밀착 파손).`);
       if (Math.abs(m.dRight) > TOL) fails.push(`${name}: 머리줄 우측이 모달 안쪽선과 Δ${m.dRight}px.`);
       if (Math.abs(m.dTop) > TOL) fails.push(`${name}: 머리줄 상단이 모달 안쪽선과 Δ${m.dTop}px.`);
-      if (m.xIn === false) fails.push(`${name}: 닫기 X가 머리줄 밖 — 밴드 위 절대 자리(top:14/right:22)를 벗어났다.`);
+      if (m.xIn === false) fails.push(`${name}: 닫기 X가 머리줄 밖 — 밴드 위 절대 자리(right:22)를 벗어났다.`);
+      if (m.dXTop !== null && Math.abs(m.dXTop) > TOL_OPT) fails.push(`${name}: 닫기 X 윗선이 머리줄 첫 줄과 Δ${m.dXTop}px — 제목·조작 버튼과 중심선이 어긋난다.`);
+      if (m.dXH !== null && Math.abs(m.dXH) > TOL) fails.push(`${name}: 닫기 X 높이가 제목 줄높이와 Δ${m.dXH}px — 같은 칸이 아니다(첫 줄 높이 한 갈래 계약 파손).`);
+      (m.dBtn || []).forEach((d, i) => { if (Math.abs(d) > TOL) fails.push(`${name}: 머리줄 조작 버튼 ${i + 1}의 세로 중심이 제목과 Δ${d}px.`); });
+      if (m.topBorderOk === false) fails.push(`${name}: 모달 윗변 테두리 색 ≠ 밴드 색 — 강조색 위에 흰 실선이 지나간다(운영자 260805-32).`);
       if (!styles.has(m.style)) styles.set(m.style, []);
       styles.get(m.style).push(name);
     }
