@@ -1029,6 +1029,22 @@ button{font-family:inherit;cursor:pointer}
 @keyframes stReveal{from{clip-path:inset(0 100% 0 0)}to{clip-path:inset(0 0 0 0)}}
 .sec-pop{animation:secPop .55s cubic-bezier(.22,.9,.36,1) both}
 @keyframes secPop{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+/* ── 대시보드 리빌 `.rv` — [260810-2 운영자 「대시보드에 있는 창, 띄워지는 순간, 그려지는 … 차트도 딱 떴을때
+   아래에서 위로 딱 올라오고(각각의 차트에 따름) … 현황판이 실시간으로 있는 액티브」] ───────────────
+   **새 모션 문법을 만들지 않는다** — 이 파일에 이미 있는 4부품의 일반화다(기틀 규칙 3 「기존 컴포넌트를 쓴다」):
+     ① 상승     = fadeUp(12px · 차트 2곳 인라인 `#yrm-chart`·`#{pfx}-chart`) · secPop(14px · _salesSectionPop)
+     ② 아래→위  = ddFold(`inset(0 0 100% 0)` 위→아래 말림)의 **방향 반전** · 가로 쌍은 기존 stReveal(.st-reveal) 그대로
+     ③ 커브     = secPop 자구 계승 `cubic-bezier(.22,.9,.36,1)`
+     ④ 촤르르   = _salesSectionPop(animationDelay 0.22s)·`.ry-yr-dd button`(JS delay) 문법 계승
+   **값만** 2026 UIUX 표준으로 조인다 = 항목 간 55ms(권고 30~80ms) · 개별 420ms(권고 <500ms · 진입은 ease-in 금지).
+   `backwards` = .p-card 선례 — 끝난 뒤 clip-path가 **안 남는다**(툴팁·콜아웃 그림자 잘림 0).
+   `--rv-i`(순번)·`--rv-step`·`--rv-dur` = **컴포넌트 로컬 변수**(`:root` 토큰 아님 — `--btn-sh`·`--mpad-*` 선례).
+   ⚠ 총 길이 상한 = **0.7s**(지연 275ms + 420ms). `backwards`는 지연 동안 from 상태(translateY 14px)로 **정지**해
+     있어서, 지연이 길면 헤드리스 기하 게이트(smoke_layout `settle` 250ms 간격 2연속 동일 = 정착 판정)가 그
+     정지 상태를 「정착」으로 오인해 잰다. 순번 상한(_RV_CAP 5)이 이 계약을 지킨다 — 늘리지 말 것. */
+.rv{animation:rvUp var(--rv-dur,.42s) cubic-bezier(.22,.9,.36,1) backwards;animation-delay:calc(var(--rv-i,0) * var(--rv-step,.055s))}
+@keyframes rvUp{from{opacity:0;transform:translateY(14px);clip-path:inset(100% 0 0 0)}to{opacity:1;transform:translateY(0);clip-path:inset(0 0 0 0)}}
+@media (prefers-reduced-motion:reduce){.rv{animation:none}}   /* 감속 선호 = 리빌 전면 off(2026 접근성 표준 · 이 파일 pin·pet·ol-dots 선례와 동일 축) */
 /* 담당자 일정 완료(종료시각/18시 경과·수동 완료) — 콘텐츠(.ev.done)와 동일하게 취소선 */
 .sp-item.done > *{text-decoration:line-through;text-decoration-color:#888;text-decoration-thickness:1.2px;text-decoration-skip-ink:none}
 .sp-item.done .ev-time,.sp-item.done .ev-plat,.sp-item.done .ev-title span{color:var(--past-text)!important}
@@ -1105,7 +1121,7 @@ table.promo-board-table th:last-child .col-resize-handle{display:none}
 
 /* ═══ MODAL ═══ */
 .modal-bg{display:none;position:fixed;inset:0;background:rgba(26,26,46,0.4);backdrop-filter:blur(4px);z-index:100;align-items:center;justify-content:center}
-.modal-bg.show{display:flex}
+.modal-bg.show{display:flex;animation:fadeIn .18s ease}   /* [260810-2] 「띄워지는 순간」 = 백드롭이 먼저 깔리고 셸이 올라온다(셸 = 기존 .modal fadeUp .25s 불변). 기존 fadeIn 키프레임 재사용 · 투명도만(리플로 0) */
 .confirm-bg{display:none;position:fixed;inset:0;background:rgba(26,26,46,0.45);backdrop-filter:blur(4px);z-index:200;align-items:center;justify-content:center}
 .confirm-bg.show{display:flex}
 .confirm{background:#fff;border:1px solid var(--glass-border);border-radius:20px;padding:24px 28px 22px;width:360px;max-width:92vw;text-align:center;box-shadow:0 24px 80px rgba(0,0,0,0.18);animation:fadeUp .2s ease}
@@ -10885,6 +10901,7 @@ function _anaRender(){
   if(s===2){
     body.innerHTML='<div id="ana-screen"></div>';
     _anaScreen2(document.getElementById('ana-screen'));
+    _rvSweep(document.getElementById('ana-screen'));   // [260810-2] 드릴 화면도 같은 리빌(창이 그려지는 결)
     return;
   }
   body.innerHTML='<div id="ana-screen"></div>'
@@ -10892,6 +10909,10 @@ function _anaRender(){
     +'<div id="ana-screen3"></div>';
   _anaScreen1(document.getElementById('ana-screen'));
   _anaScreen3(document.getElementById('ana-screen3'));
+  // [260810-2] 리빌은 **안쪽 화면**에 건다 — #ana-body 직계(screen/구분줄/screen3 3개)에 걸면 화면 통째로 한 번에 올라와
+  //   구획만 움직이고 내용은 정지해 보인다(=「그려지는」 느낌이 안 난다). 두 스윕은 같은 물결(_rvWave)로 이어진다.
+  _rvSweep(document.getElementById('ana-screen'));
+  _rvSweep(document.getElementById('ana-screen3'));
 }
 function _anaGo(n){ _anaState.screen=n; _anaRender(); }
 
@@ -12451,19 +12472,69 @@ function _salesRender(){
   if(perfs.length){ _bizEnsurePlotly(function(){ _salesDrawTarget(); if(active.length){ _salesDrawBench(); _salesDrawYield(); } _accordionize('sales-body'); _salesSectionPop(); }); }
 }
 // (260612) 보드 첫 진입 시 [1]·[2] 섹션 촤르르 펼침 (아코디언 래핑 후 stagger)
-function _salesSectionPop(){
-  var body=document.getElementById('sales-body');if(!body)return;
-  var i=0;
-  Array.prototype.forEach.call(body.children,function(el){
-    var t=(el.textContent||'').trim();
-    if(/^[▾▸]?\s*\[[12]\]/.test(t)&&t.length<60){
-      el.classList.add('sec-pop');el.style.animationDelay=(i*0.22)+'s';
-      var wrap=el.nextElementSibling;
-      if(wrap){wrap.classList.add('sec-pop');wrap.style.animationDelay=(0.1+i*0.22)+'s';}
-      i++;
-    }
+/* ══ 대시보드 리빌 배선 `_rv*` — [260810-2 운영자 「창, 띄워지는 순간, 그려지는 … 차트도 딱 떴을때 아래에서 위로
+     딱 올라오고(각각의 차트에 따름) … 현황판이 실시간으로 있는 액티브」] ═══════════════════════════════
+   모양의 정본 = CSS `.rv` **한 벌**(위 §촤르르 리빌 블록). 여기서는 「누구에게 · 언제 붙일지」만 정한다
+   (인라인 animation 재타이핑 금지 = 모달 머리줄 260805-23·컴포넌트 패리티 260805-24와 같은 축).
+   배선 = **3층 자동부착**(Q39 입력칸 클립의 「스윕 + MutationObserver」 문법 계승 — 자리마다 손배선하면
+   새 보드가 생길 때마다 빠진다. 구판이 딱 그 상태였다: 촤르르가 판매 보드 [1]·[2] 두 줄에만 있었다):
+     ① `_rvSweep(root)`  — 보드 본문이 그려질 때 **직계 자식**을 위→아래 순차 리빌(= 창이 「그려진다」)
+     ② `_rvChartMo`      — Plotly가 `.plot-container`를 심는 **그 순간** 그 차트만 리빌(= 각각의 차트에 따름)
+     ③ IntersectionObserver — 화면 밖 차트는 **보일 때** 리빌(L5510 `fadeObs` 선례) = 스크롤해 내려가면 그때 올라온다
+   ⚠ 빈 상자(차트 자리)는 ①이 **건드리지 않는다** — 껍데기만 먼저 올라오고 내용은 나중에 툭 나타나면
+     「차트가 올라온다」가 아니라 「빈 칸이 올라왔다가 채워진다」가 된다. 그 자리는 ②가 진다. */
+var _RV_STEP=0.055, _RV_CAP=5;   // 항목 간 55ms(2026 권고 30~80ms) · 순번 상한 5 = 최대 지연 275ms(+0.42s = 0.695s < smoke_layout settle 0.8s · CSS 블록 ⚠ 참조)
+var _rvWave={t:0,n:0};           // 같은 「물결」 안에서만 순번이 이어진다(보드 스윕 → 그 직후 그려지는 차트들이 자연스럽게 뒤를 잇는다)
+function _rvOff(){ try{ return !!(window.matchMedia&&window.matchMedia('(prefers-reduced-motion:reduce)').matches); }catch(_e){ return false; } }
+function _rvNext(){ var now=(window.performance&&performance.now)?performance.now():+new Date(); if(now-_rvWave.t>600)_rvWave.n=0; _rvWave.t=now; return _rvWave.n++; }
+function _rvOn(el,i){
+  if(!el||el.nodeType!==1||el.__rv||_rvOff())return;
+  el.__rv=1; el.style.setProperty('--rv-i',Math.min(i||0,_RV_CAP)); el.classList.add('rv');
+}
+function _rvSweep(root){
+  if(!root||_rvOff())return;
+  Array.prototype.forEach.call(root.children,function(el){
+    if(el.nodeType!==1||el.__rv)return;
+    if(!el.firstChild)return;                                   // 빈 상자 = 차트 자리 → ②가 맡는다(위 ⚠)
+    if(!el.getClientRects().length)return;                      // 안 그려진 자리는 순번을 안 먹는다(중간에 빈 순번 = 뒤가 괜히 늦어짐)
+    _rvOn(el,_rvNext());
   });
 }
+var _rvIO=null;
+function _rvIOget(){
+  if(_rvIO!==null)return _rvIO;
+  try{ _rvIO=new IntersectionObserver(function(es){ es.forEach(function(x){ if(x.isIntersecting){ _rvIO.unobserve(x.target); _rvOn(x.target,_rvNext()); } }); },{threshold:0.08}); }
+  catch(_e){ _rvIO=0; }
+  return _rvIO;
+}
+function _rvChart(div){
+  if(!div||div.nodeType!==1||div.__rv||_rvOff())return;
+  if(div.style&&div.style.animationName)return;   // 자기 모션을 이미 인라인으로 가진 자리(책 1면 #yrm-chart의 fadeUp)는 건드리지 않는다 — 인라인이 클래스를 이겨 어차피 안 먹고, 그 면은 헤드리스 기하 계약(smoke_layout)이 잰다
+  var r=div.getBoundingClientRect(); if(!r.height)return;
+  var vh=window.innerHeight||document.documentElement.clientHeight||0;
+  if(r.top<vh&&r.bottom>0){ _rvOn(div,_rvNext()); return; }      // 이미 보이는 차트 = 지금 올린다
+  var io=_rvIOget(); if(io)io.observe(div); else _rvOn(div,_rvNext());
+}
+(function _rvChartMo(){
+  if(!window.MutationObserver)return;
+  // Plotly는 그래프 div 안에 `.plot-container`를 **직접 자식으로** 심는다 → addedNodes 한 겹만 보면 된다
+  // (querySelector로 파고들면 캘린더 대량 렌더마다 서브트리를 뒤지게 된다 = 리빌 하나 때문에 앱 전체가 느려진다).
+  var mo=new MutationObserver(function(ms){
+    for(var i=0;i<ms.length;i++){
+      var a=ms[i].addedNodes;
+      for(var j=0;j<a.length;j++){
+        var n=a[j];
+        if(n.nodeType!==1||!n.classList||!n.classList.contains('plot-container'))continue;
+        _rvChart(n.parentElement);
+      }
+    }
+  });
+  var start=function(){ try{ mo.observe(document.body,{childList:true,subtree:true}); }catch(_e){} };
+  if(document.body)start(); else document.addEventListener('DOMContentLoaded',start);
+})();
+// (260612 → 260810-2) 보드 첫 진입 촤르르. 구판 = 판매 보드의 「[1]·[2]」 제목줄 두 개만 0.22s 간격 `.sec-pop`.
+//   운영자 260810-2 지시로 **전 보드 공통 리빌**(_rvSweep)로 승격 — 이 함수는 호출 자리(_salesRender)를 지키는 얇은 껍데기다.
+function _salesSectionPop(){ _rvSweep(document.getElementById('sales-body')); }
 // === [DB통합] 사업 현황 (dash 2_사업현황 '연간 운영현황' 이식 — 프로모 톤) ===
 var _bizState = { raw:null, year:null, types:{}, escHandler:null };
 var _BIZ_TYPE_ORDER = ['기획','대관','기타'];
@@ -12678,7 +12749,7 @@ function _bizRender(){
   const sa=(_bizState.raw&&_bizState.raw.syncedAt)?_bizState.raw.syncedAt:null;
   if(sa)h+='<div style="text-align:right;color:#bbb;font-size:11px;margin-top:10px">동기화: '+escapeHtml(sa)+'</div>';
   body.innerHTML=h;
-  _bizEnsurePlotly(function(){ _bizDrawChart(list, selTypes.length>1); _bizDrawGenreBench(); _bizDrawSeason(); _accordionize('biz-body'); });
+  _bizEnsurePlotly(function(){ _bizDrawChart(list, selTypes.length>1); _bizDrawGenreBench(); _bizDrawSeason(); _accordionize('biz-body'); _rvSweep(body); });   // [260810-2] 리빌 = 아코디언 래핑 **뒤**(직계 자식이 확정된 다음 · 판매 보드 _salesSectionPop 순서와 동일)
 }
 // ============================================================
 // 연간 실적 (사업 현황) — 예울마루(망마·장도) 2012~2026 상반기(잠정) 연간 실적 표를 '그대로' 살린 보드.
@@ -12970,11 +13041,12 @@ function _yrRender(pfx){
   h+=_yrCard('연평균',pfx+'-k3','','--green');
   h+='<div class="bizm-kpi" style="--kpitok:var('+dtok+')"><div class="lab">전년 대비 (2025 vs 2024)</div><div class="val">'+darr+' <span id="'+pfx+'-k4">0</span>'+(dpct?'<span class="u">'+dpct+'</span>':'')+'</div></div>';   // [260723f Opus] 글래스 KPI 통일
   h+='</div>';
-  h+='<div class="bizm-card"><div class="ct">'+(st.year==='all'?('연도별 '+mLabel+' 추이'):(st.year+'년 분야별 '+mLabel))+' <span class="sub">— '+catTxt+(st.year==='all'?(' · 막대=실적, 선=추세'+((st.metric==='인원')?', 점선 기둥=2026 예상 누적':'')):' · 선택 연도')+'</span></div><div id="'+pfx+'-chart" style="height:360px;margin:0 6px 6px;animation:fadeUp .45s ease"></div></div>';   // [260723f Opus] 차트 = 흰 서피스 카드 통일
+  h+='<div class="bizm-card"><div class="ct">'+(st.year==='all'?('연도별 '+mLabel+' 추이'):(st.year+'년 분야별 '+mLabel))+' <span class="sub">— '+catTxt+(st.year==='all'?(' · 막대=실적, 선=추세'+((st.metric==='인원')?', 점선 기둥=2026 예상 누적':'')):' · 선택 연도')+'</span></div><div id="'+pfx+'-chart" style="height:360px;margin:0 6px 6px"></div></div>';   // [260723f Opus] 차트 = 흰 서피스 카드 통일 · [260810-2] 인라인 `animation:fadeUp .45s`는 정본 리빌(.rv)로 이관 — 인라인이 남아 있으면 클래스가 못 이겨 이 차트만 옛 페이드로 남는다(모양 SSOT 이원화 = 260805-23이 막은 그 축)
   var _navCss='width:28px;height:28px;border-radius:8px;border:1.5px solid var(--glass-bd);background:var(--glass-surface);color:var(--text);font-size:16px;font-weight:700;cursor:pointer;line-height:1;font-family:inherit;display:inline-flex;align-items:center;justify-content:center;box-shadow:var(--glass-shadow)';
   h+='<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin:2px 0 8px"><div style="font-size:13px;font-weight:700;color:var(--text)">전체 실적표 <span style="font-weight:400;color:var(--dim);font-size:11px">— 엑셀 원본 그대로 · 선택 연도 열 하이라이트 · 2025 최근 취합 강조</span></div><div style="display:flex;gap:6px;flex-shrink:0"><button type="button" onclick="_yrScrollTable(-1,\''+pfx+'\')" title="이전 연도들 보기" style="'+_navCss+'">‹</button><button type="button" onclick="_yrScrollTable(1,\''+pfx+'\')" title="다음 연도들 보기" style="'+_navCss+'">›</button></div></div>';   // [260723 운영자] 묻히는 연도 열 = 부제줄 우측 ◀▶로 가로 스크롤(데이터 안 가리는 위치)
   h+=_yrTable(pfx);
   body.innerHTML=h;
+  _rvSweep(body);   // [260810-2] 창이 그려지는 결 — KPI 줄 ▸ 차트 카드 ▸ 실적표 순차(차트 속은 아래 _rvChart가 따로 올린다)
   _yrCountUp(document.getElementById(pfx+'-grand'),_YR.grand,1200);
   _yrCountUp(document.getElementById(pfx+'-k1'),selSum,900);
   _yrCountUp(document.getElementById(pfx+'-k2'),combo[bestIdx],900);
