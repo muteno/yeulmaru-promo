@@ -170,7 +170,8 @@ async function main() {
     //   좌·우가 한 칸씩 엇갈려 넘어가므로 면이 아니라 **조합마다** 이젤·흰 라인 계약이 따로 성립해야 한다
     //   (같은 「판매현황 상세」 우 열이 좌 사업 결과 비교·연간 실적·고객 분석과 차례로 짝을 이룬다).
     //   → 슬라이드 전부를 돈 뒤 1번으로 복귀(왕복 회귀). 차례표가 늘어나면 이 루프는 자동으로 따라간다.
-    const SL = await page.evaluate(`_bizSlides().map(function(s){return s.p+(s.d?'|상세':'|판매실적');})`);
+    // [260809] 우 열 이름 = rdet 0/1/2 세 갈래(구판 `s.d?'상세':'판매실적'`는 고객 분석 칸을 '상세'로 잘못 적었다 — 로그 표기 전용이지만 실패 원인 추적을 흐린다)
+    const SL = await page.evaluate(`_bizSlides().map(function(s){return s.p+'|'+({0:'판매실적',1:'상세',2:'고객분석'}[(+s.d||0)]||'판매실적');})`);
     const seq = []; for (let i = 2; i <= SL.length; i++) seq.push(i); seq.push(1);
     for (const i of seq) {
       await page.evaluate(`_bizmTo(${i})`);

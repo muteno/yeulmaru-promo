@@ -6588,7 +6588,7 @@ function _srailPgOf(idx,id,name){ if(!idx)return null; return (id&&idx.byId[Stri
 // 캘린더·레일·필터·패널 로직 무수정 — 좌 보드 = openBusinessBoard 축약 인라인(_bizClean·_bizDrawChart 재사용) · 우 표 = _salesBuild+_anaSpark 재사용(재fetch 0).
 // F5 세션복원 = 부트 IIFE가 파싱 중 initApp 동기 호출 → 이 var들이 할당 전일 수 있어 initApp은 setTimeout(0)에서 _mvApply(분신술 4호 TDZ 전례 계승).
 var _mainView=(function(){try{return sessionStorage.getItem('mvView')==='cal'?'cal':'biz';}catch(_e){return 'biz';}})();   // [260723c 선택값] 상태 저장 = 이번 접속만(sessionStorage) · 새 접속 = 항상 사업 실적(운영자 「항상 메인」)
-var _bizmState={year:null,types:{},page:3,rdet:0,live:0,metric:'rev',leftId:null,rightId:null};   // 인라인 보드 전용 상태(page: 좌 열이 그리는 면 · [260806-9] metric: 3면 「매출(rev) ↔ 관객수(aud)」 토글 — 기본 = 매출(운영자 「지금이 매출이고」) · [260808] leftId·rightId = 두 열이 **지금 화면에 들고 있는 내용의 신원** — 넘김 때 「바뀐 열만 다시 그린다」 판정의 정본(_bizLeftNeedsRedraw·_bizRightNeedsRedraw) · [260805 2차] rdet: 우 열이 「판매현황 상세」(3-2)인가 0|1 — 좌 면과 분리된 축 · [260806] live: 3면 「전체(0) ↔ 판매중(1)」 토글 — 구 domain(분야 축)은 칩 철거와 함께 폐지) — 모달(_bizState·_yrState 'yr')과 분리·공유는 _yrState뿐(동기 재렌더)
+var _bizmState={year:null,types:{},page:3,rdet:0,live:0,metric:'rev',leftId:null,rightId:null};   // 인라인 보드 전용 상태(page: 좌 열이 그리는 면 · [260806-9] metric: 3면 「매출(rev) ↔ 관객수(aud)」 토글 — 기본 = 매출(운영자 「지금이 매출이고」) · [260808] leftId·rightId = 두 열이 **지금 화면에 들고 있는 내용의 신원** — 넘김 때 「바뀐 열만 다시 그린다」 판정의 정본(_bizLeftNeedsRedraw·_bizRightNeedsRedraw) · [260805 2차→260809] rdet: 우 열이 그리는 면 0|1|2(0 판매 실적 · 1 판매현황 상세 3-2 · 2 고객 분석 4면) — 좌 면과 분리된 축 · 읽기는 `_bizRD()`로만(진위 비교 금지) · [260806] live: 3면 「전체(0) ↔ 판매중(1)」 토글 — 구 domain(분야 축)은 칩 철거와 함께 폐지) — 모달(_bizState·_yrState 'yr')과 분리·공유는 _yrState뿐(동기 재렌더)
 var _BIZ_HALF_CH=230, _BIZ_HALF_CH_MIN=150;   // [260806] 3면 하단 반반 줄의 막대 높이 — 공연 막대(430)의 절반 급 · [260806 2차] 낮은 화면에선 _bizFitSeason이 MIN까지만 줄인다(늘리진 않는다)
 //   [260805 2차 운영자] 첫 화면 = **3면(사업 결과 비교)** — 구 기본값 1(연간 실적)과 자리 교체(「이 페이지가 메인화면에 연간 실적이랑 교체되게」).
 function setMainView(v,skipFade){
@@ -6814,6 +6814,7 @@ function _yrmTable(){
 }
 // ── [260731 운영자 4차] 대시보드 = 「책 4면」 ────────────────────────────────────────────
 // 면 = 1 연간 실적 · 2 판매 실적(구 우측 레일 '판매 현황' 개명) · 3 사업 결과 비교(구 좌 2면 '사업 현황') · 4 고객 분석(구 '회원 분포' 인라인化 · admin 전용 — 비admin은 3면 책).
+//   [260809] 넓은 화면에서 **우 열이 들고 있는 면 = 2·3-2·4** 세 가지(구판은 2·3-2 둘) · 좌 열 = 1·3-1. 4면은 좁은 화면에서만 좌 열이 그린다.
 // 넓은 화면(2열 하한 `_BIZ_WIDE_MIN` 이상, 레일 노출) = 펼침 2면씩: 펼침1=[1|2](현행 배치 그대로), 펼침2=[3|4] — 좌 #biz-main=홀수면 · 우 #rail-yrm=짝수면, 넘김은 두 열이 같이(책넘김).
 // 좁은 화면(하한 미만, 레일 숨김) = 1→2→3→4 한 면씩.
 // 하단 바 = 1개(#bizm-dots-row) — 넓을 땐 펼침 전체(두 열)의 가운데(_srailAlignTop이 translateX 보정), 좁을 땐 좌 보드 가운데.
@@ -6825,33 +6826,54 @@ function _bizBookWide(){ return window.innerWidth>=_BIZ_WIDE_MIN; }   // [260807
 //   · 'pair' = 내용이 한 열에 안 들어가 n-1/n-2로 자른 면 = 두 열이 「짝수단위로 같이」 바뀐다(좌 n-1 · 우 n-2).
 //   운영자 지시 원문: "2는 고정이니 1만 책넘기듯이 촤르르 · 흰색 부분에 나올게 많으면 3-1, 3-2개념으로 자를게 · -n으로 엮인거는 짝수단위로 같이".
 //   면을 새로 자르려면 여기 kind만 'pair'로 바꾸고 그 면 렌더러에 half(1·2) 분기를 주면 된다.
+//   [260809] 4면(고객 분석)은 kind가 'solo' 그대로 — **좁은 화면 한 열**을 뜻한다. 넓은 화면에선 우 열이 들고 있으므로
+//     좌 열 진입은 `_bizPageIsRight`가 막는다(kind가 아니라 판형으로 갈리는 면 = 이 표에 새 값을 만들지 않았다).
 var _BIZ_PAGE_KIND={1:'solo',2:'pin',3:'pair',4:'solo'};
 // ── [260805 2차 운영자] 넘김 = 「한 번 누르면 **한 열만** 바뀐다」(좌·우 엇갈림) ─────────────────────
 //   지시 원문: *"이 페이지[사업 결과 비교]가 맨, 메인화면에 연간 실적이랑 교체되게 · 슬라이드 누르면 현재 판매되는 공연이
 //   > 첨부2[판매현황 상세]로 바뀌게 · 다시 슬라이드 누르면 첨부2에서 바뀐부분은 그대로 있고, 연간실적이 나오게"*.
 //   구판은 우 열이 좌 면에 묶여 있어(면 하나 = 두 열 한 벌) 이 결이 안 나온다 → 우 열 상태를 **좌 면에서 분리**한다.
 //     · `_bizmState.page` = 좌 열이 그리는 면 (종전 그대로)
-//     · `_bizmState.rdet` = 우 열이 「판매현황 상세」(3면 후반 3-2)인가 · 0이면 「판매 실적」(현재 판매되는 공연)
+//     · `_bizmState.rdet` = 우 열이 그리는 면 — 0 「판매 실적」(2면) · 1 「판매현황 상세」(3면 후반 3-2) · 2 「고객 분석」(4면, admin 전용)
 //   슬라이드 = 그 (좌,우) 조합의 차례표 하나. 순서를 바꾸려면 `_BIZ_SLIDES`만 고치면 된다(렌더러 무접촉).
 //   ⚠ 우 열 유지(「바뀐부분은 그대로」)는 별도 배선이 아니라 기존 `_bizRightNeedsRedraw`가 그대로 해 준다 —
 //     2·3번 슬라이드는 rightId가 '3-2'로 같아 우 열을 다시 그리지 않는다(디졸브도 좌 열에만 걸린다).
-var _BIZ_SLIDES=[{p:3,d:0},{p:3,d:1},{p:1,d:1},{p:1,d:0},{p:4,d:0}];   // ①사업 결과 비교|판매 실적 ②사업 결과 비교|판매현황 상세 ③연간 실적|판매현황 상세 ④**연간 실적|판매 실적** ⑤고객 분석|판매 실적(admin)
-//   [260805 2차 운영자 「돌아오는게 맞게끔」] 마지막 칸 d:0 — 한 바퀴의 끝에서 우 열이 「판매 실적」으로 **돌아온다**.
-//   ── [260808 운영자 「항상 변경된 부분만 전환 — 강하게 박아라」] 「두 열이 같이 바뀌는 칸」 **0개**로 ────────
-//   구 4칸 배치는 그 칸이 정확히 1개 남았다(③→④ 연간 실적|상세 → 고객 분석|판매 실적 = 좌·우 동시). 사유도 적혀 있었다:
-//     「좌는 3번·우는 짝수(2번) 바뀌므로 열-변경 합이 5인데 칸이 4개 = 비둘기집으로 한 칸은 두 열이 겹친다」.
-//   그 셈이 말하는 해법은 **칸을 5개로 늘리는 것**이다(합 5 = 칸 5 → 매 칸 정확히 한 열). 늘린 칸 = ④ `{p:1,d:0}`
-//   = 「연간 실적 | 판매 실적」 — 새 화면이 아니라 **이미 있는 두 면의 조합**(구 「1-2면 펼침」 그대로)이라 신규 부품 0.
-//   한 바퀴: ①→②(우) →③(좌) →④(우) →⑤(좌) →①(좌). 비admin(N=3, ⑤ 제외)도 ①→②(우) →③(좌) →④(우) →①(좌) = 전 칸 한 열.
-//   ⚠ 이 표를 고칠 때 **인접 칸이 좌·우 중 정확히 하나만 달라야 한다** — 어기면 `_bizSlidesAudit`이 콘솔에 경고한다.
-var _BIZ_NARROW_SEQ=[3,2,1,4];                               // 좁은 화면(한 열) 차례 = 위 슬라이드를 읽는 순서대로 편 것 — 3면은 좁은 화면에서 상세(3-2)까지 한 열에 다 그리므로 따로 두지 않는다
+// ── [260809 운영자 「우측에 붙이는게 맞아 — 그래야 다 한번씩 나오거든 · 5페이지는 다시 처음으로 한번에 돌아가는거임」] ──
+//   운영자 지적: 구 5칸의 ④ `{p:1,d:0}`(연간 실적|판매 실적)은 **새 내용이 0인 칸**이었다 — 아래 260808 셈이 자백하듯
+//   화면이 필요해서가 아니라 「매 칸 한 열만」 개수를 맞추려고 끼운 **이미 본 두 면의 조합**이다.
+//   판정 = 그 자리에 **고객 분석을 우 열로** 올린다(구 ⑤의 좌 면 → 우 열로 이사). 5면이 없어져 책은 **4칸**이 되고,
+//   네 칸 모두 아직 안 본 내용을 하나씩 들고 온다(「다 한번씩 나온다」).
+//   ⚠ 대가 = 마지막 칸 → 첫 칸에서 두 열이 **같이** 바뀐다 = 운영자 지시 「다시 처음으로 한번에 돌아가는거임」(책을 덮는 동작).
+//     260805 2차 「우 열이 판매 실적으로 돌아온다」는 폐지가 아니라 **그 넘김이 대신한다**(마지막 칸이 아니라 되돌아가는 순간에 복귀).
+var _BIZ_SLIDES=[{p:3,d:0},{p:3,d:1},{p:1,d:1},{p:1,d:2}];   // ①사업 결과 비교|판매 실적 ②사업 결과 비교|판매현황 상세 ③연간 실적|판매현황 상세 ④**연간 실적|고객 분석**
+//   ⚠ d는 이제 0/1/2 **면 선택자**다(구판은 「상세인가」 0/1) — 진위 비교(`d?:`·`!!rdet`)를 쓰면 2가 1로 뭉개진다. 정규화 = `_bizRD()`.
+//   한 바퀴: ①→②(우) →③(좌) →④(우) →①(좌+우 = 처음으로). 비admin은 고객 분석 칸이 빠져 3칸 = ①→②(우) →③(좌) →①(좌+우).
+//   [구판 사유 · 260808 「두 열이 같이 바뀌는 칸 0개로」] 「좌는 3번·우는 2번 바뀌므로 열-변경 합 5 = 칸도 5여야 매 칸 한 열」
+//     — 그래서 빈 조합 칸을 하나 끼웠다. 260809은 그 셈의 반대편을 택했다: 빈 칸을 없애고 **책을 덮는 넘김 한 곳만** 예외로 둔다.
+//   ⚠ 이 표를 고칠 때 **마지막을 뺀 인접 칸은 좌·우 중 정확히 하나만 달라야 한다** — 어기면 `_bizSlidesAudit`이 콘솔에 경고한다.
+var _BIZ_NARROW_SEQ=[3,2,1,4];                               // 좁은 화면(한 열) 차례 = 위 슬라이드를 읽는 순서대로 편 것 — 3면은 좁은 화면에서 상세(3-2)까지 한 열에 다 그리므로 따로 두지 않는다 · 4면(고객 분석)은 좁은 화면에선 종전대로 **좌 열**이 그린다(넓은 화면만 우 열로 이사)
 function _bizPageKind(p){ return _BIZ_PAGE_KIND[p]||'solo'; }
 // [260805 2차] 구 `_bizPageIsPair(p)`(면이 반으로 잘렸는가)는 철거 — 호출처 전부가 실제로 묻던 건 「**지금** 우 열이 그 후반을 들고 있는가」였고,
 //   좌 면과 우 열이 분리된 뒤로는 그 답이 면 번호가 아니라 rdet에 있다(= `_bizRightIsDetail`). 면 성질 자체는 위 `_BIZ_PAGE_KIND`가 계속 정본.
-function _bizRightIsDetail(){ return _bizBookWide()&&!!_bizmState.rdet; }   // 우 열이 지금 「판매현황 상세」(3-2)를 들고 있는가 — 좌 면과 무관(엇갈림 넘김의 핵심)
-function _bizRightId(){ return _bizRightIsDetail()?'3-2':2; }   // 우 열이 지금 그려야 하는 면 — 상세면 3면 후반, 아니면 2(판매 실적)
-function _bizSlides(){ var N=_bizBookN(); return _BIZ_SLIDES.filter(function(s){ return s.p<=N; }); }   // 비admin(N=3)은 4·5번 슬라이드 중 p>3인 칸이 빠진다
-// [260808 운영자 「강하게 박아라」] 차례표 계약 자가검사 — 인접 칸(순환 포함)이 **좌·우 중 정확히 하나만** 달라야 한다.
+// [260809] 우 열 선택자 정규화 — 구판이 남긴 불리언(true)·문자열 유입까지 0/1/2로 접는다. rdet를 직접 `?:`로 읽는 곳이 없게 이 함수만 쓴다.
+function _bizRD(){ var d=(typeof _bizmState!=='undefined'&&_bizmState)?_bizmState.rdet:0; d=(d===true)?1:(+d||0); return (d===1||d===2)?d:0; }
+function _bizRightIsDetail(){ return _bizBookWide()&&_bizRD()===1; }   // 우 열이 지금 「판매현황 상세」(3-2)를 들고 있는가 — 좌 면과 무관(엇갈림 넘김의 핵심)
+function _bizRightId(){ if(!_bizBookWide())return 2; var d=_bizRD(); return (d===1)?'3-2':((d===2)?4:2); }   // 우 열이 지금 그려야 하는 면 — 상세면 3면 후반 · 고객 분석이면 4 · 아니면 2(판매 실적)
+function _bizSlides(){ var N=_bizBookN(); return _BIZ_SLIDES.filter(function(s){ return s.p<=N&&!((+s.d||0)===2&&N<4); }); }   // 비admin(N=3)은 고객 분석 칸이 빠진다 — 좌 면(p=4)이든 [260809] 우 열(d=2)이든 같은 규칙
+// [260809] 넓은 화면에서 **좌 열이 그릴 수 없는 면**(고정면 2 판매 실적 · 우 열 면 4 고객 분석)을 「그 내용이 실제로 서는 슬라이드」로 옮긴다.
+//   구판은 이 자리에 `pin` 전용 루프가 두 곳(_bizBookRender·_bizBookGo) 흩어져 있었다 — 우 열 면이 둘로 늘면서 한 곳으로 모은다.
+function _bizSlideForPage(p){
+  var a=_bizSlides(), i;
+  if(p===2){ for(i=0;i<a.length;i++)if((+a[i].d||0)===0)return a[i]; }   // 판매 실적 = 우 열 d0
+  if(p===4){ for(i=0;i<a.length;i++)if((+a[i].d||0)===2)return a[i]; }   // 고객 분석 = 우 열 d2 (비admin은 그 칸이 없다 → 아래 폴백)
+  for(i=0;i<a.length;i++)if(a[i].p===p)return a[i];
+  return a[0]||_BIZ_SLIDES[0];
+}
+function _bizPageIsRight(p){ return _bizBookWide()&&(_bizPageKind(p)==='pin'||p===4); }   // [260809] 넓은 화면에서 그 면이 우 열 차지인가 = 좌 열이 그리지 않는가
+// [260808 운영자 「강하게 박아라」] 차례표 계약 자가검사 — 인접 칸이 **좌·우 중 정확히 하나만** 달라야 한다.
+//   [260809 운영자 「다시 처음으로 한번에 돌아가는거임」] 예외 한 곳 = **마지막 칸 → 첫 칸**(책을 덮는 넘김) = 두 열 동시 허용.
+//     그 자리마저 1개로 묶으려면 「새 내용 0인 칸」을 하나 끼워야 한다(260808이 택한 길) — 운영자가 그 칸을 버리고 이 예외를 택했다.
+//     대신 그 넘김이 **아무것도 안 바꾸는 것**(ch=0)은 여전히 사고다 = 넘겼는데 화면이 그대로.
 //   화면은 안 건드리고 콘솔 경고만 남긴다(운영 중 사고 0 · 표를 잘못 고친 다음 세션이 즉시 안다). N별로 한 번씩만 돈다.
 var _bizSlAuditDone={};
 function _bizSlidesAudit(){
@@ -6859,14 +6881,14 @@ function _bizSlidesAudit(){
     var N=_bizBookN(); if(_bizSlAuditDone[N])return; _bizSlAuditDone[N]=1;
     var a=_bizSlides(); if(a.length<2)return;
     for(var i=0;i<a.length;i++){
-      var c=a[i], n=a[(i+1)%a.length], ch=(c.p!==n.p?1:0)+((c.d?1:0)!==(n.d?1:0)?1:0);
-      if(ch!==1)console.warn('[biz slides] 칸 '+(i+1)+'→'+((i+1)%a.length+1)+' 에서 열 '+ch+'개가 바뀐다 — 계약은 「항상 1개」(_BIZ_SLIDES 참조)');
+      var c=a[i], n=a[(i+1)%a.length], wrap=(i===a.length-1), ch=(c.p!==n.p?1:0)+((+c.d||0)!==(+n.d||0)?1:0);
+      if(wrap?(ch<1):(ch!==1))console.warn('[biz slides] 칸 '+(i+1)+'→'+((i+1)%a.length+1)+' 에서 열 '+ch+'개가 바뀐다 — 계약은 「중간 = 정확히 1개 · 마지막→첫 칸 = 1개 이상」(_BIZ_SLIDES 참조)');
     }
   }catch(_e){}
 }
 function _bizNarrowSeq(){ var N=_bizBookN(); return _BIZ_NARROW_SEQ.filter(function(p){ return p<=N; }); }
 function _bizSlideIdx(){   // 지금 상태 = 몇 번째 슬라이드인가
-  var a=_bizSlides(), p=_bizmState.page||3, d=_bizmState.rdet?1:0, i;
+  var a=_bizSlides(), p=_bizmState.page||3, d=_bizRD(), i;
   for(i=0;i<a.length;i++)if(a[i].p===p&&a[i].d===d)return i;
   for(i=0;i<a.length;i++)if(a[i].p===p)return i;   // rdet만 어긋난 과도기(판형 전환 직후 등) = 그 면의 첫 슬라이드로 본다
   return 0;
@@ -6876,7 +6898,7 @@ function _bizDotCur(){   // 점등할 점의 자리(0-기준)
   if(_bizBookWide())return _bizSlideIdx();
   var s=_bizNarrowSeq(), i=s.indexOf(_bizmState.page||3); return i<0?0:i;
 }
-function _bizLeftPage(){ var p=_bizmState.page||3; return (_bizBookWide()&&_bizPageKind(p)==='pin')?_BIZ_SLIDES[0].p:p; }   // 좌 열이 실제로 그리는 면 번호(고정면 2는 좌 열이 안 그린다 → 첫 슬라이드 면)
+function _bizLeftPage(){ var p=_bizmState.page||3; return _bizPageIsRight(p)?_bizSlideForPage(p).p:p; }   // 좌 열이 실제로 그리는 면 번호(우 열 차지인 면 = 고정면 2·[260809] 고객 분석 4는 좌 열이 안 그린다 → 그 내용이 서는 슬라이드의 좌 면)
 // [260804] 우 열이 이번 넘김에 실제로 다시 그려지는가 — _bizBookRender와 **같은 판정**을 디졸브(_bizmFlip)가 미리 쓰려고 분리.
 //   두 곳이 어긋나면 「고정면(2)인데 우 열이 같이 흐려짐」 = 260801 「고정면 유지 열은 애니 0」 계약 위반이 되므로 식은 하나만 둔다.
 function _bizRightNeedsRedraw(){
@@ -6898,7 +6920,7 @@ function _bizLeftNeedsRedraw(){
 }
 function _bizBookRender(){
   var wide=_bizBookWide();
-  if(wide&&_bizPageKind(_bizmState.page||3)==='pin'){ var _s0=_bizSlides()[0]; _bizmState.page=_s0.p; _bizmState.rdet=_s0.d; }   // 고정면은 좌 열이 그리지 않는다(좁은 화면 2면에서 넓어진 경우 보정) — [260805 2차] rdet도 그 슬라이드 값으로 맞춘다(안 맞추면 좌만 옮겨져 점 점등이 어긋난다). 첫 슬라이드 = 우 열이 「판매 실적」이라 보던 내용이 우측으로 이어진다
+  if(wide&&_bizPageIsRight(_bizmState.page||3)){ var _s0=_bizSlideForPage(_bizmState.page||3); _bizmState.page=_s0.p; _bizmState.rdet=_s0.d; }   // 우 열 차지인 면은 좌 열이 그리지 않는다(좁은 화면에서 넓어진 경우 보정) — [260805 2차] rdet도 그 슬라이드 값으로 맞춘다(안 맞추면 좌만 옮겨져 점 점등이 어긋난다). 보던 내용이 우측으로 그대로 이어진다 · [260809] 고정면 2뿐 아니라 4(고객 분석)도 같은 규칙 = 좁은 화면 4면에서 넓히면 고객 분석이 우 열로 옮겨간다(좌 열은 그 칸의 연간 실적)
   _bizSlidesAudit();
   var rightRedraw=_bizRightNeedsRedraw();   // ⚠ _bizInlineRender 전에 재야 한다 — 렌더가 _bizmState.rightId를 갱신하면 판정이 뒤집힌다
   var leftRedraw=_bizLeftNeedsRedraw();     // [260808] 좌 열도 같은 규약 — 역시 렌더 전에 잰다(렌더가 leftId를 갱신한다)
@@ -6917,7 +6939,7 @@ function _railYrmClear(){   // 우 열 DOM 비우기 — 상세(#srail-uha)는 �
   try{ if(window.Plotly)['#bizm-chart','#bizm-ex-chart','#bizm-edu-chart','#yrm-chart'].forEach(function(s){var n=el.querySelector(s); if(n)Plotly.purge(n);}); }catch(_e){}   // [260806] 목록 = 현행 차트 id로 갱신(구 bizm-genre·bizm-season은 인라인에서 철거된 자리)
   el.innerHTML='';
 }
-function _bizmSlideSet(sl,dir){ _bizmState.dir=dir; _bizmState.page=sl.p; _bizmState.rdet=sl.d; _bizmFlip(); }   // [260805 2차] 슬라이드 한 칸 = (좌 면, 우 상세여부) 한 벌 — 두 축을 같이 세팅해야 _bizRightNeedsRedraw가 「바뀐 열만」을 정확히 짚는다
+function _bizmSlideSet(sl,dir){ _bizmState.dir=dir; _bizmState.page=sl.p; _bizmState.rdet=sl.d; _bizmFlip(); }   // [260805 2차] 슬라이드 한 칸 = (좌 면, 우 열 면) 한 벌 — 두 축을 같이 세팅해야 _bizRightNeedsRedraw가 「바뀐 열만」을 정확히 짚는다
 function _bizmGo(d){
   if(_bizBookWide()){ var a=_bizSlides(), i=(_bizSlideIdx()+d)%a.length; if(i<0)i+=a.length; _bizmSlideSet(a[i],d); return; }   // [260805 2차] 넓은 화면 = 슬라이드 차례표 순환(한 칸에 한 열만 바뀐다)
   var s=_bizNarrowSeq(), j=s.indexOf(_bizmState.page||3); if(j<0)j=0; j=(j+d)%s.length; if(j<0)j+=s.length;   // 좁은 화면 = 한 열 · 면 차례표 순환
@@ -6934,11 +6956,11 @@ function _bizBookGo(p){
   // [260805 2차] 면 번호 → 그 면이 좌 열에 서는 **첫 슬라이드**로(우 열 상태까지 같이 확정). 넓은 화면의 고정면(2 판매 실적)은
   //   좌 열이 없으므로 그 열이 우측에 떠 있는 첫 슬라이드(d=0)로 보낸다 = 딥링크가 가리키던 내용은 화면에 그대로 나온다.
   var _a=_bizSlides(), _tg=null, _k;
-  if(_bizBookWide()&&_bizPageKind(p)==='pin'){ for(_k=0;_k<_a.length;_k++)if(!_a[_k].d){ _tg=_a[_k]; break; } }
-  else { for(_k=0;_k<_a.length;_k++)if(_a[_k].p===p){ _tg=_a[_k]; break; } }
+  if(_bizBookWide())_tg=_bizSlideForPage(p);   // [260809] 넓은 화면 = 우 열 면(2 판매 실적 · 4 고객 분석)까지 한 함수가 옮긴다(구 pin 전용 루프 흡수)
+  else { for(_k=0;_k<_a.length;_k++)if(_a[_k].p===p){ _tg=_a[_k]; break; } }   // 좁은 화면 = 면 번호 그대로(차례표에 없는 4면도 좌 열이 그린다)
   if(_tg)p=_tg.p;
   var cur=_bizmState.page||3;
-  if(cur!==p||(_tg&&(_bizmState.rdet?1:0)!==_tg.d)){ _bizmState.dir=(p>cur)?1:-1; _bizmState.page=p; if(_tg)_bizmState.rdet=_tg.d; }
+  if(cur!==p||(_tg&&_bizRD()!==(+_tg.d||0))){ _bizmState.dir=(p>cur)?1:-1; _bizmState.page=p; if(_tg)_bizmState.rdet=_tg.d; }
   if(typeof _mainView!=='undefined'&&_mainView!=='biz'&&typeof setMainView==='function'){ setMainView('biz'); return; }   // 면을 먼저 세팅 → 모드 전환 렌더(_mvApply)가 그 면을 바로 그린다(이중 렌더·애니 중복 방지 — 페이블 검수 7)
   _bizmFlip();
 }
@@ -7053,9 +7075,10 @@ function _bizmDots(){
   // [260805 2차] 점 = 「슬라이드 자리」 — 넓은 화면은 (좌 면|우 열) 조합 하나가 한 점, 좁은 화면은 면 하나가 한 점.
   //   구판(점 = 면 번호 · 펼침이면 2개 점등)은 좌·우가 엇갈려 넘어가는 지금 결을 못 나타낸다(같은 면이 두 슬라이드에 걸친다).
   var LBL={1:'연간 실적',2:'판매 실적',3:'사업 결과 비교',4:'고객 분석'};
+  var RLBL={0:'판매 실적',1:'판매현황 상세',2:'고객 분석'};   // [260809] 우 열 이름 = rdet 0/1/2 그대로(구판 `s.d?'상세':'판매 실적'` 2분기는 고객 분석 칸을 상세로 잘못 읽었다)
   var cur=_bizDotCur();
   var labs=_bizBookWide()
-    ? _bizSlides().map(function(s){ return LBL[s.p]+' | '+(s.d?'판매현황 상세':'판매 실적'); })
+    ? _bizSlides().map(function(s){ return LBL[s.p]+' | '+(RLBL[+s.d||0]||RLBL[0]); })
     : _bizNarrowSeq().map(function(p){ return LBL[p]; });
   var dots=''; for(var i=0;i<labs.length;i++){
     var on=(i===cur);
@@ -7228,7 +7251,8 @@ function _bizInlineRender(){
     else if(typeof _srailRender==='function'){ try{_srailRender();}catch(_e){console.warn('[book p2]',_e);} }
     return;
   }
-  if(page===4){   // [260801 5차] 고객 분석 면(admin, 비admin은 _bizBookN=3이라 진입 불가) — 좌 열이 그린다(넓은 화면도 동일 · 우 열은 「판매 실적」 고정)
+  if(page===4){   // [260801 5차] 고객 분석 면(admin, 비admin은 _bizBookN=3이라 진입 불가) · [260809] 좌 열이 그리는 건 **좁은 화면**뿐 — 넓은 화면에선 우 열이 들고 있다(_bizPageIsRight)
+    try{ var _ryM=document.getElementById('rail-yrm'); if(_ryM&&_ryM.querySelector('#mem-ov-inline'))_ryM.innerHTML=''; }catch(_e){}   // [260809] #mem-ov-inline ID 유일성 — 넓→좁 전환이 한 번에 튀어 `_railYrmClear`가 못 돈 경우(리사이즈 이벤트 삼킴) 숨은 레일에 남은 같은 면을 비운다. 좁은 화면 2면이 쓰던 같은 방어(위 `_ryN.innerHTML=''`)와 한 규약
     _bizmSwap(el,'<div style="position:relative">'+_bizPageMemberHtml()+_bizmDots()+_bizmPageNav()+'</div>');   // [260802] 프레임 유지·안쪽만 교체
     _bizMemberEnsure();
     return;
@@ -10155,23 +10179,28 @@ function _railYrmRender(){
   try{ if(uha&&rail&&el.contains(uha))rail.appendChild(uha); }catch(_e){}
   // [260801 5차] 우 열 = 「판매 실적」(2면) 고정 — 좌 열이 몇 면으로 넘어가든 그대로 둔다.
   //   예외 = 짝 면(n-1/n-2)일 때만 그 면 후반이 우 열을 차지한다(두 열 동시 넘김) · 짝 면 해제 시 다시 판매 실적으로 복귀.
-  var pair=_bizRightIsDetail();   // [260805 2차] 우 열 내용은 좌 면이 아니라 rdet가 정한다(엇갈림 넘김)
-  _bizmState.rightId=_bizRightId();
-  try{if(window.Plotly)['#bizm-chart','#bizm-ex-chart','#bizm-edu-chart','#yrm-chart'].forEach(function(s){var n=el.querySelector(s); if(n)Plotly.purge(n);});}catch(_e){}   // [260806] 현행 차트 id로 갱신 · 우 열이 들고 있던 차트만 purge(노드 지정 = 좌 열 동명 id 무접촉) — 리스너·옵저버 누수 차단
+  // [260809] 우 열 내용은 좌 면이 아니라 rdet가 정한다(엇갈림 넘김) — 이제 세 갈래다: 2 판매 실적 · '3-2' 판매현황 상세 · 4 고객 분석.
+  var rid=_bizRightId(), pair=(rid==='3-2'), mem=(rid===4), sales=(rid===2);
+  _bizmState.rightId=rid;
+  try{if(window.Plotly)['#bizm-chart','#bizm-ex-chart','#bizm-edu-chart','#yrm-chart'].forEach(function(s){var n=el.querySelector(s); if(n)Plotly.purge(n);});}catch(_e){}   // [260806] 현행 차트 id로 갱신 · 우 열이 들고 있던 차트만 purge(노드 지정 = 좌 열 동명 id 무접촉) — 리스너·옵저버 누수 차단 · [260809] 고객 분석 면은 Plotly를 안 쓴다(분포 맵·도넛 = 인라인 SVG `_memOvMap`) → 추가 대상 0
   if(pair){ try{ _bizCompRender(el,2); }catch(_e){ console.warn('[rail-yrm pair]',_e); } }   // [260802] 구 `el.innerHTML=''` 선지우기 폐지 — 프레임(유리)이 살아 있어야 _bizmSwap이 안쪽만 갈아끼운다(#rail-yrm-uha 슬롯은 아래에서 재확보)
+  else if(mem){   // [260809 운영자] 고객 분석 = 우 열 면 — 좌 열 4면과 **같은 빌더**(_bizPageMemberHtml)를 그대로 쓴다(신규 부품·색·값 0 · 점줄/넘김은 좌 열 전담이라 뺀다)
+    try{ _bizmSwap(el,'<div style="position:relative">'+_bizPageMemberHtml()+'</div>'); }catch(_e){ console.warn('[rail-yrm mem]',_e); }
+    try{ _bizMemberEnsure(); }catch(_e){ console.warn('[rail-yrm mem ensure]',_e); }   // #mem-ov-inline 하나뿐 = 좌·우 동시 존재 불가(넓은 화면은 좌가 4면을 안 그리고, 좁은 화면은 _railYrmClear가 우를 비운다)
+  }
   else { try{ _bizmSwap(el,_railYrmFrame()); }catch(_e){ console.warn('[rail-yrm]',_e); } try{ _ryGrpEqualize(); }catch(_e){} }   // [260801 Q.38] 최초 틀 구축 직후에도 그룹 표 폭 통일
   // [260802] 프레임 유지 교체(_bizmSwap)는 열을 비우지 않으므로, 짝 면에서 만들어 둔 숨김 슬롯이 「판매 실적」 복귀 시 틀 안 슬롯과 겹칠 수 있다 → 첫 개(틀 안 = 문서 순서상 앞)만 남기고 정리(id 유일성 보존).
   try{ var _sls=el.querySelectorAll('#rail-yrm-uha'); for(var _si=1;_si<_sls.length;_si++)if(!_sls[_si].childNodes.length)_sls[_si].parentNode.removeChild(_sls[_si]); }catch(_e){}
   try{ if(!document.getElementById('rail-yrm-uha')){ var _sl=document.createElement('div'); _sl.id='rail-yrm-uha'; _sl.style.display='none'; el.appendChild(_sl); } }catch(_e){}   // 짝 면에도 상세 슬롯(숨김) 확보 — 회전 기계 타이머·리스너 보존, 화면 노출 0
   try{ var slot=document.getElementById('rail-yrm-uha'); if(uha&&slot)slot.appendChild(uha); }catch(_e){}
-  if(!pair){ try{ if(window._railYrmActives)_srailUhaSync(window._railYrmActives.filter(function(x){return !x._past;})); }catch(_e){} try{ if(_ryDrill.key)_ryDrillPaint(_ryDrill.key,0); }catch(_e){} try{ _railYrmSyncActive(); }catch(_e){} }   // [260731 4차 · 페이블 검수 MED] 판매 실적 복귀 = 회전 기계·상세·액티브 pill 재점화(짝 면 휴식의 짝) · [260803] 지난(_past) 프로그램은 회전에 안 태운다(표 전용)
-  else { try{ _srailUhaSync(null); }catch(_e){} }   // 짝 면 = 회전 기계 완전 휴식(숨은 슬롯에서 재점화 차단)
+  if(sales){ try{ if(window._railYrmActives)_srailUhaSync(window._railYrmActives.filter(function(x){return !x._past;})); }catch(_e){} try{ if(_ryDrill.key)_ryDrillPaint(_ryDrill.key,0); }catch(_e){} try{ _railYrmSyncActive(); }catch(_e){} }   // [260731 4차 · 페이블 검수 MED] 판매 실적 복귀 = 회전 기계·상세·액티브 pill 재점화(짝 면 휴식의 짝) · [260803] 지난(_past) 프로그램은 회전에 안 태운다(표 전용)
+  else { try{ _srailUhaSync(null); }catch(_e){} }   // 짝 면·[260809] 고객 분석 면 = 회전 기계 완전 휴식(숨은 슬롯에서 재점화 차단) — 판정을 `!pair`에서 `sales`로 뒤집은 게 핵심(고객 분석을 「짝 면 아님」으로 읽으면 회전이 되살아난다)
 }
 // 판매중 목록(actives) 도착·갱신마다 리스트만 in-place 갱신(틀·KPI 재생성 없음). 틀 미구축이면 통째 렌더.
 function _railYrmSync(actives){
   try{ if(typeof window!=='undefined')window._railYrmActives=actives; }catch(_e){}
   var el=document.getElementById('rail-yrm'); if(!el)return;
-  if(_bizRightIsDetail()){ return; }   // [260801 5차] 우 열이 「판매 실적」이 아닌 동안(상세 3-2) = 목록 DOM이 없다 — actives만 저장하고 화면은 안 건드린다(재렌더가 그 면 본문을 지우는 사고 방지)
+  if(_bizRightId()!==2){ return; }   // [260801 5차] 우 열이 「판매 실적」이 아닌 동안(상세 3-2 · [260809] 고객 분석 4) = 목록 DOM이 없다 — actives만 저장하고 화면은 안 건드린다(재렌더가 그 면 본문을 지우는 사고 방지). 좁은 화면은 _bizRightId가 늘 2 = 종전 경로 그대로
   var list=document.getElementById('rail-yrm-list');
   if(!list){
     // [260802g] 통일 로더 마커(#rail-yrm-load)가 떠 있다 = actives 첫 도착 — 그 열의 프레임을 카드+목록으로 재구축.
@@ -10267,7 +10296,7 @@ function _srailUhaResume(){ _uhaCar.paused=false; var b=document.getElementById(
 function _srailUhaSync(actives){
   var box=document.getElementById('srail-uha'); if(!box)return;
   var biz=(typeof _mainView!=='undefined'&&_mainView==='biz');
-  var p4=(typeof _bizRightIsDetail==='function'&&_bizRightIsDetail());   // [260801 5차] 우 열이 「판매 실적」이 아닌 동안(상세 3-2) = 회전 기계 완전 휴식 — 숨은 슬롯에서 재점화(data-on=1·타이머 재예약) 차단. 복귀 재점화 = _railYrmRender(2면)의 재동기 호출
+  var p4=(typeof _bizRightId==='function'&&_bizRightId()!==2);   // [260801 5차] 우 열이 「판매 실적」이 아닌 동안(상세 3-2 · [260809] 고객 분석 4) = 회전 기계 완전 휴식 — 숨은 슬롯에서 재점화(data-on=1·타이머 재예약) 차단. 복귀 재점화 = _railYrmRender(2면)의 재동기 호출
   if(!biz||p4||!actives||!actives.length){ box.style.display='none'; box.setAttribute('data-on','0'); _srailUhaStop(); _uhaCar.list=[]; _uhaCar.sig=''; return; }
   box.style.display='flex'; box.setAttribute('data-on','1');   // 데이터 있을 때만 노출(JS 구동 = 빈 박스 깜빡임 방지)
   var sig=actives.map(_srailUhaKey).join('|');
