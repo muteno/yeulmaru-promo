@@ -181,6 +181,12 @@ export const INIT_SCRIPT = `(function(){
 
 // 데이터 주입(목록·운영대장) — 페이지 로드 후 호출
 export const FEED_SCRIPT = `(()=>{
+  // [260810] ⚠ **부팅 선로딩이 먼저 다녀간 자리를 비우고 시작한다** — initApp이 _memBootWarm으로 회원·예매집계를
+  //   앱 진입 직후 부르는데, ?qa에선 그 응답이 _qaApi의 빈 데이터다. 그대로 두면 두 가지가 깨진다:
+  //     ① 그 빈 응답이 **FEED보다 늦게 도착**하면 아래에서 넣은 _memState 목을 {rows:[]}로 덮는다(4면이 빈 화면).
+  //     ② _bkState={n:0}이 이미 박혀 있어 아래 api 래핑 뒤의 _bkLoad(false)가 **early-return**한다(고객 분류 무측정).
+  //   앱 자신의 규약(_memPurge = 상태 비우기 + _memEpoch++로 비행 중 응답 폐기)을 그대로 쓴다 — 새 기계 0.
+  if(typeof _memPurge==='function'){ try{ _memPurge(); }catch(_e){ console.warn('[qa purge]',_e); } }
   // [260807] ⚠ **프로그램 시트 목은 API 훅으로는 앱에 못 닿는다** — INIT_SCRIPT가 심는 window._qaApi 접근자를
   //   페이지 최상위 \`async function _qaApi(...)\` 선언이 CreateGlobalFunctionBinding으로 데이터 속성으로 덮어쓴다
   //   (실측: getOwnPropertyDescriptor(window,'_qaApi') = {value:fn, get:undefined, configurable:false}).
