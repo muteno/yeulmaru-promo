@@ -27,7 +27,7 @@ import path from 'path';
 export const DEFAULT_KEEP = 3;
 
 // `drafts/` 바로 아래 = 폴링용 결과 JSON · `drafts/<sub>/` = 원본(.in)·결과(.out) 바이트
-const SUBDIRS = ['hwp', 'office', 'slim'];
+const SUBDIRS = ['hwp', 'office', 'slim', 'promo'];   // promo = AI 홍보 전략 입력 팩(pa*.in.json — 런 실패로 남은 잔재 회수용, 정상 런은 워크플로가 즉시 삭제)
 const ID_RE = /^([a-z]{2})(\d{13})/;   // 접두 + ms 13자리(그 뒤 난수는 안 읽는다)
 
 function idOf(name) {
