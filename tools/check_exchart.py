@@ -13,13 +13,15 @@
   실제로 260805 한 세션에서만 이 축의 회귀가 **3건** 났다(전부 게이트 밖에서 눈으로 잡았다):
     ① 선 모양 누락 → 계단이 사선 삼각형   ② `hv` → 칸이 반 달 밀림   ③ 라벨 임계 14 → 숫자 포갬.
 
-검사 6종 (전부 **하드 0** — 래칫 아님):
+검사 7종 (전부 **하드 0** — 래칫 아님):
   ① 보조 스택 = `stackgroup` + `fill:'tonexty'` 실존(진짜 스택이어야 한다)
   ② 보조 스택 선 모양 = **`shape:'hvh'`** — `hv`/`vh`/누락이면 위반(칸 정중앙 = 꼭짓점 계약)
   ③ 같은 바닥 겹치기 금지 = 이 함수 안에 `fill:'tozeroy'` 0 (260805 3차 철거분의 재유입 차단)
   ④ 보조 알파 = 한 자릿수대 유지(종료·진행중 둘 다 0 < a <= 0.20) — 보조가 주인을 누르지 않게
   ⑤ 점 채움 = 「종료 월 한 점만」 규칙의 뼈대(marker.color가 **배열 분기**로 조립되는가)
   ⑥ 라벨 겹침 = 세로 임계 >= 19 (10.5px 글상자 13 + 숨구멍 6 · 구판 14 = 글상자보다 작아 포갬)
+  ⑧ 값 라벨 잉크 = **중립 한 벌**(`--neutral-text`) — 선색(`L.col`)으로 되돌아가면 위반
+     (운영자 260809 「숫자는 색이 각기 다른 게 아니라, 조금 흐린 검정으로」 · 승인 260809-2 「응 그렇게 해주면 됨」)
 
 ⚠ 이 게이트는 **형태 계약**만 본다 — 값(전시명·색 지정·기간)은 정하지 않는다.
    색은 `_bizExCol`/`_BIZ_EX_COL`가 정본이고 그쪽은 check_design의 팔레트 축이 이미 지킨다.
@@ -27,6 +29,7 @@
 사용: python3 tools/check_exchart.py   (exit 0=통과 / 1=위반)
 호출처: .githooks/pre-commit · npm run check
 킬테스트(등재 요건 · 260805 실측): `hvh`→`hv` rc=1 · `tonexty`→`tozeroy` rc=1 · 임계 19→14 rc=1 · 알파 .09→.5 rc=1.
+        (260809-2 증설분) 꼭자락 라벨 잉크를 `L.col`로 되돌리면 rc=1.
 """
 import os
 import re
@@ -94,12 +97,24 @@ def main():
     if 'side=-side' not in body.replace(' ', ''):
         bad.append("⑦ 라벨 충돌 시 **180° 뒤집기**가 없다 — 생략으로 되돌아갔다(운영자 「겹치는거보다는 그게 나음」).")
 
+    # ⑧ 값 라벨 잉크 = 중립 한 벌(운영자 260809 · 승인 260809-2) — 막대 차트(#18)와 같은 잉크
+    flat = body.replace(' ', '')
+    if "_lbInk=_yrCss('--neutral-text')" not in flat:
+        bad.append("⑧ 값 라벨 잉크 한 벌(`--neutral-text`) 선언이 없다 — 「숫자는 조금 흐린 검정으로」(운영자 260809) 계약이 사라졌다.")
+    tips = re.findall(r"yanchor:\(side>0\)\?'bottom':'top'[^}]*font:\{size:([A-Za-z_0-9.]+),color:([A-Za-z_.]+)\}", flat)
+    if not tips:
+        bad.append("⑧ 꼭자락 라벨 주석부를 못 찾았다 — 값 라벨 조립이 바뀌었다(잉크 계약을 잴 수 없다).")
+    else:
+        for fs, ink in tips:
+            if ink != '_lbInk':
+                bad.append("⑧ 꼭자락 라벨 잉크가 `%s`다 — 선색으로 되돌아갔다. 값 라벨은 `_lbInk`(--neutral-text) 한 벌(#16 ⓐ 260809-2 개정)." % ink)
+
     if bad:
         print('[exchart] ✗ 판매 추이 차트 정본 위반 %d건 (기틀 §2 #16)' % len(bad))
         for b in bad:
             print('   · ' + b)
         return 1
-    print('[exchart] PASS — 판매 추이 차트 정본(기틀 §2 #16) 유지 · 스택 hvh · tozeroy 0 · 알파 보조역 · 점 배열 분기 · 라벨 임계·뒤집기 ✓')
+    print('[exchart] PASS — 판매 추이 차트 정본(기틀 §2 #16) 유지 · 스택 hvh · tozeroy 0 · 알파 보조역 · 점 배열 분기 · 라벨 임계·뒤집기 · 값 라벨 잉크 한 벌 ✓')
     return 0
 
 

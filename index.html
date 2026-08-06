@@ -330,9 +330,39 @@ button{font-family:inherit;cursor:pointer}
 .hamburger.is-open .hamburger-ico span:first-child{transform:translateY(-50%) rotate(45deg)}
 .hamburger.is-open .hamburger-ico span:nth-child(2){transform:translateY(-50%) rotate(-45deg)}
 .nav-acc{display:none}   /* 세부메뉴 아코디언 = 모바일 전용(미디어 쿼리에서 grid 활성) */
-/* ═══ 반응형 — 모바일 ═══ */
-@media (max-width:768px){
-  /* (260610) #mobile-guard 차단 해제 — 모바일 정식 지원 (Phase A) */
+/* ═══ [260806 운영자 「지금 조금 상단 메뉴가 겹치는 부분이 있는데」] nav 혼잡도 사다리 ═══
+   중앙 대메뉴(.nav-center)는 **뷰포트 정중앙 절대배치**(운영자 260723 「메뉴 중앙정렬」)라 흐름 밖에 있다
+   = 좌(로고+월네비)·우(아이콘 묶음) 덩이가 자리를 넓혀도 밀어내지 못하고 **그냥 겹친다**.
+   구판은 조임 단계가 **하나도 없이** 768px에서 갑자기 햄버거로 접혀서, 그 사이(≈1015 → 769)가 통째로 겹침 구역이었다.
+   실측(관리자·QA 최장 이름 「QA미리보기 님」 · tools/scratch/probe_nav_sidebar.mjs):
+     1450px에서 좌 덩이 오른끝 324 · 중앙 폭 335 · 우 덩이 왼끝 1137 → 겹침 시작 ≈ 2×(324+여유+167.5) ≈ 1015px
+     (실측 1024 = 여유 20px · 960 = **겹침 12px** · 900 = 42px · 780 = 102px)
+   조치 = 정중앙 배치는 **그대로 두고**(운영자 결정 불변) 양옆 덩이·중앙 알약을 두 단계로 조인 뒤,
+     그래도 자리가 안 나는 폭에서만 이미 있는 정본(햄버거 시트)으로 접는다 — 새 형태 창작 0, 값은 전부 기존 값의 축소 변주.
+   ⚠ 사람 이름은 길이가 제각각이라 우 덩이 폭이 흔들린다 → 단계마다 max-width+말줄임으로 **폭을 잠근다**.
+     안 잠그면 이 사다리가 「이름이 길면 또 겹친다」로 무너진다(캘린더 셀 .pf/.ps 약칭과 같은 축). */
+@media(max-width:1120px){
+  .nav{padding:0 18px}
+  .nav-mnav{margin-left:18px}
+  .nav-btn{padding:9px 10px}
+  .nav-right{gap:9px}
+  .welcome-msg{max-width:92px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+}
+@media(max-width:1000px){
+  .nav{padding:0 12px}
+  .nav-mnav{margin-left:10px}
+  .nav .month-text{font-size:22px}
+  .nav .year-text{font-size:12px;margin-left:6px}
+  .nav .arrow{width:28px;height:28px}
+  .nav-btn{padding:9px 7px;font-size:13px}
+  .nav-right{gap:7px}
+  .welcome-msg{max-width:64px}
+}
+/* ═══ 반응형 — nav 접힘(햄버거 시트) ═══
+   [260806] 구 768 모바일 블록에 있던 nav 규칙 한 벌을 **그대로** 이 폭으로 올린 것(내용 무수정 이동).
+   왜 880 = 위 2단 조임이 겹침 없이 버티는 하한(계산 ≈824 · 실측 스윕으로 확인)보다 위에서 접기 위함 —
+   조임의 끝과 접힘 사이에 겹치는 구간이 남지 않게 겹쳐 둔다. 768 모바일 블록은 나머지(하단 시트·바텀 네비 등)를 그대로 담당. */
+@media (max-width:880px){
   .hamburger{display:inline-flex}
   .nav-sub{display:none}  /* "홍보 계획표" 부제 숨김 */
   /* [260723 운영자] navigation-01 모바일 문법 이식 — 패널 = 항상 렌더 + clip-path 말림 등장/퇴장(구 display 토글 = 전이 불가 → 재구조). 모양(흰 시트·항목 스타일) = 기존 값 그대로 이동 계승, 모션 값 = 레퍼런스 원본(.55s 스프링 linear()·미지원 = cubic-bezier 폴백·visibility 지연) */
@@ -395,6 +425,10 @@ button{font-family:inherit;cursor:pointer}
   .nav-center .nav-btn.acc-on{background:rgba(74,77,231,0.06);color:var(--accent)}
   .nav-center{transform:none}   /* 데스크탑 중앙정렬(translate) 해제 — 모바일 = 좌우 풀폭 시트 */
   .nav-center .nav-hover-bg{display:none}
+}
+/* ═══ 반응형 — 모바일 ═══ */
+@media (max-width:768px){
+  /* (260610) #mobile-guard 차단 해제 — 모바일 정식 지원 (Phase A) */
   .nav-right .kst{display:none}  /* 시계 모바일에서 숨김 */
   #main-area{padding:16px !important}
   /* 플랫폼 필터 — 가로 스크롤로 (chip은 그대로 보이고 스와이프) */
@@ -926,23 +960,45 @@ button{font-family:inherit;cursor:pointer}
 
 /* ═══ PANEL ═══ */
 /* 날짜 상세 패널 = 캘린더 위 오버레이(레일 유지·main-area 안 밀림, right는 _panelRailReflow가 레일 폭으로 동적 설정) · 무채색 글래스(운영자 260708 플레이그라운드 확정: 흰 .40/blur 6/그림자 --text계열 .03). 열고닫기 = .pn-in/.pn-out(.35s) */
-.panel{position:fixed;top:56px;right:0;width:360px;height:calc(100vh - 56px);background:rgba(255,255,255,0.40);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border-left:1px solid var(--glass-border);box-shadow:-8px 0 32px rgba(26,26,46,0.03);z-index:10;display:flex;flex-direction:column}
+/* [260806 운영자 「좁아질때 항상 그 넓을때랑 같다고 가정해서 사이드바의 비율이 유지되었으면 — 예를 들어 16대 9일때
+   캘린더랑 사이드바의 너비 비율, 임의로 좁아질때도 사이드바가 그 비율에 맞춰서 줄어들게」] 사이드바 폭 = **비율 잠금**.
+   기준 = 16:9 정본 화면 1920×1080에서의 현재 폭 360px → **18.75%**(캘린더:사이드바 = 81.25:18.75 ≈ 13:3).
+     360/1920 = 0.1875 → `18.75vw` 한 식이 그 비율을 모든 폭에서 그대로 유지한다(1600→300 · 1440→270 · 1280→240).
+   구판 = `width:360px` 고정이라 폭이 줄수록 사이드바 몫만 커졌다(실측 1920 18.8% → 1280 28.1% → 900 **40.0%** → 769 46.8%)
+     = 좁은 창일수록 캘린더가 사이드바에 먹혀 마지막 열(일/월)이 잘렸다(운영자 스샷의 그 증상).
+   clamp 양끝의 뜻:
+     · 상한 360px = **정본 폭**(운영자 260731 「우측 360px 사이드바」) — 1920 초과 화면에서 더 넓어지지 않는다(기존 화면 무변).
+     · 하한 200px = 이 폭 아래로는 날짜 머리줄(2026년 8월 6일 목요일)이 글자를 줄여도 안 읽힌다 = 가독 바닥.
+       18.75vw가 200px이 되는 폭 = 1067px → 그 아래부터 하한이 잡고, 769px에서 26%까지만 되돌아간다.
+   ≤768(모바일)은 아래 미디어 블록이 하단 시트로 갈아끼운다 = **사이드바(옆 열) 출력 없음**(운영자 「일정 더 줄어들면 아예 사이드바는 출력 없애는거로(모바일)」).
+   `--pw` = 이 실폭을 아래 글자·여백 규칙이 되받는 **한 출처** — 폭이 줄면 글자도 같이 준다(값 이원화 0). */
+.panel{--pw:clamp(200px,18.75vw,360px);--ppx:calc(var(--pw)*.06667);position:fixed;top:56px;right:0;width:var(--pw);height:calc(100vh - 56px);background:rgba(255,255,255,0.40);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border-left:1px solid var(--glass-border);box-shadow:-8px 0 32px rgba(26,26,46,0.03);z-index:10;display:flex;flex-direction:column}
 .panel.pn-in{animation:slideIn .35s ease}
 .panel.pn-out{animation:slideOut .35s ease}
+/* [260806] ≤768 = 위 모바일 블록이 패널을 **폭 100vw 하단 시트**로 갈아끼운다(옆 열 사이드바 출력 없음).
+   통이 좁지 않으니 글자·여백도 줄일 이유가 없다 → `--pw`를 기준값(360)으로 되돌려 활자 = 종전 그대로.
+   이 한 줄이 `.panel` 규칙 **뒤**에 있어야 이긴다(미디어 쿼리는 특이도를 안 올린다 = 소스 순서 승부). */
+@media(max-width:768px){.panel{--pw:360px}}
 /* [260801 운영자] 아래 여백 16 → 14 = 「장도·카페 블록이 제 구분선과 두는 거리」와 같은 값(.panel-svc padding-bottom:14px).
    헤더 목록도 같은 간격으로 제 구분선(.panel-hdr border-bottom)과 떨어진다 = 두 블록이 같은 리듬. */
-.panel-hdr{display:flex;align-items:flex-start;justify-content:space-between;padding:20px 24px 14px;border-bottom:1px solid var(--border)}
-.panel-date{font-size:20px;font-weight:700}
+.panel-hdr{display:flex;align-items:flex-start;justify-content:space-between;padding:20px var(--ppx) 14px;border-bottom:1px solid var(--border)}
+/* ── [260806 운영자 「사이드바가 줄어들게 되면, 프로그램 타이틀이 줄어들도록」] 패널 글자 = 패널 실폭(`--pw`)에 연동 ──
+   식 한 줄: **글자 = 기준값 × (0.8 + 0.2×(pw−200)/160)** → `calc(기준×.55px + var(--pw)×기준×.00125)`.
+     · pw 360(=1920 화면·정본 폭) → 기준값 **그대로**(기존 화면 무변 = 회귀 0)
+     · pw 200(하한 · ≤1067 화면) → 기준값의 **80%**
+   글자는 통(--pw)보다 **천천히** 준다 — 통과 1:1로 줄이면 200px 폭에서 11px가 돼 못 읽는다(가독 하한 우선).
+   `--pw`가 이미 clamp라 여기엔 clamp가 필요 없다(양끝이 자동으로 위 두 값). 기준값 = 종전 px 그대로 = 새 활자 축 창작 0. */
+.panel-date{font-size:calc(11px + var(--pw)*.025);font-weight:700}   /* 기준 20px */
 .panel-day{font-size:13px;color:var(--dim);margin-top:2px}
-.panel-dow{font-size:13px;font-weight:600;margin-left:8px;color:var(--dim)}
+.panel-dow{font-size:calc(7.15px + var(--pw)*.01625);font-weight:600;margin-left:8px;color:var(--dim)}   /* 기준 13px — 위 --pw 연동식 */
 /* [260801 운영자] 연도 = 「2026년 8월 29일 토요일」. 요일(.panel-dow)과 같은 급(13px/600/--dim)이고
    날짜와의 여백도 같은 8px — 좌우 대칭(연도 margin-right = 요일 margin-left). 값 복제 없이 규칙만 뒤집는다. */
-.panel-yr{font-size:13px;font-weight:600;margin-right:8px;color:var(--dim)}
+.panel-yr{font-size:calc(7.15px + var(--pw)*.01625);font-weight:600;margin-right:8px;color:var(--dim)}   /* 기준 13px — 요일과 같은 급이므로 같은 식 */
 /* [260804 운영자] 공휴일·기념일 = 요일 바로 오른쪽, 같은 급(13px/600)·같은 여백(8px = .panel-dow margin-left와 한 값).
    종전엔 아래 .panel-hdr-labels 줄로 떨어져 그날만 본문이 14px+줄높이만큼 밀렸다 — 그 밀림을 없애려고 날짜 줄로 올린 것.
    날짜 줄이 좁은 폭에서 두 줄로 접히면 밀림이 되살아나므로 줄바꿈을 막고, 넘치면 말줄임(전체 이름은 title). */
 .panel-date{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.panel-hdr-hol{font-size:13px;font-weight:600;color:#D64545;margin-left:8px}
+.panel-hdr-hol{font-size:calc(7.15px + var(--pw)*.01625);font-weight:600;color:#D64545;margin-left:8px}   /* 기준 13px — 요일과 같은 급이므로 같은 식 */
 /* [260731 운영자 2차] 그날 일정 = 「n행 3열」로 함께 움직이는 격자 — 구분 | 제목 | 장소.
    표(테이블)·테두리는 쓰지 않는다: 바깥 grid + 각 행 display:contents 로 열만 공유(마크업은 div/span 그대로).
    · 1열 구분 = 「공연·교육·대관·셋업」 글자만(운영자 260731 3차 — 알약/버튼 형태 폐지).
@@ -963,13 +1019,13 @@ button{font-family:inherit;cursor:pointer}
 .panel-hdr-nm{font-size:13px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .panel-hdr-place{font-size:11px;font-weight:600;color:var(--dim);white-space:nowrap;text-align:left}
 .panel-svc{margin:2px 0 16px;padding-bottom:14px;border-bottom:1px solid var(--border)}
-.panel-svc-row{font-size:13px;font-weight:600;color:#333;line-height:2}
+.panel-svc-row{font-size:calc(7.15px + var(--pw)*.01625);font-weight:600;color:#333;line-height:2}   /* 기준 13px — --pw 연동 */
 .panel-svc-val{color:var(--accent)}
 .panel-svc-val.svc-tbd{color:#b0b0b0;font-weight:400}
 .panel-close{width:32px;height:32px;border-radius:50%;border:1px solid rgba(0,0,0,0.06);background:var(--glass);font-size:14px;color:var(--dim);display:flex;align-items:center;justify-content:center;transition:all .2s}
 .panel-close:hover{background:var(--accent-light);color:var(--accent)}
 @media(min-width:769px){#app:not(.biz-mode) .panel-close{display:none}}   /* [260731 운영자] 「사이드바 항상 펼쳐지게」 — 상주 패널엔 닫기 ✕가 없다(구 하단 drawer의 .panel-close 숨김 규칙과 동일 계약). biz 모드 오버레이 패널은 ✕ 유지 · ≤768 하단시트는 화면 절반을 먹어 닫을 수 있어야 하므로 ✕ 유지 */
-.panel-body{flex:1;padding:16px 24px;overflow-y:auto}
+.panel-body{flex:1;padding:16px var(--ppx);overflow-y:auto}
 .panel-empty{text-align:center;padding:40px 0;color:var(--dim);font-size:14px}
 .panel-hol{display:flex;align-items:center;gap:8px;padding:14px 10px 0;margin-top:18px;border-top:1px solid var(--border)}
 .panel-hol+.panel-prog-wrap{margin-top:14px}
@@ -1029,6 +1085,22 @@ button{font-family:inherit;cursor:pointer}
 @keyframes stReveal{from{clip-path:inset(0 100% 0 0)}to{clip-path:inset(0 0 0 0)}}
 .sec-pop{animation:secPop .55s cubic-bezier(.22,.9,.36,1) both}
 @keyframes secPop{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+/* ── 대시보드 리빌 `.rv` — [260810-2 운영자 「대시보드에 있는 창, 띄워지는 순간, 그려지는 … 차트도 딱 떴을때
+   아래에서 위로 딱 올라오고(각각의 차트에 따름) … 현황판이 실시간으로 있는 액티브」] ───────────────
+   **새 모션 문법을 만들지 않는다** — 이 파일에 이미 있는 4부품의 일반화다(기틀 규칙 3 「기존 컴포넌트를 쓴다」):
+     ① 상승     = fadeUp(12px · 차트 2곳 인라인 `#yrm-chart`·`#{pfx}-chart`) · secPop(14px · _salesSectionPop)
+     ② 아래→위  = ddFold(`inset(0 0 100% 0)` 위→아래 말림)의 **방향 반전** · 가로 쌍은 기존 stReveal(.st-reveal) 그대로
+     ③ 커브     = secPop 자구 계승 `cubic-bezier(.22,.9,.36,1)`
+     ④ 촤르르   = _salesSectionPop(animationDelay 0.22s)·`.ry-yr-dd button`(JS delay) 문법 계승
+   **값만** 2026 UIUX 표준으로 조인다 = 항목 간 55ms(권고 30~80ms) · 개별 420ms(권고 <500ms · 진입은 ease-in 금지).
+   `backwards` = .p-card 선례 — 끝난 뒤 clip-path가 **안 남는다**(툴팁·콜아웃 그림자 잘림 0).
+   `--rv-i`(순번)·`--rv-step`·`--rv-dur` = **컴포넌트 로컬 변수**(`:root` 토큰 아님 — `--btn-sh`·`--mpad-*` 선례).
+   ⚠ 총 길이 상한 = **0.7s**(지연 275ms + 420ms). `backwards`는 지연 동안 from 상태(translateY 14px)로 **정지**해
+     있어서, 지연이 길면 헤드리스 기하 게이트(smoke_layout `settle` 250ms 간격 2연속 동일 = 정착 판정)가 그
+     정지 상태를 「정착」으로 오인해 잰다. 순번 상한(_RV_CAP 5)이 이 계약을 지킨다 — 늘리지 말 것. */
+.rv{animation:rvUp var(--rv-dur,.42s) cubic-bezier(.22,.9,.36,1) backwards;animation-delay:calc(var(--rv-i,0) * var(--rv-step,.055s))}
+@keyframes rvUp{from{opacity:0;transform:translateY(14px);clip-path:inset(100% 0 0 0)}to{opacity:1;transform:translateY(0);clip-path:inset(0 0 0 0)}}
+@media (prefers-reduced-motion:reduce){.rv{animation:none}}   /* 감속 선호 = 리빌 전면 off(2026 접근성 표준 · 이 파일 pin·pet·ol-dots 선례와 동일 축) */
 /* 담당자 일정 완료(종료시각/18시 경과·수동 완료) — 콘텐츠(.ev.done)와 동일하게 취소선 */
 .sp-item.done > *{text-decoration:line-through;text-decoration-color:#888;text-decoration-thickness:1.2px;text-decoration-skip-ink:none}
 .sp-item.done .ev-time,.sp-item.done .ev-plat,.sp-item.done .ev-title span{color:var(--past-text)!important}
@@ -1070,7 +1142,7 @@ table.promo-board-table th:last-child .col-resize-handle{display:none}
 .panel-prog-head:hover{background:rgba(74,77,231,0.04)}
 .panel-prog-arrow{font-size:9px;color:#999;width:12px;text-align:center;transition:transform .25s cubic-bezier(0.4,0,0.2,1);display:inline-block;transform-origin:center}
 .panel-prog-arrow.open{transform:rotate(90deg)}
-.panel-prog-title{flex:1;font-size:13px;font-weight:600;color:#333}
+.panel-prog-title{flex:1;font-size:calc(7.15px + var(--pw)*.01625);font-weight:600;color:#333}   /* 기준 13px — --pw 연동 */
 .panel-prog-cnt{font-size:11px;font-weight:700;color:var(--accent);background:rgba(74,77,231,0.1);padding:2px 8px;border-radius:10px;min-width:16px;text-align:center}
 .panel-prog-body{max-height:0;overflow:hidden;opacity:0;transition:max-height .35s cubic-bezier(0.4,0,0.2,1),opacity .2s ease,padding-top .25s ease;padding-top:0}
 .panel-prog-body.open{max-height:2000px;opacity:1;padding-top:8px;transition:max-height .45s cubic-bezier(0.4,0,0.2,1),opacity .3s ease .05s,padding-top .3s ease}
@@ -1079,6 +1151,14 @@ table.promo-board-table th:last-child .col-resize-handle{display:none}
 /* 프로그램 row — flex layout 강제 (외부 override 차단) */
 .panel-perf-row{display:flex !important;flex-direction:row !important;flex-wrap:nowrap !important;align-items:center !important;width:100%;box-sizing:border-box}
 .panel-perf-row > div{min-width:0}
+/* [260806 운영자 「사이드바가 줄어들게 되면, 프로그램 타이틀이 줄어들도록」] 프로그램 행 3부품 = 정본 CSS로 승격.
+   구판은 세 자리(공연 · 전시 · 교육/대관)가 **같은 활자를 인라인으로 각각 재타이핑**하고 있었다 —
+   인라인은 CSS를 이기므로 위 `--pw` 연동이 이 줄들에는 애초에 닿지 않는다(그리고 「클래스가 같으면 픽셀도 같다」 계약도 못 진다).
+   자리마다 다른 건 **색뿐**(공연 --accent · 전시 살몬 · 교육/대관 cfg[2])이라 색만 인라인에 남기고 활자·말줄임만 여기로 올린다.
+   기준값 = 종전 인라인 px 그대로(13/10/11) = 값 변경 0 · 새 부품 창작 0. */
+.pp-nm{font-size:calc(7.15px + var(--pw)*.01625);font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}   /* 기준 13px = 프로그램 타이틀 */
+.pp-vn{font-size:calc(5.5px + var(--pw)*.0125);color:var(--dim);margin-top:1px}                                                                 /* 기준 10px = 장소 */
+.pp-dd{font-size:calc(6.05px + var(--pw)*.01375);font-weight:600;white-space:nowrap;flex-shrink:0}                                              /* 기준 11px = D-day/N일차 */
 /* URL 있으면 호버 강조 */
 .panel-perf-row[onclick]:hover{transform:translateX(2px);box-shadow:0 2px 6px rgba(0,0,0,0.08)}
 /* 캘린더 셀 안 프로그램 뱃지 — URL 있으면 호버 강조 */
@@ -1105,7 +1185,7 @@ table.promo-board-table th:last-child .col-resize-handle{display:none}
 
 /* ═══ MODAL ═══ */
 .modal-bg{display:none;position:fixed;inset:0;background:rgba(26,26,46,0.4);backdrop-filter:blur(4px);z-index:100;align-items:center;justify-content:center}
-.modal-bg.show{display:flex}
+.modal-bg.show{display:flex;animation:fadeIn .18s ease}   /* [260810-2] 「띄워지는 순간」 = 백드롭이 먼저 깔리고 셸이 올라온다(셸 = 기존 .modal fadeUp .25s 불변). 기존 fadeIn 키프레임 재사용 · 투명도만(리플로 0) */
 .confirm-bg{display:none;position:fixed;inset:0;background:rgba(26,26,46,0.45);backdrop-filter:blur(4px);z-index:200;align-items:center;justify-content:center}
 .confirm-bg.show{display:flex}
 .confirm{background:#fff;border:1px solid var(--glass-border);border-radius:20px;padding:24px 28px 22px;width:360px;max-width:92vw;text-align:center;box-shadow:0 24px 80px rgba(0,0,0,0.18);animation:fadeUp .2s ease}
@@ -4762,7 +4842,7 @@ async function initApp(){
     loadAllMasters().catch(function(e){console.warn('[initApp loadAllMasters]',e);}),
     loadCafeJangdo().catch(function(e){console.warn('[initApp loadCafeJangdo]',e);}),
     loadApplySettings().catch(function(e){console.warn('[initApp loadApplySettings]',e);})
-  ]);
+  ]).then(function(){ try{_memBootWarm();}catch(_e){console.warn('[initApp memBootWarm]',_e);} });   // [260810 운영자] 고객 분석(회원·예매집계) 선로딩 = 첫 화면 로더가 다 끝난 뒤 출발 — 사유·가드는 _memBootWarm 주석
   // MS(OneDrive) 토큰 미리 확보 — 폴더 선택 때 팝업 안 뜨게 (재방문 silent / 첫 로그인 popup 1회)
   _msalPrefetch();
 }
@@ -6540,7 +6620,13 @@ function _panelRailReflow(){
   var w=(sr&&sr.offsetParent!==null&&sr.offsetWidth)?sr.offsetWidth:0;
   p.style.right=w+'px';
   var open=(typeof panelOpen!=='undefined')&&panelOpen;
-  var ma=document.getElementById('main-area'); if(ma)ma.style.marginRight=(!w&&open)?'360px':'0';
+  /* [260806] 캘린더가 밀리는 폭 = 패널 **실폭**. 구판은 여기에 `'360px'`를 다시 적어 뒀는데,
+     사이드바 폭이 비율 잠금(CSS `--pw` = clamp(200px,18.75vw,360px))으로 바뀌면 그 숫자가 곧바로 어긋난다
+     = 좁은 창에서 캘린더와 사이드바 사이에 빈 띠가 생기거나 캘린더가 사이드바 밑으로 밀려 들어간다.
+     → 숫자를 지우고 **CSS가 정한 폭을 읽는다**(값 이원화 0 · CSS가 단일 출처).
+     display:none이면 offsetWidth가 0이라 computed 폭으로 폴백(clamp/vw는 계산값으로 해석된다). */
+  var pw=p.offsetWidth||parseFloat(getComputedStyle(p).width)||360;
+  var ma=document.getElementById('main-area'); if(ma)ma.style.marginRight=(!w&&open)?(pw+'px'):'0';
 }
 // 최신 입력 기준일 — 헤더 '기준 M.D' 표기 (공연 일일입력 + 전시일일 중 최신)
 function _srailAsof(){
@@ -7444,7 +7530,15 @@ function _bizListTable(list){
   //   전부 공연명 칸(남는 폭을 먹는 유일한 열)에서 나온다 = 운영자가 허락한 「침범」. 머리글·값에 같은 값을 먹여
   //   세로축이 안 어긋나게 한다(260731 「머리글·본문에 같은 값」 규약과 동일 축).
   var _colGap=22;
-  [['일시',''],['공연명',''],['장르',''],['관객수','명'],['오픈석','명, 회'],['점유율','%'],['매출','만원']].forEach(function(c,i){h+='<td style="padding:8px 12px;position:sticky;top:0;z-index:1;background:var(--surface-solid);box-shadow:inset 0 -2px 0 var(--border);vertical-align:top;'+(i>=2?'text-align:right;padding-left:'+_colGap+'px;':'')+(i===0?'padding-left:14px;':'')+(i===1?'padding-left:'+_nameHdPad+'px;':'')+(i===6?'padding-right:14px;':'')+'white-space:nowrap">'+c[0]+(c[1]?'<div style="font-size:10.5px;font-weight:400;margin-top:2px">(단위: '+c[1]+')</div>':'')+'</td>';});
+  // [260811 운영자 「1줄일 경우에는 그냥 2줄이라고 생각했을때 높이의 중앙에 글자가 오도록」] 머리글 세로 정렬 = **middle**.
+  //   이 행은 「(단위: …)」 부줄이 붙는 4칸(관객수·오픈석·점유율·매출)이 높이를 정하고, 부줄이 없는 3칸(일시·공연명·장르)은
+  //   구 `top`에서 그 높이의 **위쪽에 매달려** 아래로 9.0px 여백만 남겼다(실측 · `tools/scratch/probe_saletbl_hdvalign.mjs`).
+  //   `middle`이면 1줄 칸 글자 중심이 2줄 칸 잉크(제목줄~단위줄) 중심과 **Δ1.0px**로 맞는다(칸 상자 중심 기준은 0 — 남은 1px은
+  //   부줄 `margin-top:2px`가 잉크 덩어리를 아래로 민 몫). 2줄 칸은 자기 높이가 곧 행 높이라
+  //   top↔middle이 같은 자리 = **회귀 0**. 값은 이 표에 이미 있는 어휘(`.adm-tbl`·`.cs-tbl`·`.ana-tbl` tbody td·`_yrTable` rowspan 칸) 그대로.
+  //   ⚠ **연간 실적 표(`_yrTable` ~L12755)는 여기 맞춰 돌리지 마라** — 그쪽은 2줄 칸이 15칸 중 1칸뿐이라
+  //     260723 운영자가 정반대로 `top`을 못 박았다(「단줄 연도가 중앙정렬로 떠 보이던 것 교정」). 갈래 사유 = 기틀 §5.5.
+  [['일시',''],['공연명',''],['장르',''],['관객수','명'],['오픈석','명, 회'],['점유율','%'],['매출','만원']].forEach(function(c,i){h+='<td style="padding:8px 12px;position:sticky;top:0;z-index:1;background:var(--surface-solid);box-shadow:inset 0 -2px 0 var(--border);vertical-align:middle;'+(i>=2?'text-align:right;padding-left:'+_colGap+'px;':'')+(i===0?'padding-left:14px;':'')+(i===1?'padding-left:'+_nameHdPad+'px;':'')+(i===6?'padding-right:14px;':'')+'white-space:nowrap">'+c[0]+(c[1]?'<div style="font-size:10.5px;font-weight:400;margin-top:2px">(단위: '+c[1]+')</div>':'')+'</td>';});
   h+='</tr></thead><tbody>';
   // ⚠ 오픈석 칸은 `3,892(4)` **한 덩어리**를 오른쪽 정렬한다(운영자 원문 그대로). 그래서 회차 자릿수가 섞인 해에는
   //   좌석 숫자 끝자리가 1자리 ↔ 2자리에서 7.2px 어긋난다(실데이터 1,307공연 중 10회 이상 **13건**).
@@ -8325,7 +8419,7 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
       var t=Math.round(L.y).toLocaleString();
       var dx=_bizLabFit({x:L.x*pxPerDay,y:L.y*_lbPxY,w:_bizLabW(t)},_lbBox);
       lay.annotations.push({xref:'x',x:L.x,xanchor:'center',xshift:dx,yref:'y',y:L.y,yanchor:'bottom',yshift:7,
-        text:t,showarrow:false,font:{size:_BIZ_LAB_FS,color:L.col}});
+        text:t,showarrow:false,font:{size:_BIZ_LAB_FS,color:_lbInk}});   // [260809-2 운영자 승인] 선 끝 숫자도 막대와 같은 흐린 검정(구 선색 = 260805 판정의 개정 · #16 ⓐ)
     });
   }
   // [260806-11 운영자 「교육 위에 1 동그라미 저건 없어도 될 듯」] 교육 색인(①②③…) **표기 철거** —
@@ -8450,6 +8544,7 @@ function _bizDrawExhibMonthly(divId,list,hgt){
   var rows=(list||[]).slice();
   if(!rows.length){ try{Plotly.purge(div);}catch(_e0){} return; }
   var dim=_yrCss('--dim'), grid=_yrCss('--border'), pc=_yrCss('--peach-text')||'', srf=_yrCss('--surface-solid'), Y=_bizmState.year;
+  var _lbInk=_yrCss('--neutral-text')||dim;   // [260809-2] 값 라벨 잉크 = 막대 차트(#18)와 **같은 한 벌**(중립 사다리 한 단 · 새 색 0)
   var today=new Date(); today.setHours(0,0,0,0);
   var wpx=div.clientWidth||360, ax=_bizMonthAxis(Y,wpx<430);
   var md=function(d){ return ('0'+(d.getMonth()+1)).slice(-2)+'.'+('0'+d.getDate()).slice(-2); };
@@ -8570,7 +8665,11 @@ function _bizDrawExhibMonthly(divId,list,hgt){
     if(_hit(L,side))side=-side;              // 겹치면 180도 반대편(운영자 6차)
     if(_hit(L,side))return;                  // 양쪽 다 막힘 = 생략(정확값은 툴팁)
     placed.push({x:L.x,y:L.y,side:side});
-    notes.push({xref:'x',x:L.x,xanchor:'center',yref:'y',y:L.y,yanchor:(side>0)?'bottom':'top',yshift:(side>0)?6:-9,text:Math.round(L.v).toLocaleString(),showarrow:false,font:{size:10.5,color:L.col}});
+    // [260809-2 운영자 승인 「응 그렇게 해주면 됨」] 잉크 = **흐린 검정 한 벌**(`--neutral-text`) — 260805 「꼭자락 = 선색」의 개정.
+    //   같은 화면의 막대 값 라벨이 260809로 이미 이 잉크다(#18) — 선 끝 숫자만 색을 달리 하면 「숫자는 각기 다른 색이
+    //   아니라 조금 흐린 검정으로」가 한 화면에서 반만 성립한다. 어느 선의 값인지는 **자리**(그 선의 꼭자락)가 말한다.
+    //   ⚠ 보조 회색 라벨(아래 월별 누적 합 · 9.5px `--dim`)은 그대로 — 중립 사다리 한 단 아래가 「보조」를 말한다(색 갈래 아님).
+    notes.push({xref:'x',x:L.x,xanchor:'center',yref:'y',y:L.y,yanchor:(side>0)?'bottom':'top',yshift:(side>0)?6:-9,text:Math.round(L.v).toLocaleString(),showarrow:false,font:{size:_BIZ_LAB_FS,color:_lbInk}});
   });
   // [260805 운영자 6차] 「각 차트(월별) 위에 **누적 몇개인지** 옆에 **회색 톤**으로」 — 계단 칸 꼭대기의 그 달 누적 합.
   //   회색 = `--dim`(앱 표준 회색 · 새 색 0) · 9.5px = 축 눈금보다 한 단 작게 = **보조 정보**임이 활자에서 드러난다.
@@ -10877,6 +10976,7 @@ function _anaRender(){
   if(s===2){
     body.innerHTML='<div id="ana-screen"></div>';
     _anaScreen2(document.getElementById('ana-screen'));
+    _rvSweep(document.getElementById('ana-screen'));   // [260810-2] 드릴 화면도 같은 리빌(창이 그려지는 결)
     return;
   }
   body.innerHTML='<div id="ana-screen"></div>'
@@ -10884,6 +10984,10 @@ function _anaRender(){
     +'<div id="ana-screen3"></div>';
   _anaScreen1(document.getElementById('ana-screen'));
   _anaScreen3(document.getElementById('ana-screen3'));
+  // [260810-2] 리빌은 **안쪽 화면**에 건다 — #ana-body 직계(screen/구분줄/screen3 3개)에 걸면 화면 통째로 한 번에 올라와
+  //   구획만 움직이고 내용은 정지해 보인다(=「그려지는」 느낌이 안 난다). 두 스윕은 같은 물결(_rvWave)로 이어진다.
+  _rvSweep(document.getElementById('ana-screen'));
+  _rvSweep(document.getElementById('ana-screen3'));
 }
 function _anaGo(n){ _anaState.screen=n; _anaRender(); }
 
@@ -12443,19 +12547,69 @@ function _salesRender(){
   if(perfs.length){ _bizEnsurePlotly(function(){ _salesDrawTarget(); if(active.length){ _salesDrawBench(); _salesDrawYield(); } _accordionize('sales-body'); _salesSectionPop(); }); }
 }
 // (260612) 보드 첫 진입 시 [1]·[2] 섹션 촤르르 펼침 (아코디언 래핑 후 stagger)
-function _salesSectionPop(){
-  var body=document.getElementById('sales-body');if(!body)return;
-  var i=0;
-  Array.prototype.forEach.call(body.children,function(el){
-    var t=(el.textContent||'').trim();
-    if(/^[▾▸]?\s*\[[12]\]/.test(t)&&t.length<60){
-      el.classList.add('sec-pop');el.style.animationDelay=(i*0.22)+'s';
-      var wrap=el.nextElementSibling;
-      if(wrap){wrap.classList.add('sec-pop');wrap.style.animationDelay=(0.1+i*0.22)+'s';}
-      i++;
-    }
+/* ══ 대시보드 리빌 배선 `_rv*` — [260810-2 운영자 「창, 띄워지는 순간, 그려지는 … 차트도 딱 떴을때 아래에서 위로
+     딱 올라오고(각각의 차트에 따름) … 현황판이 실시간으로 있는 액티브」] ═══════════════════════════════
+   모양의 정본 = CSS `.rv` **한 벌**(위 §촤르르 리빌 블록). 여기서는 「누구에게 · 언제 붙일지」만 정한다
+   (인라인 animation 재타이핑 금지 = 모달 머리줄 260805-23·컴포넌트 패리티 260805-24와 같은 축).
+   배선 = **3층 자동부착**(Q39 입력칸 클립의 「스윕 + MutationObserver」 문법 계승 — 자리마다 손배선하면
+   새 보드가 생길 때마다 빠진다. 구판이 딱 그 상태였다: 촤르르가 판매 보드 [1]·[2] 두 줄에만 있었다):
+     ① `_rvSweep(root)`  — 보드 본문이 그려질 때 **직계 자식**을 위→아래 순차 리빌(= 창이 「그려진다」)
+     ② `_rvChartMo`      — Plotly가 `.plot-container`를 심는 **그 순간** 그 차트만 리빌(= 각각의 차트에 따름)
+     ③ IntersectionObserver — 화면 밖 차트는 **보일 때** 리빌(L5510 `fadeObs` 선례) = 스크롤해 내려가면 그때 올라온다
+   ⚠ 빈 상자(차트 자리)는 ①이 **건드리지 않는다** — 껍데기만 먼저 올라오고 내용은 나중에 툭 나타나면
+     「차트가 올라온다」가 아니라 「빈 칸이 올라왔다가 채워진다」가 된다. 그 자리는 ②가 진다. */
+var _RV_STEP=0.055, _RV_CAP=5;   // 항목 간 55ms(2026 권고 30~80ms) · 순번 상한 5 = 최대 지연 275ms(+0.42s = 0.695s < smoke_layout settle 0.8s · CSS 블록 ⚠ 참조)
+var _rvWave={t:0,n:0};           // 같은 「물결」 안에서만 순번이 이어진다(보드 스윕 → 그 직후 그려지는 차트들이 자연스럽게 뒤를 잇는다)
+function _rvOff(){ try{ return !!(window.matchMedia&&window.matchMedia('(prefers-reduced-motion:reduce)').matches); }catch(_e){ return false; } }
+function _rvNext(){ var now=(window.performance&&performance.now)?performance.now():+new Date(); if(now-_rvWave.t>600)_rvWave.n=0; _rvWave.t=now; return _rvWave.n++; }
+function _rvOn(el,i){
+  if(!el||el.nodeType!==1||el.__rv||_rvOff())return;
+  el.__rv=1; el.style.setProperty('--rv-i',Math.min(i||0,_RV_CAP)); el.classList.add('rv');
+}
+function _rvSweep(root){
+  if(!root||_rvOff())return;
+  Array.prototype.forEach.call(root.children,function(el){
+    if(el.nodeType!==1||el.__rv)return;
+    if(!el.firstChild)return;                                   // 빈 상자 = 차트 자리 → ②가 맡는다(위 ⚠)
+    if(!el.getClientRects().length)return;                      // 안 그려진 자리는 순번을 안 먹는다(중간에 빈 순번 = 뒤가 괜히 늦어짐)
+    _rvOn(el,_rvNext());
   });
 }
+var _rvIO=null;
+function _rvIOget(){
+  if(_rvIO!==null)return _rvIO;
+  try{ _rvIO=new IntersectionObserver(function(es){ es.forEach(function(x){ if(x.isIntersecting){ _rvIO.unobserve(x.target); _rvOn(x.target,_rvNext()); } }); },{threshold:0.08}); }
+  catch(_e){ _rvIO=0; }
+  return _rvIO;
+}
+function _rvChart(div){
+  if(!div||div.nodeType!==1||div.__rv||_rvOff())return;
+  if(div.style&&div.style.animationName)return;   // 자기 모션을 이미 인라인으로 가진 자리(책 1면 #yrm-chart의 fadeUp)는 건드리지 않는다 — 인라인이 클래스를 이겨 어차피 안 먹고, 그 면은 헤드리스 기하 계약(smoke_layout)이 잰다
+  var r=div.getBoundingClientRect(); if(!r.height)return;
+  var vh=window.innerHeight||document.documentElement.clientHeight||0;
+  if(r.top<vh&&r.bottom>0){ _rvOn(div,_rvNext()); return; }      // 이미 보이는 차트 = 지금 올린다
+  var io=_rvIOget(); if(io)io.observe(div); else _rvOn(div,_rvNext());
+}
+(function _rvChartMo(){
+  if(!window.MutationObserver)return;
+  // Plotly는 그래프 div 안에 `.plot-container`를 **직접 자식으로** 심는다 → addedNodes 한 겹만 보면 된다
+  // (querySelector로 파고들면 캘린더 대량 렌더마다 서브트리를 뒤지게 된다 = 리빌 하나 때문에 앱 전체가 느려진다).
+  var mo=new MutationObserver(function(ms){
+    for(var i=0;i<ms.length;i++){
+      var a=ms[i].addedNodes;
+      for(var j=0;j<a.length;j++){
+        var n=a[j];
+        if(n.nodeType!==1||!n.classList||!n.classList.contains('plot-container'))continue;
+        _rvChart(n.parentElement);
+      }
+    }
+  });
+  var start=function(){ try{ mo.observe(document.body,{childList:true,subtree:true}); }catch(_e){} };
+  if(document.body)start(); else document.addEventListener('DOMContentLoaded',start);
+})();
+// (260612 → 260810-2) 보드 첫 진입 촤르르. 구판 = 판매 보드의 「[1]·[2]」 제목줄 두 개만 0.22s 간격 `.sec-pop`.
+//   운영자 260810-2 지시로 **전 보드 공통 리빌**(_rvSweep)로 승격 — 이 함수는 호출 자리(_salesRender)를 지키는 얇은 껍데기다.
+function _salesSectionPop(){ _rvSweep(document.getElementById('sales-body')); }
 // === [DB통합] 사업 현황 (dash 2_사업현황 '연간 운영현황' 이식 — 프로모 톤) ===
 var _bizState = { raw:null, year:null, types:{}, escHandler:null };
 var _BIZ_TYPE_ORDER = ['기획','대관','기타'];
@@ -12670,7 +12824,7 @@ function _bizRender(){
   const sa=(_bizState.raw&&_bizState.raw.syncedAt)?_bizState.raw.syncedAt:null;
   if(sa)h+='<div style="text-align:right;color:#bbb;font-size:11px;margin-top:10px">동기화: '+escapeHtml(sa)+'</div>';
   body.innerHTML=h;
-  _bizEnsurePlotly(function(){ _bizDrawChart(list, selTypes.length>1); _bizDrawGenreBench(); _bizDrawSeason(); _accordionize('biz-body'); });
+  _bizEnsurePlotly(function(){ _bizDrawChart(list, selTypes.length>1); _bizDrawGenreBench(); _bizDrawSeason(); _accordionize('biz-body'); _rvSweep(body); });   // [260810-2] 리빌 = 아코디언 래핑 **뒤**(직계 자식이 확정된 다음 · 판매 보드 _salesSectionPop 순서와 동일)
 }
 // ============================================================
 // 연간 실적 (사업 현황) — 예울마루(망마·장도) 2012~2026 상반기(잠정) 연간 실적 표를 '그대로' 살린 보드.
@@ -12962,11 +13116,12 @@ function _yrRender(pfx){
   h+=_yrCard('연평균',pfx+'-k3','','--green');
   h+='<div class="bizm-kpi" style="--kpitok:var('+dtok+')"><div class="lab">전년 대비 (2025 vs 2024)</div><div class="val">'+darr+' <span id="'+pfx+'-k4">0</span>'+(dpct?'<span class="u">'+dpct+'</span>':'')+'</div></div>';   // [260723f Opus] 글래스 KPI 통일
   h+='</div>';
-  h+='<div class="bizm-card"><div class="ct">'+(st.year==='all'?('연도별 '+mLabel+' 추이'):(st.year+'년 분야별 '+mLabel))+' <span class="sub">— '+catTxt+(st.year==='all'?(' · 막대=실적, 선=추세'+((st.metric==='인원')?', 점선 기둥=2026 예상 누적':'')):' · 선택 연도')+'</span></div><div id="'+pfx+'-chart" style="height:360px;margin:0 6px 6px;animation:fadeUp .45s ease"></div></div>';   // [260723f Opus] 차트 = 흰 서피스 카드 통일
+  h+='<div class="bizm-card"><div class="ct">'+(st.year==='all'?('연도별 '+mLabel+' 추이'):(st.year+'년 분야별 '+mLabel))+' <span class="sub">— '+catTxt+(st.year==='all'?(' · 막대=실적, 선=추세'+((st.metric==='인원')?', 점선 기둥=2026 예상 누적':'')):' · 선택 연도')+'</span></div><div id="'+pfx+'-chart" style="height:360px;margin:0 6px 6px"></div></div>';   // [260723f Opus] 차트 = 흰 서피스 카드 통일 · [260810-2] 인라인 `animation:fadeUp .45s`는 정본 리빌(.rv)로 이관 — 인라인이 남아 있으면 클래스가 못 이겨 이 차트만 옛 페이드로 남는다(모양 SSOT 이원화 = 260805-23이 막은 그 축)
   var _navCss='width:28px;height:28px;border-radius:8px;border:1.5px solid var(--glass-bd);background:var(--glass-surface);color:var(--text);font-size:16px;font-weight:700;cursor:pointer;line-height:1;font-family:inherit;display:inline-flex;align-items:center;justify-content:center;box-shadow:var(--glass-shadow)';
   h+='<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin:2px 0 8px"><div style="font-size:13px;font-weight:700;color:var(--text)">전체 실적표 <span style="font-weight:400;color:var(--dim);font-size:11px">— 엑셀 원본 그대로 · 선택 연도 열 하이라이트 · 2025 최근 취합 강조</span></div><div style="display:flex;gap:6px;flex-shrink:0"><button type="button" onclick="_yrScrollTable(-1,\''+pfx+'\')" title="이전 연도들 보기" style="'+_navCss+'">‹</button><button type="button" onclick="_yrScrollTable(1,\''+pfx+'\')" title="다음 연도들 보기" style="'+_navCss+'">›</button></div></div>';   // [260723 운영자] 묻히는 연도 열 = 부제줄 우측 ◀▶로 가로 스크롤(데이터 안 가리는 위치)
   h+=_yrTable(pfx);
   body.innerHTML=h;
+  _rvSweep(body);   // [260810-2] 창이 그려지는 결 — KPI 줄 ▸ 차트 카드 ▸ 실적표 순차(차트 속은 아래 _rvChart가 따로 올린다)
   _yrCountUp(document.getElementById(pfx+'-grand'),_YR.grand,1200);
   _yrCountUp(document.getElementById(pfx+'-k1'),selSum,900);
   _yrCountUp(document.getElementById(pfx+'-k2'),combo[bestIdx],900);
@@ -16348,27 +16503,32 @@ function _promoColVal(col,r){
   if(col==='content')return (r['프로그램']||'').toString().trim();
   return '';
 }
-function closeColFilter(){var el=document.getElementById('colf-pop-wrap');if(el)el.remove();document.removeEventListener('mousedown',_colfOutside,true);}
+// [260812] 팝업 **한 벌**을 두 표가 나눠 쓴다 — 홍보 신청·확인 표(openColFilter)와 고객 분류 표(_segColFilter).
+//   왜 = 「하나를 바꾸면 다른 것도 바뀌게」(운영자 260807-8 사업 목록 표와 같은 축). 같은 조작이 두 화면에서
+//   다르게 보이면 그때부터 둘은 서로 다른 부품이 된다 — 그 자리에서 다시 그리지 마라(정본 컴포넌트 패리티 260805-24).
+//   쓰는 쪽이 주는 것 = 값 목록·현재 선택·정렬/적용 콜백뿐. 마크업·치수·색은 여기 하나가 정본이다.
+var _colfCtx=null;
+function closeColFilter(){var el=document.getElementById('colf-pop-wrap');if(el)el.remove();_colfCtx=null;document.removeEventListener('mousedown',_colfOutside,true);}
 function _colfOutside(e){var p=document.getElementById('colf-pop');if(p&&!p.contains(e.target))closeColFilter();}
 function colfToggleAll(on){Array.prototype.forEach.call(document.querySelectorAll('#colf-pop .colf-cb'),function(cb){cb.checked=on;});}
-function applyColFilter(col){
+function colfSort(dir){var c=_colfCtx;closeColFilter();if(c&&c.onSort)c.onSort(dir);}
+function applyColFilter(){
+  var c=_colfCtx;if(!c)return;
   var cbs=Array.prototype.slice.call(document.querySelectorAll('#colf-pop .colf-cb'));
   var checked=cbs.filter(function(cb){return cb.checked;}).map(function(cb){return cb.value;});
-  if(checked.length===cbs.length||checked.length===0){delete _promoFilter.colFilters[col];}
-  else{_promoFilter.colFilters[col]=checked;}
-  closeColFilter();renderPromoBoard();
+  // 전부 켜짐·전부 꺼짐 = 필터 해제(구판 semantics 그대로 — 값을 다 지우고 적용하면 「안 거른 것」이다)
+  var sel=(checked.length===cbs.length||checked.length===0)?null:checked;
+  closeColFilter();if(c.onApply)c.onApply(sel);
 }
-function openColFilter(col,ev){
-  if(ev){ev.stopPropagation();ev.preventDefault();}
-  var trigger=ev&&ev.currentTarget;
-  var vals={};(records||[]).forEach(function(r){if(r._isSpecial)return;var v=_promoColVal(col,r);if(v!=='')vals[v]=1;});
-  var list=Object.keys(vals).sort(function(a,b){return a.localeCompare(b,'ko');});
-  var sel=_promoFilter.colFilters[col];var allChecked=!sel;
+// opts = {anchor, list:[표시값], sel:[선택값]|null, onSort(dir), onApply(sel|null)}
+function _colfPop(opts){
+  _colfCtx=opts;
+  var trigger=opts.anchor,list=opts.list||[],sel=opts.sel||null,allChecked=!sel;
   var box='background:#fff;border:1px solid #e0e0e0;border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,0.16);width:232px;font-size:12px;overflow:hidden;font-family:inherit;text-align:left';
   var h='<div id="colf-pop" style="position:fixed;z-index:100000;'+box+'">';
   h+='<div style="display:flex;border-bottom:1px solid #f0f0f0">';
-  h+='<button onclick="_promoFilter.sortBy=\''+col+'\';_promoFilter.sortDir=\'asc\';closeColFilter();renderPromoBoard()" style="flex:1;padding:8px;border:0;background:#fff;cursor:pointer;font-size:11.5px;color:#444;font-family:inherit">▲ 오름차순</button>';
-  h+='<button onclick="_promoFilter.sortBy=\''+col+'\';_promoFilter.sortDir=\'desc\';closeColFilter();renderPromoBoard()" style="flex:1;padding:8px;border:0;border-left:1px solid #f0f0f0;background:#fff;cursor:pointer;font-size:11.5px;color:#444;font-family:inherit">▼ 내림차순</button>';
+  h+='<button onclick="colfSort(\'asc\')" style="flex:1;padding:8px;border:0;background:#fff;cursor:pointer;font-size:11.5px;color:#444;font-family:inherit">▲ 오름차순</button>';
+  h+='<button onclick="colfSort(\'desc\')" style="flex:1;padding:8px;border:0;border-left:1px solid #f0f0f0;background:#fff;cursor:pointer;font-size:11.5px;color:#444;font-family:inherit">▼ 내림차순</button>';
   h+='</div>';
   h+='<label style="display:flex;align-items:center;gap:6px;padding:8px 12px;border-bottom:1px solid #f0f0f0;cursor:pointer;font-weight:600;color:#333"><input type="checkbox" id="colf-all" '+(allChecked?'checked':'')+' onchange="colfToggleAll(this.checked)" style="accent-color:var(--accent)">(전체 선택)</label>';
   h+='<div style="max-height:220px;overflow-y:auto;padding:4px 0">';
@@ -16377,13 +16537,22 @@ function openColFilter(col,ev){
   h+='</div>';
   h+='<div style="display:flex;gap:6px;padding:8px 10px;border-top:1px solid #f0f0f0">';
   h+='<button onclick="closeColFilter()" style="flex:1;padding:7px;border:1px solid #ddd;border-radius:7px;background:#fff;color:#666;cursor:pointer;font-family:inherit;font-size:11.5px">닫기</button>';
-  h+='<button onclick="applyColFilter(\''+col+'\')" style="flex:1;padding:7px;border:0;border-radius:7px;background:var(--accent);color:#fff;cursor:pointer;font-weight:600;font-family:inherit;font-size:11.5px">적용</button>';
+  h+='<button onclick="applyColFilter()" style="flex:1;padding:7px;border:0;border-radius:7px;background:var(--accent);color:#fff;cursor:pointer;font-weight:600;font-family:inherit;font-size:11.5px">적용</button>';
   h+='</div></div>';
   var wrap=document.getElementById('colf-pop-wrap');if(!wrap){wrap=document.createElement('div');wrap.id='colf-pop-wrap';document.body.appendChild(wrap);}
   wrap.innerHTML=h;
   var pop=document.getElementById('colf-pop');
   if(trigger&&pop){var rc=trigger.getBoundingClientRect();var left=Math.max(8,Math.min(rc.left,window.innerWidth-240));pop.style.top=(rc.bottom+4)+'px';pop.style.left=left+'px';}
   setTimeout(function(){document.addEventListener('mousedown',_colfOutside,true);},0);
+}
+function openColFilter(col,ev){
+  if(ev){ev.stopPropagation();ev.preventDefault();}
+  var vals={};(records||[]).forEach(function(r){if(r._isSpecial)return;var v=_promoColVal(col,r);if(v!=='')vals[v]=1;});
+  _colfPop({anchor:ev&&ev.currentTarget,
+    list:Object.keys(vals).sort(function(a,b){return a.localeCompare(b,'ko');}),
+    sel:_promoFilter.colFilters[col]||null,
+    onSort:function(dir){_promoFilter.sortBy=col;_promoFilter.sortDir=dir;renderPromoBoard();},
+    onApply:function(sel){if(sel)_promoFilter.colFilters[col]=sel;else delete _promoFilter.colFilters[col];renderPromoBoard();}});
 }
 function openPromoBoard(){
   // 매번 열 때 필터 초기화 — 항상 [전체] 기준
@@ -21298,7 +21467,7 @@ function openPromoCheck(){
   //   탭 문법 = 영상 편집기(#ve-tabs) 정본 그대로(.prog-tab · --neutral 트랙 · flex:none) — 신규 부품·색 0.
   //   [260805-34] padding 7px 16px는 정본 `.prog-tab`이 진다 — 자리마다 인라인으로 다시 적지 않는다(패리티 계약).
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closePromoCheck)">'
-    + '<div class="modal" style="width:'+_PC_W.base+';max-height:88vh;--mpad-y:0;--mpad-x:0;position:relative;display:flex;flex-direction:column;overflow:hidden">'
+    + '<div class="modal" style="width:'+_PC_BOX.w+';height:'+_PC_BOX.h+';max-height:'+_PC_BOX.h+';--mpad-y:0;--mpad-x:0;position:relative;display:flex;flex-direction:column;overflow:hidden">'
     + '<button class="modal-x" onclick="closePromoCheck()" title="닫기" aria-label="닫기">✕</button>'
     + _mhead('AI 홍보','점검으로 지금 손볼 곳을 찾고 · 전략 추론으로 다음 홍보를 계획해요'+(seg?' · 고객 분류로 누가 봤는지 뽑아요':''))
     + '<div style="padding:12px 24px 0;flex:none"><div id="pc-tabs" style="display:flex;gap:2px;background:var(--neutral);border-radius:8px;padding:3px;width:max-content">'
@@ -21316,14 +21485,19 @@ function openPromoCheck(){
   _paAutoLoad();
 }
 // 탭 전환 — 뷰 display만 토글(상태·결과 보존 = 점검을 오가도 추론 결과가 안 사라진다)
-// 모달 폭 = 탭이 정한다. 고객 분류만 10열 표라 760px에선 절반이 가로 스크롤 뒤로 숨는다(운영자 「최대한 다 나오게」).
-//   ⚠ 값을 한 곳에만 둔다 — 모달 조립부와 여기 두 군데에 적으면 한쪽만 고쳐져 탭을 오갈 때 폭이 튄다.
-var _PC_W={base:'min(760px,94vw)',seg:'min(1180px,96vw)'};
+// [260806-18 운영자] 「ai홍보 창 크기를 **항상 동일하게** · 지금 **ai 홍보 점검 크기를 기준으로 고정**」 —
+//   창 = 점검 탭이 이미 갖고 있던 선언(폭 min(760px,94vw) · 88vh)을 **상한이 아니라 고정값으로 승격**한 한 벌.
+//   새 수치 0(둘 다 이 모달이 쓰던 값) · 셸 문법은 정본 워크스페이스 셸 `.pb-modal`(홍보 신청·확인 L16364) 계승
+//   = width/height 고정 + overflow:hidden + flex 세로 + 본문만 스크롤.
+//   ⚠ 구판은 탭이 폭을 정했다(고객 분류만 1180) — 그래서 탭을 누를 때마다 창이 760↔1180으로 튀었고
+//     높이도 내용대로 흘러 실측 4가지(299/399.78/270/534)였다. 이제 탭은 크기를 **못** 바꾼다(바꾸는 코드가 없다).
+//   ⚠ 값을 한 곳에만 둔다 — 조립부와 전환부 두 군데에 적으면 한쪽만 고쳐져 탭을 오갈 때 다시 튄다.
+//   ↔ 맞바꾼 것: 고객 분류 10열 표(min-width:860px)가 760 창에선 자기 스크롤 상자 안에서 가로로 밀린다
+//     (구 지시 「최대한 다 나오게」는 이 고정 지시가 덮는다 · 표는 이미 자체 overflow:auto라 레이아웃은 안 깨진다).
+var _PC_BOX={w:'min(760px,94vw)',h:'88vh'};
 function _pcTab(t){
   ['check','ai','seg'].forEach(function(k){var e=document.getElementById('pc-view-'+k);if(e)e.style.display=(k===t)?'':'none';});
   document.querySelectorAll('#pc-tabs .prog-tab').forEach(function(b){b.classList.toggle('active',b.dataset.t===t);});
-  var m=document.querySelector('#promo-check .modal');
-  if(m)m.style.width=(t==='seg')?_PC_W.seg:_PC_W.base;
 }
 
 // ===== AI 홍보 ▸ 전략 추론(총론 브리핑) — _pa* =====
@@ -24352,8 +24526,8 @@ function openPanel(dateObj,recs){
       var perfCtxAttr=' oncontextmenu="onPerfContextMenu(event,this);return false;"';
       h+='<div'+clickAttr+perfCtxAttr+' class="panel-perf-row" data-perf-name="'+escapeHtml(perf.f)+'" style="'+cursorStyle+'display:flex;align-items:center;padding:10px 12px;background:rgba(74,77,231,0.15);border-radius:10px;margin-bottom:6px;gap:10px;transition:background .15s">';
       h+='<span style="display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;border-radius:50%;font-size:8px;font-weight:700;background:var(--accent);color:#fff;flex-shrink:0">공</span>';
-      h+='<div style="flex:1;min-width:0;overflow:hidden"><div style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+nameWithArrow+'</div><div style="font-size:10px;color:var(--dim);margin-top:1px">'+escapeHtml(venueP)+'</div></div>';
-      h+='<span style="font-size:11px;font-weight:600;color:var(--accent);white-space:nowrap;flex-shrink:0">'+ddText+'</span>';
+      h+='<div style="flex:1;min-width:0;overflow:hidden"><div class="pp-nm">'+nameWithArrow+'</div><div class="pp-vn">'+escapeHtml(venueP)+'</div></div>';
+      h+='<span class="pp-dd" style="color:var(--accent)">'+ddText+'</span>';
       h+='</div>';
     });
     openExh.forEach(function(x){
@@ -24367,8 +24541,8 @@ function openPanel(dateObj,recs){
       var exhCtxAttr=' oncontextmenu="onPerfContextMenu(event,this);return false;"';
       h+='<div'+eClickAttr+exhCtxAttr+' class="panel-perf-row" data-perf-name="'+escapeHtml(eName)+'" style="'+eCursorStyle+'display:flex;align-items:center;padding:10px 12px;background:rgba(240,196,184,0.15);border-radius:10px;margin-bottom:6px;gap:10px;transition:background .15s">';
       h+='<span style="display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;border-radius:50%;font-size:8px;font-weight:700;background:#F0C4B8;color:#333;flex-shrink:0">전</span>';
-      h+='<div style="flex:1;min-width:0;overflow:hidden"><div style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+eNameWithArrow+'</div><div style="font-size:10px;color:var(--dim);margin-top:1px">'+escapeHtml(eVenue)+'</div></div>';
-      h+='<span style="font-size:11px;font-weight:600;color:#C08070;white-space:nowrap;flex-shrink:0">'+eDayText+'</span>';
+      h+='<div style="flex:1;min-width:0;overflow:hidden"><div class="pp-nm">'+eNameWithArrow+'</div><div class="pp-vn">'+escapeHtml(eVenue)+'</div></div>';
+      h+='<span class="pp-dd" style="color:#C08070">'+eDayText+'</span>';
       h+='</div>';
     });
     hPlan+=h;h='';   // 여기까지 = 공연·전시 row (기획 섹션 확정분)
@@ -24386,8 +24560,8 @@ function openPanel(dateObj,recs){
         var nameWithArrow=escapeHtml(perf.f)+(hasUrl?' <span style="font-size:9px;color:'+cfg[2]+';font-weight:500;margin-left:2px">↗</span>':'');
         h+='<div'+clickAttr+' oncontextmenu="onPerfContextMenu(event,this);return false;" class="panel-perf-row" data-perf-name="'+escapeHtml(perf.f)+'" style="'+cursorStyle+'display:flex;align-items:center;padding:10px 12px;background:'+cfg[3]+';border-radius:10px;margin-bottom:6px;gap:10px;transition:background .15s">';
         h+='<span style="display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;border-radius:50%;font-size:8px;font-weight:700;background:'+cfg[2]+';color:#fff;flex-shrink:0">'+(perf._eduRoom?'실':cfg[1])+'</span>';
-        h+='<div style="flex:1;min-width:0;overflow:hidden"><div style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+nameWithArrow+'</div><div style="font-size:10px;color:var(--dim);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+escapeHtml(venueP)+'">'+escapeHtml(venueP)+'</div></div>';
-        h+='<span style="font-size:11px;font-weight:600;color:'+cfg[2]+';white-space:nowrap;flex-shrink:0">'+ddText+'</span>';
+        h+='<div style="flex:1;min-width:0;overflow:hidden"><div class="pp-nm">'+nameWithArrow+'</div><div class="pp-vn" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+escapeHtml(venueP)+'">'+escapeHtml(venueP)+'</div></div>';
+        h+='<span class="pp-dd" style="color:'+cfg[2]+'">'+ddText+'</span>';
         h+='</div>';
       });
       if(cfg[4]==='p')hPlan+=h;else hRent+=h;
@@ -27443,6 +27617,18 @@ function _memPurge(){_memState=null;_memLoading=false;_bkState=null;_bkLoading=f
 //   클릭 시점엔 이미 캐시라 즉시 그려진다. 중복 발사는 _memLoading·_memState 가드로 차단(추가 API 호출 0).
 function _memWarm(){ if(userRole!=='admin')return; try{_bkWarm();}catch(e){}   /* [260804] 예매 집계도 같이 덥힌다 — 첫 예매 질문에서 「아직 안 불러왔어요」가 안 뜨게 */
   if(_memState||_memLoading)return; try{_memLoad(false);}catch(e){} }
+// [260810 운영자 「대시보드를 불러오는 순간 고객분석 데이터까지 다 · 애초에 이 웹앱이 열려있으면 데이터는 불러오게」]
+//   **부팅 선로딩** — 구판의 출발 신호는 세부메뉴 **호버**(위 _memWarm)와 책 4면 도착(_bizMemberEnsure) 둘뿐이라,
+//   책을 4면까지 넘겨야 그제서야 회원 시트를 부르기 시작했다. 신호를 「앱에 들어온 순간」(initApp)으로 앞당긴다.
+//   새 API·새 캐시·새 상태 **0** = 위 _memWarm을 부팅에서 한 번 더 부르는 것뿐(회원 + 예매집계 · admin 게이트와
+//   _memState/_memLoading 중복 가드가 그대로 걸린다 → 호버·4면 경로와 겹쳐도 추가 fetch 0).
+//   ⚠ **네트워크 우선권**(260711 「캘린더에 우선권」) 유지 = 회원 시트가 6.7MB라 첫 화면 fetch와 겹치면 보이는 화면이 늦어진다
+//     → initApp 병렬조(프로그램·마스터·카페장도·접수설정)가 **끝난 뒤** + 한 박자(레일 6시트는 _calP 뒤 출발이라 그때도 비행 중일 수 있다).
+//   ⚠ **잠금 중이면 안 부른다** = 유휴잠금이 _memPurge로 비운 PII를 이 타이머가 되채우는 창 차단(잠금 해제는 initApp을 다시 타므로 그때 채워진다).
+function _memBootWarm(){
+  if(typeof userRole==='undefined'||userRole!=='admin')return;   // 비admin = 4면 자체가 없다(_bizBookN=3) · 서버도 PII 시트에 admin 강제
+  setTimeout(function(){ if(typeof _locked!=='undefined'&&_locked)return; try{_memWarm();}catch(e){console.warn('[boot warm]',e);} },1200);
+}
 function closeMemberLookup(){var bg=document.getElementById('member-lookup');if(bg)bg.classList.remove('show');if(_memEscH){document.removeEventListener('keydown',_memEscH);_memEscH=null;}}
 async function openMemberLookup(){
   if(userRole!=='admin'){showToast('회원 조회는 관리자 전용이에요','error');return;}
@@ -28099,8 +28285,9 @@ function _segMemIdx(){
   _memState._segIdx=by;
   return by;
 }
-// 한 사람의 장르 분포 요약 — 많이 본 순 상위 3
-function _segGenres(rec,win){
+// 한 사람의 장르 분포 요약 — 많이 본 순 상위 3.
+//   표기(`클래식 23`)와 필터 목록(`클래식`)이 **같은 계산**을 본다 — 갈리면 화면에 보이는 장르로 걸러도 안 걸린다.
+function _segGenreTop(rec,win){
   var g={};
   for(var k in rec.d){
     var i=k.indexOf('|');if(i<0)continue;
@@ -28111,7 +28298,69 @@ function _segGenres(rec,win){
     }
     var gg=k.slice(i+1);g[gg]=(g[gg]||0)+rec.d[k];
   }
-  return Object.keys(g).sort(function(x,y){return g[y]-g[x];}).slice(0,3).map(function(x){return x+' '+g[x];}).join(' · ');
+  return Object.keys(g).sort(function(x,y){return g[y]-g[x];}).slice(0,3).map(function(x){return {g:x,c:g[x]};});
+}
+function _segGenres(rec,win){return _segGenreTop(rec,win).map(function(x){return x.g+' '+x.c;}).join(' · ');}
+
+// ===== 표기 정본 (운영자 260812 「저 부분은 많이 쓰일거라 핵심」) =====
+// 한 줄 계약 = **화면은 줄이고 가리되, 내보낸 파일은 원 표기 그대로**(운영자 「여기서만 줄임말 · 다운로드는 다 표기」).
+//   그래서 표시 문자열과 CSV 값을 만드는 함수를 나눠 둔다 — 한 함수로 겸하면 언젠가 한쪽이 다른 쪽을 따라간다.
+function _segPhoneDigits(m){return String(m['휴대폰정규화']||m['휴대폰번호']||'').replace(/\D/g,'');}
+function _segPhoneFull(m){var p=_segPhoneDigits(m);return p.length===11?(p.slice(0,3)+'-'+p.slice(3,7)+'-'+p.slice(7)):String(m['휴대폰정규화']||m['휴대폰번호']||'');}
+function _segPhoneMask(m){var p=_segPhoneDigits(m);return p.length===11?(p.slice(0,3)+'-****-'+p.slice(7)):_segPhoneFull(m).replace(/\d(?=\d{4})/g,'*');}
+// 금액 = **만 원 단위 올림**(= 만 원 미만 절상). 3,844,200원 → 385만원.
+//   ⚠ 「천 원 단위 올림」은 천 원 자리까지 남기는 것이라 3,845,000원 = 다른 값이다(운영자 문의 260812).
+function _segMan(v){return Math.ceil((parseInt(v,10)||0)/10000);}
+// 집계의 첫/최근 구매일은 원본 `이용일시`를 자른 값이라 `2020-10-16`·`20201016…`가 섞여 있다(그래서 화면에 `20201016:`처럼 꼬리가 보였다).
+//   `260804_booking_agg.mjs`의 연월 파싱과 **같은 정규식**으로 받고, 못 읽으면 원문 그대로 둔다(없는 날짜 창작 금지).
+function _segYmd(s){return /^(\d{4})[-./]?(\d{2})[-./]?(\d{2})/.exec(String(s||''));}
+function _segDayK(s){var m=_segYmd(s);return m?(m[1]+'년 '+(+m[2])+'월 '+(+m[3])+'일'):String(s||'');}
+function _segDayIso(s){var m=_segYmd(s);return m?(m[1]+'-'+m[2]+'-'+m[3]):String(s||'');}
+function _segDayNum(s){var m=_segYmd(s);return m?parseInt(m[1]+m[2]+m[3],10):0;}
+function _segKDayNum(s){var m=/(\d{4})년\s*(\d+)월\s*(\d+)일/.exec(String(s||''));return m?(+m[1]*10000+ +m[2]*100+ +m[3]):0;}
+// 시도 줄임 — 규칙은 `_memAiRegions`의 시도 별칭과 **같은 축**(접미 제거 · 경상남도→경남). 화면 전용.
+function _segSido(s){s=String(s||'').trim();var m=/^(.).(남|북)도$/.exec(s);if(m)return m[1]+m[2];return s.replace(/(특별자치도|특별자치시|통합특별시|광역시|특별시|도)$/,'')||s;}
+function _segArea(m,full){var a=String(m['주소1']||''),b=String(m['주소2']||'');return ((full?a:_segSido(a))+' '+b).trim();}
+
+// ===== 열 정본 — 표 머리·셀·정렬·필터·CSV가 전부 이 배열 하나를 본다 =====
+//   t = 화면 표시 문자열(= 필터 목록에 뜨는 값) · s = 정렬 키 · num = 우측 정렬·숫자 비교 · grp = 2단 머리의 묶음 이름
+//   ⚠ 표시와 필터 값을 갈라 두지 마라 — 화면에 「385」가 보이는데 필터 목록엔 「3844200」이 뜨면 같은 표가 아니다.
+var _SEG_COLS=[
+  {c:'name', l:'이름',         t:function(x){return String(x.m['이름']||'');},         s:function(x){return String(x.m['이름']||'');}},
+  {c:'phone',l:'휴대폰',       t:function(x){return _segPhoneMask(x.m);},              s:function(x){return _segPhoneDigits(x.m);}},
+  {c:'area', l:'지역',         t:function(x){return _segArea(x.m);},                   s:function(x){return _segArea(x.m);}},
+  {c:'hit',  l:'조건',         num:1, grp:'관람(단위: 회)', t:function(x){return _memAiFmt(x.c);},     s:function(x){return x.c;}},
+  {c:'all',  l:'전체',         num:1, grp:'관람(단위: 회)', t:function(x){return _memAiFmt(x.rec.n);}, s:function(x){return x.rec.n;}},
+  {c:'tix',  l:'구매 매수(석)', num:1, t:function(x){return _memAiFmt(x.rec.tix);},     s:function(x){return x.rec.tix;}},
+  {c:'amt',  l:'금액(만원)',    num:1, t:function(x){return _memAiFmt(_segMan(x.rec.amt));}, s:function(x){return x.rec.amt;}},
+  {c:'first',l:'첫 관람',       tap:1, t:function(x){return _segDayK(x.rec.first);},    s:function(x){return _segDayNum(x.rec.first);}, ls:function(a,b){return _segKDayNum(a)-_segKDayNum(b);}},
+  {c:'last', l:'최근 관람',     tap:1, t:function(x){return _segDayK(x.rec.last);},     s:function(x){return _segDayNum(x.rec.last);},  ls:function(a,b){return _segKDayNum(a)-_segKDayNum(b);}},
+  {c:'genre',l:'장르(회)',      multi:1, t:function(x,w){return _segGenres(x.rec,w);},  s:function(x,w){return _segGenres(x.rec,w);}}
+];
+function _segCol(c){for(var i=0;i<_SEG_COLS.length;i++)if(_SEG_COLS[i].c===c)return _SEG_COLS[i];return null;}
+// 한 칸이 필터에 내놓는 값들 — 장르 칸만 여럿(`클래식 23 · 발레/연극 4` 통째로는 아무도 못 고른다)
+function _segVals(c,x,w){var d=_segCol(c);return d.multi?_segGenreTop(x.rec,w).map(function(v){return v.g;}):[d.t(x,w)];}
+// 화면에 그릴 목록 = 필터 → 정렬. **CSV도 이걸 쓴다**(화면과 파일이 다른 말을 하지 않게).
+function _segView(){
+  if(!_segLast)return [];
+  var L=_segLast,w=L.win,out=L.rows,keys=Object.keys(L.f||{});
+  if(keys.length)out=out.filter(function(x){
+    for(var i=0;i<keys.length;i++){
+      var allow=L.f[keys[i]],vs=_segVals(keys[i],x,w),hit=false;
+      for(var j=0;j<vs.length;j++)if(allow.indexOf(vs[j])>=0){hit=true;break;}
+      if(!hit)return false;
+    }
+    return true;
+  });
+  if(L.sort&&L.sort.by){
+    var d=_segCol(L.sort.by),dir=(L.sort.dir==='desc')?-1:1;
+    if(d)out=out.slice().sort(function(a,b){
+      var va=d.s(a,w),vb=d.s(b,w);
+      if(typeof va==='number'&&typeof vb==='number')return (va-vb)*dir;
+      return String(va).localeCompare(String(vb),'ko')*dir;
+    });
+  }
+  return out;
 }
 // 폼 인라인 문법 = 회원 조회 필터줄(openMemberLookup) **계승** — 새 클래스·새 색 0(전부 기존 토큰).
 var _SEG_IN='padding:9px 12px;border:1px solid var(--border2);border-radius:var(--r-btn);font-size:13px;font-family:inherit;background:var(--surface-solid);color:var(--text)';
@@ -28163,57 +28412,139 @@ function _segCompute(win,g,thr){
     out.push({key:k,c:c,rec:rec,m:m});
   }
   out.sort(function(a,b){return b.c-a.c||b.rec.tix-a.rec.tix;});
-  _segLast={rows:out,win:win,g:g,thr:thr,nomem:nomem};
+  // 새 조회 = 새 표. 앞 조회에 걸어 둔 열 필터·정렬을 물려주지 않는다(딴 조건에 남은 필터 = 조용히 빠진 사람들)
+  _segLast={rows:out,win:win,g:g,thr:thr,nomem:nomem,f:{},sort:{by:'',dir:'asc'},mask:true,open:{}};
+}
+// 표 머리 = 2단(운영자 260812 「관람을 2행으로 인덱싱행을 구성」). 1행 높이는 여기 한 곳에서만 정한다 —
+//   2단 sticky의 아랫단이 `top`으로 그 값을 그대로 쓰기 때문에 갈리면 머리 두 줄이 겹치거나 벌어진다.
+var _SEG_TH_PY=6,_SEG_TH_LH=15,_SEG_H1=_SEG_TH_PY*2+_SEG_TH_LH;
+function _segThBase(d,top){
+  return 'padding:'+_SEG_TH_PY+'px 10px;line-height:'+_SEG_TH_LH+'px;font-size:11.5px;color:var(--neutral-text);'
+    +'background:var(--neutral);text-align:'+(d&&d.num?'right':'left')+';position:sticky;top:'+top+'px;white-space:nowrap;z-index:1';
+}
+// 열 머리 한 칸 — 화살표 규약은 홍보 신청·확인 표(`_sh`) 계승: 정렬 중 ▲▼ · 아니면 ▾(누르면 뭔가 된다) · 필터 걸림 ●
+function _segTh(d,rs){
+  var L=_segLast||{},on=L.sort&&L.sort.by===d.c,has=!!(L.f&&L.f[d.c]&&L.f[d.c].length);
+  var arrow=on?(L.sort.dir==='asc'?'▲':'▼'):'▾';
+  var st=_segThBase(d,rs===2?0:_SEG_H1)+';cursor:pointer;user-select:none'
+    +(rs===2?';vertical-align:middle':'')                                  // 1행+2행 높이의 한가운데(운영자 260812)
+    +((on||has)?';background:var(--accent-light);color:var(--accent);font-weight:800':'');
+  return '<th data-col="'+d.c+'"'+(rs===2?' rowspan="2"':'')+' onclick="_segColFilter(\''+d.c+'\',event)" title="클릭: 필터·정렬 선택" style="'+st+'">'
+    +_memEsc(d.l)+'<span style="margin-left:5px;font-size:'+(on?'10px':'9px')+';color:'+(on?'var(--accent)':'var(--muted)')+'">'+arrow+'</span>'
+    +(has?'<span style="margin-left:3px;font-size:8px;color:var(--accent);vertical-align:middle">●</span>':'')+'</th>';
+}
+function _segColFilter(c,ev){
+  if(ev){ev.stopPropagation();ev.preventDefault();}
+  var L=_segLast,d=_segCol(c);if(!L||!d)return;
+  var vals={};L.rows.forEach(function(x){_segVals(c,x,L.win).forEach(function(v){if(v!=='')vals[v]=1;});});
+  var cmp=d.ls?d.ls:(d.num?function(a,b){return (parseFloat(String(a).replace(/,/g,''))||0)-(parseFloat(String(b).replace(/,/g,''))||0);}
+                         :function(a,b){return a.localeCompare(b,'ko');});
+  _colfPop({anchor:ev&&ev.currentTarget,list:Object.keys(vals).sort(cmp),sel:L.f[c]||null,
+    onSort:function(dir){L.sort={by:c,dir:dir};_segRender();},
+    onApply:function(sel){if(sel)L.f[c]=sel;else delete L.f[c];_segRender();}});
+}
+function _segClear(){if(!_segLast)return;_segLast.f={};_segLast.sort={by:'',dir:'asc'};_segRender();}
+function _segMaskTgl(on){if(_segLast)_segLast.mask=!!on;}
+// 휴대폰 칸 = 기본 가림, 누르면 그 칸만 열린다(운영자 260812). 원본 숫자는 DOM에 안 박고 그때 화면 배열에서 꺼낸다.
+function _segPhoneTap(el,i){
+  var L=_segLast,x=L&&L._view&&L._view[i];if(!x)return;
+  var open=el.getAttribute('data-open')==='1';
+  el.setAttribute('data-open',open?'0':'1');
+  el.textContent=open?_segPhoneMask(x.m):_segPhoneFull(x.m);
+}
+// 첫/최근 관람 칸 클릭 = 그 사람 관람 이력 펼치기.
+// ⚠ **프로그램명은 못 띄운다** — 예매집계 시트의 열이 `회원키·총구매·총매수·총금액·첫구매일·최근구매일·분포`뿐이라
+//   이름 축이 아예 없다. 원본 `운영_예매`엔 `상품명`이 있으니 `docs/260804_booking_agg.mjs`가 분포에 그 축을 실어
+//   다시 돌리면 그때 붙는다(전시 예매가 쌓여도 같은 경로). 여기서는 집계에 **실제로 있는 것**만 보여준다.
+function _segHistHtml(x,w){
+  var by={};
+  for(var k in x.rec.d){var i=k.indexOf('|');if(i<0)continue;var t=k.slice(0,i);(by[t]=by[t]||[]).push(_memEsc(k.slice(i+1))+' '+x.rec.d[k]);}
+  var ks=Object.keys(by).sort(function(a,b){return b.localeCompare(a);});
+  var body=ks.length?ks.map(function(t){
+    return '<span style="display:inline-block;margin:0 14px 4px 0"><b style="color:var(--text)">'+(t.length===6?_bkYm(parseInt(t,10)):_memEsc(t)+'년')+'</b> '+by[t].join(' · ')+'</span>';
+  }).join(''):'<span style="color:var(--dim)">집계에 남은 관람 이력이 없어요</span>';
+  return '<div style="font-size:11.5px;color:var(--neutral-text);line-height:1.7">'+body
+    +'<div style="font-size:10.5px;color:var(--dim);padding-top:5px">프로그램명은 <b>예매집계에 없어요</b> — 원본(운영_예매)엔 상품명이 있으니 <code>docs/260804_booking_agg.mjs</code>가 분포에 상품명 축을 실어 다시 돌리면 여기 같이 떠요</div></div>';
+}
+function _segHist(el,i){
+  var L=_segLast,x=L&&L._view&&L._view[i],tr=el&&el.parentElement;if(!x||!tr)return;
+  var host=document.getElementById('seg-result');
+  var cur=host&&host.querySelector('tr.seg-hist'),mine=tr.nextElementSibling===cur;
+  if(cur)cur.parentNode.removeChild(cur);          // 동시 1개만 열어 둔다(드롭다운 `_ddOpen` 규약과 같은 결)
+  if(mine)return;
+  var nt=document.createElement('tr');nt.className='seg-hist';
+  nt.innerHTML='<td colspan="'+_SEG_COLS.length+'" style="padding:8px 12px 10px;background:var(--past-bg);border-top:1px solid var(--border)">'+_segHistHtml(x,L.win)+'</td>';
+  tr.parentNode.insertBefore(nt,tr.nextSibling);
 }
 function _segRender(){
   var host=document.getElementById('seg-result');if(!host||!_segLast)return;
-  var L=_segLast,rows=L.rows,LIM=300,shown=rows.slice(0,LIM);
+  var L=_segLast,view=_segView(),LIM=300,shown=view.slice(0,LIM);
+  L._view=view;                                    // 칸 클릭(번호 열기·이력 펼치기)이 **화면과 같은 배열**을 본다
   var cond=(L.win?L.win.label:_bkSpanAll())+' · '+(L.g?L.g+' ':'')+'공연 '+L.thr+'회 이상';
-  if(!rows.length){host.innerHTML=_pcCard('결과',_memEsc(cond),'<div class="u-empty">조건에 맞는 사람이 없어요</div>');return;}
-  var th='padding:7px 10px;font-size:11.5px;color:var(--neutral-text);background:var(--neutral);text-align:left;position:sticky;top:0;white-space:nowrap';
+  if(!L.rows.length){host.innerHTML=_pcCard('결과',_memEsc(cond),'<div class="u-empty">조건에 맞는 사람이 없어요</div>');return;}
+  var nf=Object.keys(L.f||{}).length,narrowed=nf||(L.sort&&L.sort.by);
   var td='padding:6px 10px;font-size:12px;border-top:1px solid var(--border);white-space:nowrap';
   var tdn=td+';font-variant-numeric:tabular-nums;text-align:right';
-  var tix=0,amt=0;rows.forEach(function(x){tix+=x.rec.tix;amt+=x.rec.amt;});
+  var tdtap=td+';cursor:pointer';
+  var tix=0,amt=0;view.forEach(function(x){tix+=x.rec.tix;amt+=x.rec.amt;});
   var head='<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:11px 0">'
-    +'<span style="font-size:12.5px;color:var(--neutral-text)"><b style="color:var(--text)">'+_memAiFmt(rows.length)+'명</b> · 누적 '+_memAiFmt(tix)+'매 · '+_memAiFmt(amt)+'원</span>'
-    +'<button type="button" class="btn btn--neutral btn--sm" style="margin-left:auto" onclick="_segCsv()">CSV 내보내기</button></div>';
+    +'<span style="font-size:12.5px;color:var(--neutral-text)"><b style="color:var(--text)">'+_memAiFmt(view.length)+'명</b>'
+    +(nf?' <span style="color:var(--dim)">(조건 '+_memAiFmt(L.rows.length)+'명 중 · 열 필터 '+nf+'개)</span>':'')
+    +' · 누적 '+_memAiFmt(tix)+'매 · '+_memAiFmt(amt)+'원</span>'
+    +(narrowed?'<button type="button" class="btn btn--ghost btn--sm" onclick="_segClear()">필터·정렬 초기화</button>':'')
+    +'<label style="margin-left:auto;display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--neutral-text);cursor:pointer" title="내려받는 CSV의 휴대폰을 가릴지 고릅니다"><input type="checkbox" '+(L.mask?'checked':'')+' onchange="_segMaskTgl(this.checked)" style="accent-color:var(--accent)">CSV 번호 가리기</label>'
+    +'<button type="button" class="btn btn--neutral btn--sm" onclick="_segCsv()">CSV 내보내기</button></div>';
+  // 머리 2단 — 1행은 rowspan 2 칸들 + 「관람(단위: 회)」 묶음, 2행은 그 아래 조건·전체
+  var grp=null,h1='',h2='';
+  _SEG_COLS.forEach(function(d){
+    if(!d.grp){h1+=_segTh(d,2);return;}
+    if(d.grp!==grp){grp=d.grp;
+      var n=0;_SEG_COLS.forEach(function(e){if(e.grp===d.grp)n++;});
+      h1+='<th colspan="'+n+'" style="'+_segThBase(null,0)+';text-align:center">'+_memEsc(d.grp)+'</th>';}
+    h2+=_segTh(d,1);
+  });
   var table='<div style="max-height:44vh;overflow:auto;border:1px solid var(--border);border-radius:var(--r-btn)">'
     +'<table style="border-collapse:collapse;width:100%;min-width:860px">'
-    +'<tr><th style="'+th+'">이름</th><th style="'+th+'">휴대폰</th><th style="'+th+'">지역</th><th style="'+th+'">조건 관람</th><th style="'+th+'">전체 관람</th><th style="'+th+'">매수</th><th style="'+th+'">금액</th><th style="'+th+'">첫 관람</th><th style="'+th+'">최근 관람</th><th style="'+th+'">장르</th></tr>'
-    +shown.map(function(x){var m=x.m;
+    +'<thead><tr>'+h1+'</tr><tr>'+h2+'</tr></thead><tbody>'
+    +(shown.length?shown.map(function(x,i){var m=x.m;
       return '<tr><td style="'+td+';font-weight:700">'+_memEsc(m['이름'])+'</td>'
-        +'<td style="'+td+';font-variant-numeric:tabular-nums">'+_memEsc(m['휴대폰정규화']||m['휴대폰번호'])+'</td>'
-        +'<td style="'+td+'">'+_memEsc((String(m['주소1']||'')+' '+String(m['주소2']||'')).trim())+'</td>'
-        +'<td style="'+tdn+';font-weight:800;color:var(--accent)">'+x.c+'</td>'
+        +'<td style="'+tdtap+';font-variant-numeric:tabular-nums" onclick="_segPhoneTap(this,'+i+')" title="클릭: 번호 보기/가리기">'+_memEsc(_segPhoneMask(m))+'</td>'
+        +'<td style="'+td+'">'+_memEsc(_segArea(m))+'</td>'
+        +'<td style="'+tdn+';font-weight:800;color:var(--accent)">'+_memAiFmt(x.c)+'</td>'
         +'<td style="'+tdn+'">'+_memAiFmt(x.rec.n)+'</td>'
         +'<td style="'+tdn+'">'+_memAiFmt(x.rec.tix)+'</td>'
-        +'<td style="'+tdn+'">'+_memAiFmt(x.rec.amt)+'</td>'
-        +'<td style="'+td+'">'+_memEsc(x.rec.first)+'</td>'
-        +'<td style="'+td+'">'+_memEsc(x.rec.last)+'</td>'
+        +'<td style="'+tdn+'">'+_memAiFmt(_segMan(x.rec.amt))+'</td>'
+        +'<td style="'+tdtap+'" onclick="_segHist(this,'+i+')" title="클릭: 이 사람 관람 이력">'+_memEsc(_segDayK(x.rec.first))+'</td>'
+        +'<td style="'+tdtap+'" onclick="_segHist(this,'+i+')" title="클릭: 이 사람 관람 이력">'+_memEsc(_segDayK(x.rec.last))+'</td>'
         +'<td style="'+td+';max-width:210px;overflow:hidden;text-overflow:ellipsis">'+_memEsc(_segGenres(x.rec,L.win))+'</td></tr>';
-    }).join('')+'</table></div>';
+    }).join('')
+      :'<tr><td colspan="'+_SEG_COLS.length+'" style="'+td+';text-align:center;color:var(--dim);padding:18px 10px">열 필터에 맞는 사람이 없어요 — 위 「필터·정렬 초기화」를 누르세요</td></tr>')
+    +'</tbody></table></div>';
   var foot='<div style="font-size:11px;color:var(--dim);padding:9px 2px 0">'
-    +(rows.length>LIM?'화면엔 상위 '+LIM+'명만 보여요 — CSV로 받으면 '+_memAiFmt(rows.length)+'명 전부 나와요 · ':'')
+    +(view.length>LIM?'화면엔 상위 '+LIM+'명만 보여요 — CSV로 받으면 '+_memAiFmt(view.length)+'명 전부 나와요 · ':'')
     +'예매기록에 회원이 확정 연결된 '+_memAiFmt(_bkState.n)+'명 안에서 고른 결과라 <b>하한</b>이에요 — 원본 휴대폰이 가려진 주문은 이름을 못 붙여 명단에서 빠져요'
     +(L.nomem?' · 회원 시트에서 못 찾은 회원키 '+_memAiFmt(L.nomem)+'건 제외':'')
+    +'<br>금액은 <b>만 원 단위 올림</b>(만 원 미만 절상) · 지역은 시도 줄임말 · 휴대폰은 가운데 가림 — <b>CSV는 셋 다 원 표기</b>예요(번호는 위 체크로 고름)'
     +(L.win&&L.win.approx?'<br>⚠ 예매집계가 아직 연 단위라 기간이 <b>근사</b>예요 — <code>node docs/260804_booking_agg.mjs</code>를 다시 돌리면 월 단위로 정확해져요':'')
     +'</div>';
   host.innerHTML=_pcCard('결과',_memEsc(cond),head+table+foot);
 }
 function _segCsv(){
-  if(!_segLast||!_segLast.rows.length)return;
-  var L=_segLast;
-  var cols=['이름','휴대폰','시도','시군구','동읍면','조건관람','전체관람','총매수','총금액','첫관람일','최근관람일','장르분포'];
-  var rows=L.rows.map(function(x){var m=x.m;
-    return {'이름':m['이름']||'','휴대폰':m['휴대폰정규화']||m['휴대폰번호']||'',
+  var L=_segLast;if(!L)return;
+  var view=L._view||_segView();if(!view.length)return;
+  var mask=!!L.mask;
+  var cols=['이름','휴대폰','시도','시군구','동읍면','조건관람','전체관람','구매매수','총금액','첫관람일','최근관람일','장르분포'];
+  var rows=view.map(function(x){var m=x.m;
+    // 화면과 달리 **원 표기 그대로**(운영자 「다운로드는 다 표기」) — 지역 전체명·금액 원 단위. 번호만 위 체크로 고른다.
+    return {'이름':m['이름']||'','휴대폰':mask?_segPhoneMask(m):_segPhoneFull(m),
       '시도':m['주소1']||'','시군구':m['주소2']||'','동읍면':m['주소3']||'',
-      '조건관람':x.c,'전체관람':x.rec.n,'총매수':x.rec.tix,'총금액':x.rec.amt,
-      '첫관람일':x.rec.first,'최근관람일':x.rec.last,'장르분포':_segGenres(x.rec,L.win)};
+      '조건관람':x.c,'전체관람':x.rec.n,'구매매수':x.rec.tix,'총금액':x.rec.amt,
+      '첫관람일':_segDayIso(x.rec.first),'최근관람일':_segDayIso(x.rec.last),'장르분포':_segGenres(x.rec,L.win)};
   });
   // 파일명에 장르를 그대로 넣지 않는다 — 「발레/연극」의 `/`가 경로 구분자로 먹혀 저장이 깨진다
   var tag=String(L.g||'전체장르').replace(/[^0-9A-Za-z가-힣]/g,'');
-  downloadCsv(tsFilename('고객분류_'+tag+'_'+L.thr+'회이상'),rowsToCsv(rows,cols));
-  showToast(_memAiFmt(rows.length)+'명 CSV로 받았어요','success');
+  downloadCsv(tsFilename('고객분류_'+tag+'_'+L.thr+'회이상'+(mask?'_번호가림':'')),rowsToCsv(rows,cols));
+  showToast(_memAiFmt(rows.length)+'명 CSV로 받았어요'+(mask?' (휴대폰 가림)':' (휴대폰 원본)'),'success');
 }
 // 예울이 답변의 「명단 보기」 → 같은 조건 그대로 이 탭으로. 질의를 두 번 해석하지 않는다(해석이 갈리면 답이 둘이 된다).
 function _segFromAsk(){
