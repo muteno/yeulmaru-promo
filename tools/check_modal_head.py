@@ -12,9 +12,14 @@
   「그 머리줄이 정본 한 벌에서 나왔는가」는 아무도 안 봤다. 실제로 260805-23 이전 실측 =
   61개 중 밴드를 가진 모달 2개(3.3%), 나머지 59개는 h3·border-bottom 줄·아예 없음이 제각각이었다.
 
-검사 5종 (전부 **하드 0** — 래칫 아님):
+검사 6종 (전부 **하드 0** — 래칫 아님):
   ① 머리줄 실존: 모든 `<div class="modal…">` 셸이 뒤이어 `_mhead(`(JS 조립) 또는
      `class="mhead"`(정적 HTML)를 하나 갖는다.
+  ⑥ **X 자리 인라인 재타이핑 금지**(260806-11 운영자 「항상 저거 어긋나지 않게 해줘」): `class="modal-x"`에
+     `position/top/right/float/margin`을 인라인으로 다시 치는 것 0. 정본 = CSS `.modal:has(>.mhead)>.modal-x`
+     한 벌이고, **인라인은 CSS를 이기기 때문에** 하나만 남아도 줄맞춤 규칙(밴드에 버튼이 서면 18 · 최소화 짝이면
+     19.33)이 그 모달에서만 조용히 안 먹는다 — 실제로 260806-10 실측에서 밴드 버튼 보유 16곳 중 15곳이
+     그 이유로 4px 어긋나 있었다. z-index만 다른 값(20/30/60)으로 남기는 건 허용(레이어는 자리가 아니다).
   ② 인라인 재타이핑 금지: 밴드를 손으로 다시 친 자리(`background:var(--accent)` + `font-size:16px`
      + `font-weight:700`가 한 style에 같이 있는 곳) 0. ← 260805-16 X버튼 사고와 같은 유입 경로
      (「CSS만 정본이고 내용은 문자열 복붙」)를 처음부터 막는다.
@@ -112,6 +117,20 @@ def main():
         fails.append('CSS `.modal`이 `padding:var(--mpad-y,28px) var(--mpad-x,28px)`가 아니다 '
                      '— 머리줄 음수 마진 상쇄가 깨진다.')
 
+    # ⑥ X 자리 인라인 재타이핑 금지 — 인라인이 CSS를 이겨 줄맞춤 규칙을 조용히 무력화한다.
+    for m in re.finditer(r'class="modal-x"[^>]*style="([^"]*)"', src):
+        st = m.group(1)
+        bad = [k for k in ('position:', 'top:', 'right:', 'float:', 'margin:') if k in st]
+        if bad:
+            fails.append('`.modal-x`에 자리 인라인 재타이핑(%s) — 정본 CSS '
+                         '`.modal:has(>.mhead)>.modal-x`가 이미 준다. 인라인은 CSS를 이겨 '
+                         '줄맞춤 규칙이 안 먹는다: style="%s"' % (','.join(bad), st[:70]))
+    # 줄맞춤 규칙 자체가 살아 있는지(누가 지우면 16개 모달이 도로 4px 어긋난다)
+    if '.modal:has(>.mhead button)>.modal-x{top:18px}' not in src:
+        fails.append('줄맞춤 규칙 소실 — `.modal:has(>.mhead button)>.modal-x{top:18px}`(밴드에 버튼이 서면 그 줄에 맞춘다).')
+    if '.modal:has(>.mhead .modal-x[aria-label="최소화"])>.modal-x{top:19.33px}' not in src:
+        fails.append('잉크 보정 규칙 소실 — 최소화(`─`)와 닫기(`✕`)는 잉크가 상자 안 다른 높이에 앉아 1.33px 보정이 필요하다.')
+
     # ⑤ 내용 SSOT
     i = src.find('function _mhead(')
     if i < 0:
@@ -127,8 +146,8 @@ def main():
             print('  · … 외 %d건' % (len(fails) - 40), file=sys.stderr)
         print('  정본 = CSS `.mhead`(모양) + `_mhead()`(내용) 한 벌. 기틀 §2 컴포넌트 7 「모달」.', file=sys.stderr)
         return 1
-    print('[modal-head] PASS — 모달 %d개 전건 머리줄 정본(`.mhead`) · 인라인 재타이핑 0 · 패딩 계약 유지.'
-          % len(shells))
+    print('[modal-head] PASS — 모달 %d개 전건 머리줄 정본(`.mhead`) · 인라인 재타이핑 0(밴드·X자리 둘 다) '
+          '· 패딩 계약 유지 · X 줄맞춤 규칙 실존.' % len(shells))
     return 0
 
 
