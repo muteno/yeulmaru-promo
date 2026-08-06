@@ -1165,6 +1165,23 @@ table.promo-board-table th:last-child .col-resize-handle{display:none}
 .modal:has(>.mhead){position:relative}
 .modal:has(>.mhead)>.modal-x{position:absolute;top:14px;right:22px;float:none;margin:0;z-index:10;color:var(--surface-solid);background:rgba(255,255,255,.12)}
 .modal:has(>.mhead)>.modal-x:hover{color:var(--surface-solid);background:rgba(255,255,255,.25)}
+/* [260806 운영자 「최소화랑 X 사분할해서 중심점을 광학 잉크 단위로 수평 선에 맞춰줘」] — 두 단계로 맞춘다.
+   ① **상자 줄맞춤**: 밴드 안에 버튼이 서면 그 줄 높이는 32(버튼 지름)로 고정된다. `.mhead`의 음수 마진이
+      모달 패딩을 정확히 상쇄해 **밴드 top = 모달 패딩박스 top**이므로, 흐름 버튼의 상자 top = 밴드 자기
+      padding-top = **18**. 절대 자리 X의 `top:14`는 「제목만 있는 밴드」(줄 높이 ≈19)에 맞춘 값이라
+      버튼이 서는 순간 4px 어긋난다(실측: X 상자중심 361 · ─ 상자중심 365). 버튼이 있을 때만 18로 옮긴다.
+      ⚠ 호출부에 `style="top:14px"`가 인라인으로 남아 있으면 이 규칙이 안 먹는다(인라인 우선) — 그 재타이핑을
+      걷어내는 게 정본 준수다(기틀 규칙 6·7).
+   ② **광학 잉크 줄맞춤**(운영자가 말한 「광학 잉크 단위」): 상자를 맞춰도 **글자마다 잉크가 상자 안에서 다른
+      높이에 앉는다**. 32px 상자 안 실측(4배율 PNG 픽셀 디코딩) = `✕` 잉크중심 **15.15**(상자중심 16.00 대비 −0.85)
+      · `─` 잉크중심 **16.48**(+0.48) → 잉크끼리 **1.33px** 어긋난다. 그래서 X의 상자를 18이 아니라
+      **18 + 1.33 = 19.33**에 세운다 = 두 **잉크**가 정확히 한 수평선에 선다(운영자가 지정한 단위가 상자가 아니라 잉크다).
+      · 가로는 이미 맞다 — `✕` −0.97 · `─` −0.73, 둘 사이 **0.24px**(사분할 세로선 기준 무시 가능).
+      ⚠ 상자(원)는 그 대가로 1.33px 어긋난다. 상자·잉크를 **둘 다** 맞추려면 글자마다 비대칭 패딩이 필요한데
+        `paddingTop/Bottom`은 패리티 서명 항목이라 `.modal-x`가 두 갈래로 갈린다(260805-24 계약) → 운영자 판단 사항.
+      ⚠ 보정값은 UI 폰트(Pretendard 계열) 실측이다. 폰트가 갈리면 잔차가 남지만 보정 전(1.33px)보다 나빠지지 않는다.
+        픽토그램 교체 길은 260805-15 「정본 글자 `✕` 복원」과 충돌해 쓰지 않는다. */
+.modal:has(>.mhead .modal-x)>.modal-x{top:19.33px}
 /* [260805-30 운영자 「정리해줘」] 머리줄 예약폭 매직넘버(74/106/112/130/200) 폐지 —
    닫기 `✕`만 절대 자리(right:22)에 남기고 **나머지 버튼은 밴드 안 흐름**으로 넣는다(`_mhead`의 extra).
    그러면 `.mhead`의 오른쪽 예약은 **언제나 74px 하나**뿐 = 패리티 갈래가 자리 수만큼 늘어나던 축이 붕괴한다.
@@ -20915,7 +20932,7 @@ function openPromoCheck(){
   //   [260805-15] X 글자 = 정본 `✕`(U+2715) 유지 — check_design ⑦(정본 부품 일치)이 커밋에서 강제.
   //   📡·📭 이모지는 운영자 「이모지 가능한 안 씀」으로 제거(위 body 조립부).
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closePromoCheck)">'
-    + '<div class="modal" style="width:min(760px,94vw);max-height:88vh;--mpad-y:0;--mpad-x:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:var(--surface-solid)">'
+    + '<div class="modal" style="width:min(760px,94vw);max-height:88vh;--mpad-y:0;--mpad-x:0;position:relative;display:flex;flex-direction:column;overflow:hidden">'
     + '<button class="modal-x" onclick="closePromoCheck()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;z-index:10">✕</button>'
     + _mhead('AI 홍보 · 점검','홍보 기록과 프로그램 시트를 훑어 지금 손볼 곳을 찾아요')
     + '<div style="overflow:auto;flex:1;min-height:0;padding:18px 24px 20px">'+body+'</div></div></div>';
@@ -29942,8 +29959,8 @@ function openFileSlimmer(){
   // 게이지바 · 그 바로 아래에 줄이기 버튼 … 그러면 위에 문서 제목, 아래에 게이지바 영역까지 줄일 수 있을 텐데」).
   // 좌 = 첨부·파일명·도구(교체·삭제·내려받기) · 우 = 세기 게이지 + [용량 줄이기] + 상태 한 줄.
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeFileSlimmer)">'
-    +'<div class="modal" style="width:min(94vw,560px);height:auto;max-height:88vh;--mpad-y:0;--mpad-x:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:var(--surface-solid)">'
-    +'<button class="modal-x" onclick="closeFileSlimmer()" title="닫기" aria-label="닫기" style="position:absolute;top:14px;right:22px;z-index:10">✕</button>'
+    +'<div class="modal" style="width:min(94vw,560px);height:auto;max-height:88vh;--mpad-y:0;--mpad-x:0;position:relative;display:flex;flex-direction:column;overflow:hidden">'
+    +'<button class="modal-x" onclick="closeFileSlimmer()" title="닫기" aria-label="닫기">✕</button>'   /* 자리·층은 정본 `.modal:has(>.mhead)>.modal-x`가 준다 — 인라인 재타이핑 금지(기틀 규칙 6·7) */
     +_mhead('용량 줄이기','무거운 파일을 가볍게 만들어요','<button class="modal-x" onclick="_tminHide(\'sl-board\',\'용량 줄이기\')" title="최소화" aria-label="최소화">─</button>')
     +'<div style="flex:1;display:flex;flex-direction:column;min-height:0;padding:13px 16px 16px">'
       // 무대 하나로 통합 — 위 파일 줄(.hw-bar)·아래 게이지 줄(.hw-ask)을 이 안으로 접어 넣어 두 줄만큼 창이 낮아진다.
