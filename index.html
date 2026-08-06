@@ -7748,9 +7748,8 @@ function _bizEduMonthRows(year){
       _st:((o.end||o.start)<tdy)?'ended':'active'});
   });
   out.sort(function(a,b){ return (a.start-b.start)||(a.name<b.name?-1:1); });
-  // [260805 운영자 「교육, 별도의 인덱싱 열 부여해줘」] 각 교육 게이지(세로 열)에 고유 순번을 단다 —
-  //   시작일순 ①②③…(원문자 = 값(명)으로 오독되지 않는 색인 표기). 게이지 위 라벨·툴팁 머리가 같이 쓴다.
-  out.forEach(function(g,i){ g._idx=(i<20)?String.fromCharCode(0x2460+i):String(i+1); });
+  // [260806-11] 구 교육 색인(①②③… · 260805 「인덱싱 열 부여」) **부여까지 철거** — 표기를 지우면서 쓰는 곳이
+  //   0이 됐다(게이지 라벨·툴팁 머리 셋이 전부였다). 되살릴 땐 시작일순 원문자라는 그 규칙 그대로.
   return out;
 }
 // ── [260804 운영자] y축 중략(≈) — 「매출이 너무 큰 게 하나 있어서 차트가 무너진다」 ────────────────
@@ -8038,7 +8037,10 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
   var lnOf=function(g){ return (ED&&g._mo&&g._mo.length)?g._mo:null; };
   var isLn=rows.map(function(g){ return !!lnOf(g); });
   var vals=rows.map(function(g,i){ return isLn[i]?null:valOf(g); }), tr2=null;   // 선으로 그리는 항목은 막대 자리를 비운다(같은 값을 두 벌로 그리지 않는다)
-  var vfmt=function(v){ return hasRev?((v>=100)?Math.round(v).toLocaleString():v.toFixed(1)):Math.round(v).toLocaleString(); };
+  // [260806-11 운영자 「항상 표현은 **반올림해서 소숫점 없이** 표기하게」] 값 라벨 = 정수 한 벌.
+  //   구판은 매출 축에서 100 미만이면 `toFixed(1)`(13.6·65.9·2.5…) — 같은 차트 안에서 「486」과 「2.5」가
+  //   다른 자릿수 문법으로 서서 눈이 두 번 읽었다. 반올림은 표기에서만 한다(값·툴팁·집계는 원값 그대로).
+  var vfmt=function(v){ return Math.round(v).toLocaleString(); };
   // [260804] 축 중략 — 그릴 자리만 접는다(값·라벨·툴팁은 실값). plotPx = 실제 그림 높이(위 18 · 아래 34 여백 제외 — 45° 이름축 폐지로 아래 여백 96→34)
   var brk=ED?null:_bizBarBreak(vals,Math.max(60,hgt-(18+_BIZ_AXB)));   // [260806-5] 위 여백 18 + 아래 여백 _BIZ_AXB — 상수 34를 박아두면 아래 여백을 늘린 만큼 중략이 없는 자리를 있다고 착각한다(그림 영역 = 높이 − 두 여백)
   var yv=brk?vals.map(function(v){return v==null?null:brk.map(v);}):vals;
@@ -8069,7 +8071,7 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
   //   자리 문법(xanchor left · xshift 9 · yanchor middle)은 아래 교육 색인의 「천장 근접 = 옆으로」와 **같은 벌**(새 형태 0).
   //   겹침 판정(placedX)은 위에서 이미 끝났다 = 라벨 수·생략 규칙은 무변, 그리는 자리만 옮긴다.
   var fcLab=[];
-  fcIdx.forEach(function(a){ var i=a[0]; if(!labs[i])return; fcLab.push({x:xs[i],y:_mapv(vals[i]),t:labs[i],c:gcol(rows[i])}); labs[i]=''; });
+  fcIdx.forEach(function(a){ var i=a[0]; if(!labs[i])return; fcLab.push({x:xs[i],y:_mapv(a[1]),t:labs[i],c:gcol(rows[i])}); labs[i]=''; });   // [260806-11] y = **예상 꼭대기**(그라데이션 끝) — 아래 주석
   // [260805 운영자 「교육도 그 위에 명수 숫자를 써줘 · 공연 차트도 각각 맨 위에 (백만 단위로)」]
   //   값 라벨 = 9.5px·--dim(3.32:1 · 화면에서 거의 안 읽혔다) → **10.5px + 그 막대 색**(전시 피크 라벨과 같은 문법 =
   //   숫자와 막대가 한 몸으로 읽힌다 · 장르색·분야색은 --dim보다 대비가 높다). 단위는 축 제목(백만 원)·카드 우상단(명)이 말한다.
@@ -8130,8 +8132,12 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
       }));
     }
   }   // [260806-5] 월 라벨 **아랫줄** = 1Q~4Q. ⚠ 이 줄은 위 `lay.annotations=zone.notes` **뒤**여야 한다 — 앞에 두면 그 할당이 통째로 덮어써서 분기 라벨이 조용히 사라진다(첫 렌더 실측)   // [260805] 달 경계선 = 음영보다 먼저(둘 다 below · 경계가 음영 위에 얹히지 않게)
-  if(fcLab.length)lay.annotations=lay.annotations.concat(fcLab.map(function(L){   // [260808-2] 위 fcLab 주석 — 예상 2단 막대의 값 라벨(실값)을 실판매 꼭대기 **옆**에
-    return {xref:'x',x:L.x,xanchor:'left',xshift:9,yref:'y',y:L.y,yanchor:'middle',
+  // [260806-11 운영자 「차트 위에 (그라데이션 있어도 **그 끝 점 위에** 그라데이션이랑 **중첩 안 되게**) 숫자를 적어줘」]
+  //   2단 막대의 값 라벨(실값) = **예상 꼭대기 바로 위**. 260808-2가 「옆」으로 뺀 이유(같은 색 잉크 위 같은 색 글자가
+  //   페이드 칸 **안**에 잠긴다)는 자리를 페이드 **밖**으로 올리면 그대로 해소된다 — 겹칠 잉크가 없다.
+  //   자리 문법 = 다른 값 라벨과 같은 벌(xanchor center · yanchor bottom · yshift 3 = 막대 꼭대기에서 한 칸) = 새 값 0.
+  if(fcLab.length)lay.annotations=lay.annotations.concat(fcLab.map(function(L){
+    return {xref:'x',x:L.x,xanchor:'center',yref:'y',y:L.y,yanchor:'bottom',yshift:3,
       text:L.t,showarrow:false,font:{size:10.5,color:L.c}}; }));
   var note=(div.parentNode&&div.parentNode.querySelector)?div.parentNode.querySelector('[data-bizbrknote]'):null;
   if(brk){
@@ -8155,7 +8161,11 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
     // [260808-2] 예상 페이드 꼭대기가 접힌 축의 상한을 넘으면 축을 그만큼 넓힌다 — 자르면 「예상이 낮다」로 오독된다.
     //   눈금(tickvals)은 손대지 않는다 = 눈금 사다리·중략 발동 계약(`check_break_rule`)은 무접촉.
     if(fcIdx.length){ var _fcTop=Math.max.apply(null,fcIdx.map(function(a){return brk.map(a[1]);}));
-      if(_fcTop>brk.rng)lay.yaxis.range=[0,_fcTop*1.02]; }
+      // [260806-11] 여유 = 값 라벨 한 줄이 **그림 안에** 서는 만큼(글자 10.5 + 띄움 3 + 숨구멍 2.5 ≈ 16px)을 축 단위로 환산.
+      //   구판 1.02는 페이드가 안 잘리는 최소치였는데, 라벨이 꼭대기 **위**로 올라오면서(운영자 260806-11) 그 위가 필요해졌다.
+      //   고정 배수를 새로 정하지 않는다 — 그림 높이가 달라지면 필요한 비율도 달라지므로 픽셀에서 역산한다.
+      var _lblRoom=1+16/Math.max(60,hgt-_BIZ_AXB-18);
+      if(_fcTop*_lblRoom>brk.rng)lay.yaxis.range=[0,_fcTop*_lblRoom]; }
     // ≈ 표식 = **차트 전폭 1줄**(국제 관례). 축 옆 스텁으로 두면 끊을 축선이 없어 「≈ 80 = 약 80」으로 읽힌다(평의회7).
     var cyc=Math.max(2,Math.min(16,Math.round(plotSpan/28)));       // 파장 ≈28px(넓은 카드는 16주기 상한에 걸려 최대 ≈45px) — 폭이 달라져도 같은 기호로 보이게
     lay.shapes=lay.shapes.concat(_bizBreakShapes(brk,[[ax.x0,ax.x1]],dim,_yrCss('--surface-solid'),cyc));
@@ -8178,7 +8188,7 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
   if(pidx.length){
     tr2={type:'bar',width:W,marker:{color:'rgba(0,0,0,0)',line:{width:0}},showlegend:false,hoverinfo:'text',textposition:'none',
       x:pidx.map(function(i){return xs[i];}),y:pidx.map(function(){return pY;}),
-      text:pidx.map(function(i){ var g=rows[i]; return ED?((g._idx?g._idx+' ':'')+g.name+'\n'+dTxt(g)+' · '+stName(g)+'\n수강생 집계 전')
+      text:pidx.map(function(i){ var g=rows[i]; return ED?(g.name+'\n'+dTxt(g)+' · '+stName(g)+'\n수강생 집계 전')
         :(g.name+'\n'+dTxt(g)+' · '+(g.genre||'-')+'\n'+(plan(g)?'예정 · 티켓 오픈 전':stName(g)+' · 자료 없음')); })};
   }
   // [260808-2] 예상 판매분 = **실막대 위에 얹는 한 칸**(`base` = 실판매 꼭대기). 트레이스를 따로 두는 이유 =
@@ -8212,7 +8222,7 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
         marker:{size:7,color:srf,line:{color:col,width:1.6}},
         showlegend:false,hoverinfo:'text',
         text:mo.map(function(p,j){ var inc=p[1]-(j>0?mo[j-1][1]:0);
-          return (g._idx?g._idx+' ':'')+g.name+'\n'+(p[0]+1)+'월 누계 '+Math.round(p[1]).toLocaleString()+'명 (그 달 +'+Math.round(inc).toLocaleString()+')\n'
+          return g.name+'\n'+(p[0]+1)+'월 누계 '+Math.round(p[1]).toLocaleString()+'명 (그 달 +'+Math.round(inc).toLocaleString()+')\n'
             +dTxt(g)+' · '+stName(g)+' · '+(g._g2||'예술교육'); })});
       lnTip.push({i:i,x:lx[lx.length-1],y:ly[ly.length-1],col:col});
     });
@@ -8226,24 +8236,9 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
       return {xref:'x',x:L.x,xanchor:'center',yref:'y',y:L.y,yanchor:'bottom',yshift:7,
         text:Math.round(L.y).toLocaleString(),showarrow:false,font:{size:10.5,color:L.col}}; }));
   }
-  // [260805 운영자] 교육 색인(①②③… = _bizEduMonthRows가 시작일순으로 부여) — **모든** 교육 열 머리에 단다
-  //   (실막대는 막대 꼭대기 위 · 값 라벨과 겹치지 않게 한 칸 더 · 파선은 게이지 끝). 원문자 = 값 숫자로 오독되지 않는 색인 표기.
-  //   꺾은선은 **꼭자락 오른쪽 옆**(위가 아니라 옆) — 동시 판매 구간에서는 두 선이 같은 달에 끝나므로, 위로 쌓으면
-  //   아래 선의 색인이 위 선 위에 얹혀 같은 초록끼리 뭉갠다(실측: ③ 색인이 ② 선에 묻혔다). 옆은 꼭자락 오른쪽 = 빈 자리다.
-  var _lnAt={}; lnTip.forEach(function(L){ _lnAt[L.i]=L; });
-  if(ED)lay.annotations=lay.annotations.concat(rows.map(function(g,i){
-      var L=_lnAt[i];
-      if(g._idx==null||(L==null&&xs[i]==null))return null;
-      if(L)return {xref:'x',x:L.x,xanchor:'left',xshift:9,yref:'y',y:L.y,yanchor:'middle',
-        text:String(g._idx),showarrow:false,font:{size:10,color:gcol(g)}};
-      // 천장에 붙은 막대(값 라벨까지 얹으면 구획 라벨 「진행 완료」·「진행·예정」 띠에 글자가 포갠다)는 색인만 **옆으로** 뺀다
-      //   — 전시 반쪽의 「천장 근접 = 라벨을 옮긴다(축을 넓히지 않는다)」 규칙과 같은 축. 30 = 값 라벨(12) + 띄움(3) + 구획 띠(≈14).
-      if(vals[i]!=null&&(_edTop-vals[i])*(Math.max(60,hgt-52)/(_edTop||1))<30)
-        return {xref:'x',x:xs[i],xanchor:'left',xshift:9,yref:'y',y:vals[i],yanchor:'middle',
-          text:String(g._idx),showarrow:false,font:{size:10,color:gcol(g)}};
-      return {xref:'x',x:xs[i],xanchor:'center',yref:'y',y:(vals[i]!=null?vals[i]:pY),yanchor:'bottom',
-        yshift:(vals[i]!=null?17:2),
-        text:String(g._idx),showarrow:false,font:{size:10,color:gcol(g)}}; }).filter(Boolean));   // [260805] 값 라벨(주석 10.5px) 위로 한 칸 더(15→17)
+  // [260806-11 운영자 「교육 위에 1 동그라미 저건 없어도 될 듯」] 교육 색인(①②③…) **표기 철거** —
+  //   260805에 「별도의 인덱싱 열 부여」로 붙였던 원문자 라벨. 열이 적을 땐 이름을 툴팁으로 바로 확인할 수 있어
+  //   색인이 한 겹 더 얹힌 잉크였다(운영자 판정). 자리·값 라벨·툴팁은 그대로 — 지운 건 원문자 주석뿐이다.
   // 교육 막대 값 라벨 = 주석판(위 tr.text 주석) · 자리·겹침 판정은 위 labs가 이미 끝냈다(같은 규칙 두 벌 금지).
   if(ED)lay.annotations=lay.annotations.concat(rows.map(function(g,i){ return (!labs[i]||xs[i]==null)?null:{
       xref:'x',x:xs[i],xanchor:'center',yref:'y',y:vals[i],yanchor:'bottom',yshift:3,
