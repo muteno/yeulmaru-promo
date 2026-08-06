@@ -7990,7 +7990,7 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
   // [260805 운영자] 교육도 **실값이 있으면 막대**로 — 축은 수강생(명) 하나뿐이라 매출 축으로 갈아타지 않는다(카드 눈금 100~400과 어긋나면 안 된다).
   var valOf=function(g){ if(ED)return (g._sold!=null&&g._sold>0)?g._sold:null;
     return hasRev?((g._rev!=null)?(g._rev/1e6):null):((g._sold!=null&&g._sold>0)?g._sold:(g.paid>0?g.paid:null)); };
-  var unit=(hasRev&&!ED)?'백만 원':'명';
+  var unit=(hasRev&&!ED)?'백만원':'명';   // [260806-10] 표기 = 「(단위: 백만원)」(운영자) · 상세 표 머리글 「(단위: 만원)」과 같은 붙임 표기 — 구 y축 세로 제목의 「백만 원」(띄어쓰기)에서 통일
   var plan=function(g){ return g._st==='planned'; };
   var _fix=ED?(_yrCss('--green')||''):'';
   var gcol=function(g){ return g._col||_fix||_BIZ_GENRE_COLORS[g.genre||'기타']||_BIZ_GENRE_COLORS['기타']; };   // [260805] _col/_fix = 분야색 고정(교육엔 장르 축이 없다)
@@ -8082,8 +8082,11 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
       .concat(rows.map(function(g){ var m=lnOf(g); return m?m[m.length-1][1]:null; }).filter(function(v){return v!=null&&isFinite(v);})).concat([0]));
     if(_edMax>_ED_YMAX*0.94){ _edTop=_bizNiceStep(_edMax*1.12); var _st2=Math.max(100,_bizNiceStep(_edTop/4)); _edTick=[]; for(var _t=_st2;_t<=_edTop+1e-6;_t+=_st2)_edTick.push(Math.round(_t)); }
   }
+  // [260806-10] y축 **세로 제목 철거** — 단위는 카드 우상단 「(단위: …)」이 가로로 말한다(전시·교육과 같은 자리·같은 문법).
   var yAx=ED?{range:[0,_edTop],tickmode:'array',tickvals:_edTick,tickfont:{size:10.5,color:dim},gridcolor:grid,zeroline:false,fixedrange:true}
-    :{title:{text:unit,font:{size:10.5,color:dim}},tickfont:{size:10.5,color:dim},gridcolor:grid,zeroline:false,fixedrange:true,rangemode:'tozero'};
+    :{tickfont:{size:10.5,color:dim},gridcolor:grid,zeroline:false,fixedrange:true,rangemode:'tozero'};
+  // 카드 우상단 단위 표기 = **축을 정한 그 자리에서** 쓴다(축과 표기가 갈릴 수 없다 · 자리가 없는 카드면 조용히 지나간다).
+  try{ var _uEl=div.parentNode&&div.parentNode.querySelector('.ct [data-bizunit]'); if(_uEl)_uEl.textContent='(단위: '+unit+')'; }catch(_eu){}
   // [260806-5 운영자 「월 아래에 1Q~4Q · 차트랑 월 간격 아주 조금 더 · 흰 도형 간 마진은 동일하게」]
   //   ⚠ height는 **hgt 그대로**(카드 높이·바깥 마진 불변 = 흰 도형 하단선 계약 유지 · smoke_layout이 재는 축) —
   //     늘린 건 아래 여백(b)뿐이고 그만큼 그림 영역이 줄어든다. 축 중략의 plotPx 계산(hgt-52)도 같은 값으로 맞춘다.
@@ -8681,8 +8684,13 @@ function _bizCompRender(el,half){
   var _kpi='<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px">'+kc(_bizmState.year+' 사업 수',total+'건'+(_planN?'<span class="u" style="color:var(--dim);margin-left:6px">+예정 '+_planN+'</span>':''),'--accent')+kc('평균 점유율',avgAll.toFixed(1)+'%','--peach-text')+kc('누적 매출',_hasRev?_bizMoney(_revTot):'—','--green')+kc('누적 판매 고객',Math.round(_soldTot).toLocaleString()+'명','--c5')+'</div>';
   // [260803 운영자 선택값] 좌 콘텐츠 = **사업별 판매현황 막대**(값 = 매출 · 공연일순). 차트 자리(id·높이 430)는 종전 그대로 = 이젤/fit 엔진(_bizFitSeason의 'bizm-chart' 축) 무접촉.
   // [260804 운영자] 제목 = 「기획 공연」 · 회색 설명문(막대 = … · ≈ 각주 · 색 = 장르 …) 전부 철거 — 축·음영이 자체로 말하고, 세부는 툴팁이 진다.
-  //   우상단 단위 표기 = y축 제목(백만 원/명)이 이미 있어 생략(전시·교육은 y축 제목이 없어 카드 우상단에 단다).
-  var _dist='<div class="bizm-card"><div class="ct">기획 공연</div><div id="bizm-chart" style="height:430px;margin:0 4px 2px"></div></div>';
+  //   [260806-10 운영자 「기획 공연 우측에 **다른 애들처럼** (단위: 백만원)을 **가로로** 표기해줘」] 우상단 단위 표기 =
+  //   전시·교육 반쪽 카드가 쓰는 그 문법 그대로(`.ct` 안 `.sub` float:right · 상세 표 머리글 「(단위: …)」와 같은 잉크).
+  //   구판은 y축 **세로 제목**(「백만 원」)이 그 자리를 대신했는데, 세로 글자는 카드마다 표기가 갈리는 데다(전시·교육은
+  //   가로) 좁은 화면에서 글자가 겹쳐 읽혔다 → 세로 제목은 철거하고 세 카드가 **같은 자리·같은 문법**으로 단위를 말한다.
+  //   ⚠ 글자는 여기 박지 않는다 — 축 단위는 데이터가 정한다(매출 있으면 백만원 · 없으면 명). `_bizDrawSalesBars`가
+  //     자기 축을 정한 뒤 이 자리(`[data-bizunit]`)에 써 넣는다 = 축과 표기가 갈릴 수 없다.
+  var _dist='<div class="bizm-card"><div class="ct">기획 공연<span class="sub" data-bizunit style="float:right;margin-left:8px"></span></div><div id="bizm-chart" style="height:430px;margin:0 4px 2px"></div></div>';
   // [260802e] data-bizmfill = 마지막 흰 도형을 박스 안선(패딩 18 위)까지 늘리는 마킹(_srailAlignTop) — 행이 적어도(1월 2건 등) 흰 라인이 좌 열과 같은 하단선에서 끝난다(운영자 「없던 있든 흰색 라인 다 맞춰줘」)
   // [260803 운영자 「전체로 선택하면 화면이 넘어선다 → 목록 안에서 스크롤」] data-bizmcap = 상한도 안선에 고정(행이 많아도 박스·흰선을 **절대** 넘지 않음).
   //   스크롤러는 정본 .ry-grp-bd 그대로 계승(오버레이 스크롤바·호버 리빌·gutter 안정 — 이 열이 #rail-yrm 안이라 호버 규칙도 그대로 먹는다) = 신규 CSS 0.
