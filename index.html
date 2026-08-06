@@ -2849,7 +2849,10 @@ html::-webkit-scrollbar-thumb{background:rgba(0,0,0,.15)}
 <div class="modal-bg" id="promo-wizard">
   <div class="modal pw-modal" style="position:relative;max-width:520px">
     <button class="modal-x" onclick="closePromoWizard()" title="닫기" aria-label="닫기">✕</button>
-    <div class="mhead"><span>홍보 신청</span><span class="sub">단계를 따라가면 신청이 끝나요</span></div>
+    <!-- [260806] 제목 span에 id — 위저드는 모드마다 제목을 갈아끼운다(신청 / 홍보 내용 입력 n/N / 임시저장 이어쓰기 / 콘텐츠 변경).
+         260805-23 머리줄 정본화가 구 `<h3>`를 이 밴드로 바꾸면서 id를 안 남겨, 제목을 넣던 JS 3곳이 전부 null을 짚었다
+         (#modal은 같은 커밋에서 m-title·m-meta를 span에 그대로 남겨 무사했다 — 그 선례를 여기에도 적용). 갈아끼우기 = _pwHead() 한 곳. -->
+    <div class="mhead"><span id="pw-mtitle">홍보 신청</span><span class="sub">단계를 따라가면 신청이 끝나요</span></div>
     <div class="pw-progress">
       <div class="pw-progress-bar" id="pw-progress-bar"></div>
     </div>
@@ -17374,6 +17377,12 @@ let _pwEditTarget=null;        // 변경 대상 rowIndex
 let _pwSelectedSteps=[];       // [1,3,4] 선택된 step 배열
 let _pwSelectedIdx=0;          // 현재 진행 중 idx
 let _pwOriginalRec=null;       // 원본 row (diff용)
+// [260806 버그수정] 위저드 머리줄 제목 = 정본 `.mhead` 밴드의 제목 span(#pw-mtitle) 하나만 갈아끼운다.
+//   ⚠ 구 코드는 `document.querySelector('#promo-wizard h3')`로 짚었는데, 260805-23 머리줄 정본화(fa9c9ce)가
+//     그 `<h3>`를 `.mhead` 밴드로 바꾼 뒤로 **항상 null**이었다. openPromoWizard는 그 null에 무방비로 대입해
+//     `.classList.add('show')` 앞에서 TypeError로 죽었다 = 「새 콘텐츠 등록」·「홍보 신청」·배치·모바일 FAB 등
+//     위저드를 여는 **모든 경로가 무반응**(에러 토스트조차 없음). 여기 한 곳으로 모아 null 방어까지 함께 진다.
+function _pwHead(title){ var el=document.getElementById('pw-mtitle'); if(el)el.textContent=title; }
 function openPromoWizard(prefillDate, batchJob){
   // [버그수정] 프로그램·홍보기간 로딩 완료 전에는 열지 않음 — 미확정 하반기 공연이 선택지로 새던 현상 차단
   if(!_perfReady||!PERFS.length){
@@ -17381,7 +17390,7 @@ function openPromoWizard(prefillDate, batchJob){
     return;
   }
   _pwMode='request';
-  document.querySelector('#promo-wizard h3').textContent='홍보 신청';
+  _pwHead('홍보 신청');
   _pwStep=1;
   _pwSubStep=1;
   // 오늘 날짜 (YYYY-MM-DD)
@@ -17430,7 +17439,8 @@ function openPromoWizard(prefillDate, batchJob){
     var _p2need=(batchJob.plat1==='기타')||PLATFORMS.some(function(p){return p['플랫폼1']===batchJob.plat1&&p['플랫폼2']&&p['플랫폼2']!=='-';});
     _pwSubStep=_p2need?1:2;
     var _bn=(_pwBatchTotal-((_pwBatchQueue&&_pwBatchQueue.length)||0)), _bt=_pwBatchTotal;
-    try{ document.querySelector('#promo-wizard h3').innerHTML='홍보 내용 입력 (<span style="color:var(--accent)">'+_bn+'</span>/'+_bt+')'; }catch(e){}
+    // 진행수는 밴드 제 글자색(흰색)으로 — 밴드 바탕이 `var(--accent)`라 구 코드의 강조색 span은 이제 바탕에 묻힌다(정본 `.mhead` 대비 규칙).
+    _pwHead('홍보 내용 입력 ('+_bn+'/'+_bt+')');
   }
   renderPwStep();
 }
@@ -17719,6 +17729,9 @@ function _startChangeWizard(rowIndex){
   _prefillPwDataFromRec(rec);
   _pwData.s_applicant=(rec['신청자']||'');   // 신청자(S) — admin 변경용 (게시담당자 P=_pwData.applicant 와 별개)
   _pwMode='edit';
+  // [260806] 머리줄 되돌리기 — 앞서 배치·임시저장이 갈아끼운 제목이 그대로 남던 자리(구 h3 시절부터 있던 누락).
+  //   라벨 = 기존 정본 문구 재사용(#modal 제목 '콘텐츠 변경' · L24826).
+  _pwHead('콘텐츠 변경');
   _pwStep=_pwSelectedSteps[0];
   if(_pwStep===4)_pwSubStep=1;
   document.getElementById('pw-acts').innerHTML='<button class="m-btn cancel" id="pw-back" onclick="promoBack()">이전</button><button class="m-btn save" id="pw-next" onclick="promoNext()">다음</button>';
@@ -18663,7 +18676,7 @@ function _pwResumeDraft(rowIndex){
   _prefillPwDataFromRec(rec);
   _pwData._draftRow=rec._rowIndex;   // 이 임시 행을 이어쓰기/제출 시 갱신 (중복 생성 방지)
   _pwData.fromCalendar=false;
-  var _h3=document.querySelector('#promo-wizard h3');if(_h3)_h3.textContent='임시저장 이어쓰기';
+  _pwHead('임시저장 이어쓰기');
   document.getElementById('pw-acts').innerHTML='<button class="m-btn cancel" id="pw-back" onclick="promoBack()">이전</button><button class="m-btn save" id="pw-next" onclick="promoNext()">다음</button>';
   document.getElementById('promo-wizard').classList.add('show');
   renderPwStep();
