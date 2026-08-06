@@ -6,8 +6,8 @@ name: 앱 블로그/분석 (claude -p · repository_dispatch)
 # [260803 예울이 AI 채팅] payload.yeulchat=1 이면 블로그 경로 대신 「예울이」 분기 — persona/yeuli.md 카드(루시봇
 #   컨셉: 카드 원문 주입 = 카드 수정이 곧 말투, 코드 수정 0) + 질문 1턴 → drafts/yc<ts>r<n>.json 커밋(같은 폴링 경로).
 #   Worker는 여분 payload 키를 그대로 통과시키므로 배포된 /api/blog/dispatch·/api/blog/draft 를 무변경 재사용한다.
-#   모델 라우팅(운영자 260803): 기본 = claude-sonnet-5·effort high(대화 속도 우선) / 복잡 질문(payload.deep=1,
-#   앱 _yeulAiDeep 판정 — 이때 앱이 「기다려 달라」 말풍선을 먼저 띄움) = claude-opus-5·effort medium.
+#   모델 라우팅(운영자 260806 갱신): 기본 = claude-sonnet-5·effort **low**(뭐든 빠르게 답한다 — 260803 high에서 내림)
+#   / 복잡 질문(payload.deep=1, 앱 _yeulAiDeep 판정 — 이때 앱이 「기다려 달라」 말풍선을 먼저 띄움) = claude-opus-5·effort medium.
 #   (v3: payload.t 시각 동봉·카드 모드 2축은 폐지 — 운영자 "밤에 아무도 안 씀", 츤데레 단일 결.)
 # [블로그 개선] 새 초안(mode=blog·수정요청 아님)은 WebSearch·WebFetch를 허용해 공연·출연진·작품을
 #   먼저 조사(BW-2)하고, 사람 말투 문체 계약(BW-1)으로 쓰며, 본문 뒤 ===TAGS===(네이버 태그 30개, BW-5)
@@ -61,7 +61,7 @@ jobs:
 
             // ---- [260803] 예울이 AI 채팅(yeulchat) — 페르소나 카드 + 질문 1턴. 블로그 경로와 완전 분리(아래 프롬프트·파서 무접촉) ----
             // 페르소나 = persona/yeuli.md 원문(루시봇 카드 규약 — 카드 수정이 곧 말투) · p.persona(앱 설정 오버라이드) 있으면 그쪽 우선.
-            // 모델 = opus·effort high(루시 스레드 확정값 계승 — 채팅 체감 속도) · 산출 = drafts/<id>.json {mode:'chat', text}.
+            // 모델 = 아래 라우팅 2줄이 정한다(기본 소넷5·low / deep opus5·medium) · 산출 = drafts/<id>.json {mode:'chat', text}.
             if (p.yeulchat) {
               let card = '';
               try { card = fs.readFileSync('persona/yeuli.md', 'utf8'); } catch (e) {}
@@ -73,10 +73,12 @@ jobs:
               cprompt += '- 길이: 2~6문장, 채팅 말풍선 하나 분량. 머리말·사고 과정 없이 답변 본문만 출력한다.\n';
               if (p.ctx) cprompt += '\n# 참고 정보 (앱이 동봉한 집계 요약 — 개인정보 없음)\n' + String(p.ctx).slice(0, 1200) + '\n';
               cprompt += '\n# 질문\n' + String(p.q || '').slice(0, 800);
-              // [260803 운영자] 모델 라우팅 — 기본 소넷5·high(속도) / 복잡(deep) opus5·medium(앱이 대기 안내 선표시)
+              // [260806 운영자 「sonnet 5 low 로 일단 배선 · 빠르게 뭐든 대답 · 어려우면 opus 5.0 medium 전환」]
+              //   모델 라우팅 = 기본 소넷5·**low**(260803 high에서 내림 — 속도 우선) / 복잡(deep) opus5·medium(앱이 대기 안내 선표시).
+              //   ⚠ 이 두 줄이 「어떤 모델이 답하는가」의 SSOT다 — 앱은 판정(payload.deep)만 보내고 모델명·effort는 안 보낸다.
               const cdeep = !!p.deep;
               const cmodel = cdeep ? 'claude-opus-5' : 'claude-sonnet-5';
-              const ceffort = cdeep ? 'medium' : 'high';
+              const ceffort = cdeep ? 'medium' : 'low';
               const cpath = require('path');
               const { runClaudeWithFailover: runChat } = require(cpath.join(process.env.GITHUB_WORKSPACE, 'shared/claude_failover.js'));
               const cr = runChat({ args: ['-p', '--model', cmodel, '--effort', ceffort, '--max-turns', '1'], input: cprompt, cwd: process.env.RUNNER_TEMP || '/tmp' });
