@@ -105,6 +105,8 @@ const FEED = `(()=>{
     _salesState.daily={rows:[]}; _salesState.master={rows:[]}; }
   window._salesBuild=function(){ return window.__MOCK_SALES; };
   if(typeof _bizmState!=='undefined'&&_bizmState)_bizmState.year=${YEAR};
+  // AUD=1 → 3면 조작부 「매출 ↔ 관객수」(260806-9)의 관객수 축에서 같은 것을 잰다 — 2단은 축이 바뀌어도 성립해야 한다
+  if(${process.env.AUD ? 'true' : 'false'}&&typeof _bizmState!=='undefined'&&_bizmState)_bizmState.metric='aud';
 })()`;
 
 // ── 실측 = ① 차트(예정 자리·예상 2단) ② 판매 실적 목록(오픈 예정 행) ────────────────────────
