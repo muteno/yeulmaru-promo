@@ -80,7 +80,16 @@ function kstNow(){
 }
 function ymdAdd(ymd,n){var a=ymd.split('-');var d=new Date(Date.UTC(+a[0],+a[1]-1,+a[2]+n));return d.toISOString().slice(0,10)}
 function ymdLabel(ymd){var a=ymd.split('-');var d=new Date(Date.UTC(+a[0],+a[1]-1,+a[2]));return (+a[1])+'월 '+(+a[2])+'일 ('+['일','월','화','수','목','금','토'][d.getUTCDay()]+')'}
-function fmtMin(m){return Math.floor(m/60)+':'+('0'+(m%60)).slice(-2)}
+/* [260806 개정] 한국어 「오전/낮/오후 N시 M분」 — 인라인 카드(/api/public/jangdo.svg)와 **같은 규칙**.
+   ⚠ 260805에 카드를 AM/PM으로 바꿀 때 여기까지 맞췄는데, 그 뒤 카드만 한국어로 다시 바꾸면서 이 파일이 남았다
+     (「다른 날짜 확인하기」로 넘어온 방문자가 카드와 다른 표기를 보고 있었다). 표기 규칙은 반드시 두 곳을 함께 옮긴다.
+   정오는 「낮」 — 「오후 12시 21분」이라 쓰면 점심때를 밤처럼 읽는다(운영자 지적). 내부 계산은 그대로 분(24시간) */
+function halfOf(m){var h=Math.floor(m/60)%24;return h<12?0:(h===12?1:2)}
+function hmOf(m){var h=(Math.floor(m/60)%12)||12,mm=m%60;return h+'시'+(mm?' '+mm+'분':'')}
+function fmtMin(m){return ['오전 ','낮 ','오후 '][halfOf(m)]+hmOf(m)}
+/* 구간 = 시작·끝 둘 다 오전/오후를 붙인다(운영자 260806 「이거 열시만 오후 열시라고 하면 될듯」).
+   예외는 낮 12시대 하나 — 최초 예시가 「오전 6시 29분 ~ 12시 21분」이었고 정오는 앞머리 없이도 안 헷갈린다. */
+function fmtRange(a,b){return fmtMin(a)+' ~ '+(halfOf(b)===1?hmOf(b):fmtMin(b))}
 function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
 
 /* "6:00~8:32, 10:32~20:31" → [[360,512],[632,1231]] · 형식 밖 텍스트(통제 공지 등)는 null = 원문 그대로 표시 */
@@ -106,7 +115,7 @@ function render(){
     return;
   }
   var ranges=parseRanges(raw),h=lab+'<div class="times">';
-  if(ranges){for(var i=0;i<ranges.length;i++)h+='<span class="t">'+fmtMin(ranges[i][0])+' ~ '+fmtMin(ranges[i][1])+'</span>';}
+  if(ranges){for(var i=0;i<ranges.length;i++)h+='<span class="t">'+fmtRange(ranges[i][0],ranges[i][1])+'</span>';}
   else h+='<span class="t" style="font-size:19px">'+esc(raw||'-')+'</span>';
   h+='</div>';
   if(SEL===now.ymd&&ranges){

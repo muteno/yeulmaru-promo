@@ -1097,12 +1097,32 @@ function jangdoRanges(t) {
 __name(jangdoRanges, "jangdoRanges");
 
 // 홈페이지 본문 인라인용 카드 이미지. 값 = docs/디자인기틀.md §1 팔레트 그대로(신규 색 0 · jangdo.html과 같은 매핑):
-//  #4A4DE7=--accent · #1A1A2E=--text · #888=--dim · #bbb=--muted · #fff=--surface-solid · #1A6B3C=--green · #E24B4A=--danger-btn.
-//  ⚠ `<img>`로 실리므로 SVG 내부 스크립트는 브라우저가 실행하지 않는다 = 상태 계산·조판 전부 서버(여기)에서 끝낸다.
+//  #4A4DE7=--accent · #1A1A2E=--text · #888=--dim · #bbb=--muted · #fff=--surface-solid · #E24B4A=--danger-btn ·
+//  #E1DFEC=--neutral-d(게이지 트랙 = 물에 잠긴 시간).
+//  ⚠ [260805-39 운영자 「그린을 코발트로」] 「가능」 신호 = --green(#1A6B3C) → **--accent(#4A4DE7)**. 그래서 「지금」 마커는
+//    --text(#1A1A2E)로 뺐다 — 마커까지 코발트로 두면 코발트 막대 위에서 묻혀 안 보인다. 「불가」 빨강(--danger-btn)은 그대로.
+//  ⚠ `<img>`로 실리므로 SVG 내부 **스크립트**는 브라우저가 실행하지 않는다 = 상태 계산·조판 전부 서버(여기)에서 끝낸다.
+//    단 SMIL `<animate>`·CSS는 `<img>` 안에서도 재생된다(스크립트만 차단) → 게이지 채움·「지금」 마커 박동에 SMIL을 쓴다.
+//    ⚠ SMIL 미지원 환경 대비: 와이프용 clip 사각형의 **정적 width는 전체 폭**으로 두고 애니메이션이 0에서 자라게 한다.
+//      (정적 0으로 두면 애니메이션이 안 도는 환경에서 가능 구간이 통째로 안 보인다.) begin은 0s 고정 —
+//      지연이 필요하면 values 앞에 0을 한 번 더 넣어 멈춰 세운다(begin 지연 = 그 사이 정적 전체 폭이 번쩍인다).
 //  rgba()는 SVG 1.1 미지원 → fill-opacity로 표현(같은 토큰 alpha 변주 = 기틀 §3.5②).
-export function buildJangdoSvg(rows, nowKst) {
+export function buildJangdoSvg(rows, nowKst, dayOffset) {
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
-  const fmt = (m) => Math.floor(m / 60) + ":" + ("0" + (m % 60)).slice(-2);
+  // [260805-39 개정 · 운영자 지시] 표기 = 한국어 「오전/오후 N시 M분」. 내부 계산은 그대로 분(minute) 24시간.
+  //  ⚠ **정오는 「낮 12시」** — 운영자 지적(「pm 12:21 이라고 하면 헷갈려」)대로 12:21을 「오후 12시 21분」이라 쓰면
+  //    점심때를 밤처럼 읽는다. 오전/오후/낮 세 갈래로 갈라 12시대만 「낮」을 쓴다.
+  const half = (m) => { const h = Math.floor(m / 60) % 24; return h < 12 ? 0 : (h === 12 ? 1 : 2); };   // 0=오전 1=낮12시대 2=오후
+  const pre = ["오전 ", "낮 ", "오후 "];
+  const hm = (m) => { const h = (Math.floor(m / 60) % 12) || 12, mm = m % 60; return h + "시" + (mm ? " " + mm + "분" : ""); };
+  const korAt = (m) => pre[half(m)] + hm(m);                                    // 단독 시각 — "오후 10시"
+  //  끝 시각도 오전/오후를 **붙인다** — 운영자 260806 「이거 열시만 오후 열시라고 하면 될듯」(「오후 3시 36분 ~ 10시」의 그 10시).
+  //  ⚠ 예외는 **낮 12시대 하나**뿐 — 운영자 최초 예시가 「오전 6시 29분 ~ 12시 21분」이었고, 정오는 앞머리 없이도
+  //    안 헷갈린다(오히려 「낮 12시 21분」까지 쓰면 장황). 즉 「같은 반나절이면 생략」 규칙은 폐기하고 12시대만 남긴다.
+  const korRange = (r) => korAt(r[0]) + " ~ " + (half(r[1]) === 1 ? hm(r[1]) : korAt(r[1]));
+  const fmtTick = (m) => pre[half(m)].trim() + ((Math.floor(m / 60) % 12) || 12) + "시";
+  // 글자폭 어림(한글 1em · 나머지 비율) — 시간이 긴 날 큰 글씨가 카드 밖으로 나가지 않게 자동 축소한다.
+  const estEm = (s) => { let w = 0; for (const c of s) w += /[가-힣]/.test(c) ? 1 : c === " " ? 0.28 : 0.62; return w; };
   const map = {};
   for (const r of rows) map[r.d] = r.t;
   const addDay = (ymd, n) => {
@@ -1114,52 +1134,127 @@ export function buildJangdoSvg(rows, nowKst) {
     const d = new Date(Date.UTC(+a[0], +a[1] - 1, +a[2]));
     return +a[1] + "월 " + +a[2] + "일 (" + "일월화수목금토"[d.getUTCDay()] + ")";
   };
-  const today = nowKst.ymd, tmrw = addDay(today, 1);
-  const rawT = map[today], ranges = jangdoRanges(rawT);
+  const off = Math.max(0, Math.min(14, dayOffset | 0));
+  const day = addDay(nowKst.ymd, off), isToday = off === 0;
+  const rawT = map[day], ranges = jangdoRanges(rawT);
 
-  // 세로는 **내용만큼만** 자란다(줄 커서 y) — 시간이 없는 날 고정 높이로 그리면 카드 아래가 빈 채로 남는다.
-  const W = 760;
-  let y = 40, body = "";
-  body += '<text x="30" y="' + y + '" font-size="17" font-weight="800" fill="#1A1A2E">장도 입도 가능 시간</text>';
-  y += 26;
-  body += '<text x="30" y="' + y + '" font-size="13.5" fill="#888">' + esc(label(today)) +
-          ' <tspan fill="#4A4DE7" font-weight="700">오늘</tspan></text>';
+  // 게이지 축 = 통상 오전 6시~오후 10시(진섬다리 통행 창). 실데이터가 그 밖으로 나가는 날은 시(hour) 단위로 넓혀 잘리지 않게 한다.
+  let AX0 = 6 * 60, AX1 = 22 * 60;
+  if (ranges) for (const r of ranges) { AX0 = Math.min(AX0, r[0]); AX1 = Math.max(AX1, r[1]); }
+  AX0 = Math.floor(AX0 / 60) * 60; AX1 = Math.ceil(AX1 / 60) * 60;
+
+  // ── [260806 운영자 선택값] 조판 상수 = 여기 한 블록이 SSOT.
+  //    출처 = 플레이그라운드 `docs/reports/260806_장도카드_플레이그라운드.html`(축 72) 회신분을 그대로 배선.
+  //    다음 튜닝 라운드도 **이 블록만** 갈아끼우면 된다(본문 조판식은 전부 T를 참조).
+  //    ⚠ 신규 색 0 — 전부 기틀 §0 팔레트 칩. 이번 라운드 역할 재지정 2건(제목·날짜 = --text/--dim → --accent)은
+  //      **이 카드 안에서만** 적용한다. 「전 앱 동축 일괄」은 운영자가 카드를 튜닝한 맥락을 넘어서므로 손대지 않는다.
+  const T = {
+    W: 1300, pad: 44, radius: 7, yTitle: 70, gapTime: 66, lhTime: 1.74,
+    gapStat: 60, gapGauge: 34, gapTick: 40, gapNote: 50, padBot: 42,
+    font: "'Apple SD Gothic Neo','Noto Sans KR','Malgun Gothic',sans-serif",
+    fsTitle: 22.5, fwTitle: 500, lsTitle: -0.5, fsDate: 21, fwDate: 800,
+    fsTime: 34, fwTime: 800, lsTime: -0.5, fsStat: 19, fwStat: 500,
+    fsTick: 16.5, fwTick: 900, fsLeg: 13.5, fsNote: 16, fwNote: 500,
+    barH: 26, barR: 21, segMin: 8, tickStep: 180, tickLen: 5,
+    mkW: 2.5, mkOver: 7, mkDotR: 4.5, mkDotY: 11, pingMax: 15, pingDur: 2.2,
+    wipeDur: 0.95, wipeEase: "0.22 1 0.36 1", dotR: 12, legSw: 15, legSwR: 3.5,
+    cOk: "#4A4DE7", cTrack: "#E1DFEC", cMk: "#1A1A2E", cTitle: "#4A4DE7", cTime: "#1A1A2E",
+    cDate: "#4A4DE7", cBadge: "#4A4DE7", cStatOk: "#4A4DE7", cStatNo: "#E24B4A", cStatEnd: "#888",
+    cNone: "#888", cTick: "#bbb", cNote: "#bbb", cCard: "#fff", aBorder: 0.2
+  };
+  const W = T.W, PAD = T.pad, GX = PAD, GW = W - PAD * 2;
+  const px = (m) => GX + (Math.max(AX0, Math.min(AX1, m)) - AX0) / (AX1 - AX0) * GW;
+  let y = T.yTitle, body = "", defs = "";
+  const badge = off === 0 ? "오늘" : off === 1 ? "내일" : "";
+  body += '<text x="' + PAD + '" y="' + y + '" font-size="' + T.fsTitle + '" font-weight="' + T.fwTitle +
+          '" letter-spacing="' + T.lsTitle + '" fill="' + T.cTitle + '">장도 입도 가능 시간</text>';
+  body += '<text x="' + (W - PAD) + '" y="' + y + '" text-anchor="end" font-size="' + T.fsDate +
+          '" font-weight="' + T.fwDate + '" fill="' + T.cDate + '">' + esc(label(day)) +
+          (badge ? ' <tspan fill="' + T.cBadge + '" font-weight="700">' + badge + "</tspan>" : "") + "</text>";
 
   if (ranges) {
-    y += 46;
-    body += '<text x="30" y="' + y + '" font-size="31" font-weight="800" fill="#1A1A2E">';
-    ranges.forEach((r, i) => {
-      if (i) body += '<tspan fill="#bbb" font-weight="400"> · </tspan>';
-      body += "<tspan>" + fmt(r[0]) + " ~ " + fmt(r[1]) + "</tspan>";
+    // 구간마다 **한 줄**(운영자 예시가 두 줄) — 한 줄에 이어 붙이면 「~」가 두 번 나와 어디서 끊기는지 눈에 안 들어온다.
+    const lines = ranges.map(korRange);
+    const fs = Math.min(T.fsTime, Math.max(16, Math.floor(GW / Math.max.apply(null, lines.map(estEm)))));
+    lines.forEach((ln, i) => {
+      y += i === 0 ? T.gapTime : Math.round(fs * T.lhTime);
+      body += '<text x="' + PAD + '" y="' + y + '" font-size="' + fs + '" font-weight="' + T.fwTime +
+              '" letter-spacing="' + T.lsTime + '" fill="' + T.cTime + '">' + esc(ln) + "</text>";
     });
-    body += "</text>";
-    let dot = "#bbb", txt = "오늘 입도 시간이 종료됐어요", col = "#888";
-    for (const r of ranges) {
-      if (nowKst.min >= r[0] && nowKst.min < r[1]) { dot = col = "#1A6B3C"; txt = "지금 입도 가능 · " + fmt(r[1]) + "까지"; break; }
-      if (nowKst.min < r[0]) { dot = col = "#E24B4A"; txt = "지금은 입도 불가 · " + fmt(r[0]) + "부터 입도 가능"; break; }
+
+    y += isToday ? T.gapStat : Math.round(T.gapStat * 0.79);
+    if (isToday) {                                   // 「지금」 상태는 오늘 카드에만 — 내일 카드에 붙이면 거짓말이 된다
+      let dot = T.cStatEnd, txt = "오늘 입도 시간이 종료됐어요", col = T.cStatEnd, live = false;
+      for (const r of ranges) {
+        if (nowKst.min >= r[0] && nowKst.min < r[1]) { dot = col = T.cStatOk; txt = "지금 입도 가능 · " + korAt(r[1]) + "까지"; live = true; break; }
+        if (nowKst.min < r[0]) { dot = col = T.cStatNo; txt = "지금은 입도 불가 · " + korAt(r[0]) + "부터 입도 가능"; break; }
+      }
+      body += '<circle cx="' + (PAD + T.dotR) + '" cy="' + (y - 6) + '" r="' + T.dotR + '" fill="' + dot + '">' +
+              (live ? '<animate attributeName="opacity" values="1;0.35;1" dur="2.2s" repeatCount="indefinite"/>' : "") + "</circle>";
+      body += '<text x="' + (PAD + T.dotR * 2 + 10) + '" y="' + y + '" font-size="' + T.fsStat +
+              '" font-weight="' + T.fwStat + '" fill="' + col + '">' + esc(txt) + "</text>";
     }
-    y += 32;
-    body += '<circle cx="35" cy="' + (y - 5) + '" r="5" fill="' + dot + '"/>';
-    body += '<text x="48" y="' + y + '" font-size="14.5" font-weight="700" fill="' + col + '">' + esc(txt) + "</text>";
+    // 범례 — 자리를 폭·색칩 크기 식으로 잡는다(하드코딩하면 W나 칩 크기를 바꿀 때마다 어긋난다)
+    const LX = W - PAD - 164, SW = T.legSw;
+    body += '<rect x="' + LX + '" y="' + (y - SW - 2) + '" width="' + SW + '" height="' + SW + '" rx="' + T.legSwR + '" fill="' + T.cOk + '"/>' +
+            '<text x="' + (LX + SW + 5) + '" y="' + (y - 4) + '" font-size="' + T.fsLeg + '" fill="' + T.cDate + '">입도 가능</text>' +
+            '<rect x="' + (LX + SW + 72) + '" y="' + (y - SW - 2) + '" width="' + SW + '" height="' + SW + '" rx="' + T.legSwR + '" fill="' + T.cTrack + '"/>' +
+            '<text x="' + (LX + SW * 2 + 77) + '" y="' + (y - 4) + '" font-size="' + T.fsLeg + '" fill="' + T.cDate + '">물에 잠김</text>';
+
+    // 게이지 — 트랙 전체 = 하루 통행 창, 채움 = 건널 수 있는 시간, 회색 = 다리가 잠겨 못 건너는 시간
+    const BT = y + T.gapGauge, BH = T.barH, BR = Math.min(T.barR, BH / 2);   // 모서리 상한 = 높이 절반(그 위는 같은 모양)
+    defs += '<clipPath id="wipe"><rect x="' + GX + '" y="' + (BT - 40) + '" width="' + GW + '" height="' + (BH + 80) + '">' +
+            '<animate attributeName="width" values="0;' + GW + '" keyTimes="0;1" dur="' + T.wipeDur + 's" begin="0s"' +
+            ' calcMode="spline" keySplines="' + T.wipeEase + '" fill="freeze"/></rect></clipPath>';
+    body += '<rect x="' + GX + '" y="' + BT + '" width="' + GW + '" height="' + BH + '" rx="' + BR + '" fill="' + T.cTrack + '"/>';
+    let segs = "";
+    for (const r of ranges) {
+      const x0 = px(r[0]), x1 = px(r[1]);
+      segs += '<rect x="' + x0.toFixed(1) + '" y="' + BT + '" width="' + Math.max(T.segMin, x1 - x0).toFixed(1) +
+              '" height="' + BH + '" rx="' + BR + '" fill="' + T.cOk + '"/>';
+    }
+    // 「지금」 마커 — 와이프 안에 넣어 게이지가 채워지며 함께 드러난다. 박동(ping)은 무한 반복.
+    if (isToday && nowKst.min >= AX0 && nowKst.min <= AX1) {
+      const nx = px(nowKst.min).toFixed(1);
+      segs += '<line x1="' + nx + '" y1="' + (BT - T.mkOver) + '" x2="' + nx + '" y2="' + (BT + BH + T.mkOver) +
+              '" stroke="' + T.cMk + '" stroke-width="' + T.mkW + '" stroke-linecap="round"/>' +
+              '<circle cx="' + nx + '" cy="' + (BT - T.mkDotY) + '" r="' + T.mkDotR + '" fill="' + T.cMk + '" fill-opacity="0.42">' +
+              '<animate attributeName="r" values="' + T.mkDotR + ';' + T.pingMax + '" dur="' + T.pingDur + 's" repeatCount="indefinite"/>' +
+              '<animate attributeName="fill-opacity" values="0.42;0" dur="' + T.pingDur + 's" repeatCount="indefinite"/></circle>' +
+              '<circle cx="' + nx + '" cy="' + (BT - T.mkDotY) + '" r="' + T.mkDotR + '" fill="' + T.cMk + '"/>';
+    }
+    body += '<g clip-path="url(#wipe)">' + segs + "</g>";
+
+    // 눈금 (와이프 밖 = 처음부터 보인다)
+    const TY = BT + BH + T.gapTick;
+    for (let m = AX0; m <= AX1; m += T.tickStep) {
+      const tx = px(m).toFixed(1);
+      const anchor = px(m) < GX + 18 ? "start" : px(m) > GX + GW - 18 ? "end" : "middle";
+      body += '<line x1="' + tx + '" y1="' + (BT + BH + 3) + '" x2="' + tx + '" y2="' + (BT + BH + 3 + T.tickLen) +
+              '" stroke="#000" stroke-opacity="0.09" stroke-width="1"/>' +
+              '<text x="' + tx + '" y="' + TY + '" text-anchor="' + anchor + '" font-size="' + T.fsTick +
+              '" font-weight="' + T.fwTick + '" fill="' + T.cTick + '">' + fmtTick(m) + "</text>";
+    }
+    y = TY;
   } else {
-    y += 44;
-    body += '<text x="30" y="' + y + '" font-size="' + (rawT ? 20 : 16) + '" font-weight="' + (rawT ? 700 : 600) + '" fill="' +
-            (rawT ? "#1A1A2E" : "#888") + '">' + esc(rawT || "오늘 입도 시간이 아직 등록되지 않았어요") + "</text>";
+    y += 50;
+    // ⚠ 미등록·통제 공지 문구는 **--dim 고정**(cNone) — 플레이그라운드에선 이 자리가 「날짜 글자」 축에 묶여 있었지만,
+    //   운영자가 바꾼 건 우상단 날짜지 이 안내 문구가 아니다. 묶어두면 안내가 강조색으로 튄다.
+    body += '<text x="' + PAD + '" y="' + y + '" font-size="' + (rawT ? T.fsTime * 0.8 : T.fsTime * 0.62) +
+            '" font-weight="700" fill="' + (rawT ? T.cTime : T.cNone) + '">' +
+            esc(rawT || (isToday ? "오늘" : "이 날짜의") + " 입도 시간이 아직 등록되지 않았어요") + "</text>";
   }
+  // [260805-39] 「내일」 줄은 뺐다(운영자 지시) — 내일은 같은 카드의 ?d=1 판으로 내고 홈페이지에서 접었다 편다.
+  y += T.gapNote;
+  body += '<text x="' + PAD + '" y="' + y + '" font-size="' + T.fsNote + '" font-weight="' + T.fwNote +
+          '" fill="' + T.cNote + '">위 시간 외에는 진섬다리가 물에 잠겨 출입이 불가합니다. 아래 월별 캘린더도 함께 확인해 주세요.</text>';
 
-  const tR = jangdoRanges(map[tmrw]);
-  if (tR) {
-    y += 33;
-    body += '<text x="30" y="' + y + '" font-size="13" fill="#888">내일 ' + esc(label(tmrw)) + "  " +
-            esc(tR.map((r) => fmt(r[0]) + " ~ " + fmt(r[1])).join(" · ")) + "</text>";
-  }
-  y += 23;
-  body += '<text x="30" y="' + y + '" font-size="11.5" fill="#bbb">위 시간 외에는 진섬다리가 물에 잠겨 출입이 불가합니다. 아래 월별 캘린더도 함께 확인해 주세요.</text>';
-
-  const H = y + 16;
+  const H = Math.round(y + T.padBot);
   return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + W + " " + H + '" width="' + W + '" height="' + H +
-    '" role="img" aria-label="장도 입도 가능 시간" font-family="\'Noto Sans KR\',\'Apple SD Gothic Neo\',\'Malgun Gothic\',sans-serif">' +
-    '<rect x="1" y="1" width="' + (W - 2) + '" height="' + (H - 2) + '" rx="16" fill="#fff" stroke="#000" stroke-opacity="0.09"/>' +
+    '" role="img" aria-label="장도 입도 가능 시간" font-family="' + esc(T.font) + '">' +
+    (defs ? "<defs>" + defs + "</defs>" : "") +
+    '<rect x="1" y="1" width="' + (W - 2) + '" height="' + (H - 2) + '" rx="' + T.radius + '" fill="' + T.cCard +
+    '" stroke="#000" stroke-opacity="' + T.aBorder + '"/>' +
     body + "</svg>";
 }
 __name(buildJangdoSvg, "buildJangdoSvg");
@@ -2301,12 +2396,47 @@ async function kkoOcrImages(env, urls) {
 }
 __name(kkoOcrImages, "kkoOcrImages");
 
+// ── AI 홍보 ▸ 상세페이지 추출 캐시 (260806) ───────────────────────────────
+// 「한 번 조회했으면 그걸 가지고 있어야 한다」(운영자 260806) — 추출(본문 텍스트+이미지 OCR)을 KV(ops_kv)에
+// 영구 저장하고 fresh=1 로만 다시 읽는다. 카카오 76자(suggestKakaoLines)와 AI 홍보 전략(/api/promo/*)이
+// 같은 저장소를 공유한다 — 같은 URL = 같은 추출본 = 재OCR 0. 키는 프로그램ID가 아니라 URL 축(URL이 정체성).
+function pdKey(u) {
+  const s = String(u || "").trim();
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = (h * 33 ^ s.charCodeAt(i)) >>> 0;   // djb2 — 짧은 결정적 키(충돌 보강 = 길이 접미)
+  return "pdext:v1:" + h.toString(36) + ":" + s.length;
+}
+__name(pdKey, "pdKey");
+async function promoDetailGet(env, rawUrl, opt) {
+  opt = opt || {};
+  const key = pdKey(rawUrl);
+  if (!opt.fresh) {
+    try {
+      const hit = await env.ops_kv.get(key);
+      if (hit) {
+        const d = JSON.parse(hit);
+        // maxAgeMs 지정 호출(카카오 문구 = 24h)은 그보다 낡은 캐시를 재추출 — 가격·할인 갱신이 문구에 늦게 반영되지 않게.
+        // AI 홍보 전략은 무기한(수동 「새로 읽기」로만 갱신) — 상세페이지는 게시 후 거의 안 바뀐다.
+        if (d && d.ts && (!opt.maxAgeMs || Date.now() - d.ts < opt.maxAgeMs)) { d.cached = true; return d; }
+      }
+    } catch (e) { /* 캐시 읽기 실패 = 새로 추출로 진행 */ }
+  }
+  const src = await kkoFetchPage(rawUrl);
+  const ocrText = await kkoOcrImages(env, src.images);
+  const d = { url: src.url, text: src.text, images: src.images, ocrText, ts: Date.now() };
+  try { await env.ops_kv.put(key, JSON.stringify(d)); } catch (e) { /* 저장 실패해도 추출본은 반환 */ }
+  d.cached = false;
+  return d;
+}
+__name(promoDetailGet, "promoDetailGet");
+
 // b = {url, program, title, date, extra, count}. 반환 = {items:[{tone,text,len}], ocrText, pageText, images, source, over}
 async function suggestKakaoLines(env, b) {
   const limit = 76;   // 앱 입력칸 maxlength와 같은 값 — 길이는 textarea와 같게 UTF-16 .length로 센다(이모지 = 2)
   const count = Math.min(8, Math.max(1, parseInt(b.count, 10) || 5));
-  const src = await kkoFetchPage(b.url);
-  const ocrText = await kkoOcrImages(env, src.images);
+  // [260806] 추출은 공용 캐시 경유 — 24h 안에 같은 링크를 다시 부르면 재수집·재OCR 없이 즉시(AI 홍보 전략과 한 저장소)
+  const src = await promoDetailGet(env, b.url, { maxAgeMs: 24 * 3600 * 1e3 });
+  const ocrText = src.ocrText || "";
   if (!src.text && !ocrText) throw new Error("링크에서 읽어낸 내용이 없어요 (페이지 구조 확인 필요)");
   const facts = [
     b.program ? "프로그램: " + String(b.program).slice(0, 200) : "",
@@ -2551,14 +2681,17 @@ var index_default = {
       // 같은 데이터의 **이미지 판**(홈페이지 본문 <img> 임베드용 — iframe이 저장 필터에 지워지는 대응).
       // max-age 120 = 「지금 입도 가능」 상태 문구가 최대 2분까지만 낡는다(데이터 자체는 KV 1시간 축 그대로).
       // 실패해도 이미지 자리는 비워야 하니 502가 아니라 '안내 문구를 그린 SVG'를 200으로 내준다(깨진 이미지 아이콘 방지).
+      // ?d=N = 오늘로부터 N일 뒤(0~14 · 기본 0). 카드 안에 토글을 넣을 수 없어서(=`<img>`는 클릭·hover가 통째로 죽는다)
+      //  「내일」은 **다른 주소의 같은 카드**로 낸다 — 홈페이지에서 <details>로 접었다 펴면 그게 토글이 된다.
       if (url.pathname === "/api/public/jangdo.svg" && request.method === "GET") {
         const svgHead = { "Content-Type": "image/svg+xml; charset=utf-8", "Cache-Control": "public, max-age=120", ...corsHeaders(env) };
+        const dOff = Math.max(0, Math.min(14, parseInt(url.searchParams.get("d"), 10) || 0));
         try {
           const list = await jangdoPublicRows(env, url.searchParams.get("fresh") === "1");
-          return new Response(buildJangdoSvg(list, jangdoNowKst()), { status: 200, headers: svgHead });
+          return new Response(buildJangdoSvg(list, jangdoNowKst(), dOff), { status: 200, headers: svgHead });
         } catch (e) {
           console.error("[public/jangdo.svg]", e);
-          return new Response(buildJangdoSvg([], jangdoNowKst()), { status: 200, headers: svgHead });
+          return new Response(buildJangdoSvg([], jangdoNowKst(), dOff), { status: 200, headers: svgHead });
         }
       }
 
@@ -3061,6 +3194,71 @@ var index_default = {
             return json({ error: String((e && e.message) || e) }, env, 502);
           }
         }
+      }
+
+      // === AI 홍보 ▸ 전략 추론 (260806 운영자) — 「AI 홍보」 대메뉴의 LLM 축(「점검」= 규칙 스캔의 짝) ===
+      // 엔진 = 블로그 초안과 같은 구독 OAuth 축(시크릿 신설 0): 데이터 팩 업로드(커밋) → repository_dispatch[promo-advise]
+      // → Actions(promo-advise.yml)의 claude -p(5계정 폴오버)가 조언 JSON을 drafts/<id>.json 으로 커밋 → 공용 /api/blog/draft 폴링.
+      // 팩 = 프론트가 조립한 「집계 수치만」(개인정보 행 0 — 회원·예매 원본은 여길 지나지 않는다). 입력 팩은 워크플로 끝에 즉시 삭제(hwp 관례).
+      if (url.pathname.startsWith("/api/promo/")) {
+        // ① 상세페이지 추출(캐시) — 프로그램 시트 K열 URL → 본문 텍스트 + 포스터·상세 이미지 OCR. KV 영구 캐시(fresh=1 = 재추출).
+        //    OCR 키가 하나도 없으면 ocrText만 비고 페이지 텍스트는 나간다(kkoOcrImages가 장별 실패를 삼킨다) = 조용한 강등, 죽지 않는다.
+        if (url.pathname === "/api/promo/detail" && request.method === "POST") {
+          let b = {};
+          try { b = await request.json(); } catch (e) {}
+          if (!String(b.url || "").trim()) return json({ error: "상세 링크가 필요해요 — 프로그램 관리에서 URL을 넣어주세요" }, env, 400);
+          try {
+            const d = await promoDetailGet(env, b.url, { fresh: b.fresh === 1 || b.fresh === "1" });
+            return json({ ok: true, cached: !!d.cached, ts: d.ts, url: d.url, text: d.text, ocrText: d.ocrText || "", images: d.images || [] }, env);
+          } catch (e) {
+            return json({ error: String((e && e.message) || e) }, env, 502);
+          }
+        }
+        // ②③ 팩 업로드·디스패치 — 한글문서 편집(/api/hwp/*) 문법 미러(PAT는 서버 시크릿만 · 브라우저에 GitHub 토큰 0)
+        const cfg = ghBlogCfg(env);
+        if (!cfg.pat) return json({ error: "no_github_pat", note: "Worker에 GITHUB_PAT 시크릿 미설정" }, env, 503);
+        const ghHdr = { "Authorization": "Bearer " + cfg.pat, "Accept": "application/vnd.github+json", "User-Agent": "yeulmaru-promo-worker" };
+        const paId = (v) => String(v || "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 64);
+        if (url.pathname === "/api/promo/upload" && request.method === "POST") {
+          let b = {};
+          try { b = await request.json(); } catch (e) {}
+          const id = paId(b.id);
+          if (!id) return json({ error: "id required" }, env, 400);
+          if (!b.pack || typeof b.pack !== "object") return json({ error: "빈 데이터 팩이에요" }, env, 400);
+          const packStr = JSON.stringify(b.pack);
+          if (packStr.length > 400000) return json({ error: "데이터 팩이 너무 커요(400KB 이하)" }, env, 413);
+          const b64 = kkoB64(new TextEncoder().encode(packStr).buffer);   // UTF-8 → base64 (contents API 규격)
+          try {
+            const gr = await fetch(`https://api.github.com/repos/${cfg.repo}/contents/drafts/promo/${id}.in.json`, {
+              method: "PUT",
+              headers: { ...ghHdr, "Content-Type": "application/json" },
+              body: JSON.stringify({ message: `chore(promo): ${id} 입력 팩 [skip ci]`, content: b64, branch: cfg.branch })
+            });
+            if (!gr.ok) return json({ error: gr.status === 401 || gr.status === 403 ? "github_denied" : "upload_failed", status: gr.status, note: (await gr.text()).slice(0, 200) }, env, 502);
+            return json({ ok: true, id }, env);
+          } catch (e) {
+            return json({ error: String((e && e.message) || e) }, env, 502);
+          }
+        }
+        // 트리거 — 전용 event_type(promo-advise)이라 블로그·한글·오피스 큐(concurrency)에 안 막힌다.
+        if (url.pathname === "/api/promo/dispatch" && request.method === "POST") {
+          let b = {};
+          try { b = await request.json(); } catch (e) {}
+          const id = paId(b.id);
+          if (!id) return json({ error: "id required" }, env, 400);
+          try {
+            const gr = await fetch(`https://api.github.com/repos/${cfg.repo}/dispatches`, {
+              method: "POST",
+              headers: { ...ghHdr, "Content-Type": "application/json" },
+              body: JSON.stringify({ event_type: "promo-advise", client_payload: { d: { id } } })
+            });
+            if (gr.ok) return json({ ok: true, id }, env);
+            return json({ error: gr.status === 401 || gr.status === 403 ? "github_denied" : "dispatch_failed", status: gr.status, note: (await gr.text()).slice(0, 200) }, env, 502);
+          } catch (e) {
+            return json({ error: String((e && e.message) || e) }, env, 502);
+          }
+        }
+        return json({ error: "unknown promo route" }, env, 404);
       }
 
       const token = await getToken(env);
