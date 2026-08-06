@@ -9,6 +9,10 @@ name: 앱 블로그/분석 (claude -p · repository_dispatch)
 #   모델 라우팅(운영자 260806 갱신): 기본 = claude-sonnet-5·effort **low**(뭐든 빠르게 답한다 — 260803 high에서 내림)
 #   / 복잡 질문(payload.deep=1, 앱 _yeulAiDeep 판정 — 이때 앱이 「기다려 달라」 말풍선을 먼저 띄움) = claude-opus-5·effort medium.
 #   (v3: payload.t 시각 동봉·카드 모드 2축은 폐지 — 운영자 "밤에 아무도 안 씀", 츤데레 단일 결.)
+# [260813 고객 분류 조건 파서] payload.segparse=1 이면 「자연어 한 줄 → 조건 JSON 하나」 분기 — 답변·명단을 만들지 않는다.
+#   받는 것 = 질문 문장 + 고를 수 있는 값 목록(장르·거주지·데이터 기간)뿐 · 돌려주는 것 = drafts/<id>.json {mode:'segparse', cond}.
+#   명단·이름·전화는 애초에 오지 않는다(앱이 브라우저 안에서만 센다) → 공개 레포에 남는 산출물에 개인정보 0.
+#   모델(운영자 260813) = claude-opus-5 · --effort medium 고정.
 # [블로그 개선] 새 초안(mode=blog·수정요청 아님)은 WebSearch·WebFetch를 허용해 공연·출연진·작품을
 #   먼저 조사(BW-2)하고, 사람 말투 문체 계약(BW-1)으로 쓰며, 본문 뒤 ===TAGS===(네이버 태그 30개, BW-5)
 #   ===RESEARCH===(검증용 리서치 노트) 섹션을 함께 출력 → 파서가 {text,tags,research}로 분리해 저장.
@@ -62,6 +66,59 @@ jobs:
             // ---- [260803] 예울이 AI 채팅(yeulchat) — 페르소나 카드 + 질문 1턴. 블로그 경로와 완전 분리(아래 프롬프트·파서 무접촉) ----
             // 페르소나 = persona/yeuli.md 원문(루시봇 카드 규약 — 카드 수정이 곧 말투) · p.persona(앱 설정 오버라이드) 있으면 그쪽 우선.
             // 모델 = 아래 라우팅 2줄이 정한다(기본 소넷5·low / deep opus5·medium) · 산출 = drafts/<id>.json {mode:'chat', text}.
+            // ---- [260813] 고객 분류 조건 파서(segparse) — 자연어 한 줄 → **조건 JSON 하나**. 답변·명단을 만들지 않는다 ----
+            // 왜 분기를 따로 두나 = 이 경로가 받는 것은 「질문 문장 + 고를 수 있는 값 목록」뿐이고, 돌려주는 것도 JSON 한 줄이다.
+            //   명단·이름·전화는 애초에 오지 않는다(앱이 브라우저 안에서만 센다) → 공개 레포에 남는 산출물에 개인정보 0.
+            // 모델(운영자 260813 지시) = claude-opus-5 · --effort medium. ⚠ 이 두 줄이 이 기능의 모델 SSOT다.
+            if (p.segparse) {
+              const SCHEMA = '{"span":"n|all|range","n":정수,"u":"년|개월","from":"YYYY-MM","to":"YYYY-MM","g":"장르명 또는 null","only":true|false,"region":"거주지명 또는 null","thr":정수}';
+              let sprompt = '너는 공연장 회원 조회 조건 파서다. 한국어 한 줄 질문을 아래 JSON 스키마로 옮긴다.\n';
+              sprompt += '설명·머리말·코드블록 없이 **JSON 객체 하나만** 출력한다.\n\n# 스키마\n' + SCHEMA + '\n\n# 규칙\n';
+              sprompt += '- span: "최근 N년/N개월"이면 "n"(n,u 채움) · "2023~2024년"처럼 구간이면 "range"(from,to 채움) · 기간 언급이 없으면 "all".\n';
+              sprompt += '- g: 아래 장르 목록에 **정확히 있는 값**만. 없으면 null(비슷한 이름을 지어내지 말 것).\n';
+              sprompt += '- only: "클래식만", "클래식 외에는 안 본" 처럼 그 장르 **외 관람이 0회**여야 할 때만 true. 애매하면 false.\n';
+              sprompt += '- region: 아래 거주지 목록에 **정확히 있는 값**만. 없으면 null.\n';
+              sprompt += '- thr: "N회 이상"이면 N · "재구매/단골"이면 2 · 언급 없으면 1.\n';
+              sprompt += '- 질문에 없는 조건은 채우지 말 것(기본값 그대로 둔다).\n';
+              if (p.ctx) sprompt += '\n# 고를 수 있는 값\n' + String(p.ctx).slice(0, 2000) + '\n';
+              sprompt += '\n# 질문\n' + String(p.q || '').slice(0, 300) + '\n\n# 출력\nJSON 객체 하나만.';
+              const spath = require('path');
+              const { runClaudeWithFailover: runSeg } = require(spath.join(process.env.GITHUB_WORKSPACE, 'shared/claude_failover.js'));
+              const sr = runSeg({ args: ['-p', '--model', 'claude-opus-5', '--effort', 'medium', '--max-turns', '1'], input: sprompt, cwd: process.env.RUNNER_TEMP || '/tmp' });
+              let sout;
+              if (sr.ok && String(sr.raw || '').trim()) {
+                // 모델이 앞뒤에 말을 붙였을 때를 대비해 **첫 { ~ 마지막 }** 만 떼어 파싱한다(실패하면 ok:false로 정직하게 돌려준다).
+                const txt = String(sr.raw).trim();
+                const a = txt.indexOf('{'), b = txt.lastIndexOf('}');
+                try {
+                  if (a < 0 || b <= a) throw new Error('JSON 없음');
+                  sout = { id, mode: 'segparse', ok: true, cond: JSON.parse(txt.slice(a, b + 1)), ts: new Date().toISOString() };
+                } catch (e) {
+                  sout = { id, mode: 'segparse', ok: false, error: 'JSON 파싱 실패: ' + e.message, ts: new Date().toISOString() };
+                }
+              } else {
+                sout = { id, mode: 'segparse', ok: false, error: (sr.error || '빈 응답'), ts: new Date().toISOString() };
+              }
+              fs.mkdirSync('drafts', { recursive: true });
+              fs.writeFileSync('drafts/' + id + '.json', JSON.stringify(sout));
+              try {
+                const sp2 = require('path');
+                const { retainDrafts } = await import('file://' + sp2.join(process.env.GITHUB_WORKSPACE, 'shared/drafts_retain.mjs'));
+                const rr = retainDrafts({ root: process.env.GITHUB_WORKSPACE, keep: 3, protect: id });
+                core.info('[drafts] 회수 ' + rr.removed.length + '건 · 기능별 최근 ' + rr.keep + '건 유지');
+              } catch (e) { core.warning('[drafts] 회수 건너뜀: ' + e.message); }
+              execFileSync('git', ['config', 'user.name', 'github-actions[bot]']);
+              execFileSync('git', ['config', 'user.email', '41898282+github-actions[bot]@users.noreply.github.com']);
+              execFileSync('git', ['add', '-A', 'drafts']);
+              execFileSync('git', ['commit', '-m', 'chore(segparse): ' + id + ' [skip ci]']);
+              let spushed = false;
+              for (let i = 0; i < 6; i++) {
+                try { execFileSync('git', ['push', 'origin', 'HEAD:main']); spushed = true; break; }
+                catch (e) { try { execFileSync('git', ['pull', '--rebase', 'origin', 'main']); } catch (e2) {} }
+              }
+              if (!spushed) core.setFailed('push 실패');
+              return;
+            }
             if (p.yeulchat) {
               let card = '';
               try { card = fs.readFileSync('persona/yeuli.md', 'utf8'); } catch (e) {}
