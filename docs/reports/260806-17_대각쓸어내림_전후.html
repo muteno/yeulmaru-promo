@@ -1,0 +1,180 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>로딩 빗살 — 10시→4시 대각 쓸어내림 + 이징 전후 (260806-17)</title>
+<style>*{box-sizing:border-box}
+:root{--accent:#4A4DE7;--accent-light:#E8E8FD;--peach-text:#D88455;
+--bg:linear-gradient(135deg,#FDF6F3 0%,#F0EBF5 50%,#EBF0F8 100%);--surface-solid:#fff;
+--glass:rgba(255,255,255,0.55);--glass-surface:rgba(255,255,255,.78);--glass-bd:var(--glass);
+--glass-shadow:0 8px 32px rgba(74,77,231,0.08),0 2px 8px rgba(0,0,0,0.04);
+--border:rgba(0,0,0,0.09);--text:#1A1A2E;--dim:#888;--muted:#bbb;--neutral:#EEEDF3;--neutral-text:#6B6B7B;
+--green:#1A6B3C;--danger-btn:#E24B4A;--radius:16px;--radius-lg:20px}
+body{margin:0;background:var(--bg);color:var(--text);font-family:'Pretendard',-apple-system,BlinkMacSystemFont,system-ui,sans-serif;line-height:1.6}
+.wrap{max-width:1180px;margin:0 auto;padding:30px 20px 70px}
+h1{font-size:22px;margin:0 0 6px;letter-spacing:-.3px}
+.lead{color:var(--neutral-text);font-size:13px;margin:0 0 20px}
+section{background:var(--glass-surface);border:1px solid var(--glass-bd);border-radius:var(--radius-lg);box-shadow:var(--glass-shadow);padding:18px 20px 22px;margin:0 0 18px}
+section>h2{margin:0 0 4px;font-size:14px;font-weight:800;color:var(--accent);display:flex;align-items:center;gap:8px}
+section>h2::before{content:"";width:4px;height:14px;border-radius:2px;background:var(--accent)}
+section>.desc{margin:0 0 14px;font-size:12px;color:var(--neutral-text)}
+.ba{display:grid;grid-template-columns:1fr;gap:14px}
+.card{background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.card>.hd{font-size:11.5px;font-weight:800;letter-spacing:.3px;padding:8px 12px;border-bottom:1px solid var(--border)}
+.hd.b{color:var(--danger-btn)}.hd.a{color:var(--green)}
+.card img{display:block;width:100%}
+table{width:100%;border-collapse:collapse;font-size:12px;background:var(--surface-solid);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+th,td{padding:7px 9px;border-top:1px solid var(--border);text-align:left;vertical-align:top}
+th{background:var(--neutral);color:var(--neutral-text);font-size:11px;font-weight:700;border-top:0;white-space:nowrap}
+td.c{text-align:center;white-space:nowrap}
+td.k{white-space:nowrap;font-weight:700;color:var(--accent);font-variant-numeric:tabular-nums}
+.ok{color:var(--green);font-weight:800}
+.no{color:var(--danger-btn);font-weight:800}
+ul{margin:8px 0 0;padding-left:18px;font-size:12.5px}li{margin:3px 0}
+code{background:var(--neutral);padding:1px 5px;border-radius:5px;font-size:11.5px}
+.warn{border-left:3px solid var(--peach-text);background:var(--surface-solid);border-radius:0 12px 12px 0;padding:10px 14px;font-size:12.5px;margin-top:12px}
+/* ── 살아 움직이는 재현(실앱 CSS 계승) ─────────────────────────────── */
+.demo{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media (max-width:820px){.demo{grid-template-columns:1fr}}
+.mini{position:relative;border-radius:var(--radius-lg);background:linear-gradient(135deg,#c9d8e8,#e8dcd6 55%,#bcd3cf);padding:14px;overflow:hidden}
+.mhd{display:flex;align-items:center;min-height:30px;padding:0 10px;background:rgba(255,255,255,.9);backdrop-filter:blur(11px);-webkit-backdrop-filter:blur(11px);border:1px solid var(--glass);border-bottom:1px solid rgba(0,0,0,.07);border-radius:var(--radius-lg) var(--radius-lg) 0 0;box-shadow:inset 0 1px 0 rgba(255,255,255,.6);overflow:hidden;font-size:11px;font-weight:800;color:var(--accent)}
+.mbox{position:relative;background:rgba(255,255,255,.15);backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px);border:1px solid rgba(255,255,255,.7);border-top:none;border-radius:0 0 var(--radius-lg) var(--radius-lg);box-shadow:var(--glass-shadow);padding:12px;height:170px}
+.mld{position:relative;height:100%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:var(--accent);opacity:.75}
+.sk{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.sk-hd{z-index:-1}.sk-gl{border-radius:0 0 var(--radius-lg) var(--radius-lg)}
+/* 전 = 구판(폭 34% 세로 띠 · 100deg · -120%→400%) */
+.old .sk::after{content:'';position:absolute;top:0;bottom:0;left:0;width:34%;
+  background:linear-gradient(100deg,transparent 0%,rgba(255,255,255,.5) 50%,transparent 100%);
+  transform:translateX(-120%);animation:skOld 1.5s ease-in-out infinite}
+@keyframes skOld{to{transform:translateX(400%)}}
+/* 후 = 신판(기준 사각 2배 판 · 120deg · ±33%) — 값은 실앱과 동일, --sw-*는 아래 스크립트가 실측해 넣는다 */
+.new .sk::after{content:'';position:absolute;
+  left:calc(var(--sw-x,0px) - var(--sw-w,100%)/2);top:calc(var(--sw-y,0px) - var(--sw-h,100%)/2);
+  width:calc(var(--sw-w,100%)*2);height:calc(var(--sw-h,100%)*2);
+  background:linear-gradient(120deg,transparent 44%,rgba(255,255,255,.5) 50%,transparent 56%);
+  transform:translate(-33%,-33%);animation:skNew var(--sw-dur,1.5s) ease-in-out infinite}
+@keyframes skNew{to{transform:translate(33%,33%)}}
+.mlab{font-size:11px;font-weight:800;letter-spacing:.3px;margin:0 0 8px}
+.frames{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+@media (max-width:820px){.frames{grid-template-columns:1fr}}
+.frames figcaption{font-size:11px;color:var(--neutral-text);padding:6px 2px 0;text-align:center}
+figure{margin:0}
+/* 각도 도해 */
+.dial{display:flex;gap:18px;align-items:center;flex-wrap:wrap;font-size:12.5px}
+</style></head><body><div class="wrap">
+<h1>로딩 빗살 — <b style="color:var(--accent)">10시 → 4시 대각 쓸어내림</b> + 이징</h1>
+<p class="lead">운영자 지시 260806-17 「이거 11시 방향에서 5시 방향으로 쓸어내리게 해주고, <b>이징되게</b> 해줄 수 있어? <b>10시 방향에서 4시 방향으로</b> 할게」 + 「<b>16대 9 화면이 더 많으니까</b>」 ·
+앞 단계 = 260806-12(빗살 = 카드 전면) · 260806-14(양면 동시 로딩 = 펼침 기준) · 화면 = <code>?qa=admin</code> 목데이터 · 1920×1080.</p>
+
+<section>
+<h2>1. 각 — 10시→4시 = 수평에서 30° 아래 = 16:9의 모서리 대각</h2>
+<div class="dial">
+<svg width="150" height="150" viewBox="0 0 150 150" aria-label="시계 방향 도해">
+  <circle cx="75" cy="75" r="60" fill="none" stroke="rgba(0,0,0,.12)"/>
+  <line x1="75" y1="75" x2="75" y2="15" stroke="rgba(0,0,0,.18)"/><text x="75" y="12" font-size="9" text-anchor="middle" fill="#6B6B7B">12</text>
+  <text x="24" y="46" font-size="9" fill="#6B6B7B">10</text><text x="122" y="112" font-size="9" fill="#6B6B7B">4</text>
+  <line x1="23" y1="45" x2="127" y2="105" stroke="#4A4DE7" stroke-width="3" stroke-linecap="round"/>
+  <polygon points="127,105 116,100 118,111" fill="#4A4DE7"/>
+  <text x="75" y="140" font-size="9.5" text-anchor="middle" fill="#4A4DE7" font-weight="700">30° 아래로</text>
+</svg>
+<div>
+<table style="min-width:320px">
+<tr><th>축</th><th>각(수평 기준)</th></tr>
+<tr><td>시계 <b>10시 → 4시</b>(지시)</td><td class="k">30.00° 아래</td></tr>
+<tr><td><b>16:9</b> 화면 모서리 대각</td><td class="k">29.36° 아래</td></tr>
+<tr><td>시계 11시 → 5시(첫 안)</td><td class="k">60.00° 아래</td></tr>
+</table>
+<p style="font-size:12px;color:var(--neutral-text);margin:8px 0 0">→ 구현 = <code>linear-gradient(<b>120deg</b>, …)</code>(정북 기준 120° = 수평에서 30° 아래). 16:9 대각과 <b>0.6° 차</b>라 운영자 단서(「16대 9가 더 많으니까」)와 사실상 일치한다.</p>
+</div>
+</div>
+<div class="warn"><b>왜 각을 그라데이션으로 정하나</b> — 줄무늬(띠)는 자기 길이 방향으로는 무늬가 없어서, <b>지각되는 이동 방향은 늘 그라데이션 축</b>이다(구경 문제).
+그래서 각의 정본은 <code>120deg</code> 한 곳이고, <code>translate</code>는 그 축으로의 <b>투영</b>만 일하면 된다.</div>
+</section>
+
+<section>
+<h2>2. 이징이 왜 안 보였나 — 여정의 절반 이상이 화면 밖이었다</h2>
+<p class="desc">구판 여정 = <code>translateX(-120% → 400%)</code>. 곡선의 느린 양끝이 <b>화면 밖</b>에서 소모되고, 화면 안에서는 가장 빠른 중간 구간만 지나가 <b>등속으로 보였다</b>.</p>
+<table>
+<tr><th style="width:120px"></th><th>여정</th><th>화면 안 비중</th><th>구간별 이동 px(20등분) 최소/최대</th></tr>
+<tr><td class="no">전</td><td>−120% → 400%(자기 폭) = 5.2배</td><td class="no">≈ 절반 이하</td><td>화면 안 구간은 사실상 등속</td></tr>
+<tr><td class="ok">후</td><td>±33%(기준 사각 2배 판) = 축 투영 <b>±0.66 L</b></td><td class="ok">여정 전체 = 보이는 구간</td><td class="k">11 / 212 (<b>19배</b>)</td></tr>
+</table>
+<ul>
+<li><b>L</b> = 기준 사각의 그라데이션 여정 길이 = <code>0.866·W + 0.5·H</code>(120deg). 띠가 양끝 밖으로 완전히 빠지는 데 필요한 최소 여정이 <b>0.62 L</b>이라 <b>0.66 L</b>은 그보다 딱 한 뼘 크다.</li>
+<li>커브 = <b><code>ease-in-out</code> 그대로</b>(이 규칙에 이미 있던 값 · 신규 창작 0). 여정을 줄인 것만으로 좌우 대칭 가감속이 눈에 남는다.</li>
+<li>주력 <code>cubic-bezier(0.4,0,0.2,1)</code>도 대봤지만 그건 <b>도착·안착</b>용이라 앞이 빠르고 뒤가 늘어져(실측 t=50%에 이미 여정의 80% 지점) 오른쪽 아래에서 멎어 보인다 — 연속 반복인 스윕엔 대칭 곡선이 맞다. 바꾸려면 이 한 줄만 갈면 된다.</li>
+</ul>
+</section>
+
+<section>
+<h2>3. 판(plate)을 기준 사각의 2배로 — 대각 띠가 제 판에 안 잘리게</h2>
+<p class="desc">구판은 「폭 34% <b>세로</b> 띠」였다. 대각 띠를 그 안에 담으면 띠의 양 끝이 판 모서리에서 잘린다. → 판을 기준 사각의 2배로 깔고 띠는 그라데이션 정지점으로 만든다.</p>
+<table>
+<tr><th style="width:132px">값</th><th style="width:220px">구현</th><th>뜻</th></tr>
+<tr><td>판 자리·크기</td><td class="k">left/top = −(기준 사각)/2 · 2배</td><td>기준 사각을 가운데 두고 사방으로 한 칸씩 여유 = 여정 끝에서도 띠가 안 잘린다</td></tr>
+<tr><td>띠 두께</td><td class="k">44% ~ 56%(판의 12%)</td><td>= 기준 사각 L의 0.24배 ≈ 구판 「폭 34%」와 같은 체감 두께</td></tr>
+<tr><td>여정</td><td class="k">translate ±33%(판 기준)</td><td>= 기준 사각의 ±0.66배 → <b>축 투영 0.66 L</b>(가로세로 비와 무관하게 성립)</td></tr>
+</table>
+<div class="warn"><b>여러 칸이 한 띠로 보이려면</b> — 머리줄과 유리박스는 높이가 달라, 각자 제 칸을 기준으로 그리면 그라데이션 위상이 어긋나 <b>경계에서 띠가 꺾인다</b>(가로 띠 시절엔 안 드러나던 축).
+그래서 <code>_ldSweepSpan</code>이 넣는 <b>기준 사각 앵커</b>(<code>--sw-x/y/w/h</code>)가 이제 <b>한 열만 로딩일 때도 필수</b>가 됐다.
+실측 = 한 열 로딩 시 머리줄·박스의 판 <b>1종</b>(<code>492,−393,1876,1872</code>) · 양면 로딩 시 네 칸 전부 <b>1종</b>(<code>−918,−393,3756,1872</code> · duration 2.45s = 펼침 배수만큼).</div>
+</section>
+
+<section>
+<h2>4. 전후 — 같은 여정의 세 지점(t = 25 / 50 / 75%)</h2>
+<p class="desc">양면 동시 로딩 화면. 후는 왼쪽 위 → 가운데 → 오른쪽 아래로 <b>대각으로 내려간다</b>.</p>
+<div class="ba" style="margin-bottom:14px">
+  <div class="card"><div class="hd b">전 — 세로 띠가 가로로(t=50%)</div><img src="260806-17_대각쓸어내림_전.png" alt="전 — 세로 띠"></div>
+</div>
+<div class="frames">
+  <figure class="card"><img src="260806-17_대각쓸어내림_후_t25.png" alt="후 t=25%"><figcaption>후 · t=25% — 왼쪽 위</figcaption></figure>
+  <figure class="card"><img src="260806-17_대각쓸어내림_후_t50.png" alt="후 t=50%"><figcaption>후 · t=50% — 가운데</figcaption></figure>
+  <figure class="card"><img src="260806-17_대각쓸어내림_후_t75.png" alt="후 t=75%"><figcaption>후 · t=75% — 오른쪽 아래</figcaption></figure>
+</div>
+</section>
+
+<section>
+<h2>5. 살아 움직이는 재현 — 왼쪽이 전, 오른쪽이 후</h2>
+<p class="desc">실앱 CSS 계승본. 후는 <code>--sw-*</code>를 실앱 <code>_ldSweepSpan</code>과 <b>같은 식</b>으로 이 페이지에서 실측해 넣는다(리사이즈 추종).</p>
+<div class="demo">
+  <div><p class="mlab" style="color:var(--danger-btn)">전 — 세로 띠 · 가로 이동 · 등속처럼 보임</p>
+    <div class="mini old"><div>
+      <div class="mhd"><span class="sk sk-hd"></span>판매 실적</div>
+      <div class="mbox"><span class="sk sk-gl"></span><div class="mld">••• 사업 실적 불러오는 중</div></div>
+    </div></div></div>
+  <div><p class="mlab" style="color:var(--green)">후 — 10시→4시 대각 · 가감속이 보임</p>
+    <div class="mini new" id="newDemo"><div>
+      <div class="mhd"><span class="sk sk-hd"></span>판매 실적</div>
+      <div class="mbox"><span class="sk sk-gl"></span><div class="mld">••• 사업 실적 불러오는 중</div></div>
+    </div></div></div>
+</div>
+</section>
+
+<section>
+<h2>6. 재현 한계 각주</h2>
+<ul>
+<li>§4 스크린샷은 <b>방향이 보이도록 띠 알파를 .5 → .92로 올려</b> 찍었다(전·후 같은 조건). 기하·여정·커브는 손대지 않았다 — 실제 화면의 띠는 이보다 은은하다.</li>
+<li>§4는 애니를 t=25/50/75%에서 정지시킨 컷이다 — 실제로는 계속 지나간다(§5가 그 모션).</li>
+<li>§5 미니 재현의 배경은 사진 대신 근사 그라데이션(자기완결 1파일 = 외부 자산 0) · 카드 비율도 실물보다 납작하다.</li>
+<li>이미지 배율 0.5 · 실측 수치는 배율 1 기준 CSS px · 목데이터라 카드 내용은 실운영 값과 다르다(재는 것은 <b>띠의 각·여정·판 앵커</b>뿐).</li>
+<li>앞 단계 전후 = <code>260806-12_로딩스윕_창전면_전후.html</code> · <code>260806-14_양면스윕_펼침기준_전후.html</code>.</li>
+</ul>
+</section>
+</div>
+<script>
+// 실앱 _ldSweepSpan과 같은 식 — 카드(머리줄+박스) 합집합을 기준 사각으로 삼아 두 칸에 같은 판을 앵커한다.
+function spanDemo(){
+  var d=document.getElementById('newDemo'); if(!d)return;
+  var sw=[].slice.call(d.querySelectorAll('.sk')); if(!sw.length)return;
+  var l=Infinity,t=Infinity,r=-Infinity,b=-Infinity;
+  sw.forEach(function(e){var q=e.getBoundingClientRect();
+    if(q.left<l)l=q.left; if(q.top<t)t=q.top; if(q.right>r)r=q.right; if(q.bottom>b)b=q.bottom;});
+  var w=r-l,h=b-t; if(!(w>0)||!(h>0))return;
+  sw.forEach(function(e){var q=e.getBoundingClientRect();
+    e.style.setProperty('--sw-x',(Math.round((l-q.left)*10)/10)+'px');
+    e.style.setProperty('--sw-y',(Math.round((t-q.top)*10)/10)+'px');
+    e.style.setProperty('--sw-w',(Math.round(w*10)/10)+'px');
+    e.style.setProperty('--sw-h',(Math.round(h*10)/10)+'px');});
+}
+spanDemo(); window.addEventListener('resize',spanDemo);
+if(document.fonts&&document.fonts.ready)document.fonts.ready.then(spanDemo);
+</script>
+</body></html>
