@@ -4762,7 +4762,7 @@ async function initApp(){
     loadAllMasters().catch(function(e){console.warn('[initApp loadAllMasters]',e);}),
     loadCafeJangdo().catch(function(e){console.warn('[initApp loadCafeJangdo]',e);}),
     loadApplySettings().catch(function(e){console.warn('[initApp loadApplySettings]',e);})
-  ]);
+  ]).then(function(){ try{_memBootWarm();}catch(_e){console.warn('[initApp memBootWarm]',_e);} });   // [260810 운영자] 고객 분석(회원·예매집계) 선로딩 = 첫 화면 로더가 다 끝난 뒤 출발 — 사유·가드는 _memBootWarm 주석
   // MS(OneDrive) 토큰 미리 확보 — 폴더 선택 때 팝업 안 뜨게 (재방문 silent / 첫 로그인 popup 1회)
   _msalPrefetch();
 }
@@ -21306,7 +21306,7 @@ function openPromoCheck(){
   //   탭 문법 = 영상 편집기(#ve-tabs) 정본 그대로(.prog-tab · --neutral 트랙 · flex:none) — 신규 부품·색 0.
   //   [260805-34] padding 7px 16px는 정본 `.prog-tab`이 진다 — 자리마다 인라인으로 다시 적지 않는다(패리티 계약).
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closePromoCheck)">'
-    + '<div class="modal" style="width:'+_PC_W.base+';max-height:88vh;--mpad-y:0;--mpad-x:0;position:relative;display:flex;flex-direction:column;overflow:hidden">'
+    + '<div class="modal" style="width:'+_PC_BOX.w+';height:'+_PC_BOX.h+';max-height:'+_PC_BOX.h+';--mpad-y:0;--mpad-x:0;position:relative;display:flex;flex-direction:column;overflow:hidden">'
     + '<button class="modal-x" onclick="closePromoCheck()" title="닫기" aria-label="닫기">✕</button>'
     + _mhead('AI 홍보','점검으로 지금 손볼 곳을 찾고 · 전략 추론으로 다음 홍보를 계획해요'+(seg?' · 고객 분류로 누가 봤는지 뽑아요':''))
     + '<div style="padding:12px 24px 0;flex:none"><div id="pc-tabs" style="display:flex;gap:2px;background:var(--neutral);border-radius:8px;padding:3px;width:max-content">'
@@ -21324,14 +21324,19 @@ function openPromoCheck(){
   _paAutoLoad();
 }
 // 탭 전환 — 뷰 display만 토글(상태·결과 보존 = 점검을 오가도 추론 결과가 안 사라진다)
-// 모달 폭 = 탭이 정한다. 고객 분류만 10열 표라 760px에선 절반이 가로 스크롤 뒤로 숨는다(운영자 「최대한 다 나오게」).
-//   ⚠ 값을 한 곳에만 둔다 — 모달 조립부와 여기 두 군데에 적으면 한쪽만 고쳐져 탭을 오갈 때 폭이 튄다.
-var _PC_W={base:'min(760px,94vw)',seg:'min(1180px,96vw)'};
+// [260806-18 운영자] 「ai홍보 창 크기를 **항상 동일하게** · 지금 **ai 홍보 점검 크기를 기준으로 고정**」 —
+//   창 = 점검 탭이 이미 갖고 있던 선언(폭 min(760px,94vw) · 88vh)을 **상한이 아니라 고정값으로 승격**한 한 벌.
+//   새 수치 0(둘 다 이 모달이 쓰던 값) · 셸 문법은 정본 워크스페이스 셸 `.pb-modal`(홍보 신청·확인 L16364) 계승
+//   = width/height 고정 + overflow:hidden + flex 세로 + 본문만 스크롤.
+//   ⚠ 구판은 탭이 폭을 정했다(고객 분류만 1180) — 그래서 탭을 누를 때마다 창이 760↔1180으로 튀었고
+//     높이도 내용대로 흘러 실측 4가지(299/399.78/270/534)였다. 이제 탭은 크기를 **못** 바꾼다(바꾸는 코드가 없다).
+//   ⚠ 값을 한 곳에만 둔다 — 조립부와 전환부 두 군데에 적으면 한쪽만 고쳐져 탭을 오갈 때 다시 튄다.
+//   ↔ 맞바꾼 것: 고객 분류 10열 표(min-width:860px)가 760 창에선 자기 스크롤 상자 안에서 가로로 밀린다
+//     (구 지시 「최대한 다 나오게」는 이 고정 지시가 덮는다 · 표는 이미 자체 overflow:auto라 레이아웃은 안 깨진다).
+var _PC_BOX={w:'min(760px,94vw)',h:'88vh'};
 function _pcTab(t){
   ['check','ai','seg'].forEach(function(k){var e=document.getElementById('pc-view-'+k);if(e)e.style.display=(k===t)?'':'none';});
   document.querySelectorAll('#pc-tabs .prog-tab').forEach(function(b){b.classList.toggle('active',b.dataset.t===t);});
-  var m=document.querySelector('#promo-check .modal');
-  if(m)m.style.width=(t==='seg')?_PC_W.seg:_PC_W.base;
 }
 
 // ===== AI 홍보 ▸ 전략 추론(총론 브리핑) — _pa* =====
@@ -27451,6 +27456,18 @@ function _memPurge(){_memState=null;_memLoading=false;_bkState=null;_bkLoading=f
 //   클릭 시점엔 이미 캐시라 즉시 그려진다. 중복 발사는 _memLoading·_memState 가드로 차단(추가 API 호출 0).
 function _memWarm(){ if(userRole!=='admin')return; try{_bkWarm();}catch(e){}   /* [260804] 예매 집계도 같이 덥힌다 — 첫 예매 질문에서 「아직 안 불러왔어요」가 안 뜨게 */
   if(_memState||_memLoading)return; try{_memLoad(false);}catch(e){} }
+// [260810 운영자 「대시보드를 불러오는 순간 고객분석 데이터까지 다 · 애초에 이 웹앱이 열려있으면 데이터는 불러오게」]
+//   **부팅 선로딩** — 구판의 출발 신호는 세부메뉴 **호버**(위 _memWarm)와 책 4면 도착(_bizMemberEnsure) 둘뿐이라,
+//   책을 4면까지 넘겨야 그제서야 회원 시트를 부르기 시작했다. 신호를 「앱에 들어온 순간」(initApp)으로 앞당긴다.
+//   새 API·새 캐시·새 상태 **0** = 위 _memWarm을 부팅에서 한 번 더 부르는 것뿐(회원 + 예매집계 · admin 게이트와
+//   _memState/_memLoading 중복 가드가 그대로 걸린다 → 호버·4면 경로와 겹쳐도 추가 fetch 0).
+//   ⚠ **네트워크 우선권**(260711 「캘린더에 우선권」) 유지 = 회원 시트가 6.7MB라 첫 화면 fetch와 겹치면 보이는 화면이 늦어진다
+//     → initApp 병렬조(프로그램·마스터·카페장도·접수설정)가 **끝난 뒤** + 한 박자(레일 6시트는 _calP 뒤 출발이라 그때도 비행 중일 수 있다).
+//   ⚠ **잠금 중이면 안 부른다** = 유휴잠금이 _memPurge로 비운 PII를 이 타이머가 되채우는 창 차단(잠금 해제는 initApp을 다시 타므로 그때 채워진다).
+function _memBootWarm(){
+  if(typeof userRole==='undefined'||userRole!=='admin')return;   // 비admin = 4면 자체가 없다(_bizBookN=3) · 서버도 PII 시트에 admin 강제
+  setTimeout(function(){ if(typeof _locked!=='undefined'&&_locked)return; try{_memWarm();}catch(e){console.warn('[boot warm]',e);} },1200);
+}
 function closeMemberLookup(){var bg=document.getElementById('member-lookup');if(bg)bg.classList.remove('show');if(_memEscH){document.removeEventListener('keydown',_memEscH);_memEscH=null;}}
 async function openMemberLookup(){
   if(userRole!=='admin'){showToast('회원 조회는 관리자 전용이에요','error');return;}
