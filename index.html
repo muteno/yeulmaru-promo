@@ -6514,7 +6514,7 @@ function _srailPgOf(idx,id,name){ if(!idx)return null; return (id&&idx.byId[Stri
 // 캘린더·레일·필터·패널 로직 무수정 — 좌 보드 = openBusinessBoard 축약 인라인(_bizClean·_bizDrawChart 재사용) · 우 표 = _salesBuild+_anaSpark 재사용(재fetch 0).
 // F5 세션복원 = 부트 IIFE가 파싱 중 initApp 동기 호출 → 이 var들이 할당 전일 수 있어 initApp은 setTimeout(0)에서 _mvApply(분신술 4호 TDZ 전례 계승).
 var _mainView=(function(){try{return sessionStorage.getItem('mvView')==='cal'?'cal':'biz';}catch(_e){return 'biz';}})();   // [260723c 선택값] 상태 저장 = 이번 접속만(sessionStorage) · 새 접속 = 항상 사업 실적(운영자 「항상 메인」)
-var _bizmState={year:null,types:{},page:3,rdet:0,live:0,leftId:null,rightId:null};   // 인라인 보드 전용 상태(page: 좌 열이 그리는 면 · [260808] leftId·rightId = 두 열이 **지금 화면에 들고 있는 내용의 신원** — 넘김 때 「바뀐 열만 다시 그린다」 판정의 정본(_bizLeftNeedsRedraw·_bizRightNeedsRedraw) · [260805 2차] rdet: 우 열이 「판매현황 상세」(3-2)인가 0|1 — 좌 면과 분리된 축 · [260806] live: 3면 「전체(0) ↔ 판매중(1)」 토글 — 구 domain(분야 축)은 칩 철거와 함께 폐지) — 모달(_bizState·_yrState 'yr')과 분리·공유는 _yrState뿐(동기 재렌더)
+var _bizmState={year:null,types:{},page:3,rdet:0,live:0,metric:'rev',leftId:null,rightId:null};   // 인라인 보드 전용 상태(page: 좌 열이 그리는 면 · [260806-9] metric: 3면 「매출(rev) ↔ 관객수(aud)」 토글 — 기본 = 매출(운영자 「지금이 매출이고」) · [260808] leftId·rightId = 두 열이 **지금 화면에 들고 있는 내용의 신원** — 넘김 때 「바뀐 열만 다시 그린다」 판정의 정본(_bizLeftNeedsRedraw·_bizRightNeedsRedraw) · [260805 2차] rdet: 우 열이 「판매현황 상세」(3-2)인가 0|1 — 좌 면과 분리된 축 · [260806] live: 3면 「전체(0) ↔ 판매중(1)」 토글 — 구 domain(분야 축)은 칩 철거와 함께 폐지) — 모달(_bizState·_yrState 'yr')과 분리·공유는 _yrState뿐(동기 재렌더)
 var _BIZ_HALF_CH=230, _BIZ_HALF_CH_MIN=150;   // [260806] 3면 하단 반반 줄의 막대 높이 — 공연 막대(430)의 절반 급 · [260806 2차] 낮은 화면에선 _bizFitSeason이 MIN까지만 줄인다(늘리진 않는다)
 //   [260805 2차 운영자] 첫 화면 = **3면(사업 결과 비교)** — 구 기본값 1(연간 실적)과 자리 교체(「이 페이지가 메인화면에 연간 실적이랑 교체되게」).
 function setMainView(v,skipFade){
@@ -7326,8 +7326,26 @@ function _bizmLiveTrigger(){
     +' title="'+(on?'판매·진행중인 사업만 보는 중 — 눌러서 전체로':'전체(종료·예정 포함)를 보는 중 — 눌러서 판매중만')+'">'+(on?'판매중':'전체')+'</button>';
 }
 function _bizmLiveToggle(){ _bizmState.live=!_bizmState.live; _bizmRepaint(); }
+// ── [260806-9 운영자] 「매출 ↔ 관객수」 글자 토글 — 조작부 셋째 칸 ──────────────────────────
+//   지시: *"좌측상단에 2026, 전체 그 옆에 구분자 하나 더 만들어서 매출로 해줄 수 있어? 지금이 매출이고, 누르면 관객수.
+//         이렇게 두가지를 볼 수 있도록 자연스럽게 토글될때마다 전환되면 될듯."*
+//   = 이웃 「전체 ↔ 판매중」과 **같은 부품 한 벌**(`.ry-hd-div` 구분선 + `.ry-live-tg` 글자 토글) 재사용 · 신규 CSS·색·값 0.
+//   왜 = 이 면의 세 분야 차트 중 공연만 축이 **백만 원**이고 전시·교육은 **명**이라, 한 화면에 두 자가 섞여 있었다.
+//     관객수로 바꾸면 셋이 같은 자(명) 위에 서서 「몇 명이 왔나」로 통째 비교가 된다 — 매출로 되돌리면 종전 화면 그대로.
+//   ⚠ 라벨 = **지금 보고 있는 축**(이웃 토글과 같은 문법) · 강조(--accent/800)는 갈아탄 상태(관객수)가 진다.
+function _bizmAudMode(){ return _bizmState.metric==='aud'; }   // 기본 'rev' = 매출(운영자 「지금이 매출이고」)
+function _bizmMetricTrigger(){
+  var on=_bizmAudMode();
+  return '<button type="button" class="ry-live-tg" role="switch" aria-checked="'+(on?'true':'false')+'" onclick="_bizmMetricToggle()"'
+    +' title="'+(on?'관객수(명)로 보는 중 — 눌러서 매출로':'매출(백만 원)로 보는 중 — 눌러서 관객수로')+'">'+(on?'관객수':'매출')+'</button>';
+}
+// 바뀌는 건 **좌 열 차트의 값 축 하나**뿐 → 우 열(판매현황 상세 표)은 재렌더하지 않는다.
+//   그 표는 관객수·매출을 **늘 같이** 적고 있어 바뀔 값이 없다(_bizListTable) = 까닭 없는 깜빡임 0.
+//   결(디졸브)은 연도·필터 전환과 같은 것을 그대로 쓴다(운영자 「자연스럽게 전환」).
+function _bizmMetricToggle(){ _bizmState.metric=_bizmAudMode()?'rev':'aud'; _bizmDissolve(['biz-main'],_bizInlineRender); }
 // 조작부 한 벌 — 좌 열 헤더 우측에만 놓는다(같은 상태를 두 열에 그리지 않는 종전 규약).
-function _bizmTools(){ return _bizmYearTrigger()+'<span class="ry-hd-div" aria-hidden="true"></span>'+_bizmLiveTrigger(); }
+function _bizmTools(){ return _bizmYearTrigger()+'<span class="ry-hd-div" aria-hidden="true"></span>'+_bizmLiveTrigger()
+  +'<span class="ry-hd-div" aria-hidden="true"></span>'+_bizmMetricTrigger(); }
 // 좌·우 동시 갱신 — 이 면의 두 열은 **같은 목록**을 그린다(좌 = KPI·막대·전시/교육 · 우 = 판매현황 상세).
 //   조작부가 바뀌면 둘 다 다시 그려야 우 표가 옛 연도·옛 필터로 남지 않는다. 결 = 책 넘김과 같은 디졸브(_bizmDissolve 계승).
 function _bizmRepaint(){
@@ -7817,7 +7835,13 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
   var rows=(list||[]).slice();
   if(!rows.length){ try{Plotly.purge(div);}catch(_e0){} return; }
   var dim=_yrCss('--dim'), grid=_yrCss('--border'), Y=_bizmState.year;
-  var hasRev=rows.some(function(g){return g._rev!=null&&g._rev>0;});
+  // [260806-9 운영자 「지금이 매출이고, 누르면 관객수」] 축 전환 = **이미 있는 갈래를 손으로 잡는 것**뿐이다 —
+  //   이 함수는 원래 「매출이 조인됐으면 매출(백만 원) · 아니면 판매 인원(명)」으로 갈리게 돼 있었고(폴백 경로),
+  //   값·라벨 서식·y축 제목·툴팁·축 중략이 전부 그 갈림목 하나(hasRev)를 보고 있다. 관객수 모드 = 그 갈림목을
+  //   **명 쪽으로 고정**한다 = 새 계산·새 축·새 형태 0(집계값은 종전 그대로 · 창작 0).
+  //   ⚠ 교육 반쪽(ED)은 애초에 수강생(명) 한 축뿐이라 이 토글 밖이다(카드 눈금 100~400 계약 유지).
+  var AUD=(!ED&&_bizmAudMode());
+  var hasRev=!AUD&&rows.some(function(g){return g._rev!=null&&g._rev>0;});
   // ⚠ 매출 미조인(_rev==null)은 **0이 아니라 null** — 0으로 떨어뜨리면 "0.0" 막대가 깔려 「하나도 안 팔렸다」로 읽힌다(평의회6).
   //   null = 막대 없음 → 아래 파선 자리(값 없음)가 그 사업의 자리를 지킨다(시간축엔 이름 눈금이 없어, 안 그리면 통째로 사라진다).
   // [260805 운영자] 교육도 **실값이 있으면 막대**로 — 축은 수강생(명) 하나뿐이라 매출 축으로 갈아타지 않는다(카드 눈금 100~400과 어긋나면 안 된다).
