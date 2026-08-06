@@ -727,6 +727,13 @@ button{font-family:inherit;cursor:pointer}
      → 같은 .sk-sweep을 두 칸에 한 벌씩 같은 프레임에 삽입 = 같은 위상·같은 폭(둘 다 카드 폭) = 눈에는 띠 하나가 카드 전체를 쓸고 지나간다. */
 .sk-sweep.sk-sweep-hd{z-index:-1}                                            /* 머리줄 = 제 칸 배경 위·제목 글자 아래(음수 z — 정지한 제목이 스켈레톤처럼 번쩍이지 않게) · 클립 = 머리줄 자신의 overflow+라운드 */
 .sk-sweep.sk-sweep-gl{border-radius:0 0 var(--radius-lg) var(--radius-lg)}   /* 유리박스 = 패딩까지 전면 · 박스엔 overflow가 없으니 스윕 자신의 아래 라운드로 클립(카드 아래 두 모서리) */
+/* [260806-10 운영자 「양면이 로딩중일 때는 모든 양면을 기준해서 빗살이 쓸어가게」] 펼침 기준 스윕.
+   두 열이 동시에 로딩이면 띠의 **좌표계를 카드 → 펼침(좌 카드 왼끝~우 카드 오른끝)으로 옮긴다**:
+   폭 = 펼침 폭의 34%(정본 비율 그대로) · left = -(자기 칸 왼끝 − 펼침 왼끝) → 네 칸(좌·우 카드 × 머리줄·박스)이
+   **같은 띠 하나**를 각자 자기 자리만큼 보여주는 창이 된다. 값은 JS 실측(_ldSweepSpan)이 넣는다.
+   duration도 펼침 배수만큼 늘린다 = 초당 이동 픽셀 = 카드 한 장 때와 동일(범위만 넓어지고 템포는 안 변한다). */
+.sk-sweep.sk-span::after{left:var(--sw-x,0);width:var(--sw-w,34%);animation-duration:var(--sw-dur,1.5s)}
+.sk-sweep.sk-rst::after{animation:none}   /* 위상 재장전용 1프레임 표식 — 두 열의 띠가 같은 시각에 출발해야 「띠 하나」로 보인다 */
 /* 캘린더 로딩 중앙 표시 — 판매 레일과 동일 강조색 dots+문구(운영자 260708). accent+opacity.75(계승) */
 .cal-skel .cal-load-msg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--accent);opacity:.75;font-size:14px;font-weight:600;z-index:2;pointer-events:none}
 /* 요일 바 배경 .43→.9: 스크롤 시 밑을 지나는 셀 비침 차단(운영자 260707 버그 신고 — 일정관리 thead 불투명화 전례 계승, 흰 alpha 변주 §3.5②) */
@@ -6351,6 +6358,7 @@ function _srailAlignTop(){
       if(calBoxH>0)srailBox.style.maxHeight=calBoxH+'px';
     }
   }
+  try{ _ldSweepSpan(); }catch(_e){}   // [260806-10] 정렬이 확정된 그 좌표로 펼침 기준 스윕 재계산(리사이즈·줌·폰트 도착·면 넘김 전부 이 함수를 지난다)
 }
 var _srailExErr=false;   // 전시 시트 로드 실패 표시(공연은 살리고 전시만 생략 — 목록 하단 정직 표기)
 var _srailChartW=0;      // [260710 운영자 "차트 늘어짐"] 카드/드릴 SVG를 실측 픽셀 폭으로 생성(비례 확대·글자 왜곡 제거) — 렌더 시 갱신, resize 시 재렌더
@@ -6932,6 +6940,7 @@ function _bizmAnimate(cols){
 //   높이 애니가 필요하면 `_srailAlignTop`이 그 값을 안 재도록 먼저 분리해야 한다(별건).
 function _bizmSwap(el,html){
   if(!el)return false;
+  _ldSpanSoon();   // [260806-10] 이 함수의 **모든 출구**(통째 교체 폴백 포함) 뒤 rAF에 돈다 — 로딩 칸이 늘거나 준 뒤 펼침 기준 재계산
   var oH=el.querySelector('[data-bizmhead]'), oB=el.querySelector('[data-bizmbox]');
   if(!oH||!oB){ el.innerHTML=html; return false; }                    // 첫 렌더(프레임 없음) = 통째로
   var tmp=document.createElement('div'); tmp.innerHTML=html;
@@ -7055,7 +7064,51 @@ function _ldSweepOff(node){
     var bx=(node&&node.closest)?node.closest('[data-bizmbox]'):null; if(!bx)return;
     var card=bx.parentNode||bx, ss=card.querySelectorAll('[data-bizmhead]>.sk-sweep,[data-bizmbox]>.sk-sweep');
     for(var i=0;i<ss.length;i++)ss[i].parentNode.removeChild(ss[i]);
+    _ldSpanSoon();   // 참여 칸이 줄었다 = 펼침 기준 해제(한 열만 로딩이면 다시 카드 기준)
   }catch(_e){}
+}
+// ── [260806-10 운영자 「양면이 로딩중일 때는 모든 양면을 기준해서 빗살이 쓸어가게」] ─────────────────
+// **두 열이 동시에 로딩일 때만** 띠의 기준을 카드 → 펼침으로 넓힌다(한 열만 로딩 = 종전 카드 기준 그대로).
+//   좌 카드 왼끝~우 카드 오른끝을 한 벌의 좌표계로 삼고, 네 칸(좌·우 × 머리줄·박스)에 **같은 띠**를 심는다
+//   = 눈에는 띠 하나가 펼침 전체를 가로지른다(칸 사이 빈 곳은 유리가 없어 안 보일 뿐 같은 여정).
+// ⚠ 위상 = 같은 시각 출발이어야 한 줄로 보인다 — 참여 칸이 바뀐 순간에만 .sk-rst 한 프레임으로 전원 재장전
+//   (매 패스 재장전하면 정렬 재계산 때마다 띠가 튄다).
+// ⚠ 좌표는 gBCR = **시각좌표(×zoom)** → CSS px(디자인 단위)로 넣으려면 전부 /_z 환산(biz 분기 정본 규약).
+function _ldSpanSoon(){ try{ if(typeof requestAnimationFrame==='function')requestAnimationFrame(_ldSweepSpan); else _ldSweepSpan(); }catch(_e){} }
+function _ldSweepSpan(){
+  try{
+    var all=document.querySelectorAll('#biz-main .sk-sweep,#rail-yrm .sk-sweep');
+    var list=[], hasL=0, hasR=0;
+    for(var i=0;i<all.length;i++){
+      var el=all[i]; if(el.offsetParent===null)continue;
+      var r=el.getBoundingClientRect(); if(!(r.width>1))continue;
+      list.push({el:el,r:r});
+      if(el.closest('#biz-main'))hasL=1; else hasR=1;
+    }
+    var both=hasL&&hasR;
+    var key=both?('S'+list.length):'';
+    if(!both){
+      for(var j=0;j<list.length;j++){ var e0=list[j].el; e0.classList.remove('sk-span'); e0.style.removeProperty('--sw-x'); e0.style.removeProperty('--sw-w'); e0.style.removeProperty('--sw-dur'); }
+      window._ldSpanKey=key; return;
+    }
+    var z=(typeof _bizZ==='function')?(_bizZ()||1):1;
+    var L=Infinity, R=-Infinity, W=0;
+    list.forEach(function(o){ if(o.r.left<L)L=o.r.left; if(o.r.right>R)R=o.r.right; if(o.r.width>W)W=o.r.width; });
+    var S=(R-L)/z, Wc=W/z;
+    if(!(S>0)||!(Wc>0))return;
+    list.forEach(function(o){
+      o.el.style.setProperty('--sw-w',(Math.round(S*0.34*10)/10)+'px');            // 정본 비율 34% — 기준만 펼침으로
+      o.el.style.setProperty('--sw-x',(Math.round((L-o.r.left)/z*10)/10)+'px');    // 자기 칸을 펼침 좌표계로 밀어 맞춤
+      o.el.style.setProperty('--sw-dur',(Math.round(1.5*S/Wc*100)/100)+'s');       // 초당 이동 픽셀 = 카드 한 장 때와 동일
+      o.el.classList.add('sk-span');
+    });
+    if(key!==window._ldSpanKey){                                                   // 참여 칸 변화 = 위상 재장전 1회
+      window._ldSpanKey=key;
+      list.forEach(function(o){ o.el.classList.add('sk-rst'); });
+      void document.body.offsetWidth;                                              // 리플로우 1회 = 애니 재장전(_bizmAnimate와 같은 관용구)
+      list.forEach(function(o){ o.el.classList.remove('sk-rst'); });
+    }
+  }catch(_e){ console.warn('[ld span]',_e); }
 }
 function _bizmHead(right,title,sub,ld){
   return '<div data-bizmhead style="display:flex;align-items:center;gap:10px;min-height:47px;padding:1px 18px 0;background:rgba(255,255,255,.9);backdrop-filter:blur(11px);-webkit-backdrop-filter:blur(11px);border:1px solid var(--glass-border);border-bottom:1px solid rgba(0,0,0,.07);border-radius:var(--radius-lg) var(--radius-lg) 0 0;box-shadow:inset 0 1px 0 rgba(255,255,255,.6);overflow:hidden">'   // [260723f Opus] 상단 흰 하이라이트(유리 입체감)
