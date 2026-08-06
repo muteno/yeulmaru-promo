@@ -2753,6 +2753,15 @@ var index_default = {
     //   (「누르지 않더라도 자동으로 그날그날」 · 총론 + 7/30/90일 시계 · opus 5 high). 중복 방어 = KV 일자 가드.
     if (h === 8 && kst.getUTCMinutes() >= 30 && kst.getUTCMinutes() < 45) {
       ctx.waitUntil(paAutoBrief(env, {}).then((r) => console.log("[promo-auto]", JSON.stringify(r))).catch((e) => console.error("promo auto brief", e)));
+    } else {
+      // 첫 가동 부트스트랩(운영자 260806 「일단 한바퀴 돌려줘」) — 포인터가 아예 없으면(한 번도 안 돈 상태 = 신규 배선·콜드스타트)
+      //   다음 틱에 즉시 1회 생성. 포인터가 생기는 순간 이 가지는 영구 무동작 · 일자 가드가 이중 방어라 하루 2회 불가.
+      ctx.waitUntil((async () => {
+        try {
+          const v = await env.ops_kv.get("pa:auto:latest");
+          if (!v) { const r = await paAutoBrief(env, {}); console.log("[promo-auto:bootstrap]", JSON.stringify(r)); }
+        } catch (e) { console.error("promo auto bootstrap", e); }
+      })());
     }
   },
   async fetch(request, env, ctx) {   // [260801] ctx = /api/gcal의 stale-while-revalidate(응답 뒤 갱신)에 필요
