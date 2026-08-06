@@ -25496,7 +25496,7 @@ var _NB_TEMPLATES=[
   ['review','후기·현장형','1) 방문 계기 / 기대\n2) 현장 분위기 묘사\n3) 공연 하이라이트\n4) 솔직한 감상\n5) 추천 + 다음 공연 안내'],
   ['info','정보 요약형','1) 핵심 정보 먼저 (일시·장소·가격·예매)\n2) 공연 개요\n3) 관람 포인트\n4) 예매 링크 / 문의']
 ];
-function _nbDefaultState(){return {length:'보통', voice:'라디오 캐스터처럼 가볍고 경쾌한', emoji:true, tgt:{}, hooks:['',''], facts:{}, extra:'', tplMode:'auto', tplSel:'', tplText:'', output:'', outView:'edit', versions:[], verCur:-1, comments:[], ocrText:'', ocrFiles:[], ocrThumb:'', ocrBusy:false, analyzeBusy:false, genBusy:false, _toneDraft:'', escHandler:null};}
+function _nbDefaultState(){return {length:'보통', voice:'라디오 캐스터처럼 가볍고 경쾌한', emoji:true, tgt:{}, hooks:['',''], facts:{}, extra:'', tplMode:'auto', tplSel:'', tplText:'', output:'', outView:'edit', versions:[], verCur:-1, comments:[], ocrText:'', ocrFiles:[], ocrThumb:'', ocrBusy:false, perf:'', perfUrl:'', linkBusy:false, analyzeBusy:false, genBusy:false, _toneDraft:'', escHandler:null};}
 var _nbState=_nbDefaultState();
 
 // 상단 '콘텐츠 제작' 드롭다운 (네이버 블로그 + 향후 채널 확장)
@@ -29085,13 +29085,67 @@ function _nbHookDel(i){if(!_nbState.hooks)return;_nbState.hooks.splice(i,1);whil
 // 3️⃣ 홍보물 OCR — 상세페이지 최대 3장 업로드(파일 큐). 각 장 OCR 텍스트를 OCR 원문에 합침.
 function _nbPickImage(){var f=document.getElementById('nb-ocr-file');if(f)f.click();}
 function _nbOcrRecompute(){_nbState.ocrText=(_nbState.ocrFiles||[]).map(function(f){return String(f.text||'');}).filter(function(t){return t.trim();}).join('\n\n');}
-function _nbOcrFileDel(i){if(!_nbState.ocrFiles)return;_nbState.ocrFiles.splice(i,1);_nbOcrRecompute();_nbSaveState();_nbRender();}
+function _nbOcrUploads(){return (_nbState.ocrFiles||[]).filter(function(f){return !f.link;}).length;}   // 3장 상한은 「사람이 올린 것」만 센다(공연 링크 항목은 별개 한 칸)
+function _nbOcrFileDel(i){
+  if(!_nbState.ocrFiles)return;
+  var it=_nbState.ocrFiles[i];
+  if(it&&it.link){_nbState.perf='';_nbState.perfUrl='';}   // 링크 항목을 지우면 선택도 비운다 — 같은 공연을 다시 골라 받을 수 있게(onchange가 다시 뜬다)
+  _nbState.ocrFiles.splice(i,1);_nbOcrRecompute();_nbSaveState();_nbRender();
+}
+
+// 3️⃣-0 공연 고르기 → 상세페이지 자동 OCR (운영자 260810)
+//  왜: 상세페이지를 사람이 캡처해 올리던 자리다. 그 공연의 상세 링크는 이미 프로그램 시트(K열)에 있으므로
+//  「연결된 공연을 고르면」 서버가 그 링크를 열어 ①페이지 본문 ②포스터·상세 이미지 OCR을 읽어 OCR 원문에 넣는다.
+//  ⚠ 카카오채널 톡(km-*)과 **같은 목록·같은 추출·같은 KV 캐시**다 — 목록은 `_kmPerfs()` 한 벌(두 화면이 다른
+//    공연 목록을 보이면 안 된다), 추출은 Worker `/api/content/detail`(카카오 76자가 쓰는 promoDetailGet 그대로).
+//    같은 링크를 카카오에서 이미 읽었으면 재수집·재OCR 0으로 즉시 온다. 업로드 경로는 그대로 남는다(링크 없는 공연·현장 리플릿).
+function _nbPerfPick(v){
+  var hit=_kmPerfs().filter(function(p){return p.f===v;})[0];
+  _nbState.perf=v||''; _nbState.perfUrl=hit?String(hit.u||'').trim():'';
+  _nbRender();
+  if(_nbState.perfUrl)_nbLinkRun();   // 「자동 OCR」 = 고르는 순간 읽는다(버튼을 한 번 더 누르게 하지 않는다)
+}
+// 페이지 본문 + 이미지 OCR을 한 덩이로 — 어디서 온 글자인지 사람이 구분할 수 있게 머리표를 붙인다(초안 생성에도 그대로 실린다).
+function _nbLinkText(r){
+  var a=String((r&&r.text)||'').trim(),b=String((r&&r.ocrText)||'').trim(),p=[];
+  if(a)p.push('[상세페이지 본문]\n'+a);
+  if(b)p.push('[포스터·상세 이미지 OCR]\n'+b);
+  return p.join('\n\n');
+}
+function _nbOcrPutLink(name,text){   // 링크 항목은 큐에 한 칸만 — 다시 읽으면 그 자리를 갈아끼운다(중복 누적 방지)
+  if(!_nbState.ocrFiles)_nbState.ocrFiles=[];
+  var it={name:(name||'공연')+' · 상세페이지',text:text,link:1};
+  var i=-1;_nbState.ocrFiles.forEach(function(f,k){if(f&&f.link&&i<0)i=k;});
+  if(i>=0)_nbState.ocrFiles[i]=it;else _nbState.ocrFiles.unshift(it);
+  _nbOcrRecompute();
+}
+async function _nbLinkRun(fresh){
+  var s=_nbState;if(!s.perfUrl||s.linkBusy)return;
+  var _st=_nbState;   // 🔒 세대 가드 — 응답이 늦게 와도 닫힌/새로 연 화면은 안 건드린다(업로드 OCR과 같은 계약)
+  s.linkBusy=true;_nbRender();
+  try{
+    var r=await api('POST','/api/content/detail',{url:s.perfUrl,fresh:fresh?1:0});
+    if(_st!==_nbState)return;
+    _nbState.linkBusy=false;
+    var t=_nbLinkText(r);
+    if(!t.trim()){_nbRender();showToast('상세페이지에서 읽은 내용이 없어요 — 이미지를 직접 올려 주세요','error');return;}
+    _nbOcrPutLink(_nbState.perf,t);
+    _nbSaveState();_nbRender();
+    showToast('상세페이지 읽기 완료 — '+t.length+'자'+((r&&r.cached)?' (읽어 둔 것)':'')+' ✅','success');
+  }catch(e){
+    if(_st!==_nbState)return;
+    _nbState.linkBusy=false;_nbRender();
+    var m=String((e&&e.message)||e);
+    if(m.indexOf('no_ocr_provider')>-1||m.indexOf('503')>-1)showToast('OCR 엔진 미설정 — Worker 키 확인','error');
+    else showToast('상세페이지를 읽지 못했어요: '+m,'error');
+  }
+}
 function _nbOnFile(input){
   var file=input&&input.files&&input.files[0];if(!file)return;input.value='';
   if(!/^image\//.test(file.type||'')){showToast('이미지 파일을 올려 주세요','error');return;}
   if(!_nbState.ocrFiles)_nbState.ocrFiles=[];
-  if(_nbState.ocrFiles.length>=3){showToast('최대 3장까지 올릴 수 있어요','error');return;}
-  var fname=file.name||('이미지'+(_nbState.ocrFiles.length+1));
+  if(_nbOcrUploads()>=3){showToast('최대 3장까지 올릴 수 있어요','error');return;}
+  var fname=file.name||('이미지'+(_nbOcrUploads()+1));
   _nbState.ocrBusy=true;_nbRender();
   _nbCompress(file).then(function(r){
     return _nbOcrRun(r.dataURL,r.mime,fname);
@@ -29187,7 +29241,7 @@ function _nbBuildPayload(){
   var hk=(s.hooks||[]).map(function(x){return String(x||'').trim();}).filter(Boolean);
   var intent=_NB_FIXED_PURPOSE;
   if(hk.length)intent+=' 이번 글에서 이 타겟에게 특히 강조할 점: '+hk.join(' / ')+'.';
-  var topic=String(F.title||'').trim();
+  var topic=String(F.title||s.perf||'').trim();   // 고른 공연이 곧 글의 주제 — 연결된 공연이 있으면 제목이 빈 채로 나가지 않는다
   return {topic:topic,intent:intent,target:tparts.join(', '),
     facts:{overview:F.overview||'',when:F.when||'',where:F.where||'',who:F.who||'',price:F.price||'',detail:F.detail||''},
     ocrText:String(s.ocrText||'').trim(),   // 홍보물 OCR 원문이 사실의 바탕(분석 단계 없이 그대로 전달)
@@ -29204,6 +29258,19 @@ function _nbRender(){
   var voices=[['라디오 캐스터처럼 가볍고 경쾌한','캐스터'],['정중하고 따뜻한','정중하게'],['친근하고 편안한','친근하게']];
   var voiceChips=voices.map(function(v){return '<span class="nb-chip'+(s.voice===v[0]?' on':'')+'" onclick="_nbSet(\'voice\',\''+v[0]+'\')">'+escapeHtml(v[1])+'</span>';}).join('');
   var F=s.facts||{};
+  // 3️⃣ 연결된 공연 — 목록은 카카오채널 톡과 한 벌(`_kmPerfs` = 상세 링크가 있는 프로그램만). 고르면 자동 OCR.
+  var nbUp=_nbOcrUploads();
+  var nbPerfs=(typeof _kmPerfs==='function')?_kmPerfs():[];
+  var perfPickHtml='<select class="nb-input" '+(s.linkBusy?'disabled':'')+' onchange="_nbPerfPick(this.value)">'
+    +(nbPerfs.length
+      ? '<option value="">연결할 공연을 골라 주세요 · 상세 링크가 있는 것만</option>'+nbPerfs.map(function(p){return '<option value="'+escapeHtml(p.f)+'"'+(s.perf===p.f?' selected':'')+'>'+escapeHtml(p.f)+'</option>';}).join('')
+      : '<option value="">상세 링크가 있는 프로그램이 없어요</option>')
+    +'</select>';
+  perfPickHtml+=s.linkBusy
+    ? '<div style="display:flex;align-items:center;font-size:11.5px;color:var(--accent);margin-top:7px">'+_ldHtml(12)+'상세페이지와 포스터를 읽는 중 · 20~40초쯤 걸려요</div>'
+    : (s.perfUrl
+      ? '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:7px"><span style="flex:1;min-width:0;font-size:11px;color:var(--dim);word-break:break-all;line-height:1.6">읽은 링크 '+escapeHtml(s.perfUrl)+'</span><button type="button" class="nb-btn ghost" onclick="_nbLinkRun(1)" style="padding:5px 13px;font-size:12px;flex-shrink:0">다시 읽기 ↻</button></div>'
+      : (nbPerfs.length?'':'<div style="font-size:11px;color:var(--dim);margin-top:7px">프로그램 관리에서 URL(예매·상세 링크)을 넣으면 여기에 나와요</div>'));
   // 1️⃣ 타겟 속성 — 칩(선택지) + 옆에 점점 완성되는 아바타
   var tgtFieldsHtml=_NB_TGT_FIELDS.map(function(f){
     var key=f[0],label=f[1],type=f[2],opts=f[3],chips='';
@@ -29286,16 +29353,17 @@ function _nbRender(){
      // 2️⃣ 이 타겟에게 강조할 점 (주관식, 2줄 이상)
      +'<div style="font-size:13px;font-weight:800;color:var(--accent);margin:16px 0 5px">2️⃣ 이 타겟에게 무엇을 강조할까요?<span style="font-size:10.5px;font-weight:700;color:var(--danger)"> · 2줄 이상 필수</span></div>'
      +'<div class="nb-field">'+hookRows+'</div>'
-     // 3️⃣ 공연 내용 — 상세페이지 OCR (원문이 글의 바탕)
+     // 3️⃣ 공연 내용 — ①연결된 공연 고르기(자동 OCR) ②직접 업로드. 둘 다 OCR 원문 한 칸으로 모인다.
      +'<div style="font-size:13px;font-weight:800;color:var(--accent);margin:16px 0 5px">3️⃣ 공연 내용</div>'
-     +'<div style="font-size:12px;color:#555;font-weight:500;line-height:1.6;margin:0 0 8px">상세페이지를 올리면 텍스트가 <b style="color:var(--accent)">OCR 원문</b>에 나와요. 그대로 글의 바탕이 됩니다.</div>'
+     +'<div style="font-size:12px;color:#555;font-weight:500;line-height:1.6;margin:0 0 8px">공연을 고르면 상세페이지를 <b style="color:var(--accent)">자동으로 읽어</b> OCR 원문에 넣어요. 직접 올려도 됩니다.</div>'
+     +'<div class="nb-field">'+perfPickHtml+'</div>'
      +'<div class="nb-field">'
        +'<input type="file" id="nb-ocr-file" accept="image/*" style="display:none" onchange="_nbOnFile(this)">'
-       +'<button type="button" class="nb-upload-btn" '+((s.ocrBusy||(s.ocrFiles&&s.ocrFiles.length>=3))?'disabled':'')+' onclick="_nbPickImage()">'+(s.ocrBusy?_ldHtml(12)+'읽는 중':'＋ 상세 페이지 업로드'+((s.ocrFiles&&s.ocrFiles.length)?' ('+s.ocrFiles.length+'/3)':''))+'</button>'
-       +((s.ocrFiles&&s.ocrFiles.length)?'<div style="margin-top:8px">'+s.ocrFiles.map(function(f,i){return '<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:#f7f7fb;border:1px solid #ececf3;border-radius:8px;margin-bottom:5px"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12.5px;color:#555">📄 '+escapeHtml(f.name||'이미지')+'</span><button type="button" title="삭제" aria-label="삭제" onclick="_nbOcrFileDel('+i+')" style="border:0;background:none;color:#bbb;cursor:pointer;font-size:15px;line-height:1;padding:0 3px;flex-shrink:0">✕</button></div>';}).join('')+'</div>':'')
+       +'<button type="button" class="nb-upload-btn" '+((s.ocrBusy||nbUp>=3)?'disabled':'')+' onclick="_nbPickImage()">'+(s.ocrBusy?_ldHtml(12)+'읽는 중':'＋ 상세 페이지 직접 업로드'+(nbUp?' ('+nbUp+'/3)':''))+'</button>'
+       +((s.ocrFiles&&s.ocrFiles.length)?'<div style="margin-top:8px">'+s.ocrFiles.map(function(f,i){return '<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:#f7f7fb;border:1px solid #ececf3;border-radius:8px;margin-bottom:5px"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12.5px;color:#555">'+(f.link?'🔗':'📄')+' '+escapeHtml(f.name||'이미지')+'</span><button type="button" title="삭제" aria-label="삭제" onclick="_nbOcrFileDel('+i+')" style="border:0;background:none;color:#bbb;cursor:pointer;font-size:15px;line-height:1;padding:0 3px;flex-shrink:0">✕</button></div>';}).join('')+'</div>':'')
      +'</div>'
      +'<div class="nb-field" style="margin-bottom:6px"><label class="nb-label">OCR 원문 <span style="color:#bbb;font-weight:500">· 직접 수정 가능 ('+(String(s.ocrText||'').length)+'자)</span></label>'
-       +'<textarea class="nb-input" style="min-height:120px;resize:vertical" placeholder="상세페이지를 올리면 읽은 텍스트가 여기 나와요. (직접 붙여넣어도 됨)" oninput="_nbState.ocrText=this.value;_nbSaveState()">'+escapeHtml(s.ocrText||'')+'</textarea>'
+       +'<textarea class="nb-input" style="min-height:120px;resize:vertical" placeholder="공연을 고르거나 상세페이지를 올리면 읽은 텍스트가 여기 나와요. (직접 붙여넣어도 됨)" oninput="_nbState.ocrText=this.value;_nbSaveState()">'+escapeHtml(s.ocrText||'')+'</textarea>'
      +'</div>'
      +'<div style="border-top:1px solid #f0f0f4;margin:6px 0 10px"></div>'
      // 말투 · 이모지 — 라벨 좌측 / 선택지 우측
@@ -29373,7 +29441,7 @@ function _nbGenErr(msg){
 }
 async function _nbGenerate(){
   var o=_nbBuildPayload();
-  if(!String(o.ocrText||'').trim()){showToast('공연 상세페이지를 올려 OCR 원문을 채워 주세요','error');return;}
+  if(!String(o.ocrText||'').trim()){showToast('공연을 고르거나 상세페이지를 올려 OCR 원문을 채워 주세요','error');return;}
   var hk=(_nbState.hooks||[]).map(function(x){return String(x||'').trim();}).filter(Boolean);
   if(hk.length<2){showToast('강조할 점을 2줄 이상 적어 주세요','error');return;}
   var _st=_nbState;   // 🔒 세대 가드 — 폴링 최장 8분, resolve 시 리셋됐으면 결과 폐기(다음 사용자 역류 방지)
