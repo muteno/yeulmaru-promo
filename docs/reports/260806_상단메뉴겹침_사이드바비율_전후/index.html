@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>260806 상단 메뉴 겹침 해소 + 사이드바 16:9 비율 잠금 — 전후</title>
+<style>
+  body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;max-width:1000px;margin:30px auto;padding:0 20px;color:#1A1A2E;line-height:1.6}
+  h1{font-size:20px} h2{font-size:16px;margin-top:30px} h3{font-size:13.5px;margin:18px 0 4px;color:#4A4DE7}
+  img{max-width:100%;border:1px solid rgba(0,0,0,0.12);border-radius:12px;display:block;margin:8px 0}
+  .dim{color:#888;font-size:12.5px} code{background:rgba(74,77,231,0.08);padding:1px 5px;border-radius:5px;font-size:12px}
+  table{border-collapse:collapse;font-size:13px;margin:10px 0;width:100%} td,th{border:1px solid rgba(0,0,0,0.12);padding:6px 10px;text-align:left}
+  th{background:rgba(74,77,231,0.06)}
+  .chg{color:#D88455;font-weight:700} .keep{color:#888} .bad{color:#E24B4A;font-weight:700} .ok{color:#1A6B3C;font-weight:700}
+  td.num{text-align:right;font-variant-numeric:tabular-nums}
+</style>
+</head>
+<body>
+<h1>260806 — <b>상단 메뉴 겹침 해소</b> + <b>사이드바 16:9 비율 잠금</b></h1>
+<p class="dim">지시(운영자 260806): <b>「지금 조금 상단 메뉴가 겹치는 부분이 있는데 그 부분좀 해결해줄래?」</b> ·
+  <b>「좁아질때 항상 그 넓을때랑 같다고 가정해서 사이드바의 비율이 유지되었으면 — 예를 들어 16대 9일때 캘린더랑 사이드바의 너비 비율,
+  임의로 좁아질때도 사이드바가 그 비율에 맞춰서 줄어들게」</b> ·
+  <b>「사이드바가 줄어들게 되면 프로그램 타이틀이 줄어들도록, 일정 더 줄어들면 아예 사이드바는 출력 없애는거로(모바일)」</b></p>
+<p class="dim">화면 = QA 진입로(<code>?qa=admin</code>) 목데이터 · 실API·실데이터·PII 미접촉 · 캘린더 모드 + 오늘 날짜 패널 상주 상태.
+  좌 = 전(<code>origin/main</code> c5efbd6) / 우 = 후. 같은 스크립트·같은 순서로 찍어 조건을 맞췄다(<code>tools/scratch/probe_nav_sidebar.mjs</code>).</p>
+
+<h2>1. 상단 메뉴 — 겹침의 정체</h2>
+<p class="dim">중앙 대메뉴(<code>.nav-center</code>)는 <b>뷰포트 정중앙 절대배치</b>(운영자 260723 「메뉴 중앙정렬」)라 흐름 밖에 있다 =
+  좌(로고+월네비)·우(아이콘 묶음)가 자리를 넓혀도 <b>밀어내지 못하고 그냥 겹친다</b>.
+  구판은 조임 단계가 <b>하나도 없이</b> 768px에서 갑자기 햄버거로 접혀, 그 사이 구간(≈1015 → 769)이 통째로 겹침 구역이었다.</p>
+<h3>900px — 「콘텐츠 제작」이 메일 아이콘 위로, 「대시보드」가 2026 위로</h3>
+<img src="01_상단메뉴_900.png" alt="900px 상단 메뉴 전후 — 전은 콘텐츠 제작과 메일 아이콘이 겹치고 후는 여유 있게 떨어져 있다">
+<h3>1100px — 겹치기 직전(여유 58px) → 1단 조임으로 여유 98px</h3>
+<img src="02_상단메뉴_1100.png" alt="1100px 상단 메뉴 전후">
+
+<h2>2. 사이드바 — 비율 잠금</h2>
+<p class="dim">기준 = 16:9 정본 화면 1920×1080에서의 현재 폭 <b>360px = 18.75%</b>(캘린더:사이드바 ≈ 13:3).
+  구판은 <code>width:360px</code> 고정이라 창이 좁아질수록 사이드바 몫만 커졌고, 그만큼 캘린더가 먹혀 <b>마지막 열(일/월)이 잘렸다</b>.</p>
+<h3>900px — 전 40.0% / 후 22.2%</h3>
+<img src="03_전체_900.png" alt="900px 전체 화면 전후 — 사이드바 폭 비율 비교">
+<h3>900px 우측 확대 — 잘린 일/월 열이 온전해지고, 글자는 통에 맞춰 줄어든다</h3>
+<img src="04_사이드바_900.png" alt="900px 캘린더 우측과 사이드바 확대 전후 — 전은 10/17/24가 잘리고 후는 온전하다">
+<h3>1440px — 전 25.0% / 후 18.75%(16:9 그대로)</h3>
+<img src="05_전체_1440.png" alt="1440px 전체 화면 전후">
+<h3>1920px(16:9 기준) — <span class="ok">픽셀 차 0</span></h3>
+<p class="dim">기준 화면에서는 아무것도 바뀌지 않는다. 실측 = 두 스샷 픽셀 차 526px, 전부 우하단 챗봇 FAB 애니메이션 프레임(bbox 1826,986–1906,1067) = 레이아웃 차 0.</p>
+<img src="06_전체_1920.png" alt="1920px 전체 화면 전후 — 동일">
+
+<h2>3. 더 좁아지면 — 접힘 → 모바일</h2>
+<p class="dim">2단 조임이 겹침 없이 버티는 하한(계산 ≈824px)보다 위인 <b>880px</b>에서 기존 정본(햄버거 시트)으로 접는다.
+  ≤768px은 종전 모바일 정본 그대로 = <b>사이드바(옆 열) 출력 없음</b>, 패널은 폭 100vw 하단 시트로 갈아끼워진다.</p>
+<img src="07_접힘_800.png" alt="800px 전후 — 전은 메뉴가 92px 겹치고 후는 햄버거로 접혔다">
+
+<h2>4. 실측 표 — 폭별 겹침·비율</h2>
+<p class="dim">겹침 = 좌(또는 우) 덩이와 중앙 메뉴의 침범 px(<b>음수 = 여유</b>). 비율 = 사이드바 / 창 폭.</p>
+<table>
+<tr><th>창 폭</th><th>전 · 겹침(좌/우)</th><th>후 · 겹침(좌/우)</th><th>전 · 사이드바</th><th>후 · 사이드바</th><th>전 · 비율</th><th>후 · 비율</th></tr>
+<tr><td class="num">1920</td><td class="num">−468 / −479</td><td class="num">−468 / −479</td><td class="num">360</td><td class="num">360</td><td class="num">18.75%</td><td class="num">18.75%</td></tr>
+<tr><td class="num">1600</td><td class="num">−308 / −319</td><td class="num">−308 / −319</td><td class="num">360</td><td class="num chg">300</td><td class="num">22.5%</td><td class="num ok">18.75%</td></tr>
+<tr><td class="num">1440</td><td class="num">−228 / −239</td><td class="num">−228 / −239</td><td class="num">360</td><td class="num chg">270</td><td class="num">25.0%</td><td class="num ok">18.75%</td></tr>
+<tr><td class="num">1280</td><td class="num">−148 / −159</td><td class="num">−148 / −159</td><td class="num">360</td><td class="num chg">240</td><td class="num">28.1%</td><td class="num ok">18.75%</td></tr>
+<tr><td class="num">1120</td><td class="num">−108 / −119</td><td class="num chg">−108 / −117</td><td class="num">360</td><td class="num chg">210</td><td class="num">32.1%</td><td class="num ok">18.75%</td></tr>
+<tr><td class="num">1067</td><td class="num">−81 / −90</td><td class="num">−81 / −90</td><td class="num">360</td><td class="num chg">200</td><td class="num">33.7%</td><td class="num ok">18.75%</td></tr>
+<tr><td class="num">1024</td><td class="num">−20 / −31</td><td class="num chg">−60 / −69</td><td class="num">360</td><td class="num chg">200</td><td class="num">35.2%</td><td class="num">19.5%</td></tr>
+<tr><td class="num">960</td><td class="num bad">+12 / +0.7</td><td class="num ok">−84 / −92</td><td class="num">360</td><td class="num chg">200</td><td class="num">37.5%</td><td class="num">20.8%</td></tr>
+<tr><td class="num">900</td><td class="num bad">+42 / +31</td><td class="num ok">−54 / −62</td><td class="num">360</td><td class="num chg">200</td><td class="num bad">40.0%</td><td class="num">22.2%</td></tr>
+<tr><td class="num">881</td><td class="num bad">+47 / +36</td><td class="num ok">−44 / −53</td><td class="num">360</td><td class="num chg">200</td><td class="num">40.9%</td><td class="num">22.7%</td></tr>
+<tr><td class="num">880</td><td class="num bad">+52 / +41</td><td colspan="1" class="ok">접힘(햄버거)</td><td class="num">360</td><td class="num chg">200</td><td class="num">40.9%</td><td class="num">22.7%</td></tr>
+<tr><td class="num">769</td><td class="num bad">+108 / +96</td><td class="ok">접힘(햄버거)</td><td class="num">360</td><td class="num chg">200</td><td class="num bad">46.8%</td><td class="num">26.0%</td></tr>
+<tr><td class="num">≤768</td><td class="keep">모바일 시트</td><td class="keep">모바일 시트</td><td class="keep">100vw</td><td class="keep">100vw</td><td class="keep">옆 열 없음</td><td class="keep">옆 열 없음</td></tr>
+</table>
+
+<h2>5. 글자 축소 실측 — 「사이드바가 줄면 프로그램 타이틀도 준다」</h2>
+<p class="dim">식 한 줄 = <b>글자 = 기준값 × (0.8 + 0.2×(pw−200)/160)</b>. 통(<code>--pw</code>)보다 <b>천천히</b> 준다 —
+  통과 1:1로 줄이면 200px 폭에서 13px 타이틀이 7px이 돼 못 읽는다.</p>
+<table>
+<tr><th>창 폭</th><th>사이드바 폭</th><th>날짜 머리줄(기준 20)</th><th>장도·카페(13)</th><th>섹션 제목(13)</th><th>프로그램 타이틀(13)</th><th>장소(10)</th><th>D-day(11)</th></tr>
+<tr><td class="num">1920</td><td class="num">360</td><td class="num">20.0</td><td class="num">13.0</td><td class="num">13.0</td><td class="num">13.0</td><td class="num">10.0</td><td class="num">11.0</td></tr>
+<tr><td class="num">1600</td><td class="num">300</td><td class="num">18.5</td><td class="num">12.0</td><td class="num">12.0</td><td class="num">12.0</td><td class="num">9.3</td><td class="num">10.2</td></tr>
+<tr><td class="num">1280</td><td class="num">240</td><td class="num">17.0</td><td class="num">11.1</td><td class="num">11.1</td><td class="num">11.1</td><td class="num">8.5</td><td class="num">9.4</td></tr>
+<tr><td class="num">≤1067</td><td class="num">200</td><td class="num">16.0</td><td class="num">10.4</td><td class="num">10.4</td><td class="num">10.4</td><td class="num">8.0</td><td class="num">8.8</td></tr>
+<tr><td class="num">≤768</td><td class="keep">100vw 시트</td><td class="num">20.0</td><td class="num">13.0</td><td class="num">13.0</td><td class="num">13.0</td><td class="num">10.0</td><td class="num">11.0</td></tr>
+</table>
+
+<h2>6. 무엇을 새로 만들지 않았나</h2>
+<table>
+<tr><th>축</th><th>처리</th></tr>
+<tr><td>색</td><td class="keep">신규 raw hex 0 · 새 토큰 0 · 새 <code>:root</code> 0 (<code>check_design</code> 1545/1545 · 2/0 블록)</td></tr>
+<tr><td>형태</td><td class="keep">새 컴포넌트 0 — 접힘은 <b>이미 있던 햄버거 시트 정본</b>을 폭만 올려 재사용(규칙 내용 무수정 이동)</td></tr>
+<tr><td>배치 결정</td><td class="keep">「메뉴 = 뷰포트 정중앙」(운영자 260723) · 「사이드바 항상 펼쳐지게」(운영자 260731) · 「우측 360px」 상한 — 셋 다 불변</td></tr>
+<tr><td>값 이원화</td><td class="chg">해소 — <code>_panelRailReflow</code>가 갖고 있던 <code>'360px'</code> 리터럴을 지우고 <b>CSS가 정한 실폭을 읽는다</b></td></tr>
+<tr><td>인라인 재타이핑</td><td class="chg">해소 — 프로그램 행 활자를 세 자리가 각각 인라인으로 적던 것을 정본 CSS <code>.pp-nm/.pp-vn/.pp-dd</code> 한 벌로(색만 인라인 유지)</td></tr>
+<tr><td>잰크</td><td class="keep">레이아웃 유발 transition 추가 0 (15/15 유지)</td></tr>
+</table>
+
+<h2>7. 게이트</h2>
+<p class="dim"><code>npm run check</code> 전건 rc=0(check_design · check_refs · modal_head 61건 · exchart · parity 56종 <b>증가 0</b> · bizchart · wizard · bkchat · build_annual_yr)
+ + <code>smoke:layout</code> 1920/1440 PASS + <code>smoke:modalhead</code> 36건 PASS + check_wide_threshold · check_biz_list · check_wiring · check_break_rule PASS.
+ 기능 실측 = 폭 1440→700 스윕 전 구간 <b>캘린더 오른변 ↔ 사이드바 왼변 틈 0.0px</b> · 가로 넘침 0 · 모드 왕복(캘린더↔대시보드) 무회귀 · 햄버거 열림/닫힘 · <b>pageerror 0</b>.</p>
+</body>
+</html>

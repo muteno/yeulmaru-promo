@@ -330,9 +330,39 @@ button{font-family:inherit;cursor:pointer}
 .hamburger.is-open .hamburger-ico span:first-child{transform:translateY(-50%) rotate(45deg)}
 .hamburger.is-open .hamburger-ico span:nth-child(2){transform:translateY(-50%) rotate(-45deg)}
 .nav-acc{display:none}   /* 세부메뉴 아코디언 = 모바일 전용(미디어 쿼리에서 grid 활성) */
-/* ═══ 반응형 — 모바일 ═══ */
-@media (max-width:768px){
-  /* (260610) #mobile-guard 차단 해제 — 모바일 정식 지원 (Phase A) */
+/* ═══ [260806 운영자 「지금 조금 상단 메뉴가 겹치는 부분이 있는데」] nav 혼잡도 사다리 ═══
+   중앙 대메뉴(.nav-center)는 **뷰포트 정중앙 절대배치**(운영자 260723 「메뉴 중앙정렬」)라 흐름 밖에 있다
+   = 좌(로고+월네비)·우(아이콘 묶음) 덩이가 자리를 넓혀도 밀어내지 못하고 **그냥 겹친다**.
+   구판은 조임 단계가 **하나도 없이** 768px에서 갑자기 햄버거로 접혀서, 그 사이(≈1015 → 769)가 통째로 겹침 구역이었다.
+   실측(관리자·QA 최장 이름 「QA미리보기 님」 · tools/scratch/probe_nav_sidebar.mjs):
+     1450px에서 좌 덩이 오른끝 324 · 중앙 폭 335 · 우 덩이 왼끝 1137 → 겹침 시작 ≈ 2×(324+여유+167.5) ≈ 1015px
+     (실측 1024 = 여유 20px · 960 = **겹침 12px** · 900 = 42px · 780 = 102px)
+   조치 = 정중앙 배치는 **그대로 두고**(운영자 결정 불변) 양옆 덩이·중앙 알약을 두 단계로 조인 뒤,
+     그래도 자리가 안 나는 폭에서만 이미 있는 정본(햄버거 시트)으로 접는다 — 새 형태 창작 0, 값은 전부 기존 값의 축소 변주.
+   ⚠ 사람 이름은 길이가 제각각이라 우 덩이 폭이 흔들린다 → 단계마다 max-width+말줄임으로 **폭을 잠근다**.
+     안 잠그면 이 사다리가 「이름이 길면 또 겹친다」로 무너진다(캘린더 셀 .pf/.ps 약칭과 같은 축). */
+@media(max-width:1120px){
+  .nav{padding:0 18px}
+  .nav-mnav{margin-left:18px}
+  .nav-btn{padding:9px 10px}
+  .nav-right{gap:9px}
+  .welcome-msg{max-width:92px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+}
+@media(max-width:1000px){
+  .nav{padding:0 12px}
+  .nav-mnav{margin-left:10px}
+  .nav .month-text{font-size:22px}
+  .nav .year-text{font-size:12px;margin-left:6px}
+  .nav .arrow{width:28px;height:28px}
+  .nav-btn{padding:9px 7px;font-size:13px}
+  .nav-right{gap:7px}
+  .welcome-msg{max-width:64px}
+}
+/* ═══ 반응형 — nav 접힘(햄버거 시트) ═══
+   [260806] 구 768 모바일 블록에 있던 nav 규칙 한 벌을 **그대로** 이 폭으로 올린 것(내용 무수정 이동).
+   왜 880 = 위 2단 조임이 겹침 없이 버티는 하한(계산 ≈824 · 실측 스윕으로 확인)보다 위에서 접기 위함 —
+   조임의 끝과 접힘 사이에 겹치는 구간이 남지 않게 겹쳐 둔다. 768 모바일 블록은 나머지(하단 시트·바텀 네비 등)를 그대로 담당. */
+@media (max-width:880px){
   .hamburger{display:inline-flex}
   .nav-sub{display:none}  /* "홍보 계획표" 부제 숨김 */
   /* [260723 운영자] navigation-01 모바일 문법 이식 — 패널 = 항상 렌더 + clip-path 말림 등장/퇴장(구 display 토글 = 전이 불가 → 재구조). 모양(흰 시트·항목 스타일) = 기존 값 그대로 이동 계승, 모션 값 = 레퍼런스 원본(.55s 스프링 linear()·미지원 = cubic-bezier 폴백·visibility 지연) */
@@ -395,6 +425,10 @@ button{font-family:inherit;cursor:pointer}
   .nav-center .nav-btn.acc-on{background:rgba(74,77,231,0.06);color:var(--accent)}
   .nav-center{transform:none}   /* 데스크탑 중앙정렬(translate) 해제 — 모바일 = 좌우 풀폭 시트 */
   .nav-center .nav-hover-bg{display:none}
+}
+/* ═══ 반응형 — 모바일 ═══ */
+@media (max-width:768px){
+  /* (260610) #mobile-guard 차단 해제 — 모바일 정식 지원 (Phase A) */
   .nav-right .kst{display:none}  /* 시계 모바일에서 숨김 */
   #main-area{padding:16px !important}
   /* 플랫폼 필터 — 가로 스크롤로 (chip은 그대로 보이고 스와이프) */
@@ -926,23 +960,45 @@ button{font-family:inherit;cursor:pointer}
 
 /* ═══ PANEL ═══ */
 /* 날짜 상세 패널 = 캘린더 위 오버레이(레일 유지·main-area 안 밀림, right는 _panelRailReflow가 레일 폭으로 동적 설정) · 무채색 글래스(운영자 260708 플레이그라운드 확정: 흰 .40/blur 6/그림자 --text계열 .03). 열고닫기 = .pn-in/.pn-out(.35s) */
-.panel{position:fixed;top:56px;right:0;width:360px;height:calc(100vh - 56px);background:rgba(255,255,255,0.40);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border-left:1px solid var(--glass-border);box-shadow:-8px 0 32px rgba(26,26,46,0.03);z-index:10;display:flex;flex-direction:column}
+/* [260806 운영자 「좁아질때 항상 그 넓을때랑 같다고 가정해서 사이드바의 비율이 유지되었으면 — 예를 들어 16대 9일때
+   캘린더랑 사이드바의 너비 비율, 임의로 좁아질때도 사이드바가 그 비율에 맞춰서 줄어들게」] 사이드바 폭 = **비율 잠금**.
+   기준 = 16:9 정본 화면 1920×1080에서의 현재 폭 360px → **18.75%**(캘린더:사이드바 = 81.25:18.75 ≈ 13:3).
+     360/1920 = 0.1875 → `18.75vw` 한 식이 그 비율을 모든 폭에서 그대로 유지한다(1600→300 · 1440→270 · 1280→240).
+   구판 = `width:360px` 고정이라 폭이 줄수록 사이드바 몫만 커졌다(실측 1920 18.8% → 1280 28.1% → 900 **40.0%** → 769 46.8%)
+     = 좁은 창일수록 캘린더가 사이드바에 먹혀 마지막 열(일/월)이 잘렸다(운영자 스샷의 그 증상).
+   clamp 양끝의 뜻:
+     · 상한 360px = **정본 폭**(운영자 260731 「우측 360px 사이드바」) — 1920 초과 화면에서 더 넓어지지 않는다(기존 화면 무변).
+     · 하한 200px = 이 폭 아래로는 날짜 머리줄(2026년 8월 6일 목요일)이 글자를 줄여도 안 읽힌다 = 가독 바닥.
+       18.75vw가 200px이 되는 폭 = 1067px → 그 아래부터 하한이 잡고, 769px에서 26%까지만 되돌아간다.
+   ≤768(모바일)은 아래 미디어 블록이 하단 시트로 갈아끼운다 = **사이드바(옆 열) 출력 없음**(운영자 「일정 더 줄어들면 아예 사이드바는 출력 없애는거로(모바일)」).
+   `--pw` = 이 실폭을 아래 글자·여백 규칙이 되받는 **한 출처** — 폭이 줄면 글자도 같이 준다(값 이원화 0). */
+.panel{--pw:clamp(200px,18.75vw,360px);--ppx:calc(var(--pw)*.06667);position:fixed;top:56px;right:0;width:var(--pw);height:calc(100vh - 56px);background:rgba(255,255,255,0.40);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border-left:1px solid var(--glass-border);box-shadow:-8px 0 32px rgba(26,26,46,0.03);z-index:10;display:flex;flex-direction:column}
 .panel.pn-in{animation:slideIn .35s ease}
 .panel.pn-out{animation:slideOut .35s ease}
+/* [260806] ≤768 = 위 모바일 블록이 패널을 **폭 100vw 하단 시트**로 갈아끼운다(옆 열 사이드바 출력 없음).
+   통이 좁지 않으니 글자·여백도 줄일 이유가 없다 → `--pw`를 기준값(360)으로 되돌려 활자 = 종전 그대로.
+   이 한 줄이 `.panel` 규칙 **뒤**에 있어야 이긴다(미디어 쿼리는 특이도를 안 올린다 = 소스 순서 승부). */
+@media(max-width:768px){.panel{--pw:360px}}
 /* [260801 운영자] 아래 여백 16 → 14 = 「장도·카페 블록이 제 구분선과 두는 거리」와 같은 값(.panel-svc padding-bottom:14px).
    헤더 목록도 같은 간격으로 제 구분선(.panel-hdr border-bottom)과 떨어진다 = 두 블록이 같은 리듬. */
-.panel-hdr{display:flex;align-items:flex-start;justify-content:space-between;padding:20px 24px 14px;border-bottom:1px solid var(--border)}
-.panel-date{font-size:20px;font-weight:700}
+.panel-hdr{display:flex;align-items:flex-start;justify-content:space-between;padding:20px var(--ppx) 14px;border-bottom:1px solid var(--border)}
+/* ── [260806 운영자 「사이드바가 줄어들게 되면, 프로그램 타이틀이 줄어들도록」] 패널 글자 = 패널 실폭(`--pw`)에 연동 ──
+   식 한 줄: **글자 = 기준값 × (0.8 + 0.2×(pw−200)/160)** → `calc(기준×.55px + var(--pw)×기준×.00125)`.
+     · pw 360(=1920 화면·정본 폭) → 기준값 **그대로**(기존 화면 무변 = 회귀 0)
+     · pw 200(하한 · ≤1067 화면) → 기준값의 **80%**
+   글자는 통(--pw)보다 **천천히** 준다 — 통과 1:1로 줄이면 200px 폭에서 11px가 돼 못 읽는다(가독 하한 우선).
+   `--pw`가 이미 clamp라 여기엔 clamp가 필요 없다(양끝이 자동으로 위 두 값). 기준값 = 종전 px 그대로 = 새 활자 축 창작 0. */
+.panel-date{font-size:calc(11px + var(--pw)*.025);font-weight:700}   /* 기준 20px */
 .panel-day{font-size:13px;color:var(--dim);margin-top:2px}
-.panel-dow{font-size:13px;font-weight:600;margin-left:8px;color:var(--dim)}
+.panel-dow{font-size:calc(7.15px + var(--pw)*.01625);font-weight:600;margin-left:8px;color:var(--dim)}   /* 기준 13px — 위 --pw 연동식 */
 /* [260801 운영자] 연도 = 「2026년 8월 29일 토요일」. 요일(.panel-dow)과 같은 급(13px/600/--dim)이고
    날짜와의 여백도 같은 8px — 좌우 대칭(연도 margin-right = 요일 margin-left). 값 복제 없이 규칙만 뒤집는다. */
-.panel-yr{font-size:13px;font-weight:600;margin-right:8px;color:var(--dim)}
+.panel-yr{font-size:calc(7.15px + var(--pw)*.01625);font-weight:600;margin-right:8px;color:var(--dim)}   /* 기준 13px — 요일과 같은 급이므로 같은 식 */
 /* [260804 운영자] 공휴일·기념일 = 요일 바로 오른쪽, 같은 급(13px/600)·같은 여백(8px = .panel-dow margin-left와 한 값).
    종전엔 아래 .panel-hdr-labels 줄로 떨어져 그날만 본문이 14px+줄높이만큼 밀렸다 — 그 밀림을 없애려고 날짜 줄로 올린 것.
    날짜 줄이 좁은 폭에서 두 줄로 접히면 밀림이 되살아나므로 줄바꿈을 막고, 넘치면 말줄임(전체 이름은 title). */
 .panel-date{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.panel-hdr-hol{font-size:13px;font-weight:600;color:#D64545;margin-left:8px}
+.panel-hdr-hol{font-size:calc(7.15px + var(--pw)*.01625);font-weight:600;color:#D64545;margin-left:8px}   /* 기준 13px — 요일과 같은 급이므로 같은 식 */
 /* [260731 운영자 2차] 그날 일정 = 「n행 3열」로 함께 움직이는 격자 — 구분 | 제목 | 장소.
    표(테이블)·테두리는 쓰지 않는다: 바깥 grid + 각 행 display:contents 로 열만 공유(마크업은 div/span 그대로).
    · 1열 구분 = 「공연·교육·대관·셋업」 글자만(운영자 260731 3차 — 알약/버튼 형태 폐지).
@@ -963,13 +1019,13 @@ button{font-family:inherit;cursor:pointer}
 .panel-hdr-nm{font-size:13px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .panel-hdr-place{font-size:11px;font-weight:600;color:var(--dim);white-space:nowrap;text-align:left}
 .panel-svc{margin:2px 0 16px;padding-bottom:14px;border-bottom:1px solid var(--border)}
-.panel-svc-row{font-size:13px;font-weight:600;color:#333;line-height:2}
+.panel-svc-row{font-size:calc(7.15px + var(--pw)*.01625);font-weight:600;color:#333;line-height:2}   /* 기준 13px — --pw 연동 */
 .panel-svc-val{color:var(--accent)}
 .panel-svc-val.svc-tbd{color:#b0b0b0;font-weight:400}
 .panel-close{width:32px;height:32px;border-radius:50%;border:1px solid rgba(0,0,0,0.06);background:var(--glass);font-size:14px;color:var(--dim);display:flex;align-items:center;justify-content:center;transition:all .2s}
 .panel-close:hover{background:var(--accent-light);color:var(--accent)}
 @media(min-width:769px){#app:not(.biz-mode) .panel-close{display:none}}   /* [260731 운영자] 「사이드바 항상 펼쳐지게」 — 상주 패널엔 닫기 ✕가 없다(구 하단 drawer의 .panel-close 숨김 규칙과 동일 계약). biz 모드 오버레이 패널은 ✕ 유지 · ≤768 하단시트는 화면 절반을 먹어 닫을 수 있어야 하므로 ✕ 유지 */
-.panel-body{flex:1;padding:16px 24px;overflow-y:auto}
+.panel-body{flex:1;padding:16px var(--ppx);overflow-y:auto}
 .panel-empty{text-align:center;padding:40px 0;color:var(--dim);font-size:14px}
 .panel-hol{display:flex;align-items:center;gap:8px;padding:14px 10px 0;margin-top:18px;border-top:1px solid var(--border)}
 .panel-hol+.panel-prog-wrap{margin-top:14px}
@@ -1070,7 +1126,7 @@ table.promo-board-table th:last-child .col-resize-handle{display:none}
 .panel-prog-head:hover{background:rgba(74,77,231,0.04)}
 .panel-prog-arrow{font-size:9px;color:#999;width:12px;text-align:center;transition:transform .25s cubic-bezier(0.4,0,0.2,1);display:inline-block;transform-origin:center}
 .panel-prog-arrow.open{transform:rotate(90deg)}
-.panel-prog-title{flex:1;font-size:13px;font-weight:600;color:#333}
+.panel-prog-title{flex:1;font-size:calc(7.15px + var(--pw)*.01625);font-weight:600;color:#333}   /* 기준 13px — --pw 연동 */
 .panel-prog-cnt{font-size:11px;font-weight:700;color:var(--accent);background:rgba(74,77,231,0.1);padding:2px 8px;border-radius:10px;min-width:16px;text-align:center}
 .panel-prog-body{max-height:0;overflow:hidden;opacity:0;transition:max-height .35s cubic-bezier(0.4,0,0.2,1),opacity .2s ease,padding-top .25s ease;padding-top:0}
 .panel-prog-body.open{max-height:2000px;opacity:1;padding-top:8px;transition:max-height .45s cubic-bezier(0.4,0,0.2,1),opacity .3s ease .05s,padding-top .3s ease}
@@ -1079,6 +1135,14 @@ table.promo-board-table th:last-child .col-resize-handle{display:none}
 /* 프로그램 row — flex layout 강제 (외부 override 차단) */
 .panel-perf-row{display:flex !important;flex-direction:row !important;flex-wrap:nowrap !important;align-items:center !important;width:100%;box-sizing:border-box}
 .panel-perf-row > div{min-width:0}
+/* [260806 운영자 「사이드바가 줄어들게 되면, 프로그램 타이틀이 줄어들도록」] 프로그램 행 3부품 = 정본 CSS로 승격.
+   구판은 세 자리(공연 · 전시 · 교육/대관)가 **같은 활자를 인라인으로 각각 재타이핑**하고 있었다 —
+   인라인은 CSS를 이기므로 위 `--pw` 연동이 이 줄들에는 애초에 닿지 않는다(그리고 「클래스가 같으면 픽셀도 같다」 계약도 못 진다).
+   자리마다 다른 건 **색뿐**(공연 --accent · 전시 살몬 · 교육/대관 cfg[2])이라 색만 인라인에 남기고 활자·말줄임만 여기로 올린다.
+   기준값 = 종전 인라인 px 그대로(13/10/11) = 값 변경 0 · 새 부품 창작 0. */
+.pp-nm{font-size:calc(7.15px + var(--pw)*.01625);font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}   /* 기준 13px = 프로그램 타이틀 */
+.pp-vn{font-size:calc(5.5px + var(--pw)*.0125);color:var(--dim);margin-top:1px}                                                                 /* 기준 10px = 장소 */
+.pp-dd{font-size:calc(6.05px + var(--pw)*.01375);font-weight:600;white-space:nowrap;flex-shrink:0}                                              /* 기준 11px = D-day/N일차 */
 /* URL 있으면 호버 강조 */
 .panel-perf-row[onclick]:hover{transform:translateX(2px);box-shadow:0 2px 6px rgba(0,0,0,0.08)}
 /* 캘린더 셀 안 프로그램 뱃지 — URL 있으면 호버 강조 */
@@ -6540,7 +6604,13 @@ function _panelRailReflow(){
   var w=(sr&&sr.offsetParent!==null&&sr.offsetWidth)?sr.offsetWidth:0;
   p.style.right=w+'px';
   var open=(typeof panelOpen!=='undefined')&&panelOpen;
-  var ma=document.getElementById('main-area'); if(ma)ma.style.marginRight=(!w&&open)?'360px':'0';
+  /* [260806] 캘린더가 밀리는 폭 = 패널 **실폭**. 구판은 여기에 `'360px'`를 다시 적어 뒀는데,
+     사이드바 폭이 비율 잠금(CSS `--pw` = clamp(200px,18.75vw,360px))으로 바뀌면 그 숫자가 곧바로 어긋난다
+     = 좁은 창에서 캘린더와 사이드바 사이에 빈 띠가 생기거나 캘린더가 사이드바 밑으로 밀려 들어간다.
+     → 숫자를 지우고 **CSS가 정한 폭을 읽는다**(값 이원화 0 · CSS가 단일 출처).
+     display:none이면 offsetWidth가 0이라 computed 폭으로 폴백(clamp/vw는 계산값으로 해석된다). */
+  var pw=p.offsetWidth||parseFloat(getComputedStyle(p).width)||360;
+  var ma=document.getElementById('main-area'); if(ma)ma.style.marginRight=(!w&&open)?(pw+'px'):'0';
 }
 // 최신 입력 기준일 — 헤더 '기준 M.D' 표기 (공연 일일입력 + 전시일일 중 최신)
 function _srailAsof(){
@@ -24319,8 +24389,8 @@ function openPanel(dateObj,recs){
       var perfCtxAttr=' oncontextmenu="onPerfContextMenu(event,this);return false;"';
       h+='<div'+clickAttr+perfCtxAttr+' class="panel-perf-row" data-perf-name="'+escapeHtml(perf.f)+'" style="'+cursorStyle+'display:flex;align-items:center;padding:10px 12px;background:rgba(74,77,231,0.15);border-radius:10px;margin-bottom:6px;gap:10px;transition:background .15s">';
       h+='<span style="display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;border-radius:50%;font-size:8px;font-weight:700;background:var(--accent);color:#fff;flex-shrink:0">공</span>';
-      h+='<div style="flex:1;min-width:0;overflow:hidden"><div style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+nameWithArrow+'</div><div style="font-size:10px;color:var(--dim);margin-top:1px">'+escapeHtml(venueP)+'</div></div>';
-      h+='<span style="font-size:11px;font-weight:600;color:var(--accent);white-space:nowrap;flex-shrink:0">'+ddText+'</span>';
+      h+='<div style="flex:1;min-width:0;overflow:hidden"><div class="pp-nm">'+nameWithArrow+'</div><div class="pp-vn">'+escapeHtml(venueP)+'</div></div>';
+      h+='<span class="pp-dd" style="color:var(--accent)">'+ddText+'</span>';
       h+='</div>';
     });
     openExh.forEach(function(x){
@@ -24334,8 +24404,8 @@ function openPanel(dateObj,recs){
       var exhCtxAttr=' oncontextmenu="onPerfContextMenu(event,this);return false;"';
       h+='<div'+eClickAttr+exhCtxAttr+' class="panel-perf-row" data-perf-name="'+escapeHtml(eName)+'" style="'+eCursorStyle+'display:flex;align-items:center;padding:10px 12px;background:rgba(240,196,184,0.15);border-radius:10px;margin-bottom:6px;gap:10px;transition:background .15s">';
       h+='<span style="display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;border-radius:50%;font-size:8px;font-weight:700;background:#F0C4B8;color:#333;flex-shrink:0">전</span>';
-      h+='<div style="flex:1;min-width:0;overflow:hidden"><div style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+eNameWithArrow+'</div><div style="font-size:10px;color:var(--dim);margin-top:1px">'+escapeHtml(eVenue)+'</div></div>';
-      h+='<span style="font-size:11px;font-weight:600;color:#C08070;white-space:nowrap;flex-shrink:0">'+eDayText+'</span>';
+      h+='<div style="flex:1;min-width:0;overflow:hidden"><div class="pp-nm">'+eNameWithArrow+'</div><div class="pp-vn">'+escapeHtml(eVenue)+'</div></div>';
+      h+='<span class="pp-dd" style="color:#C08070">'+eDayText+'</span>';
       h+='</div>';
     });
     hPlan+=h;h='';   // 여기까지 = 공연·전시 row (기획 섹션 확정분)
@@ -24353,8 +24423,8 @@ function openPanel(dateObj,recs){
         var nameWithArrow=escapeHtml(perf.f)+(hasUrl?' <span style="font-size:9px;color:'+cfg[2]+';font-weight:500;margin-left:2px">↗</span>':'');
         h+='<div'+clickAttr+' oncontextmenu="onPerfContextMenu(event,this);return false;" class="panel-perf-row" data-perf-name="'+escapeHtml(perf.f)+'" style="'+cursorStyle+'display:flex;align-items:center;padding:10px 12px;background:'+cfg[3]+';border-radius:10px;margin-bottom:6px;gap:10px;transition:background .15s">';
         h+='<span style="display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;border-radius:50%;font-size:8px;font-weight:700;background:'+cfg[2]+';color:#fff;flex-shrink:0">'+(perf._eduRoom?'실':cfg[1])+'</span>';
-        h+='<div style="flex:1;min-width:0;overflow:hidden"><div style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+nameWithArrow+'</div><div style="font-size:10px;color:var(--dim);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+escapeHtml(venueP)+'">'+escapeHtml(venueP)+'</div></div>';
-        h+='<span style="font-size:11px;font-weight:600;color:'+cfg[2]+';white-space:nowrap;flex-shrink:0">'+ddText+'</span>';
+        h+='<div style="flex:1;min-width:0;overflow:hidden"><div class="pp-nm">'+nameWithArrow+'</div><div class="pp-vn" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+escapeHtml(venueP)+'">'+escapeHtml(venueP)+'</div></div>';
+        h+='<span class="pp-dd" style="color:'+cfg[2]+'">'+ddText+'</span>';
         h+='</div>';
       });
       if(cfg[4]==='p')hPlan+=h;else hRent+=h;
