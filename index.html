@@ -717,7 +717,7 @@ button{font-family:inherit;cursor:pointer}
 /* .sk-sweep = 캘린더 스켈레톤 + 판매 레일 로딩 공용(운영자 260710 "좌측 스캔 모션 우측에도" — .cal-skel 스코프 해제, 규칙 내용 불변) */
 .sk-sweep{position:absolute;inset:0;pointer-events:none;overflow:hidden}
 /* 스윕은 transform 애니(컴포지터 전용) — left 애니는 매 프레임 layout+paint로 backdrop-filter 재계산 유발(분신술 5호 MED) */
-/* [260806-16 운영자 「10시 방향에서 4시 방향으로 쓸어내리게 · 이징되게 · 16대 9 화면이 더 많으니까」] 대각 쓸어내림.
+/* [260806-17 운영자 「10시 방향에서 4시 방향으로 쓸어내리게 · 이징되게 · 16대 9 화면이 더 많으니까」] 대각 쓸어내림.
    ① 방향 = 그라데이션 **120deg** = 수평에서 30° 아래 = 시계 10시→4시. 16:9 화면의 모서리 대각이 29.36°라 그 대각과 사실상 같은 각.
       ⚠ **지각되는 이동 방향은 그라데이션 축이 정한다**(줄무늬의 구경 문제) — translate는 그 축으로의 투영만 보인다.
    ② 판(plate) = 기준 사각의 **2배**를 깔고 그 위 띠를 민다. 구판처럼 「폭 34% 세로 띠」를 쓰면 대각 띠의 양 끝이 제 판에 잘린다.
@@ -7769,9 +7769,8 @@ function _bizEduMonthRows(year){
       _st:((o.end||o.start)<tdy)?'ended':'active'});
   });
   out.sort(function(a,b){ return (a.start-b.start)||(a.name<b.name?-1:1); });
-  // [260805 운영자 「교육, 별도의 인덱싱 열 부여해줘」] 각 교육 게이지(세로 열)에 고유 순번을 단다 —
-  //   시작일순 ①②③…(원문자 = 값(명)으로 오독되지 않는 색인 표기). 게이지 위 라벨·툴팁 머리가 같이 쓴다.
-  out.forEach(function(g,i){ g._idx=(i<20)?String.fromCharCode(0x2460+i):String(i+1); });
+  // [260806-11] 구 교육 색인(①②③… · 260805 「인덱싱 열 부여」) **부여까지 철거** — 표기를 지우면서 쓰는 곳이
+  //   0이 됐다(게이지 라벨·툴팁 머리 셋이 전부였다). 되살릴 땐 시작일순 원문자라는 그 규칙 그대로.
   return out;
 }
 // ── [260804 운영자] y축 중략(≈) — 「매출이 너무 큰 게 하나 있어서 차트가 무너진다」 ────────────────
@@ -8059,7 +8058,10 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
   var lnOf=function(g){ return (ED&&g._mo&&g._mo.length)?g._mo:null; };
   var isLn=rows.map(function(g){ return !!lnOf(g); });
   var vals=rows.map(function(g,i){ return isLn[i]?null:valOf(g); }), tr2=null;   // 선으로 그리는 항목은 막대 자리를 비운다(같은 값을 두 벌로 그리지 않는다)
-  var vfmt=function(v){ return hasRev?((v>=100)?Math.round(v).toLocaleString():v.toFixed(1)):Math.round(v).toLocaleString(); };
+  // [260806-11 운영자 「항상 표현은 **반올림해서 소숫점 없이** 표기하게」] 값 라벨 = 정수 한 벌.
+  //   구판은 매출 축에서 100 미만이면 `toFixed(1)`(13.6·65.9·2.5…) — 같은 차트 안에서 「486」과 「2.5」가
+  //   다른 자릿수 문법으로 서서 눈이 두 번 읽었다. 반올림은 표기에서만 한다(값·툴팁·집계는 원값 그대로).
+  var vfmt=function(v){ return Math.round(v).toLocaleString(); };
   // [260804] 축 중략 — 그릴 자리만 접는다(값·라벨·툴팁은 실값). plotPx = 실제 그림 높이(위 18 · 아래 34 여백 제외 — 45° 이름축 폐지로 아래 여백 96→34)
   var brk=ED?null:_bizBarBreak(vals,Math.max(60,hgt-(18+_BIZ_AXB)));   // [260806-5] 위 여백 18 + 아래 여백 _BIZ_AXB — 상수 34를 박아두면 아래 여백을 늘린 만큼 중략이 없는 자리를 있다고 착각한다(그림 영역 = 높이 − 두 여백)
   var yv=brk?vals.map(function(v){return v==null?null:brk.map(v);}):vals;
@@ -8090,7 +8092,7 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
   //   자리 문법(xanchor left · xshift 9 · yanchor middle)은 아래 교육 색인의 「천장 근접 = 옆으로」와 **같은 벌**(새 형태 0).
   //   겹침 판정(placedX)은 위에서 이미 끝났다 = 라벨 수·생략 규칙은 무변, 그리는 자리만 옮긴다.
   var fcLab=[];
-  fcIdx.forEach(function(a){ var i=a[0]; if(!labs[i])return; fcLab.push({x:xs[i],y:_mapv(vals[i]),t:labs[i],c:gcol(rows[i])}); labs[i]=''; });
+  fcIdx.forEach(function(a){ var i=a[0]; if(!labs[i])return; fcLab.push({x:xs[i],y:_mapv(a[1]),t:labs[i],c:gcol(rows[i])}); labs[i]=''; });   // [260806-11] y = **예상 꼭대기**(그라데이션 끝) — 아래 주석
   // [260805 운영자 「교육도 그 위에 명수 숫자를 써줘 · 공연 차트도 각각 맨 위에 (백만 단위로)」]
   //   값 라벨 = 9.5px·--dim(3.32:1 · 화면에서 거의 안 읽혔다) → **10.5px + 그 막대 색**(전시 피크 라벨과 같은 문법 =
   //   숫자와 막대가 한 몸으로 읽힌다 · 장르색·분야색은 --dim보다 대비가 높다). 단위는 축 제목(백만 원)·카드 우상단(명)이 말한다.
@@ -8151,8 +8153,12 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
       }));
     }
   }   // [260806-5] 월 라벨 **아랫줄** = 1Q~4Q. ⚠ 이 줄은 위 `lay.annotations=zone.notes` **뒤**여야 한다 — 앞에 두면 그 할당이 통째로 덮어써서 분기 라벨이 조용히 사라진다(첫 렌더 실측)   // [260805] 달 경계선 = 음영보다 먼저(둘 다 below · 경계가 음영 위에 얹히지 않게)
-  if(fcLab.length)lay.annotations=lay.annotations.concat(fcLab.map(function(L){   // [260808-2] 위 fcLab 주석 — 예상 2단 막대의 값 라벨(실값)을 실판매 꼭대기 **옆**에
-    return {xref:'x',x:L.x,xanchor:'left',xshift:9,yref:'y',y:L.y,yanchor:'middle',
+  // [260806-11 운영자 「차트 위에 (그라데이션 있어도 **그 끝 점 위에** 그라데이션이랑 **중첩 안 되게**) 숫자를 적어줘」]
+  //   2단 막대의 값 라벨(실값) = **예상 꼭대기 바로 위**. 260808-2가 「옆」으로 뺀 이유(같은 색 잉크 위 같은 색 글자가
+  //   페이드 칸 **안**에 잠긴다)는 자리를 페이드 **밖**으로 올리면 그대로 해소된다 — 겹칠 잉크가 없다.
+  //   자리 문법 = 다른 값 라벨과 같은 벌(xanchor center · yanchor bottom · yshift 3 = 막대 꼭대기에서 한 칸) = 새 값 0.
+  if(fcLab.length)lay.annotations=lay.annotations.concat(fcLab.map(function(L){
+    return {xref:'x',x:L.x,xanchor:'center',yref:'y',y:L.y,yanchor:'bottom',yshift:3,
       text:L.t,showarrow:false,font:{size:10.5,color:L.c}}; }));
   var note=(div.parentNode&&div.parentNode.querySelector)?div.parentNode.querySelector('[data-bizbrknote]'):null;
   if(brk){
@@ -8176,7 +8182,11 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
     // [260808-2] 예상 페이드 꼭대기가 접힌 축의 상한을 넘으면 축을 그만큼 넓힌다 — 자르면 「예상이 낮다」로 오독된다.
     //   눈금(tickvals)은 손대지 않는다 = 눈금 사다리·중략 발동 계약(`check_break_rule`)은 무접촉.
     if(fcIdx.length){ var _fcTop=Math.max.apply(null,fcIdx.map(function(a){return brk.map(a[1]);}));
-      if(_fcTop>brk.rng)lay.yaxis.range=[0,_fcTop*1.02]; }
+      // [260806-11] 여유 = 값 라벨 한 줄이 **그림 안에** 서는 만큼(글자 10.5 + 띄움 3 + 숨구멍 2.5 ≈ 16px)을 축 단위로 환산.
+      //   구판 1.02는 페이드가 안 잘리는 최소치였는데, 라벨이 꼭대기 **위**로 올라오면서(운영자 260806-11) 그 위가 필요해졌다.
+      //   고정 배수를 새로 정하지 않는다 — 그림 높이가 달라지면 필요한 비율도 달라지므로 픽셀에서 역산한다.
+      var _lblRoom=1+16/Math.max(60,hgt-_BIZ_AXB-18);
+      if(_fcTop*_lblRoom>brk.rng)lay.yaxis.range=[0,_fcTop*_lblRoom]; }
     // ≈ 표식 = **차트 전폭 1줄**(국제 관례). 축 옆 스텁으로 두면 끊을 축선이 없어 「≈ 80 = 약 80」으로 읽힌다(평의회7).
     var cyc=Math.max(2,Math.min(16,Math.round(plotSpan/28)));       // 파장 ≈28px(넓은 카드는 16주기 상한에 걸려 최대 ≈45px) — 폭이 달라져도 같은 기호로 보이게
     lay.shapes=lay.shapes.concat(_bizBreakShapes(brk,[[ax.x0,ax.x1]],dim,_yrCss('--surface-solid'),cyc));
@@ -8199,7 +8209,7 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
   if(pidx.length){
     tr2={type:'bar',width:W,marker:{color:'rgba(0,0,0,0)',line:{width:0}},showlegend:false,hoverinfo:'text',textposition:'none',
       x:pidx.map(function(i){return xs[i];}),y:pidx.map(function(){return pY;}),
-      text:pidx.map(function(i){ var g=rows[i]; return ED?((g._idx?g._idx+' ':'')+g.name+'\n'+dTxt(g)+' · '+stName(g)+'\n수강생 집계 전')
+      text:pidx.map(function(i){ var g=rows[i]; return ED?(g.name+'\n'+dTxt(g)+' · '+stName(g)+'\n수강생 집계 전')
         :(g.name+'\n'+dTxt(g)+' · '+(g.genre||'-')+'\n'+(plan(g)?'예정 · 티켓 오픈 전':stName(g)+' · 자료 없음')); })};
   }
   // [260808-2] 예상 판매분 = **실막대 위에 얹는 한 칸**(`base` = 실판매 꼭대기). 트레이스를 따로 두는 이유 =
@@ -8233,7 +8243,7 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
         marker:{size:7,color:srf,line:{color:col,width:1.6}},
         showlegend:false,hoverinfo:'text',
         text:mo.map(function(p,j){ var inc=p[1]-(j>0?mo[j-1][1]:0);
-          return (g._idx?g._idx+' ':'')+g.name+'\n'+(p[0]+1)+'월 누계 '+Math.round(p[1]).toLocaleString()+'명 (그 달 +'+Math.round(inc).toLocaleString()+')\n'
+          return g.name+'\n'+(p[0]+1)+'월 누계 '+Math.round(p[1]).toLocaleString()+'명 (그 달 +'+Math.round(inc).toLocaleString()+')\n'
             +dTxt(g)+' · '+stName(g)+' · '+(g._g2||'예술교육'); })});
       lnTip.push({i:i,x:lx[lx.length-1],y:ly[ly.length-1],col:col});
     });
@@ -8247,24 +8257,9 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
       return {xref:'x',x:L.x,xanchor:'center',yref:'y',y:L.y,yanchor:'bottom',yshift:7,
         text:Math.round(L.y).toLocaleString(),showarrow:false,font:{size:10.5,color:L.col}}; }));
   }
-  // [260805 운영자] 교육 색인(①②③… = _bizEduMonthRows가 시작일순으로 부여) — **모든** 교육 열 머리에 단다
-  //   (실막대는 막대 꼭대기 위 · 값 라벨과 겹치지 않게 한 칸 더 · 파선은 게이지 끝). 원문자 = 값 숫자로 오독되지 않는 색인 표기.
-  //   꺾은선은 **꼭자락 오른쪽 옆**(위가 아니라 옆) — 동시 판매 구간에서는 두 선이 같은 달에 끝나므로, 위로 쌓으면
-  //   아래 선의 색인이 위 선 위에 얹혀 같은 초록끼리 뭉갠다(실측: ③ 색인이 ② 선에 묻혔다). 옆은 꼭자락 오른쪽 = 빈 자리다.
-  var _lnAt={}; lnTip.forEach(function(L){ _lnAt[L.i]=L; });
-  if(ED)lay.annotations=lay.annotations.concat(rows.map(function(g,i){
-      var L=_lnAt[i];
-      if(g._idx==null||(L==null&&xs[i]==null))return null;
-      if(L)return {xref:'x',x:L.x,xanchor:'left',xshift:9,yref:'y',y:L.y,yanchor:'middle',
-        text:String(g._idx),showarrow:false,font:{size:10,color:gcol(g)}};
-      // 천장에 붙은 막대(값 라벨까지 얹으면 구획 라벨 「진행 완료」·「진행·예정」 띠에 글자가 포갠다)는 색인만 **옆으로** 뺀다
-      //   — 전시 반쪽의 「천장 근접 = 라벨을 옮긴다(축을 넓히지 않는다)」 규칙과 같은 축. 30 = 값 라벨(12) + 띄움(3) + 구획 띠(≈14).
-      if(vals[i]!=null&&(_edTop-vals[i])*(Math.max(60,hgt-52)/(_edTop||1))<30)
-        return {xref:'x',x:xs[i],xanchor:'left',xshift:9,yref:'y',y:vals[i],yanchor:'middle',
-          text:String(g._idx),showarrow:false,font:{size:10,color:gcol(g)}};
-      return {xref:'x',x:xs[i],xanchor:'center',yref:'y',y:(vals[i]!=null?vals[i]:pY),yanchor:'bottom',
-        yshift:(vals[i]!=null?17:2),
-        text:String(g._idx),showarrow:false,font:{size:10,color:gcol(g)}}; }).filter(Boolean));   // [260805] 값 라벨(주석 10.5px) 위로 한 칸 더(15→17)
+  // [260806-11 운영자 「교육 위에 1 동그라미 저건 없어도 될 듯」] 교육 색인(①②③…) **표기 철거** —
+  //   260805에 「별도의 인덱싱 열 부여」로 붙였던 원문자 라벨. 열이 적을 땐 이름을 툴팁으로 바로 확인할 수 있어
+  //   색인이 한 겹 더 얹힌 잉크였다(운영자 판정). 자리·값 라벨·툴팁은 그대로 — 지운 건 원문자 주석뿐이다.
   // 교육 막대 값 라벨 = 주석판(위 tr.text 주석) · 자리·겹침 판정은 위 labs가 이미 끝냈다(같은 규칙 두 벌 금지).
   if(ED)lay.annotations=lay.annotations.concat(rows.map(function(g,i){ return (!labs[i]||xs[i]==null)?null:{
       xref:'x',x:xs[i],xanchor:'center',yref:'y',y:vals[i],yanchor:'bottom',yshift:3,
@@ -21175,6 +21170,8 @@ function openPromoCheck(){
   var notReady=(typeof _perfReady!=='undefined'&&!_perfReady)||typeof PERFS==='undefined'||!PERFS||!PERFS.length||typeof records==='undefined'||!records;
   var el=document.getElementById('promo-check');
   if(!el){ el=document.createElement('div'); el.id='promo-check'; document.body.appendChild(el); }
+  // 고객 분류 = admin 전용(예매집계·회원 둘 다 PII) — 탭 자체를 안 그린다. 숨기기가 아니라 없는 것이 맞다.
+  var seg=(userRole==='admin');
   var body;
   if(notReady){
     body='<div class="u-empty" style="padding:48px 20px;text-align:center">데이터를 아직 못 불러왔어요<br>'
@@ -21210,282 +21207,131 @@ function openPromoCheck(){
   //   탭 문법 = 영상 편집기(#ve-tabs) 정본 그대로(.prog-tab · --neutral 트랙 · flex:none) — 신규 부품·색 0.
   //   [260805-34] padding 7px 16px는 정본 `.prog-tab`이 진다 — 자리마다 인라인으로 다시 적지 않는다(패리티 계약).
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closePromoCheck)">'
-    + '<div class="modal" style="width:min(760px,94vw);max-height:88vh;--mpad-y:0;--mpad-x:0;position:relative;display:flex;flex-direction:column;overflow:hidden">'
+    + '<div class="modal" style="width:'+_PC_W.base+';max-height:88vh;--mpad-y:0;--mpad-x:0;position:relative;display:flex;flex-direction:column;overflow:hidden">'
     + '<button class="modal-x" onclick="closePromoCheck()" title="닫기" aria-label="닫기">✕</button>'
-    + _mhead('AI 홍보','점검으로 지금 손볼 곳을 찾고 · 전략 추론으로 다음 홍보를 계획해요')
+    + _mhead('AI 홍보','점검으로 지금 손볼 곳을 찾고 · 전략 추론으로 다음 홍보를 계획해요'+(seg?' · 고객 분류로 누가 봤는지 뽑아요':''))
     + '<div style="padding:12px 24px 0;flex:none"><div id="pc-tabs" style="display:flex;gap:2px;background:var(--neutral);border-radius:8px;padding:3px;width:max-content">'
     + '<button type="button" class="prog-tab active" data-t="check" onclick="_pcTab(\'check\')" style="flex:none">점검</button>'
     + '<button type="button" class="prog-tab" data-t="ai" onclick="_pcTab(\'ai\')" style="flex:none">전략 추론</button>'
+    /* 인라인 padding 없음 = 260808 PR 720 패리티 청산 계승(정본 `.prog-tab`이 패딩을 정한다 — 자리마다 다시 타이핑하지 않는다).
+       ⚠ 주석에 「샵+숫자 3자리」를 쓰지 마라 — check_design이 raw hex로 세어 baseline이 +1 된다(실제로 걸렸다). */
+    + (seg?'<button type="button" class="prog-tab" data-t="seg" onclick="_pcTab(\'seg\')" style="flex:none">고객 분류</button>':'')
     + '</div></div>'
     + '<div style="overflow:auto;flex:1;min-height:0;padding:16px 24px 20px">'
     + '<div id="pc-view-check">'+body+'</div>'
     + '<div id="pc-view-ai" style="display:none">'+_paViewHtml()+'</div>'
+    + (seg?'<div id="pc-view-seg" style="display:none">'+_segViewHtml()+'</div>':'')
     + '</div></div></div>';
-  _paSyncInfo();
+  _paAutoLoad();
 }
 // 탭 전환 — 뷰 display만 토글(상태·결과 보존 = 점검을 오가도 추론 결과가 안 사라진다)
+// 모달 폭 = 탭이 정한다. 고객 분류만 10열 표라 760px에선 절반이 가로 스크롤 뒤로 숨는다(운영자 「최대한 다 나오게」).
+//   ⚠ 값을 한 곳에만 둔다 — 모달 조립부와 여기 두 군데에 적으면 한쪽만 고쳐져 탭을 오갈 때 폭이 튄다.
+var _PC_W={base:'min(760px,94vw)',seg:'min(1180px,96vw)'};
 function _pcTab(t){
-  var c=document.getElementById('pc-view-check'),a=document.getElementById('pc-view-ai');
-  if(c)c.style.display=(t==='check')?'':'none';
-  if(a)a.style.display=(t==='ai')?'':'none';
+  ['check','ai','seg'].forEach(function(k){var e=document.getElementById('pc-view-'+k);if(e)e.style.display=(k===t)?'':'none';});
   document.querySelectorAll('#pc-tabs .prog-tab').forEach(function(b){b.classList.toggle('active',b.dataset.t===t);});
+  var m=document.querySelector('#promo-check .modal');
+  if(m)m.style.width=(t==='seg')?_PC_W.seg:_PC_W.base;
 }
 
-// ===== AI 홍보 ▸ 전략 추론 (260806 운영자 「판매율을 높일 홍보를 AI가 추론」) — _pa* =====
-// 무엇: 프로그램(또는 전체 포트폴리오)의 ①상세페이지 추출본(서버 KV 영구 캐시 — 첫 회만 OCR) ②판매 추이(_salesBuild 카드)
-//   ③홍보 이력·캘린더 슬롯 점유(records) ④고객 집계(admin — 예매집계·회원, **개인정보 행 0 = 숫자만**)를 팩으로 묶어
-//   Worker(/api/promo/upload·dispatch) → Actions(promo-advise.yml)의 claude -p(구독 OAuth 5계정 폴오버 — 블로그와 같은 엔진)로
-//   보내고, 공용 /api/blog/draft 폴링(_yeulAiAsk 문법)으로 조언 JSON을 받아 점검 탭과 같은 카드(_pcCard/_pcRow)로 그린다.
-// 스코프: 기획 프로그램만 — 대관은 PERFS에 아예 안 실린다(R접두 = PERFS_GC 분리 · 260801). 판매와 무관, 일정 맥락도 자체 기획 경합만.
-// 🔒 공용 PC 원칙(카드 제작·블로그 도우미 동일): 결과는 인메모리만 — 서버·로컬 무저장, 모달 닫아도 세션 안에서만 유지.
-var _paState={busy:false,sel:'ALL',last:null,det:{}};
-// 대상 = 판매창이 살아있는 기획 프로그램(판매종료일 — 없으면 공연종료일 — 이 오늘 이후). 홍보 = 판매 촉진 수단이라 끝난 건 대상이 아니다.
-function _paPerfs(){
-  var t=_pcT();
-  return ((typeof PERFS!=='undefined'&&PERFS)||[]).filter(function(p){
-    if(!p||!p.f)return false;
-    var end=p.se||p.e; return !!end&&end>=t;
-  }).sort(function(a,b){var x=a.ss||a.s||'9999',y=b.ss||b.s||'9999';return x<y?-1:1;});
-}
-function _paTypeLabel(t){ return t==='e'?'전시':(t==='a'?'교육':'공연'); }
+// ===== AI 홍보 ▸ 전략 추론(총론 브리핑) — _pa* =====
+// [260806 운영자 확정 3연] 「누르지 않더라도 자동으로 그날그날」 + 「공연을 나눠서가 아니라 총론」(7일/30일/90일 시계) + 「개별 추론은 일단 지금 필요없음」.
+// 구조: 매일 KST 08:30 Worker 크론(paAutoBrief)이 서버에서 포트폴리오 팩(판매·홍보 캘린더·고객 집계 — 개인정보 행 0)을 조립해
+//   promo-advise 레일(claude 구독 OAuth · opus 5 · effort high)로 추론시키고 drafts/<id>.json + KV 포인터(pa:auto:latest)로 남긴다.
+//   이 탭은 최신 브리핑을 자동으로 불러와 그린다. admin = [오늘 브리핑 지금 생성](/api/promo/auto-run — 크론과 같은 함수 1벌).
+//   폐루프 = 조언 회차 원장(data/promo_ai/advice_runs)을 다음 추론이 입력으로 받아 「지난 제안이 실행됐나·판매가 반응했나」까지 본다.
+// ⚠ 구 개별(프로그램 1개·클라 팩 조립) 축은 운영자 260806 「일단 지금 필요없음」으로 제거 — 복원 지점 = PR 716(작업이력 260806-12).
+//   상세페이지 KV 캐시(Worker promoDetailGet)는 카카오채널 톡이 계속 쓴다(제거 아님).
+// 🔒 공용 PC 원칙(블로그·카드 제작 동일): 결과 인메모리만 — 서버·로컬 무저장.
+var _paState={busy:false,last:null};
 function _paViewHtml(){
-  var list=_paPerfs();
-  var opts='<option value="ALL">전체 — 판매 중·예정 포트폴리오 ('+list.length+'개)</option>'
-    +list.map(function(p){return '<option value="'+escapeHtml(p.f)+'"'+(_paState.sel===p.f?' selected':'')+'>['+_paTypeLabel(p.t)+'] '+escapeHtml(p.f)+(p.se?' · 판매 ~'+escapeHtml(p.se):'')+'</option>';}).join('');
-  return '<div class="ve-sec first"><span class="n">1</span>대상 고르기 <span class="sub">프로그램 하나 또는 전체 배분 진단</span></div>'
-    +'<select id="pa-prog" class="nb-input" onchange="_paPick(this.value)">'+opts+'</select>'
-    +'<div id="pa-info" style="font-size:11px;color:var(--dim);margin-top:7px;line-height:1.6"></div>'
-    +'<div class="ve-sec"><span class="n">2</span>덧붙일 요청 <span class="sub">선택 · 꼭 반영할 조건이나 궁금한 것</span></div>'
-    +'<textarea id="pa-ask" class="nb-textarea" style="min-height:60px" maxlength="600" placeholder="예) 9월 첫 주에 카카오 자리를 잡아둘까요? / 단체 판매를 늘리고 싶어요"></textarea>'
-    +'<div class="lm-foot">'
-      +'<button type="button" class="btn btn--primary btn--md" id="pa-go" onclick="_paRun()">AI 추론 시작</button>'
-      +'<button type="button" class="btn btn--neutral btn--sm" id="pa-fresh" onclick="_paFresh()" style="display:none">상세페이지 새로 읽기</button>'
+  return '<div style="font-size:12px;color:var(--dim);line-height:1.7;margin:2px 0 12px">매일 아침 8시 반, 판매 중·예정 <b>기획</b> 프로그램 전체와 홍보 캘린더·판매 추이·고객 집계를 서버가 모아 <b>총론</b>을 추론해요 — 앞으로 <b>7일 · 30일 · 90일</b> 세 시계로. 대관은 판매와 무관이라 보지 않아요.</div>'
+    +'<div class="lm-foot" style="margin:0 0 6px">'
+      +((typeof userRole!=='undefined'&&userRole==='admin')?'<button type="button" class="btn btn--primary btn--md" id="pa-auto" onclick="_paAutoNow()">오늘 브리핑 지금 생성</button>':'')
       +'<span class="ve-val" id="pa-note"></span>'
     +'</div>'
-    +'<div id="pa-out" style="margin-top:16px"></div>';
+    +'<div id="pa-out" style="margin-top:10px"><div class="u-empty" style="padding:48px 20px;text-align:center">최근 브리핑을 찾는 중…</div></div>';
 }
-function _paPick(v){ _paState.sel=v||'ALL'; _paSyncInfo(); }
-function _paSelPerf(){ if(_paState.sel==='ALL')return null; return _paPerfs().filter(function(p){return p.f===_paState.sel;})[0]||null; }
-function _paSyncInfo(){
-  var el=document.getElementById('pa-info'),fb=document.getElementById('pa-fresh');
-  if(!el)return;
-  var p=_paSelPerf();
-  if(!p){ el.textContent='전체 진단은 배분(어디에 집중할지)이 핵심이에요 — 상세페이지는 프로그램 하나를 고를 때만 읽어요.'; if(fb)fb.style.display='none'; return; }
-  var u=String(p.u||'').trim();
-  if(!u){ el.textContent='상세 링크 없음 — 프로그램 관리에서 URL을 넣으면 메시지 각도 재료(출연·카피)가 좋아져요.'; if(fb)fb.style.display='none'; return; }
-  var d=_paState.det[u];
-  el.textContent=d?('상세페이지 저장본 '+new Date(d.ts).toLocaleDateString('ko-KR',{month:'numeric',day:'numeric'})+' 수집 — 재OCR 없이 재사용 중'):'상세페이지는 추론 때 자동 수집 — 첫 회만 읽고(OCR) 이후는 저장본을 재사용해요.';
-  if(fb)fb.style.display='';
-}
-// 판매 시트 5종 로드 — 판매현황(openSalesBoard)과 같은 소스·같은 캐시(_salesState) 재사용
-function _paEnsureSales(){
-  if(_salesState.daily&&_salesState.master&&_salesState.rounds&&_salesState.ops)return Promise.resolve();
-  return Promise.all([
-    _salesState.daily?Promise.resolve(_salesState.daily):api('GET','/api/ops?sheet='+encodeURIComponent('일일입력')),
-    _salesState.master?Promise.resolve(_salesState.master):api('GET','/api/ops?sheet='+encodeURIComponent('공연마스터')),
-    _salesState.rounds?Promise.resolve(_salesState.rounds):api('GET','/api/ops?sheet='+encodeURIComponent('회차상세')),
-    _salesState.ops?Promise.resolve(_salesState.ops):((typeof _bizState!=='undefined'&&_bizState&&_bizState.raw)?Promise.resolve(_bizState.raw):api('GET','/api/ops?sheet='+encodeURIComponent('세부운영관리대장(정리)'))),
-    _salesState.group?Promise.resolve(_salesState.group):api('GET','/api/ops?sheet='+encodeURIComponent('단체')).catch(function(){return null;})
-  ]).then(function(res){ _salesState.daily=res[0];_salesState.master=res[1];_salesState.rounds=res[2];_salesState.ops=res[3];_salesState.group=res[4];_salesState._opsIdx=null; });
-}
-// 누적 곡선 — 일일입력에서 그 공연 행만 뽑아 ≤14점으로 다운샘플(전 구간 흐름 + 마지막 점 보존)
-function _paCurve(cardName){
-  var rows=((_salesState.daily&&_salesState.daily.rows)||[]).map(_salesNorm).filter(function(r){return String(r['공연명']||'').trim()===cardName;});
-  rows.sort(function(a,b){return (_salesNum(a['기준일자'])||0)-(_salesNum(b['기준일자'])||0);});
-  var pts=rows.map(function(r){var bd=String(_salesNum(r['기준일자'])||'');return [bd.length===8?bd.slice(4,6)+'-'+bd.slice(6,8):bd,_salesNum(r['합계좌석'])||0];}).filter(function(c){return c[0];});
-  if(pts.length<=14)return pts;
-  var step=Math.ceil(pts.length/13),out=[];
-  for(var i=0;i<pts.length;i+=step)out.push(pts[i]);
-  if(out[out.length-1]!==pts[pts.length-1])out.push(pts[pts.length-1]);
-  return out;
-}
-// 프로그램 1개의 판매 요약 — 판매현황 카드(_salesBuild)를 그대로 읽는다(집계 재발명 0 = 화면과 같은 숫자)
-function _paSalesFor(p,cards){
-  if(p.t==='e'){   // 전시 = 전시DB 거울(data/exhib_daily_2026.js — 3면 차트와 같은 소스)
-    var ex=(typeof EXHIB_DAILY_2026!=='undefined'&&EXHIB_DAILY_2026&&EXHIB_DAILY_2026.list||[]).filter(function(m){return _uName(m.name)===_uName(p.f);})[0];
-    if(!ex||!ex.daily||!ex.daily.length)return {none:true,why:'전시 일일 거울에 없음(운영자 업로드 xlsx 반영 후 생성)'};
-    var pts=ex.daily.map(function(d){var s=String(d[0]);return [s.slice(4,6)+'-'+s.slice(6,8),d[2]||d[1]||0];});
-    if(pts.length>14){var st=Math.ceil(pts.length/13),o=[];for(var i=0;i<pts.length;i+=st)o.push(pts[i]);if(o[o.length-1]!==pts[pts.length-1])o.push(pts[pts.length-1]);pts=o;}
-    var lastD=ex.daily[ex.daily.length-1];
-    return {status:'active',seats:lastD[2]||lastD[1]||0,curve:pts,note:'전시 누계(유료 인원 기준 · 거울 데이터)'+(ex.free?' · 무료 행사':'')};
+// 공용 폴링 — 수동 생성·자동 로드가 같은 한 벌(/api/blog/draft 공용 레일 · _yeulAiAsk 문법)
+async function _paPoll(id,say){
+  var t0=Date.now();
+  while(Date.now()-t0<480000){   // 8분 — Actions 큐+opus 추론(보통 1~3분) 여유
+    await new Promise(function(r){setTimeout(r,6000);});
+    say('AI 추론 중 '+Math.round((Date.now()-t0)/1000)+'초 — 보통 1~3분 걸려요');
+    var d=null;
+    try{ d=await api('GET','/api/blog/draft?id='+encodeURIComponent(id)); }
+    catch(e){ var s=String(e&&e.message||e);
+      if(s.indexOf('404')===0||s.indexOf('502')===0||s.indexOf('429')===0||/network|fetch/i.test(s))continue;
+      throw e; }
+    if(d&&d.ready&&d.draft)return d.draft;
   }
-  var c=(cards||[]).filter(function(k){return (p.id&&k._mid&&k._mid===p.id)||_uName(k.name)===_uName(p.f);})[0];
-  if(!c)return {none:true,why:(p.t==='a'?'교육은 판매 원장(일일입력)이 없음':'일일입력·공연마스터에 아직 없음(집계 전이거나 미등록)')};
-  return {
-    status:c.status,seats:c.seats,totalOpen:c.totalOpen,occ:Math.round(c.occ*10)/10,target:c.목표,
-    dday:c.dday,fcRate:(c.fcRate!=null?Math.round(c.fcRate*10)/10:null),
-    last7:(c.days||[]).map(function(d){var bd=String(d.bd||'');return {d:(bd.length===8?bd.slice(4,6)+'-'+bd.slice(6,8):bd),seat:d.seat};}),
-    curve:_paCurve(c.name),groupSeats:c.groupSeats||0,
-    note:(c.enriched?'운영대장 폴백 집계':'')+(c.daysTotal?(' · 실측 '+c.daysTotal+'일치'):'')
-  };
+  throw new Error('시간 초과(8분) — Actions 큐가 밀렸을 수 있어요. 잠시 후 다시 시도해 주세요');
 }
-// 홍보 이력·예정 — 발송 슬롯 모집단(_slotRows = 취소·보류·임시 제외)과 같은 축
-function _paPromoFor(p){
-  var t=_pcT(),hist=[],plan=[],last='';
-  _slotRows().forEach(function(r){
-    if(String(r['프로그램']||'').trim()!==String(p.f||'').trim())return;
-    var d=getRecDateKey(r); if(!d)return;
-    var it={d:d,ch:platShort(r['플랫폼 1'])||String(r['플랫폼 1']||''),t:String(r['콘텐츠 제목']||'').slice(0,40),st:String(r['진행 상태']||'')};
-    if(d<t){hist.push(it);if(d>last)last=d;}else plan.push(it);
-  });
-  hist.sort(function(a,b){return a.d<b.d?-1:1;}); plan.sort(function(a,b){return a.d<b.d?-1:1;});
-  if(hist.length>40)hist=hist.slice(-40);   // 최근 40건까지 — 팩 크기·프롬프트 초점
-  return {history:hist,planned:plan,lastDate:last};
-}
-// 앞으로 3주 카카오톡·문자 슬롯 점유(하루 1건 규칙의 「이미 잡힌 날」) — 비어 있는 날을 AI가 고르게
-function _paCalendar(){
-  var t=_pcT(),lim=new Date(t+'T00:00:00');lim.setDate(lim.getDate()+21);
-  var limK=lim.toISOString().slice(0,10),by={};
-  _slotRows().forEach(function(r){
-    var d=getRecDateKey(r); if(!d||d<t||d>limK)return;
-    var ps=platShort(r['플랫폼 1']); if(ps!=='카카오'&&ps!=='문자')return;
-    var tag=(ps==='문자'?('문자('+String(r['플랫폼 2']||'전체').trim()+')'):'카카오')+' 「'+String(r['콘텐츠 제목']||r['프로그램']||'').slice(0,24)+'」';
-    (by[d]=by[d]||[]).push(tag);
-  });
-  return {busy:Object.keys(by).sort().map(function(d){return {d:d,what:by[d].join(' · ')};})};
-}
-// 고객 집계(admin 전용 · 숫자만) — 예매집계(_bkState)의 장르 재관람 + 회원 인덱스(_memAiIdx)의 연령·거주지 TOP
-async function _paAudience(p){
-  if(typeof userRole==='undefined'||userRole!=='admin')return null;
-  try{ if(typeof _bkLoad==='function')await _bkLoad(false); }catch(e){}
-  try{ if(typeof _memLoad==='function'&&!_memState)await _memLoad(false); }catch(e){}
-  var a={sampleNote:'예매기록에 회원이 확정 연결된 표본(2020~2025 주문) 기준 = 하한 · 전체 구매회원 환산은 ×'+(typeof _BK_SCALE!=='undefined'?_BK_SCALE:1.53)+' 배까지만'};
-  if(typeof _bkState!=='undefined'&&_bkState&&_bkState.n){
-    a.sampleNote='예매기록에 회원이 확정 연결된 '+_bkState.n.toLocaleString()+'명 표본(2020~2025) = 하한 · 전체 구매회원 환산 ×'+_BK_SCALE+' 배까지만';
-    var g=p?_bkGenre(String((p.g2||p.g||''))||''):null,g1=0,g2=0,all2=0;
-    for(var k in _bkState.by){var r=_bkState.by[k];
-      if(_bkCount(r,null,null)>=2)all2++;
-      if(g){var c=_bkCount(r,null,g);if(c>=1)g1++;if(c>=2)g2++;}
-    }
-    a.allRepeat=all2; if(g){a.genre=g;a.gAny=g1;a.gRepeat=g2;}
-  }
-  var idx=(typeof _memAiIdx==='function')?_memAiIdx():null;
-  if(idx){
-    a.memberN=idx.n;
-    a.age=Object.keys(idx.age).filter(function(k){return k!=='미상';}).sort(function(x,y){return idx.age[y]-idx.age[x];}).slice(0,4).map(function(k){return [k,idx.age[k]];});
-    a.city=Object.keys(idx.byCity).sort(function(x,y){return idx.byCity[y]-idx.byCity[x];}).slice(0,5).map(function(k){return [k,idx.byCity[k]];});
-  }
-  return a;
-}
-async function _paDetailFetch(p,fresh){
-  var u=String((p&&p.u)||'').trim(); if(!u)return null;
-  var d=await api('POST','/api/promo/detail',{url:u,fresh:fresh?1:0});
-  if(!d||!d.ok)return null;
-  _paState.det[u]={ts:d.ts,cached:!!d.cached};
-  _paSyncInfo();
-  return {ts:d.ts,text:String(d.text||'').slice(0,2600),ocr:String(d.ocrText||'').slice(0,2600)};
-}
-function _paProgPack(p,sales){
-  return {name:p.f,short:p.n,type:_paTypeLabel(p.t),genre:String(p.g2||p.g||''),place:p.l||'',
-    period:{show:[p.s||'',p.e||''],sale:[p.ss||'',p.se||''],promoStart:p.ps||''},
-    sales:sales,promo:_paPromoFor(p)};
-}
-async function _paBuildPack(){
-  await _paEnsureSales();
-  var cards=null; try{cards=_salesBuild();}catch(e){console.warn('[pa] salesBuild',e);}
-  var t=_pcT(),sel=_paSelPerf(),pack={v:1,today:t,scope:sel?'program':'portfolio',calendar:_paCalendar(),context:{competing:[]}};
-  var askEl=document.getElementById('pa-ask'); if(askEl&&askEl.value.trim())pack.ask=askEl.value.trim().slice(0,600);
-  if(sel){
-    var pg=_paProgPack(sel,_paSalesFor(sel,cards));
-    pg.detail=await _paDetailFetch(sel,false);
-    pack.program=pg;
-    // 같은 기간에 판매창이 겹치는 다른 기획 프로그램 = 홍보 슬롯·관객을 나눠 쓰는 상대
-    var s1=sel.ss||sel.s||t,e1=sel.se||sel.e||t;
-    pack.context.competing=_paPerfs().filter(function(q){return q.f!==sel.f&&((q.ss||q.s||'9999')<=e1&&(q.se||q.e||'0000')>=s1);})
-      .slice(0,10).map(function(q){return {name:q.f,type:_paTypeLabel(q.t),period:(q.s||'')+'~'+(q.e||'')};});
-  }else{
-    pack.programs=_paPerfs().slice(0,20).map(function(q){return _paProgPack(q,_paSalesFor(q,cards));});
-  }
-  pack.audience=await _paAudience(sel);
-  return pack;
-}
-async function _paRun(){
-  if(_paState.busy)return;
-  var btn=document.getElementById('pa-go'),out=document.getElementById('pa-out');
-  var say=function(m){var n=document.getElementById('pa-note');if(n)n.textContent=m;};
-  _paState.busy=true;_btnBusy(btn,true,'추론 중');
+// 탭 열면 최신 자동 브리핑을 불러온다(포인터 → 공용 드래프트) — 실패는 조용히 안내문으로
+async function _paAutoLoad(){
+  var out=document.getElementById('pa-out');
+  var empty=function(msg){ if(out&&!_paState.last)out.innerHTML='<div class="u-empty" style="padding:48px 20px;text-align:center">'+msg+'</div>'; };
   try{
-    say('운영 데이터 모으는 중');
-    var pack=await _paBuildPack();
-    var id='pa'+Date.now()+'r'+Math.floor(Math.random()*1e4);
-    say('AI에게 보내는 중');
-    var u=await api('POST','/api/promo/upload',{id:id,pack:pack});
-    if(!u||!u.ok)throw new Error((u&&u.error)||'업로드 실패');
-    var d0=await api('POST','/api/promo/dispatch',{id:id});
-    if(!d0||!d0.ok)throw new Error((d0&&d0.error)||'추론 요청 실패');
-    var t0=Date.now(),res=null;
-    while(Date.now()-t0<480000){   // 8분 — Actions 큐+opus 추론(보통 1~3분) 여유
-      await new Promise(function(r){setTimeout(r,6000);});
-      say('AI 추론 중 '+Math.round((Date.now()-t0)/1000)+'초 — 보통 1~3분 걸려요');
-      var d=null;
-      try{ d=await api('GET','/api/blog/draft?id='+encodeURIComponent(id)); }
-      catch(e){ var s=String(e&&e.message||e);
-        if(s.indexOf('404')===0||s.indexOf('502')===0||s.indexOf('429')===0||/network|fetch/i.test(s))continue;
-        throw e; }
-      if(d&&d.ready&&d.draft){res=d.draft;break;}
-    }
-    if(!res)throw new Error('시간 초과(8분) — Actions 큐가 밀렸을 수 있어요. 잠시 후 다시 시도해 주세요');
+    var meta=null;
+    try{ meta=await api('GET','/api/promo/auto-latest'); }catch(e){ meta=null; }
+    if(!meta||!meta.ok||!meta.id){ empty('아직 자동 브리핑이 없어요 — 매일 아침 8:30에 처음 생성돼요'+((typeof userRole!=='undefined'&&userRole==='admin')?'. 위 [오늘 브리핑 지금 생성]으로 바로 만들 수도 있어요':'')); return; }
+    var d=null; try{ d=await api('GET','/api/blog/draft?id='+encodeURIComponent(meta.id)); }catch(e){ d=null; }
+    if(d&&d.ready&&d.draft&&d.draft.ok!==false){
+      if(_paState.busy)return;   // [지금 생성] 진행 중이면 그 결과가 우선
+      _paState.last={res:d.draft,at:(d.draft.ts?Date.parse(d.draft.ts):Date.now()),auto:true};
+      _paRenderResult();
+    } else empty((meta.ymd?meta.ymd+' 브리핑이 아직 만들어지는 중이거나(1~3분) 실패했어요 — 잠시 뒤 다시 열어보세요':'브리핑 준비 중이에요'));
+  }catch(e){ empty('브리핑을 불러오지 못했어요 — 네트워크 확인 후 다시 열어보세요'); }
+}
+// [오늘 브리핑 지금 생성](admin) — 크론과 같은 서버 조립 1벌을 즉시 발화(force = 오늘분 재생성 허용)
+async function _paAutoNow(){
+  if(_paState.busy)return;
+  var btn=document.getElementById('pa-auto'),out=document.getElementById('pa-out');
+  var say=function(m){var n=document.getElementById('pa-note');if(n)n.textContent=m;};
+  _paState.busy=true;_btnBusy(btn,true,'생성 중');
+  try{
+    say('서버가 오늘 데이터를 모으는 중');
+    var r=await api('POST','/api/promo/auto-run',{});
+    if(!r||!r.ok||!r.id)throw new Error((r&&(r.error||r.skipped))||'자동 브리핑 실행 실패');
+    var res=await _paPoll(r.id,say);
     if(res.ok===false)throw new Error(res.error||'추론 실패');
-    _paState.last={pack:pack,res:res,at:Date.now()};
+    _paState.last={res:res,at:Date.now(),auto:true};
     say(''); _paRenderResult();
   }catch(e){
     say('');
-    if(out)out.innerHTML='<div class="u-empty" style="padding:28px 16px;text-align:center">'+escapeHtml(String(e&&e.message||e))+'</div>';
-  }finally{ _paState.busy=false;_btnBusy(btn,false,'AI 추론 시작'); }
-}
-async function _paFresh(){
-  if(_paState.busy)return;
-  var p=_paSelPerf(); if(!p||!String(p.u||'').trim())return;
-  var b=document.getElementById('pa-fresh');
-  _paState.busy=true; if(b)_btnBusy(b,true,'읽는 중');
-  try{ await _paDetailFetch(p,true); showToast('상세페이지를 새로 읽었어요','ok'); }
-  catch(e){ showToast('새로 읽기 실패: '+String(e&&e.message||e),'error'); }
-  finally{ _paState.busy=false; if(b)_btnBusy(b,false,'상세페이지 새로 읽기'); }
-}
-// 팩 요약(근거 표시) — AI가 무엇을 보고 판단했는지 접기로 투명하게(카카오 「읽은 원문 보기」와 같은 축)
-function _paPackBrief(pack){
-  var L=['오늘: '+pack.today+' · 모드: '+(pack.scope==='program'?'프로그램 1개':'전체 포트폴리오')];
-  var one=function(g){
-    var s=g.sales||{},ln='· '+g.name+' ['+g.type+(g.genre?'/'+g.genre:'')+']';
-    ln+=s.none?' — 판매 데이터 없음('+(s.why||'')+')':(' — 누적 '+(s.seats!=null?s.seats:'?')+'석'+(s.totalOpen?('/'+s.totalOpen+'석 ('+s.occ+'%)'):'')+(s.dday!=null?' · D-'+s.dday:'')+(s.fcRate!=null?' · 페이스 '+s.fcRate+'석/일':''));
-    ln+=' · 홍보 지난 '+((g.promo&&g.promo.history)||[]).length+'건/예정 '+((g.promo&&g.promo.planned)||[]).length+'건';
-    return ln;
-  };
-  if(pack.program){ L.push(one(pack.program)); L.push('· 상세페이지: '+(pack.program.detail?('수집본 사용(본문 '+(pack.program.detail.text||'').length+'자 · OCR '+(pack.program.detail.ocr||'').length+'자)'):'없음(URL 미등록)')); }
-  (pack.programs||[]).forEach(function(g){L.push(one(g));});
-  L.push('· 3주 내 카카오·문자 점유일: '+(((pack.calendar||{}).busy)||[]).length+'일');
-  if(pack.audience){var a=pack.audience;L.push('· 고객: '+(a.genre?(a.genre+' 관람 1회+ '+a.gAny+'명 · 2회+(재관람) '+a.gRepeat+'명 · '):'')+(a.allRepeat!=null?('전장르 재관람 '+a.allRepeat+'명'):'')+(a.memberN?(' · 회원 '+a.memberN.toLocaleString()+'명'):''));L.push('  ⚠ '+a.sampleNote);}
-  else L.push('· 고객: 미포함(관리자 로그인에서만 동봉)');
-  if(pack.context&&pack.context.competing&&pack.context.competing.length)L.push('· 기간 경합: '+pack.context.competing.map(function(c){return c.name;}).join(', '));
-  if(pack.ask)L.push('· 담당자 요청: '+pack.ask);
-  return L.join('\n');
+    if(out)out.innerHTML='<div class="u-empty" style="padding:48px 20px;text-align:center">'+escapeHtml(String(e&&e.message||e))+'</div>';
+  }finally{ _paState.busy=false;_btnBusy(btn,false,'오늘 브리핑 지금 생성'); }
 }
 function _paRenderResult(){
   var out=document.getElementById('pa-out'); if(!out||!_paState.last)return;
   var r=_paState.last.res,adv=r.advice,h=[];
-  if(!adv&&r.text){   // 형식 이탈 폴백 — 조언 원문 그대로(내용은 살린다 · 형식 실패를 완료처럼 숨기지 않는다)
-    h.push(_pcCard('전략 조언 (원문)','JSON 형식을 벗어나 원문으로 표시해요',
+  var actRow=function(x,i,hot){
+    var main=(x.program?'<b>'+escapeHtml(String(x.program))+'</b> · ':'')+escapeHtml(String(x.when||''))+(x.channel?' · '+escapeHtml(String(x.channel)):'')+(x.message?' — '+escapeHtml(String(x.message)):'');
+    var sub=(x.target?'타겟: '+escapeHtml(String(x.target)):'')+(x.why?((x.target?' · ':'')+'근거: '+escapeHtml(String(x.why))):'');
+    return _pcRow(String(i+1),main,sub,hot);
+  };
+  if(!adv&&r.text){   // 형식 이탈 폴백 — 내용은 살리고 형식 실패를 숨기지 않는다
+    h.push(_pcCard('브리핑 (원문)','JSON 형식을 벗어나 원문으로 표시해요',
       '<div style="white-space:pre-wrap;font-size:13px;line-height:1.75;padding-top:8px">'+escapeHtml(r.text)+'</div>'));
   }else if(adv){
-    if(adv.verdict)h.push(_pcCard('진단','', '<div style="font-size:13px;line-height:1.75;padding-top:8px">'+escapeHtml(String(adv.verdict))+'</div>'));
-    if(Array.isArray(adv.priorities)&&adv.priorities.length)h.push(_pcCard('홍보 자원 배분','집중할 곳부터',
-      adv.priorities.map(function(x,i){return _pcRow(escapeHtml(String(x.level||'')),escapeHtml(String(x.name||'')),escapeHtml(String(x.why||'')),String(x.level||'').indexOf('집중')>=0);}).join('')));
-    if(Array.isArray(adv.actions)&&adv.actions.length)h.push(_pcCard('추천 액션','우선순위순 — 시기·채널·타겟·메시지·근거',
-      adv.actions.map(function(x,i){
-        var main=(x.program?'<b>'+escapeHtml(String(x.program))+'</b> · ':'')+escapeHtml(String(x.when||''))+' · '+escapeHtml(String(x.channel||''))+(x.message?' — '+escapeHtml(String(x.message)):'');
-        var sub=(x.target?'타겟: '+escapeHtml(String(x.target)):'')+(x.why?((x.target?' · ':'')+'근거: '+escapeHtml(String(x.why))):'');
-        return _pcRow(String(i+1),main,sub,i===0);
-      }).join('')));
+    if(adv.verdict)h.push(_pcCard('총론','','<div style="font-size:13px;line-height:1.75;padding-top:8px">'+escapeHtml(String(adv.verdict))+'</div>'));
+    var HZ=[['d7','앞으로 7일','당장 실행 — 빈 슬롯 지정 수준'],['d30','앞으로 30일','한 달 캠페인 축'],['d90','앞으로 90일','분기 축 — 빌드업·고객 관계']];
+    if(adv.horizons)HZ.forEach(function(z){
+      var arr=adv.horizons[z[0]];
+      if(Array.isArray(arr)&&arr.length)h.push(_pcCard(z[1],z[2],arr.map(function(x,i){return actRow(x,i,z[0]==='d7'&&i===0);}).join('')));
+    });
+    if(!adv.horizons&&Array.isArray(adv.actions)&&adv.actions.length)h.push(_pcCard('추천 액션','우선순위순',adv.actions.map(function(x,i){return actRow(x,i,i===0);}).join('')));
     if(Array.isArray(adv.avoid)&&adv.avoid.length)h.push(_pcCard('피할 것','',adv.avoid.map(function(x){return _pcRow('주의',escapeHtml(String(x)),'',false);}).join('')));
-    if(Array.isArray(adv.gaps)&&adv.gaps.length)h.push(_pcCard('부족했던 데이터','채우면 다음 조언이 좋아져요',adv.gaps.map(function(x){return _pcRow('미확보',escapeHtml(String(x)),'',false);}).join('')));
+    if(Array.isArray(adv.gaps)&&adv.gaps.length)h.push(_pcCard('부족했던 데이터','채우면 다음 브리핑이 좋아져요',adv.gaps.map(function(x){return _pcRow('미확보',escapeHtml(String(x)),'',false);}).join('')));
   }
   var when=new Date(_paState.last.at).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
   h.push('<div style="font-size:11.5px;color:var(--dim);display:flex;gap:10px;align-items:center;flex-wrap:wrap">'
-    +'<span>'+when+' 추론 · AI 조언은 데이터 기반 초안 — 실행 판단은 담당자 몫이에요</span>'
+    +'<span>'+(_paState.last.auto?'자동 브리핑(매일 08:30 생성) · ':'')+when+' 추론 · AI 조언은 데이터 기반 초안 — 실행 판단은 담당자 몫이에요</span>'
     +'<button type="button" class="btn btn--neutral btn--sm" onclick="var d=document.getElementById(\'pa-basis\');if(d)d.style.display=d.style.display===\'none\'?\'\':\'none\'">근거 데이터 보기</button></div>'
     +'<div id="pa-basis" style="display:none;white-space:pre-wrap;font-size:11.5px;line-height:1.7;color:var(--dim);margin-top:10px;border-top:1px solid var(--border);padding-top:10px"></div>');
   out.innerHTML=h.join('');
-  var bs=document.getElementById('pa-basis'); if(bs)bs.textContent=_paPackBrief(_paState.last.pack);
+  var bs=document.getElementById('pa-basis'); if(bs)bs.textContent=(r.basis?String(r.basis):'(근거 요약 없음 — 구 회차)');
 }
 
 // === 발송 슬롯 규칙 엔진 (260804 운영자 확정 + 9인 평의회) ===
@@ -27461,7 +27307,11 @@ var _memState=null,_memLoading=false,_memEscH=null,_memQT=null,_memEpoch=0;
 // [260731 운영자 "바로 안 열려요"] PII 재적재 가드를 「#member-lookup 존재」 → 「purge 에포크」로 교체.
 //   구 가드는 회원 조회 모달이 DOM에 없으면(= 회원 분포로 곧장 들어온 경우) 응답을 통째로 버려서 개요가 항상 "못 불러왔어요"였다.
 //   에포크 = _memPurge(로그아웃·유휴잠금)가 증가 → await 중 purge된 응답만 정확히 폐기(보안 의도 동일, 진입 경로 무관).
-function _memPurge(){_memState=null;_memLoading=false;_bkState=null;_bkLoading=false;_memEpoch++;_memAiHist=[];_memAiBusy=false;var bg=document.getElementById('member-lookup');if(bg){if(_memEscH){document.removeEventListener('keydown',_memEscH);_memEscH=null;}bg.remove();}var ov=document.getElementById('member-ov');if(ov)ov.remove();var inl=document.getElementById('mem-ov-inline');if(inl){_ldSweepOff(inl);inl.innerHTML='<div style="text-align:center;padding:40px;color:var(--dim);font-size:13px">세션 종료로 집계를 비웠어요</div>';}}   // [260731 4차 · 페이블 검수 HIGH] 인라인 4면(고객 분석)에 그려진 회원 집계 DOM도 소거 — 로그아웃·유휴잠금 PII 위생 동일 적용 · [260806] 스윕도 함께 걷는다(박스 직속이라 innerHTML 교체로는 안 지워진다)
+function _memPurge(){_memState=null;_memLoading=false;_bkState=null;_bkLoading=false;_memEpoch++;_memAiHist=[];_memAiBusy=false;
+  /* [260808] 고객 분류(AI 홍보 3탭) = 이름·휴대폰·관람이력이 한 표에 뜨는 자리라 같은 위생을 건다 —
+     상태(_segLast·_bkAsk)와 **이미 그려진 DOM** 둘 다 지운다. 상태만 지우면 화면의 명단은 그대로 남는다. */
+  _segLast=null;_bkAsk=null;var pc=document.getElementById('promo-check');if(pc)pc.innerHTML='';
+  var bg=document.getElementById('member-lookup');if(bg){if(_memEscH){document.removeEventListener('keydown',_memEscH);_memEscH=null;}bg.remove();}var ov=document.getElementById('member-ov');if(ov)ov.remove();var inl=document.getElementById('mem-ov-inline');if(inl){_ldSweepOff(inl);inl.innerHTML='<div style="text-align:center;padding:40px;color:var(--dim);font-size:13px">세션 종료로 집계를 비웠어요</div>';}}   // [260731 4차 · 페이블 검수 HIGH] 인라인 4면(고객 분석)에 그려진 회원 집계 DOM도 소거 — 로그아웃·유휴잠금 PII 위생 동일 적용 · [260806] 스윕도 함께 걷는다(박스 직속이라 innerHTML 교체로는 안 지워진다)
 // 선로딩(운영자 260731 "항상 바로 나오게") — 대시보드 ▸ 회원 분포 항목에 마우스만 올려도 백그라운드 적재 시작.
 //   클릭 시점엔 이미 캐시라 즉시 그려진다. 중복 발사는 _memLoading·_memState 가드로 차단(추가 API 호출 0).
 function _memWarm(){ if(userRole!=='admin')return; try{_bkWarm();}catch(e){}   /* [260804] 예매 집계도 같이 덥힌다 — 첫 예매 질문에서 「아직 안 불러왔어요」가 안 뜨게 */
@@ -27955,18 +27805,29 @@ async function _bkLoad(force){
   try{
     var d=await api('GET','/api/ops?sheet='+encodeURIComponent('예매집계')+(force?'&fresh=1':''));
     if(ep!==_memEpoch)return null;   // await 중 purge(로그아웃·유휴잠금) = PII 재적재 금지(_memLoad와 같은 규약)
-    var by={},n=0;
+    // [260808] 분포 키의 시간 축은 **두 갈래를 둘 다 받는다** — 신 `YYYYMM|장르`(6자리) · 구 `YYYY|장르`(4자리).
+    //   `260804_booking_agg.mjs`를 아직 안 돌린 시트에서도 답이 나와야 하고(연 단위 근사), 돌리는 순간
+    //   재배포 없이 월 정밀로 올라가야 한다. `ym` = 월 키를 한 개라도 봤는가 = 정밀 모드 가능 신호.
+    //   lo/hi = 데이터가 실제로 덮는 연월 범위(YYYYMM) — 「최근 N년」의 기준점이 여기서 나온다.
+    var by={},n=0,ym=false,lo=0,hi=0;
     (d&&d.rows||[]).forEach(function(r){
       var k=String(r['회원키']||'').trim();if(!k)return;
       var dist={};String(r['분포']||'').split(';').forEach(function(p){
         var i=p.lastIndexOf(':');if(i<1)return;
-        dist[p.slice(0,i)]=parseInt(p.slice(i+1),10)||0;
+        var t=p.slice(0,i),bar=t.indexOf('|');if(bar<1)return;
+        dist[t]=parseInt(p.slice(i+1),10)||0;
+        var tk=t.slice(0,bar),v=parseInt(tk,10);if(!v)return;
+        var a,b;
+        if(tk.length===6){ym=true;a=b=v;}                 // 월 키 = 그 달 하나
+        else if(tk.length===4){a=v*100+1;b=v*100+12;}     // 연 키 = 그 해 열두 달로 펴서 범위에 반영
+        else return;
+        if(!lo||a<lo)lo=a; if(b>hi)hi=b;
       });
       by[k]={n:parseInt(r['총구매'],10)||0,tix:parseInt(r['총매수'],10)||0,amt:parseInt(r['총금액'],10)||0,
              first:String(r['첫구매일']||''),last:String(r['최근구매일']||''),d:dist};
       n++;
     });
-    _bkState={by:by,n:n,ts:Date.now()};
+    _bkState={by:by,n:n,ym:ym,lo:lo,hi:hi,ts:Date.now()};
   }catch(e){ console.warn('[booking]',e); _bkState={by:{},n:0,err:String(e&&e.message||e)}; }
   finally{ _bkLoading=false; }
   return _bkState;
@@ -27994,35 +27855,236 @@ function _bkGenre(q){
   for(var k in _BK_ALIAS)if(q.indexOf(k)>=0)return _BK_ALIAS[k];
   return null;
 }
-// 한 회원의 (연도구간 × 장르) 관람 횟수
-function _bkCount(rec,yy,g){
+// 연월 정수(YYYYMM) → 사람이 읽는 표기
+function _bkYm(v){return Math.floor(v/100)+'.'+String(v%100).padStart(2,'0');}
+// 질의 → 기간 창 {lo,hi,unit,label}. unit 'm' = 연월(YYYYMM) 정밀 · 'y' = 연도 근사.
+// ⚠ 「N년 이내」의 기준점 = **오늘이 아니라 데이터 마지막 달**이다. 원장이 2020~2025인데 오늘이 2026-08이라
+//   오늘에 걸면 「3년 이내」가 2023.09~2026.08 = 실제 데이터로는 2년 4개월치만 잡혀 **조용히 짧아진다**.
+//   데이터 끝에 걸면 언제나 「최근 N년치」가 온전히 잡히고, 새 연도가 반입되면 창도 저절로 따라온다.
+function _bkWin(q){
+  var st=_bkState||{};
+  // ① 상대 구간을 먼저 본다 — 「13년 이내」의 13을 _bkYears가 2013년으로 오독하는 걸 막는 순서다.
+  var rel=q.match(/(?:최근|지난)\s*(\d+)\s*(년|개월|달)/)||q.match(/(\d+)\s*(년|개월|달)\s*(?:이내|간|동안|치)/);
+  if(rel&&st.hi)return _bkWinN(parseInt(rel[1],10),rel[2]==='년'?'년':'개월');
+  var yy=_bkYears(q);
+  if(yy)return {lo:yy[0],hi:yy[1],unit:'y',label:(yy[0]===yy[1]?yy[0]+'년':yy[0]+'~'+yy[1]+'년')};
+  return null;
+}
+// 「최근 N년/N개월」 창 만들기 — 질의 파싱과 고객 분류 탭 폼이 **같은 한 벌**을 쓴다(값이 갈리면 답이 둘이 된다)
+function _bkWinN(n,unit){
+  var st=_bkState||{};
+  if(!st.hi)return null;
+  var nu=Math.max(1,n||1),mon=(unit==='년')?nu*12:nu;
+  var ey=Math.floor(st.hi/100),em=st.hi%100,t=ey*12+(em-1)-(mon-1);
+  var sy=Math.floor(t/12),sm=t%12+1,lo=sy*100+sm;
+  if(lo<st.lo)lo=st.lo;                                   // 데이터보다 넓게 잡지 않는다(없는 기간을 있는 척하지 않음)
+  if(st.ym)return {lo:lo,hi:st.hi,unit:'m',n:nu,u:unit,label:'최근 '+nu+unit+'('+_bkYm(lo)+'~'+_bkYm(st.hi)+')'};
+  // 월 키가 아직 없는 시트(= agg 재실행 전) — 연 단위로 낮춰 근사한다. 답이 안 나오는 것보다 낫다.
+  return {lo:Math.floor(lo/100),hi:ey,unit:'y',n:nu,u:unit,approx:true,label:'최근 '+nu+unit+'('+Math.floor(lo/100)+'~'+ey+'년 · 연 단위 근사)'};
+}
+// 전 기간 라벨 — 값을 박지 않고 **실제 적재 범위**에서 만든다(데이터가 늘면 문구도 같이 따라간다)
+function _bkSpanAll(){
+  var st=_bkState||{};
+  if(!st.lo||!st.hi)return '전 기간';
+  var a=Math.floor(st.lo/100),b=Math.floor(st.hi/100);
+  return a===b?(a+'년'):(a+'~'+b+'년');
+}
+// 한 회원의 (기간창 × 장르) 관람 횟수 — 분포 키가 연(4자리)·월(6자리) 어느 쪽이든 받는다
+function _bkCount(rec,win,g){
   var c=0;
   for(var k in rec.d){
     var i=k.indexOf('|');if(i<0)continue;
-    var y=parseInt(k.slice(0,i),10),gg=k.slice(i+1);
-    if(yy&&(y<yy[0]||y>yy[1]))continue;
+    var t=k.slice(0,i),gg=k.slice(i+1);
     if(g&&gg!==g)continue;
+    if(win){
+      var v=parseInt(t,10);if(!v)continue;
+      if(t.length===6){
+        if(win.unit==='m'){ if(v<win.lo||v>win.hi)continue; }
+        else { var y6=Math.floor(v/100); if(y6<win.lo||y6>win.hi)continue; }
+      }else{
+        // 구 포맷(연 키)에 월 창을 물으면 연으로 낮춰 본다 — 경계 달을 통째로 포함한다(빠뜨리는 쪽보다 낫다)
+        if(win.unit==='m'){ var a=Math.floor(win.lo/100),b=Math.floor(win.hi/100); if(v<a||v>b)continue; }
+        else if(v<win.lo||v>win.hi)continue;
+      }
+    }
     c+=rec.d[k];
   }
   return c;
 }
 // 예매 질의 답변 — 집계 밖 질문이면 null을 돌려 기존 흐름(지역·연령 규칙 → 예울이 AI)에 양보한다.
 function _bkAnswer(q){
-  if(!/관람|구매|샀|산\s|예매|티켓|본\s*사람|보신|재구매|단골|몇\s*번|회\s*이상/.test(q))return null;
+  if(!/관람|구매|샀|산\s|예매|티켓|본\s*사람|보신|재구매|단골|몇\s*번|회\s*이상|명단|리스트|추출|뽑아/.test(q))return null;
   if(!_bkState){ _bkWarm(); return '예매 이력을 아직 안 불러왔어요 — 잠시 뒤 다시 물어봐 주세요.'; }
   if(!_bkState.n)return '예매 이력이 비어 있어요'+(_bkState.err?' ('+_memEsc(_bkState.err)+')':'')+' — 운영_예매집계 시트를 확인해 주세요.';
-  var yy=_bkYears(q),g=_bkGenre(q),by=_bkState.by;
+  var win=_bkWin(q),g=_bkGenre(q),by=_bkState.by;
   var m=q.match(/(\d+)\s*회\s*이상/)||q.match(/(\d+)\s*번\s*이상/);
   var thr=m?parseInt(m[1],10):(/재구매|단골|여러\s*번|2회|두\s*번/.test(q)?2:1);
   var hit=0,tix=0;
-  for(var k in by){var c=_bkCount(by[k],yy,g);if(c>=thr){hit++;tix+=by[k].tix;}}
-  var span=yy?(yy[0]===yy[1]?yy[0]+'년':yy[0]+'~'+yy[1]+'년'):'2020~2025년';
+  for(var k in by){var c=_bkCount(by[k],win,g);if(c>=thr){hit++;tix+=by[k].tix;}}
+  var span=win?win.label:_bkSpanAll();
   var what=(g?g+' ':'')+'공연';
   var est=Math.round(hit*_BK_SCALE);
+  _bkAsk={thr:thr,g:g,win:win};   // 「명단 보기」가 이 조건을 그대로 이어받는다(질의를 두 번 해석하지 않는다)
   return span+' '+what+'을 '+thr+'회 이상 관람한 회원은 <b>'+_memAiFmt(hit)+'명</b>이에요'
     +' · 이분들 누적 '+_memAiFmt(tix)+'매'
+    +(hit&&userRole==='admin'?'<br><button type="button" class="btn btn--primary btn--sm" style="margin-top:9px" onclick="_segFromAsk()">명단 보기</button>':'')
     +'<br><span style="font-size:11px;color:var(--dim)">※ 예매기록에 회원이 확정 연결된 '+_memAiFmt(_bkState.n)+'명 기준이라 <b>하한</b>이에요 '
     +'· 전체 구매회원으로 환산하면 약 '+_memAiFmt(est)+'명(×'+_BK_SCALE+')</span>';
+}
+
+// ===== AI 홍보 ▸ 고객 분류 (260808 운영자 「예매 데이터 × 회원 정보로 누가 예매한 건지 이름을 역으로」) — _seg* =====
+// 무엇: 예매집계(회원키 = 휴대폰 11자리) × 회원 시트(휴대폰정규화 → 이름·주소)를 맞춰 **조건에 걸린 사람 명단**을 뽑는다.
+//   조인은 이미 반입 때 끝나 있다(`260804_booking_ingest.mjs`가 회원키 열에 박아둠) — 여기서 퍼지 매칭을 다시 돌지 않는다.
+// ⚠ 이 화면은 앱에서 **개인 단위 관람 이력이 이름과 함께 표에 뜨는 유일한 자리**다:
+//   ① admin 전용(회원 조회·예매집계와 같은 게이트) ② 외부로 안 나간다 — `_bkAnswer`와 같은 로컬 전용 축이라
+//      `_yeulAiAsk`(GitHub Actions 왕복)에는 이 명단이 실리지 않는다 ③ `_memPurge`(로그아웃·유휴잠금)가 캐시와 함께 소거.
+// ⚠ 명단은 **항상 하한**이다 — 원본 휴대폰이 마스킹된 주문은 회원 연결이 안 돼(실측 연결률 57.1%) 명단에 안 뜬다.
+//   화면 아래 그 문장을 고정으로 적는다(운영자 확인 260808 「한계는 알고있음」 — 알고 쓰는 것과 안 적는 것은 다르다).
+var _bkAsk=null;
+var _segLast=null;   // 마지막 조회 결과 — CSV 내보내기가 화면과 같은 것을 쓴다(다시 계산하지 않는다)
+// 회원 휴대폰 색인 — 이름 역추출의 유일한 경로. _memState에 얹어 두면 purge 때 같이 사라진다.
+function _segMemIdx(){
+  if(!_memState||!_memState.rows||!_memState.rows.length)return null;
+  if(_memState._segIdx)return _memState._segIdx;
+  var by={};
+  _memState.rows.forEach(function(r){
+    var p=String(r['휴대폰정규화']||r['휴대폰번호']||'').replace(/\D/g,'');
+    if(p.length===11&&!by[p])by[p]=r;
+  });
+  _memState._segIdx=by;
+  return by;
+}
+// 한 사람의 장르 분포 요약 — 많이 본 순 상위 3
+function _segGenres(rec,win){
+  var g={};
+  for(var k in rec.d){
+    var i=k.indexOf('|');if(i<0)continue;
+    var t=k.slice(0,i),v=parseInt(t,10);if(!v)continue;
+    if(win){
+      if(t.length===6){ if(win.unit==='m'){ if(v<win.lo||v>win.hi)continue; } else { var y6=Math.floor(v/100); if(y6<win.lo||y6>win.hi)continue; } }
+      else { if(win.unit==='m'){ var a=Math.floor(win.lo/100),b=Math.floor(win.hi/100); if(v<a||v>b)continue; } else if(v<win.lo||v>win.hi)continue; }
+    }
+    var gg=k.slice(i+1);g[gg]=(g[gg]||0)+rec.d[k];
+  }
+  return Object.keys(g).sort(function(x,y){return g[y]-g[x];}).slice(0,3).map(function(x){return x+' '+g[x];}).join(' · ');
+}
+// 폼 인라인 문법 = 회원 조회 필터줄(openMemberLookup) **계승** — 새 클래스·새 색 0(전부 기존 토큰).
+var _SEG_IN='padding:9px 12px;border:1px solid var(--border2);border-radius:var(--r-btn);font-size:13px;font-family:inherit;background:var(--surface-solid);color:var(--text)';
+function _segViewHtml(){
+  var gopt='<option value="">장르 전체</option>'+_BK_GENRES.map(function(g){return '<option value="'+_memEsc(g)+'">'+_memEsc(g)+'</option>';}).join('');
+  return _pcCard('누가 봤는지 뽑아요','예매기록의 휴대폰을 회원 정보와 맞춰 이름까지 되찾아요',
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding-top:11px">'
+    + '<select id="seg-span" onchange="_segSpanToggle()" style="'+_SEG_IN+';width:auto"><option value="n">최근</option><option value="all">전 기간</option></select>'
+    + '<input id="seg-num" type="number" min="1" max="99" value="3" style="'+_SEG_IN+';width:62px;text-align:center">'
+    + '<select id="seg-unit" style="'+_SEG_IN+';width:auto"><option value="년">년</option><option value="개월">개월</option></select>'
+    + '<span style="font-size:12.5px;color:var(--neutral-text)">이내에</span>'
+    + '<select id="seg-genre" style="'+_SEG_IN+';width:auto;max-width:150px">'+gopt+'</select>'
+    + '<input id="seg-min" type="number" min="1" max="99" value="5" style="'+_SEG_IN+';width:62px;text-align:center">'
+    + '<span style="font-size:12.5px;color:var(--neutral-text)">회 이상 관람</span>'
+    + '<button type="button" class="btn btn--primary btn--sm" onclick="_segRun()">조회</button>'
+    + '</div>')
+    + '<div id="seg-result"></div>';
+}
+function _segSpanToggle(){
+  var sp=document.getElementById('seg-span'),all=!!sp&&sp.value==='all';
+  ['seg-num','seg-unit'].forEach(function(id){var e=document.getElementById(id);if(e){e.disabled=all;e.style.opacity=all?'.45':'';}});
+}
+async function _segRun(){
+  if(userRole!=='admin'){showToast('고객 분류는 관리자 전용이에요','error');return;}
+  var host=document.getElementById('seg-result');if(!host)return;
+  host.innerHTML='<div class="u-empty" style="padding:34px 16px;text-align:center">'+_ldHtml(16)+' 불러오는 중</div>';
+  var ep=_memEpoch;
+  try{ if(!_bkState)await _bkLoad(false); if(!_memState)await _memLoad(false); }catch(e){ console.warn('[seg]',e); }
+  if(ep!==_memEpoch)return;                         // 로딩 중 로그아웃·유휴잠금 = PII를 그리지 않는다(_bkLoad와 같은 규약)
+  host=document.getElementById('seg-result');if(!host)return;
+  if(!_bkState||!_bkState.n){host.innerHTML='<div class="u-empty" style="padding:34px 16px;text-align:center">예매 집계를 못 불러왔어요'+(_bkState&&_bkState.err?' ('+_memEsc(_bkState.err)+')':'')+'</div>';return;}
+  if(!_segMemIdx()){host.innerHTML='<div class="u-empty" style="padding:34px 16px;text-align:center">회원 시트를 못 불러왔어요 — 이름을 붙이려면 회원 정보가 있어야 해요</div>';return;}
+  var sp=document.getElementById('seg-span'),all=!!sp&&sp.value==='all';
+  var n=parseInt((document.getElementById('seg-num')||{}).value,10)||3;
+  var u=(document.getElementById('seg-unit')||{}).value||'년';
+  var g=(document.getElementById('seg-genre')||{}).value||null;
+  var thr=Math.max(1,parseInt((document.getElementById('seg-min')||{}).value,10)||1);
+  _segCompute(all?null:_bkWinN(n,u),g,thr);
+  _segRender();
+}
+// 조건 → 명단. 이름 역추출은 회원키(휴대폰) 한 번의 색인 조회뿐 — 퍼지 매칭은 반입 때 이미 끝났다.
+function _segCompute(win,g,thr){
+  var by=_bkState.by,idx=_segMemIdx(),out=[],nomem=0;
+  for(var k in by){
+    var rec=by[k],c=_bkCount(rec,win,g);
+    if(c<thr)continue;
+    var m=idx[k];
+    if(!m){nomem++;continue;}                       // 회원키가 회원 시트에 없다 = 이름을 못 붙인다(지어내지 않고 세어서 밝힌다)
+    out.push({key:k,c:c,rec:rec,m:m});
+  }
+  out.sort(function(a,b){return b.c-a.c||b.rec.tix-a.rec.tix;});
+  _segLast={rows:out,win:win,g:g,thr:thr,nomem:nomem};
+}
+function _segRender(){
+  var host=document.getElementById('seg-result');if(!host||!_segLast)return;
+  var L=_segLast,rows=L.rows,LIM=300,shown=rows.slice(0,LIM);
+  var cond=(L.win?L.win.label:_bkSpanAll())+' · '+(L.g?L.g+' ':'')+'공연 '+L.thr+'회 이상';
+  if(!rows.length){host.innerHTML=_pcCard('결과',_memEsc(cond),'<div class="u-empty" style="padding:30px 16px;text-align:center">조건에 맞는 사람이 없어요</div>');return;}
+  var th='padding:7px 10px;font-size:11.5px;color:var(--neutral-text);background:var(--neutral);text-align:left;position:sticky;top:0;white-space:nowrap';
+  var td='padding:6px 10px;font-size:12px;border-top:1px solid var(--border);white-space:nowrap';
+  var tdn=td+';font-variant-numeric:tabular-nums;text-align:right';
+  var tix=0,amt=0;rows.forEach(function(x){tix+=x.rec.tix;amt+=x.rec.amt;});
+  var head='<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:11px 0">'
+    +'<span style="font-size:12.5px;color:var(--neutral-text)"><b style="color:var(--text)">'+_memAiFmt(rows.length)+'명</b> · 누적 '+_memAiFmt(tix)+'매 · '+_memAiFmt(amt)+'원</span>'
+    +'<button type="button" class="btn btn--neutral btn--sm" style="margin-left:auto" onclick="_segCsv()">CSV 내보내기</button></div>';
+  var table='<div style="max-height:44vh;overflow:auto;border:1px solid var(--border);border-radius:var(--r-btn)">'
+    +'<table style="border-collapse:collapse;width:100%;min-width:860px">'
+    +'<tr><th style="'+th+'">이름</th><th style="'+th+'">휴대폰</th><th style="'+th+'">지역</th><th style="'+th+'">조건 관람</th><th style="'+th+'">전체 관람</th><th style="'+th+'">매수</th><th style="'+th+'">금액</th><th style="'+th+'">첫 관람</th><th style="'+th+'">최근 관람</th><th style="'+th+'">장르</th></tr>'
+    +shown.map(function(x){var m=x.m;
+      return '<tr><td style="'+td+';font-weight:700">'+_memEsc(m['이름'])+'</td>'
+        +'<td style="'+td+';font-variant-numeric:tabular-nums">'+_memEsc(m['휴대폰정규화']||m['휴대폰번호'])+'</td>'
+        +'<td style="'+td+'">'+_memEsc((String(m['주소1']||'')+' '+String(m['주소2']||'')).trim())+'</td>'
+        +'<td style="'+tdn+';font-weight:800;color:var(--accent)">'+x.c+'</td>'
+        +'<td style="'+tdn+'">'+_memAiFmt(x.rec.n)+'</td>'
+        +'<td style="'+tdn+'">'+_memAiFmt(x.rec.tix)+'</td>'
+        +'<td style="'+tdn+'">'+_memAiFmt(x.rec.amt)+'</td>'
+        +'<td style="'+td+'">'+_memEsc(x.rec.first)+'</td>'
+        +'<td style="'+td+'">'+_memEsc(x.rec.last)+'</td>'
+        +'<td style="'+td+';max-width:210px;overflow:hidden;text-overflow:ellipsis">'+_memEsc(_segGenres(x.rec,L.win))+'</td></tr>';
+    }).join('')+'</table></div>';
+  var foot='<div style="font-size:11px;color:var(--dim);padding:9px 2px 0">'
+    +(rows.length>LIM?'화면엔 상위 '+LIM+'명만 보여요 — CSV로 받으면 '+_memAiFmt(rows.length)+'명 전부 나와요 · ':'')
+    +'예매기록에 회원이 확정 연결된 '+_memAiFmt(_bkState.n)+'명 안에서 고른 결과라 <b>하한</b>이에요 — 원본 휴대폰이 가려진 주문은 이름을 못 붙여 명단에서 빠져요'
+    +(L.nomem?' · 회원 시트에서 못 찾은 회원키 '+_memAiFmt(L.nomem)+'건 제외':'')
+    +(L.win&&L.win.approx?'<br>⚠ 예매집계가 아직 연 단위라 기간이 <b>근사</b>예요 — <code>node docs/260804_booking_agg.mjs</code>를 다시 돌리면 월 단위로 정확해져요':'')
+    +'</div>';
+  host.innerHTML=_pcCard('결과',_memEsc(cond),head+table+foot);
+}
+function _segCsv(){
+  if(!_segLast||!_segLast.rows.length)return;
+  var L=_segLast;
+  var cols=['이름','휴대폰','시도','시군구','동읍면','조건관람','전체관람','총매수','총금액','첫관람일','최근관람일','장르분포'];
+  var rows=L.rows.map(function(x){var m=x.m;
+    return {'이름':m['이름']||'','휴대폰':m['휴대폰정규화']||m['휴대폰번호']||'',
+      '시도':m['주소1']||'','시군구':m['주소2']||'','동읍면':m['주소3']||'',
+      '조건관람':x.c,'전체관람':x.rec.n,'총매수':x.rec.tix,'총금액':x.rec.amt,
+      '첫관람일':x.rec.first,'최근관람일':x.rec.last,'장르분포':_segGenres(x.rec,L.win)};
+  });
+  // 파일명에 장르를 그대로 넣지 않는다 — 「발레/연극」의 `/`가 경로 구분자로 먹혀 저장이 깨진다
+  var tag=String(L.g||'전체장르').replace(/[^0-9A-Za-z가-힣]/g,'');
+  downloadCsv(tsFilename('고객분류_'+tag+'_'+L.thr+'회이상'),rowsToCsv(rows,cols));
+  showToast(_memAiFmt(rows.length)+'명 CSV로 받았어요','success');
+}
+// 예울이 답변의 「명단 보기」 → 같은 조건 그대로 이 탭으로. 질의를 두 번 해석하지 않는다(해석이 갈리면 답이 둘이 된다).
+function _segFromAsk(){
+  if(userRole!=='admin'||!_bkAsk)return;
+  var a=_bkAsk;
+  openPromoCheck();_pcTab('seg');
+  var sp=document.getElementById('seg-span'),nu=document.getElementById('seg-num'),un=document.getElementById('seg-unit'),
+      ge=document.getElementById('seg-genre'),mi=document.getElementById('seg-min');
+  if(sp)sp.value=(a.win&&a.win.n)?'n':'all';
+  if(nu&&a.win&&a.win.n)nu.value=a.win.n;
+  if(un&&a.win&&a.win.u)un.value=a.win.u;
+  if(ge)ge.value=a.g||'';
+  if(mi)mi.value=a.thr;
+  _segSpanToggle();
+  _segCompute(a.win,a.g,a.thr);   // 폼이 아니라 **질문이 만든 창** 그대로 계산 — 머리줄 문구가 실제 조건을 말한다
+  _segRender();
 }
 
 function _memAiIdx(){

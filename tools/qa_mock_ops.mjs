@@ -85,6 +85,38 @@ export const INIT_SCRIPT = `(function(){
   window.__MOCK_EXM={rows:exM,headers:Object.keys(exM[0])};
   window.__MOCK_EXD={rows:exD,headers:Object.keys(exD[0])};
 
+  // [260808] 고객 분류(AI 홍보 3탭) 목 — 예매집계 × 회원. **전부 지어낸 형태**(실데이터·PII 미접촉).
+  //   회원키 = 휴대폰 11자리(운영 규약과 같은 축)지만 010-0000-00NN 대역이라 실번호와 안 겹친다.
+  //   분포는 신 포맷 YYYYMM|장르 — 「최근 N년」 월 정밀 경로가 실제로 밟히는지 재려면 월 키가 있어야 한다.
+  //   ⚠ 이 블록은 INIT_SCRIPT 템플릿 리터럴 안이다 — 주석에도 백틱을 쓰지 마라(문자열이 거기서 끊긴다).
+  (function(){
+    var GEN=['클래식','뮤지컬','발레/연극','어린이·가족'], NM=['김가온','이서진','박도윤','최하람','정유나','강시우','조은결','윤나린','임채원','한소율','오지호','신예람'];
+    var SI=[['전남광주통합특별시','여수시','학동'],['전남광주통합특별시','순천시','조례동'],['전남광주통합특별시','광양시','중동'],['서울특별시','강남구','역삼동']];
+    var agg=[],mem=[];
+    for(var i=0;i<NM.length;i++){
+      var ph='0100000'+('0000'+i).slice(-4);
+      var loc=SI[i%SI.length];
+      mem.push({'이름':NM[i],'휴대폰정규화':ph,'주소1':loc[0],'주소2':loc[1],'주소3':loc[2],'주소4':'','우편번호':'','연령대':(20+(i%5)*10)+'대'});
+      // i가 클수록 최근에 자주 — 「최근 3년 5회 이상」이 일부만 걸리도록 층을 만든다(전건 통과 = 못 재는 목)
+      var cnt=1+i, d={}, tix=0, amt=0, first='', last='';
+      for(var j=0;j<cnt;j++){
+        var ym=202101+Math.round(rnd()*49);                 // 2021.01~2025.12 범위
+        var yy=2021+Math.floor((ym-202101)/50*5), mm2=1+((ym+j)%12);
+        var key=String(yy)+('0'+mm2).slice(-2);
+        var g=GEN[(i+j)%GEN.length];
+        d[key+'|'+g]=(d[key+'|'+g]||0)+1;
+        var day=yy+'-'+('0'+mm2).slice(-2)+'-1'+(j%9);
+        if(!first||day<first)first=day; if(day>last)last=day;
+        tix+=1+(j%3); amt+=(30000+(j%4)*20000);
+      }
+      agg.push({'회원키':ph,'총구매':String(cnt),'총매수':String(tix),'총금액':String(amt),
+        '첫구매일':first,'최근구매일':last,
+        '분포':Object.keys(d).map(function(k){return k+':'+d[k];}).join(';')});
+    }
+    window.__MOCK_BKAGG={rows:agg,headers:Object.keys(agg[0]),count:agg.length};
+    window.__MOCK_MEM={rows:mem,headers:Object.keys(mem[0]),count:mem.length};
+  })();
+
   // [260804] 예술교육 프로그램 목 — 3면 예술교육 반쪽(당해 연도 월별 일정 게이지)이 빈 상태가 아니라
   //   실제 차트를 그린 상태의 레이아웃 계약을 재도록 프로그램 시트에 t'a' 행을 준다(260805 전시 2시트 목과 같은 축).
   //   형태만 재현(실데이터·PII 미접촉): 과거·진행·예정이 섞인 4건 — 공연축(t'c') 무접촉.
@@ -113,6 +145,8 @@ export const INIT_SCRIPT = `(function(){
     if(p.indexOf('/api/ops')===0&&dp.indexOf('세부운영관리대장')>=0)return Promise.resolve(window.__MOCK_OPS);
     if(p.indexOf('/api/ops')===0&&dp.indexOf('전시마스터')>=0)return Promise.resolve(window.__MOCK_EXM);
     if(p.indexOf('/api/ops')===0&&dp.indexOf('전시일일')>=0)return Promise.resolve(window.__MOCK_EXD);
+    // ⚠ 예매집계·회원 목을 여기 넣지 마라 — 이 접근자는 페이지의 _qaApi 함수 선언에 덮여 죽는다(FEED_SCRIPT 주석 참조).
+    //   그 둘은 FEED_SCRIPT에서 window.api를 위임 래핑해 먹인다 = _bkLoad/_memLoad의 **실제 파싱 경로**를 그대로 밟는다.
     if(p.indexOf('/api/programs')===0)return Promise.resolve(window.__MOCK_PROGRAMS);
     return real?real(method,path):Promise.resolve({rows:[],headers:[],programs:[]});
   }
@@ -179,6 +213,22 @@ export const FEED_SCRIPT = `(()=>{
       var g=SIDO[Math.floor(rr()*SIDO.length)];
       mrows.push({'주소1':(rr()<0.04?'':g[0]),'주소2':g[1],'연령대':AGES[Math.floor(rr()*AGES.length)]});
     }
+    // [260808] 앞 12행 = 고객 분류(AI 홍보 3탭)용 — 이름·휴대폰정규화가 있어야 예매집계 회원키와 맞물린다.
+    //   4면 집계는 주소1·주소2·연령대만 보므로 열이 더 있어도 무해하다(한 벌로 두 화면을 먹인다).
+    if(window.__MOCK_MEM)mrows=window.__MOCK_MEM.rows.concat(mrows);
     window._memState={rows:mrows,ts:1,schemaWarn:''};
+  }
+  // [260808] 예매집계는 **window.api 위임 래핑**으로 먹인다 — _qaApi 접근자가 죽는 자리(위 주석)라
+  //   여기서 api를 감싸야 _bkLoad가 실제로 돌면서 분포 키 파싱·연/월 판별까지 그대로 측정된다.
+  //   _bkState를 직접 대입하면 재려던 그 로직을 건너뛰어 「목만 통과하는 게이트」가 된다.
+  if(typeof api==='function'&&window.__MOCK_BKAGG&&!window.__MOCK_API_WRAPPED){
+    window.__MOCK_API_WRAPPED=1;
+    var _realApi=api;
+    window.api=function(method,path){
+      var dp=decodeURIComponent(String(path||''));
+      if(dp.indexOf('/api/ops')===0&&dp.indexOf('sheet=예매집계')>=0)return Promise.resolve(window.__MOCK_BKAGG);
+      if(dp.indexOf('/api/ops')===0&&dp.indexOf('sheet=회원')>=0)return Promise.resolve(window.__MOCK_MEM);
+      return _realApi.apply(this,arguments);
+    };
   }
 })()`;
