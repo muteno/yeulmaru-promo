@@ -3437,6 +3437,94 @@ var index_default = {
         }
       }
 
+      // === 콘텐츠 제작 ▸ 보도자료 만들기 (260806 운영자) — /api/office/* 의 미러 ===
+      // 흐름은 오피스문서 편집과 같다(신설 개념 0): upload(자료 원본 커밋·선택) → dispatch(press-release)
+      //   → [Actions 가 집필 + 워드 조립 후 커밋] → /api/blog/draft 폴링(공용) → file(워드 수령).
+      // ⚠ office 와 갈리는 지점 둘:
+      //   ① 자료 원본은 **여러 개**다(출연자 프로필 여러 건) → `.src<N>.<ext>` 로 번호를 붙인다.
+      //   ② 확장자 화이트리스트가 넓다(.hwp 포함) — 운영자가 실제로 주는 프로필이 구형 .hwp라
+      //      ZIP도 PDF도 아니고, 러너의 tools/press_srcext.py 가 그걸 직접 읽는다.
+      if (url.pathname.startsWith("/api/press/")) {
+        const cfg = ghBlogCfg(env);
+        if (!cfg.pat) return json({ error: "no_github_pat", note: "Worker에 GITHUB_PAT 시크릿 미설정" }, env, 503);
+        const ghHdr = { "Authorization": "Bearer " + cfg.pat, "Accept": "application/vnd.github+json", "User-Agent": "yeulmaru-promo-worker" };
+        const prId = (v) => String(v || "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 64);
+        const prExt = (n) => { const m = String(n || "").match(/\.(hwp|hwpx|docx|pptx|pdf|txt|md)$/i); return m ? m[1].toLowerCase() : null; };
+
+        if (url.pathname === "/api/press/upload" && request.method === "POST") {
+          let b = {};
+          try { b = await request.json(); } catch (e) {}
+          const id = prId(b.id);
+          const ext = prExt(b.name);
+          const n = Math.max(0, Math.min(9, parseInt(b.n, 10) || 0));   // 자료 번호(0~9) — 경로 조작 차단
+          const b64 = String(b.b64 || "").replace(/\s/g, "");
+          if (!id) return json({ error: "id required" }, env, 400);
+          if (!ext) return json({ error: "한글·워드·PPT·PDF·텍스트(.hwp·.hwpx·.docx·.pptx·.pdf·.txt·.md)만 올릴 수 있어요" }, env, 400);
+          if (!b64) return json({ error: "빈 파일이에요" }, env, 400);
+          if (b64.length > 12e6) return json({ error: "자료가 너무 커요(8MB 이하)" }, env, 413);
+          const path = `drafts/press/${id}.src${n}.${ext}`;
+          try {
+            const gr = await fetch(`https://api.github.com/repos/${cfg.repo}/contents/${path}`, {
+              method: "PUT",
+              headers: { ...ghHdr, "Content-Type": "application/json" },
+              body: JSON.stringify({ message: `chore(press): ${id} 자료 [skip ci]`, content: b64, branch: cfg.branch })
+            });
+            if (!gr.ok) return json({ error: gr.status === 401 || gr.status === 403 ? "github_denied" : "upload_failed", status: gr.status, note: (await gr.text()).slice(0, 200) }, env, 502);
+            return json({ ok: true, id, path }, env);
+          } catch (e) {
+            return json({ error: String((e && e.message) || e) }, env, 502);
+          }
+        }
+
+        // 트리거 — 전용 event_type(press-release)이라 블로그·오피스 큐에 안 막힌다.
+        if (url.pathname === "/api/press/dispatch" && request.method === "POST") {
+          let b = {};
+          try { b = await request.json(); } catch (e) {}
+          const id = prId(b.id);
+          if (!id) return json({ error: "id required" }, env, 400);
+          const cut = (v, n) => String(v == null ? "" : v).slice(0, n);
+          const inner = {
+            id,
+            tone: cut(b.tone, 8) === "blog" ? "blog" : "press",
+            main: cut(b.main, 160),
+            hooks: (Array.isArray(b.hooks) ? b.hooks : []).slice(0, 6).map((x) => cut(x, 300)),
+            srcs: (Array.isArray(b.srcs) ? b.srcs : []).slice(0, 10).map((x) => cut(x, 160)),
+            perfs: (Array.isArray(b.perfs) ? b.perfs : []).slice(0, 12).map((x) => ({
+              name: cut(x && x.name, 160), url: cut(x && x.url, 300), detail: cut(x && x.detail, 24000)
+            })),
+            prevDraft: cut(b.prevDraft, 60000),
+            revise: cut(b.revise, 4000)
+          };
+          try {
+            const gr = await fetch(`https://api.github.com/repos/${cfg.repo}/dispatches`, {
+              method: "POST",
+              headers: { ...ghHdr, "Content-Type": "application/json" },
+              body: JSON.stringify({ event_type: "press-release", client_payload: { d: inner } })
+            });
+            if (gr.ok) return json({ ok: true, id }, env);
+            return json({ error: gr.status === 401 || gr.status === 403 ? "github_denied" : "dispatch_failed", status: gr.status, note: (await gr.text()).slice(0, 200) }, env, 502);
+          } catch (e) {
+            return json({ error: String((e && e.message) || e) }, env, 502);
+          }
+        }
+
+        // 결과 워드 — 산출은 언제나 .docx 하나라 office 처럼 확장자를 순회하지 않는다.
+        if (url.pathname === "/api/press/file" && request.method === "GET") {
+          const id = prId(url.searchParams.get("id"));
+          if (!id) return json({ error: "id required" }, env, 400);
+          try {
+            const gr = await fetch(`https://api.github.com/repos/${cfg.repo}/contents/drafts/press/${id}.out.docx?ref=${encodeURIComponent(cfg.branch)}&t=${Date.now()}`, {
+              headers: { ...ghHdr, "Accept": "application/vnd.github.raw" }
+            });
+            if (gr.status === 404) return json({ error: "not_ready" }, env, 404);
+            if (!gr.ok) return json({ error: "github " + gr.status }, env, 502);
+            return new Response(gr.body, { headers: { "Content-Type": "application/octet-stream", ...corsHeaders(env) } });
+          } catch (e) {
+            return json({ error: String((e && e.message) || e) }, env, 502);
+          }
+        }
+      }
+
       // === AI 홍보 ▸ 전략 추론(총론 브리핑) — 「AI 홍보」 대메뉴의 LLM 축(「점검」= 규칙 스캔의 짝) ===
       // [260806 운영자 확정] 자동 그날그날(크론 08:30 KST) · 총론 + 7/30/90일 · 개별 추론은 「일단 지금 필요없음」.
       // 조립·디스패치는 전부 서버(paAutoBrief — 크론과 admin 수동 실행이 같은 함수 1벌). 결과는 공용 /api/blog/draft 폴링.
