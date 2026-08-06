@@ -688,7 +688,7 @@ button{font-family:inherit;cursor:pointer}
 .prog-btn .prog-count-badge{position:absolute;top:-4px;right:-4px;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:var(--danger);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;line-height:1}
 .prog-list{max-height:50vh;overflow-y:auto;margin:8px 0 12px;padding-right:4px}
 .prog-toggle{display:flex;gap:0;background:#F0F0F5;border-radius:10px;padding:3px;margin:14px 0 4px}
-.prog-tab{flex:1;padding:7px 12px;border:none;background:transparent;color:#888;font-size:12px;font-weight:600;cursor:pointer;border-radius:8px;transition:all .15s}
+.prog-tab{flex:1;padding:7px 16px;border:none;background:transparent;color:#888;font-size:12px;font-weight:600;cursor:pointer;border-radius:8px;transition:all .15s}
 .prog-tab:hover{color:var(--text)}
 .prog-tab.active{background:var(--glass-surface);backdrop-filter:blur(8px);color:var(--accent);box-shadow:var(--glass-shadow)}
 /* === 프로그램 필터 리스트 (재작성, pf-*) === */
@@ -721,6 +721,19 @@ button{font-family:inherit;cursor:pointer}
 @keyframes skSweep{to{transform:translateX(400%)}}
 @media (max-width:768px){.cal-skel{grid-auto-rows:64px}.cal-skel .sk-b{height:7px;margin-bottom:6px}}
 @media (prefers-reduced-motion:reduce){.sk-sweep::after{animation:none}}
+/* [260806 운영자 「빗살을 창 전체에 — 창 = 저 블러 된 독립 박스」] 사업 보드 카드(머리줄+유리박스)용 스윕 자리 2종.
+   구판 = 스윕이 유리박스 **안쪽 내용칸**(패딩 18 안)에만 걸렸다 → 박스 테두리 18px 띠와 머리줄은 늘 안 쓸렸다(운영자 실측 캡처 = 「블러 박스 위 흰 박스에 국한」).
+   ⚠ 오버레이 한 장으로 두 칸을 못 덮는다: 머리줄·유리박스는 각자 backdrop-filter = **자기 자신이 절대배치 기준(containing block)**이라 자식은 그 칸을 못 벗어난다.
+     → 같은 .sk-sweep을 두 칸에 한 벌씩 같은 프레임에 삽입 = 같은 위상·같은 폭(둘 다 카드 폭) = 눈에는 띠 하나가 카드 전체를 쓸고 지나간다. */
+.sk-sweep.sk-sweep-hd{z-index:-1}                                            /* 머리줄 = 제 칸 배경 위·제목 글자 아래(음수 z — 정지한 제목이 스켈레톤처럼 번쩍이지 않게) · 클립 = 머리줄 자신의 overflow+라운드 */
+.sk-sweep.sk-sweep-gl{border-radius:0 0 var(--radius-lg) var(--radius-lg)}   /* 유리박스 = 패딩까지 전면 · 박스엔 overflow가 없으니 스윕 자신의 아래 라운드로 클립(카드 아래 두 모서리) */
+/* [260806-14 운영자 「양면이 로딩중일 때는 모든 양면을 기준해서 빗살이 쓸어가게」] 펼침 기준 스윕.
+   두 열이 동시에 로딩이면 띠의 **좌표계를 카드 → 펼침(좌 카드 왼끝~우 카드 오른끝)으로 옮긴다**:
+   폭 = 펼침 폭의 34%(정본 비율 그대로) · left = -(자기 칸 왼끝 − 펼침 왼끝) → 네 칸(좌·우 카드 × 머리줄·박스)이
+   **같은 띠 하나**를 각자 자기 자리만큼 보여주는 창이 된다. 값은 JS 실측(_ldSweepSpan)이 넣는다.
+   duration도 펼침 배수만큼 늘린다 = 초당 이동 픽셀 = 카드 한 장 때와 동일(범위만 넓어지고 템포는 안 변한다). */
+.sk-sweep.sk-span::after{left:var(--sw-x,0);width:var(--sw-w,34%);animation-duration:var(--sw-dur,1.5s)}
+.sk-sweep.sk-rst::after{animation:none}   /* 위상 재장전용 1프레임 표식 — 두 열의 띠가 같은 시각에 출발해야 「띠 하나」로 보인다 */
 /* 캘린더 로딩 중앙 표시 — 판매 레일과 동일 강조색 dots+문구(운영자 260708). accent+opacity.75(계승) */
 .cal-skel .cal-load-msg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--accent);opacity:.75;font-size:14px;font-weight:600;z-index:2;pointer-events:none}
 /* 요일 바 배경 .43→.9: 스크롤 시 밑을 지나는 셀 비침 차단(운영자 260707 버그 신고 — 일정관리 thead 불투명화 전례 계승, 흰 alpha 변주 §3.5②) */
@@ -1179,11 +1192,15 @@ table.promo-board-table th:last-child .col-resize-handle{display:none}
    `.modal`의 1px 테두리는 `var(--glass-border)` = 흰 알파 .55다. 흰 표면 위에서는 유리 가장자리로 읽히지만
    **머리줄(코발트)이 덮인 위쪽 한 변**에서는 밴드 위를 지나는 흰 실선으로 보인다(밴드는 padding 상쇄라
    테두리 바깥까지는 못 덮는다 — margin은 border를 가릴 수 없다).
-   → 머리줄이 있는 모달만 **윗변 테두리 색을 밴드와 같은 `var(--accent)`**로 = 상단이 한 덩어리 코발트.
-   좌·우·아래 유리 테두리는 그대로(신규 색 0 · 이미 밴드가 쓰는 토큰 계승).
+   [260805-35 운영자 「상단 양옆에 흰색으로 좀 실선처럼 보이는 것도 정상적으로 **음영만** 보이게」]
+   1차는 **윗변 색만** 밴드색으로 바꿨는데, 그러면 좌·우 변이 밴드 높이만큼 **코발트 옆을 지나는 흰 실선**으로 남는다.
+   테두리는 길이의 일부만 색을 달리할 수 없고(border-image는 모서리 반경을 못 따른다), 밴드가 덮을 수도 없다
+   (margin은 border를 못 가리고 `overflow`도 패딩박스에서 잘린다) → **테두리를 없애고 그림자만 남긴다**.
+   `.modal`은 `box-sizing:border-box`라 겉 크기는 그대로고, 가장자리는 이미 있는 `box-shadow`(음영)가 진다
+   = 신규 값 0 · 갈래 0(윗변만 다른 색이던 예외도 같이 사라진다).
    `!important` = 연간 일정 셸(`.annual-modal`)이 `border:… !important`로 테두리를 통째로 다시 선언해 둬서,
-   그 한 곳 때문에 규칙을 두 군데로 쪼개지 않으려는 것(자리별 재타이핑 금지 · 실측 es1에서 이 한 곳만 흰 실선으로 남았다). */
-.modal:has(>.mhead){position:relative;border-top-color:var(--accent)!important}
+   그 한 곳 때문에 규칙을 두 군데로 쪼개지 않으려는 것(자리별 재타이핑 금지). */
+.modal:has(>.mhead){position:relative;border:0!important}
 /* [260805-31 광학 정렬 실측] `top:14px` → **18px** — 밴드 안 흐름 버튼은 `.mhead`의 padding-top(18)에서 시작하는데
    절대배치 X만 14였다. 잉크 무게중심 실측에서 X가 제목보다 **4.2~4.7px 위로** 떠 있던 원인이 정확히 이 4px다.
    `top:50%`(밴드 중심)도 틀렸다 — 절대배치의 기준은 밴드가 아니라 **모달 전체**라 키 큰 보드에서는 X가
@@ -2338,7 +2355,7 @@ table.promo-board-table thead th:last-child{border-top-right-radius:11px}
      안에서 가로 스크롤한다(정본 = _yrmTable의 표 감싸개). 실측: 1220~1920 전 구간 바 스윙 0.0px · 문서 가로 넘침도 0.
    biz(대시보드) 모드로만 한정 = 캘린더 모드(레일 숨김·전체 폭)는 종전 거동 그대로(회귀 0). */
 #app.biz-mode #main-area{min-width:0}
-@media(max-width:1200px){#sales-rail{display:none}}
+@media(max-width:1364px){#sales-rail{display:none}}   /* [260807-10] 2열 하한 `_BIZ_WIDE_MIN`(1365)의 CSS 짝 — JS는 「≥1365 = 2열」, 여기는 「≤1364 = 레일 숨김」. 둘이 어긋나면 레일만 뜬 반쪽 레이아웃이 된다(게이트 tools/check_wide_threshold.py가 대조) */
 /* [260731 운영자] 캘린더 모드 = 판매 레일 없음 — 「캘린더 누를 때 사업 판매현황이 있을 필요가 없다」.
    260708 판매 레일 도입(PR 139) 이전 화면 복원: 캘린더가 전체 폭을 쓰고, 날짜 클릭 시 우측 360px 사이드바(#panel)가 살아나며 캘린더가 그만큼 밀린다(_panelRailReflow).
    레일 마크업·데이터·렌더러(.srail/#srail-uha/#rail-yrm)는 전부 보존 — biz(대시보드) 모드에선 그대로 노출되고, 판매현황 전체 보드는 nav 「판매 현황」이 담당. */
@@ -2725,6 +2742,16 @@ html::-webkit-scrollbar-thumb{background:rgba(0,0,0,.15)}
        본문 _bizZoomApply·리사이즈·모드전환이 같은 함수를 재사용한다(값 이원화 금지). script 요소는 UA display:none = 부모 flex 항목 아님.
        _mainView는 아직 선언 전(뒤 스크립트 블록) → sessionStorage 원본(mvView)에서 같은 규칙으로 읽는다. */
     var _BIZ_ZOOM_STEPS=[.25,.33,.5,.67,.75,.8,.9,1,1.1,1.25,1.5,1.75,2,2.5,3,4,5];   // 크로미움 페이지 줌 단계
+    /* [260807-10 운영자 승인 「다 배선」] 대시보드 **2열 하한** = 이 한 곳이 정본(구 1200 · 8곳에 흩어져 있던 매직넘버).
+       왜 올렸나: 2열은 화면을 반으로 갈라 쓰는데 그 반쪽 칸이 「판매현황 상세」 표(바닥폭 612.5px)보다 좁으면
+       맨 오른쪽 매출 열이 카드 밖으로 밀려 통째로 사라진다 — 게다가 `.ry-grp-bd::-webkit-scrollbar{height:0}`(L2341 아래)라
+       넘쳤다는 신호도 손잡이도 없다. 실측(무패치 스윕 · tools/scratch/probe_wide_threshold.mjs):
+         1201 넘침 82px · 1280 43 · 1340 13 · 1360 3 · 1364 1 · **1365 = 0**(매출 열 복귀) → 하한 = 1365.
+       ⚠ 리포트 1판의 「1281」은 **그 뒤 260807-7 열 간격 확대(_colGap 12→22 · 5열)로 표가 42px 넓어지기 전** 수치다.
+         승인된 건 「잘림이 없어지는 폭까지 올린다」이므로 낡은 숫자가 아니라 다시 잰 값을 쓴다.
+       여기(첫 페인트 전 블록)에 두는 이유 = 바로 아래 _bizZoomTarget이 본문 스크립트보다 먼저 실행된다(값 이원화 금지).
+       짝 = 레일 숨김 미디어쿼리(L2341 · max-width 1364px = 이 수의 여집합) — 게이트 tools/check_wide_threshold.py가 둘을 대조한다. */
+    var _BIZ_WIDE_MIN=1365;
     /* [260801] 브라우저 줌 배율 추정 — outerWidth는 페이지 줌에 영향받지 않는 창 폭이라 outerWidth/innerWidth ≈ 줌 배율.
        창 테두리·스크롤바 오차(~1%)는 실제 줌 단계로 스냅해 흡수하고, 어느 단계와도 6% 밖이면 보정을 포기(=1)해 오작동보다 무보정을 택한다. */
     function _bizBrowserZoom(){
@@ -2734,11 +2761,11 @@ html::-webkit-scrollbar-thumb{background:rgba(0,0,0,.15)}
       for(var i=0;i<_BIZ_ZOOM_STEPS.length;i++){ var s=_BIZ_ZOOM_STEPS[i], d=Math.abs(raw-s)/s; if(d<bd){bd=d;best=s;} }
       return bd<=.06?best:1;
     }
-    /* 목표 줌 = 브라우저 줌 배율만 상쇄(100% = 1 → 확대 없음·종전 유동 레이아웃) · 캘린더 모드·좁은 폭(≤1200)은 해제 */
+    /* 목표 줌 = 브라우저 줌 배율만 상쇄(100% = 1 → 확대 없음·종전 유동 레이아웃) · 캘린더 모드·좁은 폭(2열 하한 미만)은 해제 */
     function _bizZoomTarget(){
       var v='biz';
       try{ v=(typeof _mainView!=='undefined'&&_mainView)?_mainView:(sessionStorage.getItem('mvView')==='cal'?'cal':'biz'); }catch(_e){}
-      if(v!=='biz'||window.innerWidth<=1200)return 1;
+      if(v!=='biz'||window.innerWidth<_BIZ_WIDE_MIN)return 1;
       var z=Math.max(.75,Math.min(2.2,1/_bizBrowserZoom()));   // 클램프 = 과축소 가독 하한 .75 / 상한 2.2
       z=Math.round(z*1000)/1000;
       return Math.abs(z-1)<.003?1:z;
@@ -5270,7 +5297,7 @@ function openAdminPanel(){
   // 하단 펫 표시 토글 = 관리자(매니저) 노출. Worker POST가 checkAdmin(슈퍼 OR 서브admin PIN)로 정합 · 이 레포는 슈퍼admin 개념 폐기(role==='admin' 통일)라 admin=서브admin(PIN 보유) · openAdminPanel 자체가 admin 전용 · 분신술 재검증 260711(구 슈퍼전용 게이트 = 전원 미노출 오류 교정)
   var _petTogAdmin=(typeof userRole!=='undefined' && userRole==='admin');
   var _petTogHtml=_petTogAdmin?'<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:10px"><div><div style="font-weight:700;font-size:13px">캘린더 하단 펫 표시</div><div style="font-size:11px;color:var(--dim)">공차는 애·크랩·LOVE 3마리 랜덤 등장 · 전역설정</div></div><label style="display:inline-flex;align-items:center;cursor:pointer;flex:0 0 auto"><input type="checkbox" id="pet-vis-toggle" onchange="_petToggle(this.checked)" style="width:18px;height:18px;cursor:pointer;accent-color:var(--accent);margin:0"></label></div>':'';
-  const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeAdminPanel)"><div class="modal admin-modal" style="width:520px;position:relative"><button class="modal-x" onclick="closeAdminPanel()" title="닫기" aria-label="닫기">✕</button>'+_mhead('관리자 패널','관리할 항목을 골라 주세요')+'<div class="admin-modal-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+items.map(it=>'<button class="admin-item" data-id="'+it.id+'" style="text-align:left;padding:14px;border:1px solid rgba(0,0,0,0.08);border-radius:12px;background:#fff;cursor:pointer;transition:all .15s"><div style="font-weight:700;font-size:14px;margin-bottom:4px">'+it.label+'</div><div style="font-size:11px;color:#888">'+it.desc+'</div></button>').join('')+'</div>'+_petTogHtml+'</div></div>';
+  const html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeAdminPanel)"><div class="modal admin-modal" style="width:520px;position:relative"><button class="modal-x" onclick="closeAdminPanel()" title="닫기" aria-label="닫기">✕</button>'+_mhead('관리자 패널','관리할 항목을 골라 주세요')+'<div class="admin-modal-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+items.map(it=>'<button class="admin-item" data-id="'+it.id+'" style="text-align:left;padding:14px;border:1px solid var(--border);border-radius:12px;background:var(--surface-solid);cursor:pointer;transition:all .15s"><div style="font-weight:700;font-size:14px;margin-bottom:4px">'+it.label+'</div><div style="font-size:11px;color:#888">'+it.desc+'</div></button>').join('')+'</div>'+_petTogHtml+'</div></div>';
   let el=document.getElementById('admin-panel');
   if(!el){el=document.createElement('div');el.id='admin-panel';document.body.appendChild(el);}
   el.innerHTML=html;
@@ -5971,8 +5998,8 @@ function _srailEls(){ return { body:document.getElementById('srail-body'), cnt:d
 // [260725 운영자] "100% 화면 기준으로 스크롤 안 내려도 다 보이게" — 대시보드 전체가 뷰포트를 넘으면 그만큼 차트를 줄인다.
 // 줄이는 대상 = 「연도별 관람·수강 추이」 차트 하나뿐(KPI·실적표·목록은 값이라 못 줄인다). 최소 240px까지만 줄이고 그 아래로는 안 내린다.
 // 넘치는 양 = documentElement.scrollHeight - innerHeight (QA 배너·챗봇 FAB는 position:fixed라 안 잡힌다). 좌를 줄이면 우가 따라오므로 2패스면 수렴한다.
-// 레일이 숨는 좁은 폭(≤1200)에선 세로로 쌓이는 구조라 미적용(그 경우엔 스크롤이 정상).
-// [260731 운영자 "줌 배율 따라 레이아웃 규격이 따로 논다"] 대시보드 규격 고정 — biz 모드(레일 표시 폭 >1200)에서 #body-wrap에
+// 레일이 숨는 좁은 폭(2열 하한 `_BIZ_WIDE_MIN` 미만)에선 세로로 쌓이는 구조라 미적용(그 경우엔 스크롤이 정상).
+// [260731 운영자 "줌 배율 따라 레이아웃 규격이 따로 논다"] 대시보드 규격 고정 — biz 모드(레일 표시 폭 = 2열 하한 이상)에서 #body-wrap에
 //   CSS zoom = 뷰포트폭/1920 을 걸어 항상 1920 기준 디자인 공간에서 레이아웃한다. 100%(FHD) = z1 → 종전과 완전 동일(무변),
 //   브라우저 80% 축소 = z1.25 → 물리 렌더가 100% 화면과 동일 구도(차트 상한 걸림·하단 여백·"확대하면 오히려 작아짐" 역전 해소).
 //   좌표계 실측(Chrome 141, probe): gBCR=시각좌표(×z) · offsetWidth/clientWidth/scrollTop/computedStyle=레이아웃 단위(비스케일) ·
@@ -6247,7 +6274,7 @@ function _srailAlignTop(){
           _rl.style.height=_nw+'px'; _rl.style.maxHeight=_nw+'px';
         }
       } else if(_rl&&_live){
-        // 이젤 꺼짐(좁은 화면 폭 1200 초과~낮은 높이 등) = 박스가 자연 높이 → 종전(260731) 좌 앵커 공식 그대로(회귀 0)
+        // 이젤 꺼짐(2열 하한 미만~낮은 높이 등) = 박스가 자연 높이 → 종전(260731) 좌 앵커 공식 그대로(회귀 0)
         try{ _rlCard.style.marginBottom=''; }catch(_em2){}   // [260802f] 이젤 전용 여백 0 규약 해제(자연 높이 모드는 정본 14 그대로)
         var _ctEl=_rlCard.querySelector('.ct'), _ctH=_ctEl?_ctEl.getBoundingClientRect().height:0;
         var _tgt=_boxed?_rbox:_rlCard;   // 하단선을 좌 앵커에 붙일 우측 대상
@@ -6391,6 +6418,7 @@ function _srailAlignTop(){
       if(calBoxH>0)srailBox.style.maxHeight=calBoxH+'px';
     }
   }
+  try{ _ldSweepSpan(); }catch(_e){}   // [260806-14] 정렬이 확정된 그 좌표로 펼침 기준 스윕 재계산(리사이즈·줌·폰트 도착·면 넘김 전부 이 함수를 지난다)
 }
 var _srailExErr=false;   // 전시 시트 로드 실패 표시(공연은 살리고 전시만 생략 — 목록 하단 정직 표기)
 var _srailChartW=0;      // [260710 운영자 "차트 늘어짐"] 카드/드릴 SVG를 실측 픽셀 폭으로 생성(비례 확대·글자 왜곡 제거) — 렌더 시 갱신, resize 시 재렌더
@@ -6398,9 +6426,9 @@ function _srailInit(force,_fetchGate,allowNarrow){
   if(typeof _salesState==='undefined'||!_salesState)return;   // 부트 파싱중 방어(분신술 4호 HIGH — initApp의 setTimeout과 이중 안전)
   var els=_srailEls(); if(!els.body)return;
   _srailArmResize();
-  // 레일이 숨는 폭(≤1200px)에선 데이터도 안 당긴다(모바일 낭비 방지, 분신술 1호 LOW) — 넓어지면 resize에서 1회 재시도
+  // 레일이 숨는 폭(2열 하한 `_BIZ_WIDE_MIN` 미만)에선 데이터도 안 당긴다(모바일 낭비 방지, 분신술 1호 LOW) — 넓어지면 resize에서 1회 재시도
   // [260731 4차] 예외 = allowNarrow(책 2면 「판매 실적」이 좁은 화면에서 좌 보드로 나올 때) — 6시트 파이프라인은 이 한 곳만 쓴다(제2 fetch 경로 금지 · 페이블 검수 4)
-  if(window.innerWidth<=1200&&!allowNarrow)return;
+  if(!_bizBookWide()&&!allowNarrow)return;
   _srailAlignTop();
   // 전시 캐시 = 분석 보드와 공유(_anaState._exDaily/_exMaster) — 레일이 선채우면 분석 보드 전시 탭도 즉시 열림
   _anaState=_anaState||{screen:1,cat:'공연',genre:'전체',year:null,drillName:null,xstep:3,cmp:{tray:[],bars:false}};
@@ -6472,22 +6500,22 @@ function _srailArmResize(){
     _srailAlignTop();
     try{_bizFitViewport();}catch(_e){}   // [260725 운영자] 창 크기 바뀌면 한 화면에 다시 맞춘다 · [260802e] 이젤(박스 높이) 재고정 **후** 맞춰야 새 박스 기준(순서 이동) + 시즌 차트도 동축
     try{_bizFitSeason();}catch(_e){}
-    if(window.innerWidth<=1200)_srailCarStop();   // 레일 CSS 숨김되면 캐러셀 전역 리스너·타이머 철거(감사2 LOW — 숨은 레일 유휴 리스너 잔존 방지)
-    if(window.innerWidth>1200&&_salesState&&!_salesState.daily&&!_srailBusy)_srailInit();
-    // [260731 4차] 1200 경계 넘나듦 = 책 판형 전환(펼침 2면 ↔ 한 면) — 좌·우 열 재렌더(면 매핑·점줄 개수·바 중앙이 판형에 묶여 있다)
+    if(!_bizBookWide())_srailCarStop();   // 레일 CSS 숨김되면 캐러셀 전역 리스너·타이머 철거(감사2 LOW — 숨은 레일 유휴 리스너 잔존 방지)
+    if(_bizBookWide()&&_salesState&&!_salesState.daily&&!_srailBusy)_srailInit();
+    // [260731 4차] 2열 하한 경계 넘나듦 = 책 판형 전환(펼침 2면 ↔ 한 면) — 좌·우 열 재렌더(면 매핑·점줄 개수·바 중앙이 판형에 묶여 있다)
     try{ var _bw=_bizBookWide(); if(window._bookWideLast===undefined)window._bookWideLast=_bw; if(_bw!==window._bookWideLast){ window._bookWideLast=_bw; if(typeof _mainView!=='undefined'&&_mainView==='biz')_bizBookRender(); } }catch(_e){}
-    if(typeof panelOpen!=='undefined'&&panelOpen)_panelRailReflow();   // 1200px 경계 리사이즈 시 열린 패널 폭 stale 방지(분신술 1호 LOW)
+    if(typeof panelOpen!=='undefined'&&panelOpen)_panelRailReflow();   // 2열 하한 경계 리사이즈 시 열린 패널 폭 stale 방지(분신술 1호 LOW)
     // [260710] 차트 = 실측 폭 렌더 → 폭이 24px 이상 변하면 디바운스 재렌더(글자 왜곡 없는 1:1 유지)
     clearTimeout(window._srailRzT);
     window._srailRzT=setTimeout(function(){
       var b=_srailEls().body; if(!b)return;
-      if(window.innerWidth>1200&&_salesState&&_salesState.daily&&Math.abs((_srailChartW||0)-((b.clientWidth||0)-56))>24)_srailRender();
+      if(_bizBookWide()&&_salesState&&_salesState.daily&&Math.abs((_srailChartW||0)-((b.clientWidth||0)-56))>24)_srailRender();
     },200);
   });
 }
 // 날짜 패널 위치 계산 — resize·모드전환 공용.
 //  · 레일이 보일 때(biz 모드) = 기존대로 캘린더 위 오버레이. 패널 오른쪽 끝을 레일 왼쪽 경계에 맞추고 main-area는 안 밀림(운영자 260708).
-//  · 레일이 숨을 때(캘린더 모드·≤1200) = 구(260708 이전) 우측 사이드바 복원. 패널이 우측 끝에 서고 캘린더(main-area)가 360px 밀린다(운영자 260731).
+//  · 레일이 숨을 때(캘린더 모드 · 2열 하한 미만) = 구(260708 이전) 우측 사이드바 복원. 패널이 우측 끝에 서고 캘린더(main-area)가 360px 밀린다(운영자 260731).
 //    ≤768 모바일은 CSS가 하단시트 + main-area margin-right:0 !important로 승 — 여기 값은 무시된다.
 function _panelRailReflow(){
   var p=document.getElementById('panel'); if(!p)return;
@@ -6596,7 +6624,7 @@ function _mvApply(noRail){
   if(noRail)return;   // initApp 부트 = 레일 fetch는 기존 게이트(_calP 뒤 _srailInit)가 담당 — 네트워크 우선권(260711) 불변
   // 레일 콘텐츠 = 모드에 맞게 재구성(카드 ⇄ 표). 데이터 있으면 즉시, 없으면 기존 로딩 플로우가 채움.
   if(typeof _salesState!=='undefined'&&_salesState&&_salesState.daily&&_salesState.master&&!_srailBusy){ try{_srailRender();}catch(_e){} }
-  else if(window.innerWidth>1200&&typeof _salesState!=='undefined'&&_salesState&&!_salesState.daily&&!_srailBusy){ try{_srailInit();}catch(_e){} }
+  else if(_bizBookWide()&&typeof _salesState!=='undefined'&&_salesState&&!_salesState.daily&&!_srailBusy){ try{_srailInit();}catch(_e){} }
 }
 // 우측 판매현황 컴팩트 표 — 분석 보드 스크린1(.ana-tbl) 계승 · 정렬 = 공연일 순(운영자: 날짜순) · 서브 1줄 = 장소(프로그램 시트 l) · 2줄 = 일시·장르 · 행 클릭 = 레일 인라인 드릴(기존).
 // 색 = 대표 토큰만(--green/--danger/--dim — 모달의 동결 초록·회색 리터럴은 신규 사용 금지 §0④).
@@ -6769,13 +6797,13 @@ function _yrmTable(){
 }
 // ── [260731 운영자 4차] 대시보드 = 「책 4면」 ────────────────────────────────────────────
 // 면 = 1 연간 실적 · 2 판매 실적(구 우측 레일 '판매 현황' 개명) · 3 사업 결과 비교(구 좌 2면 '사업 현황') · 4 고객 분석(구 '회원 분포' 인라인化 · admin 전용 — 비admin은 3면 책).
-// 넓은 화면(>1200, 레일 노출) = 펼침 2면씩: 펼침1=[1|2](현행 배치 그대로), 펼침2=[3|4] — 좌 #biz-main=홀수면 · 우 #rail-yrm=짝수면, 넘김은 두 열이 같이(책넘김).
-// 좁은 화면(≤1200, 레일 숨김) = 1→2→3→4 한 면씩.
+// 넓은 화면(2열 하한 `_BIZ_WIDE_MIN` 이상, 레일 노출) = 펼침 2면씩: 펼침1=[1|2](현행 배치 그대로), 펼침2=[3|4] — 좌 #biz-main=홀수면 · 우 #rail-yrm=짝수면, 넘김은 두 열이 같이(책넘김).
+// 좁은 화면(하한 미만, 레일 숨김) = 1→2→3→4 한 면씩.
 // 하단 바 = 1개(#bizm-dots-row) — 넓을 땐 펼침 전체(두 열)의 가운데(_srailAlignTop이 translateX 보정), 좁을 땐 좌 보드 가운데.
 //   [260805 2차~260808] 넓은 화면 점 = **슬라이드 자리 1개 점등**(구 「펼침 두 면 동시 점등」 폐지 · 점 수 = _BIZ_SLIDES 칸 수 = admin 5·비admin 4).
 //   우 레일 하단 점줄 바(.srail-uha-bar)는 260731 폐지 — 사업 넘김은 상세 카드 헤더 ‹ n / N ›(별도 축).
 function _bizBookN(){ return (typeof userRole!=='undefined'&&userRole==='admin')?4:3; }
-function _bizBookWide(){ return window.innerWidth>1200; }
+function _bizBookWide(){ return window.innerWidth>=_BIZ_WIDE_MIN; }   // [260807-10] 값은 _BIZ_WIDE_MIN 한 곳(첫 페인트 전 블록) — 폭 비교는 앱 전체가 이 함수만 부른다(구 `innerWidth>1200` 산재 8곳 청산)
 // [260801 운영자] 면 성격 — 'pin' = 우 열 고정면(2 판매 실적, 넘김에 안 흔들린다) · 'solo' = 좌 열만 촤르르(우는 그대로 2)
 //   · 'pair' = 내용이 한 열에 안 들어가 n-1/n-2로 자른 면 = 두 열이 「짝수단위로 같이」 바뀐다(좌 n-1 · 우 n-2).
 //   운영자 지시 원문: "2는 고정이니 1만 책넘기듯이 촤르르 · 흰색 부분에 나올게 많으면 3-1, 3-2개념으로 자를게 · -n으로 엮인거는 짝수단위로 같이".
@@ -6972,6 +7000,7 @@ function _bizmAnimate(cols){
 //   높이 애니가 필요하면 `_srailAlignTop`이 그 값을 안 재도록 먼저 분리해야 한다(별건).
 function _bizmSwap(el,html){
   if(!el)return false;
+  _ldSpanSoon();   // [260806-14] 이 함수의 **모든 출구**(통째 교체 폴백 포함) 뒤 rAF에 돈다 — 로딩 칸이 늘거나 준 뒤 펼침 기준 재계산
   var oH=el.querySelector('[data-bizmhead]'), oB=el.querySelector('[data-bizmbox]');
   if(!oH||!oB){ el.innerHTML=html; return false; }                    // 첫 렌더(프레임 없음) = 통째로
   var tmp=document.createElement('div'); tmp.innerHTML=html;
@@ -7077,7 +7106,71 @@ function _bizWheelInit(){
   });
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',_bizWheelInit);else _bizWheelInit();
-function _bizmHead(right,title,sub){
+// ── [260806 운영자 「빗살 로딩, 창 전체에 — 창 = 저 블러 된 독립 박스」] 보드 로딩 정본 ─────────────────
+// 스윕 = 카드 한 장 **전면**(머리줄 + 유리박스 전면 · 패딩까지). 두 칸에 한 벌씩 넣는 이유·클립은 CSS .sk-sweep-hd/-gl 주석 참조.
+// 4번째 인자(ld)를 켠 _bizmHead + _ldGlass(본문)가 한 쌍 — 세 자리(2·3·4면 로더)가 같은 빌더를 쓴다(인라인 재타이핑 금지).
+var _SK_HD='<div class="sk-sweep sk-sweep-hd" aria-hidden="true"></div>';
+var _SK_GL='<div class="sk-sweep sk-sweep-gl" aria-hidden="true"></div>';
+// 유리박스 안 로딩 본문 = 전면 스윕 + 정중앙 문구. id = 도착 감지 마커(선택) · minh = 이젤 꺼짐(좁은 화면 = 박스 자연높이) 폴백.
+//   height:100% = 이젤 고정 박스의 내부높이를 채워 문구가 세로 정중앙(260802g 규약 그대로) · 스윕은 박스 직속이라 문구칸 밖(패딩)까지 쓴다.
+function _ldGlass(msg,id,minh){
+  return _SK_GL+'<div'+(id?' id="'+id+'"':'')+' style="position:relative;height:100%;min-height:'+(minh||260)+'px">'
+    +'<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--accent);opacity:.75;font-size:14px;font-weight:600">'+_ldHtml(16)+msg+'</div></div>';
+}
+// 스윕 걷기 — 유리박스 **안쪽만** 갈아끼우는 경로(_memOvRender·오류 카드·세션 소거)용.
+//   프레임을 통째로 다시 그리는 경로(_bizmSwap)는 머리줄·박스 innerHTML을 새로 받아 스윕이 저절로 사라진다 = 부를 필요 없음.
+function _ldSweepOff(node){
+  try{
+    var bx=(node&&node.closest)?node.closest('[data-bizmbox]'):null; if(!bx)return;
+    var card=bx.parentNode||bx, ss=card.querySelectorAll('[data-bizmhead]>.sk-sweep,[data-bizmbox]>.sk-sweep');
+    for(var i=0;i<ss.length;i++)ss[i].parentNode.removeChild(ss[i]);
+    _ldSpanSoon();   // 참여 칸이 줄었다 = 펼침 기준 해제(한 열만 로딩이면 다시 카드 기준)
+  }catch(_e){}
+}
+// ── [260806-14 운영자 「양면이 로딩중일 때는 모든 양면을 기준해서 빗살이 쓸어가게」] ─────────────────
+// **두 열이 동시에 로딩일 때만** 띠의 기준을 카드 → 펼침으로 넓힌다(한 열만 로딩 = 종전 카드 기준 그대로).
+//   좌 카드 왼끝~우 카드 오른끝을 한 벌의 좌표계로 삼고, 네 칸(좌·우 × 머리줄·박스)에 **같은 띠**를 심는다
+//   = 눈에는 띠 하나가 펼침 전체를 가로지른다(칸 사이 빈 곳은 유리가 없어 안 보일 뿐 같은 여정).
+// ⚠ 위상 = 같은 시각 출발이어야 한 줄로 보인다 — 참여 칸이 바뀐 순간에만 .sk-rst 한 프레임으로 전원 재장전
+//   (매 패스 재장전하면 정렬 재계산 때마다 띠가 튄다).
+// ⚠ 좌표는 gBCR = **시각좌표(×zoom)** → CSS px(디자인 단위)로 넣으려면 전부 /_z 환산(biz 분기 정본 규약).
+function _ldSpanSoon(){ try{ if(typeof requestAnimationFrame==='function')requestAnimationFrame(_ldSweepSpan); else _ldSweepSpan(); }catch(_e){} }
+function _ldSweepSpan(){
+  try{
+    var all=document.querySelectorAll('#biz-main .sk-sweep,#rail-yrm .sk-sweep');
+    var list=[], hasL=0, hasR=0;
+    for(var i=0;i<all.length;i++){
+      var el=all[i]; if(el.offsetParent===null)continue;
+      var r=el.getBoundingClientRect(); if(!(r.width>1))continue;
+      list.push({el:el,r:r});
+      if(el.closest('#biz-main'))hasL=1; else hasR=1;
+    }
+    var both=hasL&&hasR;
+    var key=both?('S'+list.length):'';
+    if(!both){
+      for(var j=0;j<list.length;j++){ var e0=list[j].el; e0.classList.remove('sk-span'); e0.style.removeProperty('--sw-x'); e0.style.removeProperty('--sw-w'); e0.style.removeProperty('--sw-dur'); }
+      window._ldSpanKey=key; return;
+    }
+    var z=(typeof _bizZ==='function')?(_bizZ()||1):1;
+    var L=Infinity, R=-Infinity, W=0;
+    list.forEach(function(o){ if(o.r.left<L)L=o.r.left; if(o.r.right>R)R=o.r.right; if(o.r.width>W)W=o.r.width; });
+    var S=(R-L)/z, Wc=W/z;
+    if(!(S>0)||!(Wc>0))return;
+    list.forEach(function(o){
+      o.el.style.setProperty('--sw-w',(Math.round(S*0.34*10)/10)+'px');            // 정본 비율 34% — 기준만 펼침으로
+      o.el.style.setProperty('--sw-x',(Math.round((L-o.r.left)/z*10)/10)+'px');    // 자기 칸을 펼침 좌표계로 밀어 맞춤
+      o.el.style.setProperty('--sw-dur',(Math.round(1.5*S/Wc*100)/100)+'s');       // 초당 이동 픽셀 = 카드 한 장 때와 동일
+      o.el.classList.add('sk-span');
+    });
+    if(key!==window._ldSpanKey){                                                   // 참여 칸 변화 = 위상 재장전 1회
+      window._ldSpanKey=key;
+      list.forEach(function(o){ o.el.classList.add('sk-rst'); });
+      void document.body.offsetWidth;                                              // 리플로우 1회 = 애니 재장전(_bizmAnimate와 같은 관용구)
+      list.forEach(function(o){ o.el.classList.remove('sk-rst'); });
+    }
+  }catch(_e){ console.warn('[ld span]',_e); }
+}
+function _bizmHead(right,title,sub,ld){
   return '<div data-bizmhead style="display:flex;align-items:center;gap:10px;min-height:47px;padding:1px 18px 0;background:rgba(255,255,255,.9);backdrop-filter:blur(11px);-webkit-backdrop-filter:blur(11px);border:1px solid var(--glass-border);border-bottom:1px solid rgba(0,0,0,.07);border-radius:var(--radius-lg) var(--radius-lg) 0 0;box-shadow:inset 0 1px 0 rgba(255,255,255,.6);overflow:hidden">'   // [260723f Opus] 상단 흰 하이라이트(유리 입체감)
     +(title===''?'':'<span style="font-size:14.5px;font-weight:800;color:var(--accent);white-space:nowrap;letter-spacing:-.01em;flex-shrink:0">'+(title||'사업 현황')+'</span>')   // [260802e] title='' = 제목 생략(짝 면 우 열 — 좌와 같은 「사업 결과 비교」 이중 표기 방지, 운영자 「같은 내용이면 좌측에만」) · undefined/미지정은 종전 폴백 그대로
     // [260805] 부제 = **줄어드는 칸**(min-width:0 + 말줄임) · 조작부 = 안 줄어드는 칸(flex-shrink:0).
@@ -7085,9 +7178,12 @@ function _bizmHead(right,title,sub){
     //   좌·우 박스 상단선 계약이 깨졌다(3면에 분야 칩 3개가 붙자 1512 이하에서 Δ28px — 스모크 실측).
     //   이제 폭이 모자라면 조작부 대신 **부제가 말줄임**된다 = 헤더는 늘 한 줄 = 두 박스 상단선 동일.
     +'<span style="font-size:11px;color:var(--muted);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:0 1 auto">'+(sub||'· 연간 누적 실적 (운영대장)')+'</span>'
-    +'<span style="margin-left:auto;display:inline-flex;gap:9px;align-items:center;flex-wrap:wrap;flex-shrink:0;padding:6px 0">'+(right||'')+'</span></div>';
+    +'<span style="margin-left:auto;display:inline-flex;gap:9px;align-items:center;flex-wrap:wrap;flex-shrink:0;padding:6px 0">'+(right||'')+'</span>'
+    +(ld?_SK_HD:'')+'</div>';   // [260806] ld = 로딩 중 = 머리줄도 스윕 범위(카드 전면) · 미지정(기존 3인자 호출 전부)은 종전 그대로
 }
-var _BIZM_BOX='<div data-bizmbox style="background:rgba(255,255,255,.15);backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px);border:1px solid rgba(255,255,255,.7);border-top:none;border-radius:0 0 var(--radius-lg) var(--radius-lg);box-shadow:var(--glass-shadow);padding:18px">';   // [260723c 선택값] 좌 유리 알파 .15 · 라운드 20 · [260723f] 패딩 균일 18 · [260724] data-bizmbox = 우 레일 하단 정렬 측정 앵커(슬라이드 점줄은 박스 밖이라 제외)
+// [260806] position:relative = 박스 안 스윕(_SK_GL)의 절대배치 기준을 **못박는 것**. 실동작은 무변화(backdrop-filter가 이미 같은 기준을 세운다)지만,
+//   그 규칙을 안 따르는 브라우저에서 스윕이 바깥 래퍼(= 점줄 바까지)로 번지는 걸 막는다.
+var _BIZM_BOX='<div data-bizmbox style="position:relative;background:rgba(255,255,255,.15);backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px);border:1px solid rgba(255,255,255,.7);border-top:none;border-radius:0 0 var(--radius-lg) var(--radius-lg);box-shadow:var(--glass-shadow);padding:18px">';   // [260723c 선택값] 좌 유리 알파 .15 · 라운드 20 · [260723f] 패딩 균일 18 · [260724] data-bizmbox = 우 레일 하단 정렬 측정 앵커(슬라이드 점줄은 박스 밖이라 제외)
 function _bizInlineRender(){
   var el=document.getElementById('biz-main'); if(!el)return;
   if(typeof _mainView==='undefined'||_mainView!=='biz')return;
@@ -7320,12 +7416,13 @@ function _bizListTable(list){
       // [260805] 예정(오픈 전) 행 = 실적 칸을 0으로 채우지 않고 「오픈 전」·「—」로 — 0은 「안 팔렸다」로 읽힌다
       +'<td style="padding:7px 12px 7px '+_colGap+'px;text-align:right;color:var(--peach-text);font-weight:600;font-variant-numeric:tabular-nums">'+(g._st==='planned'?'<span style="color:var(--muted);font-weight:500">오픈 전</span>':Math.round((g._sold!=null&&g._sold>0)?g._sold:g.paid).toLocaleString())+'</td>'
       // 오픈석(회차) — 부차 정보임은 **괄호가 말한다**(잉크로 더 내리지 않는다).
-      //   ⚠ 대비 이력: 회차 값은 구 독립 열에서 `--neutral-text` **5.23:1**(AA 통과)이었고, 이 열로 옮기며 열 잉크
-      //     `--dim` **3.54:1**(제브라 행 3.40:1 · AA 미달)로 **내려간다**. 더 흐린 `--muted` 시안은 **1.92:1**이라
-      //     기각했다. 지금 값 = 오픈석 숫자와 **같은 가독 수준**(이 열 전체가 원래 --dim = §6-5 그레이 축 부채 안) —
-      //     회차만 더 진하게 하면 부값이 주값보다 진해져 위계가 뒤집힌다. 열 전체를 올리는 건 이 지시 밖 = 운영자 판단.
+      //   [260807-10 운영자 승인 「다 배선」] 열 잉크 `--dim` → **`--neutral-text`**. 이 열만 머리글과 같은 잉크라
+      //     본문이 안내 문구 층위로 읽혔다 = 위계 역전. 승격 후 흰 행 **5.23:1** · 제브라 행 **5.01:1**(둘 다 AA 통과 ·
+      //     구 3.54:1 / 3.40:1은 미달이었다). 대가 = 오픈석이 일시·장르와 같은 무게가 된다(표 안 회색 2종 → 1종) — 승인됨.
+      //   대비 이력: 회차 값은 구 독립 열에서 원래 `--neutral-text`였다가 이 열로 합치며 `--dim`으로 내려갔던 것 = **원위치**.
+      //     더 흐린 `--muted` 시안은 1.92:1이라 기각. 머리글·단위줄은 `--dim` 그대로(본문만 올려 위계를 정상화 · 머리글 축은 별건).
       //   게이트 ⑤는 리터럴 hex 쌍만 채점해 var() 조합을 못 본다 → 통과 여부는 근거가 못 된다(손으로 계산한 값).
-      +'<td style="padding:7px 12px 7px '+_colGap+'px;text-align:right;color:var(--dim);white-space:nowrap;font-variant-numeric:tabular-nums">'+(g.seat>0?Math.round(g.seat).toLocaleString():'<span style="color:var(--muted);font-weight:500">—</span>')+'('+g.cnt+')</td>'
+      +'<td style="padding:7px 12px 7px '+_colGap+'px;text-align:right;color:var(--neutral-text);white-space:nowrap;font-variant-numeric:tabular-nums">'+(g.seat>0?Math.round(g.seat).toLocaleString():'<span style="color:var(--muted);font-weight:500">—</span>')+'('+g.cnt+')</td>'
       +'<td style="padding:7px 12px 7px '+_colGap+'px;text-align:right;color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums">'+(g._st==='planned'?'—':g.avg.toFixed(1))+'</td>'
       +'<td style="padding:7px 14px 7px '+_colGap+'px;text-align:right;color:var(--green);font-weight:600;font-variant-numeric:tabular-nums">'+((g._rev!=null&&g._rev>0)?_bizMoney(g._rev,true):'—')+'</td>'   // [260803 선택값] 열: 매출 = 표시(진행바·최근 7일 = 끔) · [260805] 단위는 머리글이 말한다 = 숫자만(bare)
       +'</tr>';
@@ -7651,9 +7748,8 @@ function _bizEduMonthRows(year){
       _st:((o.end||o.start)<tdy)?'ended':'active'});
   });
   out.sort(function(a,b){ return (a.start-b.start)||(a.name<b.name?-1:1); });
-  // [260805 운영자 「교육, 별도의 인덱싱 열 부여해줘」] 각 교육 게이지(세로 열)에 고유 순번을 단다 —
-  //   시작일순 ①②③…(원문자 = 값(명)으로 오독되지 않는 색인 표기). 게이지 위 라벨·툴팁 머리가 같이 쓴다.
-  out.forEach(function(g,i){ g._idx=(i<20)?String.fromCharCode(0x2460+i):String(i+1); });
+  // [260806-11] 구 교육 색인(①②③… · 260805 「인덱싱 열 부여」) **부여까지 철거** — 표기를 지우면서 쓰는 곳이
+  //   0이 됐다(게이지 라벨·툴팁 머리 셋이 전부였다). 되살릴 땐 시작일순 원문자라는 그 규칙 그대로.
   return out;
 }
 // ── [260804 운영자] y축 중략(≈) — 「매출이 너무 큰 게 하나 있어서 차트가 무너진다」 ────────────────
@@ -7908,7 +8004,7 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
   // [260805 운영자] 교육도 **실값이 있으면 막대**로 — 축은 수강생(명) 하나뿐이라 매출 축으로 갈아타지 않는다(카드 눈금 100~400과 어긋나면 안 된다).
   var valOf=function(g){ if(ED)return (g._sold!=null&&g._sold>0)?g._sold:null;
     return hasRev?((g._rev!=null)?(g._rev/1e6):null):((g._sold!=null&&g._sold>0)?g._sold:(g.paid>0?g.paid:null)); };
-  var unit=(hasRev&&!ED)?'백만 원':'명';
+  var unit=(hasRev&&!ED)?'백만원':'명';   // [260806-10] 표기 = 「(단위: 백만원)」(운영자) · 상세 표 머리글 「(단위: 만원)」과 같은 붙임 표기 — 구 y축 세로 제목의 「백만 원」(띄어쓰기)에서 통일
   var plan=function(g){ return g._st==='planned'; };
   var _fix=ED?(_yrCss('--green')||''):'';
   var gcol=function(g){ return g._col||_fix||_BIZ_GENRE_COLORS[g.genre||'기타']||_BIZ_GENRE_COLORS['기타']; };   // [260805] _col/_fix = 분야색 고정(교육엔 장르 축이 없다)
@@ -7941,7 +8037,10 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
   var lnOf=function(g){ return (ED&&g._mo&&g._mo.length)?g._mo:null; };
   var isLn=rows.map(function(g){ return !!lnOf(g); });
   var vals=rows.map(function(g,i){ return isLn[i]?null:valOf(g); }), tr2=null;   // 선으로 그리는 항목은 막대 자리를 비운다(같은 값을 두 벌로 그리지 않는다)
-  var vfmt=function(v){ return hasRev?((v>=100)?Math.round(v).toLocaleString():v.toFixed(1)):Math.round(v).toLocaleString(); };
+  // [260806-11 운영자 「항상 표현은 **반올림해서 소숫점 없이** 표기하게」] 값 라벨 = 정수 한 벌.
+  //   구판은 매출 축에서 100 미만이면 `toFixed(1)`(13.6·65.9·2.5…) — 같은 차트 안에서 「486」과 「2.5」가
+  //   다른 자릿수 문법으로 서서 눈이 두 번 읽었다. 반올림은 표기에서만 한다(값·툴팁·집계는 원값 그대로).
+  var vfmt=function(v){ return Math.round(v).toLocaleString(); };
   // [260804] 축 중략 — 그릴 자리만 접는다(값·라벨·툴팁은 실값). plotPx = 실제 그림 높이(위 18 · 아래 34 여백 제외 — 45° 이름축 폐지로 아래 여백 96→34)
   var brk=ED?null:_bizBarBreak(vals,Math.max(60,hgt-(18+_BIZ_AXB)));   // [260806-5] 위 여백 18 + 아래 여백 _BIZ_AXB — 상수 34를 박아두면 아래 여백을 늘린 만큼 중략이 없는 자리를 있다고 착각한다(그림 영역 = 높이 − 두 여백)
   var yv=brk?vals.map(function(v){return v==null?null:brk.map(v);}):vals;
@@ -7972,7 +8071,7 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
   //   자리 문법(xanchor left · xshift 9 · yanchor middle)은 아래 교육 색인의 「천장 근접 = 옆으로」와 **같은 벌**(새 형태 0).
   //   겹침 판정(placedX)은 위에서 이미 끝났다 = 라벨 수·생략 규칙은 무변, 그리는 자리만 옮긴다.
   var fcLab=[];
-  fcIdx.forEach(function(a){ var i=a[0]; if(!labs[i])return; fcLab.push({x:xs[i],y:_mapv(vals[i]),t:labs[i],c:gcol(rows[i])}); labs[i]=''; });
+  fcIdx.forEach(function(a){ var i=a[0]; if(!labs[i])return; fcLab.push({x:xs[i],y:_mapv(a[1]),t:labs[i],c:gcol(rows[i])}); labs[i]=''; });   // [260806-11] y = **예상 꼭대기**(그라데이션 끝) — 아래 주석
   // [260805 운영자 「교육도 그 위에 명수 숫자를 써줘 · 공연 차트도 각각 맨 위에 (백만 단위로)」]
   //   값 라벨 = 9.5px·--dim(3.32:1 · 화면에서 거의 안 읽혔다) → **10.5px + 그 막대 색**(전시 피크 라벨과 같은 문법 =
   //   숫자와 막대가 한 몸으로 읽힌다 · 장르색·분야색은 --dim보다 대비가 높다). 단위는 축 제목(백만 원)·카드 우상단(명)이 말한다.
@@ -8000,8 +8099,11 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
       .concat(rows.map(function(g){ var m=lnOf(g); return m?m[m.length-1][1]:null; }).filter(function(v){return v!=null&&isFinite(v);})).concat([0]));
     if(_edMax>_ED_YMAX*0.94){ _edTop=_bizNiceStep(_edMax*1.12); var _st2=Math.max(100,_bizNiceStep(_edTop/4)); _edTick=[]; for(var _t=_st2;_t<=_edTop+1e-6;_t+=_st2)_edTick.push(Math.round(_t)); }
   }
+  // [260806-10] y축 **세로 제목 철거** — 단위는 카드 우상단 「(단위: …)」이 가로로 말한다(전시·교육과 같은 자리·같은 문법).
   var yAx=ED?{range:[0,_edTop],tickmode:'array',tickvals:_edTick,tickfont:{size:10.5,color:dim},gridcolor:grid,zeroline:false,fixedrange:true}
-    :{title:{text:unit,font:{size:10.5,color:dim}},tickfont:{size:10.5,color:dim},gridcolor:grid,zeroline:false,fixedrange:true,rangemode:'tozero'};
+    :{tickfont:{size:10.5,color:dim},gridcolor:grid,zeroline:false,fixedrange:true,rangemode:'tozero'};
+  // 카드 우상단 단위 표기 = **축을 정한 그 자리에서** 쓴다(축과 표기가 갈릴 수 없다 · 자리가 없는 카드면 조용히 지나간다).
+  try{ var _uEl=div.parentNode&&div.parentNode.querySelector('.ct [data-bizunit]'); if(_uEl)_uEl.textContent='(단위: '+unit+')'; }catch(_eu){}
   // [260806-5 운영자 「월 아래에 1Q~4Q · 차트랑 월 간격 아주 조금 더 · 흰 도형 간 마진은 동일하게」]
   //   ⚠ height는 **hgt 그대로**(카드 높이·바깥 마진 불변 = 흰 도형 하단선 계약 유지 · smoke_layout이 재는 축) —
   //     늘린 건 아래 여백(b)뿐이고 그만큼 그림 영역이 줄어든다. 축 중략의 plotPx 계산(hgt-52)도 같은 값으로 맞춘다.
@@ -8030,8 +8132,12 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
       }));
     }
   }   // [260806-5] 월 라벨 **아랫줄** = 1Q~4Q. ⚠ 이 줄은 위 `lay.annotations=zone.notes` **뒤**여야 한다 — 앞에 두면 그 할당이 통째로 덮어써서 분기 라벨이 조용히 사라진다(첫 렌더 실측)   // [260805] 달 경계선 = 음영보다 먼저(둘 다 below · 경계가 음영 위에 얹히지 않게)
-  if(fcLab.length)lay.annotations=lay.annotations.concat(fcLab.map(function(L){   // [260808-2] 위 fcLab 주석 — 예상 2단 막대의 값 라벨(실값)을 실판매 꼭대기 **옆**에
-    return {xref:'x',x:L.x,xanchor:'left',xshift:9,yref:'y',y:L.y,yanchor:'middle',
+  // [260806-11 운영자 「차트 위에 (그라데이션 있어도 **그 끝 점 위에** 그라데이션이랑 **중첩 안 되게**) 숫자를 적어줘」]
+  //   2단 막대의 값 라벨(실값) = **예상 꼭대기 바로 위**. 260808-2가 「옆」으로 뺀 이유(같은 색 잉크 위 같은 색 글자가
+  //   페이드 칸 **안**에 잠긴다)는 자리를 페이드 **밖**으로 올리면 그대로 해소된다 — 겹칠 잉크가 없다.
+  //   자리 문법 = 다른 값 라벨과 같은 벌(xanchor center · yanchor bottom · yshift 3 = 막대 꼭대기에서 한 칸) = 새 값 0.
+  if(fcLab.length)lay.annotations=lay.annotations.concat(fcLab.map(function(L){
+    return {xref:'x',x:L.x,xanchor:'center',yref:'y',y:L.y,yanchor:'bottom',yshift:3,
       text:L.t,showarrow:false,font:{size:10.5,color:L.c}}; }));
   var note=(div.parentNode&&div.parentNode.querySelector)?div.parentNode.querySelector('[data-bizbrknote]'):null;
   if(brk){
@@ -8055,7 +8161,11 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
     // [260808-2] 예상 페이드 꼭대기가 접힌 축의 상한을 넘으면 축을 그만큼 넓힌다 — 자르면 「예상이 낮다」로 오독된다.
     //   눈금(tickvals)은 손대지 않는다 = 눈금 사다리·중략 발동 계약(`check_break_rule`)은 무접촉.
     if(fcIdx.length){ var _fcTop=Math.max.apply(null,fcIdx.map(function(a){return brk.map(a[1]);}));
-      if(_fcTop>brk.rng)lay.yaxis.range=[0,_fcTop*1.02]; }
+      // [260806-11] 여유 = 값 라벨 한 줄이 **그림 안에** 서는 만큼(글자 10.5 + 띄움 3 + 숨구멍 2.5 ≈ 16px)을 축 단위로 환산.
+      //   구판 1.02는 페이드가 안 잘리는 최소치였는데, 라벨이 꼭대기 **위**로 올라오면서(운영자 260806-11) 그 위가 필요해졌다.
+      //   고정 배수를 새로 정하지 않는다 — 그림 높이가 달라지면 필요한 비율도 달라지므로 픽셀에서 역산한다.
+      var _lblRoom=1+16/Math.max(60,hgt-_BIZ_AXB-18);
+      if(_fcTop*_lblRoom>brk.rng)lay.yaxis.range=[0,_fcTop*_lblRoom]; }
     // ≈ 표식 = **차트 전폭 1줄**(국제 관례). 축 옆 스텁으로 두면 끊을 축선이 없어 「≈ 80 = 약 80」으로 읽힌다(평의회7).
     var cyc=Math.max(2,Math.min(16,Math.round(plotSpan/28)));       // 파장 ≈28px(넓은 카드는 16주기 상한에 걸려 최대 ≈45px) — 폭이 달라져도 같은 기호로 보이게
     lay.shapes=lay.shapes.concat(_bizBreakShapes(brk,[[ax.x0,ax.x1]],dim,_yrCss('--surface-solid'),cyc));
@@ -8078,7 +8188,7 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
   if(pidx.length){
     tr2={type:'bar',width:W,marker:{color:'rgba(0,0,0,0)',line:{width:0}},showlegend:false,hoverinfo:'text',textposition:'none',
       x:pidx.map(function(i){return xs[i];}),y:pidx.map(function(){return pY;}),
-      text:pidx.map(function(i){ var g=rows[i]; return ED?((g._idx?g._idx+' ':'')+g.name+'\n'+dTxt(g)+' · '+stName(g)+'\n수강생 집계 전')
+      text:pidx.map(function(i){ var g=rows[i]; return ED?(g.name+'\n'+dTxt(g)+' · '+stName(g)+'\n수강생 집계 전')
         :(g.name+'\n'+dTxt(g)+' · '+(g.genre||'-')+'\n'+(plan(g)?'예정 · 티켓 오픈 전':stName(g)+' · 자료 없음')); })};
   }
   // [260808-2] 예상 판매분 = **실막대 위에 얹는 한 칸**(`base` = 실판매 꼭대기). 트레이스를 따로 두는 이유 =
@@ -8112,7 +8222,7 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
         marker:{size:7,color:srf,line:{color:col,width:1.6}},
         showlegend:false,hoverinfo:'text',
         text:mo.map(function(p,j){ var inc=p[1]-(j>0?mo[j-1][1]:0);
-          return (g._idx?g._idx+' ':'')+g.name+'\n'+(p[0]+1)+'월 누계 '+Math.round(p[1]).toLocaleString()+'명 (그 달 +'+Math.round(inc).toLocaleString()+')\n'
+          return g.name+'\n'+(p[0]+1)+'월 누계 '+Math.round(p[1]).toLocaleString()+'명 (그 달 +'+Math.round(inc).toLocaleString()+')\n'
             +dTxt(g)+' · '+stName(g)+' · '+(g._g2||'예술교육'); })});
       lnTip.push({i:i,x:lx[lx.length-1],y:ly[ly.length-1],col:col});
     });
@@ -8126,24 +8236,9 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
       return {xref:'x',x:L.x,xanchor:'center',yref:'y',y:L.y,yanchor:'bottom',yshift:7,
         text:Math.round(L.y).toLocaleString(),showarrow:false,font:{size:10.5,color:L.col}}; }));
   }
-  // [260805 운영자] 교육 색인(①②③… = _bizEduMonthRows가 시작일순으로 부여) — **모든** 교육 열 머리에 단다
-  //   (실막대는 막대 꼭대기 위 · 값 라벨과 겹치지 않게 한 칸 더 · 파선은 게이지 끝). 원문자 = 값 숫자로 오독되지 않는 색인 표기.
-  //   꺾은선은 **꼭자락 오른쪽 옆**(위가 아니라 옆) — 동시 판매 구간에서는 두 선이 같은 달에 끝나므로, 위로 쌓으면
-  //   아래 선의 색인이 위 선 위에 얹혀 같은 초록끼리 뭉갠다(실측: ③ 색인이 ② 선에 묻혔다). 옆은 꼭자락 오른쪽 = 빈 자리다.
-  var _lnAt={}; lnTip.forEach(function(L){ _lnAt[L.i]=L; });
-  if(ED)lay.annotations=lay.annotations.concat(rows.map(function(g,i){
-      var L=_lnAt[i];
-      if(g._idx==null||(L==null&&xs[i]==null))return null;
-      if(L)return {xref:'x',x:L.x,xanchor:'left',xshift:9,yref:'y',y:L.y,yanchor:'middle',
-        text:String(g._idx),showarrow:false,font:{size:10,color:gcol(g)}};
-      // 천장에 붙은 막대(값 라벨까지 얹으면 구획 라벨 「진행 완료」·「진행·예정」 띠에 글자가 포갠다)는 색인만 **옆으로** 뺀다
-      //   — 전시 반쪽의 「천장 근접 = 라벨을 옮긴다(축을 넓히지 않는다)」 규칙과 같은 축. 30 = 값 라벨(12) + 띄움(3) + 구획 띠(≈14).
-      if(vals[i]!=null&&(_edTop-vals[i])*(Math.max(60,hgt-52)/(_edTop||1))<30)
-        return {xref:'x',x:xs[i],xanchor:'left',xshift:9,yref:'y',y:vals[i],yanchor:'middle',
-          text:String(g._idx),showarrow:false,font:{size:10,color:gcol(g)}};
-      return {xref:'x',x:xs[i],xanchor:'center',yref:'y',y:(vals[i]!=null?vals[i]:pY),yanchor:'bottom',
-        yshift:(vals[i]!=null?17:2),
-        text:String(g._idx),showarrow:false,font:{size:10,color:gcol(g)}}; }).filter(Boolean));   // [260805] 값 라벨(주석 10.5px) 위로 한 칸 더(15→17)
+  // [260806-11 운영자 「교육 위에 1 동그라미 저건 없어도 될 듯」] 교육 색인(①②③…) **표기 철거** —
+  //   260805에 「별도의 인덱싱 열 부여」로 붙였던 원문자 라벨. 열이 적을 땐 이름을 툴팁으로 바로 확인할 수 있어
+  //   색인이 한 겹 더 얹힌 잉크였다(운영자 판정). 자리·값 라벨·툴팁은 그대로 — 지운 건 원문자 주석뿐이다.
   // 교육 막대 값 라벨 = 주석판(위 tr.text 주석) · 자리·겹침 판정은 위 labs가 이미 끝냈다(같은 규칙 두 벌 금지).
   if(ED)lay.annotations=lay.annotations.concat(rows.map(function(g,i){ return (!labs[i]||xs[i]==null)?null:{
       xref:'x',x:xs[i],xanchor:'center',yref:'y',y:vals[i],yanchor:'bottom',yshift:3,
@@ -8418,7 +8513,7 @@ function _bizExhibRetry(){ window._bizmExFail=0; try{_bizExhibEnsure();}catch(_e
 function _bizExhibEnsure(){
   if(window._bizmExBusy)return;
   window._bizmExBusy=1;
-  // 전시 캐시는 분석 보드와 **공유 그릇**(_anaState)에 담긴다 — 레일이 숨는 폭(≤1200)에선 그 그릇 자체가 아직 없어서
+  // 전시 캐시는 분석 보드와 **공유 그릇**(_anaState)에 담긴다 — 레일이 숨는 폭(2열 하한 미만)에선 그 그릇 자체가 아직 없어서
   //   받아 온 시트를 넣을 데가 없었다(구 260805 경로의 잠복 결함 = 좁은 화면 전시 반쪽이 로딩에서 안 벗어난다 · 1100 실측).
   //   초기값은 레일(_srailInit)이 쓰는 그것과 **같은 한 벌**로 만든다(값 이원화 금지).
   if(typeof _anaState==='undefined'||!_anaState)_anaState={screen:1,cat:'공연',genre:'전체',year:null,drillName:null,xstep:3,cmp:{tray:[],bars:false}};
@@ -8460,9 +8555,9 @@ function _bizCompRender(el,half){
   var tgtId=el.id;
   if(typeof requestAnimationFrame==='function')requestAnimationFrame(function(){try{_srailAlignTop();}catch(_e){}});
   if(!_bizState.raw){
-    _bizmSwap(el,'<div style="position:relative">'+_bizmHead('',TTL,SUB)+_BIZM_BOX+'<div style="position:relative;height:100%;min-height:300px"><div class="sk-sweep" aria-hidden="true"></div><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--accent);opacity:.75;font-size:14px;font-weight:600">'+_ldHtml(16)+'운영 데이터 불러오는 중</div></div>'+'</div>'+DOTS+'</div>');   // [260802] 프레임 유지 · [PR 357 타 세션] 빔 스윕 로딩 통일 채택(양쪽 보존) · [260802g] height:100% = 이젤 박스 전면(스윕·문구 정중앙 — 4면 로더와 동일 규약, 데이터 도착 시 _bizmSwap이 통째 교체라 원복 불요)
-    // 레일이 숨는 폭(≤1200) = 레일 6시트 fetch가 없어 자체 확보 — 넓은 화면은 레일 플로우(res[3]→_bizState.raw)가 채움(중복 fetch 방지)
-    if(window.innerWidth<=1200&&!window._bizmBusy){
+    _bizmSwap(el,'<div style="position:relative">'+_bizmHead('',TTL,SUB,1)+_BIZM_BOX+_ldGlass('운영 데이터 불러오는 중','',300)+'</div>'+DOTS+'</div>');   // [260802] 프레임 유지 · [PR 357 타 세션] 빔 스윕 로딩 통일 채택(양쪽 보존) · [260802g] height:100% = 이젤 박스 전면(스윕·문구 정중앙 — 4면 로더와 동일 규약, 데이터 도착 시 _bizmSwap이 통째 교체라 원복 불요) · [260806] 스윕 = 카드 전면(머리줄 ld=1 + _ldGlass) 정본 빌더로 통일
+    // 레일이 숨는 폭(2열 하한 미만) = 레일 6시트 fetch가 없어 자체 확보 — 넓은 화면은 레일 플로우(res[3]→_bizState.raw)가 채움(중복 fetch 방지)
+    if(!_bizBookWide()&&!window._bizmBusy){
       window._bizmBusy=1;
       api('GET','/api/ops?sheet='+encodeURIComponent('세부운영관리대장(정리)')).then(function(d){
         window._bizmBusy=0;_bizState.raw=d;
@@ -8599,8 +8694,13 @@ function _bizCompRender(el,half){
   var _kpi='<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px">'+kc(_bizmState.year+' 사업 수',total+'건'+(_planN?'<span class="u" style="color:var(--dim);margin-left:6px">+예정 '+_planN+'</span>':''),'--accent')+kc('평균 점유율',avgAll.toFixed(1)+'%','--peach-text')+kc('누적 매출',_hasRev?_bizMoney(_revTot):'—','--green')+kc('누적 판매 고객',Math.round(_soldTot).toLocaleString()+'명','--c5')+'</div>';
   // [260803 운영자 선택값] 좌 콘텐츠 = **사업별 판매현황 막대**(값 = 매출 · 공연일순). 차트 자리(id·높이 430)는 종전 그대로 = 이젤/fit 엔진(_bizFitSeason의 'bizm-chart' 축) 무접촉.
   // [260804 운영자] 제목 = 「기획 공연」 · 회색 설명문(막대 = … · ≈ 각주 · 색 = 장르 …) 전부 철거 — 축·음영이 자체로 말하고, 세부는 툴팁이 진다.
-  //   우상단 단위 표기 = y축 제목(백만 원/명)이 이미 있어 생략(전시·교육은 y축 제목이 없어 카드 우상단에 단다).
-  var _dist='<div class="bizm-card"><div class="ct">기획 공연</div><div id="bizm-chart" style="height:430px;margin:0 4px 2px"></div></div>';
+  //   [260806-10 운영자 「기획 공연 우측에 **다른 애들처럼** (단위: 백만원)을 **가로로** 표기해줘」] 우상단 단위 표기 =
+  //   전시·교육 반쪽 카드가 쓰는 그 문법 그대로(`.ct` 안 `.sub` float:right · 상세 표 머리글 「(단위: …)」와 같은 잉크).
+  //   구판은 y축 **세로 제목**(「백만 원」)이 그 자리를 대신했는데, 세로 글자는 카드마다 표기가 갈리는 데다(전시·교육은
+  //   가로) 좁은 화면에서 글자가 겹쳐 읽혔다 → 세로 제목은 철거하고 세 카드가 **같은 자리·같은 문법**으로 단위를 말한다.
+  //   ⚠ 글자는 여기 박지 않는다 — 축 단위는 데이터가 정한다(매출 있으면 백만원 · 없으면 명). `_bizDrawSalesBars`가
+  //     자기 축을 정한 뒤 이 자리(`[data-bizunit]`)에 써 넣는다 = 축과 표기가 갈릴 수 없다.
+  var _dist='<div class="bizm-card"><div class="ct">기획 공연<span class="sub" data-bizunit style="float:right;margin-left:8px"></span></div><div id="bizm-chart" style="height:430px;margin:0 4px 2px"></div></div>';
   // [260802e] data-bizmfill = 마지막 흰 도형을 박스 안선(패딩 18 위)까지 늘리는 마킹(_srailAlignTop) — 행이 적어도(1월 2건 등) 흰 라인이 좌 열과 같은 하단선에서 끝난다(운영자 「없던 있든 흰색 라인 다 맞춰줘」)
   // [260803 운영자 「전체로 선택하면 화면이 넘어선다 → 목록 안에서 스크롤」] data-bizmcap = 상한도 안선에 고정(행이 많아도 박스·흰선을 **절대** 넘지 않음).
   //   스크롤러는 정본 .ry-grp-bd 그대로 계승(오버레이 스크롤바·호버 리빌·gutter 안정 — 이 열이 #rail-yrm 안이라 호버 규칙도 그대로 먹는다) = 신규 CSS 0.
@@ -9968,11 +10068,12 @@ function _ryDrillClose(anim){
 function _railYrmFrame(){
   // [260725 운영자] 우 틀 = 「판매 실적」(구 '판매 현황' — 260731 4차 책 4면 개명 · 2면 이름 = 세부메뉴와 동일어) · 연간 축 표기(누적 N명·2012~2026.1Q)와 상수 KPI 4칸(_uhaLeftStrip)은 제거 → 그 자리만큼 아래 리스트가 위로 올라옴
   var acts=(typeof window!=='undefined')?window._railYrmActives:null;
-  var h='<div style="position:relative">'+_bizmHead('','판매 실적',' ')+_BIZM_BOX;
+  var h='<div style="position:relative">'+_bizmHead('','판매 실적',' ',!acts)+_BIZM_BOX;
   // [260802g 운영자 「로딩 통일」] 데이터 도착 전 = 흰 카드(구 .rail-yrm-empty 소형 로더) 대신 4면(고객 분석)과 같은
   //   블러 전면 스윕 로더 — 「사업 실적 불러오는 중」 정중앙(문구 = 운영자 지정) · height:100% 규약 = 4면 로더와 동일.
   //   #rail-yrm-load = 카드·목록 부재 상태의 유일 마커 — actives 첫 도착 시 _railYrmSync가 이 마커를 보고 프레임 재구축.
-  if(!acts)h+='<div id="rail-yrm-load" style="position:relative;height:100%;min-height:260px"><div class="sk-sweep" aria-hidden="true"></div><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--accent);opacity:.75;font-size:14px;font-weight:600">'+_ldHtml(16)+'사업 실적 불러오는 중</div></div>';
+  // [260806 운영자 「창 전체 = 블러 박스 전면」] 스윕 = _ldGlass(박스 직속 = 패딩까지) + 머리줄 한 벌(_bizmHead 4번째 인자) = 카드 한 장 전면.
+  if(!acts)h+=_ldGlass('사업 실적 불러오는 중','rail-yrm-load');
   else h+='<div class="bizm-card"><div class="ct">'+_railYrmCardTitle()+'</div><div id="rail-yrm-list">'+_railYrmTableHtml(acts)+'</div></div>';
   h+='<div id="rail-yrm-uha"></div>';   // [260731 운영자] 상세(#srail-uha) 슬롯 = 유리박스 '안'으로 이주. 하단 점줄 바는 폐지(우 카드 하단선 = 좌 「전체 실적표」와 일치) · 박스 밖 하단 바는 책 넘김(#bizm-dots-row) 하나만
   h+='</div>';   // 유리박스 닫기
@@ -9985,24 +10086,27 @@ function _railYrmFrame(){
 //   sk-sweep이 유리 전체를 쓸고 문구가 세로 정중앙(구 min-height 260 = 박스 상단 일부만). 이젤 꺼짐(좁은 화면 = 박스 자연높이)은
 //   100%가 auto로 무효 → min-height 260 폴백(종전 그대로). 데이터 렌더 직전 _bizMemberEnsure가 height를 지워 자연 흐름 원복.
 function _bizPageMemberHtml(){
-  var inner=(typeof userRole!=='undefined'&&userRole==='admin')
-    ?('<div id="mem-ov-inline" style="position:relative;height:100%;min-height:260px"><div class="sk-sweep" aria-hidden="true"></div><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--accent);opacity:.75;font-size:14px;font-weight:600">'+_ldHtml(16)+'회원 데이터 불러오는 중</div></div>')
+  var adm=(typeof userRole!=='undefined'&&userRole==='admin');
+  var inner=adm
+    ?_ldGlass('회원 데이터 불러오는 중','mem-ov-inline')
     :('<div style="text-align:center;padding:60px 20px;color:var(--dim);font-size:13px">🔒 고객 분석은 관리자 전용이에요<br><span style="font-size:11.5px;color:var(--muted)">개인정보 집계라 관리자 계정에서만 열려요</span></div>');
-  return _bizmHead('','고객 분석',' · 운영_회원 · 집계 + 예매 이력 조회(admin 전용)')+_BIZM_BOX+inner+'</div>';
+  // [260806] 스윕 = 카드 전면(머리줄 + 유리박스). 이 면은 프레임을 다시 안 그리고 박스 **안쪽만** 갈아끼우므로(_memOvRender)
+  //   걷는 것도 손으로 한다 = _bizMemberEnsure/_memPurge의 _ldSweepOff.
+  return _bizmHead('','고객 분석',' · 운영_회원 · 집계 + 예매 이력 조회(admin 전용)',adm)+_BIZM_BOX+inner+'</div>';
 }
 function _bizMemberEnsure(){
   var tgt=document.getElementById('mem-ov-inline'); if(!tgt)return;
   if(typeof userRole==='undefined'||userRole!=='admin')return;   // 비admin은 애초에 안내 카드(위)라 여기 안 온다 — 이중 안전
   var ready=_memState&&_memState.rows&&_memState.rows.length&&_memState.rows[0]['연령대']!==undefined;
-  if(ready){ tgt.style.height=''; _memOvRender('mem-ov-inline'); return; }   // [260802g] 로딩용 height:100% 원복 — 실데이터는 자연 흐름(넘치면 박스 내부 스크롤 정본)
+  if(ready){ tgt.style.height=''; _ldSweepOff(tgt); _memOvRender('mem-ov-inline'); return; }   // [260802g] 로딩용 height:100% 원복 — 실데이터는 자연 흐름(넘치면 박스 내부 스크롤 정본) · [260806] 카드 전면 스윕 걷기(머리줄+박스 — 이 경로는 프레임을 안 다시 그린다)
   if(_memLoading){ setTimeout(_bizMemberEnsure,600); return; }   // [페이블 검수 MED] _memLoad는 비행 중이면 콜백 없이 return — 폴링으로 합류(_memWarm 선로딩과 공존)
   if(window._bizMemBusy)return;
   window._bizMemBusy=1;
   Promise.resolve()
     .then(function(){ return (_memState&&_memState.rows&&_memState.rows.length)?null:_memLoad(false); })
     .then(function(){ if(_memState&&_memState.rows&&_memState.rows.length&&_memState.rows[0]['연령대']===undefined)return _memLoad(true); })   // 옛 캐시(연령대 없음) = 1회 신선 재로드(openMemberOverview와 동일 규칙)
-    .then(function(){ window._bizMemBusy=0; var t2=document.getElementById('mem-ov-inline'); if(t2){ t2.style.height=''; _memOvRender('mem-ov-inline'); } })   // [260802g] 로딩용 height:100% 원복(위 ready 경로와 동일 규약)
-    .catch(function(e){ window._bizMemBusy=0; var t=document.getElementById('mem-ov-inline'); if(t)t.innerHTML='<div style="text-align:center;padding:50px;color:var(--danger);font-size:13px">회원 데이터를 못 불러왔어요 <button class="ana-chip" onclick="_bizMemberEnsure()" style="margin-left:8px">다시 시도</button></div>'; console.warn('[book p4]',e); });
+    .then(function(){ window._bizMemBusy=0; var t2=document.getElementById('mem-ov-inline'); if(t2){ t2.style.height=''; _ldSweepOff(t2); _memOvRender('mem-ov-inline'); } })   // [260802g] 로딩용 height:100% 원복(위 ready 경로와 동일 규약) · [260806] 스윕 걷기 동일
+    .catch(function(e){ window._bizMemBusy=0; var t=document.getElementById('mem-ov-inline'); if(t)_ldSweepOff(t); if(t)t.innerHTML='<div style="text-align:center;padding:50px;color:var(--danger);font-size:13px">회원 데이터를 못 불러왔어요 <button class="ana-chip" onclick="_bizMemberEnsure()" style="margin-left:8px">다시 시도</button></div>'; console.warn('[book p4]',e); });
 }
 function _railYrmRender(){
   var el=document.getElementById('rail-yrm'); if(!el)return;
@@ -21045,6 +21149,8 @@ function openPromoCheck(){
   var notReady=(typeof _perfReady!=='undefined'&&!_perfReady)||typeof PERFS==='undefined'||!PERFS||!PERFS.length||typeof records==='undefined'||!records;
   var el=document.getElementById('promo-check');
   if(!el){ el=document.createElement('div'); el.id='promo-check'; document.body.appendChild(el); }
+  // 고객 분류 = admin 전용(예매집계·회원 둘 다 PII) — 탭 자체를 안 그린다. 숨기기가 아니라 없는 것이 맞다.
+  var seg=(userRole==='admin');
   var body;
   if(notReady){
     body='<div class="u-empty" style="padding:48px 20px;text-align:center">데이터를 아직 못 불러왔어요<br>'
@@ -21077,284 +21183,134 @@ function openPromoCheck(){
   //   [260805-15] X 글자 = 정본 `✕`(U+2715) 유지 — check_design ⑦(정본 부품 일치)이 커밋에서 강제.
   //   📡·📭 이모지는 운영자 「이모지 가능한 안 씀」으로 제거(위 body 조립부).
   // [260806 운영자] 「AI 홍보」 = 2탭 — 점검(규칙 스캔 · 기존 그대로) + 전략 추론(claude 구독 OAuth 축 · _pa*).
-  //   탭 문법 = 영상 편집기(#ve-tabs) 정본 그대로(.prog-tab · --neutral 트랙 · flex:none;padding:7px 16px) — 신규 부품·색 0.
+  //   탭 문법 = 영상 편집기(#ve-tabs) 정본 그대로(.prog-tab · --neutral 트랙 · flex:none) — 신규 부품·색 0.
+  //   [260805-34] padding 7px 16px는 정본 `.prog-tab`이 진다 — 자리마다 인라인으로 다시 적지 않는다(패리티 계약).
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closePromoCheck)">'
-    + '<div class="modal" style="width:min(760px,94vw);max-height:88vh;--mpad-y:0;--mpad-x:0;position:relative;display:flex;flex-direction:column;overflow:hidden">'
+    + '<div class="modal" style="width:'+_PC_W.base+';max-height:88vh;--mpad-y:0;--mpad-x:0;position:relative;display:flex;flex-direction:column;overflow:hidden">'
     + '<button class="modal-x" onclick="closePromoCheck()" title="닫기" aria-label="닫기">✕</button>'
-    + _mhead('AI 홍보','점검으로 지금 손볼 곳을 찾고 · 전략 추론으로 다음 홍보를 계획해요')
+    + _mhead('AI 홍보','점검으로 지금 손볼 곳을 찾고 · 전략 추론으로 다음 홍보를 계획해요'+(seg?' · 고객 분류로 누가 봤는지 뽑아요':''))
     + '<div style="padding:12px 24px 0;flex:none"><div id="pc-tabs" style="display:flex;gap:2px;background:var(--neutral);border-radius:8px;padding:3px;width:max-content">'
-    + '<button type="button" class="prog-tab active" data-t="check" onclick="_pcTab(\'check\')" style="flex:none;padding:7px 16px">점검</button>'
-    + '<button type="button" class="prog-tab" data-t="ai" onclick="_pcTab(\'ai\')" style="flex:none;padding:7px 16px">전략 추론</button>'
+    + '<button type="button" class="prog-tab active" data-t="check" onclick="_pcTab(\'check\')" style="flex:none">점검</button>'
+    + '<button type="button" class="prog-tab" data-t="ai" onclick="_pcTab(\'ai\')" style="flex:none">전략 추론</button>'
+    /* 인라인 padding 없음 = 260808 PR 720 패리티 청산 계승(정본 `.prog-tab`이 패딩을 정한다 — 자리마다 다시 타이핑하지 않는다).
+       ⚠ 주석에 「샵+숫자 3자리」를 쓰지 마라 — check_design이 raw hex로 세어 baseline이 +1 된다(실제로 걸렸다). */
+    + (seg?'<button type="button" class="prog-tab" data-t="seg" onclick="_pcTab(\'seg\')" style="flex:none">고객 분류</button>':'')
     + '</div></div>'
     + '<div style="overflow:auto;flex:1;min-height:0;padding:16px 24px 20px">'
     + '<div id="pc-view-check">'+body+'</div>'
     + '<div id="pc-view-ai" style="display:none">'+_paViewHtml()+'</div>'
+    + (seg?'<div id="pc-view-seg" style="display:none">'+_segViewHtml()+'</div>':'')
     + '</div></div></div>';
-  _paSyncInfo();
+  _paAutoLoad();
 }
 // 탭 전환 — 뷰 display만 토글(상태·결과 보존 = 점검을 오가도 추론 결과가 안 사라진다)
+// 모달 폭 = 탭이 정한다. 고객 분류만 10열 표라 760px에선 절반이 가로 스크롤 뒤로 숨는다(운영자 「최대한 다 나오게」).
+//   ⚠ 값을 한 곳에만 둔다 — 모달 조립부와 여기 두 군데에 적으면 한쪽만 고쳐져 탭을 오갈 때 폭이 튄다.
+var _PC_W={base:'min(760px,94vw)',seg:'min(1180px,96vw)'};
 function _pcTab(t){
-  var c=document.getElementById('pc-view-check'),a=document.getElementById('pc-view-ai');
-  if(c)c.style.display=(t==='check')?'':'none';
-  if(a)a.style.display=(t==='ai')?'':'none';
+  ['check','ai','seg'].forEach(function(k){var e=document.getElementById('pc-view-'+k);if(e)e.style.display=(k===t)?'':'none';});
   document.querySelectorAll('#pc-tabs .prog-tab').forEach(function(b){b.classList.toggle('active',b.dataset.t===t);});
+  var m=document.querySelector('#promo-check .modal');
+  if(m)m.style.width=(t==='seg')?_PC_W.seg:_PC_W.base;
 }
 
-// ===== AI 홍보 ▸ 전략 추론 (260806 운영자 「판매율을 높일 홍보를 AI가 추론」) — _pa* =====
-// 무엇: 프로그램(또는 전체 포트폴리오)의 ①상세페이지 추출본(서버 KV 영구 캐시 — 첫 회만 OCR) ②판매 추이(_salesBuild 카드)
-//   ③홍보 이력·캘린더 슬롯 점유(records) ④고객 집계(admin — 예매집계·회원, **개인정보 행 0 = 숫자만**)를 팩으로 묶어
-//   Worker(/api/promo/upload·dispatch) → Actions(promo-advise.yml)의 claude -p(구독 OAuth 5계정 폴오버 — 블로그와 같은 엔진)로
-//   보내고, 공용 /api/blog/draft 폴링(_yeulAiAsk 문법)으로 조언 JSON을 받아 점검 탭과 같은 카드(_pcCard/_pcRow)로 그린다.
-// 스코프: 기획 프로그램만 — 대관은 PERFS에 아예 안 실린다(R접두 = PERFS_GC 분리 · 260801). 판매와 무관, 일정 맥락도 자체 기획 경합만.
-// 🔒 공용 PC 원칙(카드 제작·블로그 도우미 동일): 결과는 인메모리만 — 서버·로컬 무저장, 모달 닫아도 세션 안에서만 유지.
-var _paState={busy:false,sel:'ALL',last:null,det:{}};
-// 대상 = 판매창이 살아있는 기획 프로그램(판매종료일 — 없으면 공연종료일 — 이 오늘 이후). 홍보 = 판매 촉진 수단이라 끝난 건 대상이 아니다.
-function _paPerfs(){
-  var t=_pcT();
-  return ((typeof PERFS!=='undefined'&&PERFS)||[]).filter(function(p){
-    if(!p||!p.f)return false;
-    var end=p.se||p.e; return !!end&&end>=t;
-  }).sort(function(a,b){var x=a.ss||a.s||'9999',y=b.ss||b.s||'9999';return x<y?-1:1;});
-}
-function _paTypeLabel(t){ return t==='e'?'전시':(t==='a'?'교육':'공연'); }
+// ===== AI 홍보 ▸ 전략 추론(총론 브리핑) — _pa* =====
+// [260806 운영자 확정 3연] 「누르지 않더라도 자동으로 그날그날」 + 「공연을 나눠서가 아니라 총론」(7일/30일/90일 시계) + 「개별 추론은 일단 지금 필요없음」.
+// 구조: 매일 KST 08:30 Worker 크론(paAutoBrief)이 서버에서 포트폴리오 팩(판매·홍보 캘린더·고객 집계 — 개인정보 행 0)을 조립해
+//   promo-advise 레일(claude 구독 OAuth · opus 5 · effort high)로 추론시키고 drafts/<id>.json + KV 포인터(pa:auto:latest)로 남긴다.
+//   이 탭은 최신 브리핑을 자동으로 불러와 그린다. admin = [오늘 브리핑 지금 생성](/api/promo/auto-run — 크론과 같은 함수 1벌).
+//   폐루프 = 조언 회차 원장(data/promo_ai/advice_runs)을 다음 추론이 입력으로 받아 「지난 제안이 실행됐나·판매가 반응했나」까지 본다.
+// ⚠ 구 개별(프로그램 1개·클라 팩 조립) 축은 운영자 260806 「일단 지금 필요없음」으로 제거 — 복원 지점 = PR 716(작업이력 260806-12).
+//   상세페이지 KV 캐시(Worker promoDetailGet)는 카카오채널 톡이 계속 쓴다(제거 아님).
+// 🔒 공용 PC 원칙(블로그·카드 제작 동일): 결과 인메모리만 — 서버·로컬 무저장.
+var _paState={busy:false,last:null};
 function _paViewHtml(){
-  var list=_paPerfs();
-  var opts='<option value="ALL">전체 — 판매 중·예정 포트폴리오 ('+list.length+'개)</option>'
-    +list.map(function(p){return '<option value="'+escapeHtml(p.f)+'"'+(_paState.sel===p.f?' selected':'')+'>['+_paTypeLabel(p.t)+'] '+escapeHtml(p.f)+(p.se?' · 판매 ~'+escapeHtml(p.se):'')+'</option>';}).join('');
-  return '<div class="ve-sec first"><span class="n">1</span>대상 고르기 <span class="sub">프로그램 하나 또는 전체 배분 진단</span></div>'
-    +'<select id="pa-prog" class="nb-input" onchange="_paPick(this.value)">'+opts+'</select>'
-    +'<div id="pa-info" style="font-size:11px;color:var(--dim);margin-top:7px;line-height:1.6"></div>'
-    +'<div class="ve-sec"><span class="n">2</span>덧붙일 요청 <span class="sub">선택 · 꼭 반영할 조건이나 궁금한 것</span></div>'
-    +'<textarea id="pa-ask" class="nb-textarea" style="min-height:60px" maxlength="600" placeholder="예) 9월 첫 주에 카카오 자리를 잡아둘까요? / 단체 판매를 늘리고 싶어요"></textarea>'
-    +'<div class="lm-foot">'
-      +'<button type="button" class="btn btn--primary btn--md" id="pa-go" onclick="_paRun()">AI 추론 시작</button>'
-      +'<button type="button" class="btn btn--neutral btn--sm" id="pa-fresh" onclick="_paFresh()" style="display:none">상세페이지 새로 읽기</button>'
+  return '<div style="font-size:12px;color:var(--dim);line-height:1.7;margin:2px 0 12px">매일 아침 8시 반, 판매 중·예정 <b>기획</b> 프로그램 전체와 홍보 캘린더·판매 추이·고객 집계를 서버가 모아 <b>총론</b>을 추론해요 — 앞으로 <b>7일 · 30일 · 90일</b> 세 시계로. 대관은 판매와 무관이라 보지 않아요.</div>'
+    +'<div class="lm-foot" style="margin:0 0 6px">'
+      +((typeof userRole!=='undefined'&&userRole==='admin')?'<button type="button" class="btn btn--primary btn--md" id="pa-auto" onclick="_paAutoNow()">오늘 브리핑 지금 생성</button>':'')
       +'<span class="ve-val" id="pa-note"></span>'
     +'</div>'
-    +'<div id="pa-out" style="margin-top:16px"></div>';
+    +'<div id="pa-out" style="margin-top:10px"><div class="u-empty" style="padding:48px 20px;text-align:center">최근 브리핑을 찾는 중…</div></div>';
 }
-function _paPick(v){ _paState.sel=v||'ALL'; _paSyncInfo(); }
-function _paSelPerf(){ if(_paState.sel==='ALL')return null; return _paPerfs().filter(function(p){return p.f===_paState.sel;})[0]||null; }
-function _paSyncInfo(){
-  var el=document.getElementById('pa-info'),fb=document.getElementById('pa-fresh');
-  if(!el)return;
-  var p=_paSelPerf();
-  if(!p){ el.textContent='전체 진단은 배분(어디에 집중할지)이 핵심이에요 — 상세페이지는 프로그램 하나를 고를 때만 읽어요.'; if(fb)fb.style.display='none'; return; }
-  var u=String(p.u||'').trim();
-  if(!u){ el.textContent='상세 링크 없음 — 프로그램 관리에서 URL을 넣으면 메시지 각도 재료(출연·카피)가 좋아져요.'; if(fb)fb.style.display='none'; return; }
-  var d=_paState.det[u];
-  el.textContent=d?('상세페이지 저장본 '+new Date(d.ts).toLocaleDateString('ko-KR',{month:'numeric',day:'numeric'})+' 수집 — 재OCR 없이 재사용 중'):'상세페이지는 추론 때 자동 수집 — 첫 회만 읽고(OCR) 이후는 저장본을 재사용해요.';
-  if(fb)fb.style.display='';
-}
-// 판매 시트 5종 로드 — 판매현황(openSalesBoard)과 같은 소스·같은 캐시(_salesState) 재사용
-function _paEnsureSales(){
-  if(_salesState.daily&&_salesState.master&&_salesState.rounds&&_salesState.ops)return Promise.resolve();
-  return Promise.all([
-    _salesState.daily?Promise.resolve(_salesState.daily):api('GET','/api/ops?sheet='+encodeURIComponent('일일입력')),
-    _salesState.master?Promise.resolve(_salesState.master):api('GET','/api/ops?sheet='+encodeURIComponent('공연마스터')),
-    _salesState.rounds?Promise.resolve(_salesState.rounds):api('GET','/api/ops?sheet='+encodeURIComponent('회차상세')),
-    _salesState.ops?Promise.resolve(_salesState.ops):((typeof _bizState!=='undefined'&&_bizState&&_bizState.raw)?Promise.resolve(_bizState.raw):api('GET','/api/ops?sheet='+encodeURIComponent('세부운영관리대장(정리)'))),
-    _salesState.group?Promise.resolve(_salesState.group):api('GET','/api/ops?sheet='+encodeURIComponent('단체')).catch(function(){return null;})
-  ]).then(function(res){ _salesState.daily=res[0];_salesState.master=res[1];_salesState.rounds=res[2];_salesState.ops=res[3];_salesState.group=res[4];_salesState._opsIdx=null; });
-}
-// 누적 곡선 — 일일입력에서 그 공연 행만 뽑아 ≤14점으로 다운샘플(전 구간 흐름 + 마지막 점 보존)
-function _paCurve(cardName){
-  var rows=((_salesState.daily&&_salesState.daily.rows)||[]).map(_salesNorm).filter(function(r){return String(r['공연명']||'').trim()===cardName;});
-  rows.sort(function(a,b){return (_salesNum(a['기준일자'])||0)-(_salesNum(b['기준일자'])||0);});
-  var pts=rows.map(function(r){var bd=String(_salesNum(r['기준일자'])||'');return [bd.length===8?bd.slice(4,6)+'-'+bd.slice(6,8):bd,_salesNum(r['합계좌석'])||0];}).filter(function(c){return c[0];});
-  if(pts.length<=14)return pts;
-  var step=Math.ceil(pts.length/13),out=[];
-  for(var i=0;i<pts.length;i+=step)out.push(pts[i]);
-  if(out[out.length-1]!==pts[pts.length-1])out.push(pts[pts.length-1]);
-  return out;
-}
-// 프로그램 1개의 판매 요약 — 판매현황 카드(_salesBuild)를 그대로 읽는다(집계 재발명 0 = 화면과 같은 숫자)
-function _paSalesFor(p,cards){
-  if(p.t==='e'){   // 전시 = 전시DB 거울(data/exhib_daily_2026.js — 3면 차트와 같은 소스)
-    var ex=(typeof EXHIB_DAILY_2026!=='undefined'&&EXHIB_DAILY_2026&&EXHIB_DAILY_2026.list||[]).filter(function(m){return _uName(m.name)===_uName(p.f);})[0];
-    if(!ex||!ex.daily||!ex.daily.length)return {none:true,why:'전시 일일 거울에 없음(운영자 업로드 xlsx 반영 후 생성)'};
-    var pts=ex.daily.map(function(d){var s=String(d[0]);return [s.slice(4,6)+'-'+s.slice(6,8),d[2]||d[1]||0];});
-    if(pts.length>14){var st=Math.ceil(pts.length/13),o=[];for(var i=0;i<pts.length;i+=st)o.push(pts[i]);if(o[o.length-1]!==pts[pts.length-1])o.push(pts[pts.length-1]);pts=o;}
-    var lastD=ex.daily[ex.daily.length-1];
-    return {status:'active',seats:lastD[2]||lastD[1]||0,curve:pts,note:'전시 누계(유료 인원 기준 · 거울 데이터)'+(ex.free?' · 무료 행사':'')};
+// 공용 폴링 — 수동 생성·자동 로드가 같은 한 벌(/api/blog/draft 공용 레일 · _yeulAiAsk 문법)
+async function _paPoll(id,say){
+  var t0=Date.now();
+  while(Date.now()-t0<480000){   // 8분 — Actions 큐+opus 추론(보통 1~3분) 여유
+    await new Promise(function(r){setTimeout(r,6000);});
+    say('AI 추론 중 '+Math.round((Date.now()-t0)/1000)+'초 — 보통 1~3분 걸려요');
+    var d=null;
+    try{ d=await api('GET','/api/blog/draft?id='+encodeURIComponent(id)); }
+    catch(e){ var s=String(e&&e.message||e);
+      if(s.indexOf('404')===0||s.indexOf('502')===0||s.indexOf('429')===0||/network|fetch/i.test(s))continue;
+      throw e; }
+    if(d&&d.ready&&d.draft)return d.draft;
   }
-  var c=(cards||[]).filter(function(k){return (p.id&&k._mid&&k._mid===p.id)||_uName(k.name)===_uName(p.f);})[0];
-  if(!c)return {none:true,why:(p.t==='a'?'교육은 판매 원장(일일입력)이 없음':'일일입력·공연마스터에 아직 없음(집계 전이거나 미등록)')};
-  return {
-    status:c.status,seats:c.seats,totalOpen:c.totalOpen,occ:Math.round(c.occ*10)/10,target:c.목표,
-    dday:c.dday,fcRate:(c.fcRate!=null?Math.round(c.fcRate*10)/10:null),
-    last7:(c.days||[]).map(function(d){var bd=String(d.bd||'');return {d:(bd.length===8?bd.slice(4,6)+'-'+bd.slice(6,8):bd),seat:d.seat};}),
-    curve:_paCurve(c.name),groupSeats:c.groupSeats||0,
-    note:(c.enriched?'운영대장 폴백 집계':'')+(c.daysTotal?(' · 실측 '+c.daysTotal+'일치'):'')
-  };
+  throw new Error('시간 초과(8분) — Actions 큐가 밀렸을 수 있어요. 잠시 후 다시 시도해 주세요');
 }
-// 홍보 이력·예정 — 발송 슬롯 모집단(_slotRows = 취소·보류·임시 제외)과 같은 축
-function _paPromoFor(p){
-  var t=_pcT(),hist=[],plan=[],last='';
-  _slotRows().forEach(function(r){
-    if(String(r['프로그램']||'').trim()!==String(p.f||'').trim())return;
-    var d=getRecDateKey(r); if(!d)return;
-    var it={d:d,ch:platShort(r['플랫폼 1'])||String(r['플랫폼 1']||''),t:String(r['콘텐츠 제목']||'').slice(0,40),st:String(r['진행 상태']||'')};
-    if(d<t){hist.push(it);if(d>last)last=d;}else plan.push(it);
-  });
-  hist.sort(function(a,b){return a.d<b.d?-1:1;}); plan.sort(function(a,b){return a.d<b.d?-1:1;});
-  if(hist.length>40)hist=hist.slice(-40);   // 최근 40건까지 — 팩 크기·프롬프트 초점
-  return {history:hist,planned:plan,lastDate:last};
-}
-// 앞으로 3주 카카오톡·문자 슬롯 점유(하루 1건 규칙의 「이미 잡힌 날」) — 비어 있는 날을 AI가 고르게
-function _paCalendar(){
-  var t=_pcT(),lim=new Date(t+'T00:00:00');lim.setDate(lim.getDate()+21);
-  var limK=lim.toISOString().slice(0,10),by={};
-  _slotRows().forEach(function(r){
-    var d=getRecDateKey(r); if(!d||d<t||d>limK)return;
-    var ps=platShort(r['플랫폼 1']); if(ps!=='카카오'&&ps!=='문자')return;
-    var tag=(ps==='문자'?('문자('+String(r['플랫폼 2']||'전체').trim()+')'):'카카오')+' 「'+String(r['콘텐츠 제목']||r['프로그램']||'').slice(0,24)+'」';
-    (by[d]=by[d]||[]).push(tag);
-  });
-  return {busy:Object.keys(by).sort().map(function(d){return {d:d,what:by[d].join(' · ')};})};
-}
-// 고객 집계(admin 전용 · 숫자만) — 예매집계(_bkState)의 장르 재관람 + 회원 인덱스(_memAiIdx)의 연령·거주지 TOP
-async function _paAudience(p){
-  if(typeof userRole==='undefined'||userRole!=='admin')return null;
-  try{ if(typeof _bkLoad==='function')await _bkLoad(false); }catch(e){}
-  try{ if(typeof _memLoad==='function'&&!_memState)await _memLoad(false); }catch(e){}
-  var a={sampleNote:'예매기록에 회원이 확정 연결된 표본(2020~2025 주문) 기준 = 하한 · 전체 구매회원 환산은 ×'+(typeof _BK_SCALE!=='undefined'?_BK_SCALE:1.53)+' 배까지만'};
-  if(typeof _bkState!=='undefined'&&_bkState&&_bkState.n){
-    a.sampleNote='예매기록에 회원이 확정 연결된 '+_bkState.n.toLocaleString()+'명 표본(2020~2025) = 하한 · 전체 구매회원 환산 ×'+_BK_SCALE+' 배까지만';
-    var g=p?_bkGenre(String((p.g2||p.g||''))||''):null,g1=0,g2=0,all2=0;
-    for(var k in _bkState.by){var r=_bkState.by[k];
-      if(_bkCount(r,null,null)>=2)all2++;
-      if(g){var c=_bkCount(r,null,g);if(c>=1)g1++;if(c>=2)g2++;}
-    }
-    a.allRepeat=all2; if(g){a.genre=g;a.gAny=g1;a.gRepeat=g2;}
-  }
-  var idx=(typeof _memAiIdx==='function')?_memAiIdx():null;
-  if(idx){
-    a.memberN=idx.n;
-    a.age=Object.keys(idx.age).filter(function(k){return k!=='미상';}).sort(function(x,y){return idx.age[y]-idx.age[x];}).slice(0,4).map(function(k){return [k,idx.age[k]];});
-    a.city=Object.keys(idx.byCity).sort(function(x,y){return idx.byCity[y]-idx.byCity[x];}).slice(0,5).map(function(k){return [k,idx.byCity[k]];});
-  }
-  return a;
-}
-async function _paDetailFetch(p,fresh){
-  var u=String((p&&p.u)||'').trim(); if(!u)return null;
-  var d=await api('POST','/api/promo/detail',{url:u,fresh:fresh?1:0});
-  if(!d||!d.ok)return null;
-  _paState.det[u]={ts:d.ts,cached:!!d.cached};
-  _paSyncInfo();
-  return {ts:d.ts,text:String(d.text||'').slice(0,2600),ocr:String(d.ocrText||'').slice(0,2600)};
-}
-function _paProgPack(p,sales){
-  return {name:p.f,short:p.n,type:_paTypeLabel(p.t),genre:String(p.g2||p.g||''),place:p.l||'',
-    period:{show:[p.s||'',p.e||''],sale:[p.ss||'',p.se||''],promoStart:p.ps||''},
-    sales:sales,promo:_paPromoFor(p)};
-}
-async function _paBuildPack(){
-  await _paEnsureSales();
-  var cards=null; try{cards=_salesBuild();}catch(e){console.warn('[pa] salesBuild',e);}
-  var t=_pcT(),sel=_paSelPerf(),pack={v:1,today:t,scope:sel?'program':'portfolio',calendar:_paCalendar(),context:{competing:[]}};
-  var askEl=document.getElementById('pa-ask'); if(askEl&&askEl.value.trim())pack.ask=askEl.value.trim().slice(0,600);
-  if(sel){
-    var pg=_paProgPack(sel,_paSalesFor(sel,cards));
-    pg.detail=await _paDetailFetch(sel,false);
-    pack.program=pg;
-    // 같은 기간에 판매창이 겹치는 다른 기획 프로그램 = 홍보 슬롯·관객을 나눠 쓰는 상대
-    var s1=sel.ss||sel.s||t,e1=sel.se||sel.e||t;
-    pack.context.competing=_paPerfs().filter(function(q){return q.f!==sel.f&&((q.ss||q.s||'9999')<=e1&&(q.se||q.e||'0000')>=s1);})
-      .slice(0,10).map(function(q){return {name:q.f,type:_paTypeLabel(q.t),period:(q.s||'')+'~'+(q.e||'')};});
-  }else{
-    pack.programs=_paPerfs().slice(0,20).map(function(q){return _paProgPack(q,_paSalesFor(q,cards));});
-  }
-  pack.audience=await _paAudience(sel);
-  return pack;
-}
-async function _paRun(){
-  if(_paState.busy)return;
-  var btn=document.getElementById('pa-go'),out=document.getElementById('pa-out');
-  var say=function(m){var n=document.getElementById('pa-note');if(n)n.textContent=m;};
-  _paState.busy=true;_btnBusy(btn,true,'추론 중');
+// 탭 열면 최신 자동 브리핑을 불러온다(포인터 → 공용 드래프트) — 실패는 조용히 안내문으로
+async function _paAutoLoad(){
+  var out=document.getElementById('pa-out');
+  var empty=function(msg){ if(out&&!_paState.last)out.innerHTML='<div class="u-empty" style="padding:48px 20px;text-align:center">'+msg+'</div>'; };
   try{
-    say('운영 데이터 모으는 중');
-    var pack=await _paBuildPack();
-    var id='pa'+Date.now()+'r'+Math.floor(Math.random()*1e4);
-    say('AI에게 보내는 중');
-    var u=await api('POST','/api/promo/upload',{id:id,pack:pack});
-    if(!u||!u.ok)throw new Error((u&&u.error)||'업로드 실패');
-    var d0=await api('POST','/api/promo/dispatch',{id:id});
-    if(!d0||!d0.ok)throw new Error((d0&&d0.error)||'추론 요청 실패');
-    var t0=Date.now(),res=null;
-    while(Date.now()-t0<480000){   // 8분 — Actions 큐+opus 추론(보통 1~3분) 여유
-      await new Promise(function(r){setTimeout(r,6000);});
-      say('AI 추론 중 '+Math.round((Date.now()-t0)/1000)+'초 — 보통 1~3분 걸려요');
-      var d=null;
-      try{ d=await api('GET','/api/blog/draft?id='+encodeURIComponent(id)); }
-      catch(e){ var s=String(e&&e.message||e);
-        if(s.indexOf('404')===0||s.indexOf('502')===0||s.indexOf('429')===0||/network|fetch/i.test(s))continue;
-        throw e; }
-      if(d&&d.ready&&d.draft){res=d.draft;break;}
-    }
-    if(!res)throw new Error('시간 초과(8분) — Actions 큐가 밀렸을 수 있어요. 잠시 후 다시 시도해 주세요');
+    var meta=null;
+    try{ meta=await api('GET','/api/promo/auto-latest'); }catch(e){ meta=null; }
+    if(!meta||!meta.ok||!meta.id){ empty('아직 자동 브리핑이 없어요 — 매일 아침 8:30에 처음 생성돼요'+((typeof userRole!=='undefined'&&userRole==='admin')?'. 위 [오늘 브리핑 지금 생성]으로 바로 만들 수도 있어요':'')); return; }
+    var d=null; try{ d=await api('GET','/api/blog/draft?id='+encodeURIComponent(meta.id)); }catch(e){ d=null; }
+    if(d&&d.ready&&d.draft&&d.draft.ok!==false){
+      if(_paState.busy)return;   // [지금 생성] 진행 중이면 그 결과가 우선
+      _paState.last={res:d.draft,at:(d.draft.ts?Date.parse(d.draft.ts):Date.now()),auto:true};
+      _paRenderResult();
+    } else empty((meta.ymd?meta.ymd+' 브리핑이 아직 만들어지는 중이거나(1~3분) 실패했어요 — 잠시 뒤 다시 열어보세요':'브리핑 준비 중이에요'));
+  }catch(e){ empty('브리핑을 불러오지 못했어요 — 네트워크 확인 후 다시 열어보세요'); }
+}
+// [오늘 브리핑 지금 생성](admin) — 크론과 같은 서버 조립 1벌을 즉시 발화(force = 오늘분 재생성 허용)
+async function _paAutoNow(){
+  if(_paState.busy)return;
+  var btn=document.getElementById('pa-auto'),out=document.getElementById('pa-out');
+  var say=function(m){var n=document.getElementById('pa-note');if(n)n.textContent=m;};
+  _paState.busy=true;_btnBusy(btn,true,'생성 중');
+  try{
+    say('서버가 오늘 데이터를 모으는 중');
+    var r=await api('POST','/api/promo/auto-run',{});
+    if(!r||!r.ok||!r.id)throw new Error((r&&(r.error||r.skipped))||'자동 브리핑 실행 실패');
+    var res=await _paPoll(r.id,say);
     if(res.ok===false)throw new Error(res.error||'추론 실패');
-    _paState.last={pack:pack,res:res,at:Date.now()};
+    _paState.last={res:res,at:Date.now(),auto:true};
     say(''); _paRenderResult();
   }catch(e){
     say('');
-    if(out)out.innerHTML='<div class="u-empty" style="padding:28px 16px;text-align:center">'+escapeHtml(String(e&&e.message||e))+'</div>';
-  }finally{ _paState.busy=false;_btnBusy(btn,false,'AI 추론 시작'); }
-}
-async function _paFresh(){
-  if(_paState.busy)return;
-  var p=_paSelPerf(); if(!p||!String(p.u||'').trim())return;
-  var b=document.getElementById('pa-fresh');
-  _paState.busy=true; if(b)_btnBusy(b,true,'읽는 중');
-  try{ await _paDetailFetch(p,true); showToast('상세페이지를 새로 읽었어요','ok'); }
-  catch(e){ showToast('새로 읽기 실패: '+String(e&&e.message||e),'error'); }
-  finally{ _paState.busy=false; if(b)_btnBusy(b,false,'상세페이지 새로 읽기'); }
-}
-// 팩 요약(근거 표시) — AI가 무엇을 보고 판단했는지 접기로 투명하게(카카오 「읽은 원문 보기」와 같은 축)
-function _paPackBrief(pack){
-  var L=['오늘: '+pack.today+' · 모드: '+(pack.scope==='program'?'프로그램 1개':'전체 포트폴리오')];
-  var one=function(g){
-    var s=g.sales||{},ln='· '+g.name+' ['+g.type+(g.genre?'/'+g.genre:'')+']';
-    ln+=s.none?' — 판매 데이터 없음('+(s.why||'')+')':(' — 누적 '+(s.seats!=null?s.seats:'?')+'석'+(s.totalOpen?('/'+s.totalOpen+'석 ('+s.occ+'%)'):'')+(s.dday!=null?' · D-'+s.dday:'')+(s.fcRate!=null?' · 페이스 '+s.fcRate+'석/일':''));
-    ln+=' · 홍보 지난 '+((g.promo&&g.promo.history)||[]).length+'건/예정 '+((g.promo&&g.promo.planned)||[]).length+'건';
-    return ln;
-  };
-  if(pack.program){ L.push(one(pack.program)); L.push('· 상세페이지: '+(pack.program.detail?('수집본 사용(본문 '+(pack.program.detail.text||'').length+'자 · OCR '+(pack.program.detail.ocr||'').length+'자)'):'없음(URL 미등록)')); }
-  (pack.programs||[]).forEach(function(g){L.push(one(g));});
-  L.push('· 3주 내 카카오·문자 점유일: '+(((pack.calendar||{}).busy)||[]).length+'일');
-  if(pack.audience){var a=pack.audience;L.push('· 고객: '+(a.genre?(a.genre+' 관람 1회+ '+a.gAny+'명 · 2회+(재관람) '+a.gRepeat+'명 · '):'')+(a.allRepeat!=null?('전장르 재관람 '+a.allRepeat+'명'):'')+(a.memberN?(' · 회원 '+a.memberN.toLocaleString()+'명'):''));L.push('  ⚠ '+a.sampleNote);}
-  else L.push('· 고객: 미포함(관리자 로그인에서만 동봉)');
-  if(pack.context&&pack.context.competing&&pack.context.competing.length)L.push('· 기간 경합: '+pack.context.competing.map(function(c){return c.name;}).join(', '));
-  if(pack.ask)L.push('· 담당자 요청: '+pack.ask);
-  return L.join('\n');
+    if(out)out.innerHTML='<div class="u-empty" style="padding:48px 20px;text-align:center">'+escapeHtml(String(e&&e.message||e))+'</div>';
+  }finally{ _paState.busy=false;_btnBusy(btn,false,'오늘 브리핑 지금 생성'); }
 }
 function _paRenderResult(){
   var out=document.getElementById('pa-out'); if(!out||!_paState.last)return;
   var r=_paState.last.res,adv=r.advice,h=[];
-  if(!adv&&r.text){   // 형식 이탈 폴백 — 조언 원문 그대로(내용은 살린다 · 형식 실패를 완료처럼 숨기지 않는다)
-    h.push(_pcCard('전략 조언 (원문)','JSON 형식을 벗어나 원문으로 표시해요',
+  var actRow=function(x,i,hot){
+    var main=(x.program?'<b>'+escapeHtml(String(x.program))+'</b> · ':'')+escapeHtml(String(x.when||''))+(x.channel?' · '+escapeHtml(String(x.channel)):'')+(x.message?' — '+escapeHtml(String(x.message)):'');
+    var sub=(x.target?'타겟: '+escapeHtml(String(x.target)):'')+(x.why?((x.target?' · ':'')+'근거: '+escapeHtml(String(x.why))):'');
+    return _pcRow(String(i+1),main,sub,hot);
+  };
+  if(!adv&&r.text){   // 형식 이탈 폴백 — 내용은 살리고 형식 실패를 숨기지 않는다
+    h.push(_pcCard('브리핑 (원문)','JSON 형식을 벗어나 원문으로 표시해요',
       '<div style="white-space:pre-wrap;font-size:13px;line-height:1.75;padding-top:8px">'+escapeHtml(r.text)+'</div>'));
   }else if(adv){
-    if(adv.verdict)h.push(_pcCard('진단','', '<div style="font-size:13px;line-height:1.75;padding-top:8px">'+escapeHtml(String(adv.verdict))+'</div>'));
-    if(Array.isArray(adv.priorities)&&adv.priorities.length)h.push(_pcCard('홍보 자원 배분','집중할 곳부터',
-      adv.priorities.map(function(x,i){return _pcRow(escapeHtml(String(x.level||'')),escapeHtml(String(x.name||'')),escapeHtml(String(x.why||'')),String(x.level||'').indexOf('집중')>=0);}).join('')));
-    if(Array.isArray(adv.actions)&&adv.actions.length)h.push(_pcCard('추천 액션','우선순위순 — 시기·채널·타겟·메시지·근거',
-      adv.actions.map(function(x,i){
-        var main=(x.program?'<b>'+escapeHtml(String(x.program))+'</b> · ':'')+escapeHtml(String(x.when||''))+' · '+escapeHtml(String(x.channel||''))+(x.message?' — '+escapeHtml(String(x.message)):'');
-        var sub=(x.target?'타겟: '+escapeHtml(String(x.target)):'')+(x.why?((x.target?' · ':'')+'근거: '+escapeHtml(String(x.why))):'');
-        return _pcRow(String(i+1),main,sub,i===0);
-      }).join('')));
+    if(adv.verdict)h.push(_pcCard('총론','','<div style="font-size:13px;line-height:1.75;padding-top:8px">'+escapeHtml(String(adv.verdict))+'</div>'));
+    var HZ=[['d7','앞으로 7일','당장 실행 — 빈 슬롯 지정 수준'],['d30','앞으로 30일','한 달 캠페인 축'],['d90','앞으로 90일','분기 축 — 빌드업·고객 관계']];
+    if(adv.horizons)HZ.forEach(function(z){
+      var arr=adv.horizons[z[0]];
+      if(Array.isArray(arr)&&arr.length)h.push(_pcCard(z[1],z[2],arr.map(function(x,i){return actRow(x,i,z[0]==='d7'&&i===0);}).join('')));
+    });
+    if(!adv.horizons&&Array.isArray(adv.actions)&&adv.actions.length)h.push(_pcCard('추천 액션','우선순위순',adv.actions.map(function(x,i){return actRow(x,i,i===0);}).join('')));
     if(Array.isArray(adv.avoid)&&adv.avoid.length)h.push(_pcCard('피할 것','',adv.avoid.map(function(x){return _pcRow('주의',escapeHtml(String(x)),'',false);}).join('')));
-    if(Array.isArray(adv.gaps)&&adv.gaps.length)h.push(_pcCard('부족했던 데이터','채우면 다음 조언이 좋아져요',adv.gaps.map(function(x){return _pcRow('미확보',escapeHtml(String(x)),'',false);}).join('')));
+    if(Array.isArray(adv.gaps)&&adv.gaps.length)h.push(_pcCard('부족했던 데이터','채우면 다음 브리핑이 좋아져요',adv.gaps.map(function(x){return _pcRow('미확보',escapeHtml(String(x)),'',false);}).join('')));
   }
   var when=new Date(_paState.last.at).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
   h.push('<div style="font-size:11.5px;color:var(--dim);display:flex;gap:10px;align-items:center;flex-wrap:wrap">'
-    +'<span>'+when+' 추론 · AI 조언은 데이터 기반 초안 — 실행 판단은 담당자 몫이에요</span>'
+    +'<span>'+(_paState.last.auto?'자동 브리핑(매일 08:30 생성) · ':'')+when+' 추론 · AI 조언은 데이터 기반 초안 — 실행 판단은 담당자 몫이에요</span>'
     +'<button type="button" class="btn btn--neutral btn--sm" onclick="var d=document.getElementById(\'pa-basis\');if(d)d.style.display=d.style.display===\'none\'?\'\':\'none\'">근거 데이터 보기</button></div>'
     +'<div id="pa-basis" style="display:none;white-space:pre-wrap;font-size:11.5px;line-height:1.7;color:var(--dim);margin-top:10px;border-top:1px solid var(--border);padding-top:10px"></div>');
   out.innerHTML=h.join('');
-  var bs=document.getElementById('pa-basis'); if(bs)bs.textContent=_paPackBrief(_paState.last.pack);
+  var bs=document.getElementById('pa-basis'); if(bs)bs.textContent=(r.basis?String(r.basis):'(근거 요약 없음 — 구 회차)');
 }
 
 // === 발송 슬롯 규칙 엔진 (260804 운영자 확정 + 9인 평의회) ===
@@ -27330,7 +27286,11 @@ var _memState=null,_memLoading=false,_memEscH=null,_memQT=null,_memEpoch=0;
 // [260731 운영자 "바로 안 열려요"] PII 재적재 가드를 「#member-lookup 존재」 → 「purge 에포크」로 교체.
 //   구 가드는 회원 조회 모달이 DOM에 없으면(= 회원 분포로 곧장 들어온 경우) 응답을 통째로 버려서 개요가 항상 "못 불러왔어요"였다.
 //   에포크 = _memPurge(로그아웃·유휴잠금)가 증가 → await 중 purge된 응답만 정확히 폐기(보안 의도 동일, 진입 경로 무관).
-function _memPurge(){_memState=null;_memLoading=false;_bkState=null;_bkLoading=false;_memEpoch++;_memAiHist=[];_memAiBusy=false;var bg=document.getElementById('member-lookup');if(bg){if(_memEscH){document.removeEventListener('keydown',_memEscH);_memEscH=null;}bg.remove();}var ov=document.getElementById('member-ov');if(ov)ov.remove();var inl=document.getElementById('mem-ov-inline');if(inl)inl.innerHTML='<div style="text-align:center;padding:40px;color:var(--dim);font-size:13px">세션 종료로 집계를 비웠어요</div>';}   // [260731 4차 · 페이블 검수 HIGH] 인라인 4면(고객 분석)에 그려진 회원 집계 DOM도 소거 — 로그아웃·유휴잠금 PII 위생 동일 적용
+function _memPurge(){_memState=null;_memLoading=false;_bkState=null;_bkLoading=false;_memEpoch++;_memAiHist=[];_memAiBusy=false;
+  /* [260808] 고객 분류(AI 홍보 3탭) = 이름·휴대폰·관람이력이 한 표에 뜨는 자리라 같은 위생을 건다 —
+     상태(_segLast·_bkAsk)와 **이미 그려진 DOM** 둘 다 지운다. 상태만 지우면 화면의 명단은 그대로 남는다. */
+  _segLast=null;_bkAsk=null;var pc=document.getElementById('promo-check');if(pc)pc.innerHTML='';
+  var bg=document.getElementById('member-lookup');if(bg){if(_memEscH){document.removeEventListener('keydown',_memEscH);_memEscH=null;}bg.remove();}var ov=document.getElementById('member-ov');if(ov)ov.remove();var inl=document.getElementById('mem-ov-inline');if(inl){_ldSweepOff(inl);inl.innerHTML='<div style="text-align:center;padding:40px;color:var(--dim);font-size:13px">세션 종료로 집계를 비웠어요</div>';}}   // [260731 4차 · 페이블 검수 HIGH] 인라인 4면(고객 분석)에 그려진 회원 집계 DOM도 소거 — 로그아웃·유휴잠금 PII 위생 동일 적용 · [260806] 스윕도 함께 걷는다(박스 직속이라 innerHTML 교체로는 안 지워진다)
 // 선로딩(운영자 260731 "항상 바로 나오게") — 대시보드 ▸ 회원 분포 항목에 마우스만 올려도 백그라운드 적재 시작.
 //   클릭 시점엔 이미 캐시라 즉시 그려진다. 중복 발사는 _memLoading·_memState 가드로 차단(추가 API 호출 0).
 function _memWarm(){ if(userRole!=='admin')return; try{_bkWarm();}catch(e){}   /* [260804] 예매 집계도 같이 덥힌다 — 첫 예매 질문에서 「아직 안 불러왔어요」가 안 뜨게 */
@@ -27824,18 +27784,29 @@ async function _bkLoad(force){
   try{
     var d=await api('GET','/api/ops?sheet='+encodeURIComponent('예매집계')+(force?'&fresh=1':''));
     if(ep!==_memEpoch)return null;   // await 중 purge(로그아웃·유휴잠금) = PII 재적재 금지(_memLoad와 같은 규약)
-    var by={},n=0;
+    // [260808] 분포 키의 시간 축은 **두 갈래를 둘 다 받는다** — 신 `YYYYMM|장르`(6자리) · 구 `YYYY|장르`(4자리).
+    //   `260804_booking_agg.mjs`를 아직 안 돌린 시트에서도 답이 나와야 하고(연 단위 근사), 돌리는 순간
+    //   재배포 없이 월 정밀로 올라가야 한다. `ym` = 월 키를 한 개라도 봤는가 = 정밀 모드 가능 신호.
+    //   lo/hi = 데이터가 실제로 덮는 연월 범위(YYYYMM) — 「최근 N년」의 기준점이 여기서 나온다.
+    var by={},n=0,ym=false,lo=0,hi=0;
     (d&&d.rows||[]).forEach(function(r){
       var k=String(r['회원키']||'').trim();if(!k)return;
       var dist={};String(r['분포']||'').split(';').forEach(function(p){
         var i=p.lastIndexOf(':');if(i<1)return;
-        dist[p.slice(0,i)]=parseInt(p.slice(i+1),10)||0;
+        var t=p.slice(0,i),bar=t.indexOf('|');if(bar<1)return;
+        dist[t]=parseInt(p.slice(i+1),10)||0;
+        var tk=t.slice(0,bar),v=parseInt(tk,10);if(!v)return;
+        var a,b;
+        if(tk.length===6){ym=true;a=b=v;}                 // 월 키 = 그 달 하나
+        else if(tk.length===4){a=v*100+1;b=v*100+12;}     // 연 키 = 그 해 열두 달로 펴서 범위에 반영
+        else return;
+        if(!lo||a<lo)lo=a; if(b>hi)hi=b;
       });
       by[k]={n:parseInt(r['총구매'],10)||0,tix:parseInt(r['총매수'],10)||0,amt:parseInt(r['총금액'],10)||0,
              first:String(r['첫구매일']||''),last:String(r['최근구매일']||''),d:dist};
       n++;
     });
-    _bkState={by:by,n:n,ts:Date.now()};
+    _bkState={by:by,n:n,ym:ym,lo:lo,hi:hi,ts:Date.now()};
   }catch(e){ console.warn('[booking]',e); _bkState={by:{},n:0,err:String(e&&e.message||e)}; }
   finally{ _bkLoading=false; }
   return _bkState;
@@ -27863,35 +27834,236 @@ function _bkGenre(q){
   for(var k in _BK_ALIAS)if(q.indexOf(k)>=0)return _BK_ALIAS[k];
   return null;
 }
-// 한 회원의 (연도구간 × 장르) 관람 횟수
-function _bkCount(rec,yy,g){
+// 연월 정수(YYYYMM) → 사람이 읽는 표기
+function _bkYm(v){return Math.floor(v/100)+'.'+String(v%100).padStart(2,'0');}
+// 질의 → 기간 창 {lo,hi,unit,label}. unit 'm' = 연월(YYYYMM) 정밀 · 'y' = 연도 근사.
+// ⚠ 「N년 이내」의 기준점 = **오늘이 아니라 데이터 마지막 달**이다. 원장이 2020~2025인데 오늘이 2026-08이라
+//   오늘에 걸면 「3년 이내」가 2023.09~2026.08 = 실제 데이터로는 2년 4개월치만 잡혀 **조용히 짧아진다**.
+//   데이터 끝에 걸면 언제나 「최근 N년치」가 온전히 잡히고, 새 연도가 반입되면 창도 저절로 따라온다.
+function _bkWin(q){
+  var st=_bkState||{};
+  // ① 상대 구간을 먼저 본다 — 「13년 이내」의 13을 _bkYears가 2013년으로 오독하는 걸 막는 순서다.
+  var rel=q.match(/(?:최근|지난)\s*(\d+)\s*(년|개월|달)/)||q.match(/(\d+)\s*(년|개월|달)\s*(?:이내|간|동안|치)/);
+  if(rel&&st.hi)return _bkWinN(parseInt(rel[1],10),rel[2]==='년'?'년':'개월');
+  var yy=_bkYears(q);
+  if(yy)return {lo:yy[0],hi:yy[1],unit:'y',label:(yy[0]===yy[1]?yy[0]+'년':yy[0]+'~'+yy[1]+'년')};
+  return null;
+}
+// 「최근 N년/N개월」 창 만들기 — 질의 파싱과 고객 분류 탭 폼이 **같은 한 벌**을 쓴다(값이 갈리면 답이 둘이 된다)
+function _bkWinN(n,unit){
+  var st=_bkState||{};
+  if(!st.hi)return null;
+  var nu=Math.max(1,n||1),mon=(unit==='년')?nu*12:nu;
+  var ey=Math.floor(st.hi/100),em=st.hi%100,t=ey*12+(em-1)-(mon-1);
+  var sy=Math.floor(t/12),sm=t%12+1,lo=sy*100+sm;
+  if(lo<st.lo)lo=st.lo;                                   // 데이터보다 넓게 잡지 않는다(없는 기간을 있는 척하지 않음)
+  if(st.ym)return {lo:lo,hi:st.hi,unit:'m',n:nu,u:unit,label:'최근 '+nu+unit+'('+_bkYm(lo)+'~'+_bkYm(st.hi)+')'};
+  // 월 키가 아직 없는 시트(= agg 재실행 전) — 연 단위로 낮춰 근사한다. 답이 안 나오는 것보다 낫다.
+  return {lo:Math.floor(lo/100),hi:ey,unit:'y',n:nu,u:unit,approx:true,label:'최근 '+nu+unit+'('+Math.floor(lo/100)+'~'+ey+'년 · 연 단위 근사)'};
+}
+// 전 기간 라벨 — 값을 박지 않고 **실제 적재 범위**에서 만든다(데이터가 늘면 문구도 같이 따라간다)
+function _bkSpanAll(){
+  var st=_bkState||{};
+  if(!st.lo||!st.hi)return '전 기간';
+  var a=Math.floor(st.lo/100),b=Math.floor(st.hi/100);
+  return a===b?(a+'년'):(a+'~'+b+'년');
+}
+// 한 회원의 (기간창 × 장르) 관람 횟수 — 분포 키가 연(4자리)·월(6자리) 어느 쪽이든 받는다
+function _bkCount(rec,win,g){
   var c=0;
   for(var k in rec.d){
     var i=k.indexOf('|');if(i<0)continue;
-    var y=parseInt(k.slice(0,i),10),gg=k.slice(i+1);
-    if(yy&&(y<yy[0]||y>yy[1]))continue;
+    var t=k.slice(0,i),gg=k.slice(i+1);
     if(g&&gg!==g)continue;
+    if(win){
+      var v=parseInt(t,10);if(!v)continue;
+      if(t.length===6){
+        if(win.unit==='m'){ if(v<win.lo||v>win.hi)continue; }
+        else { var y6=Math.floor(v/100); if(y6<win.lo||y6>win.hi)continue; }
+      }else{
+        // 구 포맷(연 키)에 월 창을 물으면 연으로 낮춰 본다 — 경계 달을 통째로 포함한다(빠뜨리는 쪽보다 낫다)
+        if(win.unit==='m'){ var a=Math.floor(win.lo/100),b=Math.floor(win.hi/100); if(v<a||v>b)continue; }
+        else if(v<win.lo||v>win.hi)continue;
+      }
+    }
     c+=rec.d[k];
   }
   return c;
 }
 // 예매 질의 답변 — 집계 밖 질문이면 null을 돌려 기존 흐름(지역·연령 규칙 → 예울이 AI)에 양보한다.
 function _bkAnswer(q){
-  if(!/관람|구매|샀|산\s|예매|티켓|본\s*사람|보신|재구매|단골|몇\s*번|회\s*이상/.test(q))return null;
+  if(!/관람|구매|샀|산\s|예매|티켓|본\s*사람|보신|재구매|단골|몇\s*번|회\s*이상|명단|리스트|추출|뽑아/.test(q))return null;
   if(!_bkState){ _bkWarm(); return '예매 이력을 아직 안 불러왔어요 — 잠시 뒤 다시 물어봐 주세요.'; }
   if(!_bkState.n)return '예매 이력이 비어 있어요'+(_bkState.err?' ('+_memEsc(_bkState.err)+')':'')+' — 운영_예매집계 시트를 확인해 주세요.';
-  var yy=_bkYears(q),g=_bkGenre(q),by=_bkState.by;
+  var win=_bkWin(q),g=_bkGenre(q),by=_bkState.by;
   var m=q.match(/(\d+)\s*회\s*이상/)||q.match(/(\d+)\s*번\s*이상/);
   var thr=m?parseInt(m[1],10):(/재구매|단골|여러\s*번|2회|두\s*번/.test(q)?2:1);
   var hit=0,tix=0;
-  for(var k in by){var c=_bkCount(by[k],yy,g);if(c>=thr){hit++;tix+=by[k].tix;}}
-  var span=yy?(yy[0]===yy[1]?yy[0]+'년':yy[0]+'~'+yy[1]+'년'):'2020~2025년';
+  for(var k in by){var c=_bkCount(by[k],win,g);if(c>=thr){hit++;tix+=by[k].tix;}}
+  var span=win?win.label:_bkSpanAll();
   var what=(g?g+' ':'')+'공연';
   var est=Math.round(hit*_BK_SCALE);
+  _bkAsk={thr:thr,g:g,win:win};   // 「명단 보기」가 이 조건을 그대로 이어받는다(질의를 두 번 해석하지 않는다)
   return span+' '+what+'을 '+thr+'회 이상 관람한 회원은 <b>'+_memAiFmt(hit)+'명</b>이에요'
     +' · 이분들 누적 '+_memAiFmt(tix)+'매'
+    +(hit&&userRole==='admin'?'<br><button type="button" class="btn btn--primary btn--sm" style="margin-top:9px" onclick="_segFromAsk()">명단 보기</button>':'')
     +'<br><span style="font-size:11px;color:var(--dim)">※ 예매기록에 회원이 확정 연결된 '+_memAiFmt(_bkState.n)+'명 기준이라 <b>하한</b>이에요 '
     +'· 전체 구매회원으로 환산하면 약 '+_memAiFmt(est)+'명(×'+_BK_SCALE+')</span>';
+}
+
+// ===== AI 홍보 ▸ 고객 분류 (260808 운영자 「예매 데이터 × 회원 정보로 누가 예매한 건지 이름을 역으로」) — _seg* =====
+// 무엇: 예매집계(회원키 = 휴대폰 11자리) × 회원 시트(휴대폰정규화 → 이름·주소)를 맞춰 **조건에 걸린 사람 명단**을 뽑는다.
+//   조인은 이미 반입 때 끝나 있다(`260804_booking_ingest.mjs`가 회원키 열에 박아둠) — 여기서 퍼지 매칭을 다시 돌지 않는다.
+// ⚠ 이 화면은 앱에서 **개인 단위 관람 이력이 이름과 함께 표에 뜨는 유일한 자리**다:
+//   ① admin 전용(회원 조회·예매집계와 같은 게이트) ② 외부로 안 나간다 — `_bkAnswer`와 같은 로컬 전용 축이라
+//      `_yeulAiAsk`(GitHub Actions 왕복)에는 이 명단이 실리지 않는다 ③ `_memPurge`(로그아웃·유휴잠금)가 캐시와 함께 소거.
+// ⚠ 명단은 **항상 하한**이다 — 원본 휴대폰이 마스킹된 주문은 회원 연결이 안 돼(실측 연결률 57.1%) 명단에 안 뜬다.
+//   화면 아래 그 문장을 고정으로 적는다(운영자 확인 260808 「한계는 알고있음」 — 알고 쓰는 것과 안 적는 것은 다르다).
+var _bkAsk=null;
+var _segLast=null;   // 마지막 조회 결과 — CSV 내보내기가 화면과 같은 것을 쓴다(다시 계산하지 않는다)
+// 회원 휴대폰 색인 — 이름 역추출의 유일한 경로. _memState에 얹어 두면 purge 때 같이 사라진다.
+function _segMemIdx(){
+  if(!_memState||!_memState.rows||!_memState.rows.length)return null;
+  if(_memState._segIdx)return _memState._segIdx;
+  var by={};
+  _memState.rows.forEach(function(r){
+    var p=String(r['휴대폰정규화']||r['휴대폰번호']||'').replace(/\D/g,'');
+    if(p.length===11&&!by[p])by[p]=r;
+  });
+  _memState._segIdx=by;
+  return by;
+}
+// 한 사람의 장르 분포 요약 — 많이 본 순 상위 3
+function _segGenres(rec,win){
+  var g={};
+  for(var k in rec.d){
+    var i=k.indexOf('|');if(i<0)continue;
+    var t=k.slice(0,i),v=parseInt(t,10);if(!v)continue;
+    if(win){
+      if(t.length===6){ if(win.unit==='m'){ if(v<win.lo||v>win.hi)continue; } else { var y6=Math.floor(v/100); if(y6<win.lo||y6>win.hi)continue; } }
+      else { if(win.unit==='m'){ var a=Math.floor(win.lo/100),b=Math.floor(win.hi/100); if(v<a||v>b)continue; } else if(v<win.lo||v>win.hi)continue; }
+    }
+    var gg=k.slice(i+1);g[gg]=(g[gg]||0)+rec.d[k];
+  }
+  return Object.keys(g).sort(function(x,y){return g[y]-g[x];}).slice(0,3).map(function(x){return x+' '+g[x];}).join(' · ');
+}
+// 폼 인라인 문법 = 회원 조회 필터줄(openMemberLookup) **계승** — 새 클래스·새 색 0(전부 기존 토큰).
+var _SEG_IN='padding:9px 12px;border:1px solid var(--border2);border-radius:var(--r-btn);font-size:13px;font-family:inherit;background:var(--surface-solid);color:var(--text)';
+function _segViewHtml(){
+  var gopt='<option value="">장르 전체</option>'+_BK_GENRES.map(function(g){return '<option value="'+_memEsc(g)+'">'+_memEsc(g)+'</option>';}).join('');
+  return _pcCard('누가 봤는지 뽑아요','예매기록의 휴대폰을 회원 정보와 맞춰 이름까지 되찾아요',
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding-top:11px">'
+    + '<select id="seg-span" onchange="_segSpanToggle()" style="'+_SEG_IN+';width:auto"><option value="n">최근</option><option value="all">전 기간</option></select>'
+    + '<input id="seg-num" type="number" min="1" max="99" value="3" style="'+_SEG_IN+';width:62px;text-align:center">'
+    + '<select id="seg-unit" style="'+_SEG_IN+';width:auto"><option value="년">년</option><option value="개월">개월</option></select>'
+    + '<span style="font-size:12.5px;color:var(--neutral-text)">이내에</span>'
+    + '<select id="seg-genre" style="'+_SEG_IN+';width:auto;max-width:150px">'+gopt+'</select>'
+    + '<input id="seg-min" type="number" min="1" max="99" value="5" style="'+_SEG_IN+';width:62px;text-align:center">'
+    + '<span style="font-size:12.5px;color:var(--neutral-text)">회 이상 관람</span>'
+    + '<button type="button" class="btn btn--primary btn--sm" onclick="_segRun()">조회</button>'
+    + '</div>')
+    + '<div id="seg-result"></div>';
+}
+function _segSpanToggle(){
+  var sp=document.getElementById('seg-span'),all=!!sp&&sp.value==='all';
+  ['seg-num','seg-unit'].forEach(function(id){var e=document.getElementById(id);if(e){e.disabled=all;e.style.opacity=all?'.45':'';}});
+}
+async function _segRun(){
+  if(userRole!=='admin'){showToast('고객 분류는 관리자 전용이에요','error');return;}
+  var host=document.getElementById('seg-result');if(!host)return;
+  host.innerHTML='<div class="u-empty" style="padding:34px 16px;text-align:center">'+_ldHtml(16)+' 불러오는 중</div>';
+  var ep=_memEpoch;
+  try{ if(!_bkState)await _bkLoad(false); if(!_memState)await _memLoad(false); }catch(e){ console.warn('[seg]',e); }
+  if(ep!==_memEpoch)return;                         // 로딩 중 로그아웃·유휴잠금 = PII를 그리지 않는다(_bkLoad와 같은 규약)
+  host=document.getElementById('seg-result');if(!host)return;
+  if(!_bkState||!_bkState.n){host.innerHTML='<div class="u-empty" style="padding:34px 16px;text-align:center">예매 집계를 못 불러왔어요'+(_bkState&&_bkState.err?' ('+_memEsc(_bkState.err)+')':'')+'</div>';return;}
+  if(!_segMemIdx()){host.innerHTML='<div class="u-empty" style="padding:34px 16px;text-align:center">회원 시트를 못 불러왔어요 — 이름을 붙이려면 회원 정보가 있어야 해요</div>';return;}
+  var sp=document.getElementById('seg-span'),all=!!sp&&sp.value==='all';
+  var n=parseInt((document.getElementById('seg-num')||{}).value,10)||3;
+  var u=(document.getElementById('seg-unit')||{}).value||'년';
+  var g=(document.getElementById('seg-genre')||{}).value||null;
+  var thr=Math.max(1,parseInt((document.getElementById('seg-min')||{}).value,10)||1);
+  _segCompute(all?null:_bkWinN(n,u),g,thr);
+  _segRender();
+}
+// 조건 → 명단. 이름 역추출은 회원키(휴대폰) 한 번의 색인 조회뿐 — 퍼지 매칭은 반입 때 이미 끝났다.
+function _segCompute(win,g,thr){
+  var by=_bkState.by,idx=_segMemIdx(),out=[],nomem=0;
+  for(var k in by){
+    var rec=by[k],c=_bkCount(rec,win,g);
+    if(c<thr)continue;
+    var m=idx[k];
+    if(!m){nomem++;continue;}                       // 회원키가 회원 시트에 없다 = 이름을 못 붙인다(지어내지 않고 세어서 밝힌다)
+    out.push({key:k,c:c,rec:rec,m:m});
+  }
+  out.sort(function(a,b){return b.c-a.c||b.rec.tix-a.rec.tix;});
+  _segLast={rows:out,win:win,g:g,thr:thr,nomem:nomem};
+}
+function _segRender(){
+  var host=document.getElementById('seg-result');if(!host||!_segLast)return;
+  var L=_segLast,rows=L.rows,LIM=300,shown=rows.slice(0,LIM);
+  var cond=(L.win?L.win.label:_bkSpanAll())+' · '+(L.g?L.g+' ':'')+'공연 '+L.thr+'회 이상';
+  if(!rows.length){host.innerHTML=_pcCard('결과',_memEsc(cond),'<div class="u-empty" style="padding:30px 16px;text-align:center">조건에 맞는 사람이 없어요</div>');return;}
+  var th='padding:7px 10px;font-size:11.5px;color:var(--neutral-text);background:var(--neutral);text-align:left;position:sticky;top:0;white-space:nowrap';
+  var td='padding:6px 10px;font-size:12px;border-top:1px solid var(--border);white-space:nowrap';
+  var tdn=td+';font-variant-numeric:tabular-nums;text-align:right';
+  var tix=0,amt=0;rows.forEach(function(x){tix+=x.rec.tix;amt+=x.rec.amt;});
+  var head='<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:11px 0">'
+    +'<span style="font-size:12.5px;color:var(--neutral-text)"><b style="color:var(--text)">'+_memAiFmt(rows.length)+'명</b> · 누적 '+_memAiFmt(tix)+'매 · '+_memAiFmt(amt)+'원</span>'
+    +'<button type="button" class="btn btn--neutral btn--sm" style="margin-left:auto" onclick="_segCsv()">CSV 내보내기</button></div>';
+  var table='<div style="max-height:44vh;overflow:auto;border:1px solid var(--border);border-radius:var(--r-btn)">'
+    +'<table style="border-collapse:collapse;width:100%;min-width:860px">'
+    +'<tr><th style="'+th+'">이름</th><th style="'+th+'">휴대폰</th><th style="'+th+'">지역</th><th style="'+th+'">조건 관람</th><th style="'+th+'">전체 관람</th><th style="'+th+'">매수</th><th style="'+th+'">금액</th><th style="'+th+'">첫 관람</th><th style="'+th+'">최근 관람</th><th style="'+th+'">장르</th></tr>'
+    +shown.map(function(x){var m=x.m;
+      return '<tr><td style="'+td+';font-weight:700">'+_memEsc(m['이름'])+'</td>'
+        +'<td style="'+td+';font-variant-numeric:tabular-nums">'+_memEsc(m['휴대폰정규화']||m['휴대폰번호'])+'</td>'
+        +'<td style="'+td+'">'+_memEsc((String(m['주소1']||'')+' '+String(m['주소2']||'')).trim())+'</td>'
+        +'<td style="'+tdn+';font-weight:800;color:var(--accent)">'+x.c+'</td>'
+        +'<td style="'+tdn+'">'+_memAiFmt(x.rec.n)+'</td>'
+        +'<td style="'+tdn+'">'+_memAiFmt(x.rec.tix)+'</td>'
+        +'<td style="'+tdn+'">'+_memAiFmt(x.rec.amt)+'</td>'
+        +'<td style="'+td+'">'+_memEsc(x.rec.first)+'</td>'
+        +'<td style="'+td+'">'+_memEsc(x.rec.last)+'</td>'
+        +'<td style="'+td+';max-width:210px;overflow:hidden;text-overflow:ellipsis">'+_memEsc(_segGenres(x.rec,L.win))+'</td></tr>';
+    }).join('')+'</table></div>';
+  var foot='<div style="font-size:11px;color:var(--dim);padding:9px 2px 0">'
+    +(rows.length>LIM?'화면엔 상위 '+LIM+'명만 보여요 — CSV로 받으면 '+_memAiFmt(rows.length)+'명 전부 나와요 · ':'')
+    +'예매기록에 회원이 확정 연결된 '+_memAiFmt(_bkState.n)+'명 안에서 고른 결과라 <b>하한</b>이에요 — 원본 휴대폰이 가려진 주문은 이름을 못 붙여 명단에서 빠져요'
+    +(L.nomem?' · 회원 시트에서 못 찾은 회원키 '+_memAiFmt(L.nomem)+'건 제외':'')
+    +(L.win&&L.win.approx?'<br>⚠ 예매집계가 아직 연 단위라 기간이 <b>근사</b>예요 — <code>node docs/260804_booking_agg.mjs</code>를 다시 돌리면 월 단위로 정확해져요':'')
+    +'</div>';
+  host.innerHTML=_pcCard('결과',_memEsc(cond),head+table+foot);
+}
+function _segCsv(){
+  if(!_segLast||!_segLast.rows.length)return;
+  var L=_segLast;
+  var cols=['이름','휴대폰','시도','시군구','동읍면','조건관람','전체관람','총매수','총금액','첫관람일','최근관람일','장르분포'];
+  var rows=L.rows.map(function(x){var m=x.m;
+    return {'이름':m['이름']||'','휴대폰':m['휴대폰정규화']||m['휴대폰번호']||'',
+      '시도':m['주소1']||'','시군구':m['주소2']||'','동읍면':m['주소3']||'',
+      '조건관람':x.c,'전체관람':x.rec.n,'총매수':x.rec.tix,'총금액':x.rec.amt,
+      '첫관람일':x.rec.first,'최근관람일':x.rec.last,'장르분포':_segGenres(x.rec,L.win)};
+  });
+  // 파일명에 장르를 그대로 넣지 않는다 — 「발레/연극」의 `/`가 경로 구분자로 먹혀 저장이 깨진다
+  var tag=String(L.g||'전체장르').replace(/[^0-9A-Za-z가-힣]/g,'');
+  downloadCsv(tsFilename('고객분류_'+tag+'_'+L.thr+'회이상'),rowsToCsv(rows,cols));
+  showToast(_memAiFmt(rows.length)+'명 CSV로 받았어요','success');
+}
+// 예울이 답변의 「명단 보기」 → 같은 조건 그대로 이 탭으로. 질의를 두 번 해석하지 않는다(해석이 갈리면 답이 둘이 된다).
+function _segFromAsk(){
+  if(userRole!=='admin'||!_bkAsk)return;
+  var a=_bkAsk;
+  openPromoCheck();_pcTab('seg');
+  var sp=document.getElementById('seg-span'),nu=document.getElementById('seg-num'),un=document.getElementById('seg-unit'),
+      ge=document.getElementById('seg-genre'),mi=document.getElementById('seg-min');
+  if(sp)sp.value=(a.win&&a.win.n)?'n':'all';
+  if(nu&&a.win&&a.win.n)nu.value=a.win.n;
+  if(un&&a.win&&a.win.u)un.value=a.win.u;
+  if(ge)ge.value=a.g||'';
+  if(mi)mi.value=a.thr;
+  _segSpanToggle();
+  _segCompute(a.win,a.g,a.thr);   // 폼이 아니라 **질문이 만든 창** 그대로 계산 — 머리줄 문구가 실제 조건을 말한다
+  _segRender();
 }
 
 function _memAiIdx(){
@@ -29377,9 +29549,9 @@ function openVideoEditor(tab){
     +_mhead('영상 편집기','이 컴퓨터 안에서 자르고 붙여요','<button class="modal-x" onclick="_tminHide(\'ve-board\',\'영상 편집기\')" title="최소화" aria-label="최소화">─</button>')
     +'<div style="padding:12px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:14px;flex-wrap:wrap">'   // 운영자 선택값 260711: 16/700 → 14/900
     +'<div id="ve-tabs" style="display:flex;gap:2px;background:var(--neutral);border-radius:8px;padding:3px">'
-    +'<button type="button" class="prog-tab" data-t="edit" onclick="_veTab(\'edit\')" style="flex:none;padding:7px 16px">1. 영상 편집</button>'
-    +'<button type="button" class="prog-tab" data-t="sub" onclick="_veTab(\'sub\')" style="flex:none;padding:7px 16px">2. 자막 삽입</button>'
-    +'<button type="button" class="prog-tab" data-t="prompt" onclick="_veTab(\'prompt\')" style="flex:none;padding:7px 16px">3. 영상 프롬프팅</button>'
+    +'<button type="button" class="prog-tab" data-t="edit" onclick="_veTab(\'edit\')" style="flex:none">1. 영상 편집</button>'
+    +'<button type="button" class="prog-tab" data-t="sub" onclick="_veTab(\'sub\')" style="flex:none">2. 자막 삽입</button>'
+    +'<button type="button" class="prog-tab" data-t="prompt" onclick="_veTab(\'prompt\')" style="flex:none">3. 영상 프롬프팅</button>'
     +'</div>'
     +'<button type="button" class="btn btn--neutral btn--sm" id="ve-pinbtn" style="margin-left:auto;margin-right:72px" onclick="_veDraftPin()">'+(_veState._pinned?'저장됨':'임시 저장')+'</button>'
     +'</div>'
@@ -31387,8 +31559,8 @@ function openCardMaker(tab){
     +_mhead('이미지 편집','','<button class="modal-x" onclick="_tminHide(\'cm-board\',\'이미지 편집\')" title="최소화" aria-label="최소화">─</button>')
     +'<div style="padding:12px 24px;border-bottom:1px solid var(--border);font-size:16px;font-weight:700;display:flex;align-items:center;gap:14px;flex-wrap:wrap">'
       +'<div id="cm-tabs" style="display:flex;gap:2px;background:var(--neutral);border-radius:8px;padding:3px">'
-        +'<button type="button" class="prog-tab" data-t="card" onclick="_cmTab(\'card\')" style="flex:none;padding:7px 16px">1. 카드 제작</button>'
-        +'<button type="button" class="prog-tab" data-t="cut" onclick="_cmTab(\'cut\')" style="flex:none;padding:7px 16px">2. 누끼따기</button>'
+        +'<button type="button" class="prog-tab" data-t="card" onclick="_cmTab(\'card\')" style="flex:none">1. 카드 제작</button>'
+        +'<button type="button" class="prog-tab" data-t="cut" onclick="_cmTab(\'cut\')" style="flex:none">2. 누끼따기</button>'
       +'</div>'
       +'<span id="cm-subnote" style="font-size:11.5px;font-weight:600;color:var(--dim)">1080 × 1350 · 이 컴퓨터 안에서 만들어요</span></div>'
     +'<div id="cm-pane-cut" style="flex:1;min-height:0;display:none"></div>'   // 누끼따기 = 첫 전환 때 임베드 생성(모델 4.5MB를 안 쓸 땐 안 받게)

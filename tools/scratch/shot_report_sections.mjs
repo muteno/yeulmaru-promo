@@ -17,7 +17,9 @@ await page.route('**/*',r=>{const u=new NodeURL(r.request().url());
   catch(e){ return r.fulfill({status:404,body:String(e)}); }});
 await page.goto('https://app.local/'+PAGE,{waitUntil:'networkidle',timeout:30000});
 await page.waitForTimeout(600);
-for(const [id,name] of [['d1','260807_결정1_2열임계_설명.png'],['d2','260807_결정2_오픈석잉크_설명.png']]){
+// 3번째 인자 = "id:파일명,id:파일명" (생략 시 260807-9 기본값)
+const PAIRS=(process.argv[4]||'d1:260807_결정1_2열임계_설명.png,d2:260807_결정2_오픈석잉크_설명.png').split(',').map(s=>s.split(':'));
+for(const [id,name] of PAIRS){
   const el=await page.$('#'+id); if(!el){console.log('missing #'+id);continue;}
   await el.screenshot({path:join(OUT,name)});
   const bx=await el.boundingBox(); console.log(name, Math.round(bx.width)+'x'+Math.round(bx.height));
