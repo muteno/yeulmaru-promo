@@ -22658,6 +22658,20 @@ async function saveProgram(rowIndex){
     // (A) 항상: 순서 상식(오타 차단)
     if(_pfS&&_pfE&&_pfE<_pfS) _errs.push('공연 종료일이 시작일보다 빨라요');
     if(_saS&&_saE&&_saE<_saS) _errs.push('판매종료일이 판매시작일보다 빨라요');
+    // (A-2) 항상: 줄임말 중복 차단 — 같은 줄임말이 2건이면 _findPerfByName(L21136)의 first-match가 늘 앞 행만 반환해
+    //   뒤 프로그램의 홍보가 통째로 막힌다(작업이력 260804-17 「라이브 버그 ②」 = 헬로!오페라 2건 → 11월 마술피리 영구 차단).
+    //   두 축을 다 본다: 원문 일치(=_findPerfByName 조건) + _uName 정규화 일치(=_salesBuild·_dailyMasters dedup 조건, L5693).
+    //   _uName은 `_`·`!`·괄호·공백을 지우므로 '헬로_세비야'와 '헬로!세비야'가 같은 키 → 원문만 보면 새어나간다.
+    var _sh=(fd.get('줄임말')||'').trim();
+    if(_sh){
+      var _shU=_uName(_sh);
+      var _clash=(typeof _programsCache!=='undefined'&&_programsCache?_programsCache:[]).filter(function(p){
+        if(p._rowIndex===rowIndex)return false;   // 자기 자신(편집 중인 행)은 제외 — 신규는 rowIndex 없음 → 전 행 대조
+        var o=String(p['줄임말']||'').trim(); if(!o)return false;
+        return o===_sh||_uName(o)===_shU;
+      });
+      if(_clash.length) _errs.push('줄임말 「'+_sh+'」은 이미 ['+String(_clash[0]['풀네임']||'').trim()+']이 쓰고 있어요 — 겹치면 뒤 프로그램 홍보가 막힙니다');
+    }
     // (B) 노출 창이 열린 프로그램만: 홍보 정합(끝난 프로그램은 캘린더가 날짜로 제외 → 강제 무의미·이력 편집 마찰만)
     if(_open){
       if(_hasSale&&!_prS) _errs.push('판매·노출 기간이 남아 있으면 홍보 신청 받기를 켜세요 (홍보시작일 = 판매시작일 당일이나 그 이전)');
@@ -25482,7 +25496,7 @@ var _NB_TEMPLATES=[
   ['review','후기·현장형','1) 방문 계기 / 기대\n2) 현장 분위기 묘사\n3) 공연 하이라이트\n4) 솔직한 감상\n5) 추천 + 다음 공연 안내'],
   ['info','정보 요약형','1) 핵심 정보 먼저 (일시·장소·가격·예매)\n2) 공연 개요\n3) 관람 포인트\n4) 예매 링크 / 문의']
 ];
-function _nbDefaultState(){return {length:'보통', voice:'라디오 캐스터처럼 가볍고 경쾌한', emoji:true, tgt:{}, hooks:['',''], facts:{}, extra:'', tplMode:'auto', tplSel:'', tplText:'', output:'', outView:'edit', versions:[], verCur:-1, comments:[], ocrText:'', ocrFiles:[], ocrThumb:'', ocrBusy:false, analyzeBusy:false, genBusy:false, _toneDraft:'', escHandler:null};}
+function _nbDefaultState(){return {length:'보통', voice:'라디오 캐스터처럼 가볍고 경쾌한', emoji:true, tgt:{}, hooks:['',''], facts:{}, extra:'', tplMode:'auto', tplSel:'', tplText:'', output:'', outView:'edit', versions:[], verCur:-1, comments:[], ocrText:'', ocrFiles:[], ocrThumb:'', ocrBusy:false, perf:'', perfUrl:'', linkBusy:false, analyzeBusy:false, genBusy:false, _toneDraft:'', escHandler:null};}
 var _nbState=_nbDefaultState();
 
 // 상단 '콘텐츠 제작' 드롭다운 (네이버 블로그 + 향후 채널 확장)
@@ -27387,7 +27401,7 @@ var _memState=null,_memLoading=false,_memEscH=null,_memQT=null,_memEpoch=0;
 // [260731 운영자 "바로 안 열려요"] PII 재적재 가드를 「#member-lookup 존재」 → 「purge 에포크」로 교체.
 //   구 가드는 회원 조회 모달이 DOM에 없으면(= 회원 분포로 곧장 들어온 경우) 응답을 통째로 버려서 개요가 항상 "못 불러왔어요"였다.
 //   에포크 = _memPurge(로그아웃·유휴잠금)가 증가 → await 중 purge된 응답만 정확히 폐기(보안 의도 동일, 진입 경로 무관).
-function _memPurge(){_memState=null;_memLoading=false;_bkState=null;_bkLoading=false;_memEpoch++;_memAiHist=[];_memAiBusy=false;
+function _memPurge(){_memState=null;_memLoading=false;_bkState=null;_bkLoading=false;_bkP=null;_memEpoch++;_memAiHist=[];_memAiBusy=false;   /* [260806] _bkP(비행 중 적재)도 끊는다 — 안 끊으면 purge 뒤 첫 호출이 **폐기 예정인 옛 요청**에 합류해 빈손으로 돌아온다 */
   /* [260808] 고객 분류(AI 홍보 3탭) = 이름·휴대폰·관람이력이 한 표에 뜨는 자리라 같은 위생을 건다 —
      상태(_segLast·_bkAsk)와 **이미 그려진 DOM** 둘 다 지운다. 상태만 지우면 화면의 명단은 그대로 남는다. */
   _segLast=null;_bkAsk=null;var pc=document.getElementById('promo-check');if(pc)pc.innerHTML='';
@@ -27866,7 +27880,7 @@ function _memAiChip(sfx,t){var i=document.getElementById('mem-ai-q-'+sfx);if(i)i
 //   (docs/260804_booking_ingest.mjs 회원 조인 → docs/260804_booking_agg.mjs 회원키 집계).
 // 분포를 연도·장르 **교차표**로 들고 있는 이유 = 「23~24년에 클래식을 2회 이상」이 교차 조건이라
 //   연도별 합·장르별 합을 따로 저장하면 답이 안 나온다.
-var _bkState=null,_bkLoading=false;
+var _bkState=null,_bkLoading=false,_bkP=null;   // _bkP = 비행 중인 적재 요청 — 선로딩(_bkWarm)과 질문이 겹칠 때 **합류**할 손잡이
 
 // 확대 추정 배수 — 식별 표본을 「구매 경험 회원」으로 환산할 때 곱한다.
 //   ⚠ 표본 10,119명은 **구매했기 때문에 식별된** 사람들이라 무작위 표본이 아니다. 전체 회원 29,752로
@@ -27878,9 +27892,21 @@ var _BK_SCALE=1.53;
 var _BK_GENRES=['클래식','뮤지컬','발레/연극','어린이·가족','대중','국악','시즌','기타'];
 var _BK_ALIAS={'연극':'발레/연극','발레':'발레/연극','무용':'발레/연극','오페라':'클래식','가족':'어린이·가족','어린이':'어린이·가족','아동':'어린이·가족'};
 
-async function _bkLoad(force){
-  if(_bkLoading||(_bkState&&!force))return _bkState;
+// [260806 운영자 「AI 홍보 메뉴에선 확인되는데 예울이에선 안 나온다 — 붙여줘」] 적재 진입점 = **합류형**.
+//   구판은 `if(_bkLoading||(_bkState&&!force))return _bkState;` — 비행 중이면 아직 null인 _bkState를 그 자리에서
+//   돌려줬다. 그래서 `await _bkLoad(...)`로 기다린 줄 안 호출측이 **빈손으로** 다음 줄에 갔다(고객 분류 탭도 같은 구멍).
+//   실제로 걸리는 순서: 대시보드 「고객 분석」에 마우스가 스치면 _memWarm→_bkWarm이 먼저 적재를 띄운다 →
+//   화면이 열리고 사용자가 질문 → 그 적재가 아직 비행 중 → 구판은 즉시 null → 「아직 안 불러왔어요」.
+//   이제는 그 요청에 합류해 **끝날 때까지 같이 기다린다**(중복 fetch 0 = 단일 비행 규약은 그대로).
+function _bkLoad(force){
+  if(_bkP)return _bkP;                              // 비행 중 = 합류(force여도 두 벌 띄우지 않는다 — 구판과 같은 규약)
+  if(_bkState&&!force)return Promise.resolve(_bkState);
   _bkLoading=true;
+  var p=_bkFetch(force),done=function(){ if(_bkP===p){_bkP=null;_bkLoading=false;} };   // 항등 확인 = purge 뒤 새로 뜬 적재를 옛 비행이 끄지 않게
+  _bkP=p;p.then(done,done);
+  return p;
+}
+async function _bkFetch(force){
   var ep=_memEpoch;
   try{
     var d=await api('GET','/api/ops?sheet='+encodeURIComponent('예매집계')+(force?'&fresh=1':''));
@@ -27909,8 +27935,7 @@ async function _bkLoad(force){
     });
     _bkState={by:by,n:n,ym:ym,lo:lo,hi:hi,ts:Date.now()};
   }catch(e){ console.warn('[booking]',e); _bkState={by:{},n:0,err:String(e&&e.message||e)}; }
-  finally{ _bkLoading=false; }
-  return _bkState;
+  return _bkState;   // _bkLoading·_bkP 해제 = _bkLoad의 done(합류 손잡이와 한자리에서 푼다)
 }
 function _bkWarm(){ if(userRole!=='admin'||_bkState||_bkLoading)return; try{_bkLoad(false);}catch(e){} }
 
@@ -27991,9 +28016,16 @@ function _bkCount(rec,win,g){
   }
   return c;
 }
+// 「이 질문은 예매집계가 있어야 답이 나온다」의 단일 판정(SSOT) — _bkAnswer가 답할 질문인지, 그리고
+//   채팅(_memAiSend)이 **먼저 적재를 기다릴지**를 같은 한 벌로 정한다. 두 곳에 따로 적으면
+//   「기다리기는 했는데 답은 다른 경로로 새는」(또는 그 반대) 어긋남이 난다.
+function _bkIsQ(q){ return /관람|구매|샀|산\s|예매|티켓|본\s*사람|보신|재구매|단골|몇\s*번|회\s*이상|명단|리스트|추출|뽑아/.test(q); }
 // 예매 질의 답변 — 집계 밖 질문이면 null을 돌려 기존 흐름(지역·연령 규칙 → 예울이 AI)에 양보한다.
 function _bkAnswer(q){
-  if(!/관람|구매|샀|산\s|예매|티켓|본\s*사람|보신|재구매|단골|몇\s*번|회\s*이상|명단|리스트|추출|뽑아/.test(q))return null;
+  if(!_bkIsQ(q))return null;
+  // [260806] 여기 오면 적재는 이미 끝나 있다 — 냉시동 대기는 호출측(_memAiSend)이 AI 홍보 ▸ 고객 분류(_segRun)와
+  //   **같은 await _bkLoad**로 처리한다. 아래 줄은 그래도 남기는 안전판(예: 다른 진입로가 생겼을 때)이지
+  //   정상 경로가 아니다 — 구판은 이 자리가 정상 경로였고, 그래서 같은 시트인데 한쪽 화면만 답했다.
   if(!_bkState){ _bkWarm(); return '예매 이력을 아직 안 불러왔어요 — 잠시 뒤 다시 물어봐 주세요.'; }
   if(!_bkState.n)return '예매 이력이 비어 있어요'+(_bkState.err?' ('+_memEsc(_bkState.err)+')':'')+' — 운영_예매집계 시트를 확인해 주세요.';
   var win=_bkWin(q),g=_bkGenre(q),by=_bkState.by;
@@ -28300,7 +28332,7 @@ function _memAiCtx(idx){
   }
   return s;
 }
-function _memAiSend(sfx){
+async function _memAiSend(sfx){
   var inp=document.getElementById('mem-ai-q-'+sfx);if(!inp)return;
   var q=(inp.value||'').trim();if(!q||_memAiBusy)return;
   var idx=_memAiIdx();
@@ -28309,8 +28341,24 @@ function _memAiSend(sfx){
   if(_memAiHist.length>60)_memAiHist=_memAiHist.slice(-40);   // 세션 메모리 무한 누적 방지
   _memAiHist.push({u:q});
   var nowT=new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});   // [260804 2차] 말풍선 시각 = 레포 정본 포맷(「오전 11:24」) 그대로
+  // [260806 운영자 「예매데이터 — AI 홍보쪽 메뉴에서는 확인 가능한데, 여기랑 붙여줘」]
+  //   예매 질의인데 집계가 아직 없으면 **기다렸다가 답한다** = AI 홍보 ▸ 고객 분류(_segRun)와 똑같은 레일.
+  //   구판은 여기서 안 기다리고 _bkAnswer가 「아직 안 불러왔어요 — 잠시 뒤 다시」로 끝냈다(캡처 260806 오후 1:26).
+  //   같은 시트·같은 앱인데 한 화면만 답하는 상태였고, 재질문 안내도 소용없었다 — 뒤에서 덥히는 _bkWarm은
+  //   admin이 아니면 아예 안 돌아, 그 문장에서 영영 못 벗어나는 경로가 실재했다.
+  //   대기 줄은 답이 **그 자리에서 갈음**한다(줄이 둘로 늘지 않게 · 아래 AI 폴백의 pend와 같은 문법).
+  var warm=null;
+  if(_bkIsQ(q)&&!_bkState){
+    var ep=_memEpoch;
+    warm={b:_ldHtml(12)+'예매 이력을 불러오는 중이에요. 잠깐만요.',t:nowT};
+    _memAiHist.push(warm);_memAiBusy=true;_memAiPaintAll();
+    try{ await _bkLoad(false); }catch(e){ console.warn('[mem-ai booking]',e); }
+    _memAiBusy=false;
+    if(ep!==_memEpoch)return;   // 대기 중 로그아웃·유휴잠금 = PII를 그리지 않는다(_segRun·_bkFetch와 같은 규약)
+  }
   var ans=null;try{ans=_memAiLocal(q,idx);}catch(e){console.warn('[mem-ai local]',e);}
-  if(ans){_memAiHist.push({b:ans,t:nowT});_memAiPaintAll();return;}
+  if(ans){if(warm)warm.b=ans;else _memAiHist.push({b:ans,t:nowT});_memAiPaintAll();return;}
+  if(warm){var wi=_memAiHist.indexOf(warm);if(wi>=0)_memAiHist.splice(wi,1);}   // 예매어는 있었지만 집계 밖 질문 = 아래 AI 경로가 자기 대기 줄을 세운다
   var deepQ=_yeulAiDeep(q);   // [260803 운영자] 복잡 질문 = opus 딥 라우팅 — 「기다려 달라」를 츤 결로 먼저(v3 「음 귀찮은 걸 물어보시네요?」 급)
   var wait=deepQ?'음, 귀찮은 걸 물어보시네요? …그래도 제대로 생각해드릴게요. 조금 기다리세요.':'…생각 중이에요. 잠깐만요.';
   var pend={b:_ldHtml(12)+wait,t:nowT};   // 집계 밖 질문 = 예울이 AI(깃 Actions claude — _yeulAiAsk 공용 브레인)
@@ -29037,13 +29085,67 @@ function _nbHookDel(i){if(!_nbState.hooks)return;_nbState.hooks.splice(i,1);whil
 // 3️⃣ 홍보물 OCR — 상세페이지 최대 3장 업로드(파일 큐). 각 장 OCR 텍스트를 OCR 원문에 합침.
 function _nbPickImage(){var f=document.getElementById('nb-ocr-file');if(f)f.click();}
 function _nbOcrRecompute(){_nbState.ocrText=(_nbState.ocrFiles||[]).map(function(f){return String(f.text||'');}).filter(function(t){return t.trim();}).join('\n\n');}
-function _nbOcrFileDel(i){if(!_nbState.ocrFiles)return;_nbState.ocrFiles.splice(i,1);_nbOcrRecompute();_nbSaveState();_nbRender();}
+function _nbOcrUploads(){return (_nbState.ocrFiles||[]).filter(function(f){return !f.link;}).length;}   // 3장 상한은 「사람이 올린 것」만 센다(공연 링크 항목은 별개 한 칸)
+function _nbOcrFileDel(i){
+  if(!_nbState.ocrFiles)return;
+  var it=_nbState.ocrFiles[i];
+  if(it&&it.link){_nbState.perf='';_nbState.perfUrl='';}   // 링크 항목을 지우면 선택도 비운다 — 같은 공연을 다시 골라 받을 수 있게(onchange가 다시 뜬다)
+  _nbState.ocrFiles.splice(i,1);_nbOcrRecompute();_nbSaveState();_nbRender();
+}
+
+// 3️⃣-0 공연 고르기 → 상세페이지 자동 OCR (운영자 260810)
+//  왜: 상세페이지를 사람이 캡처해 올리던 자리다. 그 공연의 상세 링크는 이미 프로그램 시트(K열)에 있으므로
+//  「연결된 공연을 고르면」 서버가 그 링크를 열어 ①페이지 본문 ②포스터·상세 이미지 OCR을 읽어 OCR 원문에 넣는다.
+//  ⚠ 카카오채널 톡(km-*)과 **같은 목록·같은 추출·같은 KV 캐시**다 — 목록은 `_kmPerfs()` 한 벌(두 화면이 다른
+//    공연 목록을 보이면 안 된다), 추출은 Worker `/api/content/detail`(카카오 76자가 쓰는 promoDetailGet 그대로).
+//    같은 링크를 카카오에서 이미 읽었으면 재수집·재OCR 0으로 즉시 온다. 업로드 경로는 그대로 남는다(링크 없는 공연·현장 리플릿).
+function _nbPerfPick(v){
+  var hit=_kmPerfs().filter(function(p){return p.f===v;})[0];
+  _nbState.perf=v||''; _nbState.perfUrl=hit?String(hit.u||'').trim():'';
+  _nbRender();
+  if(_nbState.perfUrl)_nbLinkRun();   // 「자동 OCR」 = 고르는 순간 읽는다(버튼을 한 번 더 누르게 하지 않는다)
+}
+// 페이지 본문 + 이미지 OCR을 한 덩이로 — 어디서 온 글자인지 사람이 구분할 수 있게 머리표를 붙인다(초안 생성에도 그대로 실린다).
+function _nbLinkText(r){
+  var a=String((r&&r.text)||'').trim(),b=String((r&&r.ocrText)||'').trim(),p=[];
+  if(a)p.push('[상세페이지 본문]\n'+a);
+  if(b)p.push('[포스터·상세 이미지 OCR]\n'+b);
+  return p.join('\n\n');
+}
+function _nbOcrPutLink(name,text){   // 링크 항목은 큐에 한 칸만 — 다시 읽으면 그 자리를 갈아끼운다(중복 누적 방지)
+  if(!_nbState.ocrFiles)_nbState.ocrFiles=[];
+  var it={name:(name||'공연')+' · 상세페이지',text:text,link:1};
+  var i=-1;_nbState.ocrFiles.forEach(function(f,k){if(f&&f.link&&i<0)i=k;});
+  if(i>=0)_nbState.ocrFiles[i]=it;else _nbState.ocrFiles.unshift(it);
+  _nbOcrRecompute();
+}
+async function _nbLinkRun(fresh){
+  var s=_nbState;if(!s.perfUrl||s.linkBusy)return;
+  var _st=_nbState;   // 🔒 세대 가드 — 응답이 늦게 와도 닫힌/새로 연 화면은 안 건드린다(업로드 OCR과 같은 계약)
+  s.linkBusy=true;_nbRender();
+  try{
+    var r=await api('POST','/api/content/detail',{url:s.perfUrl,fresh:fresh?1:0});
+    if(_st!==_nbState)return;
+    _nbState.linkBusy=false;
+    var t=_nbLinkText(r);
+    if(!t.trim()){_nbRender();showToast('상세페이지에서 읽은 내용이 없어요 — 이미지를 직접 올려 주세요','error');return;}
+    _nbOcrPutLink(_nbState.perf,t);
+    _nbSaveState();_nbRender();
+    showToast('상세페이지 읽기 완료 — '+t.length+'자'+((r&&r.cached)?' (읽어 둔 것)':'')+' ✅','success');
+  }catch(e){
+    if(_st!==_nbState)return;
+    _nbState.linkBusy=false;_nbRender();
+    var m=String((e&&e.message)||e);
+    if(m.indexOf('no_ocr_provider')>-1||m.indexOf('503')>-1)showToast('OCR 엔진 미설정 — Worker 키 확인','error');
+    else showToast('상세페이지를 읽지 못했어요: '+m,'error');
+  }
+}
 function _nbOnFile(input){
   var file=input&&input.files&&input.files[0];if(!file)return;input.value='';
   if(!/^image\//.test(file.type||'')){showToast('이미지 파일을 올려 주세요','error');return;}
   if(!_nbState.ocrFiles)_nbState.ocrFiles=[];
-  if(_nbState.ocrFiles.length>=3){showToast('최대 3장까지 올릴 수 있어요','error');return;}
-  var fname=file.name||('이미지'+(_nbState.ocrFiles.length+1));
+  if(_nbOcrUploads()>=3){showToast('최대 3장까지 올릴 수 있어요','error');return;}
+  var fname=file.name||('이미지'+(_nbOcrUploads()+1));
   _nbState.ocrBusy=true;_nbRender();
   _nbCompress(file).then(function(r){
     return _nbOcrRun(r.dataURL,r.mime,fname);
@@ -29139,7 +29241,7 @@ function _nbBuildPayload(){
   var hk=(s.hooks||[]).map(function(x){return String(x||'').trim();}).filter(Boolean);
   var intent=_NB_FIXED_PURPOSE;
   if(hk.length)intent+=' 이번 글에서 이 타겟에게 특히 강조할 점: '+hk.join(' / ')+'.';
-  var topic=String(F.title||'').trim();
+  var topic=String(F.title||s.perf||'').trim();   // 고른 공연이 곧 글의 주제 — 연결된 공연이 있으면 제목이 빈 채로 나가지 않는다
   return {topic:topic,intent:intent,target:tparts.join(', '),
     facts:{overview:F.overview||'',when:F.when||'',where:F.where||'',who:F.who||'',price:F.price||'',detail:F.detail||''},
     ocrText:String(s.ocrText||'').trim(),   // 홍보물 OCR 원문이 사실의 바탕(분석 단계 없이 그대로 전달)
@@ -29156,6 +29258,19 @@ function _nbRender(){
   var voices=[['라디오 캐스터처럼 가볍고 경쾌한','캐스터'],['정중하고 따뜻한','정중하게'],['친근하고 편안한','친근하게']];
   var voiceChips=voices.map(function(v){return '<span class="nb-chip'+(s.voice===v[0]?' on':'')+'" onclick="_nbSet(\'voice\',\''+v[0]+'\')">'+escapeHtml(v[1])+'</span>';}).join('');
   var F=s.facts||{};
+  // 3️⃣ 연결된 공연 — 목록은 카카오채널 톡과 한 벌(`_kmPerfs` = 상세 링크가 있는 프로그램만). 고르면 자동 OCR.
+  var nbUp=_nbOcrUploads();
+  var nbPerfs=(typeof _kmPerfs==='function')?_kmPerfs():[];
+  var perfPickHtml='<select class="nb-input" '+(s.linkBusy?'disabled':'')+' onchange="_nbPerfPick(this.value)">'
+    +(nbPerfs.length
+      ? '<option value="">연결할 공연을 골라 주세요 · 상세 링크가 있는 것만</option>'+nbPerfs.map(function(p){return '<option value="'+escapeHtml(p.f)+'"'+(s.perf===p.f?' selected':'')+'>'+escapeHtml(p.f)+'</option>';}).join('')
+      : '<option value="">상세 링크가 있는 프로그램이 없어요</option>')
+    +'</select>';
+  perfPickHtml+=s.linkBusy
+    ? '<div style="display:flex;align-items:center;font-size:11.5px;color:var(--accent);margin-top:7px">'+_ldHtml(12)+'상세페이지와 포스터를 읽는 중 · 20~40초쯤 걸려요</div>'
+    : (s.perfUrl
+      ? '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:7px"><span style="flex:1;min-width:0;font-size:11px;color:var(--dim);word-break:break-all;line-height:1.6">읽은 링크 '+escapeHtml(s.perfUrl)+'</span><button type="button" class="nb-btn ghost" onclick="_nbLinkRun(1)" style="padding:5px 13px;font-size:12px;flex-shrink:0">다시 읽기 ↻</button></div>'
+      : (nbPerfs.length?'':'<div style="font-size:11px;color:var(--dim);margin-top:7px">프로그램 관리에서 URL(예매·상세 링크)을 넣으면 여기에 나와요</div>'));
   // 1️⃣ 타겟 속성 — 칩(선택지) + 옆에 점점 완성되는 아바타
   var tgtFieldsHtml=_NB_TGT_FIELDS.map(function(f){
     var key=f[0],label=f[1],type=f[2],opts=f[3],chips='';
@@ -29238,16 +29353,17 @@ function _nbRender(){
      // 2️⃣ 이 타겟에게 강조할 점 (주관식, 2줄 이상)
      +'<div style="font-size:13px;font-weight:800;color:var(--accent);margin:16px 0 5px">2️⃣ 이 타겟에게 무엇을 강조할까요?<span style="font-size:10.5px;font-weight:700;color:var(--danger)"> · 2줄 이상 필수</span></div>'
      +'<div class="nb-field">'+hookRows+'</div>'
-     // 3️⃣ 공연 내용 — 상세페이지 OCR (원문이 글의 바탕)
+     // 3️⃣ 공연 내용 — ①연결된 공연 고르기(자동 OCR) ②직접 업로드. 둘 다 OCR 원문 한 칸으로 모인다.
      +'<div style="font-size:13px;font-weight:800;color:var(--accent);margin:16px 0 5px">3️⃣ 공연 내용</div>'
-     +'<div style="font-size:12px;color:#555;font-weight:500;line-height:1.6;margin:0 0 8px">상세페이지를 올리면 텍스트가 <b style="color:var(--accent)">OCR 원문</b>에 나와요. 그대로 글의 바탕이 됩니다.</div>'
+     +'<div style="font-size:12px;color:#555;font-weight:500;line-height:1.6;margin:0 0 8px">공연을 고르면 상세페이지를 <b style="color:var(--accent)">자동으로 읽어</b> OCR 원문에 넣어요. 직접 올려도 됩니다.</div>'
+     +'<div class="nb-field">'+perfPickHtml+'</div>'
      +'<div class="nb-field">'
        +'<input type="file" id="nb-ocr-file" accept="image/*" style="display:none" onchange="_nbOnFile(this)">'
-       +'<button type="button" class="nb-upload-btn" '+((s.ocrBusy||(s.ocrFiles&&s.ocrFiles.length>=3))?'disabled':'')+' onclick="_nbPickImage()">'+(s.ocrBusy?_ldHtml(12)+'읽는 중':'＋ 상세 페이지 업로드'+((s.ocrFiles&&s.ocrFiles.length)?' ('+s.ocrFiles.length+'/3)':''))+'</button>'
-       +((s.ocrFiles&&s.ocrFiles.length)?'<div style="margin-top:8px">'+s.ocrFiles.map(function(f,i){return '<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:#f7f7fb;border:1px solid #ececf3;border-radius:8px;margin-bottom:5px"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12.5px;color:#555">📄 '+escapeHtml(f.name||'이미지')+'</span><button type="button" title="삭제" aria-label="삭제" onclick="_nbOcrFileDel('+i+')" style="border:0;background:none;color:#bbb;cursor:pointer;font-size:15px;line-height:1;padding:0 3px;flex-shrink:0">✕</button></div>';}).join('')+'</div>':'')
+       +'<button type="button" class="nb-upload-btn" '+((s.ocrBusy||nbUp>=3)?'disabled':'')+' onclick="_nbPickImage()">'+(s.ocrBusy?_ldHtml(12)+'읽는 중':'＋ 상세 페이지 직접 업로드'+(nbUp?' ('+nbUp+'/3)':''))+'</button>'
+       +((s.ocrFiles&&s.ocrFiles.length)?'<div style="margin-top:8px">'+s.ocrFiles.map(function(f,i){return '<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:#f7f7fb;border:1px solid #ececf3;border-radius:8px;margin-bottom:5px"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12.5px;color:#555">'+(f.link?'🔗':'📄')+' '+escapeHtml(f.name||'이미지')+'</span><button type="button" title="삭제" aria-label="삭제" onclick="_nbOcrFileDel('+i+')" style="border:0;background:none;color:#bbb;cursor:pointer;font-size:15px;line-height:1;padding:0 3px;flex-shrink:0">✕</button></div>';}).join('')+'</div>':'')
      +'</div>'
      +'<div class="nb-field" style="margin-bottom:6px"><label class="nb-label">OCR 원문 <span style="color:#bbb;font-weight:500">· 직접 수정 가능 ('+(String(s.ocrText||'').length)+'자)</span></label>'
-       +'<textarea class="nb-input" style="min-height:120px;resize:vertical" placeholder="상세페이지를 올리면 읽은 텍스트가 여기 나와요. (직접 붙여넣어도 됨)" oninput="_nbState.ocrText=this.value;_nbSaveState()">'+escapeHtml(s.ocrText||'')+'</textarea>'
+       +'<textarea class="nb-input" style="min-height:120px;resize:vertical" placeholder="공연을 고르거나 상세페이지를 올리면 읽은 텍스트가 여기 나와요. (직접 붙여넣어도 됨)" oninput="_nbState.ocrText=this.value;_nbSaveState()">'+escapeHtml(s.ocrText||'')+'</textarea>'
      +'</div>'
      +'<div style="border-top:1px solid #f0f0f4;margin:6px 0 10px"></div>'
      // 말투 · 이모지 — 라벨 좌측 / 선택지 우측
@@ -29325,7 +29441,7 @@ function _nbGenErr(msg){
 }
 async function _nbGenerate(){
   var o=_nbBuildPayload();
-  if(!String(o.ocrText||'').trim()){showToast('공연 상세페이지를 올려 OCR 원문을 채워 주세요','error');return;}
+  if(!String(o.ocrText||'').trim()){showToast('공연을 고르거나 상세페이지를 올려 OCR 원문을 채워 주세요','error');return;}
   var hk=(_nbState.hooks||[]).map(function(x){return String(x||'').trim();}).filter(Boolean);
   if(hk.length<2){showToast('강조할 점을 2줄 이상 적어 주세요','error');return;}
   var _st=_nbState;   // 🔒 세대 가드 — 폴링 최장 8분, resolve 시 리셋됐으면 결과 폐기(다음 사용자 역류 방지)
