@@ -16,6 +16,10 @@
  *   ② 값 없는 자리에 **파선 도형 0**(기틀 §2 #18 = 파선 폐지 · 페이드가 그 자리를 말한다)
  *   ③ 보수 기간 라벨의 **광학 잉크 중심**이 그 구간 중심과 Δ ≤ 1px(기틀 §2 #22)
  *   ④ 캘린더(일정)의 유지보수 달머리 == `_YC_MAINT` 구간 — **두 화면이 같은 달**을 가리킨다
+ *   ⑤ 값 라벨 「한 벌」(운영자 260809 · 기틀 §2 #18) — ⓐ 기구가 하나(막대 트레이스 텍스트 0 = 전부 주석)
+ *      ⓑ 막대 꼭대기↔숫자 **세로 간격 Δ ≤ 1.5px**(서브픽셀 반올림 여유 · 기구가 둘이면 여기서 5px가 튄다)
+ *      ⓒ 값이 있는 막대 중 **숫자 없는 것 0**(생략 금지 · 겹치면 가로로 비킨다) ⓓ 잉크 **1갈래**(흐린 검정 한 벌)
+ *      ⓔ 숫자끼리 **포갬 0** — 「다 보이게」의 반대편 축(비키다 못해 겹쳐 버리면 그것도 실패다)
  *
  * fail-soft: playwright-core·chromium 미탐지, 렌더 실패 = SKIP(차단 안 함). 계약 위반만 rc=1.
  * 데이터 = 커밋된 스냅샷(docs/reports/260803_…플레이그라운드.html 안 DATA) — 실API·PII 미접촉.
@@ -100,7 +104,29 @@ const MEASURE = `(()=>{
     return h?h.querySelector('.yc-mo-n').textContent.trim().replace(/[^0-9]+/g,'~'):'(머리 없음)';
   });
   const constMs=(typeof _YC_MAINT!=='undefined'?_YC_MAINT:[]).map(m=>m.ms.join('~'));
-  return {barmode:fl.barmode, groups, dash, maint, want, cal, constMs};
+  // ⑤ 값 라벨 한 벌 — 기구·간격·빠짐·잉크·포갬을 한 번에 잰다(운영자 260809).
+  const R=d.getBoundingClientRect(), rr=v=>+v.toFixed(2);
+  const bars=[];
+  [...d.querySelectorAll('.barlayer > .trace')].forEach((t,ti)=>[...t.querySelectorAll('.point > path')].forEach(p=>{
+    const b=p.getBoundingClientRect(); if(b.height<0.5)return;
+    bars.push({ti,cx:rr(b.x+b.width/2-R.x),top:rr(b.y-R.y),bot:rr(b.y+b.height-R.y)});
+  }));
+  const num=t=>/^[0-9,]+$/.test(t.textContent.trim());
+  const grab=(sel,src)=>[...d.querySelectorAll(sel)].filter(num).map(t=>{ const b=t.getBoundingClientRect();
+    return {src,t:t.textContent.trim(),cx:rr(b.x+b.width/2-R.x),w:rr(b.width),bot:rr(b.y+b.height-R.y),fill:getComputedStyle(t).fill}; });
+  const labs=grab('.barlayer text','trace').concat(grab('.annotation text','anno'));   // ⚠ Plotly 주석은 .infolayer > g.annotation
+  labs.forEach(L=>{ let g=null;
+    bars.forEach(B=>{ if(Math.abs(B.cx-L.cx)>14)return; const q=B.top-L.bot; if(q<-4)return; if(g==null||q<g)g=rr(q); });
+    L.gap=g; });
+  const nolab=bars.filter(B=>!labs.some(L=>Math.abs(L.cx-B.cx)<=14&&B.top-L.bot>=-4&&B.top-L.bot<=24)
+    &&!bars.some(O=>O!==B&&Math.abs(O.cx-B.cx)<=2&&O.ti!==B.ti&&O.bot<=B.top+1.5)).length;   // 예상 칸이 얹힌 실막대는 그 칸이 숫자를 인다
+  const gaps=labs.map(L=>L.gap).filter(g=>g!=null);
+  const ovl=[]; for(let a=0;a<labs.length;a++)for(let b=a+1;b<labs.length;b++)
+    if(Math.abs(labs[a].cx-labs[b].cx)<(labs[a].w+labs[b].w)/2&&Math.abs(labs[a].bot-labs[b].bot)<13)ovl.push(labs[a].t+'↔'+labs[b].t);
+  const lab={n:labs.length, trace:labs.filter(L=>L.src==='trace').length, nolab, ovl,
+    inks:[...new Set(labs.map(L=>L.fill))],
+    gapSpread:gaps.length?rr(Math.max(...gaps)-Math.min(...gaps)):null};
+  return {barmode:fl.barmode, groups, dash, maint, want, cal, constMs, lab};
 })()`;
 
 async function main() {
@@ -190,6 +216,19 @@ async function main() {
     fails.push(`④ 일정(캘린더) 유지보수 달머리 [${calN}] ≠ 상수 _YC_MAINT [${consN}] — 두 화면이 다른 달을 가리킨다(스냅샷 재생성 = node tools/build_annual.mjs).`);
   else infos.push(`④ 일정 ↔ 상수 동기 [${consN}]`);
 
+  // ⑤ 값 라벨 한 벌(운영자 260809 「숫자 간격이 다르다 · 다 숫자가 나오게 · 조금 흐린 검정으로」)
+  const L = m.lab || {};
+  if (!L.n) {
+    infos.push('⑤ 값 라벨 표본 0 — 이 데이터엔 숫자를 일 막대가 없다(계약 검사 생략).');
+  } else {
+    if (L.trace) fails.push(`⑤ⓐ 막대 트레이스 텍스트로 그린 값 라벨 ${L.trace}개 — 기구는 **주석 한 벌**이다(둘이면 간격이 갈린다 · 구판 실측 Δ0 vs Δ5.0px).`);
+    if (L.gapSpread != null && L.gapSpread > 1.5) fails.push(`⑤ⓑ 막대 꼭대기↔숫자 세로 간격이 라벨마다 ${L.gapSpread}px까지 벌어졌다(허용 1.5px = 서브픽셀 반올림 몫).`);
+    if (L.nolab) fails.push(`⑤ⓒ 값이 있는데 숫자가 없는 막대 ${L.nolab}개 — 겹치면 **가로로 비키고** 지우지 않는다(운영자 260809).`);
+    if ((L.inks || []).length > 1) fails.push(`⑤ⓓ 값 라벨 잉크가 ${L.inks.length}갈래다(${L.inks.join(' / ')}) — 「각기 다른 색이 아니라 조금 흐린 검정」 한 벌(--neutral-text).`);
+    if ((L.ovl || []).length) fails.push(`⑤ⓔ 숫자끼리 포갰다 ${L.ovl.length}쌍(${L.ovl.slice(0, 4).join(' · ')}) — 비키다 못해 겹치면 그것도 실패다.`);
+    infos.push(`⑤ 값 라벨 ${L.n}개 · 전부 주석 · 간격 Δ${L.gapSpread}px · 숫자 없는 막대 ${L.nolab} · 잉크 ${(L.inks || []).length}갈래 · 포갬 ${(L.ovl || []).length}`);
+  }
+
   if (fails.length) {
     console.error(`[bizchart] FAIL — 자리 계약 위반 ${fails.length}건:`);
     fails.forEach(f => console.error('  · ' + f));
@@ -197,7 +236,7 @@ async function main() {
     return 1;
   }
   infos.forEach(i => console.log('  ℹ ' + i));
-  console.log('[bizchart] PASS — 연간 사업 차트 자리 계약 유지(barmode overlay · 겹칸 x정렬 · 파선 0 · 보수 라벨 중심 · 일정 동기).');
+  console.log('[bizchart] PASS — 연간 사업 차트 자리 계약 유지(barmode overlay · 겹칸 x정렬 · 파선 0 · 보수 라벨 중심 · 일정 동기 · 값 라벨 한 벌).');
   return 0;
 }
 
