@@ -4,6 +4,44 @@
 <meta charset="UTF-8">
 <!-- [운영자 260723] HTTP 접속 = HTTPS로 자동 승격 (Teams/MSAL 로그인은 https 필수). GitHub Pages는 서버 리다이렉트 불가 → head 최상단 클라이언트 승격 · 엣지 강제(301+HSTS)는 repo Settings▸Pages▸"Enforce HTTPS" 병행 권장 -->
 <script>if(location.protocol==='http:')location.replace('https://'+location.host+location.pathname+location.search+location.hash);</script>
+<!-- [260806 운영자 승인 「관리자에게만 토스트」] 전역 에러 포착 — 「눌러도 아무 일도 안 일어남」을 관리자에게 알린다.
+     왜 = 260806 실사고(홍보 위저드 사망 · PR 725번). onclick 핸들러가 TypeError로 죽어도 앱이 **완전히 조용해서**
+       「새 콘텐츠 등록이 안 먹는다」가 하루를 갔다 — 그때 앱엔 window.onerror가 0건이었다(실측).
+     범위 = **관리자만** 화면 알림. 일반 사용자 화면은 종전 그대로(무해한 외부 예외로 겁주지 않는다 · 운영자 선택).
+     자리 = head 최상단. 리스너는 **등록된 뒤**의 것만 잡으므로, 본체 스크립트의 파싱 에러까지 덮으려면 여기여야 한다.
+     새 디자인 0 = 정본 `showToast(msg,'error')` 재사용(`.toast.error` 그대로) · 상세는 역할 무관 항상 console.error.
+     ⚠ userRole은 본체의 top-level `let`(전역 렉시컬 바인딩 = window 속성이 아니고 TDZ가 있다) → typeof까지 try로 감싼다. -->
+<script>
+(function(){
+  var seen={}, shown=0, MAX=5;   // 같은 문구 반복·루프 도배 차단(콘솔 기록은 안 막는다 — 화면만 조인다)
+  function isAdmin(){
+    try{ if(typeof userRole!=='undefined' && userRole) return userRole==='admin'; }catch(e){}   // TDZ면 아래 폴백
+    try{ return sessionStorage.getItem('role')==='admin'; }catch(e){}
+    return false;
+  }
+  function report(kind, msg, detail){
+    // 남의 오리진 스크립트는 브라우저가 본문을 가려 'Script error.'만 준다 = 우리 코드 아님·손댈 것 없음 →
+    //   화면은 물론 **기록도 남기지 않는다**(브라우저가 이미 콘솔에 제 몫으로 찍는다 = 우리 줄은 순수 중복 잡음).
+    //   ⚠ 이 걸러내기는 console.error **위**에 있어야 한다 — 아래에 두면 잡음만 두 배가 된다(260806 게이트가 실제로 잡아냈다).
+    if(!msg || /^script error\.?$/i.test(String(msg).trim())) return;
+    try{ console.error('[전역 '+kind+']', msg, detail||''); }catch(e){}   // 기록은 역할 무관 항상(관리자만인 건 화면 안내뿐)
+    if(!isAdmin() || typeof showToast!=='function') return;
+    var key=kind+'|'+msg;
+    if(seen[key] || shown>=MAX) return;
+    seen[key]=1; shown++;
+    showToast('화면 오류가 났어요 · 콘솔(F12) 확인','error');   // 데스크톱 .toast는 nowrap = 문구를 길게 안 만든다(상세는 콘솔)
+  }
+  window.addEventListener('error', function(e){
+    // <img>/<script> 로드 실패도 같은 이벤트로 온다(target이 엘리먼트 · e.error 없음) = 스크립트 예외가 아니므로 제외
+    if(e && e.target && e.target!==window && e.target.nodeType===1) return;
+    report('에러', e && e.message, e && e.error);
+  }, true);
+  window.addEventListener('unhandledrejection', function(e){
+    var r = e && e.reason;
+    report('처리 안 된 거절', (r && (r.message || String(r))) || '(사유 없음)', r);
+  });
+})();
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, viewport-fit=cover">
 <title>GS칼텍스 예울마루 사업 대시보드</title>
 <meta name="description" content="GS칼텍스 예울마루 사업 대시보드 — 사업 실적·판매 현황·홍보 관리">

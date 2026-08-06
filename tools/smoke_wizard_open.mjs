@@ -69,8 +69,9 @@ const RESET = `(()=>{try{closePromoWizard(true);}catch(e){try{document.getElemen
 
 async function boot(browser, role) {
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
-  const errs = [];
+  const errs = [], con = [];
   page.on('pageerror', e => errs.push(String(e).split('\n')[0]));
+  page.on('console', m => { const t = m.text(); if (t.indexOf('[전역 ') === 0) con.push(t.slice(0, 160)); });   // 전역 포착기의 기록 채널(토스트와 별개 축)
   await page.route('**/*', route => {
     const u = new NodeURL(route.request().url());
     if (u.hostname === 'app.local') {
@@ -78,13 +79,15 @@ async function boot(browser, role) {
       try { return route.fulfill({ status: 200, body: readFileSync(join(ROOT, p)), contentType: MIME[extname(p)] || 'application/octet-stream' }); }
       catch { return route.fulfill({ status: 404, body: 'nf' }); }
     }
+    // 남의 오리진에서 온 스크립트(MSAL·CDN 축)를 흉내 — CORS 헤더 없이 주면 브라우저가 본문을 가려 'Script error.'만 보고한다.
+    if (u.hostname === 'x-origin.local') return route.fulfill({ status: 200, contentType: 'text/javascript', body: "throw new Error('cross-origin boom');" });
     return route.abort();
   });
   await page.goto(`https://app.local/index.html?qa=${role}#cal`, { waitUntil: 'domcontentloaded', timeout: 30000 });
   await page.waitForSelector('.cell', { timeout: 20000 });
   await page.evaluate(FEED);
   await page.waitForTimeout(900);
-  return { page, errs };
+  return { page, errs, con };
 }
 
 // 캘린더 빈 셀 우클릭 → 메뉴 항목 클릭(실제 사용자 동선 그대로 — 함수 직접 호출로는 onclick 배선 파손을 못 잡는다)
@@ -103,6 +106,39 @@ async function viaCell(page, label) {
   if (hit !== 'ok') return { err: `우클릭 메뉴에서 「${label}」 못 찾음(${hit})` };
   await page.waitForTimeout(700);
   return { st: await page.evaluate(STATE) };
+}
+
+// ④ [260806 운영자 승인 「관리자에게만 토스트」] 전역 에러 포착 실측 — 이번 사고의 **재발 시 발견 장치** 자체를 잠근다.
+//   재는 것 = ⓐ진짜 스크립트 예외 → 안내 1건 ⓑ<img> 404(리소스 로드 실패) → 안내·기록 **둘 다 0건**(스크립트 예외가 아니다) ⓒ처리 안 된 Promise 거절 → 1건
+//               ⓓ남의 오리진 스크립트 예외('Script error.') → 안내·기록 **둘 다 0건**(본문이 가려져 손댈 것이 없다 = 잡음).
+//   ⚠ 일부러 예외를 던지므로 호출부는 「무소음 예외(pageerror)」 판정을 **끝낸 뒤에** 부른다.
+//   두 채널을 따로 센다 — ⓐ**토스트**: showToast를 감싸 호출을 센다(#toast 한 칸을 재사용하는 구조라 DOM만 보면 마지막 1건밖에 못 센다) ·
+//   ⓑ**콘솔 기록**: 리소스 실패는 message가 비어 토스트 경로엔 애초에 못 닿는다 = 토스트만 보면 「리소스 제외 규칙」을 지워도 검출이 안 된다(첫 판 킬테스트 실측).
+//   그 규칙이 실제로 지키는 건 **기록 채널의 잡음**이므로 콘솔 줄 수로 재야 이빨이 생긴다.
+async function globalErrProbe(page, con) {
+  const READ = `(()=>{const n=(window.__ge||[]).length; window.__ge=[]; return n;})()`;
+  const conN = () => { const n = con.length; con.length = 0; return n; };
+  conN();
+  await page.evaluate(`(()=>{ window.__ge=[]; if(!window.__geTapped){ window.__geTapped=1; var _o=window.showToast;
+    window.showToast=function(m,t){ if(t==='error')window.__ge.push(m); return _o.apply(this,arguments); }; } })()`);
+  // 실제 사고와 같은 모양 = **onclick 핸들러가 던진다**. 리스너 안에서 던진 예외는 호출부로 전파되지 않고
+  //   window 에러로 보고되므로 in-page `.click()`으로 부른다(page.click은 위저드가 덮고 있으면 못 누른다).
+  await page.evaluate(`(()=>{var b=document.getElementById('__ge_boom');
+    if(!b){b=document.createElement('button');b.id='__ge_boom';b.onclick=function(){null.x=1;};b.style.cssText='position:fixed;left:-9999px';document.body.appendChild(b);}
+    b.click();})()`);
+  await page.waitForTimeout(300);
+  const 실예외 = await page.evaluate(READ); conN();
+  await page.evaluate(`(()=>{var i=new Image();i.src='/__ge_none__.png';document.body.appendChild(i);})()`);
+  await page.waitForTimeout(450);
+  const 리소스404 = await page.evaluate(READ), 리소스404기록 = conN();
+  await page.evaluate(`(()=>{Promise.reject(new Error('스모크 거절'));})()`);
+  await page.waitForTimeout(300);
+  const 거절 = await page.evaluate(READ); conN();
+  // 남의 오리진 스크립트의 예외 = 브라우저가 'Script error.'만 준다(우리 코드 아님·손댈 것 없음) → 안내·기록 둘 다 0이어야 한다.
+  await page.evaluate(`(()=>new Promise(function(res){var s=document.createElement('script');s.src='https://x-origin.local/boom.js';s.onload=function(){setTimeout(res,250);};s.onerror=function(){setTimeout(res,250);};document.head.appendChild(s);}))()`);
+  await page.waitForTimeout(250);
+  const 남의오리진 = await page.evaluate(READ), 남의오리진기록 = conN();
+  return { 실예외, 리소스404, 리소스404기록, 거절, 남의오리진, 남의오리진기록 };
 }
 
 async function main() {
@@ -156,6 +192,13 @@ async function main() {
       if (d.head !== '임시저장 이어쓰기') fails.push(`임시저장 머리줄 제목 = "${d.head}" (기대 "임시저장 이어쓰기")`);
     }
     if (A.errs.length) fails.push('관리자 경로 무소음 예외: ' + A.errs.slice(0, 3).join(' | '));
+    // ⚠ 아래 ④는 **일부러 예외를 던진다** → 위 「무소음 예외」 판정을 먼저 끝낸 뒤에만 돌린다(순서 고정).
+    const ga = await globalErrProbe(A.page, A.con);
+    if (ga.실예외 !== 1) fails.push(`전역 에러 포착(관리자): 진짜 예외에 안내 ${ga.실예외}건 (기대 1건 — head 최상단 window.onerror 배선 확인)`);
+    if (ga.리소스404 !== 0) fails.push(`전역 에러 포착(관리자): <img> 404에 안내 ${ga.리소스404}건 (기대 0건 — 리소스 로드 실패는 스크립트 예외가 아니다)`);
+    if (ga.리소스404기록 !== 0) fails.push(`전역 에러 포착: <img> 404가 콘솔에 ${ga.리소스404기록}건 기록됨 (기대 0건 — 리소스 로드 실패 제외 규칙 확인: e.target.nodeType===1이면 return)`);
+    if (ga.거절 !== 1) fails.push(`전역 에러 포착(관리자): 처리 안 된 Promise 거절에 안내 ${ga.거절}건 (기대 1건)`);
+    if (ga.남의오리진 !== 0 || ga.남의오리진기록 !== 0) fails.push(`전역 에러 포착: 남의 오리진 스크립트 예외에 안내 ${ga.남의오리진}건·기록 ${ga.남의오리진기록}건 (기대 0·0 — 'Script error.' 필터 확인: 본문이 가려져 손댈 것이 없다)`);
     await A.page.close();
 
     // ── 사용자: 셀 우클릭 → 「홍보 신청」(관리자와 다른 메뉴 가지 = 같은 위저드) ──
@@ -169,9 +212,12 @@ async function main() {
       if (u.st.body < 10) fails.push('사용자 「홍보 신청」 — Step 본문이 비었다');
     }
     if (U.errs.length) fails.push('사용자 경로 무소음 예외: ' + U.errs.slice(0, 3).join(' | '));
+    const gu = await globalErrProbe(U.page, U.con);   // 사용자 화면은 종전대로 조용해야 한다(운영자 선택 = 관리자에게만)
+    const guTotal = gu.실예외 + gu.리소스404 + gu.거절 + gu.남의오리진;
+    if (guTotal !== 0) fails.push(`전역 에러 포착(사용자): 일반 사용자에게 안내 ${guTotal}건 (기대 0건 — 범위는 관리자 전용)`);
     await U.page.close();
 
-    if (!fails.length) { console.log('[wizard] PASS — 위저드 열림 계약 유지(관리자·사용자 우클릭 · 배치 · 임시저장 이어쓰기 · 머리줄 훅 · 무소음 예외 0).'); return 0; }
+    if (!fails.length) { console.log('[wizard] PASS — 위저드 열림 계약 유지(관리자·사용자 우클릭 · 배치 · 임시저장 이어쓰기 · 머리줄 훅 · 무소음 예외 0 · 전역 에러 포착 관리자 전용).'); return 0; }
     console.error('[wizard] FAIL — 홍보 위저드 열림 계약 위반:');
     fails.forEach(f => console.error('  · ' + f));
     console.error('  기준: 여는 경로가 .show + Step 본문을 그리고, 머리줄 제목(#pw-mtitle)이 모드대로 바뀌며, pageerror 0.');
