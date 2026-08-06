@@ -16428,27 +16428,32 @@ function _promoColVal(col,r){
   if(col==='content')return (r['프로그램']||'').toString().trim();
   return '';
 }
-function closeColFilter(){var el=document.getElementById('colf-pop-wrap');if(el)el.remove();document.removeEventListener('mousedown',_colfOutside,true);}
+// [260812] 팝업 **한 벌**을 두 표가 나눠 쓴다 — 홍보 신청·확인 표(openColFilter)와 고객 분류 표(_segColFilter).
+//   왜 = 「하나를 바꾸면 다른 것도 바뀌게」(운영자 260807-8 사업 목록 표와 같은 축). 같은 조작이 두 화면에서
+//   다르게 보이면 그때부터 둘은 서로 다른 부품이 된다 — 그 자리에서 다시 그리지 마라(정본 컴포넌트 패리티 260805-24).
+//   쓰는 쪽이 주는 것 = 값 목록·현재 선택·정렬/적용 콜백뿐. 마크업·치수·색은 여기 하나가 정본이다.
+var _colfCtx=null;
+function closeColFilter(){var el=document.getElementById('colf-pop-wrap');if(el)el.remove();_colfCtx=null;document.removeEventListener('mousedown',_colfOutside,true);}
 function _colfOutside(e){var p=document.getElementById('colf-pop');if(p&&!p.contains(e.target))closeColFilter();}
 function colfToggleAll(on){Array.prototype.forEach.call(document.querySelectorAll('#colf-pop .colf-cb'),function(cb){cb.checked=on;});}
-function applyColFilter(col){
+function colfSort(dir){var c=_colfCtx;closeColFilter();if(c&&c.onSort)c.onSort(dir);}
+function applyColFilter(){
+  var c=_colfCtx;if(!c)return;
   var cbs=Array.prototype.slice.call(document.querySelectorAll('#colf-pop .colf-cb'));
   var checked=cbs.filter(function(cb){return cb.checked;}).map(function(cb){return cb.value;});
-  if(checked.length===cbs.length||checked.length===0){delete _promoFilter.colFilters[col];}
-  else{_promoFilter.colFilters[col]=checked;}
-  closeColFilter();renderPromoBoard();
+  // 전부 켜짐·전부 꺼짐 = 필터 해제(구판 semantics 그대로 — 값을 다 지우고 적용하면 「안 거른 것」이다)
+  var sel=(checked.length===cbs.length||checked.length===0)?null:checked;
+  closeColFilter();if(c.onApply)c.onApply(sel);
 }
-function openColFilter(col,ev){
-  if(ev){ev.stopPropagation();ev.preventDefault();}
-  var trigger=ev&&ev.currentTarget;
-  var vals={};(records||[]).forEach(function(r){if(r._isSpecial)return;var v=_promoColVal(col,r);if(v!=='')vals[v]=1;});
-  var list=Object.keys(vals).sort(function(a,b){return a.localeCompare(b,'ko');});
-  var sel=_promoFilter.colFilters[col];var allChecked=!sel;
+// opts = {anchor, list:[표시값], sel:[선택값]|null, onSort(dir), onApply(sel|null)}
+function _colfPop(opts){
+  _colfCtx=opts;
+  var trigger=opts.anchor,list=opts.list||[],sel=opts.sel||null,allChecked=!sel;
   var box='background:#fff;border:1px solid #e0e0e0;border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,0.16);width:232px;font-size:12px;overflow:hidden;font-family:inherit;text-align:left';
   var h='<div id="colf-pop" style="position:fixed;z-index:100000;'+box+'">';
   h+='<div style="display:flex;border-bottom:1px solid #f0f0f0">';
-  h+='<button onclick="_promoFilter.sortBy=\''+col+'\';_promoFilter.sortDir=\'asc\';closeColFilter();renderPromoBoard()" style="flex:1;padding:8px;border:0;background:#fff;cursor:pointer;font-size:11.5px;color:#444;font-family:inherit">▲ 오름차순</button>';
-  h+='<button onclick="_promoFilter.sortBy=\''+col+'\';_promoFilter.sortDir=\'desc\';closeColFilter();renderPromoBoard()" style="flex:1;padding:8px;border:0;border-left:1px solid #f0f0f0;background:#fff;cursor:pointer;font-size:11.5px;color:#444;font-family:inherit">▼ 내림차순</button>';
+  h+='<button onclick="colfSort(\'asc\')" style="flex:1;padding:8px;border:0;background:#fff;cursor:pointer;font-size:11.5px;color:#444;font-family:inherit">▲ 오름차순</button>';
+  h+='<button onclick="colfSort(\'desc\')" style="flex:1;padding:8px;border:0;border-left:1px solid #f0f0f0;background:#fff;cursor:pointer;font-size:11.5px;color:#444;font-family:inherit">▼ 내림차순</button>';
   h+='</div>';
   h+='<label style="display:flex;align-items:center;gap:6px;padding:8px 12px;border-bottom:1px solid #f0f0f0;cursor:pointer;font-weight:600;color:#333"><input type="checkbox" id="colf-all" '+(allChecked?'checked':'')+' onchange="colfToggleAll(this.checked)" style="accent-color:var(--accent)">(전체 선택)</label>';
   h+='<div style="max-height:220px;overflow-y:auto;padding:4px 0">';
@@ -16457,13 +16462,22 @@ function openColFilter(col,ev){
   h+='</div>';
   h+='<div style="display:flex;gap:6px;padding:8px 10px;border-top:1px solid #f0f0f0">';
   h+='<button onclick="closeColFilter()" style="flex:1;padding:7px;border:1px solid #ddd;border-radius:7px;background:#fff;color:#666;cursor:pointer;font-family:inherit;font-size:11.5px">닫기</button>';
-  h+='<button onclick="applyColFilter(\''+col+'\')" style="flex:1;padding:7px;border:0;border-radius:7px;background:var(--accent);color:#fff;cursor:pointer;font-weight:600;font-family:inherit;font-size:11.5px">적용</button>';
+  h+='<button onclick="applyColFilter()" style="flex:1;padding:7px;border:0;border-radius:7px;background:var(--accent);color:#fff;cursor:pointer;font-weight:600;font-family:inherit;font-size:11.5px">적용</button>';
   h+='</div></div>';
   var wrap=document.getElementById('colf-pop-wrap');if(!wrap){wrap=document.createElement('div');wrap.id='colf-pop-wrap';document.body.appendChild(wrap);}
   wrap.innerHTML=h;
   var pop=document.getElementById('colf-pop');
   if(trigger&&pop){var rc=trigger.getBoundingClientRect();var left=Math.max(8,Math.min(rc.left,window.innerWidth-240));pop.style.top=(rc.bottom+4)+'px';pop.style.left=left+'px';}
   setTimeout(function(){document.addEventListener('mousedown',_colfOutside,true);},0);
+}
+function openColFilter(col,ev){
+  if(ev){ev.stopPropagation();ev.preventDefault();}
+  var vals={};(records||[]).forEach(function(r){if(r._isSpecial)return;var v=_promoColVal(col,r);if(v!=='')vals[v]=1;});
+  _colfPop({anchor:ev&&ev.currentTarget,
+    list:Object.keys(vals).sort(function(a,b){return a.localeCompare(b,'ko');}),
+    sel:_promoFilter.colFilters[col]||null,
+    onSort:function(dir){_promoFilter.sortBy=col;_promoFilter.sortDir=dir;renderPromoBoard();},
+    onApply:function(sel){if(sel)_promoFilter.colFilters[col]=sel;else delete _promoFilter.colFilters[col];renderPromoBoard();}});
 }
 function openPromoBoard(){
   // 매번 열 때 필터 초기화 — 항상 [전체] 기준
@@ -28196,8 +28210,9 @@ function _segMemIdx(){
   _memState._segIdx=by;
   return by;
 }
-// 한 사람의 장르 분포 요약 — 많이 본 순 상위 3
-function _segGenres(rec,win){
+// 한 사람의 장르 분포 요약 — 많이 본 순 상위 3.
+//   표기(`클래식 23`)와 필터 목록(`클래식`)이 **같은 계산**을 본다 — 갈리면 화면에 보이는 장르로 걸러도 안 걸린다.
+function _segGenreTop(rec,win){
   var g={};
   for(var k in rec.d){
     var i=k.indexOf('|');if(i<0)continue;
@@ -28208,7 +28223,69 @@ function _segGenres(rec,win){
     }
     var gg=k.slice(i+1);g[gg]=(g[gg]||0)+rec.d[k];
   }
-  return Object.keys(g).sort(function(x,y){return g[y]-g[x];}).slice(0,3).map(function(x){return x+' '+g[x];}).join(' · ');
+  return Object.keys(g).sort(function(x,y){return g[y]-g[x];}).slice(0,3).map(function(x){return {g:x,c:g[x]};});
+}
+function _segGenres(rec,win){return _segGenreTop(rec,win).map(function(x){return x.g+' '+x.c;}).join(' · ');}
+
+// ===== 표기 정본 (운영자 260812 「저 부분은 많이 쓰일거라 핵심」) =====
+// 한 줄 계약 = **화면은 줄이고 가리되, 내보낸 파일은 원 표기 그대로**(운영자 「여기서만 줄임말 · 다운로드는 다 표기」).
+//   그래서 표시 문자열과 CSV 값을 만드는 함수를 나눠 둔다 — 한 함수로 겸하면 언젠가 한쪽이 다른 쪽을 따라간다.
+function _segPhoneDigits(m){return String(m['휴대폰정규화']||m['휴대폰번호']||'').replace(/\D/g,'');}
+function _segPhoneFull(m){var p=_segPhoneDigits(m);return p.length===11?(p.slice(0,3)+'-'+p.slice(3,7)+'-'+p.slice(7)):String(m['휴대폰정규화']||m['휴대폰번호']||'');}
+function _segPhoneMask(m){var p=_segPhoneDigits(m);return p.length===11?(p.slice(0,3)+'-****-'+p.slice(7)):_segPhoneFull(m).replace(/\d(?=\d{4})/g,'*');}
+// 금액 = **만 원 단위 올림**(= 만 원 미만 절상). 3,844,200원 → 385만원.
+//   ⚠ 「천 원 단위 올림」은 천 원 자리까지 남기는 것이라 3,845,000원 = 다른 값이다(운영자 문의 260812).
+function _segMan(v){return Math.ceil((parseInt(v,10)||0)/10000);}
+// 집계의 첫/최근 구매일은 원본 `이용일시`를 자른 값이라 `2020-10-16`·`20201016…`가 섞여 있다(그래서 화면에 `20201016:`처럼 꼬리가 보였다).
+//   `260804_booking_agg.mjs`의 연월 파싱과 **같은 정규식**으로 받고, 못 읽으면 원문 그대로 둔다(없는 날짜 창작 금지).
+function _segYmd(s){return /^(\d{4})[-./]?(\d{2})[-./]?(\d{2})/.exec(String(s||''));}
+function _segDayK(s){var m=_segYmd(s);return m?(m[1]+'년 '+(+m[2])+'월 '+(+m[3])+'일'):String(s||'');}
+function _segDayIso(s){var m=_segYmd(s);return m?(m[1]+'-'+m[2]+'-'+m[3]):String(s||'');}
+function _segDayNum(s){var m=_segYmd(s);return m?parseInt(m[1]+m[2]+m[3],10):0;}
+function _segKDayNum(s){var m=/(\d{4})년\s*(\d+)월\s*(\d+)일/.exec(String(s||''));return m?(+m[1]*10000+ +m[2]*100+ +m[3]):0;}
+// 시도 줄임 — 규칙은 `_memAiRegions`의 시도 별칭과 **같은 축**(접미 제거 · 경상남도→경남). 화면 전용.
+function _segSido(s){s=String(s||'').trim();var m=/^(.).(남|북)도$/.exec(s);if(m)return m[1]+m[2];return s.replace(/(특별자치도|특별자치시|통합특별시|광역시|특별시|도)$/,'')||s;}
+function _segArea(m,full){var a=String(m['주소1']||''),b=String(m['주소2']||'');return ((full?a:_segSido(a))+' '+b).trim();}
+
+// ===== 열 정본 — 표 머리·셀·정렬·필터·CSV가 전부 이 배열 하나를 본다 =====
+//   t = 화면 표시 문자열(= 필터 목록에 뜨는 값) · s = 정렬 키 · num = 우측 정렬·숫자 비교 · grp = 2단 머리의 묶음 이름
+//   ⚠ 표시와 필터 값을 갈라 두지 마라 — 화면에 「385」가 보이는데 필터 목록엔 「3844200」이 뜨면 같은 표가 아니다.
+var _SEG_COLS=[
+  {c:'name', l:'이름',         t:function(x){return String(x.m['이름']||'');},         s:function(x){return String(x.m['이름']||'');}},
+  {c:'phone',l:'휴대폰',       t:function(x){return _segPhoneMask(x.m);},              s:function(x){return _segPhoneDigits(x.m);}},
+  {c:'area', l:'지역',         t:function(x){return _segArea(x.m);},                   s:function(x){return _segArea(x.m);}},
+  {c:'hit',  l:'조건',         num:1, grp:'관람(단위: 회)', t:function(x){return _memAiFmt(x.c);},     s:function(x){return x.c;}},
+  {c:'all',  l:'전체',         num:1, grp:'관람(단위: 회)', t:function(x){return _memAiFmt(x.rec.n);}, s:function(x){return x.rec.n;}},
+  {c:'tix',  l:'구매 매수(석)', num:1, t:function(x){return _memAiFmt(x.rec.tix);},     s:function(x){return x.rec.tix;}},
+  {c:'amt',  l:'금액(만원)',    num:1, t:function(x){return _memAiFmt(_segMan(x.rec.amt));}, s:function(x){return x.rec.amt;}},
+  {c:'first',l:'첫 관람',       tap:1, t:function(x){return _segDayK(x.rec.first);},    s:function(x){return _segDayNum(x.rec.first);}, ls:function(a,b){return _segKDayNum(a)-_segKDayNum(b);}},
+  {c:'last', l:'최근 관람',     tap:1, t:function(x){return _segDayK(x.rec.last);},     s:function(x){return _segDayNum(x.rec.last);},  ls:function(a,b){return _segKDayNum(a)-_segKDayNum(b);}},
+  {c:'genre',l:'장르(회)',      multi:1, t:function(x,w){return _segGenres(x.rec,w);},  s:function(x,w){return _segGenres(x.rec,w);}}
+];
+function _segCol(c){for(var i=0;i<_SEG_COLS.length;i++)if(_SEG_COLS[i].c===c)return _SEG_COLS[i];return null;}
+// 한 칸이 필터에 내놓는 값들 — 장르 칸만 여럿(`클래식 23 · 발레/연극 4` 통째로는 아무도 못 고른다)
+function _segVals(c,x,w){var d=_segCol(c);return d.multi?_segGenreTop(x.rec,w).map(function(v){return v.g;}):[d.t(x,w)];}
+// 화면에 그릴 목록 = 필터 → 정렬. **CSV도 이걸 쓴다**(화면과 파일이 다른 말을 하지 않게).
+function _segView(){
+  if(!_segLast)return [];
+  var L=_segLast,w=L.win,out=L.rows,keys=Object.keys(L.f||{});
+  if(keys.length)out=out.filter(function(x){
+    for(var i=0;i<keys.length;i++){
+      var allow=L.f[keys[i]],vs=_segVals(keys[i],x,w),hit=false;
+      for(var j=0;j<vs.length;j++)if(allow.indexOf(vs[j])>=0){hit=true;break;}
+      if(!hit)return false;
+    }
+    return true;
+  });
+  if(L.sort&&L.sort.by){
+    var d=_segCol(L.sort.by),dir=(L.sort.dir==='desc')?-1:1;
+    if(d)out=out.slice().sort(function(a,b){
+      var va=d.s(a,w),vb=d.s(b,w);
+      if(typeof va==='number'&&typeof vb==='number')return (va-vb)*dir;
+      return String(va).localeCompare(String(vb),'ko')*dir;
+    });
+  }
+  return out;
 }
 // 폼 인라인 문법 = 회원 조회 필터줄(openMemberLookup) **계승** — 새 클래스·새 색 0(전부 기존 토큰).
 var _SEG_IN='padding:9px 12px;border:1px solid var(--border2);border-radius:var(--r-btn);font-size:13px;font-family:inherit;background:var(--surface-solid);color:var(--text)';
@@ -28260,57 +28337,139 @@ function _segCompute(win,g,thr){
     out.push({key:k,c:c,rec:rec,m:m});
   }
   out.sort(function(a,b){return b.c-a.c||b.rec.tix-a.rec.tix;});
-  _segLast={rows:out,win:win,g:g,thr:thr,nomem:nomem};
+  // 새 조회 = 새 표. 앞 조회에 걸어 둔 열 필터·정렬을 물려주지 않는다(딴 조건에 남은 필터 = 조용히 빠진 사람들)
+  _segLast={rows:out,win:win,g:g,thr:thr,nomem:nomem,f:{},sort:{by:'',dir:'asc'},mask:true,open:{}};
+}
+// 표 머리 = 2단(운영자 260812 「관람을 2행으로 인덱싱행을 구성」). 1행 높이는 여기 한 곳에서만 정한다 —
+//   2단 sticky의 아랫단이 `top`으로 그 값을 그대로 쓰기 때문에 갈리면 머리 두 줄이 겹치거나 벌어진다.
+var _SEG_TH_PY=6,_SEG_TH_LH=15,_SEG_H1=_SEG_TH_PY*2+_SEG_TH_LH;
+function _segThBase(d,top){
+  return 'padding:'+_SEG_TH_PY+'px 10px;line-height:'+_SEG_TH_LH+'px;font-size:11.5px;color:var(--neutral-text);'
+    +'background:var(--neutral);text-align:'+(d&&d.num?'right':'left')+';position:sticky;top:'+top+'px;white-space:nowrap;z-index:1';
+}
+// 열 머리 한 칸 — 화살표 규약은 홍보 신청·확인 표(`_sh`) 계승: 정렬 중 ▲▼ · 아니면 ▾(누르면 뭔가 된다) · 필터 걸림 ●
+function _segTh(d,rs){
+  var L=_segLast||{},on=L.sort&&L.sort.by===d.c,has=!!(L.f&&L.f[d.c]&&L.f[d.c].length);
+  var arrow=on?(L.sort.dir==='asc'?'▲':'▼'):'▾';
+  var st=_segThBase(d,rs===2?0:_SEG_H1)+';cursor:pointer;user-select:none'
+    +(rs===2?';vertical-align:middle':'')                                  // 1행+2행 높이의 한가운데(운영자 260812)
+    +((on||has)?';background:var(--accent-light);color:var(--accent);font-weight:800':'');
+  return '<th data-col="'+d.c+'"'+(rs===2?' rowspan="2"':'')+' onclick="_segColFilter(\''+d.c+'\',event)" title="클릭: 필터·정렬 선택" style="'+st+'">'
+    +_memEsc(d.l)+'<span style="margin-left:5px;font-size:'+(on?'10px':'9px')+';color:'+(on?'var(--accent)':'var(--muted)')+'">'+arrow+'</span>'
+    +(has?'<span style="margin-left:3px;font-size:8px;color:var(--accent);vertical-align:middle">●</span>':'')+'</th>';
+}
+function _segColFilter(c,ev){
+  if(ev){ev.stopPropagation();ev.preventDefault();}
+  var L=_segLast,d=_segCol(c);if(!L||!d)return;
+  var vals={};L.rows.forEach(function(x){_segVals(c,x,L.win).forEach(function(v){if(v!=='')vals[v]=1;});});
+  var cmp=d.ls?d.ls:(d.num?function(a,b){return (parseFloat(String(a).replace(/,/g,''))||0)-(parseFloat(String(b).replace(/,/g,''))||0);}
+                         :function(a,b){return a.localeCompare(b,'ko');});
+  _colfPop({anchor:ev&&ev.currentTarget,list:Object.keys(vals).sort(cmp),sel:L.f[c]||null,
+    onSort:function(dir){L.sort={by:c,dir:dir};_segRender();},
+    onApply:function(sel){if(sel)L.f[c]=sel;else delete L.f[c];_segRender();}});
+}
+function _segClear(){if(!_segLast)return;_segLast.f={};_segLast.sort={by:'',dir:'asc'};_segRender();}
+function _segMaskTgl(on){if(_segLast)_segLast.mask=!!on;}
+// 휴대폰 칸 = 기본 가림, 누르면 그 칸만 열린다(운영자 260812). 원본 숫자는 DOM에 안 박고 그때 화면 배열에서 꺼낸다.
+function _segPhoneTap(el,i){
+  var L=_segLast,x=L&&L._view&&L._view[i];if(!x)return;
+  var open=el.getAttribute('data-open')==='1';
+  el.setAttribute('data-open',open?'0':'1');
+  el.textContent=open?_segPhoneMask(x.m):_segPhoneFull(x.m);
+}
+// 첫/최근 관람 칸 클릭 = 그 사람 관람 이력 펼치기.
+// ⚠ **프로그램명은 못 띄운다** — 예매집계 시트의 열이 `회원키·총구매·총매수·총금액·첫구매일·최근구매일·분포`뿐이라
+//   이름 축이 아예 없다. 원본 `운영_예매`엔 `상품명`이 있으니 `docs/260804_booking_agg.mjs`가 분포에 그 축을 실어
+//   다시 돌리면 그때 붙는다(전시 예매가 쌓여도 같은 경로). 여기서는 집계에 **실제로 있는 것**만 보여준다.
+function _segHistHtml(x,w){
+  var by={};
+  for(var k in x.rec.d){var i=k.indexOf('|');if(i<0)continue;var t=k.slice(0,i);(by[t]=by[t]||[]).push(_memEsc(k.slice(i+1))+' '+x.rec.d[k]);}
+  var ks=Object.keys(by).sort(function(a,b){return b.localeCompare(a);});
+  var body=ks.length?ks.map(function(t){
+    return '<span style="display:inline-block;margin:0 14px 4px 0"><b style="color:var(--text)">'+(t.length===6?_bkYm(parseInt(t,10)):_memEsc(t)+'년')+'</b> '+by[t].join(' · ')+'</span>';
+  }).join(''):'<span style="color:var(--dim)">집계에 남은 관람 이력이 없어요</span>';
+  return '<div style="font-size:11.5px;color:var(--neutral-text);line-height:1.7">'+body
+    +'<div style="font-size:10.5px;color:var(--dim);padding-top:5px">프로그램명은 <b>예매집계에 없어요</b> — 원본(운영_예매)엔 상품명이 있으니 <code>docs/260804_booking_agg.mjs</code>가 분포에 상품명 축을 실어 다시 돌리면 여기 같이 떠요</div></div>';
+}
+function _segHist(el,i){
+  var L=_segLast,x=L&&L._view&&L._view[i],tr=el&&el.parentElement;if(!x||!tr)return;
+  var host=document.getElementById('seg-result');
+  var cur=host&&host.querySelector('tr.seg-hist'),mine=tr.nextElementSibling===cur;
+  if(cur)cur.parentNode.removeChild(cur);          // 동시 1개만 열어 둔다(드롭다운 `_ddOpen` 규약과 같은 결)
+  if(mine)return;
+  var nt=document.createElement('tr');nt.className='seg-hist';
+  nt.innerHTML='<td colspan="'+_SEG_COLS.length+'" style="padding:8px 12px 10px;background:var(--past-bg);border-top:1px solid var(--border)">'+_segHistHtml(x,L.win)+'</td>';
+  tr.parentNode.insertBefore(nt,tr.nextSibling);
 }
 function _segRender(){
   var host=document.getElementById('seg-result');if(!host||!_segLast)return;
-  var L=_segLast,rows=L.rows,LIM=300,shown=rows.slice(0,LIM);
+  var L=_segLast,view=_segView(),LIM=300,shown=view.slice(0,LIM);
+  L._view=view;                                    // 칸 클릭(번호 열기·이력 펼치기)이 **화면과 같은 배열**을 본다
   var cond=(L.win?L.win.label:_bkSpanAll())+' · '+(L.g?L.g+' ':'')+'공연 '+L.thr+'회 이상';
-  if(!rows.length){host.innerHTML=_pcCard('결과',_memEsc(cond),'<div class="u-empty">조건에 맞는 사람이 없어요</div>');return;}
-  var th='padding:7px 10px;font-size:11.5px;color:var(--neutral-text);background:var(--neutral);text-align:left;position:sticky;top:0;white-space:nowrap';
+  if(!L.rows.length){host.innerHTML=_pcCard('결과',_memEsc(cond),'<div class="u-empty">조건에 맞는 사람이 없어요</div>');return;}
+  var nf=Object.keys(L.f||{}).length,narrowed=nf||(L.sort&&L.sort.by);
   var td='padding:6px 10px;font-size:12px;border-top:1px solid var(--border);white-space:nowrap';
   var tdn=td+';font-variant-numeric:tabular-nums;text-align:right';
-  var tix=0,amt=0;rows.forEach(function(x){tix+=x.rec.tix;amt+=x.rec.amt;});
+  var tdtap=td+';cursor:pointer';
+  var tix=0,amt=0;view.forEach(function(x){tix+=x.rec.tix;amt+=x.rec.amt;});
   var head='<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:11px 0">'
-    +'<span style="font-size:12.5px;color:var(--neutral-text)"><b style="color:var(--text)">'+_memAiFmt(rows.length)+'명</b> · 누적 '+_memAiFmt(tix)+'매 · '+_memAiFmt(amt)+'원</span>'
-    +'<button type="button" class="btn btn--neutral btn--sm" style="margin-left:auto" onclick="_segCsv()">CSV 내보내기</button></div>';
+    +'<span style="font-size:12.5px;color:var(--neutral-text)"><b style="color:var(--text)">'+_memAiFmt(view.length)+'명</b>'
+    +(nf?' <span style="color:var(--dim)">(조건 '+_memAiFmt(L.rows.length)+'명 중 · 열 필터 '+nf+'개)</span>':'')
+    +' · 누적 '+_memAiFmt(tix)+'매 · '+_memAiFmt(amt)+'원</span>'
+    +(narrowed?'<button type="button" class="btn btn--ghost btn--sm" onclick="_segClear()">필터·정렬 초기화</button>':'')
+    +'<label style="margin-left:auto;display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--neutral-text);cursor:pointer" title="내려받는 CSV의 휴대폰을 가릴지 고릅니다"><input type="checkbox" '+(L.mask?'checked':'')+' onchange="_segMaskTgl(this.checked)" style="accent-color:var(--accent)">CSV 번호 가리기</label>'
+    +'<button type="button" class="btn btn--neutral btn--sm" onclick="_segCsv()">CSV 내보내기</button></div>';
+  // 머리 2단 — 1행은 rowspan 2 칸들 + 「관람(단위: 회)」 묶음, 2행은 그 아래 조건·전체
+  var grp=null,h1='',h2='';
+  _SEG_COLS.forEach(function(d){
+    if(!d.grp){h1+=_segTh(d,2);return;}
+    if(d.grp!==grp){grp=d.grp;
+      var n=0;_SEG_COLS.forEach(function(e){if(e.grp===d.grp)n++;});
+      h1+='<th colspan="'+n+'" style="'+_segThBase(null,0)+';text-align:center">'+_memEsc(d.grp)+'</th>';}
+    h2+=_segTh(d,1);
+  });
   var table='<div style="max-height:44vh;overflow:auto;border:1px solid var(--border);border-radius:var(--r-btn)">'
     +'<table style="border-collapse:collapse;width:100%;min-width:860px">'
-    +'<tr><th style="'+th+'">이름</th><th style="'+th+'">휴대폰</th><th style="'+th+'">지역</th><th style="'+th+'">조건 관람</th><th style="'+th+'">전체 관람</th><th style="'+th+'">매수</th><th style="'+th+'">금액</th><th style="'+th+'">첫 관람</th><th style="'+th+'">최근 관람</th><th style="'+th+'">장르</th></tr>'
-    +shown.map(function(x){var m=x.m;
+    +'<thead><tr>'+h1+'</tr><tr>'+h2+'</tr></thead><tbody>'
+    +(shown.length?shown.map(function(x,i){var m=x.m;
       return '<tr><td style="'+td+';font-weight:700">'+_memEsc(m['이름'])+'</td>'
-        +'<td style="'+td+';font-variant-numeric:tabular-nums">'+_memEsc(m['휴대폰정규화']||m['휴대폰번호'])+'</td>'
-        +'<td style="'+td+'">'+_memEsc((String(m['주소1']||'')+' '+String(m['주소2']||'')).trim())+'</td>'
-        +'<td style="'+tdn+';font-weight:800;color:var(--accent)">'+x.c+'</td>'
+        +'<td style="'+tdtap+';font-variant-numeric:tabular-nums" onclick="_segPhoneTap(this,'+i+')" title="클릭: 번호 보기/가리기">'+_memEsc(_segPhoneMask(m))+'</td>'
+        +'<td style="'+td+'">'+_memEsc(_segArea(m))+'</td>'
+        +'<td style="'+tdn+';font-weight:800;color:var(--accent)">'+_memAiFmt(x.c)+'</td>'
         +'<td style="'+tdn+'">'+_memAiFmt(x.rec.n)+'</td>'
         +'<td style="'+tdn+'">'+_memAiFmt(x.rec.tix)+'</td>'
-        +'<td style="'+tdn+'">'+_memAiFmt(x.rec.amt)+'</td>'
-        +'<td style="'+td+'">'+_memEsc(x.rec.first)+'</td>'
-        +'<td style="'+td+'">'+_memEsc(x.rec.last)+'</td>'
+        +'<td style="'+tdn+'">'+_memAiFmt(_segMan(x.rec.amt))+'</td>'
+        +'<td style="'+tdtap+'" onclick="_segHist(this,'+i+')" title="클릭: 이 사람 관람 이력">'+_memEsc(_segDayK(x.rec.first))+'</td>'
+        +'<td style="'+tdtap+'" onclick="_segHist(this,'+i+')" title="클릭: 이 사람 관람 이력">'+_memEsc(_segDayK(x.rec.last))+'</td>'
         +'<td style="'+td+';max-width:210px;overflow:hidden;text-overflow:ellipsis">'+_memEsc(_segGenres(x.rec,L.win))+'</td></tr>';
-    }).join('')+'</table></div>';
+    }).join('')
+      :'<tr><td colspan="'+_SEG_COLS.length+'" style="'+td+';text-align:center;color:var(--dim);padding:18px 10px">열 필터에 맞는 사람이 없어요 — 위 「필터·정렬 초기화」를 누르세요</td></tr>')
+    +'</tbody></table></div>';
   var foot='<div style="font-size:11px;color:var(--dim);padding:9px 2px 0">'
-    +(rows.length>LIM?'화면엔 상위 '+LIM+'명만 보여요 — CSV로 받으면 '+_memAiFmt(rows.length)+'명 전부 나와요 · ':'')
+    +(view.length>LIM?'화면엔 상위 '+LIM+'명만 보여요 — CSV로 받으면 '+_memAiFmt(view.length)+'명 전부 나와요 · ':'')
     +'예매기록에 회원이 확정 연결된 '+_memAiFmt(_bkState.n)+'명 안에서 고른 결과라 <b>하한</b>이에요 — 원본 휴대폰이 가려진 주문은 이름을 못 붙여 명단에서 빠져요'
     +(L.nomem?' · 회원 시트에서 못 찾은 회원키 '+_memAiFmt(L.nomem)+'건 제외':'')
+    +'<br>금액은 <b>만 원 단위 올림</b>(만 원 미만 절상) · 지역은 시도 줄임말 · 휴대폰은 가운데 가림 — <b>CSV는 셋 다 원 표기</b>예요(번호는 위 체크로 고름)'
     +(L.win&&L.win.approx?'<br>⚠ 예매집계가 아직 연 단위라 기간이 <b>근사</b>예요 — <code>node docs/260804_booking_agg.mjs</code>를 다시 돌리면 월 단위로 정확해져요':'')
     +'</div>';
   host.innerHTML=_pcCard('결과',_memEsc(cond),head+table+foot);
 }
 function _segCsv(){
-  if(!_segLast||!_segLast.rows.length)return;
-  var L=_segLast;
-  var cols=['이름','휴대폰','시도','시군구','동읍면','조건관람','전체관람','총매수','총금액','첫관람일','최근관람일','장르분포'];
-  var rows=L.rows.map(function(x){var m=x.m;
-    return {'이름':m['이름']||'','휴대폰':m['휴대폰정규화']||m['휴대폰번호']||'',
+  var L=_segLast;if(!L)return;
+  var view=L._view||_segView();if(!view.length)return;
+  var mask=!!L.mask;
+  var cols=['이름','휴대폰','시도','시군구','동읍면','조건관람','전체관람','구매매수','총금액','첫관람일','최근관람일','장르분포'];
+  var rows=view.map(function(x){var m=x.m;
+    // 화면과 달리 **원 표기 그대로**(운영자 「다운로드는 다 표기」) — 지역 전체명·금액 원 단위. 번호만 위 체크로 고른다.
+    return {'이름':m['이름']||'','휴대폰':mask?_segPhoneMask(m):_segPhoneFull(m),
       '시도':m['주소1']||'','시군구':m['주소2']||'','동읍면':m['주소3']||'',
-      '조건관람':x.c,'전체관람':x.rec.n,'총매수':x.rec.tix,'총금액':x.rec.amt,
-      '첫관람일':x.rec.first,'최근관람일':x.rec.last,'장르분포':_segGenres(x.rec,L.win)};
+      '조건관람':x.c,'전체관람':x.rec.n,'구매매수':x.rec.tix,'총금액':x.rec.amt,
+      '첫관람일':_segDayIso(x.rec.first),'최근관람일':_segDayIso(x.rec.last),'장르분포':_segGenres(x.rec,L.win)};
   });
   // 파일명에 장르를 그대로 넣지 않는다 — 「발레/연극」의 `/`가 경로 구분자로 먹혀 저장이 깨진다
   var tag=String(L.g||'전체장르').replace(/[^0-9A-Za-z가-힣]/g,'');
-  downloadCsv(tsFilename('고객분류_'+tag+'_'+L.thr+'회이상'),rowsToCsv(rows,cols));
-  showToast(_memAiFmt(rows.length)+'명 CSV로 받았어요','success');
+  downloadCsv(tsFilename('고객분류_'+tag+'_'+L.thr+'회이상'+(mask?'_번호가림':'')),rowsToCsv(rows,cols));
+  showToast(_memAiFmt(rows.length)+'명 CSV로 받았어요'+(mask?' (휴대폰 가림)':' (휴대폰 원본)'),'success');
 }
 // 예울이 답변의 「명단 보기」 → 같은 조건 그대로 이 탭으로. 질의를 두 번 해석하지 않는다(해석이 갈리면 답이 둘이 된다).
 function _segFromAsk(){
