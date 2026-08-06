@@ -22658,6 +22658,20 @@ async function saveProgram(rowIndex){
     // (A) 항상: 순서 상식(오타 차단)
     if(_pfS&&_pfE&&_pfE<_pfS) _errs.push('공연 종료일이 시작일보다 빨라요');
     if(_saS&&_saE&&_saE<_saS) _errs.push('판매종료일이 판매시작일보다 빨라요');
+    // (A-2) 항상: 줄임말 중복 차단 — 같은 줄임말이 2건이면 _findPerfByName(L21136)의 first-match가 늘 앞 행만 반환해
+    //   뒤 프로그램의 홍보가 통째로 막힌다(작업이력 260804-17 「라이브 버그 ②」 = 헬로!오페라 2건 → 11월 마술피리 영구 차단).
+    //   두 축을 다 본다: 원문 일치(=_findPerfByName 조건) + _uName 정규화 일치(=_salesBuild·_dailyMasters dedup 조건, L5693).
+    //   _uName은 `_`·`!`·괄호·공백을 지우므로 '헬로_세비야'와 '헬로!세비야'가 같은 키 → 원문만 보면 새어나간다.
+    var _sh=(fd.get('줄임말')||'').trim();
+    if(_sh){
+      var _shU=_uName(_sh);
+      var _clash=(typeof _programsCache!=='undefined'&&_programsCache?_programsCache:[]).filter(function(p){
+        if(p._rowIndex===rowIndex)return false;   // 자기 자신(편집 중인 행)은 제외 — 신규는 rowIndex 없음 → 전 행 대조
+        var o=String(p['줄임말']||'').trim(); if(!o)return false;
+        return o===_sh||_uName(o)===_shU;
+      });
+      if(_clash.length) _errs.push('줄임말 「'+_sh+'」은 이미 ['+String(_clash[0]['풀네임']||'').trim()+']이 쓰고 있어요 — 겹치면 뒤 프로그램 홍보가 막힙니다');
+    }
     // (B) 노출 창이 열린 프로그램만: 홍보 정합(끝난 프로그램은 캘린더가 날짜로 제외 → 강제 무의미·이력 편집 마찰만)
     if(_open){
       if(_hasSale&&!_prS) _errs.push('판매·노출 기간이 남아 있으면 홍보 신청 받기를 켜세요 (홍보시작일 = 판매시작일 당일이나 그 이전)');
