@@ -36,11 +36,22 @@ try{
   const geo=await page.evaluate(`(()=>{const l=document.getElementById('mem-ai-log-m'),c=l.parentElement,cr=c.getBoundingClientRect();
     const m=getComputedStyle(c).clipPath.match(/100% - ([\\d.]+)px/); const clip=m?cr.bottom-parseFloat(m[1]):cr.top;
     const a=l.querySelector('.cb-ava'); return {clip:+clip.toFixed(1),ava:a?+a.getBoundingClientRect().top.toFixed(1):null,colW:+cr.width.toFixed(0)};})()`);
-  console.log('[접힘] 칩 '+chips.n+'개/'+chips.rows+'행 · 열폭 '+geo.colW+' · 클립선 '+geo.clip+' · 아바타top '+geo.ava+' · 여백 '+(+(geo.ava-geo.clip).toFixed(1)));
+  const shift=await page.evaluate(`(()=>{const c=document.getElementById('mem-ai-card-m');return {sh:c.style.getPropertyValue('--rise-shift'),t:getComputedStyle(c.parentElement).getPropertyValue('--rise-t')};})()`);
+  console.log('[접힘] 칩 '+chips.n+'개/'+chips.rows+'행 · 열폭 '+geo.colW+' · 클립선 '+geo.clip+' · 아바타top '+geo.ava+' · 여백 '+(+(geo.ava-geo.clip).toFixed(1))+' · --rise-shift '+shift.sh+' · --rise-t'+shift.t);
   await (await col()).screenshot({path:OUT+'_접힘.png'});
   await page.hover('#mem-ai-q-m'); await page.waitForTimeout(170);
-  console.log('[중간] '+await page.evaluate(PAUSE(0.35)));
-  await (await col()).screenshot({path:OUT+'_중간.png'});
+  for(const p of (process.env.PW_MID||'0.35').split(',')){
+    await page.evaluate(`(()=>{document.getElementById('mem-ai-card-m').getAnimations({subtree:true}).forEach(a=>{a.cancel();});})()`);
+    await page.mouse.move(10,10); await page.waitForTimeout(700);
+    await page.hover('#mem-ai-q-m'); await page.waitForTimeout(140);
+    const info=await page.evaluate(PAUSE(+p));
+    const g=await page.evaluate(`(()=>{const l=document.getElementById('mem-ai-log-m'),c=l.parentElement,cr=c.getBoundingClientRect();
+      const m=getComputedStyle(c).clipPath.match(/([\\d.]+)px\\)? 0px 0px/); const a=l.querySelector('.cb-ava');
+      const cl=getComputedStyle(c).clipPath; const top=cr.top+(parseFloat((cl.match(/inset\\(([\\d.]+)px/)||[])[1])||0);
+      return {보이는윗선:+top.toFixed(1),아바타top:a?+a.getBoundingClientRect().top.toFixed(1):null};})()`);
+    console.log('[중간 '+p+'] '+info+' · 보이는 윗선 '+g.보이는윗선+' · 아바타top '+g.아바타top+' · 아바타가 윗선보다 '+(+(g.아바타top-g.보이는윗선).toFixed(1))+'px 아래');
+    await (await col()).screenshot({path:OUT+'_중간'+p.replace('0.','')+'.png'});
+  }
   await page.evaluate(`(()=>{const c=document.getElementById('mem-ai-card-m');c.getAnimations({subtree:true}).forEach(a=>{a.play();a.finish();});})()`);
   await page.waitForTimeout(200);
   const g2=await page.evaluate(`(()=>{const l=document.getElementById('mem-ai-log-m'),c=l.parentElement,cr=c.getBoundingClientRect();

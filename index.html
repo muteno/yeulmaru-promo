@@ -1503,24 +1503,32 @@ table.promo-board-table th:last-child .col-resize-handle{display:none}
      **어느 창에서도 발동하지 않는 죽은 코드**다(측정 → CSS 변수 쓰기 → 리사이즈 관측 한 벌이 통째로 사라진다).
    ⚠ `--rise-h`에 **백분율 금지**(260813-2에서 잡은 함정) — 같은 변수를 `padding-bottom`(%가 **폭** 기준)과
      `clip-path`(%가 **높이** 기준)가 함께 써서 한 값이 두 뜻이 된다. 상한이 필요하면 px·vh로만. */
-.cb-rise-col{position:relative;--rise-log:clamp(96px,16vh,190px);--rise-foot:63px;--rise-h:calc(var(--rise-log) + var(--rise-foot));padding-bottom:calc(var(--rise-h) + var(--rise-gap,14px))}
+/* [260813-7 운영자 「펼쳐지는 거 살짝 속도 빨라지면 좋을듯 · 이징 느낌은 그대로」] 길이 `--rise-t` = .59s → **.48s**.
+   커브(`cubic-bezier(.215,.61,.355,1)`)·지연(열림 .1s·닫힘 .18s)·펼침 범위는 **전부 계승** = 느낌은 그대로, 시간만 짧다.
+   ⚠ 길이는 **이 변수 한 곳**에만 둔다 — 클립(카드가 열리는 것)과 대화 미끄러짐이 **같은 시간**을 써야 둘이 한 몸으로 움직인다.
+     260813-6에서 `.69s`(= .1 + .59)를 손으로 맞춰 뒀다가 길이를 고칠 때마다 어긋날 자리였다. */
+.cb-rise-col{position:relative;--rise-log:clamp(96px,16vh,190px);--rise-foot:63px;--rise-h:calc(var(--rise-log) + var(--rise-foot));--rise-t:.48s;padding-bottom:calc(var(--rise-h) + var(--rise-gap,14px))}
 .cb-rise{position:absolute;left:0;right:0;top:0;bottom:0;z-index:1;
   clip-path:inset(max(0px,calc(100% - var(--rise-h))) 0 0 0 round var(--radius));
-  transition:clip-path .59s cubic-bezier(.215,.61,.355,1) .18s,box-shadow .59s cubic-bezier(.215,.61,.355,1) .18s}
+  transition:clip-path var(--rise-t) cubic-bezier(.215,.61,.355,1) .18s,box-shadow var(--rise-t) cubic-bezier(.215,.61,.355,1) .18s}
 .cb-rise:hover,.cb-rise:focus-within{clip-path:inset(0 0 0 0 round var(--radius));box-shadow:var(--elev);transition-delay:.1s}
 .cb-rise>.cb-body>:first-child{margin-top:auto}   /* 접힘 = 입력줄 바로 위에 붙는다 — 로그창은 늘 열 전체 높이라 위로 붙이면 접힘 칸이 빈 칸이 된다 */
-/* [260813-5 운영자 「대화창이 확대되면 가장 윗부분으로 채팅 상대의 대화가 이동되게」] 다 열린 **뒤에** 대화가 맨 위로 올라간다.
-   ⚠ 「호버 즉시 위로」로 만들면 안 된다(실측 폐기) — 클립은 아래에서 위로 열리는데 대화가 먼저 위로 가버리면
-     여는 590ms 동안 보이는 칸이 **텅 빈 흰 판**이 되고 글자가 끝에 갑자기 나타난다(35% 지점 캡처로 확인).
-   ⚠ 전이(`transition`)로도 못 만든다 — transition 값에 margin이 들어가면 게이트 ⑥ 잰크가 15 → 16이 돼 커밋이 막힌다.
-   → `animation` + `step-end`로 **여는 내내 바닥 정렬을 붙들고 있다가**(from) 열림이 끝나는 순간 한 번에 위로 넘긴다(to).
-     .69s = 열림 지연 .1s + 길이 .59s(위 `.cb-rise:hover` 값과 같은 축 · 둘이 어긋나면 빈 칸이나 늦은 점프가 생긴다).
-     닫힘은 규칙이 그냥 빠지므로 즉시 바닥 복귀 = 닫히는 동안에도 대화가 보인다.
-   ⚠ 이 규칙은 첫 자식의 `cbIn`(말풍선 등장)을 덮는다 — 등장은 0.28s에 이미 끝나 있고 `cbIn`의 끝 상태 = 기본값이라 보이는 차이 0. */
-@keyframes cbRiseTop{from{margin-top:auto}to{margin-top:0}}
-.cb-rise:hover>.cb-body>:first-child,.cb-rise:focus-within>.cb-body>:first-child{animation:cbRiseTop .69s step-end forwards}
-@media (prefers-reduced-motion:reduce){.cb-rise{transition:none}
-  .cb-rise:hover>.cb-body>:first-child,.cb-rise:focus-within>.cb-body>:first-child{animation-duration:0s}}   /* 즉시 열리니 위로 붙는 것도 즉시 */
+/* [260813-7 운영자 「예울이가 화면 커지면서 올라가면 **자연스럽게** 올라가게」] 대화가 카드와 **한 몸으로 미끄러져** 올라간다.
+   대화를 `transform:translateY`로 올린다 — 클립과 같은 길이·커브·지연이라 **열리는 윗선에 붙어서** 따라 올라가고, 끝나면 카드 맨 위.
+   ⚠ 260813-6의 「끝에 한 번에 넘김」(`@keyframes cbRiseTop` step-end)은 폐기 — 다 열린 뒤 대화가 **툭 튀어오르는** 게 보였다.
+   ⚠ 올릴 거리 `--rise-shift`는 CSS가 못 만든다 — 바닥 정렬(`margin-top:auto`)로 위에 남는 몫이라 내용 높이에 따라 매번 다르다.
+     → `_memRiseShift`가 **`offsetTop`으로** 재서 넣는다(`getBoundingClientRect`는 transform이 섞여 호버 중에 값이 오염된다).
+   ⚠ `transition`은 **transform 하나뿐** — 게이트 ⑥ 잰크(width/height/padding/margin 전이)에 안 걸린다(합성 전용 · 15/15 유지).
+   [260813-8 운영자 「올라갔다가 다시 내려갈 때도 예울이가 **내려간 창에서 가장 위에** 있게」] 접힘 쪽에도 자리를 준다 = `--rise-down`.
+     접힘은 종전에 **바닥 정렬 그대로**(transform 0)여서, 답이 접힘 칸보다 길면 **윗줄(예울이 아바타·첫 줄)이 잘려 나가고**
+     꼬리(각주·시각)만 보였다. → 마지막 예울이 줄이 **클립선 바로 아래**에 오도록 그만큼 내려 놓는다(넘치는 꼬리는 로그창이 자른다).
+     ⚠ 짧은 첫 화면(인사+칩)은 `max(0, …)`에 걸려 **0 = 종전 그대로**(260813-6에서 만든 아바타 위 여백 +37px이 그대로 산다).
+     ⚠ 내려놓은 몫이 입력줄을 덮지 않는다 — `.cb-foot` 배경이 반투명(0.6)이라 비쳐 보일 자리인데,
+       `.cb-body`가 `overflow-y:auto`(= 양축 클립)라 **로그창 밖으로는 애초에 안 그려진다**(실측 확인).
+     ⚠ 두 값은 같은 축이라 함께 잰다 — 펼침 `--rise-shift`(위로) · 접힘 `--rise-down`(아래로) · 그 차이가 곧 클립이 여는 거리다. */
+.cb-rise>.cb-body>*{transform:translateY(var(--rise-down,0px));transition:transform var(--rise-t) cubic-bezier(.215,.61,.355,1) .18s}
+.cb-rise:hover>.cb-body>*,.cb-rise:focus-within>.cb-body>*{transform:translateY(var(--rise-shift,0px));transition-delay:.1s}
+@media (prefers-reduced-motion:reduce){.cb-rise,.cb-rise>.cb-body>*{transition:none}}
 @keyframes cbIn{from{transform:translateY(10px) scale(0.96);opacity:0}to{transform:translateY(0) scale(1);opacity:1}}
 .cb-msg.bot a{color:var(--accent);font-weight:700}
 .cb-msg.bot .cb-card-t{font-weight:800;font-size:13.5px;color:var(--text);margin-bottom:3px}
@@ -5344,7 +5352,8 @@ function _ddAdmin(btn){
       + items.map(function(it){ return _it('_ddCloseAll();adminRoute(\''+it[0]+'\')',it[1]); }).join('')
       + '<div style="height:1px;background:var(--border);margin:6px 10px"></div>'
       + _it('_ddCloseAll();openLockSettings()','자동 잠금 시간')   // [260724 운영자] 시스템 설정 성격 = 관리 6개(데이터 화면)와 구분선으로 분리 · 향후 관련 설정 모이면 '시스템 설정' 그룹으로
-      + _it('_ddCloseAll();openYeulPersona()','예울이 페르소나');   // [260803 운영자] 루시봇 컨셉 — AI 답변 말투 카드 조정(기본 = 레포 persona/yeuli.md)
+      + _it('_ddCloseAll();openYeulPersona()','예울이 페르소나')   // [260803 운영자] 루시봇 컨셉 — AI 답변 말투 카드 조정(기본 = 레포 persona/yeuli.md)
+      + _it('_ddCloseAll();openSearchMonitor()','검색량 확인');   // [260807 운영자] 검색 모니터링 열람 — 웹에 잡힌 예울마루(구글 알림·다음·KOPIS). 알림 아님 = 조회 화면(Q28)
   });
 }
 function showLogoutModal(){
@@ -5571,6 +5580,70 @@ function openLockSettings(){
   el.innerHTML=html;
 }
 function closeLockSettings(){var el=document.getElementById('admin-panel');if(el)el.innerHTML='';}
+// ── [260807 운영자 「설정- 검색량 확인 하나 만들어서 리스트업 · 디자인은 사업 대시보드 공연 리스트와 동일한 느낌」] ──
+//   검색 모니터링 열람 모달 — Worker sm* 축(/api/monitor/feed)이 매시 모아둔 「웹에 잡힌 예울마루」를 보여준다.
+//   알림이 아니라 조회 화면(Q28 「홍보 알림 당분간 없애줘」 준수) · 모달 골격 = openLockSettings 계승(#admin-panel 공유) ·
+//   표 문법 = _bizListTable 계승 — 머리글(sticky·--dim 12px·inset 하단선·좌 14px)·제브라(--past-bg)·행 하단선(--border)·
+//   제목 1행 말줄임(max-width:0 + width:100% · 말줄임은 칸 자체에 — 래퍼 금지, 표 복사 쪼개짐 방지)·tabular-nums.
+var _smwSrcName={google:'구글',kakao:'다음',kopis:'KOPIS',naver:'네이버'};
+function openSearchMonitor(){
+  var html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeSearchMonitor)">'
+    +'<div class="modal" style="width:920px;max-width:calc(100vw - 24px);position:relative">'
+    +'<button class="modal-x" onclick="closeSearchMonitor()" title="닫기" aria-label="닫기">✕</button>'
+    +_mhead('검색량 확인','웹에 잡힌 예울마루 — 구글 알림 · 다음(카카오) · KOPIS 공연')
+    +'<div id="smw-sum" style="display:flex;align-items:center;gap:10px;font-size:12px;color:var(--dim);margin-bottom:10px;flex-wrap:wrap"><span style="display:inline-flex;align-items:center;gap:7px">'+_ldHtml(14)+' 불러오는 중</span></div>'
+    +'<div id="smw-body" style="max-height:min(58vh,540px);overflow:auto;border:1px solid var(--border);border-radius:12px"></div>'
+    +'</div></div>';
+  var el=document.getElementById('admin-panel');
+  if(!el){el=document.createElement('div');el.id='admin-panel';document.body.appendChild(el);}
+  el.innerHTML=html;
+  _smwLoad();
+}
+function closeSearchMonitor(){var el=document.getElementById('admin-panel');if(el)el.innerHTML='';}
+async function _smwLoad(){
+  var sum=document.getElementById('smw-sum'),body=document.getElementById('smw-body');
+  if(!sum||!body)return;
+  try{
+    var d=await api('GET','/api/monitor/feed?limit=300');
+    var rows=(d&&d.rows)||[];
+    var by={};rows.forEach(function(r){by[r.src]=(by[r.src]||0)+1;});
+    var at=(d&&d.last&&d.last.at)?new Date(d.last.at):null;
+    var atTxt=(at&&!isNaN(at.getTime()))?at.toLocaleString('ko-KR',{timeZone:'Asia/Seoul',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}):'아직 없음';
+    sum.innerHTML='<span>마지막 수집 <b style="color:var(--text)">'+escapeHtml(atTxt)+'</b> · 총 <b style="color:var(--text)">'+rows.length+'건</b>'
+      +Object.keys(by).map(function(k){return ' · '+escapeHtml((_smwSrcName[k]||k)+' '+by[k]);}).join('')
+      +' · 매시 자동 수집</span><span style="flex:1 1 auto"></span>'
+      +'<button type="button" class="btn btn--ghost btn--sm" onclick="_smwLoad()">새로고침</button>';
+    body.innerHTML=rows.length?_smwTable(rows)
+      :'<div class="u-empty"><div class="ico">📡</div><div class="msg">아직 수집된 결과가 없어요 — 매시 자동으로 모아요</div></div>';
+  }catch(e){
+    sum.innerHTML='<span style="color:var(--danger)">불러오지 못했어요 — '+escapeHtml(String((e&&e.message)||e).slice(0,80))+'</span>'
+      +'<span style="flex:1 1 auto"></span><button type="button" class="btn btn--ghost btn--sm" onclick="_smwLoad()">다시 시도</button>';
+    body.innerHTML='';
+  }
+}
+function _smwTable(rows){
+  var h='<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="color:var(--dim);font-size:12px;text-align:left">';
+  ['일시','제목','출처','분류','키워드·비고'].forEach(function(c,i){
+    h+='<td style="padding:8px 12px;position:sticky;top:0;z-index:1;background:var(--surface-solid);box-shadow:inset 0 -2px 0 var(--border);white-space:nowrap;'
+      +(i===0?'padding-left:14px;':'')+(i>=2?'padding-left:22px;':'')+(i===4?'padding-right:14px;':'')+'">'+c+'</td>';
+  });
+  h+='</tr></thead><tbody>';
+  rows.forEach(function(r,idx){
+    var dt=r.date||String(r.seenAt||'').slice(0,10)||'—';
+    // 비고 = 걸린 검색어(「…」) 또는 KOPIS 부가(시설·상태) · KOPIS 상세가 있으면 가격을 이어 붙인다
+    var memo=r.kw?('「'+r.kw+'」'):(r.extra||'');
+    if(r.detail&&r.detail.price)memo=(memo?memo+' · ':'')+r.detail.price;
+    h+='<tr style="border-bottom:1px solid var(--border);'+(idx%2===1?'background:var(--past-bg);':'')+'">'
+      +'<td style="padding:7px 12px;padding-left:14px;white-space:nowrap;color:var(--neutral-text);font-variant-numeric:tabular-nums">'+escapeHtml(dt)+'</td>'
+      +'<td style="padding:7px 12px;max-width:0;width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+escapeHtml(r.title||'')+'">'
+        +'<a href="'+escapeHtml(r.link||'#')+'" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none;font-weight:600">'+escapeHtml(r.title||r.link||'—')+'</a></td>'
+      +'<td style="padding:7px 12px 7px 22px;white-space:nowrap;color:var(--neutral-text)">'+escapeHtml(_smwSrcName[r.src]||r.src||'—')+'</td>'
+      +'<td style="padding:7px 12px 7px 22px;white-space:nowrap;color:var(--neutral-text)">'+escapeHtml(r.kind||'—')+'</td>'
+      +'<td style="padding:7px 14px 7px 22px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:250px;color:var(--neutral-text)" title="'+escapeHtml(memo)+'">'+(memo?escapeHtml(memo):'<span style="color:var(--muted)">—</span>')+'</td>'
+      +'</tr>';
+  });
+  return h+'</tbody></table>';
+}
 // [260803 운영자] 예울이 페르소나 조정 — 루시봇 카드 컨셉(카드 문장 = 곧 말투): 기본 = 레포 persona/yeuli.md(SSOT),
 //   여기 적으면 이 기기에서만 오버라이드(localStorage — AI 요청에 동봉되어 카드 대신 주입). 모달 골격 = openLockSettings 계승.
 function openYeulPersona(){
@@ -10034,6 +10107,21 @@ function _ryAccCell(n){
   return _ryNumSlot(Math.round(n).toLocaleString(),'--peach-text')
     +'<span style="color:var(--peach-text);font-weight:800">명</span>';
 }
+// [260807-2 운영자 「전일대비일 때 판매율 자리에 **누적좌석·누적금액** 나오게 · 위가 누적 좌석 · 그 아래가 누적 금액」]
+//   전일 대비 모드에서만 3열이 갈아끼워진다(끔 = 판매율·누적 관객수 그대로 = 회귀 0).
+//   문법은 옆 칸(_ryDodCell)과 **한 벌** — 윗줄 = 수량(분야 강조색·800) · 아랫줄 = 금액(중립 `--neutral-text`).
+//   ⚠ 아랫줄에 부호색(green/danger)을 쓰지 않는다 — 이 표에서 초록·빨강은 「어제보다 늘/줄」의 뜻이고, 누계는 증감이 아니다.
+//   값 = 화면이 이미 쓰는 그 두 수(공연 `p.seats`·`p.money` = 단체 포함 총량 · 전시 `_acc`·`_accM`) — 새 집계 0.
+function _ryCumCell(p){
+  var isEx=(p&&p._kind==='ex'), tok=isEx?'--peach-text':'--accent', unit=isEx?'명':'석';
+  var n=isEx?p._acc:p.seats, m=isEx?p._accM:p.money;
+  if(n===null||n===undefined||isNaN(n))return '<span style="color:var(--muted);font-size:12px">—</span>';
+  return '<span style="display:inline-block">'
+    +'<span style="display:block;white-space:nowrap">'+_ryNumSlot(Math.round(n).toLocaleString(),tok)
+      +'<span style="color:var('+tok+');font-weight:800">'+unit+'</span></span>'
+    +'<span style="display:block;font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;margin-top:2px;white-space:nowrap;color:var('
+      +((m===null||m===undefined||isNaN(m))?'--muted">—':'--neutral-text">'+Math.round(m).toLocaleString()+'원')+'</span></span>';
+}
 // [260729 운영자] 머리글 열 크기 조절 — 기본 폭(합 100) · 조절값은 기기 단위 기억(localStorage). 계정 축은 【바인딩】상 미배선이라 기기 저장이 상한.
 // [260731 운영자] 「사업 성격」 열 폐지 → 그 자리를 「장르」가 차지(6칸 → 5칸). 성격 폭 13은 장르(11)에 합산 = 24(총합 100 보존).
 //   구 6칸 저장값(localStorage ryColW)은 길이 검사에서 자동 탈락 → 기본 폭으로 리셋(마이그레이션 코드 불필요).
@@ -10128,8 +10216,11 @@ function _railYrmPerfTable(perfs,rateLab){
   // [260731 운영자] 「사업 성격」 열 삭제 · 그 자리에 「장르」 — 5칸(일자·프로그램·판매율·최근 7일 추이·장르).
   //   ([260803] 성격(예술성/사업성) 축 자체 폐지 — 데이터·필터·입력구 전부 제거)
   // [260807] 4열 = 토글 한 축으로 「최근 7일 추이 ↔ 전일 대비」 갈아끼움(열 신설 0 · 폭·경계 그대로).
+  // [260807-2] 같은 토글로 3열도 함께 갈아끼운다 — 「판매율/누적 관객수」 → **「누적 좌석·금액」**(운영자 지시).
+  //   왜 = 전일 대비만 보는 화면에서 판매율은 어제와 무관한 값이고, 운영자 일일 보고문은 「누적 좌석 · 누적 금액 · 전일대비」 세 줄이 한 벌이다.
   var DOD=(typeof _ryDodOn==='function')&&_ryDodOn();
-  var HL=['일자','프로그램',(rateLab||'판매율'),(DOD?'전일 대비':'최근 7일 추이'),'장르'];
+  var _isEx=!!(perfs&&perfs[0]&&perfs[0]._kind==='ex');   // 표는 분야별로 따로 그려진다 = 한 표의 행은 모두 같은 종류
+  var HL=['일자','프로그램',(DOD?(_isEx?'누적 관객·금액':'누적 좌석·금액'):(rateLab||'판매율')),(DOD?'전일 대비':'최근 7일 추이'),'장르'];
   // [260731 운영자 개정] 최근 7일 추이 = **가운데** 정렬(나머지는 좌측 유지).
   var HA=['left','left','left','center','left'];
   // [260731 운영자] 열 간격 벌리기 — 「프로그램↔판매율(전시 = 누적 관객수)」·「추이↔장르」 두 경계.
@@ -10157,7 +10248,8 @@ function _railYrmPerfTable(perfs,rateLab){
       :_mvBars(p.days,p.diff,p._unit,(p._kind==='ex')?'--peach-text':null,(p._kind==='ex')?'--peach-light':null)));   // [260731 운영자 4차] 전시 추이 = 전시색(--peach-text 사다리) — 3열 누적 관객수·그룹 블릿과 같은 축
     // 3열 = 공연·교육 「판매율」(N% (분자/분모)) · 전시 「누적 관객수」(누계 숫자) — 둘 다 강조색 볼드·좌측 정렬로 같은 문법
     var rate=p.noData?'<span style="color:var(--muted);font-size:12px">—</span>'
-      :((p._kind==='ex')?_ryAccCell(p._acc):_ryRateCell(p.seats,p.totalOpen,p.occ,'--accent'));
+      :(DOD?_ryCumCell(p)   // [260807-2] 전일 대비 모드 = 누적 좌석/금액 두 줄(옆 칸과 한 벌)
+      :((p._kind==='ex')?_ryAccCell(p._acc):_ryRateCell(p.seats,p.totalOpen,p.occ,'--accent')));
     var sub=_rySubLine((p._ryRun!==undefined&&p._ryRun!==null)?p._ryRun:_ryRunTxt(p),p._venue);
     var kind=(p._kind==='ex')?'ex':'perf', pkey=(p._kind==='ex')?(p.id||p.name):p.name;   // 드릴 키 = _srailUhaKey와 같은 축(전시 = ID 우선)
     h+='<tr class="clk" role="button" tabindex="0"'+(p._past?' style="background:var(--past-bg)"':'')+' data-uhakey="'+escapeHtml(_srailUhaKey(p))+'" onclick="_railYrmPick(\''+kind+'\',\''+_anaEsc(pkey)+'\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click();}" title="'+escapeHtml(p.name)+' — 클릭 = 아래 상세 보기">'
@@ -10188,7 +10280,11 @@ function _ryExRow(e){
   // [260807] mny = 전시일일 「누계금액」 — 공연 days의 mny(합계금액)와 같은 자리·같은 뜻(전일 대비 금액 소스). 없으면 null → 금액 줄만 '—'.
   var days=ds.map(function(r){ var v=_salesNum(r['누계총인원']); if(v===null)v=_salesNum(r['누계유료']); return {bd:_salesNum(r['기준일자']),seat:(v===null?0:v),mny:_salesNum(r['누계금액'])}; });
   var acc=(e._total!==null&&e._total!==undefined)?e._total:e._paid;   // 누적 관객수 = 누계총인원 → 없으면 누계유료
-  return {_kind:'ex',id:(e.id||''),name:e.name,_src:e,_past:(e._past?1:0),
+  // [260807-2] _accM = 누적 금액 — 전일 대비 모드의 3열 아랫줄(공연 p.money 자리). 마지막 실측 「누계금액」 → 없으면 마스터 「최종매출」.
+  var accM=null;
+  for(var _i=days.length-1;_i>=0;_i--){ if(days[_i].mny!==null&&days[_i].mny!==undefined){ accM=days[_i].mny; break; } }
+  if(accM===null)accM=_salesNum(e.최종매출);
+  return {_kind:'ex',id:(e.id||''),name:e.name,_src:e,_past:(e._past?1:0),_accM:accM,
     startDate:sd,endDate:ed,_ryDate:(ed||sd),
     dday:((e._dday===null||e._dday===undefined)?null:e._dday),
     noData:!!e.noData,seats:e._paid,totalOpen:e._goal,occ:((e.occ===null||e.occ===undefined)?null:e.occ),_acc:acc,
@@ -12160,13 +12256,22 @@ function openDailyInput(origin){
   let el=document.getElementById('daily-input');
   if(!el){el=document.createElement('div');el.id='daily-input';document.body.appendChild(el);}
   el.innerHTML='<div class="modal-bg show" style="z-index:99990" onclick="if(event.target===this)closeDailyInput()"><div class="modal" style="width:96vw;max-width:760px;max-height:90vh;overflow:auto;--mpad-y:0;--mpad-x:0;position:relative;background:#fff"><button class="modal-x" onclick="closeDailyInput()" title="닫기" aria-label="닫기">✕</button>'+_mhead('일일 판매 입력','오늘 판매분을 시트에 바로 적어요')+'<div id="daily-body" style="padding:18px 22px"><div style="text-align:center;color:#888;padding:30px">'+_ldHtml(16)+'공연 목록 불러오는 중</div></div></div></div>';
-  if(_dailyState.master&&_dailyState.programs&&_dailyState.exMaster){_dailyRenderForm();return;}
+  // [260807 운영자 「넣었으면 그만큼 변경할 수도 있어야 함(해당 날짜 리스트로 남아야 함)」] 단체 기존 내역 로드 —
+  //   수정 축이라 열 때마다 fresh(캐시 재사용 경로 포함). 실패해도 입력은 살고(gLoadOk=false = 기존 내역 수정만 잠금 · 신규 추가는 가능),
+  //   저장 시 replaceShow가 이 스냅샷 기준으로 그 공연만 교체한다(_srailEdit groupLoadOk 전삭제 방어와 같은 축).
+  var _gLoad=function(){ return api('GET','/api/ops?sheet='+encodeURIComponent('단체')+'&fresh=1').catch(function(){return {rows:[],headers:[],_loadFailed:1};}).then(function(gr){
+    _dailyState.gLoadOk=!(gr&&(gr._loadFailed||gr.note||!(gr.headers&&gr.headers.length)));
+    _dailyState.gEdit=(( (gr&&gr.rows)||[]).map(_salesNorm).map(function(r){return {공연명:String(r['공연명']||'').trim(),공연ID:String(r['공연ID']||'').trim(),기준일자:String(r['기준일자']||'').replace(/[^0-9]/g,''),좌석:(_salesNum(r['좌석'])==null?'':String(_salesNum(r['좌석']))),금액:(_salesNum(r['금액'])==null?'':String(_salesNum(r['금액']))),단체명:String(r['단체명']||'')};}).filter(function(r){return r.공연명;}))
+      .sort(function(a,b){return a.공연명===b.공연명?((parseInt(a.기준일자,10)||0)-(parseInt(b.기준일자,10)||0)):(a.공연명<b.공연명?-1:1);});
+    _dailyState.gSig=JSON.stringify(_dailyState.gEdit);
+  }); };
+  if(_dailyState.master&&_dailyState.programs&&_dailyState.exMaster){_gLoad().then(function(){_dailyRenderForm();});return;}
   Promise.all([
     api('GET','/api/ops?sheet='+encodeURIComponent('공연마스터')),
     api('GET','/api/programs').then(function(d){return (d&&d.programs)||[];}).catch(function(){return [];}),
     api('GET','/api/ops?sheet='+encodeURIComponent('전시마스터')).catch(function(){return {headers:[],rows:[]};}),   // [260723] 전시 입력용 — 실패해도 공연 입력은 되게 빈 시트 폴백
     api('GET','/api/ops?sheet='+encodeURIComponent('전시일일')).catch(function(){return {headers:[],rows:[]};})
-  ]).then(function(res){_dailyState.master=res[0];_dailyState.programs=res[1];_dailyState.exMaster=res[2];_dailyState.exDaily=res[3];_dailyRenderForm();}).catch(function(e){var b=document.getElementById('daily-body');if(b)b.innerHTML='<div style="color:var(--danger);text-align:center;padding:30px">공연 목록 로드 실패: '+escapeHtml(e.message||String(e))+'</div>';});
+  ]).then(function(res){_dailyState.master=res[0];_dailyState.programs=res[1];_dailyState.exMaster=res[2];_dailyState.exDaily=res[3];return _gLoad();}).then(function(){_dailyRenderForm();}).catch(function(e){var b=document.getElementById('daily-body');if(b)b.innerHTML='<div style="color:var(--danger);text-align:center;padding:30px">공연 목록 로드 실패: '+escapeHtml(e.message||String(e))+'</div>';});
 }
 function closeDailyInput(){ var el=document.getElementById('daily-input'); if(el)el.innerHTML=''; window._dsxState=null; window._dsxPending=null; window._dsxGen=(window._dsxGen||0)+1; if(_dailyState)_dailyState._gSaved=false; _dailyKind='공연'; }   // [260723] 다음 열 때 공연 탭부터
 // [260715] 저장 완료 후 '직전 메뉴'로 복원 — 캘린더 메인으로 빠지지 않게. 보드는 재오픈(새 실적 반영), 메뉴 진입은 드롭다운 재오픈(모바일 등 앵커 불가 시 판매 실적 조회로 대체).
@@ -12240,6 +12345,9 @@ function _dailyGroupReadDOM(){
 }
 function _dailyGroupAdd(){ _dailyRenderForm(_dailyReadDOM(), _dailyGroupReadDOM().concat([{}])); }
 function _dailyGroupRemove(btn){ var data=_dailyGroupReadDOM(); var rowEl=btn.closest('.dgroup-row'); var idx=Array.prototype.indexOf.call(document.querySelectorAll('#daily-body .dgroup-row'),rowEl); if(idx>=0)data.splice(idx,1); _dailyRenderForm(_dailyReadDOM(), data); }
+// [260807] 기존 단체 내역 인라인 수정·삭제 — 상태(_dailyState.gEdit)만 갱신, 저장 시 공연별 replaceShow로 반영
+function _dailyGExistSet(i,f,v){ if(_dailyState&&_dailyState.gEdit&&_dailyState.gEdit[i])_dailyState.gEdit[i][f]=v; }
+function _dailyGExistDel(i){ if(!(_dailyState&&_dailyState.gEdit))return; _dailyState.gEdit.splice(i,1); _dailyRenderForm(_dailyReadDOM(), _dailyGroupReadDOM()); }
 function _dailyRenderForm(rowsData, groupData){
   var body=document.getElementById('daily-body'); if(!body)return;
   var tabs=_dailyKindTabs();   // [260723] 공연·전시 종류 탭 — 전시 담당·진행중 전시가 있을 때만 노출(아니면 '' = 기존 공연 단독 UI 그대로)
@@ -12262,13 +12370,34 @@ function _dailyRenderForm(rowsData, groupData){
   var _bk=_dailyMasters().filter(function(o){return o.back;});
   if(_bk.length)h+='<div style="font-size:11.5px;color:var(--dim);margin-top:8px;line-height:1.7">「<b style="color:var(--green)">· 종료(소급)</b>」 표시 = 이미 끝난 <b>예술교육</b>이에요 — 최종 실적을 뒤늦게 넣는 자리.<br>기준일자를 그 프로그램 <b>종료일</b>로 맞춰 주세요('+_bk.map(function(o){return escapeHtml(o.name)+' → '+o.back;}).join(' · ')+').</div>';
   if(regSet){ var _remain=_dailyMasters().filter(function(o){return !regSet[o.name];}).length; if(!_remain)h+='<div style="font-size:11.5px;color:var(--dim);margin-top:6px">이 날짜는 판매중 공연이 모두 입력됐어요 — 값 수정은 판매 현황 카드 ▸ <b>실적 수정</b>에서.</div>'; }
-  h+='<button onclick="_dailyAddRow()" style="margin-top:4px;padding:6px 12px;border:1.5px dashed #ccc;border-radius:8px;background:#fafafa;color:#666;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">+ 공연 추가</button>';
+  h+='<button type="button" class="nb-btn ghost" title="공연 추가" aria-label="공연 추가" onclick="_dailyAddRow()" style="margin-top:4px;flex-shrink:0;padding:0 14px;font-size:18px">＋</button>';   // [260807 운영자] + 버튼 = 정본 nb-btn ghost ＋(블로그 「한 줄 추가」 값 사본 — 구 대시 텍스트 버튼 폐지)
   // [단체 유입] 단체 섹션 — 상단 기준일자 공유. 같은 날 여러 건 OK. 색·형태 토큰 계승(신규 raw 0).
   h+='<div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border)">';
   h+='<div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:8px">단체</div>';
   h+='<div style="display:flex;gap:8px;font-size:11px;color:var(--dim);font-weight:600;margin-bottom:6px;padding:0 4px"><span style="flex:2;min-width:150px">공연</span><span style="flex:1;min-width:70px">좌석</span><span style="flex:1;min-width:70px">금액</span><span style="flex:1.4;min-width:90px">단체명</span><span style="width:24px"></span></div>';
   h+='<div id="dg-rows">'; grows.forEach(function(r){h+=_dailyGroupRowHtml(r);}); h+='</div>';
-  h+='<button onclick="_dailyGroupAdd()" style="margin-top:4px;padding:6px 12px;border:1.5px dashed var(--border2);border-radius:8px;background:var(--neutral);color:var(--neutral-text);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">+ 단체 추가</button>';
+  h+='<button type="button" class="nb-btn ghost" title="단체 추가" aria-label="단체 추가" onclick="_dailyGroupAdd()" style="margin-top:4px;flex-shrink:0;padding:0 14px;font-size:18px">＋</button>';   // [260807 운영자] 정본 nb-btn ghost ＋ — 공연 추가와 한 벌
+  // [260807 운영자] 기존 단체 내역 — 날짜 리스트로 상존 · 인라인 수정/삭제 → 저장 시 그 공연만 교체(replaceShow).
+  //   공연명은 라벨 고정(옮기려면 삭제+추가) · 입력은 oninput으로 상태만 갱신(재렌더 0 = 포커스 유지 · _kmSet 문법).
+  h+='<div style="margin-top:14px;padding-top:10px;border-top:1px dashed var(--border2)">';
+  if(!_dailyState.gLoadOk){
+    h+='<div style="font-size:11.5px;color:var(--dim);padding:4px 0 2px">기존 내역을 못 불러와서 수정은 잠시 잠갔어요(새 단체 추가는 가능) — 다시 열면 재시도해요</div>';
+  } else if(!(_dailyState.gEdit&&_dailyState.gEdit.length)){
+    h+='<div style="font-size:11.5px;color:var(--dim);padding:4px 0 2px">저장된 단체가 아직 없어요 — 위 [+ 단체 추가]로 첫 건을 넣어줘요</div>';
+  } else {
+    var gSt='box-sizing:border-box;padding:7px 9px;border:1.5px solid var(--border2);border-radius:7px;font-size:12px;font-family:inherit;background:var(--surface-solid);color:var(--text)';
+    _dailyState.gEdit.forEach(function(r,i){
+      h+='<div class="dgexist-row" style="display:flex;gap:8px;align-items:center;margin-bottom:6px;flex-wrap:wrap">'
+        +'<span style="flex:2;min-width:150px;font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+escapeHtml(r.공연명)+'">'+escapeHtml(r.공연명)+'</span>'
+        +'<input value="'+escapeHtml(r.기준일자)+'" inputmode="numeric" maxlength="8" placeholder="YYYYMMDD" oninput="_dailyGExistSet('+i+',\'기준일자\',this.value)" style="flex:1;min-width:88px;'+gSt+'">'
+        +'<input value="'+escapeHtml(r.좌석)+'" inputmode="numeric" placeholder="좌석" oninput="_dailyGExistSet('+i+',\'좌석\',this.value)" style="flex:1;min-width:64px;'+gSt+'">'
+        +'<input value="'+escapeHtml(r.금액)+'" inputmode="numeric" placeholder="금액" oninput="_dailyGExistSet('+i+',\'금액\',this.value)" style="flex:1;min-width:78px;'+gSt+'">'
+        +'<input type="text" value="'+escapeHtml(r.단체명)+'" placeholder="단체명" oninput="_dailyGExistSet('+i+',\'단체명\',this.value)" style="flex:1.4;min-width:90px;'+gSt+'">'
+        +'<button onclick="_dailyGExistDel('+i+')" title="이 단체 건 삭제(저장 시 반영)" aria-label="삭제" style="border:0;background:none;color:var(--danger);cursor:pointer;font-size:14px;padding:4px">✕</button>'
+        +'</div>';
+    });
+  }
+  h+='</div>';
   h+='</div>';
   h+='<div id="d-msg" style="font-size:12px;color:var(--danger);margin-top:10px;min-height:16px"></div>';
   h+='<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px;padding-top:14px;border-top:1px solid #eee"><button onclick="closeDailyInput()" class="m-btn cancel">취소</button><button onclick="_dailySubmit()" class="m-btn save" id="d-save">저장</button></div>';
@@ -12284,7 +12413,16 @@ async function _dailySubmit(){
   var entries=_dailyReadDOM().filter(function(r){return r.공연;});
   // [단체] 단체 행 — 공연 선택 + 좌석 있는 행만 저장. 같은 날 여러 건 OK. 상단 기준일자(ymd) 공유.
   var gEntries=_dailyGroupReadDOM().filter(function(r){return r.공연 && String(r.좌석||'').trim()!=='';});
-  if(!entries.length && !gEntries.length){if(msg)msg.textContent='공연을 1개 이상 선택하세요';return;}
+  // [260807] 기존 단체 내역 수정·삭제 감지 — 공연 단위 diff(그 공연만 replaceShow · 타 공연 무접촉)
+  var gDirty=false, gEditedShows={};
+  if(_dailyState&&_dailyState.gLoadOk&&_dailyState.gSig){
+    var _gBase=[]; try{_gBase=JSON.parse(_dailyState.gSig)||[];}catch(_ge){}
+    var _perShow=function(arr){var m={};(arr||[]).forEach(function(r){(m[r.공연명]=m[r.공연명]||[]).push(r);});return m;};
+    var _bm=_perShow(_gBase),_cm=_perShow(_dailyState.gEdit),_ns={};
+    Object.keys(_bm).forEach(function(n){_ns[n]=1;}); Object.keys(_cm).forEach(function(n){_ns[n]=1;});
+    Object.keys(_ns).forEach(function(n){ if(JSON.stringify(_bm[n]||[])!==JSON.stringify(_cm[n]||[])){gEditedShows[n]=1;gDirty=true;} });
+  }
+  if(!entries.length && !gEntries.length && !gDirty){if(msg)msg.textContent='공연을 1개 이상 선택하세요';return;}
   // [회차 보정 260723 운영자] needRc 공연에 회차수 입력됨 → 공연마스터 총회차 확정(분모 = 좌석×회차). masters(분모)도 즉시 갱신해 이 저장의 점유율까지 정확하게.
   var rcPatch={}, _mByName={}; _dailyMasters().forEach(function(m){ _mByName[m.name]=m; });
   entries.forEach(function(r){ var rcv=parseInt(r['d-rc'],10); var mo=_mByName[r.공연]; if(rcv>0&&mo&&mo.needRc&&mo.id){ var _op=(mo.base||_SALES_FALLBACK_SEAT)*rcv; rcPatch[mo.id]={총회차:rcv,총오픈석:_op}; masters[r.공연]=_op; } });   // [260723 운영자] 총회차 + 총오픈석(=기준석×회차) 동시 확정 — _salesBuild 분모가 총오픈석을 우선하므로, 단회차 총오픈석이 남아 있어도 이 값으로 확실히 덮어 오픈석×회차 분모 반영
@@ -12298,12 +12436,27 @@ async function _dailySubmit(){
   try{
     // [회차 보정 260723] 공연마스터 총회차 먼저 확정(분모 근본 수정) — 실패해도 실적 저장은 진행(경고). 로컬 캐시 직주입 + 아래 _salesState.master=null로 레일 재계산 반영.
     if(Object.keys(rcPatch).length){ try{ var _mpr=await _opsMasterPatch('공연마스터','ID',rcPatch); _dailyState.master={sheet:'공연마스터',headers:_mpr.headers,rows:_mpr.rows,count:_mpr.rows.length}; }catch(_me){ console.warn('[dailyRcPatch]',_me); showToast('회차 반영은 실패했지만 실적은 저장할게 — 분모는 잠시 후 카드 ▸ 회차·객석에서 확인','error'); } }
-    // [분신술 MED-1] 저장 순서 = 단체 먼저 → 개인 최후. 개인은 append(비idempotent)라 '성공 후 다른 스텝 실패→재시도' 시 개인 행이 중복된다.
-    //  개인을 마지막 단일 스텝으로 두면 개인 성공 = 전체 완료(중복 창 없음). 단체는 성공 플래그(_gSaved)로 재시도 시 스킵 = 단체 중복도 방지.
-    if(gRows.length && !(_dailyState&&_dailyState._gSaved)){ await _groupSave({newRows:gRows,mode:'append'}); if(_dailyState)_dailyState._gSaved=true; }
+    // [분신술 MED-1 + 260807 수정 축] 저장 순서 = 단체 먼저 → 개인 최후. 개인은 append(비idempotent)라 '성공 후 다른 스텝 실패→재시도' 시 개인 행이 중복된다.
+    //  ①수정·삭제된 공연 = replaceShow(멱등 — 재시도 무해 · 그 공연의 신규 추가분도 함께 실어 append 중복 차단)
+    //  ②무수정 공연 신규 = 종전 append(+_gSaved 재시도 가드) ③개인 최후 단일 스텝(종전 계약 그대로).
+    var gConsumed={};
+    if(gDirty){
+      var _toG=function(r){return {공연명:r.공연명,공연ID:r.공연ID||'',기준일자:String(r.기준일자||'').replace(/[^0-9]/g,''),좌석:parseInt(r.좌석,10)||0,금액:(String(r.금액||'').trim()===''?'':(parseInt(r.금액,10)||0)),단체명:(r.단체명||'')};};
+      var _shows=Object.keys(gEditedShows);
+      for(var _si=0;_si<_shows.length;_si++){
+        var _sn=_shows[_si];
+        var _mine=(_dailyState.gEdit||[]).filter(function(r){return r.공연명===_sn;}).map(_toG);
+        gRows.forEach(function(r,gi){ if(r.공연명===_sn&&!gConsumed[gi]){_mine.push(r);gConsumed[gi]=1;} });
+        await _groupSave({show:_sn,newRows:_mine,mode:'replaceShow'});
+      }
+      _dailyState.gSig=JSON.stringify(_dailyState.gEdit);   // 반영 완료 = 새 기준(재시도 시 같은 교체 = 멱등 무해)
+    }
+    var gAppend=gRows.filter(function(r,gi){return !gConsumed[gi];});
+    if(gAppend.length && !(_dailyState&&_dailyState._gSaved)){ await _groupSave({newRows:gAppend,mode:'append'}); if(_dailyState)_dailyState._gSaved=true; }
     if(rows.length) await api('POST','/api/ops',{sheet:'일일입력',mode:'append',rows:rows});
     if(_dailyState)_dailyState._gSaved=false;   // 전체 성공 → 플래그 리셋
-    showToast((rows.length?rows.length+'건':'')+((rows.length&&gRows.length)?' · ':'')+(gRows.length?'단체 '+gRows.length+'건':'')+' 저장됐어요 ('+date+')');
+    var _tp=[]; if(rows.length)_tp.push(rows.length+'건'); if(gRows.length)_tp.push('단체 '+gRows.length+'건'); if(gDirty)_tp.push('단체 수정 반영');
+    showToast(_tp.join(' · ')+' 저장됐어요 ('+date+')');
     closeDailyInput();
     _salesState.master=null;_salesState.daily=null;_salesState.rounds=null;
     try{_srailInit();}catch(_e){}  // 판매 레일 최신화(일일입력 반영 재fetch)
@@ -13295,25 +13448,31 @@ var _YR_PARTIAL=2026;
 function _yrFullN(){var ys=_YR.years;return (ys[ys.length-1]===_YR_PARTIAL)?ys.length-1:ys.length;}   // 완결 연도 개수(잠정 연도 앞까지)
 // [260804 3차 운영자] 2026 **연간 예상치** — 차트 점선 마킹 전용. 막대·표·누계(_YR)에는 절대 안 섞는다(실적 ≠ 예상).
 //   산식 = 운영자 지시 그대로. 표본은 전부 앱이 이미 쓰는 정본(운영_세부운영관리대장(정리) · 프로그램 관리 시트) 실측 — 새 가정 창작 0.
-//   ① 공연 62,220 = (기획 27,971 + 대관 19,345) × 1.315
-//      · 기획(발권유료) = 상반기 실적 **10,710** + 하반기 17,261.
-//        ⚠ [260807 정정] 상반기 실적 항만 갈았다 — 구 9,568은 **회차 원장의 불완전본**(운영자가 회차를 나중에 채운다)이었고,
-//          공연대장 실측 2026 상반기 기획 발권유료 = 10,710이다. 산식 구조·계수(하반기 벤치마크·70%·1.315)는 운영자 결정 그대로 뒀다.
-//        ⚠ **미결(운영자 판단)**: ×1.315는 2025 전체(기획+대관) 혼합 환산비다. 이제 상반기는 유료·초대가 **둘 다 실측**이라
-//          환산이 필요 없고(23,601), 구분별 실측 환산비도 크게 다르다(기획 1.084 = 11,609/10,710 · 대관 1.021 = 11,992/11,741).
-//          「상반기 실측 + 하반기만 환산」으로 다시 짜면 약 50,076이 된다 — 어느 쪽을 정본으로 삼을지는 운영자 결정이라 손대지 않았다.
-//        하반기 = 프로그램 시트 2026 하반기 라인업 **15건**에 각 장르의 「회차당 평균 발권유료」를 곱한 합.
+//   ① 공연 56,298 = **상반기 실측 23,601** + (하반기 기획 17,261 + 하반기 대관 7,604) × 1.315
+//      ⚠ [260807-2 운영자 「상반기에는 무료+유료 관객이 확정된 거 아니야?」] **맞다 — 그래서 상반기엔 환산을 안 건다.**
+//        구판은 연간 전체(상반기 포함)에 ×1.315를 곱했다. 그 환산은 **원장에 무료·초대 열이 없던 시절의 대용품**이고,
+//        260807 공연대장 반입으로 상반기는 유료 22,451 + 초대 1,150이 **둘 다 실측**이 됐다. 확정된 반년에까지
+//        무료 보정을 곱하면 **없는 관객 약 3천 명이 얹힌다**(구 62,220 → 56,298 = 그 차이).
+//        환산이 남을 자리는 **아직 안 일어난 하반기**뿐이다.
+//      · 상반기(실측 · 환산 없음) = 기획 11,609(유료 10,710 + 초대 899) + 대관 11,992(유료 11,741 + 초대 251) = 23,601.
+//      · 하반기 대관(발권유료) = 운영자 연간 추정 19,345 − 상반기 실측 11,741 = 7,604.
+//        ⚠ 상반기 실측만으로 이미 연간 추정의 61%다 — 연간 19,345(2025×70%)가 낮게 잡혔을 수 있다. 계수는 운영자 것이라 안 고쳤다.
+//      · 하반기에 ×1.315를 그대로 쓰는 이유 = 운영자가 승인한 가정이고, 대안(2026 상반기 실측비 기획 1.084·대관 1.021)은
+//        「올해 상반기처럼 무료가 적을 것」이라는 **더 센 가정**이다. 실측 무료 비중이 해마다 요동친다(대관 2025 41% ↔ 2026 상반기 2%).
+//        그 대안으로 짜면 50,077 — 하반기 가정을 바꾸는 건 운영자 결정이라 안 건드렸다.
+//        하반기 기획 = 프로그램 시트 2026 하반기 라인업 **15건**에 각 장르의 「회차당 평균 발권유료」를 곱한 합.
 //        장르 벤치마크(원장 기획 2022~2025 실측) = 뮤지컬 627 · 어린이·가족 373 · 클래식 351 · 발레/연극 340 · 소극장급 210.
 //        회차 = 시트 「회차」 우선(8건), 빈칸은 공연일수 × 장르 회차/일(클래식 1.03 · 발레/연극 1.42 · 뮤지컬 1.64 · 어린이·가족 2.00).
 //        시트 장르 → 원장 장르1 대응: 뮤지컬(대형)·뮤지컬→뮤지컬 / 뮤지컬(어린이)→어린이·가족 / 연극·무용·인문학(발레)→발레/연극 / 시즌 기획·공백→클래식.
 //      · 대관(발권유료) = 2025 원장 대관 27,635 × 70%.
 //      · ×1.315 = **무료 포함 환산**(운영자 260804 4차 결정 「무료분까지 섞어서임 · 네 추천대로」). 배율 = 2025 실측 83,455(취합본) ÷ 63,444(원장 발권유료).
-//      ⚠ 왜 환산하나: 원장엔 무료·초대 열이 없다. 환산 없이 46,173을 그리면 **무료 포함인 다른 해 막대와 기준이 어긋나** 낙폭이 과장된다.
+//      ⚠ 왜 (하반기에) 환산하나: 하반기 예상은 **발권유료 기준**으로만 쌓인 값이다. 환산 없이 그리면 무료 포함인 다른 해 막대와 기준이 어긋나 낙폭이 과장된다.
+//        (구 문구 「원장엔 무료·초대 열이 없다」는 260807 반입 전 이야기 — 이제 `발권초대` 열이 있고 상반기는 실측이다.)
 //      ⚠ 폐기한 경로(3차): 「총 83,455 − 기획 35,809 = 대관 47,646」의 뺄셈은 기획의 무료분까지 대관으로 몰아넣는다(60,181).
 //        두 경로 차 = 556명(0.9%) — 어느 쪽이든 그림은 같고, 기준이 한 줄로 설명되는 환산 쪽을 정본으로 삼는다.
 //   ② 전시 24,147 = 2026 상반기 누적 8,049 × 3(운영자 가중치 · 전시DB는 원래 총인원 = 무료 포함이라 환산 불요)
 //   ③ 교육 917 = 2025 실적과 동일 수준(운영자 지시)
-var _YR_FC={'공연':{v:62220,why:'기획 27,971(상반기 실적 10,710 + 하반기 15건 장르 벤치마크 17,261) + 대관 19,345(전년 70%) → 무료 포함 환산 ×1.315'},'전시':{v:24147,why:'상반기 누적 8,049 × 3'},'교육':{v:917,why:'2025년과 동일 수준'}};
+var _YR_FC={'공연':{v:56298,why:'상반기 실측 23,601(유료 22,451 + 초대 1,150 · 환산 없음) + 하반기 24,865(기획 15건 장르 벤치마크 17,261 + 대관 7,604) × 무료 포함 환산 1.315'},'전시':{v:24147,why:'상반기 누적 8,049 × 3'},'교육':{v:917,why:'2025년과 동일 수준'}};
 var _YR_FCW=1.5;   // [260804 3차 운영자 「2026 표기가 다른 곳보다 1.5배 더 너비가 커야 함 · 다른 곳 간격을 줄이면 될 듯」] 2026 칸 폭 배율(다른 해 = 1) — 막대 폭도 같은 배율
 var _YR_FCX=0.5;   // 넓힌 2026 칸 안에서 예상 값 라벨의 자리(연도 단위 오른쪽 오프셋) — 기둥은 눈금 자리 그대로, 라벨만 오른쪽 여백으로
 function _yrBand(y,hl){   // 잠정(2026) 상시 강조 + 선택 하이라이트(선택 우선). 기존 토큰만.
@@ -28444,11 +28603,11 @@ function _memAiCardHtml(sfx,fit,col){
   //   호버·포커스 = 잘라내기가 0으로 가며 열 끝(거주지 TOP 5 윗선)까지 열린다 — 모양·커브 SSOT = CSS `.cb-rise`(위 정의 · 인라인 재타이핑 0).
   //   로그창은 늘 카드 전체를 채우고(flex:1 1 auto) 대화는 아래에 붙는다(.cb-rise>.cb-body>:first-child{margin-top:auto}) =
   //   접힘 칸에 보이는 것도, 펼친 뒤 이어 보는 것도 **같은 한 벌**이라 스크롤이 튀지 않는다(칸 높이가 안 변한다).
-  return '<div'+(col?' id="mem-ai-card-'+sfx+'" class="cb-rise"':'')+' style="'+(col?'':'margin-top:'+(fit?14:24)+'px;')+'width:'+(col?'100%':'min(100%,max(300px,40%))')+';background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden'+((fit||col)?';flex:0 0 auto;display:flex;flex-direction:column':'')+'">'
+  return '<div'+(col?' id="mem-ai-card-'+sfx+'" class="cb-rise" onmouseenter="_memRiseShift(this)"':'')+' style="'+(col?'':'margin-top:'+(fit?14:24)+'px;')+'width:'+(col?'100%':'min(100%,max(300px,40%))')+';background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden'+((fit||col)?';flex:0 0 auto;display:flex;flex-direction:column':'')+'">'
     +'<div id="mem-ai-log-'+sfx+'" class="cb-body" style="'+(col?'flex:1 1 auto;min-height:0':(fit?'flex:0 0 auto;height:clamp(96px,16vh,190px)':'min-height:96px;max-height:190px'))+';overflow-y:auto;padding:12px 14px"></div>'
     // 입력줄 = FAB 예울이 정본 부품(.cb-foot/.cb-in/.cb-send) 그대로 — 「질문」 글자 버튼 → 종이비행기 픽토그램(정본 svg 동일 path)
     +'<div class="cb-foot">'
-    +'<input id="mem-ai-q-'+sfx+'" class="cb-in" maxlength="200" placeholder="예: 순천 20대 회원 몇 명이야?" onkeydown="if(event.key===\'Enter\'&&!event.isComposing)_memAiSend(\''+sfx+'\')">'
+    +'<input id="mem-ai-q-'+sfx+'" class="cb-in" maxlength="200" autocomplete="off" placeholder="예: 순천 20대 회원 몇 명이야?" onkeydown="_memAiKey(this,event,\''+sfx+'\')" oninput="_memAiAuto(this,event)" oncompositionend="_memAiAuto(this,null)">'
     +'<button type="button" class="cb-send" onclick="_memAiSend(\''+sfx+'\')" title="질문 보내기" aria-label="질문 보내기"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg></button>'
     +'</div></div>';
 }
@@ -28476,11 +28635,70 @@ function _memAiPaint(sfx){
   if(col&&col.classList&&col.classList.contains('cb-rise-col')){
     var ft=card.querySelector('.cb-foot');
     if(ft&&ft.offsetHeight)col.style.setProperty('--rise-foot',(ft.offsetHeight+2)+'px');
+    _memRiseShift(card,1);
   }
   // [260813-4] 접힘 칸이 종전 값으로 돌아오면서 260813-3의 차트 우선 상한(`_memRiseFit`·`--rise-avail`·`_MEM_BAR_MIN`)은 걷어냈다 —
   //   그건 304로 키운 자리를 낮은 창에서 되돌리려던 보정이라, 지금은 어느 창에서도 하한(96+63=159)에 먼저 걸려 발동하지 않는다.
 }
+// [260813-7 운영자 「자연스럽게 올라가게」] 펼칠 때 대화가 미끄러져 올라갈 거리 = **지금 바닥 정렬로 위에 남아 있는 몫**.
+//   CSS는 이 값을 못 만든다(`margin-top:auto`가 내용 높이에 따라 매번 다르게 먹는다) → 여기서 재서 `--rise-shift`로 넣고 CSS가 그만큼 `translateY`한다.
+//   ⚠ **`offsetTop`으로 잰다** — `getBoundingClientRect()`는 transform이 반영돼서, 호버 중(이미 올라간 상태)에 다시 재면 거리가 0으로 접힌다.
+//   ⚠ 값이 0 = 대화가 칸을 넘겨 자동 마진이 0인 상태(= 스크롤이 있는 긴 대화) → 안 움직인다. 움직일 땐 스크롤이 없고, 스크롤이 있을 땐 안 움직인다.
+//   호출 = 렌더 직후(_memAiPaint) + 카드 `onmouseenter`(창 크기가 바뀐 뒤 첫 호버에서 다시 잰다 · 리사이즈 관측 상주 0).
+function _memRiseShift(card,quiet){
+  try{
+    var log=card.querySelector('.cb-body'),first=log&&log.firstElementChild;
+    if(!first)return;
+    var pad=parseFloat(getComputedStyle(log).paddingTop)||0;
+    var d=first.offsetTop-log.offsetTop-pad;
+    // [260813-8 운영자 「다시 내려갈 때도 예울이가 내려간 창에서 가장 위에」] 접힘 쪽 몫 = 마지막 예울이 줄을 클립선 바로 아래로.
+    //   ⚠ 클립선(= 카드 높이 − `--rise-h`)은 CSS 변수 계산이라 JS가 바로 못 읽는다(`getComputedStyle`은 `calc(var()+var())` 원문을 준다).
+    //     JS에 `clamp(96px,16vh,190px)`을 옮겨 적으면 **정본이 둘**이 된다 → 대신 `height:var(--rise-h)`짜리 눈에 안 보이는 자 한 장을
+    //     붙였다 떼서 **브라우저가 계산한 px**을 받는다(값의 출처는 CSS 한 곳 그대로).
+    var pr=document.createElement('div');
+    pr.style.cssText='position:absolute;left:0;top:0;width:0;visibility:hidden;pointer-events:none;height:var(--rise-h)';
+    card.appendChild(pr);var riseH=pr.offsetHeight;pr.remove();
+    var lines=log.querySelectorAll('.cb-line'),tgt=lines.length?lines[lines.length-1]:first;   // 마지막 예울이 줄(없으면 첫 줄)
+    // ⚠ 기준은 그 줄의 **위쪽 이웃 밑동**이다 — 「줄 top을 클립선 + 여백」으로 잡으면 앞 말풍선 밑동이 클립선 아래로 삐져나와
+    //   접힘 창 맨 윗줄에 남의 색 띠가 걸린다(실측: 여백 12 → 보라 3px · 여백 9(gap) → 0.6px 실오라기).
+    //   앞 말풍선 밑동을 **정확히 클립선에** 두면 그 위는 전부 잘리고, 줄 간격(gap)이 그대로 윗여백이 된다. 맨 앞줄이면 로그창 패딩.
+    var prev=tgt.previousElementSibling;
+    var anchor=prev?(prev.offsetTop+prev.offsetHeight):(tgt.offsetTop-pad);
+    //   ⚠ `offsetTop`·`offsetHeight`는 **정수로 반올림**돼 실제 레이아웃(소수)과 최대 1px 어긋난다 → 1px 위로 당겨 반올림 몫을 먹인다.
+    var down=(card.offsetHeight-riseH)-(anchor-log.scrollTop)-1;
+    // ⚠ 렌더 직후(quiet)에는 **전이를 끄고** 자리부터 잡는다 — 카드에 남아 있던 지난 값에서 새 값으로 바뀌면서
+    //   새로 그린 대화가 화면에서 스르륵 내려가는 게 보인다(실측: 첫 페인트 400ms 뒤 transform이 22/41 지점이었다).
+    //   호버로 다시 잴 때는 끄지 않는다 — 그때는 어차피 펼침 값으로 넘어가며 움직여야 한다.
+    var kids=quiet?log.children:null,i;
+    if(kids)for(i=0;i<kids.length;i++)kids[i].style.transition='none';
+    card.style.setProperty('--rise-shift',(d>1?-d:0).toFixed(1)+'px');
+    card.style.setProperty('--rise-down',(down>1?down:0).toFixed(1)+'px');   // 짧은 첫 화면은 음수 = 0 = 종전 바닥 정렬 그대로
+    if(kids){void card.offsetHeight;for(i=0;i<kids.length;i++)kids[i].style.transition='';}
+  }catch(_e){}
+}
 function _memAiPaintAll(){_memAiPaint('i');_memAiPaint('m');}
+// [260813-8 운영자 「예시 대화목록에 있는 거 자판 누르면 자동입력 채워지게」] 치는 대로 예시 칩(_MEM_AI_CHIPS) 중 앞이 같은 것을 찾아
+//   **나머지를 채우고 채운 부분만 선택**해 둔다 — 그대로 Enter면 예시 그대로 질의, 계속 치면 선택된 자리가 덮여 쓰인다.
+//   ⚠ 한글 조합 중(`isComposing`)에는 `value`를 절대 안 건드린다 — 조합이 깨져 자모가 흩어진다. 조합이 끝난 뒤(`compositionend`)에 채운다.
+//   ⚠ 지우는 중에는 안 채운다(`_memNoAuto`) — 안 그러면 Backspace로 지운 자리를 그 자리에서 다시 채워 **지워지지 않는 입력칸**이 된다.
+//   ⚠ 새 부품·새 CSS 0 — 입력칸 자체의 선택 영역만 쓴다(드롭다운 신설 없음).
+function _memAiAuto(inp,ev){
+  try{
+    if(ev&&ev.isComposing)return;
+    if(inp._memNoAuto){inp._memNoAuto=0;return;}
+    var v=inp.value;
+    if(!v||inp.selectionStart!==v.length)return;                       // 커서가 끝에 있을 때만(가운데 고쳐 쓰는 중이면 안 끼어든다)
+    var lv=v.toLowerCase();
+    for(var i=0;i<_MEM_AI_CHIPS.length;i++){
+      var c=_MEM_AI_CHIPS[i];
+      if(c.length>v.length&&c.toLowerCase().indexOf(lv)===0){inp.value=c;inp.setSelectionRange(v.length,c.length);return;}
+    }
+  }catch(_e){}
+}
+function _memAiKey(inp,ev,sfx){
+  if(ev.key==='Backspace'||ev.key==='Delete')inp._memNoAuto=1;
+  if(ev.key==='Enter'&&!ev.isComposing)_memAiSend(sfx);
+}
 function _memAiChip(sfx,t){var i=document.getElementById('mem-ai-q-'+sfx);if(i)i.value=t;_memAiSend(sfx);}
 // 집계 인덱스(질의용) — _memState당 1회 계산 캐시. 거주지 = 시 단위(_memCityName·구는 시로 합산 = 화면 「거주지 TOP」와 동일 기준).
 // === [260804] 예매 이력 배선 — 「누가 몇 개 샀는지」를 예울이가 답한다 (운영자 「예울이 통해서만 진행」) ===

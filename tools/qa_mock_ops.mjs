@@ -139,6 +139,19 @@ export const INIT_SCRIPT = `(function(){
     {'프로그램ID':'QPF5','풀네임':'국립현대무용단 <트리플 빌>','줄임말':'트리플 빌','콘텐츠구분':'공연','장소':'대극장','구분':'무용','시작일':'2026-10-29','종료일':'2026-10-29'}
   ]};
 
+  // [260807] 검색량 확인(설정 톱니) 목 — 4갈래 대표 형태 6행(결정적 · 실API·실데이터 미접촉)
+  window.__MOCK_MONITOR={ok:true,count:6,total:6,ready:{google:true,naver:false,kakao:true,kopis:true},
+    last:{at:'2026-08-07T03:00:00.000Z',added:6,sources:{google:1,naver:null,kakao:3,kopis:2}},
+    // 순서 = Worker 실물(smScan: 배치 안 구글→카카오(최신순)→KOPIS · fresh.concat(기존)) — 화면은 이 「쌓인 순서」를 그대로 보인다(재정렬 없음)
+    rows:[
+      {src:'google',kind:'알림',title:'GS칼텍스 예울마루, 가을 시즌 프로그램 공개',link:'https://news.example/1',date:'2026-08-06',kw:'예울마루 공연',seenAt:'2026-08-07T03:00:00.000Z'},
+      {src:'kakao',kind:'블로그',title:'예울마루 브런치 콘서트 다녀왔어요',link:'https://blog.example/2',date:'2026-08-05',kw:'예울마루',seenAt:'2026-08-07T03:00:00.000Z'},
+      {src:'kakao',kind:'웹문서',title:'바다와 예술이 만나는 도시들',link:'https://web.example/4',date:'2026-08-02',kw:'예울마루',seenAt:'2026-08-07T03:00:00.000Z'},
+      {src:'kakao',kind:'카페글',title:'여수 여행 코스 — 예울마루 야경까지',link:'https://cafe.example/3',date:'2026-08-01',kw:'예울마루',seenAt:'2026-08-07T03:00:00.000Z'},
+      {src:'kopis',kind:'뮤지컬',title:'그날들 [여수]',link:'https://www.kopis.or.kr/',date:'2026-09-18',extra:'GS칼텍스 예울마루 · 공연예정',detail:{price:'R석 160,000원'},seenAt:'2026-08-07T03:00:00.000Z'},
+      {src:'kopis',kind:'서양음악(클래식)',title:'제10회 여수음악제, 개막연주회',link:'https://www.kopis.or.kr/',date:'2026-08-29',extra:'GS칼텍스 예울마루 · 공연예정',seenAt:'2026-08-07T03:00:00.000Z'}
+    ]};
+
   var real=null;
   function wrapped(method,path){
     var p=String(path||''), dp=decodeURIComponent(p);
@@ -160,8 +173,10 @@ export const INIT_SCRIPT = `(function(){
     //   ⚠ 누계라 **단조 증가**여야 한다 — 날마다 단가를 새로 굴려 s×단가로 만들면 좌석이 늘어도 금액이 줄어 실데이터에 없는 상태가 나온다.
     function days(base,step){ var a=[],s=base,m=base*42000; for(var i=0;i<7;i++){ a.push({bd:20260726+i,seat:s,mny:m}); var ds=Math.max(0,Math.round(step*(0.4+rnd()))); s+=ds; m+=ds*(35000+Math.round(rnd()*25000)); } return a; }
     function perf(m,d,name,seats,open,genre,run){
+      var dd=days(Math.max(0,seats-40),9);
+      // [260807-2] money = 누적 금액 — 전일 대비 모드 3열 아랫줄(_ryCumCell)이 읽는 자리. 없으면 그 줄이 '—'라 모드가 무측정.
       return {_kind:'perf',id:'',name:name,startDate:D(m,d),_ryDate:D(m,d),dday:30,noData:false,
-        seats:seats,totalOpen:open,occ:seats/open*100,days:days(Math.max(0,seats-40),9),diff:null,_unit:'석',
+        seats:seats,money:dd[dd.length-1].mny,totalOpen:open,occ:seats/open*100,days:dd,diff:null,_unit:'석',
         deltaPP:null,'수익성':'공공성',genre:genre,_venue:'대극장',_ryRun:run};
     }
     var a=[
@@ -237,6 +252,8 @@ export const FEED_SCRIPT = `(()=>{
       var dp=decodeURIComponent(String(path||''));
       if(dp.indexOf('/api/ops')===0&&dp.indexOf('sheet=예매집계')>=0)return Promise.resolve(window.__MOCK_BKAGG);
       if(dp.indexOf('/api/ops')===0&&dp.indexOf('sheet=회원')>=0)return Promise.resolve(window.__MOCK_MEM);
+      // [260807] 검색량 확인(설정 톱니) — _qaApi 접근자가 죽는 자리라 여기서 먹인다(_smwLoad의 실제 파싱 경로 측정)
+      if(dp.indexOf('/api/monitor/feed')===0)return Promise.resolve(window.__MOCK_MONITOR);
       return _realApi.apply(this,arguments);
     };
   }
