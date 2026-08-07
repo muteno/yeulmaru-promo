@@ -25928,6 +25928,7 @@ function _bnavMore(){
   let h='<div class="bn-sheet">';
   const add=function(emo,label,fnStr){h+='<button class="bn-sheet-item" onclick="this.closest(\'.bn-sheet-bg\').remove();'+fnStr+'"><span class="emo">'+emo+'</span>'+label+'</button>';};
   add('📝','블로그·카페 포스팅','openNaverBlogTool()');   // [260805 운영자 2차] 이름 = 데스크톱 「콘텐츠 제작 ▸ SNS」와 통일(구 '네이버 블로그 글쓰기')
+  add('📰','보도자료 만들기','openPressKit()');   // [260806 운영자] 데스크톱 드롭다운(_contentMenuBuild)과 같은 진입점
   // [260805 운영자] 「로고 제작」 메뉴 숨김 — 데스크톱 드롭다운(_contentMenuBuild)과 같이 내림. 롤백 = 이 줄 주석 해제.
   //   숨김일 뿐 제거가 아니다: openLogoMaker()·_lm* 함수와 .lm-* CSS는 그대로 살아있다(.lm-wrap·.lm-col은 「카카오 메세지 설계」가 공용 — 지우면 그쪽이 깨진다).
   // add('🎯','로고 제작','openLogoMaker()');   // [260804 운영자] 데스크톱 「콘텐츠 제작」 드롭다운과 같은 진입점 — 좁은 폭에서도 닿게
@@ -26054,7 +26055,8 @@ function _contentMenuBuild(menu){
   menu.innerHTML='<div style="'+_CT_HD+'">콘텐츠 제작</div>'
     +'<div style="'+_CT_SEC+'">SNS</div>'
     +_ctItem("_ddCloseAll();openKakaoDesigner()",'카카오채널 톡')   /* 구 「카카오 메세지 설계」 개명(260805 2차) — 공연 상세 링크 → 포스터 OCR → 카카오 76자 문구 후보 */
-    +_ctItem("_ddCloseAll();openNaverBlogTool()",'블로그·카페 포스팅')   /* 구 「네이버 블로그」 개명(260805 2차) — 글쓰기 도우미 */
+    +_ctItem("_ddCloseAll();openNaverBlogTool()",'블로그·카페 포스팅')
+    +_ctItem("_ddCloseAll();openPressKit()",'보도자료 만들기')   /* [260806 운영자] 공연을 묶어 워드 보도자료 — 블로그 포스팅의 문서판 */   /* 구 「네이버 블로그」 개명(260805 2차) — 글쓰기 도우미 */
     +'<div style="'+_CT_SEC+'">Edit</div>'
     +_ctItem("_ddCloseAll();openCardMaker()",'이미지 편집')   /* 모달 안 탭 = 1 카드 제작(사진 절삭+문구→PNG) · 2 누끼따기(배경 제거 /cutout/ 임베드) */
     +_ctItem("_ddCloseAll();openVideoEditor('edit')",'영상 편집')   /* 모달 안 탭 = 1 영상 편집 · 2 자막 삽입 · 3 영상 프롬프팅([260711 운영자] 한 도구, 탭 3) */
@@ -33351,6 +33353,379 @@ function _kmCopyFb(txt,done){   // 클립보드 API가 막힌 브라우저 폴�
     var ta=document.createElement('textarea');ta.value=txt;ta.style.cssText='position:fixed;left:-9999px;top:0';
     document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);done();
   }catch(e){showToast('복사하지 못했어요 — 문구를 직접 선택해 주세요','error');}
+}
+
+// ============================================================
+// 콘텐츠 제작 ▸ 보도자료 만들기 (pr-*) — 운영자 260806
+//  공연 여러 편 + 올린 자료(출연자 프로필·기획안)를 읽어 **워드 보도자료**를 쓴다.
+//
+//  ▸ 흐름 = 오피스문서 편집(_ofRun)과 같은 4단: upload(자료 원본·선택) → dispatch(press-release)
+//    → _nbPollDraft(공용 폴링 drafts/<id>.json) → /api/press/file 로 워드 수령.
+//  ▸ 부품은 전부 기존 것: 공연 목록 `_kmPerfs()`(카카오·블로그와 같은 한 벌) · 상세 읽기
+//    `/api/content/detail`(같은 KV 캐시 — 카카오에서 이미 읽은 공연은 즉시 온다) ·
+//    사진 자리 파서 `_nbPhotoParse()` · 폴링 `_nbPollDraft()` · 토글 `.sw`/`.sw-k` · 셸 `.nb-wrap`.
+//    신규 CSS 0 · 신규 색 0.
+//
+//  ▸ 어투 2종(운영자 260806-3) — 「타이틀은 보도자료형인데, 블로그 어투로 변형 토글을 키면」:
+//    토글 OFF(기본) = 보도자료형(관찰형 평서체 `~다`) / ON = 블로그 어투(존댓말 `~입니다`).
+//    두 어투의 계약은 앱이 아니라 **press-release.yml 프롬프트**가 갖는다(문안 정본 1곳).
+//
+//  ▸ 사진(운영자 「빈 공간에 사진도 넣을 수 있도록 완성된 워드파일」):
+//    워드에 **점선 빈 액자 + 캡션 초안**이 자리마다 박혀 나온다 → 워드에서 [삽입 ▸ 그림]만 하면 끝.
+//    ⚠ 사진을 앱에서 받아 서버로 올리지 않는다 — 이 레포는 공개라 행사 사진 커밋이 곧 노출이다.
+//      화면의 사진 자리 카드는 **어디에 무엇을 넣을지 미리 보는 용도**(첨부 아님).
+//
+//  🔒 공용 PC 원칙(다른 제작 도구와 동일): 닫으면 상태 전멸. 자료는 [만들기]를 누를 때만 서버로 나간다.
+// ============================================================
+var _PR_ETA_MIN = 30;          // 예상 소요(분) — 운영자 260806-3 「너가 소요한 시간 + 2분」.
+                               //   [260806-4 상향 26→30] 프롬프트에 「깊이 계약」이 붙어 리서치가 늘었다 —
+                               //   사람이 손으로 한 3판(상세페이지 전수 재조사 + 연주자 3인 1차 출처 교차확인)이 28분 + 2 = 30.
+                               //   ⚠ 이 숫자를 올리면 _PR_POLL_MS·워크플로 timeout-minutes도 같이 올려야 한다.
+                               //     셋은 「화면이 러너보다 먼저 포기」 순서(ETA < 폴 < 러너)로 정렬돼 있다.
+var _PR_POLL_MS = 40 * 60000;  // 폴 한도 40분 — 워크플로 timeout(42분)보다 짧게(러너가 죽기 전에 화면이 먼저 포기)
+var _PR_MAX_SRC = 6;           // 자료 첨부 상한
+var _PR_SRC_EXT = /\.(hwp|hwpx|docx|pptx|pdf|txt|md)$/i;
+var _PR_MAX_BYTES = 8 * 1024 * 1024;
+
+var _prState = null;
+function _prDefault(){
+  return {picks:[],           // [{name,url,detail,busy}]  고른 공연(상세는 고르는 즉시 읽는다)
+          main:'',            // 메인으로 강조할 공연 이름
+          hooks:['',''],      // 강조할 점
+          srcs:[],            // [{name,bytes}] 첨부 자료
+          blogTone:false,     // 토글 — OFF=보도자료형(기본) / ON=블로그 어투
+          busy:false, step:'', startedAt:0, tick:null,
+          text:'', versions:[], verCur:-1, docx:null, docxName:'', docxErr:'',
+          escHandler:null};
+}
+
+function openPressKit(){
+  if(_tminIs('pr-board')){_tminShow('pr-board');return;}   // 최소화 중 재열기 = 복원(러너 작업이 뒤에서 이어진다)
+  var el=document.getElementById('pr-board');
+  if(!el){el=document.createElement('div');el.id='pr-board';document.body.appendChild(el);}
+  try{if(_prState&&_prState.escHandler)document.removeEventListener('keydown',_prState.escHandler);}catch(_e){}
+  try{if(_prState&&_prState.tick)clearInterval(_prState.tick);}catch(_e){}
+  _prState=_prDefault();   // 🔒 매번 새로 — 이전 사용자의 공연·자료·초안을 복원하지 않는다
+  el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closePressKit)">'
+    +'<div class="modal" style="width:96vw;max-width:1180px;height:92vh;max-height:92vh;--mpad-y:0;--mpad-x:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:var(--surface-solid)">'
+    +'<button class="modal-x" onclick="closePressKit()" title="닫기" aria-label="닫기">✕</button>'
+    +_mhead('보도자료 만들기','공연을 고르면 자료를 읽고 워드 보도자료를 써요','<button class="modal-x" onclick="_tminHide(\'pr-board\',\'보도자료 만들기\')" title="최소화" aria-label="최소화">─</button>')
+    +'<div style="flex:1;min-height:0;padding:16px 24px 18px">'
+      +'<div class="nb-wrap">'
+        +'<div class="nb-col"><div class="nb-col-head">무엇을 담을까요</div><div id="pr-in"></div></div>'
+        +'<div class="nb-col"><div class="nb-col-head">보도자료 초안</div><div id="pr-out" style="flex:1;min-height:0;display:flex;flex-direction:column"></div></div>'
+      +'</div>'
+    +'</div>'
+    +'<input type="file" id="pr-src-file" accept=".hwp,.hwpx,.docx,.pptx,.pdf,.txt,.md" multiple style="display:none" onchange="_prOnSrc(this)">'
+    +'</div></div>';
+  _prState.escHandler=function(e){if(e.key==='Escape'&&!_prState.busy&&!_tminIs('pr-board'))closePressKit();};
+  document.addEventListener('keydown',_prState.escHandler);
+  _prRender();
+}
+function closePressKit(){
+  if(_prState&&_prState.escHandler)document.removeEventListener('keydown',_prState.escHandler);
+  if(_prState&&_prState.tick)clearInterval(_prState.tick);
+  _prState=_prDefault();   // 🔒 자료·초안·워드 전부 폐기(인메모리만 썼으므로 참조만 끊으면 끝)
+  var el=document.getElementById('pr-board');if(el)el.innerHTML='';
+}
+
+// ── 공연 고르기(다중) ────────────────────────────────────
+//  카카오·블로그는 한 편만 고른다. 보도자료는 여러 편을 묶는 글이라 여기만 다중이다 — 목록 자체는 같은 한 벌.
+function _prPickedIdx(name){
+  var k=-1;(_prState.picks||[]).forEach(function(p,i){if(p.name===name)k=i;});return k;
+}
+function _prTogglePerf(name){
+  var s=_prState,i=_prPickedIdx(name);
+  if(i>=0){
+    s.picks.splice(i,1);
+    if(s.main===name)s.main=(s.picks[0]&&s.picks[0].name)||'';
+  }else{
+    if(s.picks.length>=8){showToast('한 번에 8편까지 담을 수 있어요','error');return;}
+    var hit=_kmPerfs().filter(function(p){return p.f===name;})[0];
+    s.picks.push({name:name,url:hit?String(hit.u||'').trim():'',detail:'',busy:false});
+    if(!s.main)s.main=name;      // 첫 선택이 기본 메인 — 운영자가 라디오로 바꾼다
+    _prReadDetail(name);
+  }
+  _prRender();
+}
+// 상세페이지 읽기 = 고르는 순간(버튼을 한 번 더 누르게 하지 않는다). 카카오와 같은 엔드포인트·같은 KV 캐시.
+async function _prReadDetail(name){
+  var s=_prState,i=_prPickedIdx(name);if(i<0)return;
+  var it=s.picks[i];if(!it.url||it.busy||it.detail)return;
+  it.busy=true;_prRender();
+  var _st=_prState;   // 🔒 세대 가드
+  try{
+    var r=await api('POST','/api/content/detail',{url:it.url,fresh:0});
+    if(_st!==_prState)return;
+    var j=_prPickedIdx(name);if(j<0)return;
+    var a=String((r&&r.text)||'').trim(),b=String((r&&r.ocrText)||'').trim(),parts=[];
+    if(a)parts.push('[상세페이지 본문]\n'+a);
+    if(b)parts.push('[포스터·상세 이미지 OCR]\n'+b);
+    _prState.picks[j].detail=parts.join('\n\n');
+    _prState.picks[j].busy=false;_prRender();
+  }catch(e){
+    if(_st!==_prState)return;
+    var k=_prPickedIdx(name);if(k>=0){_prState.picks[k].busy=false;}
+    _prRender();
+    showToast('「'+name+'」 상세페이지를 못 읽었어요 — 자료를 직접 올려 주세요','error');
+  }
+}
+function _prSetMain(name){_prState.main=name;_prRender();}
+
+// ── 강조할 점 ────────────────────────────────────────────
+function _prHook(i,v){_prState.hooks[i]=v;}
+function _prHookAdd(){if(_prState.hooks.length<4)_prState.hooks.push('');_prRender();}
+function _prHookDel(i){_prState.hooks.splice(i,1);while(_prState.hooks.length<2)_prState.hooks.push('');_prRender();}
+
+// ── 자료 첨부 ────────────────────────────────────────────
+function _prSrcPick(){var f=document.getElementById('pr-src-file');if(f)f.click();}
+function _prOnSrc(input){
+  var files=(input&&input.files)?Array.prototype.slice.call(input.files):[];
+  if(input)input.value='';
+  var s=_prState;
+  files.forEach(function(file){
+    if(s.srcs.length>=_PR_MAX_SRC){showToast('자료는 '+_PR_MAX_SRC+'개까지 올릴 수 있어요','error');return;}
+    if(!_PR_SRC_EXT.test(file.name||'')){showToast('「'+(file.name||'')+'」는 못 읽어요 — 한글·워드·PPT·PDF·텍스트만 돼요','error');return;}
+    if(file.size>_PR_MAX_BYTES){showToast('「'+file.name+'」가 너무 커요(8MB 이하)','error');return;}
+    var _st=_prState,fr=new FileReader();
+    fr.onload=function(){
+      if(_st!==_prState)return;
+      _prState.srcs.push({name:file.name,bytes:new Uint8Array(fr.result)});
+      _prRender();
+    };
+    fr.onerror=function(){showToast('「'+file.name+'」를 읽지 못했어요','error');};
+    fr.readAsArrayBuffer(file);
+  });
+}
+function _prSrcDel(i){_prState.srcs.splice(i,1);_prRender();}
+
+// ── 어투 토글 ────────────────────────────────────────────
+function _prToneToggle(){_prState.blogTone=!_prState.blogTone;_prRender();}
+
+// ── 화면 ─────────────────────────────────────────────────
+function _prRender(){
+  var s=_prState;if(!s)return;
+  var box=document.getElementById('pr-in');
+  if(box){
+    var list=_kmPerfs();
+    var h='';
+    // 1) 공연
+    h+='<div class="nb-field"><span class="nb-label">공연 고르기<span class="req">*</span> <span style="font-weight:400;color:var(--dim)">— 고르면 상세페이지를 바로 읽어요</span></span>';
+    h+= list.length
+      ? '<div class="nb-chips">'+list.map(function(p){
+          var on=_prPickedIdx(p.f)>=0;
+          return '<button type="button" class="nb-chip'+(on?' on':'')+'" onclick="_prTogglePerf('+_qa(p.f)+')"'+(s.busy?' disabled':'')+'>'+escapeHtml(p.f)+'</button>';
+        }).join('')+'</div>'
+      : '<div style="font-size:12px;color:var(--dim);line-height:1.7">상세 링크가 있는 공연이 없어요 — 프로그램 관리에서 URL을 넣어 주세요</div>';
+    h+='</div>';
+    // 2) 담긴 공연 + 메인 라디오
+    if(s.picks.length){
+      h+='<div class="nb-field"><span class="nb-label">메인으로 강조할 공연 <span style="font-weight:400;color:var(--dim)">— 본문의 40% 안팎을 이 공연에 씁니다</span></span>';
+      h+=s.picks.map(function(p){
+        return '<div class="nb-tone-item" style="align-items:center">'
+          +'<input type="radio" name="pr-main" '+(s.main===p.name?'checked':'')+' onchange="_prSetMain('+_qa(p.name)+')" style="margin-top:1px;accent-color:var(--accent)">'
+          +'<span style="flex:1;min-width:0">'+escapeHtml(p.name)
+            +'<span style="display:block;font-size:11px;color:var(--dim);margin-top:2px">'
+              +(p.busy?'상세페이지 읽는 중':(p.detail?('상세 '+p.detail.length+'자 읽음'):(p.url?'상세를 못 읽었어요 — 자료를 올려 주세요':'상세 링크 없음')))
+            +'</span></span>'
+          +'<span class="x" onclick="_prTogglePerf('+_qa(p.name)+')" title="빼기" aria-label="빼기" style="cursor:pointer">✕</span></div>';
+      }).join('')+'</div>';
+    }
+    // 3) 강조할 점
+    h+='<div class="nb-field"><span class="nb-label">강조할 점 <span style="font-weight:400;color:var(--dim)">— 이번 보도자료에서 꼭 살릴 것</span></span>';
+    h+=s.hooks.map(function(v,i){
+      return '<div style="display:flex;gap:6px;margin-bottom:6px"><input class="nb-input" style="flex:1" value="'+escapeHtml(v)+'" oninput="_prHook('+i+',this.value)" placeholder="'+(i?'예) 전시도 박람회 기간에 맞춰 할인':'예) 클래식 여러 편을 묶어 할인한다')+'">'
+        +(s.hooks.length>2?'<button type="button" class="nb-btn ghost" style="padding:0 11px" onclick="_prHookDel('+i+')" title="이 줄 지우기" aria-label="이 줄 지우기">✕</button>':'')+'</div>';
+    }).join('');
+    if(s.hooks.length<4)h+='<button type="button" class="nb-btn ghost" style="padding:6px 13px;font-size:12px" onclick="_prHookAdd()">＋ 한 줄 더</button>';
+    h+='</div>';
+    // 4) 자료 첨부
+    h+='<div class="nb-field"><span class="nb-label">자료 첨부 <span style="font-weight:400;color:var(--dim)">— 출연자 프로필·기획안 (한글·워드·PPT·PDF·텍스트)</span></span>';
+    h+=s.srcs.map(function(f,i){
+      return '<div class="nb-tone-item" style="align-items:center"><span style="flex:1;min-width:0;word-break:break-all">'+escapeHtml(f.name)+' · '+_prSize(f.bytes.length)+'</span>'
+        +'<span class="x" onclick="_prSrcDel('+i+')" title="빼기" aria-label="빼기" style="cursor:pointer">✕</span></div>';
+    }).join('');
+    if(s.srcs.length<_PR_MAX_SRC)h+='<button type="button" class="nb-btn ghost" style="padding:6px 13px;font-size:12px;margin-top:'+(s.srcs.length?'7px':'0')+'" onclick="_prSrcPick()"'+(s.busy?' disabled':'')+'>＋ 자료 올리기</button>';
+    h+='</div>';
+    // 5) 어투 토글 — 정본 .sw 스위치(신규 컴포넌트 0)
+    h+='<div class="nb-field" style="display:flex;align-items:flex-start;gap:10px;margin-top:18px">'
+      +'<div style="flex:1;min-width:0"><span class="nb-label" style="margin:0">블로그 어투로 변형</span>'
+        +'<span style="display:block;font-size:11px;color:var(--dim);line-height:1.6;margin-top:3px">'
+        +(s.blogTone?'존댓말 블로그체로 씁니다 — 「~입니다 / ~하실 수 있습니다」, 꼭지마다 정보 불릿'
+                    :'끄면 보도자료체로 씁니다 — 관찰형 평서체 「~다」, 기자가 쓴 것처럼 담백하게')+'</span></div>'
+      +'<div class="sw'+(s.blogTone?' on':'')+'" onclick="_prToneToggle()" title="블로그 어투로 변형 ON/OFF" style="margin-top:1px"><div class="sw-k"></div></div></div>';
+    // 6) 실행
+    h+='<button type="button" id="pr-go" class="btn btn--primary btn--md" style="width:100%;margin-top:6px" onclick="_prGo()"'+(s.busy?' disabled':'')+'>'
+      +(s.busy?_ldHtml(14)+' '+escapeHtml(s.step||'쓰는 중'):'보도자료 만들기')+'</button>';
+    h+='<div style="font-size:11px;color:var(--dim);line-height:1.7;margin-top:8px">'
+      +'자료를 읽고 사실을 확인한 뒤 쓰기 때문에 <b style="color:var(--accent)">약 '+_PR_ETA_MIN+'분</b> 걸려요. '
+      +'창을 닫아도 되고, ─(최소화)로 내려 두면 다른 일을 하는 동안 계속 써요.</div>';
+    box.innerHTML=h;
+  }
+  _prOut();
+}
+function _prSize(n){return n>=1048576?((n/1048576).toFixed(1)+'MB'):(Math.round(n/1024)+'KB');}
+function _prPlain(t){return String(t||'').replace(/^===\w+===[ \t]*$/gm,'').replace(/\n{3,}/g,'\n\n').trim();}
+function _qa(s){return "'"+String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'")+"'";}   // onclick 인자용 따옴표 이스케이프
+
+function _prOut(){
+  var box=document.getElementById('pr-out');if(!box)return;
+  var s=_prState;
+  if(s.busy){
+    var el=Math.max(0,Math.round((Date.now()-s.startedAt)/1000));
+    var mm=Math.floor(el/60),ss=el%60;
+    var pct=Math.min(97,Math.round(el/(_PR_ETA_MIN*60)*100));
+    box.innerHTML='<div class="u-empty" style="margin:auto;max-width:340px">'
+      +'<div style="display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--accent);font-weight:700">'+_ldHtml(14)+escapeHtml(s.step||'쓰는 중')+'</div>'
+      +'<div style="height:6px;border-radius:99px;background:var(--neutral);margin:14px 0 8px;overflow:hidden"><div style="height:100%;width:100%;transform-origin:left;transform:scaleX('+(pct/100)+');background:var(--accent);border-radius:99px;transition:transform 1s linear"></div></div>'
+      +'<div style="font-size:12px;color:var(--dim);line-height:1.8">'
+        +'경과 '+mm+'분 '+(ss<10?'0':'')+ss+'초 · 예상 '+_PR_ETA_MIN+'분<br>'
+        +'자료를 읽고 사실을 확인한 뒤 쓰는 중이에요.<br>─(최소화)로 내려 두고 다른 일을 하셔도 돼요.</div></div>';
+    return;
+  }
+  if(!s.text){
+    box.innerHTML='<div class="u-empty" style="margin:auto"><div class="msg">공연을 고르고 [보도자료 만들기]를 눌러 주세요</div>'
+      +'<div style="font-size:12px;color:var(--dim);line-height:1.7">고른 공연의 상세페이지와 올린 자료를 읽고<br>'
+      +'사진 자리까지 잡힌 <b>워드 보도자료</b>를 만들어요</div></div>';
+    return;
+  }
+  var h='';
+  // 버전 — 코멘트로 다듬을 때마다 쌓인다(초안을 잃지 않는다)
+  if((s.versions||[]).length>1){
+    h+='<div class="nb-chips" style="margin-bottom:9px">'+s.versions.map(function(v,i){
+      return '<button type="button" class="nb-chip'+(i===s.verCur?' on':'')+'" style="padding:5px 11px;font-size:11.5px" onclick="_prVerGo('+i+')">'+escapeHtml(v.label)+'</button>';
+    }).join('')+'</div>';
+  }
+  h+='<div class="nb-row" style="gap:7px;margin-bottom:9px;flex-wrap:wrap">'
+    +(s.docx?'<button type="button" class="btn btn--primary btn--sm" onclick="_prDownload()">워드 내려받기</button>'
+            :'<span style="font-size:11.5px;color:var(--danger);align-self:center">워드 조립 실패 — 아래 본문은 그대로 쓸 수 있어요'+(s.docxErr?' ('+escapeHtml(s.docxErr.slice(0,60))+')':'')+'</span>')
+    +'<button type="button" class="btn btn--neutral btn--sm" onclick="_prCopy()">본문 복사</button></div>';
+  // 본문 — 사진 자리는 액자 카드로(어디에 무엇이 들어갈지 미리 보기). 파서는 블로그 도구와 같은 한 벌.
+  h+='<div class="nb-out" style="flex:1;overflow:auto;cursor:auto">';
+  // `===TITLE===` 류 구획 머리표는 **조립기와의 약속**이지 읽을 글이 아니다 — 화면에선 지운다(워드·복사도 동일).
+  _nbPhotoParse(_prPlain(s.text)).forEach(function(p){
+    if(p.t==='txt'){
+      var v=p.v.replace(/^\n+|\n+$/g,'');
+      if(v)h+='<div style="white-space:pre-wrap;margin:8px 0">'+escapeHtml(v)+'</div>';
+      return;
+    }
+    h+='<div style="margin:12px 0;border:1.5px dashed var(--accent);border-radius:12px;padding:14px;background:var(--accent-light);text-align:center">'
+      +'<div style="font-size:11.5px;font-weight:700;color:var(--accent)">사진 자리 '+(p.i+1)+'</div>'
+      +'<div style="font-size:11.5px;color:var(--text);margin-top:4px">'+escapeHtml(p.desc)+'</div>'
+      +(p.cap?'<div style="font-size:11px;color:var(--dim);margin-top:3px">캡션: '+escapeHtml(p.cap)+'</div>':'')
+      +'<div style="font-size:10.5px;color:var(--dim);margin-top:6px">워드 파일에 빈 액자로 들어가요 — 워드에서 사진을 넣어 주세요</div></div>';
+  });
+  h+='</div>';
+  // 코멘트 다듬기 — 초안이 나온 뒤 계속 고쳐 나가는 자리(블로그 도구 _nbCmtInlineSend와 같은 계약)
+  h+='<div style="margin-top:10px"><span class="nb-label">고칠 점을 적어 주세요 <span style="font-weight:400;color:var(--dim)">— 반영해서 다시 씁니다</span></span>'
+    +'<div style="display:flex;gap:7px">'
+    +'<input class="nb-input" id="pr-cmt" style="flex:1" placeholder="예) 조재혁 부분을 줄이고 전시 할인을 더 자세히" onkeydown="if(event.key===\'Enter\')_prComment()">'
+    +'<button type="button" class="btn btn--primary btn--sm" onclick="_prComment()">반영</button></div></div>';
+  box.innerHTML=h;
+}
+
+// ── 실행 ─────────────────────────────────────────────────
+function _prTickOn(){
+  var s=_prState;
+  if(s.tick)clearInterval(s.tick);
+  s.startedAt=Date.now();
+  s.tick=setInterval(function(){ if(_prState&&_prState.busy)_prOut(); },1000);   // 경과 초만 다시 그린다(입력칸 무접촉)
+}
+function _prTickOff(){if(_prState&&_prState.tick){clearInterval(_prState.tick);_prState.tick=null;}}
+
+async function _prRun(revise){
+  var s=_prState;if(s.busy)return;
+  if(!s.picks.length&&!s.srcs.length){showToast('공연을 고르거나 자료를 올려 주세요','error');return;}
+  var _st=_prState;   // 🔒 세대 가드 — 폴링 최장 30분, 그 사이 닫혔으면 결과 폐기
+  s.busy=true;s.step=s.srcs.length?'자료 올리는 중':'쓰는 중';_prTickOn();_prRender();
+  try{
+    var id='pr'+Date.now()+Math.floor(Math.random()*1000);
+    // 1) 자료 원본 업로드(있을 때만) — 러너가 .hwp까지 직접 읽는다(tools/press_srcext.py)
+    var srcs=[];
+    for(var i=0;i<s.srcs.length;i++){
+      var f=s.srcs[i];
+      var up=await fetch(API+'/api/press/upload',{method:'POST',headers:_nbApiHeaders(),
+        body:JSON.stringify({id:id,n:i,name:f.name,b64:_hwB64(f.bytes)})});
+      if(up.status===503)throw new Error('NO_PAT');
+      if(up.status===401)throw new Error('로그인이 필요해요 — 다시 로그인해 주세요');
+      if(!up.ok)throw new Error('upload '+up.status+': '+(await up.text()).slice(0,150));
+      if(_st!==_prState)return;
+      srcs.push(f.name);
+    }
+    // 2) 디스패치
+    _prState.step='쓰는 중';_prRender();
+    var body={id:id,tone:s.blogTone?'blog':'press',main:s.main,srcs:srcs,
+      hooks:(s.hooks||[]).map(function(x){return String(x||'').trim();}).filter(Boolean),
+      perfs:s.picks.map(function(p){return {name:p.name,url:p.url,detail:p.detail};})};
+    if(revise){body.revise=revise;body.prevDraft=s.text;}
+    var dp=await fetch(API+'/api/press/dispatch',{method:'POST',headers:_nbApiHeaders(),body:JSON.stringify(body)});
+    if(!dp.ok)throw new Error('dispatch '+dp.status+': '+(await dp.text()).slice(0,150));
+    if(_st!==_prState)return;
+
+    // 3) 폴링(공용 경로)
+    var res=await _nbPollDraft(id,_PR_POLL_MS);
+    if(_st!==_prState)return;
+    if(!res||res.ok===false||!String(res.text||'').trim())throw new Error((res&&res.error)||'빈 응답');
+
+    // 4) 워드 수령 — 본문은 이미 손에 있으니 워드가 없어도 죽이지 않는다
+    _prState.step='받는 중';_prRender();
+    var docx=null,derr=String(res.docxError||'');
+    if(!derr){
+      try{
+        var fr=await fetch(API+'/api/press/file?id='+encodeURIComponent(id)+'&t='+Date.now(),{headers:_nbApiHeaders()});
+        if(fr.ok)docx=new Uint8Array(await fr.arrayBuffer());
+        else derr='file '+fr.status;
+      }catch(e){derr=String((e&&e.message)||e);}
+    }
+    if(_st!==_prState)return;
+
+    _prTickOff();
+    _prState.busy=false;_prState.step='';
+    _prState.docx=docx;_prState.docxErr=derr;
+    _prState.docxName=String(res.name||'예울마루_보도자료_초안.docx');
+    _prSetText(res.text,revise?('코멘트: '+revise.slice(0,14)):'초안');
+    showToast(revise?'코멘트를 반영했어요 ✨':'보도자료 초안을 만들었어요'+(docx?' — [워드 내려받기]로 받으세요':'')+' ✨','success');
+  }catch(e){
+    if(_st!==_prState)return;
+    _prTickOff();
+    _prState.busy=false;_prState.step='';_prRender();
+    _nbGenErr(String((e&&e.message)||e));   // 오류 문구는 블로그 도구와 한 벌(NO_PAT·TIMEOUT 안내 공유)
+  }
+}
+function _prGo(){_prRun('');}
+function _prComment(){
+  var inp=document.getElementById('pr-cmt');
+  var t=String((inp&&inp.value)||'').trim();
+  if(!t){showToast('고칠 점을 적어 주세요','error');if(inp)inp.focus();return;}
+  if(!_prState.text){showToast('먼저 초안을 만들어 주세요','error');return;}
+  if(inp)inp.value='';
+  _prRun(t);
+}
+function _prSetText(text,label){
+  var s=_prState,vs=s.versions||(s.versions=[]);
+  vs.push({text:text,label:label||('초안 '+(vs.length+1)),docx:s.docx,docxName:s.docxName,docxErr:s.docxErr,ts:Date.now()});
+  s.verCur=vs.length-1;s.text=text;_prRender();
+}
+function _prVerGo(i){
+  var s=_prState,vs=s.versions||[];
+  if(i<0||i>=vs.length||i===s.verCur)return;
+  s.verCur=i;s.text=vs[i].text;s.docx=vs[i].docx;s.docxName=vs[i].docxName;s.docxErr=vs[i].docxErr;
+  _prRender();
+}
+function _prDownload(){
+  var s=_prState;if(!s.docx){showToast('내려받을 워드가 없어요','error');return;}
+  try{
+    var blob=new Blob([s.docx],{type:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'});
+    var a=document.createElement('a');a.href=URL.createObjectURL(blob);
+    a.download=s.docxName||'예울마루_보도자료_초안.docx';
+    document.body.appendChild(a);a.click();
+    setTimeout(function(){URL.revokeObjectURL(a.href);a.remove();},1500);
+  }catch(e){showToast('내려받지 못했어요 — '+String((e&&e.message)||e).slice(0,60),'error');}
+}
+function _prCopy(){
+  var t=_prState.text||'';
+  if(!t){showToast('먼저 초안을 만들어 주세요','error');return;}
+  _nbCopyText(_prPlain(t),'본문을 복사했어요 📋');
 }
 
 // ============================================================
