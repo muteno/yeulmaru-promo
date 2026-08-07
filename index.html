@@ -10037,6 +10037,21 @@ function _ryAccCell(n){
   return _ryNumSlot(Math.round(n).toLocaleString(),'--peach-text')
     +'<span style="color:var(--peach-text);font-weight:800">명</span>';
 }
+// [260807-2 운영자 「전일대비일 때 판매율 자리에 **누적좌석·누적금액** 나오게 · 위가 누적 좌석 · 그 아래가 누적 금액」]
+//   전일 대비 모드에서만 3열이 갈아끼워진다(끔 = 판매율·누적 관객수 그대로 = 회귀 0).
+//   문법은 옆 칸(_ryDodCell)과 **한 벌** — 윗줄 = 수량(분야 강조색·800) · 아랫줄 = 금액(중립 `--neutral-text`).
+//   ⚠ 아랫줄에 부호색(green/danger)을 쓰지 않는다 — 이 표에서 초록·빨강은 「어제보다 늘/줄」의 뜻이고, 누계는 증감이 아니다.
+//   값 = 화면이 이미 쓰는 그 두 수(공연 `p.seats`·`p.money` = 단체 포함 총량 · 전시 `_acc`·`_accM`) — 새 집계 0.
+function _ryCumCell(p){
+  var isEx=(p&&p._kind==='ex'), tok=isEx?'--peach-text':'--accent', unit=isEx?'명':'석';
+  var n=isEx?p._acc:p.seats, m=isEx?p._accM:p.money;
+  if(n===null||n===undefined||isNaN(n))return '<span style="color:var(--muted);font-size:12px">—</span>';
+  return '<span style="display:inline-block">'
+    +'<span style="display:block;white-space:nowrap">'+_ryNumSlot(Math.round(n).toLocaleString(),tok)
+      +'<span style="color:var('+tok+');font-weight:800">'+unit+'</span></span>'
+    +'<span style="display:block;font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;margin-top:2px;white-space:nowrap;color:var('
+      +((m===null||m===undefined||isNaN(m))?'--muted">—':'--neutral-text">'+Math.round(m).toLocaleString()+'원')+'</span></span>';
+}
 // [260729 운영자] 머리글 열 크기 조절 — 기본 폭(합 100) · 조절값은 기기 단위 기억(localStorage). 계정 축은 【바인딩】상 미배선이라 기기 저장이 상한.
 // [260731 운영자] 「사업 성격」 열 폐지 → 그 자리를 「장르」가 차지(6칸 → 5칸). 성격 폭 13은 장르(11)에 합산 = 24(총합 100 보존).
 //   구 6칸 저장값(localStorage ryColW)은 길이 검사에서 자동 탈락 → 기본 폭으로 리셋(마이그레이션 코드 불필요).
@@ -10131,8 +10146,11 @@ function _railYrmPerfTable(perfs,rateLab){
   // [260731 운영자] 「사업 성격」 열 삭제 · 그 자리에 「장르」 — 5칸(일자·프로그램·판매율·최근 7일 추이·장르).
   //   ([260803] 성격(예술성/사업성) 축 자체 폐지 — 데이터·필터·입력구 전부 제거)
   // [260807] 4열 = 토글 한 축으로 「최근 7일 추이 ↔ 전일 대비」 갈아끼움(열 신설 0 · 폭·경계 그대로).
+  // [260807-2] 같은 토글로 3열도 함께 갈아끼운다 — 「판매율/누적 관객수」 → **「누적 좌석·금액」**(운영자 지시).
+  //   왜 = 전일 대비만 보는 화면에서 판매율은 어제와 무관한 값이고, 운영자 일일 보고문은 「누적 좌석 · 누적 금액 · 전일대비」 세 줄이 한 벌이다.
   var DOD=(typeof _ryDodOn==='function')&&_ryDodOn();
-  var HL=['일자','프로그램',(rateLab||'판매율'),(DOD?'전일 대비':'최근 7일 추이'),'장르'];
+  var _isEx=!!(perfs&&perfs[0]&&perfs[0]._kind==='ex');   // 표는 분야별로 따로 그려진다 = 한 표의 행은 모두 같은 종류
+  var HL=['일자','프로그램',(DOD?(_isEx?'누적 관객·금액':'누적 좌석·금액'):(rateLab||'판매율')),(DOD?'전일 대비':'최근 7일 추이'),'장르'];
   // [260731 운영자 개정] 최근 7일 추이 = **가운데** 정렬(나머지는 좌측 유지).
   var HA=['left','left','left','center','left'];
   // [260731 운영자] 열 간격 벌리기 — 「프로그램↔판매율(전시 = 누적 관객수)」·「추이↔장르」 두 경계.
@@ -10160,7 +10178,8 @@ function _railYrmPerfTable(perfs,rateLab){
       :_mvBars(p.days,p.diff,p._unit,(p._kind==='ex')?'--peach-text':null,(p._kind==='ex')?'--peach-light':null)));   // [260731 운영자 4차] 전시 추이 = 전시색(--peach-text 사다리) — 3열 누적 관객수·그룹 블릿과 같은 축
     // 3열 = 공연·교육 「판매율」(N% (분자/분모)) · 전시 「누적 관객수」(누계 숫자) — 둘 다 강조색 볼드·좌측 정렬로 같은 문법
     var rate=p.noData?'<span style="color:var(--muted);font-size:12px">—</span>'
-      :((p._kind==='ex')?_ryAccCell(p._acc):_ryRateCell(p.seats,p.totalOpen,p.occ,'--accent'));
+      :(DOD?_ryCumCell(p)   // [260807-2] 전일 대비 모드 = 누적 좌석/금액 두 줄(옆 칸과 한 벌)
+      :((p._kind==='ex')?_ryAccCell(p._acc):_ryRateCell(p.seats,p.totalOpen,p.occ,'--accent')));
     var sub=_rySubLine((p._ryRun!==undefined&&p._ryRun!==null)?p._ryRun:_ryRunTxt(p),p._venue);
     var kind=(p._kind==='ex')?'ex':'perf', pkey=(p._kind==='ex')?(p.id||p.name):p.name;   // 드릴 키 = _srailUhaKey와 같은 축(전시 = ID 우선)
     h+='<tr class="clk" role="button" tabindex="0"'+(p._past?' style="background:var(--past-bg)"':'')+' data-uhakey="'+escapeHtml(_srailUhaKey(p))+'" onclick="_railYrmPick(\''+kind+'\',\''+_anaEsc(pkey)+'\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click();}" title="'+escapeHtml(p.name)+' — 클릭 = 아래 상세 보기">'
@@ -10191,7 +10210,11 @@ function _ryExRow(e){
   // [260807] mny = 전시일일 「누계금액」 — 공연 days의 mny(합계금액)와 같은 자리·같은 뜻(전일 대비 금액 소스). 없으면 null → 금액 줄만 '—'.
   var days=ds.map(function(r){ var v=_salesNum(r['누계총인원']); if(v===null)v=_salesNum(r['누계유료']); return {bd:_salesNum(r['기준일자']),seat:(v===null?0:v),mny:_salesNum(r['누계금액'])}; });
   var acc=(e._total!==null&&e._total!==undefined)?e._total:e._paid;   // 누적 관객수 = 누계총인원 → 없으면 누계유료
-  return {_kind:'ex',id:(e.id||''),name:e.name,_src:e,_past:(e._past?1:0),
+  // [260807-2] _accM = 누적 금액 — 전일 대비 모드의 3열 아랫줄(공연 p.money 자리). 마지막 실측 「누계금액」 → 없으면 마스터 「최종매출」.
+  var accM=null;
+  for(var _i=days.length-1;_i>=0;_i--){ if(days[_i].mny!==null&&days[_i].mny!==undefined){ accM=days[_i].mny; break; } }
+  if(accM===null)accM=_salesNum(e.최종매출);
+  return {_kind:'ex',id:(e.id||''),name:e.name,_src:e,_past:(e._past?1:0),_accM:accM,
     startDate:sd,endDate:ed,_ryDate:(ed||sd),
     dday:((e._dday===null||e._dday===undefined)?null:e._dday),
     noData:!!e.noData,seats:e._paid,totalOpen:e._goal,occ:((e.occ===null||e.occ===undefined)?null:e.occ),_acc:acc,
