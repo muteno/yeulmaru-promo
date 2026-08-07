@@ -2508,6 +2508,8 @@ async function paBuildServerPack(env, token) {
   try { exMaster = await getOpsCached(token, "운영_전시마스터"); } catch (e) {}
   try { recs = await handleGetRecords(token); } catch (e) {}
   try { opsL = await getOpsCached(token, "운영_세부운영관리대장(정리)"); } catch (e) {}   // [260807] 분모 신호 — 운영대장 행수 = 회차(프런트 _opsIndex 축 이식)
+  let grpS = null;
+  try { grpS = await getOpsCached(token, "운영_단체"); } catch (e) {}   // [260807 운영자 「단체라고 따로 구분지어 포함」] 단체 = 개인(일일입력·티켓셀러)과의 차이분 원장
 
   const dmap = {};
   ((daily && daily.rows) || []).forEach((r) => { const k = paNorm(r["공연명"]); if (!k || paNum(r["기준일자"]) === null) return; (dmap[k] = dmap[k] || []).push(r); });
@@ -2537,6 +2539,22 @@ async function paBuildServerPack(env, token) {
     for (const dy of [0, 1, -1]) { const hit = opsIdx.byNY[k + "|" + (yy + dy)]; if (hit) return hit; }   // ±1년 가드 = 재연 오매칭 방지(프런트 _opsLookup 동형)
     return null;
   };
+  // 단체 인덱스 — 건별 증분 합산(프런트 gmap 동형: 공연ID 우선 → 정규화명 폴백 · 시점 축은 안 실음 = 「언제 들어왔냐는 의미가 없다」)
+  const grpIdx = { byId: {}, byNorm: {} };
+  ((grpS && grpS.rows) || []).forEach((r) => {
+    const nm = String(r["공연명"] || "").trim(); if (!nm) return;
+    const seat = paNum(r["좌석"]) || 0, money = paNum(r["금액"]) || 0;
+    const gid = String(r["공연ID"] || "").trim();
+    const add = (o) => { o.seat += seat; o.money += money; o.cnt++; };
+    if (gid) add(grpIdx.byId[gid] = grpIdx.byId[gid] || { seat: 0, money: 0, cnt: 0 });
+    add(grpIdx.byNorm[paNorm(nm)] = grpIdx.byNorm[paNorm(nm)] || { seat: 0, money: 0, cnt: 0 });
+  });
+  const grpFor = (p, m) => {
+    const mid = m ? String(m["ID"] || "").trim() : "";
+    if (mid && grpIdx.byId[mid]) return grpIdx.byId[mid];
+    if (p.id && grpIdx.byId[p.id]) return grpIdx.byId[p.id];
+    return grpIdx.byNorm[paNorm(p.f)] || null;
+  };
 
   const salesFor = (p) => {
     if (p.t === "전시") {
@@ -2550,7 +2568,11 @@ async function paBuildServerPack(env, token) {
     const rows = dmap[paNorm(p.f)] || [];
     const m = mmap[paNorm(p.f)];
     if (!rows.length && !m) return { none: true, why: "일일입력·공연마스터 미등록(집계 전)" };
-    const seats = rows.length ? (paNum(rows[rows.length - 1]["합계좌석"]) || 0) : 0;
+    // [260807 운영자] 총누적 = 개인(일일입력 = 티켓셀러) + 단체(운영_단체 차이분 · 시점 무의미) — 운영 리포트와 같은 총량.
+    //   추이·페이스·최근7일·곡선은 개인 축으로만(프런트와 동일 = 단체가 추세를 오염하지 않는다).
+    const indiv = rows.length ? (paNum(rows[rows.length - 1]["합계좌석"]) || 0) : 0;
+    const grp = grpFor(p, m);
+    const seats = indiv + (grp ? grp.seat : 0);
     const ops = opsFor(p);
     const base = (m && paNum(m["기준석"])) || (ops && ops.base) || 926;
     // [260807 운영자 「회차가 감안이 안 돼 100% 초과」] 분모 회차 = 프런트 _salesBuild 5신호 사다리 이식 —
@@ -2576,7 +2598,8 @@ async function paBuildServerPack(env, token) {
     const dday = p.s ? Math.round((new Date(p.s + "T00:00:00") - new Date(today + "T00:00:00")) / 86400000) : null;
     return {
       status: (p.ss && p.ss <= today && today <= (p.se || p.e || today)) ? "active" : (p.ss && p.ss > today ? "notyet" : "unknown"),
-      seats, totalOpen: totalOpen || null, occ: totalOpen ? Math.round(seats / totalOpen * 1000) / 10 : null,
+      seats, indiv, groupSeats: grp ? grp.seat : 0, groupCnt: grp ? grp.cnt : 0,
+      totalOpen: totalOpen || null, occ: totalOpen ? Math.round(seats / totalOpen * 1000) / 10 : null,
       target: (m && paNum(m["목표점유율"])) || null, dday,
       fcRate: (rows.length >= 2 && fcDen > 0) ? Math.round(fcNum / fcDen * 10) / 10 : null,
       last7: rows.slice(-7).map((r) => { const s = String(paNum(r["기준일자"]) || ""); return { d: s.length === 8 ? s.slice(4, 6) + "-" + s.slice(6, 8) : s, seat: paNum(r["합계좌석"]) || 0 }; }),
@@ -2672,7 +2695,7 @@ __name(paBuildServerPack, "paBuildServerPack");
 
 // 브리핑 서식판 — 프롬프트(promo-advise.yml)의 말투·형식이 크게 바뀌면 이 값을 올린다 → 포인터 fv 불일치 =
 // 다음 15분 틱에 1회 자동 재생성(운영자가 안 눌러도 새 서식으로 「새로고침」). 선례 = nomute chan_brief PVER 해시 축.
-const PA_FMT_V = "v5-signals-detail-260807";   // v5 = 점검 신호 흡수 + 상세페이지 재료 + 분모 5신호 + 라벨 불릿(운영자 260807 4연)
+const PA_FMT_V = "v7-group-260807";   // v7 = 단체 구분(개인+단체 총량 · 추이는 개인 축) · v6 = 자기 산출 오류 서사화 금지(원칙 9-1) · v5 = 점검 신호 흡수 + 상세재료 + 분모 5신호 + 라벨 불릿
 // 자동 브리핑 1회 실행 — 크론(매일 08:30 KST)과 /api/promo/auto-run(admin 수동)이 같은 함수를 쓴다.
 async function paAutoBrief(env, opt) {
   opt = opt || {};

@@ -107,11 +107,10 @@ jobs:
               if (!s || s.none) return '판매 데이터 없음' + (s && s.why ? ' — ' + S(s.why, 200) : '');
               const L = [];
               if (s.status) L.push('상태 ' + S(s.status, 20));
-              if (s.seats != null) L.push('누적 판매 ' + s.seats + '석' + (s.totalOpen ? ' / 총오픈 ' + s.totalOpen + '석 (점유율 ' + (NUM(s.occ) == null ? '?' : NUM(s.occ)) + '%)' : ''));
+              if (s.seats != null) L.push('누적 판매 ' + s.seats + '석' + (s.groupSeats ? ' = 개인 ' + (s.indiv != null ? s.indiv : '?') + ' + 단체 ' + s.groupSeats + '(' + (s.groupCnt || '?') + '건)' : '') + (s.totalOpen ? ' / 총오픈 ' + s.totalOpen + '석 (점유율 ' + (NUM(s.occ) == null ? '?' : NUM(s.occ)) + '%)' : ''));
               if (s.target != null) L.push('목표 점유율 ' + s.target + '%');
               if (s.dday != null) L.push('공연 시작까지 D-' + s.dday);
               if (s.fcRate != null) L.push('최근 판매 페이스 일평균 ' + NUM(s.fcRate) + '석/일');
-              if (s.groupSeats) L.push('단체 유입 ' + s.groupSeats + '석');
               let out = L.join(' · ');
               if (Array.isArray(s.last7) && s.last7.length) out += '\n  최근 실측(누적석): ' + s.last7.map((r) => S(r.d, 10) + '=' + r.seat).join(', ');
               if (Array.isArray(s.curve) && s.curve.length) out += '\n  누적 곡선(일자=누적): ' + s.curve.map((c) => S(c[0], 10) + '=' + c[1]).join(', ');
@@ -206,8 +205,10 @@ jobs:
             prompt += '7. 과장 수식(「최고의」 「완벽한」)과 근거 없는 확신 금지. 판매 페이스 해석은 남은 기간·총오픈석 대비로 정량적으로.\n';
             prompt += '8. 이미 예정된 홍보와 중복인 제안은 하지 않는다 — 예정분을 보완·조정하는 제안은 가능(그렇다고 명시).\n';
             prompt += '9. 지난 조언 회차가 있으면: ⓐ 그 제안이 실행됐는지 「예정된 홍보·지난 홍보」에서 확인하고(제안한 날짜·채널이 이력에 있으면 실행된 것) ⓑ 실행분은 그때→지금 수치 변화로 효과를 총론에 한 줄 평가 ⓒ 미실행 제안을 그대로 반복하지 말 것 — 아직 유효하면 시기를 조정해 다시, 아니면 접은 이유를 말한다.\n';
+            prompt += '9-1. ⚠ 지난 회차의 판정·수치가 계산 보정·데이터 수정으로 달라졌다면(운영자 260807) — 그건 **네 이전 산출의 오류**이지 운영자가 믿던 가정이 아니다. 「~라던 게 실은」 「판이 뒤집혔다」처럼 남의 믿음을 정정하는 서사로 쓰지 말고 **헤드라인 소재로도 금지**. 처리 = 현재 값만 사실로 말하고, 필요하면 gaps에 「분모 보정으로 지난 회차 수치와 다르다」 한 줄. 지난 회차 언급은 ⓐⓑⓒ(제안 실행·효과)에만 쓴다.\n';
             prompt += '10. 다음 세 신호는 발견되면 반드시 다룬다(구 「점검」 기능의 이관 — 운영자 260807): ⓐ 티켓오픈(판매시작) D-3 이내인데 그날 카카오 슬롯이 비어 있다 → d7 최우선 후보 ⓑ 판매종료 D-14 이내인데 예정된 홍보가 0건이다 → d7에 회수 계획 ⓒ 「⚠ 홍보 게이트 닫힘」인데 판매가 임박했다 → 홍보 제안보다 먼저 「프로그램 시트에서 홍보노출부터 열어야 한다」를 avoid나 첫 액션에 명시한다(지금은 앱에서 신청 자체가 안 된다).\n';
-            prompt += '11. 상세페이지 재료에 할인율·조기예매 마감·가격·특전이 보이면 그 시한을 액션 날짜 계산에 쓴다(예: 조기예매 25%가 08-08 마감이면 그 전날·당일이 발송 최적일). 단 판매기간·공연일은 시트가 정본 — 재료와 어긋나면 시트를 따른다.\n\n';
+            prompt += '11. 상세페이지 재료에 할인율·조기예매 마감·가격·특전이 보이면 그 시한을 액션 날짜 계산에 쓴다(예: 조기예매 25%가 08-08 마감이면 그 전날·당일이 발송 최적일). 단 판매기간·공연일은 시트가 정본 — 재료와 어긋나면 시트를 따른다.\n';
+            prompt += '12. 단체(운영자 260807): 누적·점유율은 「개인+단체」 총량이고 단체는 유입 시점이 무의미한 차이분이다 — 최근 실측·페이스·누적 곡선은 **개인 예매(티켓셀러) 축만**이니 총량과 다르다고 오독하지 마라. 단체 비중이 크면 그 자체가 재료다(단체 영업이 서는 공연 vs 개인 판매로 크는 공연을 구분해 채널·타겟을 갈라라). 표기할 땐 「428석 = 개인 298 + 단체 130」처럼 구분한다.\n\n';
             if (scope === 'portfolio') {
               prompt += '# 이번 요청 = 전체 총론 (운영자: 「공연을 나눠서가 아니라 총론」)\n';
               prompt += '프로그램별 소제목으로 나눠 쓰지 말고, 포트폴리오 전체를 한 번에 보고 「지금 홍보 운영이 어디에 서 있고, 무엇부터 움직여야 하는가」를 한 편의 브리핑으로 말하세요. ';
@@ -260,10 +261,10 @@ jobs:
               let adv = null;
               try { adv = JSON.parse(t); } catch (e) { const m = t.match(/\{[\s\S]*\}/); if (m) { try { adv = JSON.parse(m[0]); } catch (e2) {} } }
               // 근거 요약(basis) — 앱 [근거 데이터 보기]가 그대로 보여준다(AI가 무엇을 보고 판단했는지 투명성 축)
-              const keyOf = (g) => { const s = (g && g.sales) || {}; return { name: g && g.name, seats: s.seats != null ? s.seats : null, totalOpen: s.totalOpen != null ? s.totalOpen : null, occ: s.occ != null ? s.occ : null, dday: s.dday != null ? s.dday : null, fcRate: s.fcRate != null ? s.fcRate : null }; };
+              const keyOf = (g) => { const s = (g && g.sales) || {}; return { name: g && g.name, seats: s.seats != null ? s.seats : null, grp: s.groupSeats || 0, totalOpen: s.totalOpen != null ? s.totalOpen : null, occ: s.occ != null ? s.occ : null, dday: s.dday != null ? s.dday : null, fcRate: s.fcRate != null ? s.fcRate : null }; };
               const keys = scope === 'program' ? (pack.program ? [keyOf(pack.program)] : []) : (pack.programs || []).map(keyOf);
               const basisL = ['오늘 ' + S(pack.today, 10) + ' · ' + (scope === 'portfolio' ? '포트폴리오 ' + keys.length + '개(총론 · 7/30/90일)' : '프로그램 1개') + (isAuto ? ' · 자동(서버 조립 · 축약 집계)' : '') + ' · opus5/' + effort];
-              keys.slice(0, 12).forEach((k) => basisL.push('· ' + S(k.name, 60) + ' — 누적 ' + (k.seats != null ? (k.seats + (k.totalOpen ? '석/' + k.totalOpen + '석' : '석')) : '?') + (k.occ != null ? ' (' + k.occ + '%)' : '') + (k.dday != null ? ' · D-' + k.dday : '') + (k.fcRate != null ? ' · ' + k.fcRate + '석/일' : '')));
+              keys.slice(0, 12).forEach((k) => basisL.push('· ' + S(k.name, 60) + ' — 누적 ' + (k.seats != null ? (k.seats + (k.totalOpen ? '석/' + k.totalOpen + '석' : '석')) : '?') + (k.grp ? '(단체 ' + k.grp + ' 포함)' : '') + (k.occ != null ? ' (' + k.occ + '%)' : '') + (k.dday != null ? ' · D-' + k.dday : '') + (k.fcRate != null ? ' · ' + k.fcRate + '석/일' : '')));
               basisL.push('· 3주 내 카카오·문자 점유일 ' + (((pack.calendar || {}).busy) || []).length + '일' + (pack.audience ? ' · 고객 집계 동봉' : ' · 고객 집계 미포함'));
               if (prevRuns.length) basisL.push('· 지난 조언 ' + prevRuns.length + '회차 반영(폐루프)');
               const basis = basisL.join('\n');

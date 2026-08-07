@@ -5980,7 +5980,9 @@ function _salesBuild(){
     // [분석보드] 추가 필드(기존 필드 불변): 최근 7일 점유율 스파크라인 / 어제대비 %p / 데이터 출처
     var spark=rows.slice(-7).map(function(r){return totalOpen>0?Math.min((_salesNum(r['합계좌석'])||0)/totalOpen*100,100):0;});
     // 레일 10일 추이용 — 최근 7일 실측(좌석·기준일자·점유율·x=예측 제외 표시). 예측(추세 연장·종료 예상)은 렌더 시 — 실측 7건부터(_SRAIL_FC_MIN).
-    var days=rows.slice(-7).map(function(r){var s=_salesNum(r['합계좌석']); return {bd:_salesNum(r['기준일자']),seat:(s==null?0:s),occ:(s!=null&&totalOpen>0)?Math.min(s/totalOpen*100,100):0,x:_fcExcl(r)?1:0};});
+    // [260807 운영자 「전일 대비 … +00% +000원」] mny = 그 날짜의 **누계 금액**(합계금액) — 전일 대비 금액을 같은 두 점에서 뽑기 위한 동봉값.
+    //   ⚠ 새 계산이 아니라 이미 읽고 있던 행의 열 하나를 같이 실어 보내는 것뿐 = 좌석·점유율·예측 축 무접촉(단체 금액도 종전대로 여기 미포함).
+    var days=rows.slice(-7).map(function(r){var s=_salesNum(r['합계좌석']); return {bd:_salesNum(r['기준일자']),seat:(s==null?0:s),mny:_salesNum(r['합계금액']),occ:(s!=null&&totalOpen>0)?Math.min(s/totalOpen*100,100):0,x:_fcExcl(r)?1:0};});
     var deltaPP=(diff!==null&&totalOpen>0)?diff/totalOpen*100:null;
     // [260710 운영자] 예측 일평균 fcRate(석/일) = (마지막 누적 − 첫 실측 누적) ÷ 달력일수 — 첫 실측점 기준선 제외(첫날 버스트 배제).
     // 구현 = 인접 구간(증분·달력일수) 합산: 제외 0건이면 기존 두 점 식과 동치, 「예측 제외」 체크일(단체 유입·2차 오픈 등)은
@@ -6824,6 +6826,45 @@ function _mvBars(days,diff,unit,tok,tokDim){
     +'<span style="display:inline-block;vertical-align:middle;margin-left:'+_RY_TREND_GAP+'px;text-align:right;width:'+_RY_TREND_NUMW+'px">'
     +'<span style="display:block;color:var('+tok+');font-weight:800;font-size:13px;font-variant-numeric:tabular-nums">+'+sum7.toLocaleString()+(unit||'석')+'</span>'
     +'<span style="display:block;color:var(--dim);font-size:11px;font-variant-numeric:tabular-nums;margin-top:2px">어제 '+(yest>=0?'+':'')+yest.toLocaleString()+'</span></span>';
+}
+// ── [260807 운영자 「어제 대비해서가 너무 눈에 안 띈다 … 오로지 전일하고 비교만 할 수 있게 · +00% +000원 등」] ──────
+//   같은 칸(최근 7일 추이 자리)을 **전일 대비 한 칸**으로 갈아끼운다 — 열 신설 0 · 폭 동일(막대 67 + 간격 10 + 숫자 56 = 133)이라
+//   토글을 눌러도 표의 세로 오와열(_ryColW 경계·머리글 중심)이 안 흔들린다.
+//   표기 문법 = 레일 머리 요약(「전일 대비 | 공연 -9석」)이 이미 쓰는 정본 그대로 — **부호·색만**(▲▼ 삼각형 폐지 · 운영자 260710):
+//     늘면 `--green` · 줄면 `--danger` · 그대로면 `--muted`(0은 조용해야 한다 — 표는 행이 여럿이라 요약 한 줄의 `--text`를 그대로 쓰면
+//     「아무 일 없음」이 프로그램 이름만큼 크게 읽힌다. 색은 지난 행 일자와 같은 중립 사다리 = 새 색 0).
+//   ⚠ 여기서 「전일」 = 달력 어제가 아니라 **직전 입력분**이다 — 시트가 매일 들어오지 않는 날이 있어, 시트 열 「전일대비(석)」이
+//     쓰는 뜻과 같은 축으로 맞춘다. 그래서 실제 두 날짜를 툴팁에 적는다(예: 8.6 → 8.7).
+var _RY_TREND_BARW=67, _RY_DOD_W=_RY_TREND_BARW+_RY_TREND_GAP+_RY_TREND_NUMW;   // 133 = 추이 칸 내용 폭(두 모드가 같은 폭을 쓴다)
+function _ryDodPick(p){
+  var ds=(p&&p.days)||[]; if(!ds.length)return null;
+  var b=ds[ds.length-1], a=(ds.length>=2)?ds[ds.length-2]:null;
+  // 좌석 = 시트 「전일대비(석)」(p.diff)이 정본 · 없으면 두 점 차(첫 입력분은 그날 누계가 곧 그날 판매분 — _mvBars와 같은 규칙)
+  var seat=(p.diff!==null&&p.diff!==undefined&&!isNaN(p.diff))?p.diff:(a?((b.seat||0)-(a.seat||0)):(b.seat||0));
+  var hasM=(b.mny!==null&&b.mny!==undefined);
+  var mny=hasM?(((a&&a.mny!==null&&a.mny!==undefined)?(b.mny-a.mny):b.mny)):null;
+  // 증감률 분모 = 「전일 누계」 = 오늘 누계 − 오늘 증감. a.seat를 그대로 쓰지 않는 이유 = 좌석을 시트 diff에서 받은 행에서
+  //   분자(시트)와 분모(days)가 서로 다른 출처가 돼 %만 혼자 어긋난다(둘이 일치하는 평시엔 a.seat와 같은 값).
+  var base=(b.seat||0)-seat;
+  return {seat:seat,mny:mny,pct:(a&&base>0)?(seat/base*100):null,from:(a?a.bd:null),to:b.bd};
+}
+function _ryDodDate(bd){ var s=String(bd||'').replace(/[^0-9]/g,''); return (s.length===8)?(parseInt(s.slice(4,6),10)+'.'+parseInt(s.slice(6,8),10)):''; }
+function _ryDodCell(p){
+  var d=_ryDodPick(p);
+  if(!d)return '<span style="color:var(--muted);font-size:12px">데이터 부족</span>';
+  var unit=p._unit||'석';
+  var tok=function(v){ return (v>0)?'--green':((v<0)?'--danger':'--muted'); };
+  var sgn=function(v){ return (v>0)?'+':((v<0)?'':'±'); };   // 음수는 숫자가 이미 부호를 갖는다 · 0 = ±(요약 줄과 같은 문법)
+  var num=function(v){ return sgn(v)+Math.round(v).toLocaleString(); };
+  var tip=(d.from?(_ryDodDate(d.from)+' → '):'')+_ryDodDate(d.to)+' 대비'
+    +(d.from?'':' (첫 입력분)');
+  return '<span title="'+escapeHtml(tip)+'" style="display:inline-block;vertical-align:middle;text-align:right;width:'+_RY_DOD_W+'px">'
+    +'<span style="display:block;font-variant-numeric:tabular-nums;white-space:nowrap">'
+      +'<b style="color:var('+tok(d.seat)+');font-weight:800;font-size:14.5px">'+num(d.seat)+unit+'</b>'
+      +((d.pct===null)?'':'<span style="color:var(--dim);font-size:11.5px;font-weight:700;margin-left:5px">'+sgn(d.pct)+(Math.abs(d.pct)>=10?Math.round(d.pct):(Math.round(d.pct*10)/10))+'%</span>')
+    +'</span>'
+    +'<span style="display:block;font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;margin-top:2px;white-space:nowrap;color:var('+((d.mny===null)?'--muted':tok(d.mny))+')">'
+      +((d.mny===null)?'—':(num(d.mny)+'원'))+'</span></span>';
 }
 function _srailTableHtml(perfs,exs){
   var pgIdx=_srailPgIdx();
@@ -9955,7 +9996,9 @@ function _railYrmPerfTable(perfs,rateLab){
   var CW=_ryColW();
   // [260731 운영자] 「사업 성격」 열 삭제 · 그 자리에 「장르」 — 5칸(일자·프로그램·판매율·최근 7일 추이·장르).
   //   ([260803] 성격(예술성/사업성) 축 자체 폐지 — 데이터·필터·입력구 전부 제거)
-  var HL=['일자','프로그램',(rateLab||'판매율'),'최근 7일 추이','장르'];
+  // [260807] 4열 = 토글 한 축으로 「최근 7일 추이 ↔ 전일 대비」 갈아끼움(열 신설 0 · 폭·경계 그대로).
+  var DOD=(typeof _ryDodOn==='function')&&_ryDodOn();
+  var HL=['일자','프로그램',(rateLab||'판매율'),(DOD?'전일 대비':'최근 7일 추이'),'장르'];
   // [260731 운영자 개정] 최근 7일 추이 = **가운데** 정렬(나머지는 좌측 유지).
   var HA=['left','left','left','center','left'];
   // [260731 운영자] 열 간격 벌리기 — 「프로그램↔판매율(전시 = 누적 관객수)」·「추이↔장르」 두 경계.
@@ -9969,7 +10012,8 @@ function _railYrmPerfTable(perfs,rateLab){
   //       (머리글 padding-left 10 · 본문 8 · 본문 padding-right 8 · 내용 133 = 막대 67 + 간격 10 + 숫자 56 · 막대 절반 33.5)
   //       두 식을 같게 풀면 PRh = 76 — 열 폭 W와 무관하므로 드래그로 폭을 바꿔도 계속 맞는다(실측 확인).
   //   .ry-rz(열 너비 조절 손잡이)는 padding box 기준 right:-4px라 이 여백에 영향받지 않는다(경계에 그대로).
-  var HPR=[0,0,0,(_RY_TREND_NUMW+_RY_TREND_GAP+10),0];
+  //   [260807] 전일 대비 모드는 내용이 **막대 없는 한 덩어리**(폭 _RY_DOD_W가 셀 가운데) → 보정 0 = 머리글도 그 덩어리 중심에 선다.
+  var HPR=[0,0,0,(DOD?0:(_RY_TREND_NUMW+_RY_TREND_GAP+10)),0];
   var h='<table class="ana-tbl mv-tbl" style="font-size:13px;width:100%;table-layout:fixed">'+_ryColGroup(CW)+'<thead><tr>';
   HL.forEach(function(lab,i){
     h+='<td style="text-align:'+HA[i]+';'+(HP[i]?('padding-left:'+(10+HP[i])+'px;'):'')+(HPR[i]?('padding-right:'+HPR[i]+'px;'):'')+'">'+lab+(i<HL.length-1?('<i class="ry-rz" role="separator" aria-label="'+lab+' 열 너비 조절" onpointerdown="_ryRzDown(event,'+i+')"></i>'):'')+'</td>';
@@ -9978,7 +10022,8 @@ function _railYrmPerfTable(perfs,rateLab){
   perfs.forEach(function(p){
     var trend=p._past?'<span style="color:var(--muted);font-size:12px">판매 종료</span>'   // [260803] 지난 행 추이 = 「판매 종료」 문구(noData '오픈 예정' 문법 계승) — 최종 실적은 3열·행 클릭 상세가 담당
       :(p.noData?('<span style="color:var(--muted);font-size:12px">'+(_ryNotYetSold(p)?'오픈 예정':'데이터 부족')+'</span>')
-      :_mvBars(p.days,p.diff,p._unit,(p._kind==='ex')?'--peach-text':null,(p._kind==='ex')?'--peach-light':null));   // [260731 운영자 4차] 전시 추이 = 전시색(--peach-text 사다리) — 3열 누적 관객수·그룹 블릿과 같은 축
+      :(DOD?_ryDodCell(p)   // [260807] 전일 대비 모드 — 「판매 종료·오픈 예정·데이터 부족」 분기는 위 그대로(그 행들은 어제와 비교할 것이 없다)
+      :_mvBars(p.days,p.diff,p._unit,(p._kind==='ex')?'--peach-text':null,(p._kind==='ex')?'--peach-light':null)));   // [260731 운영자 4차] 전시 추이 = 전시색(--peach-text 사다리) — 3열 누적 관객수·그룹 블릿과 같은 축
     // 3열 = 공연·교육 「판매율」(N% (분자/분모)) · 전시 「누적 관객수」(누계 숫자) — 둘 다 강조색 볼드·좌측 정렬로 같은 문법
     var rate=p.noData?'<span style="color:var(--muted);font-size:12px">—</span>'
       :((p._kind==='ex')?_ryAccCell(p._acc):_ryRateCell(p.seats,p.totalOpen,p.occ,'--accent'));
@@ -10009,7 +10054,8 @@ function _ryExRow(e){
   var ds=((e.daily)||[]).slice().sort(function(a,b){ return String(a['기준일자']||'').localeCompare(String(b['기준일자']||'')); })
     .filter(function(r){ var d=String(r['기준일자']||'').replace(/[^0-9]/g,''); return !d||d<=tISO; });
   // 추이 = 3열 「누적 관객수」와 같은 축(누계총인원 → 없으면 누계유료)이라 막대 증분과 위 숫자가 같은 것을 센다
-  var days=ds.map(function(r){ var v=_salesNum(r['누계총인원']); if(v===null)v=_salesNum(r['누계유료']); return {bd:_salesNum(r['기준일자']),seat:(v===null?0:v)}; });
+  // [260807] mny = 전시일일 「누계금액」 — 공연 days의 mny(합계금액)와 같은 자리·같은 뜻(전일 대비 금액 소스). 없으면 null → 금액 줄만 '—'.
+  var days=ds.map(function(r){ var v=_salesNum(r['누계총인원']); if(v===null)v=_salesNum(r['누계유료']); return {bd:_salesNum(r['기준일자']),seat:(v===null?0:v),mny:_salesNum(r['누계금액'])}; });
   var acc=(e._total!==null&&e._total!==undefined)?e._total:e._paid;   // 누적 관객수 = 누계총인원 → 없으면 누계유료
   return {_kind:'ex',id:(e.id||''),name:e.name,_src:e,_past:(e._past?1:0),
     startDate:sd,endDate:ed,_ryDate:(ed||sd),
@@ -10202,6 +10248,18 @@ function _ryLivePref(){ if(_ryLiveMem!==null)return _ryLiveMem; try{return local
 //   그래서 올해가 아닌 칩에서는 판매중 축을 걷고(전부 노출) 토글 자체도 숨긴다(제목줄 도구 묶음에서 빠짐).
 //   저장된 선호는 건드리지 않는다 → 올해 칩으로 돌아오면 쓰던 상태 그대로 복귀.
 function _ryLiveOnly(){ return _ryLivePref()&&_ryYearIsNow(); }
+// ── [260807 운영자] 「전일 대비」 글자 토글 — 이웃 「판매중」과 **같은 부품 한 벌**(.ry-hd-div 구분선 + .ry-live-tg 글자 토글) ──
+//   지시: *"판매중 구분자 우측에 동일한 마진간격으로 전일 대비 라고 하나 만들어서 오로지 전일하고 비교만 할 수 있게"*.
+//   켬 = 「최근 7일 추이」 칸이 **전일 대비 한 칸**으로 바뀐다(_ryDodCell) · 끔 = 종전 7일 막대 그대로 = 회귀 0.
+//   라벨은 「판매중」과 같은 문법 = **고정 글자 + 켬/끔 상태**(색·굵기 이중단서는 부품이 이미 진다).
+//   상태 = 기기 기억(판매중 ryLiveOnly2·열 폭 ryColW4와 같은 축) + 메모리 폴백(프라이빗 모드) · 기본 = 끔.
+var _RY_DOD_KEY='ryDodOnly1', _ryDodMem=null;
+function _ryDodOn(){ if(_ryDodMem!==null)return _ryDodMem; try{return localStorage.getItem(_RY_DOD_KEY)==='1';}catch(_e){return false;} }
+function _ryDodToggle(){
+  var v=!_ryDodOn(); _ryDodMem=v;
+  try{localStorage.setItem(_RY_DOD_KEY,v?'1':'0');}catch(_e){}
+  _ryRepaintAnim(v?-1:1);   // 연도·판매중과 같은 교체 경로(좁혀 보기 = 좌→중앙 · 되돌리기 = 우→중앙)
+}
 function _ryLiveToggle(){
   var v=!_ryLivePref(); _ryLiveMem=v;
   try{localStorage.setItem(_RY_LIVE_KEY,v?'1':'0');}catch(_e){}
@@ -10222,7 +10280,12 @@ function _railYrmCardTitle(){
     +_ryYearTrigger()
     +(_ryYearIsNow()?('<span class="ry-hd-div" aria-hidden="true"></span>'
       +'<button type="button" class="ry-live-tg" role="switch" aria-checked="'+(live?'true':'false')+'" onclick="_ryLiveToggle()"'
-      +' title="'+(live?'켬 = 판매중 프로그램만 (눌러서 끄면 올해 지난 프로그램까지)':'끔 = 올해 지난(종료) 프로그램까지 (눌러서 켜면 판매중만)')+'">판매중</button>'):'')
+      +' title="'+(live?'켬 = 판매중 프로그램만 (눌러서 끄면 올해 지난 프로그램까지)':'끔 = 올해 지난(종료) 프로그램까지 (눌러서 켜면 판매중만)')+'">판매중</button>'
+      // [260807 운영자 「판매중 구분자 우측에 동일한 마진간격으로」] 구분선·간격(.ry-hd-tools gap:6px)은 앞 칸과 같은 부품 그대로 = 마진 창작 0.
+      //   ⚠ 지난 연도에는 안 세운다 — 그 해 행은 전부 「판매 종료」라 전일 대비가 나올 수 없는 죽은 조작부가 된다(판매중 토글과 같은 이유·같은 게이트).
+      +'<span class="ry-hd-div" aria-hidden="true"></span>'
+      +'<button type="button" class="ry-live-tg" role="switch" aria-checked="'+(_ryDodOn()?'true':'false')+'" onclick="_ryDodToggle()"'
+      +' title="'+(_ryDodOn()?'켬 = 직전 입력분 대비 증감만 (눌러서 끄면 최근 7일 추이)':'끔 = 최근 7일 추이 (눌러서 켜면 전일 대비 증감만)')+'">전일 대비</button>'):'')
     +'</span>';
 }
 // ── [260801 운영자 · Q.38] 3열 숫자 세로선 보증 — 그룹 표 폭 통일(JS 폴백) ──────────────────────
