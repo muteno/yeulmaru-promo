@@ -44,28 +44,40 @@ T(rep.n === rep.total, `전 기간·전 장르·1회 이상 = 전건(${rep.n}/${
 T(rep.isBlank === true, '_segQBlank가 그 조건을 「안 좁힌 조건」으로 잡는다');
 T(rep.notBlank.every(v => v === false), '축이 하나라도 좁혀지면 blank가 아니다(2회 이상·장르·기간·거주지 4종)');
 
-// ── ② 없는 축을 짚은 질문 = 왕복 전에 그 자리에서 말한다 ─────────────────
-const noax = await page.evaluate(`(()=>({
-  phone:_segNoAxis('0789 끝자리인 번호로 예매한 이력을 확인해줘'),
-  age:_segNoAxis('20대 고객 뽑아줘'), amt:_segNoAxis('금액 많이 쓴 사람'),
-  none:_segNoAxis('3년 이내 클래식 5회 이상 본 여수 사람')
-}))()`);
-console.log('없는 축 =', JSON.stringify(noax));
-T(noax.phone === '휴대폰 번호', '「끝자리 번호로…」 = 휴대폰 번호 축(이 도구에 없음)으로 잡힌다');
-T(noax.age === '연령대' && noax.amt === '구매 금액', '연령·금액도 없는 축으로 잡힌다');
-T(noax.none === null, '정상 조건 질문은 안 걸린다(오탐 0)');
+// ── ② 휴대폰 끝자리 = **이제 축이다**(260814-2 운영자 「검색되게 해야되」) ────────────
+const tailp = await page.evaluate(`(()=>{
+  const p=q=>{const r=_segParseLocal(q);return r?{tail:r.q.tail,why:r.why}:null;};
+  return {a:p('0789 끝자리인 번호로 예매한 이력을 확인해줘'), b:p('끝자리 0789'), c:p('뒷자리가 1299인 사람'),
+    full:p('010-8800-1299 예매 이력'), short:p('12 끝자리'),
+    noax:{num:_segNoAxis('번호로 찾아줘'), ok:_segNoAxis('0789 끝자리인 번호로 예매한 이력을 확인해줘'),
+          age:_segNoAxis('20대 고객 뽑아줘'), none:_segNoAxis('3년 이내 클래식 5회 이상 본 여수 사람')}};
+})()`);
+console.log('끝자리 =', JSON.stringify(tailp));
+T(tailp.a && tailp.a.tail === '0789', `운영자 실사용 문장이 끝자리로 읽힌다 — "${tailp.a && tailp.a.why}"`);
+T(tailp.b && tailp.b.tail === '0789' && tailp.c && tailp.c.tail === '1299', '「끝자리 N」·「뒷자리가 N인」 어순 둘 다');
+T(tailp.full && tailp.full.tail === '1299' && !/기간/.test(tailp.full.why),
+  `온전한 번호를 적어도 **뒤 4자리만** 담고, 그 숫자가 기간으로 새지 않는다 — "${tailp.full && tailp.full.why}"`);
+T(tailp.noax.ok === null, '끝자리 질문은 「없는 축」에 안 걸린다(이제 있는 축)');
+T(tailp.noax.num !== null && tailp.noax.age === '연령대' && tailp.noax.none === null, '숫자 없는 「번호로 찾아줘」는 되묻고 · 연령은 여전히 없는 축 · 정상 질문 오탐 0');
 
+// 목데이터에 실제로 있는 끝자리로 돌린다(운영자 실사용 문장의 0789는 그 시트에만 있는 번호다)
+const mockTail = await page.evaluate(`String(Object.keys(_bkState.by)[0]).replace(/\\D/g,'').slice(-4)`);
 const run1 = await page.evaluate(`(async()=>{
-  _segLast=null; document.getElementById('seg-nl').value='0789 끝자리인 번호로 예매한 이력을 확인해줘';
+  _segLast=null; document.getElementById('seg-nl').value=${JSON.stringify(mockTail + ' 끝자리인 번호로 예매한 이력을 확인해줘')};
   let dispatched=0; const real=window.api;
   window.api=async(m,u,b)=>{ if(String(u).indexOf('/api/blog/dispatch')>=0)dispatched++; return real(m,u,b); };
   await _segNlGo(); window.api=real;
-  return {note:document.getElementById('seg-nl-note').textContent, ran:!!_segLast, dispatched};
+  const key=_segLast&&_segLast.rows[0]&&_segLast.rows[0].key;
+  return {note:document.getElementById('seg-nl-note').textContent, ran:!!_segLast, dispatched,
+    n:_segLast?_segLast.rows.length:0, allTail:_segLast?_segLast.rows.every(x=>String(x.key).replace(/\\D/g,'').slice(-4)===${JSON.stringify(mockTail)}):null,
+    key:key?String(key).slice(-4):null, cond:document.getElementById('seg-cond').textContent.replace(/\s+/g,' ').trim(),
+    label:_segLast?_segQLabel(_segLast.q):null};
 })()`);
 console.log('run1 =', JSON.stringify(run1));
-T(/못 걸러요/.test(run1.note) && /휴대폰 번호/.test(run1.note), `없는 축은 그 자리에서 말한다 — "${run1.note.slice(0, 48)}…"`);
-T(run1.ran === false, '**조회를 안 한다** — 구판은 여기서 전건 명단을 그렸다');
-T(run1.dispatched === 0, '예울이(Actions)에 안 보낸다 — 30초~2분 기다려도 답이 없는 축이다');
+T(run1.ran === true && run1.n >= 1, `끝자리 조회가 **실제로 돈다** — ${run1.n}명`);
+T(run1.allTail === true, `나온 사람 전건이 그 끝자리(${mockTail})`);
+T(run1.dispatched === 0, '예울이(Actions)에 안 보낸다 — 번호 조각이 공개 저장소로 나갈 길 0');
+T(run1.cond.indexOf('번호 뒤 ' + mockTail) >= 0 && run1.label.indexOf('번호 뒤 ' + mockTail) >= 0, `문장·조건 문구에 그 축이 선다 — "${run1.label}"`);
 
 // ── ③ 예울이가 기본값만 돌려준 경우 = 「못 찾았다」로 끝난다 ──────────────
 const run2 = await page.evaluate(`(async()=>{
@@ -150,6 +162,37 @@ T(clicked.after < clicked.before, `바뀐 조건으로 **그 자리에서 다시
 T(clicked.open === false, '고르면 목록이 닫힌다(_ddOpen 동시 1개 규약)');
 const want = ['거주지 전체', '여수시', '순천시', '광양시', '여수·순천·광양', '전남·광주', '수도권(서울·경기·인천)', '영·호남', '기타 광역시'];
 T(want.every(w => clicked.items.indexOf(w) >= 0), '거주지 후보 = 운영자가 준 목록 그대로 ' + JSON.stringify(want));
+
+// ── ⑥ 장르 쪼개기(260814-2 운영자 「발레무용 하나고 연극이 별개 · 대중 국악 기타 다 별개」) ──
+const gen = await page.evaluate(`(()=>{
+  const list=_segGenreList();
+  const hit=(v,g)=>_bkGenreHit(v,g);
+  _segCompute({span:'all',thr:1,g:'연극'}); const nYeon=_segLast.rows.length;
+  _segCompute({span:'all',thr:1,g:'발레·무용'}); const nBal=_segLast.rows.length;
+  return {list, order:list.slice(0,9),
+    split:{yeon:_bkGenre('연극 본 사람'), bal:_bkGenre('발레 본 사람'), mu:_bkGenre('무용 좋아하는 사람'),
+           dae:_bkGenre('대중 공연'), guk:_bkGenre('국악')},
+    map:{balMu:hit('무용','발레·무용'), balBal:hit('발레','발레·무용'), yeonYeon:hit('연극','연극'),
+         yeonNotBal:hit('연극','발레·무용'), balNotYeon:hit('발레','연극'), legacyNeither:[hit('발레/연극','발레·무용'),hit('발레/연극','연극')]},
+    legacyInList:list.indexOf('발레/연극')>=0, legacyN:_segLegacyN(null), nYeon, nBal,
+    norm:{yeon:_segQNorm({g:'연극'}).g, legacy:_segQNorm({g:'발레/연극'}).g, bogus:_segQNorm({g:'없는장르'}).g}};
+})()`);
+console.log('장르 =', JSON.stringify(gen));
+T(gen.order[0] === '클래식' && gen.order[3] === '발레·무용' && gen.order[4] === '연극',
+  `목록 순서 = 운영자 지시 그대로 — ${gen.order.slice(0, 6).join(' · ')}`);
+T(gen.map.balMu && gen.map.balBal && gen.map.yeonYeon && !gen.map.yeonNotBal && !gen.map.balNotYeon,
+  '발레·무용 ← 발레/무용 · 연극 ← 연극 · **서로 안 섞인다**');
+T(gen.split.yeon === '연극' && gen.split.bal === '발레·무용' && gen.split.mu === '발레·무용',
+  `말로 물어도 나뉜다 — 「연극」→${gen.split.yeon} · 「발레」→${gen.split.bal} · 「무용」→${gen.split.mu}`);
+T(gen.split.dae === '대중' && gen.split.guk === '국악', '대중·국악도 별개 장르로 읽힌다');
+T(gen.map.legacyNeither.every(v => v === false), '구 표기 「발레/연극」은 **어느 쪽으로도 안 들어간다**(섞인 값을 지어내 나누지 않는다)');
+T(gen.legacyInList && gen.legacyN > 0, `그 대신 목록에 그대로 뜬다 — 「발레/연극」 ${gen.legacyN}명(시트가 안 나눈 몫)`);
+T(gen.norm.yeon === '연극' && gen.norm.legacy === '발레/연극' && gen.norm.bogus === null,
+  '조건 검증 = 화면 어휘 + 시트 실존 값만 통과(모르는 이름 0)');
+
+const foot = await page.evaluate(`(()=>{ _segCompute({span:'all',thr:1,g:'연극'}); _segRender();
+  return document.getElementById('seg-result').textContent; })()`);
+T(/「발레\/연극」으로만 적힌 회차/.test(foot), '연극을 고르면 「안 나뉜 몫이 빠졌다」를 결과 아래에 적는다(숨기지 않음)');
 
 console.log('\n── 결과 ──');
 ok.forEach(m => console.log('  ✔ ' + m));

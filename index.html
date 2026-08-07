@@ -29018,8 +29018,32 @@ var _bkState=null,_bkLoading=false,_bkP=null;   // _bkP = 비행 중인 적재 �
 //   중간값 15,488명(주문의 회원여부=Y 기준) ÷ 10,119 = **1.53**. 운영자 확인 260804.
 //   ⚠ 유실된 예매 이력본이 꽤 있다(운영자 확인) — 크기 미상이라 **보정하지 않는다**(없는 값 창작 금지).
 var _BK_SCALE=1.53;
-var _BK_GENRES=['클래식','뮤지컬','발레/연극','어린이·가족','대중','국악','시즌','기타'];
-var _BK_ALIAS={'연극':'발레/연극','발레':'발레/연극','무용':'발레/연극','오페라':'클래식','가족':'어린이·가족','어린이':'어린이·가족','아동':'어린이·가족'};
+// ===== 장르 어휘 (260814-2 운영자 「발레 무용 연극은 쪼개야됨 — **발레무용 하나고 연극이 별개** · 대중 국악 기타 다 별개 장르임」) =====
+// 화면 장르 = **시트 값 묶음**(한 이름이 여러 `장르1` 값을 덮는다). 구판은 반대로 앱이 발레·무용·연극을
+//   `발레/연극` 한 이름으로 **밀어 넣고** 있었다(`_BK_ALIAS`) — 시트가 나눠 적어도 화면에서 다시 합쳐졌다.
+// ⚠ 시트에 **이미 `발레/연극`으로 적힌 회차**는 어느 쪽으로도 못 나눈다(그 안에 둘이 섞여 있다).
+//   지어내지 않고 그 값 그대로 목록에 **한 줄 더** 띄우고(인원 병기), 결과 아래에 「이만큼은 안 나뉘어 빠졌다」를 적는다.
+//   실제로 나누려면 원천 `장르1`을 나눠 적고 `docs/260804_booking_agg.mjs`를 다시 돌려야 한다(앱이 못 하는 몫).
+var _BK_GMAP={
+  '클래식':['클래식'],'뮤지컬':['뮤지컬'],'어린이·가족':['어린이·가족','어린이','가족'],
+  '발레·무용':['발레·무용','발레/무용','발레','무용'],'연극':['연극'],
+  '시즌':['시즌'],'대중':['대중'],'국악':['국악'],'기타':['기타']
+};
+var _BK_LEGACY_G='발레/연극';                      // 구 표기(안 나뉜 회차) — 목록엔 데이터에 실제로 있을 때만 뜬다
+var _BK_GENRES=Object.keys(_BK_GMAP);
+// 시트 값 하나가 그 화면 장르에 드는가 — 모르는 이름은 **그 값 그대로** 비교(구 표기·새 값 전부 통과)
+function _bkGenreHit(gg,g){ var s=_BK_GMAP[g]; return s?(s.indexOf(gg)>=0):(gg===g); }
+function _bkGenreKnown(g){ return !!_BK_GMAP[g]||g===_BK_LEGACY_G||_segDataGenres().indexOf(g)>=0; }
+// 시트에 **실제로 있는** 장르 값(예매집계 분포 키) — 목록·검증이 같은 것을 본다(어휘를 손으로 두 벌 적지 않는다)
+function _segDataGenres(){
+  var by=(_bkState&&_bkState.by)||null;if(!by)return [];
+  if(_bkState._gv)return _bkState._gv;
+  var seen={};
+  for(var k in by){ var d=by[k].d; for(var t in d){ var i=t.indexOf('|'); if(i>0)seen[t.slice(i+1)]=1; } }
+  _bkState._gv=Object.keys(seen);
+  return _bkState._gv;
+}
+var _BK_ALIAS={'발레':'발레·무용','무용':'발레·무용','오페라':'클래식','가족':'어린이·가족','어린이':'어린이·가족','아동':'어린이·가족'};
 
 // [260806 운영자 「AI 홍보 메뉴에선 확인되는데 예울이에선 안 나온다 — 붙여줘」] 적재 진입점 = **합류형**.
 //   구판은 `if(_bkLoading||(_bkState&&!force))return _bkState;` — 비행 중이면 아직 null인 _bkState를 그 자리에서
@@ -29080,11 +29104,13 @@ function _bkYears(q){
   if(one){var y=f(one[1]);if(y>=2000&&y<=yr+1)return [y,y];}
   return null;
 }
+// 질문에서 장르 찾기 — 화면 이름 · 그 이름이 덮는 시트 값 · 별칭 순. [260814-2] 「연극」은 이제 **연극으로 읽는다**
+//   (구판은 별칭이 발레/연극으로 밀어 넣어, 말로 「연극」을 물어도 발레가 섞인 답이 나왔다).
 function _bkGenre(q){
   for(var i=0;i<_BK_GENRES.length;i++){var g=_BK_GENRES[i];
     if(q.indexOf(g)>=0)return g;
-    if(g==='발레/연극'&&/발레|연극/.test(q))return g;
-    if(g==='어린이·가족'&&/어린이|가족/.test(q))return g;
+    var s=_BK_GMAP[g];
+    for(var j=0;j<s.length;j++)if(q.indexOf(s[j])>=0)return g;
   }
   for(var k in _BK_ALIAS)if(q.indexOf(k)>=0)return _BK_ALIAS[k];
   return null;
@@ -29142,7 +29168,7 @@ function _bkCount(rec,win,g){
   var c=0;
   for(var k in rec.d){
     var i=k.indexOf('|');if(i<0)continue;
-    if(g&&k.slice(i+1)!==g)continue;
+    if(g&&!_bkGenreHit(k.slice(i+1),g))continue;   // 화면 장르 1 : 시트 값 여럿(_BK_GMAP)
     if(!_bkInWin(k.slice(0,i),win))continue;
     c+=rec.d[k];
   }
@@ -29188,9 +29214,12 @@ function _bkAnswer(q){
       thr:tm?tm[1]:(/재구매|단골|여러\s*번|2회|두\s*번/.test(q)?2:1)});
     if(w0&&!w0.n){ask.span='range';ask.from=String(w0.lo).length===4?(w0.lo+'01'):String(w0.lo);ask.to=String(w0.hi).length===4?(w0.hi+'12'):String(w0.hi);}
   }
+  // [260814-2] 휴대폰 뒤 자리는 **개인을 특정하는 축**이라 채팅에서는 관리자에게만 답한다(명단 화면과 같은 게이트).
+  if(ask.tail&&userRole!=='admin')return '휴대폰 뒤 자리로 찾는 건 <b>관리자 전용</b>이에요.';
   var win=_segQWin(ask),g=ask.g,by=_bkState.by;
   var hit=0,tix=0,byIdx=(ask.region?_segMemIdx():null);
   for(var k in by){
+    if(!_segTailHit(k,ask.tail))continue;                        // 끝자리 = 명단과 같은 줄(_segTailHit)
     var c=_bkCount(by[k],win,g);if(!_segHitOk(c,ask))continue;   // 명단(_segCompute)과 **같은 판정 한 벌**
     if(ask.only&&_bkCountOther(by[k],win,g)>0)continue;
     if(byIdx){var mm=byIdx[k];if(!mm||!_segRegionMatch(mm,ask.region))continue;}
@@ -29405,19 +29434,25 @@ function _segView(){
 }
 // ===== 조건 한 벌(SSOT · 260813 · 260814 축 2개 증설) =====
 // 폼 · 자연어 파서 · 예울이 채팅이 **같은 객체**를 주고받는다 — 조건을 각자 해석하면 같은 질문에 답이 둘이 된다.
-//   {span:'n'|'all'|'range', n, u:'년'|'개월', from:'YYYY-MM', to:'YYYY-MM', g, only, region, thr, op}
+//   {span:'n'|'all'|'range', n, u:'년'|'개월', from:'YYYY-MM', to:'YYYY-MM', g, only, region, thr, op, tail}
 //   · only   = 「그 장르**만**」(다른 장르 0회) · g가 없으면 뜻이 없다
 //   · region = 회원 시트의 시 이름(`_memCityName` 산출값) **또는** 묶음 키(`@`로 시작 · `_SEG_RGRP`) — 창작 지명 0
 //   · op     = 횟수 비교(260814 운영자 「이상」도 변수) · 'gte' = N회 이상 · 'lte' = 1~N회(안 본 사람은 안 든다)
+//   · tail   = **휴대폰 뒤 2~4자리**(260814-2 운영자 「휴대폰 끝자리 조회는 검색되게 해야되」) — 숫자만 남긴다.
+//     ⚠ 이 축은 **브라우저 안에서만** 쓴다 — 예울이(공개 저장소에 질문이 남는 경로)로는 애초에 안 나간다
+//       (끝자리를 로컬이 읽으면 해석이 그 자리에서 끝나 LLM 호출 자체가 없다 · `_segAiSafe`는 그대로 두 번째 방벽).
 function _segQNorm(q){
   q=q||{};
+  var tl=String(q.tail||'').replace(/\D/g,'');
+  if(tl.length>4)tl=tl.slice(-4);
   var out={span:(q.span==='all'||q.span==='range')?q.span:'n',
     n:Math.max(1,Math.min(99,parseInt(q.n,10)||3)),
     u:(q.u==='개월')?'개월':'년',
     from:String(q.from||''),to:String(q.to||''),
-    g:(q.g&&_BK_GENRES.indexOf(q.g)>=0)?q.g:null,
+    g:(q.g&&_bkGenreKnown(q.g))?q.g:null,
     only:!!q.only,region:q.region?String(q.region):null,
     op:(q.op==='lte')?'lte':'gte',
+    tail:(tl.length>=2)?tl:'',
     thr:Math.max(1,Math.min(99,parseInt(q.thr,10)||1))};
   if(!out.g)out.only=false;                                    // 장르가 없으면 「~만」은 말이 안 된다
   if(out.region&&out.region.charAt(0)==='@'&&!_segRgrp(out.region))out.region=null;   // 모르는 묶음 키 = 조건 없음(있는 척 금지)
@@ -29428,7 +29463,9 @@ function _segQNorm(q){
 function _segHitOk(c,q){ return (q.op==='lte')?(c>=1&&c<=q.thr):(c>=q.thr); }
 // 조건이 **아무 축도 안 좁히는가** — 기간 전체 + 장르 전체 + 거주지 전체 + 1회 이상 = 사실상 「전건」이다.
 //   [260814] 이 판정이 없어서 자연어 해석이 실패해도 「읽은 조건」이라 말하고 전건 명단을 그렸다(운영자 실측 10,119명).
-function _segQBlank(q){ q=_segQNorm(q); return q.span==='all'&&!q.g&&!q.region&&q.op==='gte'&&q.thr<=1; }
+function _segQBlank(q){ q=_segQNorm(q); return q.span==='all'&&!q.g&&!q.region&&!q.tail&&q.op==='gte'&&q.thr<=1; }
+// 회원키(= 휴대폰 11자리)가 그 끝자리인가 — 명단·채팅이 같은 줄을 본다
+function _segTailHit(key,tail){ if(!tail)return true; var d=String(key||'').replace(/\D/g,''); return d.slice(-tail.length)===tail; }
 function _segQWin(q){ return q.span==='all'?null:(q.span==='range'?_bkWinRange(q.from,q.to):_bkWinN(q.n,q.u)); }
 // 회원 시트에 실존하는 시 목록 — 폼 select와 자연어 파서가 같은 목록을 본다(둘이 갈리면 폼엔 있는데 말로는 안 되는 지역이 생긴다)
 function _segCities(){
@@ -29503,13 +29540,24 @@ var _segQ=_segQNorm({span:'n',n:3,u:'년',thr:5});
 var _SEG_TXT='font-size:12.5px;color:var(--neutral-text);white-space:nowrap';
 var _SEG_DDIT='display:block;width:100%;padding:7px 13px;border:0;background:none;text-align:left;font-size:12.5px;border-radius:9px;cursor:pointer;font-family:inherit;white-space:nowrap;transition:background .12s';
 var _SEG_DDSEP='<div style="height:1px;background:var(--border);margin:5px 9px"></div>';
-// 시트 값 → 화면 이름. 「발레/연극」은 **한 갈래**다(운영자 260814 「발레·무용/연극」 문의 — 시트 `장르1`이 둘을 한 값으로
-//   들고 있어 지금 데이터로는 못 쪼갠다). `/`가 파일명·경로로 새는 것도 막아 온 자리라 화면만 가운뎃점으로 읽는다.
-function _segGLab(g){ return g==='발레/연극'?'발레·연극':g; }
-// 운영자 지시 순서 먼저(클래식·뮤지컬·어린이·가족·발레·연극·시즌), 시트에 실존하는 나머지를 뒤에 — 목록에서 빠지는 장르 0
-var _SEG_GORD=['클래식','뮤지컬','어린이·가족','발레/연극','시즌','대중','국악','기타'];
-function _segGenreList(){ return _SEG_GORD.filter(function(g){return _BK_GENRES.indexOf(g)>=0;})
-  .concat(_BK_GENRES.filter(function(g){return _SEG_GORD.indexOf(g)<0;})); }
+// 시트 값 → 화면 이름. 구 표기 `발레/연극`은 **안 나뉜 회차**라는 뜻이라 목록에서도 그렇게 읽는다.
+function _segGLab(g){ return g===_BK_LEGACY_G?'발레/연극(구 표기)':g; }
+// 운영자 지시 순서(260814-2) 먼저, 화면 어휘의 나머지를 뒤에 — 목록에서 빠지는 장르 0
+var _SEG_GORD=['클래식','뮤지컬','어린이·가족','발레·무용','연극','시즌','대중','국악','기타'];
+// 목록 = 화면 어휘 + **시트에 실제로 있는데 어느 이름도 안 덮는 값**(구 표기 `발레/연극`·`미상` 등).
+//   어휘를 손으로만 적으면 시트에 새 값이 생겼을 때 그 사람들이 조용히 목록에서 사라진다.
+function _segGenreList(){
+  var out=_SEG_GORD.filter(function(g){return _BK_GENRES.indexOf(g)>=0;})
+    .concat(_BK_GENRES.filter(function(g){return _SEG_GORD.indexOf(g)<0;}));
+  _segDataGenres().forEach(function(v){
+    if(out.indexOf(v)>=0)return;
+    for(var i=0;i<out.length;i++)if(_bkGenreHit(v,out[i]))return;   // 이미 어떤 이름이 덮는 값
+    out.push(v);
+  });
+  return out;
+}
+// 시트에 「안 나뉜 구 표기」가 몇 명이나 남아 있나 — 발레·무용/연극을 고른 결과 아래에 그대로 적는다
+function _segLegacyN(win){ var t=_segGenreTally(win); return t[_BK_LEGACY_G]||0; }
 function _segYmLab(s){ s=String(s||'').replace(/-/g,'.'); return s||'?'; }
 function _segSpanLab(q){ return q.span==='all'?'전 기간':(q.span==='range'?(_segYmLab(q.from)+'~'+_segYmLab(q.to)):('최근 '+q.n+q.u)); }
 function _segTokBtn(k,label,tip){
@@ -29518,9 +29566,12 @@ function _segTokBtn(k,label,tip){
 }
 function _segTxt(s){ return '<span style="'+_SEG_TXT+'">'+_memEsc(s)+'</span>'; }
 // 조건 문장 — 「[최근 3년] 이내에 [클래식] 공연을 [5회] [이상] 관람한 [여수시] 거주 고객」
+//   [260814-2] 휴대폰 끝자리는 **걸었을 때만** 맨 앞에 선다 — 늘 세워 두면 운영자 지시 「1줄로 말끔히」가 깨지고,
+//   평소엔 쓰지 않는 축이라 문장이 그만큼 길어질 이유가 없다(해제하면 그 자리가 사라진다).
 function _segCondHtml(){
   var q=_segQ;
-  return _segTokBtn('span',_segSpanLab(q),'기간 — 눌러서 바꿔요')
+  return (q.tail?(_segTokBtn('tail','번호 뒤 '+q.tail,'휴대폰 뒤 자리 — 눌러서 바꾸거나 해제해요')+_segTxt('·')):'')
+    + _segTokBtn('span',_segSpanLab(q),'기간 — 눌러서 바꿔요')
     + _segTxt(q.span==='all'?'동안':'이내에')
     + _segTokBtn('genre',q.g?_segGLab(q.g):'전 장르','장르 — 눌러서 바꿔요'+(q.g?' · 「그 장르만」도 여기서':''))
     + _segTxt(q.only?'공연만':'공연을')
@@ -29537,7 +29588,7 @@ function _segViewHtml(){
       // ① 조건을 직접 적는 자리 — **문장을 채우는 입력**이다(답을 대신 만들지 않는다).
       //   로컬 해석이 0초로 먼저 붙고, 못 읽은 것만 예울이(claude-opus-5·medium)가 조건으로 번역한다.
       '<div style="display:flex;gap:8px;align-items:center;padding-top:11px">'
-    + '<input id="seg-nl" maxlength="120" placeholder="조건을 적어 보세요 — 예: 3년 이내 클래식 5회 이상 본 여수 사람" style="'+_SEG_IN+';flex:1;min-width:0" onkeydown="if(event.key===\'Enter\'&&!event.isComposing)_segNlGo()">'
+    + '<input id="seg-nl" maxlength="120" placeholder="조건을 적어 보세요 — 예: 3년 이내 클래식 5회 이상 본 여수 사람 · 0789 끝자리" style="'+_SEG_IN+';flex:1;min-width:0" onkeydown="if(event.key===\'Enter\'&&!event.isComposing)_segNlGo()">'
     + '<button type="button" id="seg-nl-btn" class="btn btn--ghost btn--sm" style="flex:none" onclick="_segNlGo()">조건 만들기</button>'
     + '</div>'
     + '<div id="seg-nl-note" style="font-size:11.5px;color:var(--dim);padding:7px 2px 0"></div>'
@@ -29578,8 +29629,11 @@ function _segDdMenu(k){
     var gt=_segGenreTally(_segQWin(q));
     it("_segPick('genre','')",'전 장르',!q.g);
     h+=_SEG_DDSEP;
-    _segGenreList().forEach(function(g){ it("_segPick('genre','"+g.replace(/'/g,"\\'")+"')",_segGLab(g),q.g===g,_memAiFmt(gt[g]||0)+'명',
-      g==='발레/연극'?'시트 장르1이 발레·무용과 연극을 한 값(발레/연극)으로 들고 있어요 — 지금 데이터로는 못 쪼개요':''); });
+    _segGenreList().forEach(function(g){
+      var n=0,s=_BK_GMAP[g];                       // 화면 이름 하나가 시트 값 여럿을 덮으면 그 값들을 합쳐 센다
+      if(s)s.forEach(function(v){n+=gt[v]||0;}); else n=gt[g]||0;
+      it("_segPick('genre','"+g.replace(/'/g,"\\'")+"')",_segGLab(g),q.g===g,_memAiFmt(n)+'명',
+        g===_BK_LEGACY_G?'시트 장르1에 「발레/연극」으로 적힌 회차 — 발레·무용과 연극이 섞여 있어 어느 쪽으로도 못 나눠요(원천을 나눠 적고 집계를 다시 돌리면 사라집니다)':''); });
     h+=_SEG_DDSEP;
     h+=q.g?_segDdIt("_segPick('only','')",(q.only?'「'+_segGLab(q.g)+'만」 끄기':_segGLab(q.g)+'만 본 사람'),q.only,'',i++,'그 장르 외에는 그 기간에 한 번도 안 본 사람만')
           :'<div style="padding:7px 13px;font-size:11.5px;color:var(--muted)">장르를 고르면 「그 장르만」을 쓸 수 있어요</div>';
@@ -29593,6 +29647,14 @@ function _segDdMenu(k){
   }else if(k==='op'){
     it("_segPick('op','gte')",'이상',q.op!=='lte','','그 횟수를 넘게 본 사람');
     it("_segPick('op','lte')",'이하',q.op==='lte','','1회 이상 그 횟수 이하 — 안 본 사람은 안 들어와요');
+  }else if(k==='tail'){
+    // [260814-2] 휴대폰 뒤 자리 — **밖으로 안 나가는 축**(브라우저 안에서만 센다). 2~4자리.
+    h+='<div style="display:flex;gap:5px;align-items:center;padding:5px 11px 3px">'
+      +'<span style="'+_SEG_TXT+'">번호 뒤</span>'
+      +'<input type="text" inputmode="numeric" maxlength="4" id="seg-dd-tail" value="'+_memEsc(q.tail)+'" placeholder="0789" style="'+_SEG_IN+';font-size:12px;padding:6px 8px;width:78px;text-align:center;font-variant-numeric:tabular-nums"'
+      +' onkeydown="if(event.key===\'Enter\')_segPick(\'tail\',\'#\')">'
+      +'<button type="button" class="btn btn--ghost btn--sm" style="flex:none" onclick="_segPick(\'tail\',\'#\')">적용</button></div>';
+    if(q.tail){ h+=_SEG_DDSEP; it("_segPick('tail','')",'끝자리 해제',false,'','번호 조건을 빼고 나머지 조건으로만 봅니다'); }
   }else if(k==='region'){
     // 운영자 260814 지시 목록 그대로(구분선 자리까지) + 시트에 실존하는 나머지 시는 아래 스크롤 칸에.
     var t=_segRegionTally(),num=function(v){return _memAiFmt(t[v]||0)+'명';};   // 0명도 적는다 — 빈 칸은 「모른다」로 읽힌다
@@ -29633,6 +29695,11 @@ function _segPick(k,v){
   else if(k==='genre')p={g:v||null,only:v?_segQ.only:false};
   else if(k==='only')p={only:!_segQ.only};
   else if(k==='thr'){ var n=(v==='#')?parseInt((document.getElementById('seg-dd-thr')||{}).value,10):v; if(!n||n<1)return; p={thr:n}; }
+  else if(k==='tail'){
+    var tv=(v==='#')?String((document.getElementById('seg-dd-tail')||{}).value||'').replace(/\D/g,''):'';
+    if(v==='#'&&tv.length<2){showToast('끝자리를 2~4자리로 적어 주세요','error');return;}
+    p={tail:tv};
+  }
   else if(k==='op')p={op:v};
   else if(k==='region')p={region:v||null};
   _ddCloseAll();
@@ -29667,6 +29734,7 @@ function _segCompute(q){
   q=_segQNorm(q);
   var win=_segQWin(q),by=_bkState.by,idx=_segMemIdx(),out=[],nomem=0,noreg=0,notonly=0;
   for(var k in by){
+    if(!_segTailHit(k,q.tail))continue;             // 휴대폰 뒤 자리 — 회원키가 곧 번호라 이름 조회 전에 걸러진다
     var rec=by[k],c=_bkCount(rec,win,q.g);
     if(!_segHitOk(c,q))continue;                    // 이상/이하 = 한 벌(`_segHitOk`) — 채팅도 같은 줄을 본다
     if(q.only&&_bkCountOther(rec,win,q.g)>0){notonly++;continue;}   // 「그 장르만」 = 그 창에서 다른 장르 0회
@@ -29682,7 +29750,8 @@ function _segCompute(q){
 // 조건 → 사람이 읽는 한 줄. 결과 머리줄과 예울이 답변이 **같은 문장**을 쓴다.
 function _segQLabel(q){
   q=_segQNorm(q);var win=_segQWin(q);
-  return (win?win.label:_bkSpanAll())+' · '+(q.region?_segRegionLabel(q.region)+' 거주 · ':'')
+  return (q.tail?'번호 뒤 '+q.tail+' · ':'')
+    +(win?win.label:_bkSpanAll())+' · '+(q.region?_segRegionLabel(q.region)+' 거주 · ':'')
     +(q.g?(_segGLab(q.g)+(q.only?'만 ':' ')):'')+'공연 '+q.thr+'회 '+(q.op==='lte'?'이하':'이상');
 }
 // 표 머리 = 2단(운영자 260812 「관람을 2행으로 인덱싱행을 구성」). 1행 높이는 여기 한 곳에서만 정한다 —
@@ -29783,7 +29852,13 @@ function _segRender(){
   var L=_segLast,view=_segView(),LIM=300,shown=view.slice(0,LIM);
   L._view=view;                                    // 칸 클릭(번호 열기·이력 펼치기)이 **화면과 같은 배열**을 본다
   var cond=_segQLabel(L.q);                        // 조건 문장 = 한 벌(`_segQLabel`) — 머리줄·예울이 답변이 같은 말을 한다
-  if(!L.rows.length){host.innerHTML=_pcCard('결과',_memEsc(cond),'<div class="u-empty">조건에 맞는 사람이 없어요</div>');return;}
+  // [260814-2] 발레·무용/연극을 골랐는데 시트에 「발레/연극」(안 나뉜 구 표기)이 남아 있으면 **그만큼 빠진다** — 숨기지 않고 적는다.
+  //   ⚠ 결과가 **0명일 때 가장 중요한 안내**다(구 표기뿐이면 새 이름으로는 아무도 안 잡힌다) — 빈 화면에도 같이 띄운다.
+  var legN=((L.q.g==='발레·무용'||L.q.g==='연극')?_segLegacyN(L.win):0);
+  var legNote=legN?'<br>⚠ 시트에 <b>「발레/연극」으로만 적힌 회차</b>가 남아 있어 그걸 본 '+_memAiFmt(legN)+'명은 <b>여기 안 들어와요</b>(발레·무용과 연극이 섞여 있어 어느 쪽으로도 못 나눔) — 원천 <code>장르1</code>을 나눠 적고 <code>node docs/260804_booking_agg.mjs</code>를 다시 돌리면 사라져요':'';
+  if(!L.rows.length){host.innerHTML=_pcCard('결과',_memEsc(cond),'<div class="u-empty">조건에 맞는 사람이 없어요'
+    +(L.q.tail?' — 예매기록에 <b>회원이 확정 연결된</b> '+_memAiFmt(_bkState.n)+'명 안에서만 찾아요(원본 번호가 가려진 주문은 못 찾습니다)':'')
+    +(legNote?'<div style="font-size:11px;color:var(--dim);padding-top:8px;text-align:left">'+legNote.replace(/^<br>/,'')+'</div>':'')+'</div>');return;}
   var nf=Object.keys(L.f||{}).length,narrowed=nf||(L.sort&&L.sort.by);
   var td='padding:6px 10px;font-size:12px;border-top:1px solid var(--border);white-space:nowrap';
   var tdn=td+';font-variant-numeric:tabular-nums;text-align:right';
@@ -29830,6 +29905,7 @@ function _segRender(){
     +(L.noreg?' · 거주지가 「'+_memEsc(L.q.region)+'」가 아니라 빠진 사람 '+_memAiFmt(L.noreg)+'명':'')
     +'<br>금액은 <b>만 원 단위 올림</b>(만 원 미만 절상) · 지역은 시도 줄임말 · 휴대폰은 가운데 가림 — <b>CSV는 셋 다 원 표기</b>예요(번호는 위 체크로 고름)'
     +(L.win&&L.win.approx?'<br>⚠ 예매집계가 아직 연 단위라 기간이 <b>근사</b>예요 — <code>node docs/260804_booking_agg.mjs</code>를 다시 돌리면 월 단위로 정확해져요':'')
+    +legNote                                        // 「발레/연극」(안 나뉜 구 표기)로 빠진 몫 — 위에서 한 번만 만든다
     +'</div>';
   host.innerHTML=_pcCard('결과',_memEsc(cond),head+table+foot);
   // 「잡을 수 있음」 손 모양은 **실제로 숨은 열이 있을 때만** 붙인다 — 넓은 창에서 grab 커서는 거짓말이 된다.
@@ -29882,6 +29958,12 @@ function _segAiSafe(q){ return !/01[016-9][-\s.]?\d{3,4}[-\s.]?\d{4}|\d{10,}/.te
 function _segParseLocal(s,min){
   var q=String(s||'').trim();if(!q)return null;
   var got=[],out={span:'all',thr:1};
+  // [260814-2] 번호 조각을 **맨 먼저** 떼어 낸다 — 남겨 두면 뒤의 기간 파서가 `010-8800-1299`를
+  //   「2010~2088년」으로 읽어 조건에 없는 기간을 얹는다(실측). 뗀 자리는 공백으로 지운다.
+  var tm=q.match(/01[016-9][-\s.]?\d{3,4}[-\s.]?(\d{4})/)
+       ||q.match(/(\d{2,4})\s*(?:번호)?\s*(?:끝자리|뒷자리|뒤\s*자리|로\s*끝나)/)
+       ||q.match(/(?:끝자리|뒷자리|뒤\s*자리|번호\s*뒤)\s*(?:가|는|이)?\s*(\d{2,4})/);
+  if(tm){ out.tail=tm[1]; got.push('번호 뒤 '+out.tail); q=q.replace(tm[0],' '); }
   var win=_bkWin(q);
   if(win){ if(win.n){out.span='n';out.n=win.n;out.u=win.u;} else {out.span='range';out.from=String(win.lo)+(String(win.lo).length===4?'01':'');out.to=String(win.hi)+(String(win.hi).length===4?'12':'');}
     got.push('기간 '+win.label); }
@@ -29901,22 +29983,37 @@ function _segParseLocal(s,min){
   if(lte){out.thr=parseInt(lte[1],10);out.op='lte';got.push(out.thr+'회 이하');}
   else if(m){out.thr=parseInt(m[1],10);got.push(out.thr+'회 이상');}
   else if(/재구매|단골|여러\s*번|두\s*번/.test(q)){out.thr=2;got.push('2회 이상');}
+  // [260814-2 운영자 「휴대폰 끝자리 조회는 검색되게 해야되」] 끝자리 = **로컬에서 끝내는 축**이다.
+  //   ⚠ 위에서 읽히면 예울이(공개 저장소에 질문이 남는 경로)를 **아예 안 부른다** — 번호 조각이 밖으로 나갈 길이 없다.
+  //   ⚠ 온전한 번호(010-…)를 적었으면 **뒤 4자리만** 취한다(원본 번호를 조건에 담지 않는다).
+  //   ⚠ 끝자리는 그것만으로 충분히 좁은 조건이라 **축 1개라도 「읽었다」**로 친다.
+  if(out.tail)return {q:_segQNorm(out),why:got.join(' · ')};
   if(got.length<(min||2))return null;               // 하나만 읽혔으면 「읽었다」고 하기 어렵다 → LLM에 넘긴다
   return {q:_segQNorm(out),why:got.join(' · ')};
 }
 // [260814] 이 도구에 **없는 축**을 짚은 질문 — LLM에 보내도 답이 없다(있는 축으로 뭉개진 조건이 온다).
 //   운영자 실측 = 「0789 끝자리인 번호로 예매한 이력을 확인해줘」 → 예울이가 30초~2분 걸려 「전 기간 · 1회 이상」을
 //   돌려줬고 앱은 그걸 「읽은 조건」이라 말하며 **전건 10,119명**을 그렸다. 없는 축은 왕복 전에 그 자리에서 말한다.
+//   [260814-2] **휴대폰 뒤 자리는 이제 축이다**(운영자 「검색되게 해야되」) — 이 목록에서 빠졌다. 위 `_segParseLocal`이
+//   숫자를 읽어 그 자리에서 조회한다(로컬 전용 · 예울이 왕복 0). 숫자 없이 「번호로 찾아줘」만 오면 아래 ①이 되묻는다.
+//   `un` = 「이게 있으면 없는 축이 아니다」 — 번호는 **숫자를 같이 적었으면** 위 파서가 끝자리로 읽는다.
 var _SEG_NOAXIS=[
-  {re:/끝자리|뒷자리|뒤\s*네\s*자리|번호로|휴대폰|전화번호/,l:'휴대폰 번호'},
+  {re:/번호|휴대폰|전화/,un:/\d{2,}/,l:'번호(끝자리 숫자를 같이 적어 주세요)'},
   {re:/이름이|성함|이름으로/,l:'이름'},
   {re:/공연명|프로그램명|작품명|무슨\s*공연|어떤\s*공연/,l:'공연·프로그램 이름'},
   {re:/\d+\s*대\s|\d+\s*대$|연령|나이/,l:'연령대'},
   {re:/금액|얼마|매출|객단가/,l:'구매 금액'},
   {re:/좌석|매수|몇\s*장/,l:'구매 매수'}
 ];
-function _segNoAxis(s){ var q=String(s||''); for(var i=0;i<_SEG_NOAXIS.length;i++)if(_SEG_NOAXIS[i].re.test(q))return _SEG_NOAXIS[i].l; return null; }
-var _SEG_AXES='지금 걸 수 있는 조건은 <b>기간 · 장르 · 거주지 · 관람 횟수</b> 넷이에요';
+function _segNoAxis(s){
+  var q=String(s||'');
+  for(var i=0;i<_SEG_NOAXIS.length;i++){var e=_SEG_NOAXIS[i];
+    if(!e.re.test(q))continue;
+    if(e.un&&e.un.test(q))continue;                 // 「번호」인데 숫자가 있다 = 끝자리로 읽히는 질문
+    return e.l;}
+  return null;
+}
+var _SEG_AXES='지금 걸 수 있는 조건은 <b>기간 · 장르 · 거주지 · 관람 횟수 · 휴대폰 뒤 자리</b> 다섯이에요';
 // LLM 해석 — 질문 문장 + 고를 수 있는 값 목록(장르·거주지·데이터 범위)만 보낸다. 개인 데이터 0.
 async function _segParseAI(s,onTick){
   var st=_bkState||{};
