@@ -1508,8 +1508,19 @@ table.promo-board-table th:last-child .col-resize-handle{display:none}
   clip-path:inset(max(0px,calc(100% - var(--rise-h))) 0 0 0 round var(--radius));
   transition:clip-path .59s cubic-bezier(.215,.61,.355,1) .18s,box-shadow .59s cubic-bezier(.215,.61,.355,1) .18s}
 .cb-rise:hover,.cb-rise:focus-within{clip-path:inset(0 0 0 0 round var(--radius));box-shadow:var(--elev);transition-delay:.1s}
-.cb-rise>.cb-body>:first-child{margin-top:auto}   /* 대화가 짧아도 입력줄 바로 위에 붙는다 — 로그창은 늘 열 전체 높이라 위로 붙이면 접힘 칸이 빈 칸이 된다 */
-@media (prefers-reduced-motion:reduce){.cb-rise{transition:none}}
+.cb-rise>.cb-body>:first-child{margin-top:auto}   /* 접힘 = 입력줄 바로 위에 붙는다 — 로그창은 늘 열 전체 높이라 위로 붙이면 접힘 칸이 빈 칸이 된다 */
+/* [260813-5 운영자 「대화창이 확대되면 가장 윗부분으로 채팅 상대의 대화가 이동되게」] 다 열린 **뒤에** 대화가 맨 위로 올라간다.
+   ⚠ 「호버 즉시 위로」로 만들면 안 된다(실측 폐기) — 클립은 아래에서 위로 열리는데 대화가 먼저 위로 가버리면
+     여는 590ms 동안 보이는 칸이 **텅 빈 흰 판**이 되고 글자가 끝에 갑자기 나타난다(35% 지점 캡처로 확인).
+   ⚠ 전이(`transition`)로도 못 만든다 — transition 값에 margin이 들어가면 게이트 ⑥ 잰크가 15 → 16이 돼 커밋이 막힌다.
+   → `animation` + `step-end`로 **여는 내내 바닥 정렬을 붙들고 있다가**(from) 열림이 끝나는 순간 한 번에 위로 넘긴다(to).
+     .69s = 열림 지연 .1s + 길이 .59s(위 `.cb-rise:hover` 값과 같은 축 · 둘이 어긋나면 빈 칸이나 늦은 점프가 생긴다).
+     닫힘은 규칙이 그냥 빠지므로 즉시 바닥 복귀 = 닫히는 동안에도 대화가 보인다.
+   ⚠ 이 규칙은 첫 자식의 `cbIn`(말풍선 등장)을 덮는다 — 등장은 0.28s에 이미 끝나 있고 `cbIn`의 끝 상태 = 기본값이라 보이는 차이 0. */
+@keyframes cbRiseTop{from{margin-top:auto}to{margin-top:0}}
+.cb-rise:hover>.cb-body>:first-child,.cb-rise:focus-within>.cb-body>:first-child{animation:cbRiseTop .69s step-end forwards}
+@media (prefers-reduced-motion:reduce){.cb-rise{transition:none}
+  .cb-rise:hover>.cb-body>:first-child,.cb-rise:focus-within>.cb-body>:first-child{animation-duration:0s}}   /* 즉시 열리니 위로 붙는 것도 즉시 */
 @keyframes cbIn{from{transform:translateY(10px) scale(0.96);opacity:0}to{transform:translateY(0) scale(1);opacity:1}}
 .cb-msg.bot a{color:var(--accent);font-weight:700}
 .cb-msg.bot .cb-card-t{font-weight:800;font-size:13.5px;color:var(--text);margin-bottom:3px}
@@ -28392,7 +28403,10 @@ async function _yeulAiAsk(q,ctx,onTick){
   throw new Error('시간 초과(4분) — Actions 큐가 밀렸을 수 있어요. 잠시 후 다시 물어봐 주세요');
 }
 var _memAiHist=[],_memAiBusy=false;
-var _MEM_AI_CHIPS=['여수 30대 회원 몇 명이야?','23~24년 클래식 2회 이상 관람한 사람','재구매 회원 몇 명이야?','거주지 TOP5 알려줘'];
+// [260813-5 운영자 「그 아래 파란색 있는 부분 예시 한 행을 삭제해서 여백을 더 확보해줘」] 칩 4 → 3.
+//   지운 건 「23~24년 클래식 2회 이상 관람한 사람」 — 혼자 한 줄을 다 먹던 칩이라 이것만 지우면 **정확히 한 행**이 준다
+//   (짧은 칩을 지우면 같은 행에 둘씩 앉아 있어 행 수가 안 준다 = 여백이 안 생긴다). 남은 3개도 자연어 질의 예시 축은 그대로.
+var _MEM_AI_CHIPS=['여수 30대 회원 몇 명이야?','재구매 회원 몇 명이야?','거주지 TOP5 알려줘'];
 function _memAiCardHtml(sfx,fit,col){
   // [260804 운영자] ① 헤더 띠(.cb-hdr = 아바타+이름+부제) **폐지** — 이름·상태는 대화 줄의 프로필(.cb-line .cb-ava)이 대신한다.
   //   ② 카드 폭 = 40%(min(100%,max(300px,40%))) — 40%가 300px보다 좁아지는 좁은 칸에선 300px, 칸이 그보다 좁으면 100%.
