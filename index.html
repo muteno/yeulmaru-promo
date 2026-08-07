@@ -4195,6 +4195,7 @@ async function initLoginScreen(){
   }
   if(email){
     _loginEmail=email;
+    try{_plKick();}catch(_e){}   // [로그인 프리로드] MS 세션 확인됨 = PIN으로 이어질 확률 높음 → 첫 화면 데이터 선출발(무세션 분기는 리다이렉트 이탈 가능성이 커 발사 안 함 = 낭비 0)
     // [260704] 이미 MS 로그인된 상태면 "계속" 클릭 없이 자동으로 PIN 단계로 이동 (재방문 편의).
     //  ⚠️ 1회만 — goToPinStep이 실패해 initLoginScreen으로 되돌아오면(_autoPinDone=true) 자동 진입을 멈추고
     //  아래 수동 "계속" 버튼을 보여준다 (등록X/휴직/네트워크 실패 시 무한루프 방지).
@@ -4255,6 +4256,7 @@ function _fullLogout(){
   try{password='';userRole='user';['pw','role','myApplicant','myUser','subAdminPin'].forEach(function(k){sessionStorage.removeItem(k);});}catch(e){} try{if(typeof _memPurge==='function')_memPurge();}catch(e){} console.log('[fullLogout] done'); }   // 회원 PII 캐시·모달 소거(분신술 보안 MED-4 — 비리로드 로그아웃 경로 힙 잔류 차단)
 async function goToPinStep(skipEnsure){
   try{
+  try{_plKick();}catch(_e){}   // [로그인 프리로드] PIN 단계 진입 확정(리다이렉트 복귀 _resumePin 직행 포함) — MS 재검증·PIN 타이핑 동안 첫 화면 데이터 선출발
   const step=document.getElementById('account-step');
   if(step)step.innerHTML='<div style="color:#999;font-size:13px;padding:24px 0">'+_ldHtml(12)+'Microsoft 인증 확인 중</div>';
   if(!skipEnsure){
@@ -4295,6 +4297,8 @@ async function goToPinStep(skipEnsure){
 }
 function _enterPinInputStep(){
   window._pinActive=true;
+  try{_plKick();}catch(_e){}   // [로그인 프리로드] PIN 직행 경로 안전망 — 이미 발사됐으면 _plOne 신선도 가드가 중복 0
+
   // PIN 직행 경로(_resumePin 리로드·잠금 등)는 initLoginScreen을 안 거침 → 첫 화면과 동일한 유동 셰이더 배경 보장(이미 돌면 no-op)
   if(typeof startLoginShader==='function'){try{startLoginShader();}catch(e){}}
   if(!window._pinGuardInstalled){window._pinGuardInstalled=true;var _ga=document.getElementById('account-step');if(_ga){new MutationObserver(function(){if(window._pinActive && _ga.style.display!=='none'){console.trace('[pinGuard] account restored - culprit stack below');_ga.style.display='none';var _gp=document.getElementById('pin-step');if(_gp)_gp.style.display='';}}).observe(_ga,{attributes:true,attributeFilter:['style']});}}
@@ -4449,11 +4453,52 @@ function _qaDeepLink(){
     if(tries++<40){ setTimeout(go,100); }   // nav 빌드 대기(최대 ~4초)
   })();
 }
+/* ═══ [로그인 프리로드] 운영자 260807 「로그인 전에 이미 데이터를 불러와서 로딩 시간 단축」 ═══
+   로그인 화면이 떠 있는 동안(MS 인증 확인·PIN 타이핑 = 보통 수 초) initApp 첫 화면이 어차피 당길 공용 읽기 GET을
+   미리 출발시켜 두고, api()가 같은 경로 GET을 만나면 그 응답을 1회 재사용한다 → 진입 직후 재요청 0 = 즉시 렌더.
+   · 인증 = 읽기 비번 '0510' 리터럴 — goToPinStep·_authWithEmail의 로그인 전 loadManagers와 같은 전례(이 파일에 이미
+     내장된 값 = 새 노출 0. Worker 읽기 게이트는 X-App-Password뿐 · MS+PIN은 화면 신원 게이트라 데이터 접근권 불변).
+   · 대상 = 공용 읽기 19개만(아래 목록 = initApp 첫 화면 로더의 전수). 개인화·PII 축(메시지/프레즌스/회원)은 제외 —
+     로그인 전 메시지 API 봉인(분신술 B-HIGH)·회원 PII 소거(_memPurge) 경계 그대로.
+   · 신선도 = TTL 3분 — PIN 화면 방치 후 진입 시 낡은 그림 방지. 만료·실패·미적중 = api()가 정상 fetch 폴백(회귀 0).
+   · /api/lastmod 동봉 = 파랑 배지 기준선(_refreshSeenMod)이 records와 같은 시각(t0)으로 잡혀, 프리로드~진입 사이
+     시트 변경도 다음 45초 폴링이 정상 감지(records만 t0·기준선만 미래(t1)로 갈라지는 사각 차단).
+   · 레일 7시트 = records 프리로드 완료 뒤 발사 — 260711 「캘린더 네트워크 우선권」 원칙을 프리로드 구간에도 유지.
+   · 발사 조건 = 로그인·PIN·잠금(F5 복원) 화면뿐. QA(실네트워크 금지)·앱 진입 후(_appEnteredAt = 유휴 잠금은 복귀
+     시점 불명이라 낭비)·세션복원 직행(F5 = initApp이 곧장 당김)은 발사 0. */
+var _plJobs=Object.create(null), _PL_TTL=180000;
+function _plOne(path){
+  var j=_plJobs[path];
+  if(j&&(Date.now()-j.t)<_PL_TTL)return;   // 신선한 선행 잡 존재 = 중복 발사 0(initLoginScreen 재진입·발사점 중첩 대비)
+  var p=fetch(API+path,{headers:{'Content-Type':'application/json','X-App-Password':'0510'}})
+    .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();});
+  p.catch(function(){});   // 소비 전 실패 = 무음(unhandledrejection 차단) — 소비 시엔 api()가 정상 fetch로 폴백
+  _plJobs[path]={t:Date.now(),p:p};
+}
+function _plKick(){
+  try{
+    if(window._QA)return;                 // QA 미리보기 = 실네트워크 차단 계약 유지
+    if(window._appEnteredAt)return;       // 앱 진입 후(유휴 잠금 등) = 발사 안 함
+    var enc=encodeURIComponent;
+    ['/api/records','/api/lastmod','/api/sheet/special','/api/programs','/api/sheet/manager',
+     '/api/sheet/platform','/api/sheet/content','/api/sheet/applysettings','/api/config',
+     '/api/ops?sheet='+enc('카페일정'),'/api/ops?sheet='+enc('장도'),
+     '/api/holidays?year='+new Date().getFullYear()].forEach(_plOne);
+    var _rails=function(){try{['일일입력','공연마스터','회차상세','세부운영관리대장(정리)','전시일일','전시마스터','단체'].forEach(function(n){_plOne('/api/ops?sheet='+enc(n));});}catch(_e){}};   // 빠른 진입으로 앱이 먼저 요청해도 _plOne·api() 소비가 dedupe = 요청 수 불변
+    var rj=_plJobs['/api/records'];
+    if(rj)rj.p.then(_rails,_rails); else _rails();   // records 실패여도 레일은 발사(initApp의 _calP 게이트와 같은 계약)
+  }catch(e){}
+}
 (function(){if(window._QA){try{_qaEnter();}catch(_qe){console.error('[QA] enter fail',_qe);}return;}try{localStorage.removeItem('myApplicant');localStorage.removeItem('myUserDept');}catch(e){}const s=sessionStorage.getItem('pw');if(s){var _lk=null;try{_lk=sessionStorage.getItem('_lockedAt');}catch(e){} if(_lk){try{if(!_loginEmail)_loginEmail=(sessionStorage.getItem('myEmail')||'').trim();}catch(e){} lockScreen();}else{_enterAppFromSession();_msalHasLiveSession();}}else{var _rp=null;try{_rp=localStorage.getItem('_resumePin');}catch(e){} if(_rp){try{localStorage.removeItem('_resumePin');}catch(e){} _loginEmail=_rp; if(typeof startLoginShader==='function'){try{startLoginShader();}catch(e){}} if(typeof goToPinStep==='function'){setTimeout(function(){goToPinStep(true);},0);}else{if(typeof initLoginScreen==='function')initLoginScreen();}}else{if(typeof initLoginScreen==='function')initLoginScreen();}}})();
 
 var _apiWrites=0;   // [Q39 평의회6] 비행 중 쓰기 재계 — nmSyncBusy가 읽어 배포 자동 리로드가 PATCH/POST를 절단하지 못하게(모달 닫힘~쓰기 완료 사이 무방비 창 봉합)
 async function api(method,path,body){
   if(window._QA)return _qaApi(method,path,body);   // [QA] 실네트워크 차단 — 목데이터만(실API·실데이터 미접촉)
+  // [로그인 프리로드] 같은 경로 GET의 선행 응답을 1회 재사용(신선할 때만) — 만료·실패는 아래 정상 fetch 폴백(회귀 0)
+  if(method==='GET'&&_plJobs[path]){
+    var _pl=_plJobs[path]; delete _plJobs[path];   // 1회 소비 — 이후 같은 경로(수동 새로고침·syncReload)는 항상 네트워크
+    if((Date.now()-_pl.t)<_PL_TTL){ try{ return await _pl.p; }catch(_e){} }
+  }
   const headers={'Content-Type':'application/json','X-App-Password':password};
   // 서브 admin: 본인 PIN을 헤더에 동봉 (Worker가 검증해 admin 권한 부여)
   const subPin=sessionStorage.getItem('subAdminPin');
@@ -5297,6 +5342,7 @@ function lockScreen(){
   _pinClear(false);
   if(typeof _pinFocusFirst==='function')_pinFocusFirst(); else if(pins[0])pins[0].focus();   // [260714] 잠금 재진입도 견고화 포커스로 통일(경로 일관성)
   if(typeof _pinFirstHintStart==='function')_pinFirstHintStart();   // [분신술 260710 감사5] 잠금 재진입도 PIN 진입 — 첫 칸 안내 링 발동(경로 일관성)
+  try{if(typeof _plKick==='function')_plKick();}catch(_e){}   // [로그인 프리로드] F5 잠금 복원(_lockedAt 도장) = 해제 즉시 initApp 재로딩 → 그 데이터 선출발(_appEnteredAt 가드가 앱 사용 중 유휴 잠금은 자동 제외)
 }
 function toggleMobileNav(){
   const c=document.getElementById('nav-menus');if(!c)return;
