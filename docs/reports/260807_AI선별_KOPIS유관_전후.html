@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>260807 — 검색 모니터링 AI 선별(sonnet 5 · 3시간) + 판매 추이 상세 「KOPIS 유관 타지역」</title>
+<style>
+  body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;max-width:1000px;margin:30px auto;padding:0 20px;color:#1A1A2E;line-height:1.6}
+  h1{font-size:20px} h2{font-size:16px;margin-top:30px}
+  img{width:100%;border:1px solid rgba(0,0,0,.12);border-radius:12px;margin:6px 0 4px}
+  table{border-collapse:collapse;width:100%;font-size:13px;margin:8px 0 18px}
+  th,td{border:1px solid rgba(0,0,0,.12);padding:7px 10px;text-align:left;vertical-align:top}
+  th{background:rgba(74,77,231,.06)}
+  .dim{color:#888;font-size:12.5px}
+  code{background:rgba(0,0,0,.05);padding:1px 5px;border-radius:5px;font-size:12px}
+</style>
+</head>
+<body>
+<h1>260807 — ① 검색 모니터링 AI 선별 · ② 판매 추이 상세 「KOPIS 유관 타지역」</h1>
+<p class="dim">지시(운영자): <b>「3일 이내 올라온 것 중 예울마루와 관련된거를 oauth 계정 배선을 통해서 sonnet 5가 3시간마다 걸러내게. (밤 7~오전 8)에는 멈춤 …
+ 관련 없는것도 있어서 관련된 것만 추릴 수 있는지」</b> · <b>「KOPIS 공연은 공연 상세페이지 이거(판매 추이 상세) 아래쪽에 유관된 타지역 공연이 있는지 확인해서 알려주게 해줘」</b>.</p>
+<p class="dim">화면 = QA 진입로(<code>?qa=admin</code>) + 결정적 목(<code>tools/qa_mock_ops.mjs</code>) · 실데이터·PII 미접촉. 상세 카드의 NaN·7/32는 목 데이터의 가짜 날짜 산물(기존 기지 사항 · 이번 축과 무관).</p>
+
+<h2>① AI 선별 — 어떻게 도는가</h2>
+<table>
+<tr><th>축</th><th>내용</th></tr>
+<tr><td>엔진</td><td>Worker의 <b>기존 구독 OAuth 배선(<code>claudeText</code>)</b> 그대로 — 예울이 채팅과 같은 키(<code>ANTHROPIC_AUTH_TOKEN</code>), 추가 발급·추가 비용 0. 모델 = <b>claude-sonnet-5</b>(effort low · 변수 <code>MONITOR_JUDGE_MODEL</code>로 교체 가능)</td></tr>
+<tr><td>시각</td><td>크론이 <b>KST 8시·11시·14시·17시</b>의 :15 틱에 실행 = <b>3시간 간격 + 밤 7시~오전 8시 멈춤</b> 정확 충족. :15인 이유 = 같은 시각 :00의 수집 스캔과 KV 쓰기 경합 회피</td></tr>
+<tr><td>대상</td><td><b>최근 3일</b>(발행일 우선 · 수집시각 폴백) 중 미판정, 회당 ≤60건. KOPIS 갈래는 시설 필터로 수집돼 정의상 관련 = AI 없이 자동 관련 처리</td></tr>
+<tr><td>판정</td><td>제목·분류·검색어만으로 관련(공연·전시·교육·행사·방문 후기)/무관(동명 장소·아파트·스치는 언급) — 항목에 <code>rel</code>(1/0)·<code>relWhy</code>(근거) 저장. 애매하면 관련으로(놓치는 쪽보다 안전). 알림 발화 0(Q28 유지 — 조회 화면 표식만)</td></tr>
+<tr><td>수동</td><td><code>POST /api/monitor/judge</code> = 지금 1회(크론과 같은 함수 1벌)</td></tr>
+</table>
+
+<h2>① 후 — 설정 ▸ 검색량 확인: 기본 = 「관련」만</h2>
+<p class="dim">전 = 어제 신설된 그 모달(칩 없음 · <code>260807_검색량확인_후_모달.png</code>). 후 = AI 선별 칩 줄(관련·제외·미판정·전체 · 건수 동반)이 서고, <b>첫 진입 기본이 「관련」</b> — 지시 「관련된 것만」.</p>
+<img src="260807_AI선별_후_관련만.png" alt="후: 검색량 확인 모달 — AI 선별 칩 줄(관련 4 선택)과 관련 글 4행만 보이는 표, 요약줄에 AI 선별 시각">
+
+<h2>① 후 — 「전체」 칩: 제외된 글은 흐리게 + 사유</h2>
+<p class="dim">웹문서 행이 흐려지고 비고 맨 앞에 <b>「AI 제외: 스치는 언급뿐」</b> — 무엇이 왜 걸러졌는지 전체 보기에서 그대로 보인다.</p>
+<img src="260807_AI선별_후_전체.png" alt="후: 전체 칩 선택 — 6행 중 제외 판정 1행이 흐리게 표시되고 비고에 AI 제외 사유가 붙는다">
+
+<h2>② 후 — 판매 추이 상세: AI 예상 아래 「KOPIS 유관」 줄</h2>
+<p class="dim">운영자가 가리킨 자리(AI 예상 브리핑 바로 아래)에 한 줄 — Worker가 KOPIS 공연DB에서 <b>같은 제목</b>을 찾아 <b>예울마루 제외 타지역</b>만 보여준다(지역·공연장·기간 · 원문 링크 · 24시간 캐시). 없으면 「타지역 일정 없음」으로 확인 자체를 알린다. 전 = 이 줄 자체가 없었다(신설).</p>
+<img src="260807_KOPIS유관_후_상세.png" alt="후: 프로그램 별 판매 추이 상세 — AI 예상 박스 바로 아래 KOPIS 유관 줄에 서울·대구 타지역 일정 2건이 링크로 나온다">
+
+<h2>배선(코드)</h2>
+<table>
+<tr><th>층</th><th>내용</th></tr>
+<tr><td>Worker</td><td><code>smJudge</code>(선별 + KV 저장) · <code>smKopisRelated</code>(핵심 제목 추출 → KOPIS 기간 목록 이름 대조 → 예울마루 제외 · 24h 캐시) · 크론 게이트(KST 8/11/14/17 :15) · 라우트 <code>POST /api/monitor/judge</code>·<code>GET /api/monitor/kopis-related</code> · feed 응답에 <code>judge</code> 동봉</td></tr>
+<tr><td>프론트</td><td>검색량 확인 모달 — <code>.ana-chip</code> 정본 칩(AI 홍보 탭 기간 칩과 같은 관용구) + 제외 행 흐림·사유 · 판매 추이 상세 — <code>.srail-fc</code> 정본(AI 예상 줄과 같은 부품 · 라벨 색만 --c5) · 컨테이너는 차트 폭 수렴 재그림 밖이라 생존</td></tr>
+<tr><td>주의</td><td>KOPIS <code>shprfnm</code> 파라미터는 명세 미확정(prfplccd와 같은 상황) — 무시돼 전 목록이 와도 <b>로컬 이름 대조가 최종 필터</b>라 결과 동일. 이름 대조 = 정규화 후 동일 또는 4자 이상 포함(동명 오탐 억제)</td></tr>
+</table>
+
+<h2>검증(헤드리스 실측)</h2>
+<ul>
+  <li>모달 기본 「관련」 = 4행 · 칩 <code>관련 4 · 제외 1 · 미판정 1 · 전체 6</code> · 요약줄에 AI 선별 시각 — <b>정확</b>.</li>
+  <li>「전체」 = 6행 · 흐림 1행(웹문서 · 비고 「AI 제외: 스치는 언급뿐」) — <b>정확</b>.</li>
+  <li>상세 드릴 = 「KOPIS 유관 같은 공연 타지역 2건 — 서울특별시 홍익대 대학로 아트센터 (11.20~2.1) · 대구광역시 계명아트센터 (10.2~10.5)」 — <b>AI 예상 바로 아래 렌더 · pageerror 0</b>.</li>
+  <li>게이트: check_design(신규 hex 0 — 전부 기존 토큰) · check_modal_head · check_biz_list · <code>node --check src/index.js</code> · pre-commit 스모크 전건.</li>
+</ul>
+<p class="dim">라이브 실증(머지 → Worker 자동 배포 뒤): <code>POST /api/monitor/judge</code> 1회로 실제 쌓인 글을 선별시키고, 실공연명으로 <code>kopis-related</code>를 확인한다 — 결과는 원장·보고에 병기.</p>
+</body>
+</html>

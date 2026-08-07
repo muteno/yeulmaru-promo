@@ -140,17 +140,25 @@ export const INIT_SCRIPT = `(function(){
   ]};
 
   // [260807] 검색량 확인(설정 톱니) 목 — 4갈래 대표 형태 6행(결정적 · 실API·실데이터 미접촉)
+  //   [260807 2차] rel 표식 = AI 선별(sonnet 5 크론)의 세 상태를 전부 밟는다: 관련 1(구글·카카오 블로그·KOPIS 자동 2)
+  //   · 제외 0(웹문서 = 동명 무관 문서) · 미판정 없음(카페글) — 칩 4종·흐림 행·비고 사유가 실제로 렌더되게.
   window.__MOCK_MONITOR={ok:true,count:6,total:6,ready:{google:true,naver:false,kakao:true,kopis:true},
     last:{at:'2026-08-07T03:00:00.000Z',added:6,sources:{google:1,naver:null,kakao:3,kopis:2}},
+    judge:{at:'2026-08-07T03:15:00.000Z',model:'claude-sonnet-5',pool:4,judged:3,rel:2,irrel:1,auto:2,note:''},
     // 순서 = Worker 실물(smScan: 배치 안 구글→카카오(최신순)→KOPIS · fresh.concat(기존)) — 화면은 이 「쌓인 순서」를 그대로 보인다(재정렬 없음)
     rows:[
-      {src:'google',kind:'알림',title:'GS칼텍스 예울마루, 가을 시즌 프로그램 공개',link:'https://news.example/1',date:'2026-08-06',kw:'예울마루 공연',seenAt:'2026-08-07T03:00:00.000Z'},
-      {src:'kakao',kind:'블로그',title:'예울마루 브런치 콘서트 다녀왔어요',link:'https://blog.example/2',date:'2026-08-05',kw:'예울마루',seenAt:'2026-08-07T03:00:00.000Z'},
-      {src:'kakao',kind:'웹문서',title:'바다와 예술이 만나는 도시들',link:'https://web.example/4',date:'2026-08-02',kw:'예울마루',seenAt:'2026-08-07T03:00:00.000Z'},
+      {src:'google',kind:'알림',title:'GS칼텍스 예울마루, 가을 시즌 프로그램 공개',link:'https://news.example/1',date:'2026-08-06',kw:'예울마루 공연',seenAt:'2026-08-07T03:00:00.000Z',rel:1,relWhy:'시즌 프로그램 소식'},
+      {src:'kakao',kind:'블로그',title:'예울마루 브런치 콘서트 다녀왔어요',link:'https://blog.example/2',date:'2026-08-05',kw:'예울마루',seenAt:'2026-08-07T03:00:00.000Z',rel:1,relWhy:'공연 방문 후기'},
+      {src:'kakao',kind:'웹문서',title:'바다와 예술이 만나는 도시들',link:'https://web.example/4',date:'2026-08-02',kw:'예울마루',seenAt:'2026-08-07T03:00:00.000Z',rel:0,relWhy:'스치는 언급뿐'},
       {src:'kakao',kind:'카페글',title:'여수 여행 코스 — 예울마루 야경까지',link:'https://cafe.example/3',date:'2026-08-01',kw:'예울마루',seenAt:'2026-08-07T03:00:00.000Z'},
-      {src:'kopis',kind:'뮤지컬',title:'그날들 [여수]',link:'https://www.kopis.or.kr/',date:'2026-09-18',extra:'GS칼텍스 예울마루 · 공연예정',detail:{price:'R석 160,000원'},seenAt:'2026-08-07T03:00:00.000Z'},
-      {src:'kopis',kind:'서양음악(클래식)',title:'제10회 여수음악제, 개막연주회',link:'https://www.kopis.or.kr/',date:'2026-08-29',extra:'GS칼텍스 예울마루 · 공연예정',seenAt:'2026-08-07T03:00:00.000Z'}
+      {src:'kopis',kind:'뮤지컬',title:'그날들 [여수]',link:'https://www.kopis.or.kr/',date:'2026-09-18',extra:'GS칼텍스 예울마루 · 공연예정',detail:{price:'R석 160,000원'},seenAt:'2026-08-07T03:00:00.000Z',rel:1,relWhy:'시설 필터 수집(자동)'},
+      {src:'kopis',kind:'서양음악(클래식)',title:'제10회 여수음악제, 개막연주회',link:'https://www.kopis.or.kr/',date:'2026-08-29',extra:'GS칼텍스 예울마루 · 공연예정',seenAt:'2026-08-07T03:00:00.000Z',rel:1,relWhy:'시설 필터 수집(자동)'}
     ]};
+  // [260807 2차] KOPIS 유관 타지역 목(판매 추이 상세 「KOPIS 유관」 줄) — 형태만 재현(실API 미접촉)
+  window.__MOCK_KOPIS_REL={ok:true,name:'',core:'그날들',rows:[
+    {id:'PF000001',title:'그날들 [서울]',place:'홍익대 대학로 아트센터',area:'서울특별시',from:'2026-11-20',to:'2027-02-01',state:'공연예정',link:'https://www.kopis.or.kr/'},
+    {id:'PF000002',title:'그날들 [대구]',place:'계명아트센터',area:'대구광역시',from:'2026-10-02',to:'2026-10-05',state:'공연예정',link:'https://www.kopis.or.kr/'}
+  ],at:'2026-08-07T03:00:00.000Z'};
 
   var real=null;
   function wrapped(method,path){
@@ -254,6 +262,7 @@ export const FEED_SCRIPT = `(()=>{
       if(dp.indexOf('/api/ops')===0&&dp.indexOf('sheet=회원')>=0)return Promise.resolve(window.__MOCK_MEM);
       // [260807] 검색량 확인(설정 톱니) — _qaApi 접근자가 죽는 자리라 여기서 먹인다(_smwLoad의 실제 파싱 경로 측정)
       if(dp.indexOf('/api/monitor/feed')===0)return Promise.resolve(window.__MOCK_MONITOR);
+      if(dp.indexOf('/api/monitor/kopis-related')===0)return Promise.resolve(window.__MOCK_KOPIS_REL);   // [260807 2차] 상세 「KOPIS 유관」 줄
       return _realApi.apply(this,arguments);
     };
   }
