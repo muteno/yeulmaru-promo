@@ -186,10 +186,22 @@ class Builder:
         put(pPr, _el("w:spacing", before=60, after=120))
         self.run(p, text, size=12.5, bold=True, color=C_ACC)
 
-    def para(self, text):
+    def para(self, text, before=None):
         p = self.p()
-        self.spacing(p, after=80, line=300)
+        self.spacing(p, before=before, after=80, line=300)
         self.rich(p, text)
+
+    def subhead(self, text):
+        """소절 머리 — 한 꼭지 안을 다시 나누는 굵은 한 줄.
+
+        왜 필요한가(260806 3판 실측): 메인 공연에 출연자가 셋이면 서술이 10문단을 넘는데,
+        문단만 이어 붙이면 「누구 얘기를 읽고 있는지」가 사라진다. 사람이 손으로 쓴 3판은
+        연주자마다 굵은 한 줄을 세워 나눴고 그게 읽히는 이유였다.
+        `## 꼭지`를 하나 더 파지 않는 이유 = 그건 공연 단위 머리줄(강조색 밴드)이라
+        같은 공연 안을 쪼개는 데 쓰면 목차가 거짓말이 된다. 그래서 본문 활자 그대로 굵게만,
+        앞 여백으로 숨만 틔운다(새 색·새 활자 0).
+        """
+        self.para(text, before=180)
 
     def bullet(self, key, val, first=False, last=False):
         p = self.p()
@@ -312,6 +324,8 @@ PHOTO_RE = re.compile(r"^[ \t]*\[사진[^:\[\]]*:\s*([^\]]+)\][ \t]*$")
 HEAD_RE = re.compile(r"^#{1,3}\s+(.+?)\s*$")
 BULLET_RE = re.compile(r"^\s*[-*▫•]\s+(.+?)\s*$")
 ROW_RE = re.compile(r"^\s*\|(.+)\|\s*$")
+# 소절 머리 = 줄 전체가 하나의 **굵게**. 안쪽에 `**`가 또 없어야 한다(문장 중간 강조와 구분).
+SUBHEAD_RE = re.compile(r"^\*\*(?!\s)((?:(?!\*\*).)+?)\*\*$")
 
 
 def split_sections(text):
@@ -409,7 +423,10 @@ def build(spec):
                 blts.append((kv.group(1), kv.group(2)) if kv else (inner, ""))
                 continue
             flush_bullets()
-            b.para(st)
+            if SUBHEAD_RE.match(st):
+                b.subhead(st)          # 줄 전체가 **굵게** = 소절 머리
+            else:
+                b.para(st)
         flush_bullets()
         flush_rows()
 
