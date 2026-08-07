@@ -25,7 +25,7 @@ const want = sel => /^:root/.test(sel) || /(^|[\s,])\.cb-/.test(sel);
 let css = '', m;
 while ((m = RULE.exec(style))) { if (want(m[1])) css += m[0] + '\n'; }
 // @keyframes는 **중괄호가 한 겹 더** 있다 — 위 `[^}]*`로 자르면 반토막이 나가 그 뒤 규칙이 통째로 죽는다(초판 실사고: 파싱이 cbPop에서 멈춰 .cb-rise 전건 미적용).
-const KF = /^@keyframes\s+(cbIn|cbDot|cbPop|cbRiseTop)\s*\{(?:[^{}]*\{[^{}]*\})*[^{}]*\}/gm;   // cbRiseTop = 260813-6 「펼치면 대화가 맨 위로」 — 빠뜨리면 시안이 그 동작 없이 렌더된다
+const KF = /^@keyframes\s+(cbIn|cbDot|cbPop)\s*\{(?:[^{}]*\{[^{}]*\})*[^{}]*\}/gm;   // 260813-7: cbRiseTop 폐기(대화 올림 = transform 전이로 바뀜) → 다시 3종
 while ((m = KF.exec(style))) css += m[0] + '\n';
 // clip-path 전이는 미디어쿼리 안 감속 규칙도 함께(있으면)
 const rm = style.match(/@media \(prefers-reduced-motion:reduce\)\{\.cb-rise\{[^{}]*\}(?:[^{}]*\{[^{}]*\})*\}/);
@@ -73,7 +73,8 @@ async function grabMarkup() {
       c.querySelectorAll('img').forEach(i=>i.remove());
       // id 충돌 방지(시안 안에서 2벌을 나란히 놓는다)
       c.querySelectorAll('[id]').forEach(e=>e.removeAttribute('id'));
-      c.querySelectorAll('[onclick],[onkeydown]').forEach(e=>{e.removeAttribute('onclick');e.removeAttribute('onkeydown');});
+      // ⚠ 인라인 핸들러는 **전부** 떼야 한다 — 시안은 자기완결 1파일이라 앱 함수가 없다(onmouseenter=_memRiseShift 빠뜨렸다 pageerror로 잡힘)
+      c.querySelectorAll('*').forEach(e=>{[...e.attributes].forEach(a=>{ if(/^on/i.test(a.name)) e.removeAttribute(a.name); });});
       return c.outerHTML; })()`);
   } finally { await browser.close(); }
 }
@@ -122,8 +123,11 @@ h1{font-size:20px;margin:0 0 4px}h2{font-size:15px;margin:30px 0 10px}
 .cb-rise-was-card>.cb-body{flex:0 0 auto;height:clamp(96px,16vh,190px)}
 .cb-rise-was-card>.cb-body>:first-child{margin-top:0}
 /* 시안 전용 오버라이드 = 슬라이더가 만지는 축(정본은 위 .cb-rise 값 그대로 · 복사본이 곧 배선 스펙) */
-#live .cb-rise{transition:clip-path var(--d,.46s) var(--e,cubic-bezier(.215,.61,.355,1)) var(--o,.18s),box-shadow var(--d,.46s) var(--e,cubic-bezier(.215,.61,.355,1)) var(--o,.18s)}
+#live .cb-rise{transition:clip-path var(--d,.48s) var(--e,cubic-bezier(.215,.61,.355,1)) var(--o,.18s),box-shadow var(--d,.48s) var(--e,cubic-bezier(.215,.61,.355,1)) var(--o,.18s)}
 #live .cb-rise:hover,#live .cb-rise:focus-within{transition-delay:var(--i,.1s);clip-path:inset(calc(var(--open,0) * max(0px,100% - var(--rise-h))) 0 0 0 round var(--radius))}
+/* 260813-7: 대화 미끄러짐도 같은 축으로 — 길이·커브·지연 슬라이더가 둘을 함께 움직인다(실코드도 --rise-t 한 곳) */
+#live .cb-rise>.cb-body>*{transition:transform var(--d,.48s) var(--e,cubic-bezier(.215,.61,.355,1)) var(--o,.18s)}
+#live .cb-rise:hover>.cb-body>*,#live .cb-rise:focus-within>.cb-body>*{transition-delay:var(--i,.1s)}
 </style></head><body><div class="wrap">
 
 <h1>예울이 대화창 — 마우스 올리면 「거주지 TOP 5」 구간까지 올라온다</h1>
@@ -148,8 +152,8 @@ h1{font-size:20px;margin:0 0 4px}h2{font-size:15px;margin:30px 0 10px}
   <div class="shot"><span class="tag was">전 — 접힘</span><img alt="전: 아바타가 윗선에 잘린다" src="${b64('260813-6_예울이_첫화면_전_접힘.png')}"><div class="cap">칩 <b>4개 / 3행</b>. 인사 줄이 접힘 칸보다 커서 <b>아바타가 윗선에 −3px로 물린다</b>(창이 더 낮으면 더 잘린다).</div></div>
   <div class="shot"><span class="tag">후 — 접힘</span><img alt="후: 아바타 위에 여백 37px" src="${b64('260813-6_예울이_첫화면_후_접힘.png')}"><div class="cap">칩 <b>3개 / 2행</b>(혼자 한 줄을 먹던 「23~24년 클래식…」 1개 삭제 = <b>정확히 한 행</b>). 아바타 위 여백 <b>+37px</b> · 잘림 0.</div></div>
   <div class="shot"><span class="tag was">전 — 펼침</span><img alt="전: 펼쳐도 대화가 맨 아래" src="${b64('260813-6_예울이_첫화면_전_펼침.png')}"><div class="cap">펼쳐도 대화가 <b>입력줄 옆(맨 아래)</b>에 붙어 있고 위 <b>625px</b>이 빈 흰 판이었다.</div></div>
-  <div class="shot"><span class="tag">후 — 중간(35%)</span><img alt="후: 여는 동안 대화가 계속 보인다" src="${b64('260813-6_예울이_첫화면_후_중간.png')}"><div class="cap">여는 동안은 <b>바닥 정렬을 붙들고</b> 있다(<code>step-end</code>). 호버 즉시 위로 보내면 이 시점이 <b>텅 빈 흰 판</b>이 된다 — 실측 후 폐기한 판.</div></div>
-  <div class="shot"><span class="tag">후 — 펼침</span><img alt="후: 대화가 맨 위" src="${b64('260813-6_예울이_첫화면_후_펼침.png')}"><div class="cap">다 열린 순간(<b>.69s</b> = 지연 .1 + 길이 .59) 대화가 <b>맨 위</b>로. 카드 윗선에서 <b>13px</b>.</div></div>
+  <div class="shot"><span class="tag">후 — 중간(35%)</span><img alt="후: 여는 동안 대화가 계속 보인다" src="${b64('260813-6_예울이_첫화면_후_중간.png')}"><div class="cap"><b>260813-7</b> = 대화가 열리는 윗선에 붙어 <b>같이 미끄러져</b> 올라온다(<code>transform</code> · 클립과 같은 길이·커브·지연). 260813-6의 「끝에 한 번에 넘김」은 <b>툭 튀어올라</b> 폐기.</div></div>
+  <div class="shot"><span class="tag">후 — 펼침</span><img alt="후: 대화가 맨 위" src="${b64('260813-6_예울이_첫화면_후_펼침.png')}"><div class="cap">끝나면 대화가 <b>맨 위</b> — 카드 윗선에서 <b>13px</b>. 길이 <b>590 → 480ms</b>(260813-7 운영자 「살짝 빠르게 · 이징 느낌은 그대로」 · 커브·지연 계승).</div></div>
 </div></div>
 
 <h2>2. 만지는 미리보기 — 왼쪽 「전」, 오른쪽 「후」에 마우스를 올려 보세요</h2>
@@ -160,7 +164,7 @@ h1{font-size:20px;margin:0 0 4px}h2{font-size:15px;margin:30px 0 10px}
   <div id="live"><div class="tag">후 — 값 조절 대상</div><div class="frame">${colHtml}</div></div>
   <div style="flex:1 1 300px;min-width:270px">
     <div class="ctl">
-      <label>길이</label><input type="range" id="d" min="120" max="900" step="10" value="590"><span class="val" id="dv">590ms</span>
+      <label>길이</label><input type="range" id="d" min="120" max="900" step="10" value="480"><span class="val" id="dv">480ms</span>
       <label>커브</label><select id="e">
         <option value="cubic-bezier(.215,.61,.355,1)">주력 감속 .215,.61,.355,1 (현행 · .dd-menu 계승)</option>
         <option value="cubic-bezier(.4,0,.2,1)">도착·안착 .4,0,.2,1 (기틀 §2 #13)</option>
@@ -189,7 +193,7 @@ h1{font-size:20px;margin:0 0 4px}h2{font-size:15px;margin:30px 0 10px}
 <b>접힘 칸</b> <code>--rise-h</code> = 로그창 <code>clamp(96px,16vh,190px)</code> + 입력줄·테두리 <code>--rise-foot</code>(<code>_memAiPaint</code>가 <code>.cb-foot</code> 실측으로 덮어씀 · 실측 61+2=63) = <b>1500×1000에서 223px</b> = 이 기능 배선 <b>전과 같은 값</b>.<br>
 <b>쉼 상태는 손대지 않는다(260813-4 · 운영자 「위에 이미 있는 내용의 간격들은 그대로 유지」)</b> — 260813-2의 접힘 칸 304px은 되돌렸다. 접힘 칸은 열의 <code>padding-bottom</code>으로 <b>자리를 예약</b>하는 값이라 키운 만큼 위 막대 카드가 실제로 줄어든다(1500×1000 <b>414 → 333</b> · 1920×1080 <b>474.8 → 406.6</b>). 넓어지는 건 <b>켜져 있는 동안 덮는 것</b>뿐 — 카드가 절대배치·불투명이라 위 카드를 <b>밀지 않고 덮는다</b>. 260813-3의 차트 우선 상한(<code>--rise-avail</code>·<code>_memRiseFit</code>·<code>ResizeObserver</code>)은 304를 되돌리려던 보정이라 <b>함께 걷어냈다</b>(어느 창에서도 하한 159px에 먼저 걸려 발동하지 않는다).<br>
 실측 = 막대 카드 1500×1000 <b>414.0</b> · 1920×1080 <b>474.8</b> · 1366×768 <b>237.7</b> — <b>세 창 전부 배선 전과 Δ0</b>. 접힘 칸 223 / 235.8 / 185.9.<br>
-<b>펼치면 대화가 맨 위로(260813-6)</b> — <code>@keyframes cbRiseTop{from{margin-top:auto}to{margin-top:0}}</code>를 <code>step-end .69s forwards</code>로 건다. 여는 <b>내내 바닥 정렬을 붙들고</b> 있다가 열림이 끝나는 순간 한 번에 넘긴다. ⚠ <code>transition</code>으로는 못 만든다(transition 값에 margin이 들어가면 게이트 ⑥ 잰크 15 → 16 = 커밋 차단) · 호버 즉시 넘기면 여는 590ms가 <b>빈 흰 판</b>이 된다.<br>
+<b>펼치면 대화가 같이 미끄러져 올라온다(260813-7)</b> — <code>.cb-rise&gt;.cb-body&gt;*{transition:transform var(--rise-t) …}</code> + <code>translateY(var(--rise-shift))</code>. 올릴 거리는 CSS가 못 만들어(<code>margin-top:auto</code>가 내용 높이마다 다르게 먹는다) <code>_memRiseShift</code>가 <b><code>offsetTop</code>으로</b> 재서 넣는다(<code>getBoundingClientRect</code>는 transform이 섞여 호버 중에 오염된다). 거리 0 = 이미 칸을 넘긴 긴 대화 → 안 움직인다(스크롤과 안 부딪친다). ⚠ 앞선 두 판은 폐기 — 「호버 즉시 위로」는 여는 동안 <b>빈 흰 판</b>, 「끝에 한 번에 넘김(step-end)」은 다 열린 뒤 <b>툭 튀어오름</b>. ⚠ margin 전이는 게이트 ⑥ 잰크 15 → 16 = 커밋 차단이라 <b>transform 하나</b>로 간다(합성 전용).<br>
 <b>진입로 2개</b> — <code>:hover</code>(마우스)와 <code>:focus-within</code>(터치·키보드로 입력칸에 들어갈 때). 감속 선호(<code>prefers-reduced-motion</code>)면 전이 없이 즉시 전환.<br>
 <b>대화는 아래에 붙는다</b>(<code>.cb-rise&gt;.cb-body&gt;:first-child{margin-top:auto}</code>) — 로그창이 늘 열 전체 높이라 위로 붙이면 접힘 칸이 빈 칸이 된다.
 </div>
@@ -205,10 +209,10 @@ h1{font-size:20px;margin:0 0 4px}h2{font-size:15px;margin:30px 0 10px}
 </div>
 <script>
 var PRESETS=[
- {n:'현행 = 배선값 ★',d:590,e:'cubic-bezier(.215,.61,.355,1)',i:100,o:180,open:0,h:223},
+ {n:'현행 = 배선값 ★',d:480,e:'cubic-bezier(.215,.61,.355,1)',i:100,o:180,open:0,h:223},
  {n:'빠릿',d:280,e:'cubic-bezier(.4,0,.2,1)',i:60,o:120,open:0,h:223},
  {n:'느긋',d:760,e:'cubic-bezier(.22,.9,.36,1)',i:160,o:260,open:0,h:223},
- {n:'절반만 올라감',d:590,e:'cubic-bezier(.215,.61,.355,1)',i:100,o:180,open:45,h:223}
+ {n:'절반만 올라감',d:480,e:'cubic-bezier(.215,.61,.355,1)',i:100,o:180,open:45,h:223}
 ];
 var $=function(k){return document.getElementById(k);},live=$('live'),ids=['d','e','i','o','opn','h'];
 function cur(){return {d:+$('d').value,e:$('e').value,i:+$('i').value,o:+$('o').value,open:+$('opn').value,h:+$('h').value};}   // ⚠ getElementById로 받는다 — id 전역(window.open 등 내장과 충돌)에 기대면 값이 undefined가 된다
@@ -219,11 +223,13 @@ function apply(){var v=cur();
  live.querySelector('.cb-rise-col').style.setProperty('--rise-h',v.h+'px');
  $('dv').textContent=v.d+'ms';$('iv').textContent=v.i+'ms';$('ov').textContent=v.o+'ms';
  $('opnv').textContent=(100-v.open)+'%';$('hv').textContent=v.h+'px';
- var base=(v.d===590&&v.e==='cubic-bezier(.215,.61,.355,1)'&&v.i===100&&v.o===180&&v.open===0&&v.h===223);
+ var base=(v.d===480&&v.e==='cubic-bezier(.215,.61,.355,1)'&&v.i===100&&v.o===180&&v.open===0&&v.h===223);
  $('out').textContent=
   '/* index.html .cb-rise — 선택값 */\\n'+
-  '.cb-rise{transition:clip-path '+(v.d/1000)+'s '+v.e+' '+(v.o/1000)+'s,\\n'+
-  '                    box-shadow '+(v.d/1000)+'s '+v.e+' '+(v.o/1000)+'s}\\n'+
+  '.cb-rise-col{--rise-t:'+(v.d/1000)+'s}   /* 길이 = 여기 한 곳 — 클립과 대화 미끄러짐이 같이 쓴다 */\\n'+
+  '.cb-rise{transition:clip-path var(--rise-t) '+v.e+' '+(v.o/1000)+'s,\\n'+
+  '                    box-shadow var(--rise-t) '+v.e+' '+(v.o/1000)+'s}\\n'+
+  '.cb-rise>.cb-body>*{transition:transform var(--rise-t) '+v.e+' '+(v.o/1000)+'s}\\n'+
   '.cb-rise:hover,.cb-rise:focus-within{transition-delay:'+(v.i/1000)+'s;\\n'+
   '  clip-path:inset('+(v.open?'calc('+(v.open/100)+' * max(0px,100% - var(--rise-h)))':'0')+' 0 0 0 round var(--radius))}\\n'+
   '.cb-rise-col{--rise-h:'+(v.h===223?'calc(var(--rise-log) + var(--rise-foot))   /* 계승 = clamp(96,16vh,190) + 실측 63 = 223 = 배선 전과 동일 */':v.h+'px   /* 갱신 후보 — 현행 223(=clamp(96,16vh,190)+63) · ⚠ 키우면 그만큼 위 막대 카드가 눌린다(260813-4) */')+'}\\n'+
