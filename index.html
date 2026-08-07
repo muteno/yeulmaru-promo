@@ -1503,24 +1503,27 @@ table.promo-board-table th:last-child .col-resize-handle{display:none}
      **어느 창에서도 발동하지 않는 죽은 코드**다(측정 → CSS 변수 쓰기 → 리사이즈 관측 한 벌이 통째로 사라진다).
    ⚠ `--rise-h`에 **백분율 금지**(260813-2에서 잡은 함정) — 같은 변수를 `padding-bottom`(%가 **폭** 기준)과
      `clip-path`(%가 **높이** 기준)가 함께 써서 한 값이 두 뜻이 된다. 상한이 필요하면 px·vh로만. */
-.cb-rise-col{position:relative;--rise-log:clamp(96px,16vh,190px);--rise-foot:63px;--rise-h:calc(var(--rise-log) + var(--rise-foot));padding-bottom:calc(var(--rise-h) + var(--rise-gap,14px))}
+/* [260813-7 운영자 「펼쳐지는 거 살짝 속도 빨라지면 좋을듯 · 이징 느낌은 그대로」] 길이 `--rise-t` = .59s → **.48s**.
+   커브(`cubic-bezier(.215,.61,.355,1)`)·지연(열림 .1s·닫힘 .18s)·펼침 범위는 **전부 계승** = 느낌은 그대로, 시간만 짧다.
+   ⚠ 길이는 **이 변수 한 곳**에만 둔다 — 클립(카드가 열리는 것)과 대화 미끄러짐이 **같은 시간**을 써야 둘이 한 몸으로 움직인다.
+     260813-6에서 `.69s`(= .1 + .59)를 손으로 맞춰 뒀다가 길이를 고칠 때마다 어긋날 자리였다. */
+.cb-rise-col{position:relative;--rise-log:clamp(96px,16vh,190px);--rise-foot:63px;--rise-h:calc(var(--rise-log) + var(--rise-foot));--rise-t:.48s;padding-bottom:calc(var(--rise-h) + var(--rise-gap,14px))}
 .cb-rise{position:absolute;left:0;right:0;top:0;bottom:0;z-index:1;
   clip-path:inset(max(0px,calc(100% - var(--rise-h))) 0 0 0 round var(--radius));
-  transition:clip-path .59s cubic-bezier(.215,.61,.355,1) .18s,box-shadow .59s cubic-bezier(.215,.61,.355,1) .18s}
+  transition:clip-path var(--rise-t) cubic-bezier(.215,.61,.355,1) .18s,box-shadow var(--rise-t) cubic-bezier(.215,.61,.355,1) .18s}
 .cb-rise:hover,.cb-rise:focus-within{clip-path:inset(0 0 0 0 round var(--radius));box-shadow:var(--elev);transition-delay:.1s}
 .cb-rise>.cb-body>:first-child{margin-top:auto}   /* 접힘 = 입력줄 바로 위에 붙는다 — 로그창은 늘 열 전체 높이라 위로 붙이면 접힘 칸이 빈 칸이 된다 */
-/* [260813-5 운영자 「대화창이 확대되면 가장 윗부분으로 채팅 상대의 대화가 이동되게」] 다 열린 **뒤에** 대화가 맨 위로 올라간다.
-   ⚠ 「호버 즉시 위로」로 만들면 안 된다(실측 폐기) — 클립은 아래에서 위로 열리는데 대화가 먼저 위로 가버리면
-     여는 590ms 동안 보이는 칸이 **텅 빈 흰 판**이 되고 글자가 끝에 갑자기 나타난다(35% 지점 캡처로 확인).
-   ⚠ 전이(`transition`)로도 못 만든다 — transition 값에 margin이 들어가면 게이트 ⑥ 잰크가 15 → 16이 돼 커밋이 막힌다.
-   → `animation` + `step-end`로 **여는 내내 바닥 정렬을 붙들고 있다가**(from) 열림이 끝나는 순간 한 번에 위로 넘긴다(to).
-     .69s = 열림 지연 .1s + 길이 .59s(위 `.cb-rise:hover` 값과 같은 축 · 둘이 어긋나면 빈 칸이나 늦은 점프가 생긴다).
-     닫힘은 규칙이 그냥 빠지므로 즉시 바닥 복귀 = 닫히는 동안에도 대화가 보인다.
-   ⚠ 이 규칙은 첫 자식의 `cbIn`(말풍선 등장)을 덮는다 — 등장은 0.28s에 이미 끝나 있고 `cbIn`의 끝 상태 = 기본값이라 보이는 차이 0. */
-@keyframes cbRiseTop{from{margin-top:auto}to{margin-top:0}}
-.cb-rise:hover>.cb-body>:first-child,.cb-rise:focus-within>.cb-body>:first-child{animation:cbRiseTop .69s step-end forwards}
-@media (prefers-reduced-motion:reduce){.cb-rise{transition:none}
-  .cb-rise:hover>.cb-body>:first-child,.cb-rise:focus-within>.cb-body>:first-child{animation-duration:0s}}   /* 즉시 열리니 위로 붙는 것도 즉시 */
+/* [260813-7 운영자 「예울이가 화면 커지면서 올라가면 **자연스럽게** 올라가게」] 대화가 카드와 **한 몸으로 미끄러져** 올라간다.
+   대화를 `transform:translateY`로 올린다 — 클립과 같은 길이·커브·지연이라 **열리는 윗선에 붙어서** 따라 올라가고, 끝나면 카드 맨 위.
+   ⚠ 260813-6의 「끝에 한 번에 넘김」(`@keyframes cbRiseTop` step-end)은 폐기 — 다 열린 뒤 대화가 **툭 튀어오르는** 게 보였다.
+   ⚠ 올릴 거리 `--rise-shift`는 CSS가 못 만든다 — 바닥 정렬(`margin-top:auto`)로 위에 남는 몫이라 내용 높이에 따라 매번 다르다.
+     → `_memRiseShift`가 **`offsetTop`으로** 재서 넣는다(`getBoundingClientRect`는 transform이 섞여 호버 중에 값이 오염된다).
+   ⚠ 거리가 0인 경우 = 대화가 칸을 넘겨 이미 위까지 찬 상태(자동 마진이 0) → transform도 0 = **긴 대화는 아무것도 안 움직인다**.
+     그래서 이 transform이 스크롤을 어긋내는 경우가 없다(움직일 땐 스크롤이 없고, 스크롤이 있을 땐 안 움직인다).
+   ⚠ `transition`은 **transform 하나뿐** — 게이트 ⑥ 잰크(width/height/padding/margin 전이)에 안 걸린다(합성 전용 · 15/15 유지). */
+.cb-rise>.cb-body>*{transition:transform var(--rise-t) cubic-bezier(.215,.61,.355,1) .18s}
+.cb-rise:hover>.cb-body>*,.cb-rise:focus-within>.cb-body>*{transform:translateY(var(--rise-shift,0px));transition-delay:.1s}
+@media (prefers-reduced-motion:reduce){.cb-rise,.cb-rise>.cb-body>*{transition:none}}
 @keyframes cbIn{from{transform:translateY(10px) scale(0.96);opacity:0}to{transform:translateY(0) scale(1);opacity:1}}
 .cb-msg.bot a{color:var(--accent);font-weight:700}
 .cb-msg.bot .cb-card-t{font-weight:800;font-size:13.5px;color:var(--text);margin-bottom:3px}
@@ -28490,7 +28493,7 @@ function _memAiCardHtml(sfx,fit,col){
   //   호버·포커스 = 잘라내기가 0으로 가며 열 끝(거주지 TOP 5 윗선)까지 열린다 — 모양·커브 SSOT = CSS `.cb-rise`(위 정의 · 인라인 재타이핑 0).
   //   로그창은 늘 카드 전체를 채우고(flex:1 1 auto) 대화는 아래에 붙는다(.cb-rise>.cb-body>:first-child{margin-top:auto}) =
   //   접힘 칸에 보이는 것도, 펼친 뒤 이어 보는 것도 **같은 한 벌**이라 스크롤이 튀지 않는다(칸 높이가 안 변한다).
-  return '<div'+(col?' id="mem-ai-card-'+sfx+'" class="cb-rise"':'')+' style="'+(col?'':'margin-top:'+(fit?14:24)+'px;')+'width:'+(col?'100%':'min(100%,max(300px,40%))')+';background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden'+((fit||col)?';flex:0 0 auto;display:flex;flex-direction:column':'')+'">'
+  return '<div'+(col?' id="mem-ai-card-'+sfx+'" class="cb-rise" onmouseenter="_memRiseShift(this)"':'')+' style="'+(col?'':'margin-top:'+(fit?14:24)+'px;')+'width:'+(col?'100%':'min(100%,max(300px,40%))')+';background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden'+((fit||col)?';flex:0 0 auto;display:flex;flex-direction:column':'')+'">'
     +'<div id="mem-ai-log-'+sfx+'" class="cb-body" style="'+(col?'flex:1 1 auto;min-height:0':(fit?'flex:0 0 auto;height:clamp(96px,16vh,190px)':'min-height:96px;max-height:190px'))+';overflow-y:auto;padding:12px 14px"></div>'
     // 입력줄 = FAB 예울이 정본 부품(.cb-foot/.cb-in/.cb-send) 그대로 — 「질문」 글자 버튼 → 종이비행기 픽토그램(정본 svg 동일 path)
     +'<div class="cb-foot">'
@@ -28522,9 +28525,23 @@ function _memAiPaint(sfx){
   if(col&&col.classList&&col.classList.contains('cb-rise-col')){
     var ft=card.querySelector('.cb-foot');
     if(ft&&ft.offsetHeight)col.style.setProperty('--rise-foot',(ft.offsetHeight+2)+'px');
+    _memRiseShift(card);
   }
   // [260813-4] 접힘 칸이 종전 값으로 돌아오면서 260813-3의 차트 우선 상한(`_memRiseFit`·`--rise-avail`·`_MEM_BAR_MIN`)은 걷어냈다 —
   //   그건 304로 키운 자리를 낮은 창에서 되돌리려던 보정이라, 지금은 어느 창에서도 하한(96+63=159)에 먼저 걸려 발동하지 않는다.
+}
+// [260813-7 운영자 「자연스럽게 올라가게」] 펼칠 때 대화가 미끄러져 올라갈 거리 = **지금 바닥 정렬로 위에 남아 있는 몫**.
+//   CSS는 이 값을 못 만든다(`margin-top:auto`가 내용 높이에 따라 매번 다르게 먹는다) → 여기서 재서 `--rise-shift`로 넣고 CSS가 그만큼 `translateY`한다.
+//   ⚠ **`offsetTop`으로 잰다** — `getBoundingClientRect()`는 transform이 반영돼서, 호버 중(이미 올라간 상태)에 다시 재면 거리가 0으로 접힌다.
+//   ⚠ 값이 0 = 대화가 칸을 넘겨 자동 마진이 0인 상태(= 스크롤이 있는 긴 대화) → 안 움직인다. 움직일 땐 스크롤이 없고, 스크롤이 있을 땐 안 움직인다.
+//   호출 = 렌더 직후(_memAiPaint) + 카드 `onmouseenter`(창 크기가 바뀐 뒤 첫 호버에서 다시 잰다 · 리사이즈 관측 상주 0).
+function _memRiseShift(card){
+  try{
+    var log=card.querySelector('.cb-body'),first=log&&log.firstElementChild;
+    if(!first)return;
+    var d=first.offsetTop-log.offsetTop-(parseFloat(getComputedStyle(log).paddingTop)||0);
+    card.style.setProperty('--rise-shift',(d>1?-d:0).toFixed(1)+'px');
+  }catch(_e){}
 }
 function _memAiPaintAll(){_memAiPaint('i');_memAiPaint('m');}
 function _memAiChip(sfx,t){var i=document.getElementById('mem-ai-q-'+sfx);if(i)i.value=t;_memAiSend(sfx);}
