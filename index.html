@@ -5632,7 +5632,9 @@ async function _smwLoad(){
     body.innerHTML='';
   }
 }
-// 칩(.ana-chip — AI 홍보 ▸ 검색 모니터링 기간 칩과 같은 관용구) + 표를 지금 선별 상태로 그린다.
+// 선별 줄(**세그먼트 `.fbar-seg` 정본** — 기간 줄과 같은 빌더 `_chipRow` 한 벌) + 표를 지금 선별 상태로 그린다.
+// ⚠ 260807-17에서 칩(.ana-chip) → 세그먼트로 통일했다: 관련/제외/미판정/전체는 **상호배타**라 「하나만」을 말하는 세그먼트가 맞다
+//   (칩은 규범상 「여러 개 고를 수 있다」 — Primer·M3·Mobbin 실측). 근거 = docs/reports/260807_기간필터_세그먼트_규범실측.md
 function _smwPaint(){
   var body=document.getElementById('smw-body'),fl=document.getElementById('smw-flt');
   if(!body)return;
@@ -5640,12 +5642,11 @@ function _smwPaint(){
   if(fl){
     if(!judged)fl.style.display='none';
     else{
-      var chips=[['rel','관련 '+c.rel],['irr','제외 '+c.irr]];
-      if(c.un)chips.push(['un','미판정 '+c.un]);
-      chips.push(['all','전체 '+rows.length]);
+      var segs=[{v:'rel',t:'관련 '+c.rel},{v:'irr',t:'제외 '+c.irr}];
+      if(c.un)segs.push({v:'un',t:'미판정 '+c.un});
+      segs.push({v:'all',t:'전체 '+rows.length});
       fl.style.display='flex';
-      fl.innerHTML='<span style="font-size:11px;color:var(--dim);font-weight:600;margin-right:2px">AI 선별</span>'
-        +chips.map(function(w){return '<button type="button" class="ana-chip'+(_smwState.flt===w[0]?' on':'')+'" onclick="_smwSetFlt(\''+w[0]+'\')">'+w[1]+'</button>';}).join('')
+      fl.innerHTML=_chipRow('AI 선별',segs,_smwState.flt,'_smwSetFlt')
         +'<span style="font-size:11px;color:var(--muted)">sonnet 5 · 3시간마다(08~19시) 최근 3일치</span>';
     }
   }
@@ -13338,7 +13339,19 @@ function _bizDrawChart(list,multi,divId,hgt){   // [260723] divId·hgt = 메인 
 }
 function _accordionize(bodyId){var body=document.getElementById(bodyId);if(!body)return;var kids=Array.prototype.slice.call(body.children);var groups=[],cur=null;kids.forEach(function(el){var t=(el.textContent||'').trim();if(/^\[\d+\]/.test(t)&&t.length<40){cur={head:el,body:[]};groups.push(cur);}else if(cur){cur.body.push(el);}});groups.forEach(function(g){var wrap=document.createElement('div');g.body.forEach(function(el){wrap.appendChild(el);});g.head.parentNode.insertBefore(wrap,g.head.nextSibling);g.head.style.cursor='pointer';g.head.style.userSelect='none';var ar=document.createElement('span');ar.textContent='▾ ';ar.style.cssText='color:#bbb;font-size:11px';g.head.insertBefore(ar,g.head.firstChild);g.head.onclick=function(){var open=wrap.style.display!=='none';wrap.style.display=open?'none':'';ar.textContent=open?'▸ ':'▾ ';if(!open&&window.Plotly){Array.prototype.slice.call(wrap.querySelectorAll('.plotly')).forEach(function(p){try{Plotly.Plots.resize(p);}catch(e){}});}};});}
 // UX #4: 공용 .fbar-seg 세그먼트로 렌더(선택=accent 채움). 핸들러 계약(fn(o)) 불변.
-function _chipRow(label,opts,cur,fn){return '<div class="fbar-seg"><span class="fbar-lbl">'+label+'</span>'+opts.map(function(o){var on=(cur||opts[0])===o;return '<button class="'+(on?'on':'')+'" onclick="'+fn+'(\''+o+'\')">'+o+'</button>';}).join('')+'</div>';}
+// [260807] 값≠라벨 허용(`{v:값,t:라벨}` · 문자열이면 종전대로 값=라벨) + **접근성 보강**.
+//   근거 = Primer SegmentedControl 접근성 규범(2026 실측): ⓐ 그룹에 이름을 준다(`role="group"`+`aria-label`)
+//   ⓑ 선택 표시는 `aria-current`(= `aria-pressed`/`aria-selected` 아님) ⓒ **radiogroup·tablist·toolbar 역할을 주지 마라**
+//   — 그 셋은 화살표 키 규칙이 서로 달라 보조기술 사용자가 「방향키로 옮겨지겠지」 하고 기대했다가 안 움직인다.
+//   구판엔 선택 상태가 **색으로만** 있었다(스크린리더에 안 들림) = 접근성 결손. 시각은 무변(속성만 추가).
+function _chipRow(label,opts,cur,fn){
+  return '<div class="fbar-seg" role="group" aria-label="'+escapeHtml(label)+'"><span class="fbar-lbl">'+label+'</span>'
+    +opts.map(function(o,i){
+      var v=(o&&typeof o==='object')?o.v:o, t=(o&&typeof o==='object')?o.t:o;
+      var on=(cur==null||cur==='')?(i===0):(cur===v);   // cur=0(전체) 같은 falsy 유효값을 첫 칸으로 오인하지 않게 null/''만 기본 취급
+      return '<button type="button" class="'+(on?'on':'')+'" aria-current="'+(on?'true':'false')+'" onclick="'+fn+'('+(typeof v==='number'?v:'\''+v+'\'')+')">'+escapeHtml(String(t))+'</button>';
+    }).join('')+'</div>';
+}
 function _bizSetRounds(b){_bizState.rounds=b;_bizRender();}
 function _bizSetRunDays(b){_bizState.rundays=b;_bizRender();}
 function _bizDrawGenreBench(divId,stO){var _bs=stO||_bizState;var div=document.getElementById(divId||'biz-genre-chart');if(!div||!window.Plotly)return;var all=_bizClean();var sel=_bs.types||{};var selTypes=Object.keys(sel).filter(function(t){return sel[t];});var rows=all.filter(function(r){return selTypes.length?selTypes.indexOf(r._type)>=0:true;});var sm={};rows.forEach(function(r){var k=r._year+'|'+r._name;if(!sm[k])sm[k]={occs:[],dates:{},genre:r._genre||'기타',year:r._year,name:r._name};sm[k].occs.push(r._occ);if(r._date)sm[k].dates[r._date.getFullYear()+'-'+r._date.getMonth()+'-'+r._date.getDate()]=1;});var order=['클래식','뮤지컬','대중','발레/연극','어린이·가족','기타'];var shows=Object.keys(sm).map(function(k){var s=sm[k];s.occ=s.occs.reduce(function(a,b){return a+b;},0)/s.occs.length;s.회차=s.occs.length;s.진행일=Object.keys(s.dates||{}).length||1;if(order.indexOf(s.genre)<0)s.genre='기타';return s;});var __rb=_bs.rounds||'전체';if(__rb!=='전체')shows=shows.filter(function(s){var c=s.회차;return __rb==='1회'?c<=1:(__rb==='2~4회'?(c>=2&&c<=4):c>=5);});var __db=_bs.rundays||'전체';if(__db!=='전체')shows=shows.filter(function(s){var d=s.진행일;return __db==='단일'?d<=1:(__db==='2~3일'?(d>=2&&d<=3):d>=4);});var byG={};shows.forEach(function(s){(byG[s.genre]=byG[s.genre]||[]).push(s);});var genres=order.filter(function(g){return byG[g]&&byG[g].length;});var cy=_bs.year;var traces=[];genres.forEach(function(g,gi){var arr=byG[g];var col=_BIZ_GENRE_COLORS[g]||'#9CA3AF';var hx=[],hy=[],ht=[],sx=[],sy=[],st=[];arr.forEach(function(s){var jit=gi+(Math.random()-0.5)*0.5;var lab=s.name+' ('+s.year+') '+s.occ.toFixed(1)+'%';if(s.year===cy){sx.push(s.occ);sy.push(jit);st.push(lab);}else{hx.push(s.occ);hy.push(jit);ht.push(lab);}});traces.push({type:'scatter',mode:'markers',x:hx,y:hy,text:ht,marker:{color:col,size:6,opacity:0.3},hovertemplate:'%{text}<extra></extra>',showlegend:false});if(sx.length)traces.push({type:'scatter',mode:'markers',x:sx,y:sy,text:st,marker:{color:col,size:12,symbol:'star',line:{color:'#fff',width:1}},hovertemplate:'⭐ %{text}<extra></extra>',showlegend:false});var mean=arr.reduce(function(a,s){return a+s.occ;},0)/arr.length;traces.push({type:'scatter',mode:'markers',x:[mean],y:[gi],marker:{color:col,size:15,symbol:'diamond',line:{color:'#333',width:1.5}},hovertemplate:g+' 평균 '+mean.toFixed(1)+'%<extra></extra>',showlegend:false});});if(!traces.length){div.innerHTML='<div style="color:#aaa;text-align:center;padding:24px;font-size:12px">장르 데이터 없음</div>';return;}var layout={height:300,margin:{t:10,r:20,b:40,l:100},paper_bgcolor:'#fff',plot_bgcolor:'#fff',font:{family:'inherit',size:11,color:'#444'},xaxis:{title:'점유율 %',range:[0,105],gridcolor:'#f2f2f2',zeroline:false},yaxis:{tickvals:genres.map(function(g,i){return i;}),ticktext:genres.map(function(g){return g+' ('+byG[g].length+')';}),autorange:'reversed',gridcolor:'#fafafa',zeroline:false},showlegend:false};Plotly.react(div,traces,layout,{responsive:true,displayModeBar:false});}
@@ -28983,7 +28996,7 @@ function _smViewHtml(){
       +'<span class="ve-val" id="sm-note"></span>'
     +'</div>'
     +'<div id="sm-ready" style="margin:10px 0 2px;display:flex;gap:6px;flex-wrap:wrap"></div>'
-    +'<div id="sm-win" style="display:none;gap:6px;flex-wrap:wrap;align-items:center;margin:12px 0 2px"></div>'
+    +'<div id="sm-win" style="display:none;margin:12px 0 2px"></div>'
     +'<div id="sm-out" style="margin-top:10px"><div class="u-empty">수집된 글을 불러오는 중…</div></div>';
 }
 // 갈래 칩 — 켜짐/끔을 smReady 그대로. 네이버 끔 = 신규발급 중단(260806 실측)이라 「발급 중단」으로 말한다(키 사냥 방지).
@@ -29031,7 +29044,11 @@ function _smAgeDays(it){
   return Math.max(0,(Date.now()-t)/86400000);
 }
 function _smSetWin(v){_smState.win=v;_smState.winTouched=true;_smRender();}
-// [260807 운영자 「3일 이내/7일 이내/30일 이내 따로 보이게」] 기간 칩 + 필터 렌더 — .ana-chip 정본(분석 보드 장르 필터와 같은 관용구), 칩마다 건수.
+// [260807 운영자 「3일 이내/7일 이내/30일 이내 따로 보이게」] 기간 줄 + 필터 렌더.
+// 부품 = **세그먼트 `.fbar-seg` 정본**(회차·진행일과 같은 빌더 `_chipRow` 한 벌). 칩(.ana-chip)이 아닌 이유 =
+//   2026 규범 실측(Primer·Material 3·Mobbin·Eleken): **칩은 「여러 개 고를 수 있다」를, 세그먼트는 「하나만」을 말한다** —
+//   기간은 상호배타라 세그먼트가 맞고, 권장 칸 수 2~5와도 맞는다(여기 4). 구판은 칩이라 「3일과 7일을 같이 켤 수 있나?」로 읽혔다.
+// 칸마다 건수를 붙이는 이유 = 대시보드 필터 규범 「빈 결과로 들어가게 하지 마라」 — 0이면 누르기 전에 보인다(비활성 상태는 이 레포에 선례가 없어 안 만든다).
 function _smRender(){
   var out=document.getElementById('sm-out'),wl=document.getElementById('sm-win');
   if(!out)return;
@@ -29045,12 +29062,11 @@ function _smRender(){
   }
   var ages=rows.map(_smAgeDays);
   var cnt=function(w){return w?ages.filter(function(a){return a<=w;}).length:rows.length;};
-  var wins=[[3,'3일 이내'],[7,'7일 이내'],[30,'30일 이내'],[0,'전체']];
-  if(wl){wl.style.display='flex';wl.innerHTML='<span style="font-size:11px;color:var(--dim);font-weight:600;margin-right:2px">기간</span>'
-    +wins.map(function(w){return '<button type="button" class="ana-chip'+(_smState.win===w[0]?' on':'')+'" onclick="_smSetWin('+w[0]+')">'+w[1]+' '+cnt(w[0])+'</button>';}).join('');}
+  if(wl){wl.style.display='';
+    wl.innerHTML=_chipRow('기간',[3,7,30].map(function(w){return {v:w,t:w+'일 이내 '+cnt(w)};}).concat([{v:0,t:'전체 '+rows.length}]),_smState.win,'_smSetWin');}
   var h='';
   for(var i=0;i<rows.length;i++){if(!_smState.win||ages[i]<=_smState.win)h+=_smRow(rows[i]);}
-  if(!h)h='<div class="u-empty">최근 '+_smState.win+'일 안엔 없어요 — 위 기간 칩으로 넓혀 보세요</div>';
+  if(!h)h='<div class="u-empty">최근 '+_smState.win+'일 안엔 없어요 — 위 기간 줄에서 넓혀 보세요</div>';
   var shown=cnt(_smState.win);
   if((_smState.win&&shown<rows.length)||_smState.total>rows.length)h+='<div class="ve-val" style="padding:10px 2px">'+(_smState.win?('최근 '+_smState.win+'일 '+shown+'건'):('불러온 '+rows.length+'건'))+' · 보관 '+_smState.total+'건(상한 300)</div>';
   out.innerHTML=h;

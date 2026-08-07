@@ -33,7 +33,7 @@ if(MODE==='after'){
   await p.evaluate(()=>{_ddCloseAll();openSearchMonitor();});
   await p.waitForTimeout(1400);
   const info=await p.evaluate(()=>{const t=document.querySelectorAll('#smw-body tbody tr').length;const s=(document.getElementById('smw-sum')||{}).innerText||'';
-    const chips=Array.from(document.querySelectorAll('#smw-flt .ana-chip')).map(b=>b.textContent.trim());
+    const chips=Array.from(document.querySelectorAll('#smw-flt .fbar-seg button')).map(b=>b.textContent.trim());
     return {rows:t,chips,sum:s.slice(0,160)};});
   console.log('modal(관련 기본):',JSON.stringify(info));
   await p.screenshot({path:`${OUT}/smw_after_modal.png`});
