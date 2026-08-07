@@ -2734,7 +2734,8 @@ __name(ghDecodeB64, "ghDecodeB64");
 // 검색 모니터링 — 「예울마루」가 어디에 걸렸나 (운영자 260806 · 절차 문서 = docs/reports/260805_검색모니터링_키발급_절차.html)
 //   출처 3갈래, 전부 **자격증명이 있을 때만** 켜진다(미설정 = 그 갈래만 조용히 건너뜀 · 앱 나머지 무관):
 //     ① 구글  = Google Alerts **RSS**(키 불요 · env.GALERT_RSS) — 구글 Custom Search JSON API는 신규 가입이 막혀 대안이 이것뿐
-//     ② 네이버 = 검색 오픈 API(env.NAVER_SEARCH_ID/SECRET · 무료 25,000회/일) 블로그·뉴스·카페글·웹문서
+//     ② 네이버 = 검색 오픈 API(env.NAVER_SEARCH_ID/SECRET) — ⛔ 260806 신규 발급 소멸 실측 · 키 확보 시에만 켜짐(코드는 존치)
+//     ②′ 카카오(다음) = Daum 검색 REST API(env.KAKAO_REST_KEY · 무료 쿼터) 웹문서·블로그·다음카페 — 네이버 카페 구멍의 실질 대체
 //     ③ 공연  = KOPIS OpenAPI(env.KOPIS_KEY) — 네이버 플레이스 「공연·전시」 탭의 원천. ⚠ **공연 전용(전시는 안 나온다)**
 //   ⚠ RSS 주소엔 운영자 구글 계정 ID가 들어간다 — 이 레포는 **Public**이라 코드에 박지 않고 env로만 받는다(GCAL_ICS_URL 선례).
 //   ⚠ Q28(260731 운영자 「홍보 알림 당분간 없애줘」) 준수 — 이 스캔은 **알림을 쏘지 않는다**. KV에 쌓고 API로만 내준다.
@@ -2750,6 +2751,12 @@ var SM_NAVER_KINDS = [
   { ep: "news", label: "뉴스", sort: "date" },
   { ep: "cafearticle", label: "카페글", sort: "date" },
   { ep: "webkr", label: "웹문서", sort: "" }
+];
+// 카카오(다음) 3갈래 — 운영자 260807 「다음 등 주요 포털까지」. 네이버 카페 구멍(robots가 Googlebot 전면 차단)의 실질 대체이기도 하다.
+var SM_KAKAO_KINDS = [
+  { ep: "web", label: "웹문서" },
+  { ep: "blog", label: "블로그" },
+  { ep: "cafe", label: "카페글" }
 ];
 
 // HTML 엔티티 해제 + 태그 제거.
@@ -2893,6 +2900,32 @@ async function smFromNaver(env, keywords) {
 }
 __name(smFromNaver, "smFromNaver");
 
+// ②′ 카카오(다음) — Daum 검색 REST API(공식 문서 실측 260807: dapi.kakao.com/v2/search/{web,blog,cafe} ·
+//   헤더 `Authorization: KakaoAK <REST키>` · sort=recency · size≤50 · documents[].{title,contents,url,datetime}).
+//   카카오디벨로퍼스 앱의 REST API 키 = env.KAKAO_REST_KEY. 티스토리·브런치·다음카페가 이 축으로 들어온다.
+async function smFromKakao(env, keywords) {
+  const key = env.KAKAO_REST_KEY;
+  if (!key) return { on: false, items: [], note: "KAKAO_REST_KEY 미설정" };
+  const items = [];
+  for (const kw of keywords) {
+    for (const g of SM_KAKAO_KINDS) {
+      try {
+        const u = "https://dapi.kakao.com/v2/search/" + g.ep + "?sort=recency&size=20&query=" + encodeURIComponent(kw);
+        const r = await smFetch(u, { headers: { Authorization: "KakaoAK " + key, "User-Agent": "yeulmaru-promo-worker" } });
+        if (!r.ok) { console.error("[sm/kakao]", g.ep, r.status); continue; }
+        const j = await r.json();
+        for (const d of (j && j.documents) || []) {
+          const link = smText(d.url || "");
+          if (!link) continue;
+          items.push({ src: "kakao", kind: g.label, title: smText(d.title) || link, link, date: String(d.datetime || "").slice(0, 10), kw });
+        }
+      } catch (e) { console.error("[sm/kakao]", g.ep, e); }
+    }
+  }
+  return { on: true, items };
+}
+__name(smFromKakao, "smFromKakao");
+
 // KOPIS 응답(<db> 반복) → 표준 항목. 시설명이 우리 것이 아닌 건 여기서 버린다(폴백 경로 대비).
 //   id(mt20id)를 함께 남긴다 — 새 공연의 상세(가격·예매처)를 물을 때 필요.
 function smKopisRows(xml, fclt) {
@@ -3018,12 +3051,12 @@ __name(smLoad, "smLoad");
 // 스캔 1회 — 켜진 갈래를 모아 링크 해시로 중복을 걷어내고 새 것만 앞에 쌓는다. 알림 발화 0(Q28).
 async function smScan(env) {
   const kws = String(env.MONITOR_KEYWORDS || "예울마루").split(",").map((s) => s.trim()).filter(Boolean).slice(0, 5);
-  const [g, n, k] = await Promise.all([smFromAlerts(env), smFromNaver(env, kws), smFromKopis(env)]);
+  const [g, n, kk, k] = await Promise.all([smFromAlerts(env), smFromNaver(env, kws), smFromKakao(env, kws), smFromKopis(env)]);
   const st = await smLoad(env);
   const seen = new Set(st.seen);
   const stamp = new Date().toISOString();
   const fresh = [];
-  for (const it of g.items.concat(n.items, k.items)) {
+  for (const it of g.items.concat(n.items, kk.items, k.items)) {
     const h = smHash(it.link);
     if (seen.has(h)) continue;
     seen.add(h);
@@ -3037,9 +3070,9 @@ async function smScan(env) {
   const items = fresh.concat(st.items).slice(0, SM_MAX_ITEMS);
   const last = {
     at: stamp, added: fresh.length,
-    sources: { google: g.on ? g.items.length : null, naver: n.on ? n.items.length : null, kopis: k.on ? k.items.length : null },
+    sources: { google: g.on ? g.items.length : null, naver: n.on ? n.items.length : null, kakao: kk.on ? kk.items.length : null, kopis: k.on ? k.items.length : null },
     kopisMode: k.mode || null,
-    notes: [g.note, n.note, k.note].filter(Boolean)
+    notes: [g.note, n.note, kk.note, k.note].filter(Boolean)
   };
   try { await env.ops_kv.put(SM_KEY, JSON.stringify({ items, seen: Array.from(seen).slice(-SM_MAX_SEEN), last })); }
   catch (e) { console.error("[sm/save]", e); }
@@ -3052,6 +3085,7 @@ function smReady(env) {
   return {
     google: !!env.GALERT_RSS,
     naver: !!(env.NAVER_SEARCH_ID && env.NAVER_SEARCH_SECRET),
+    kakao: !!env.KAKAO_REST_KEY,
     kopis: !!env.KOPIS_KEY
   };
 }
@@ -3081,7 +3115,7 @@ var index_default = {
     }
     // [260806 운영자] 검색 모니터링 스캔 — 매시 첫 틱 1회(*/15 크론에서 시간당 1회 · 구글/네이버에 과하지 않은 간격).
     //   갈래가 하나도 안 켜졌으면 아예 안 돈다(=KV 왕복 0). ⚠ 알림 발화 0 — Q28(「홍보 알림 당분간 없애줘」) 준수.
-    if (kst.getUTCMinutes() < 15 && (env.GALERT_RSS || (env.NAVER_SEARCH_ID && env.NAVER_SEARCH_SECRET) || env.KOPIS_KEY)) {
+    if (kst.getUTCMinutes() < 15 && (env.GALERT_RSS || (env.NAVER_SEARCH_ID && env.NAVER_SEARCH_SECRET) || env.KAKAO_REST_KEY || env.KOPIS_KEY)) {
       ctx.waitUntil(smScan(env).then((r) => console.log("[sm]", JSON.stringify(r))).catch((e) => console.error("sm scan", e)));
     }
     // [260806 운영자] AI 홍보 자동 브리핑 — 매일 KST 08:30 틱에 서버가 포트폴리오 팩을 조립해 추론 디스패치
@@ -3341,7 +3375,7 @@ var index_default = {
       }
       if (url.pathname === "/api/monitor/scan" && request.method === "POST") {
         const rd = smReady(env);
-        if (!rd.google && !rd.naver && !rd.kopis) return json({ error: "no_source", note: "GALERT_RSS / NAVER_SEARCH_* / KOPIS_KEY 중 하나는 있어야 한다", ready: rd }, env, 503);
+        if (!rd.google && !rd.naver && !rd.kakao && !rd.kopis) return json({ error: "no_source", note: "GALERT_RSS / NAVER_SEARCH_* / KAKAO_REST_KEY / KOPIS_KEY 중 하나는 있어야 한다", ready: rd }, env, 503);
         try { return json({ ok: true, ready: rd, ...(await smScan(env)) }, env); }
         catch (e) { console.error("[sm/scan]", e); return json({ error: String(e) }, env, 500); }
       }
