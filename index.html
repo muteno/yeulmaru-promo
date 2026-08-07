@@ -5502,7 +5502,7 @@ function buildNav(){
     };
     // 세부메뉴 보유 메뉴 = 호버 즉시 드롭다운(운영자 260709 "바로" — 스침 오발 방지 가드 120ms만). 다른 팝업이 열려 있으면 안 뺏음.
     // [260731] 대메뉴 4종 전부 세부 보유(대시보드·캘린더는 클릭=화면 전환 + 호버=세부 — 구 prodreg "둘다" 패턴)
-    var _sub=(m.id==='content')?_contentMenuBuild:(m.id==='biz')?_bizMenuBuild:(m.id==='cal')?_calMenuBuild:(m.id==='playzone')?_playzoneMenuBuild:null;   // [260803] sales(_salesMenuBuild) 제거 — 대메뉴 폐지
+    var _sub=(m.id==='content')?_contentMenuBuild:(m.id==='biz')?_bizMenuBuild:(m.id==='cal')?_calMenuBuild:(m.id==='aipromo')?_aipromoMenuBuild:(m.id==='playzone')?_playzoneMenuBuild:null;   // [260803] sales(_salesMenuBuild) 제거 — 대메뉴 폐지 · [260807] aipromo 세부 3종 신설(운영자)
     if(_sub){ b.setAttribute('aria-haspopup','true');   // navigation-01 이식 — 세부메뉴 보유 표시(a11y · 딤 축과 동일 문법)
       // [260723 운영자] navigation-01 모바일 문법 — 세부메뉴 = 인라인 아코디언(내용 = 데스크탑 드롭다운과 같은 빌더 재사용 · 항목 탭 = 패널 닫고 이동)
       var _acc=document.createElement('div');_acc.className='nav-acc';
@@ -6950,7 +6950,7 @@ function _srailPgOf(idx,id,name){ if(!idx)return null; return (id&&idx.byId[Stri
 var _mainView=(function(){try{return sessionStorage.getItem('mvView')==='cal'?'cal':'biz';}catch(_e){return 'biz';}})();   // [260723c 선택값] 상태 저장 = 이번 접속만(sessionStorage) · 새 접속 = 항상 사업 실적(운영자 「항상 메인」)
 var _bizmState={year:null,types:{},page:3,rdet:0,live:0,metric:'rev',leftId:null,rightId:null};   // 인라인 보드 전용 상태(page: 좌 열이 그리는 면 · [260806-9] metric: 3면 「매출(rev) ↔ 관객수(aud)」 토글 — 기본 = 매출(운영자 「지금이 매출이고」) · [260808] leftId·rightId = 두 열이 **지금 화면에 들고 있는 내용의 신원** — 넘김 때 「바뀐 열만 다시 그린다」 판정의 정본(_bizLeftNeedsRedraw·_bizRightNeedsRedraw) · [260805 2차→260809] rdet: 우 열이 그리는 면 0|1|2(0 판매 실적 · 1 판매현황 상세 3-2 · 2 고객 분석 4면) — 좌 면과 분리된 축 · 읽기는 `_bizRD()`로만(진위 비교 금지) · [260806] live: 3면 「전체(0) ↔ 판매중(1)」 토글 — 구 domain(분야 축)은 칩 철거와 함께 폐지) — 모달(_bizState·_yrState 'yr')과 분리·공유는 _yrState뿐(동기 재렌더)
 var _BIZ_HALF_CH=230, _BIZ_HALF_CH_MIN=150;   // [260806] 3면 하단 반반 줄의 막대 높이 — 공연 막대(430)의 절반 급 · [260806 2차] 낮은 화면에선 _bizFitSeason이 MIN까지만 줄인다(늘리진 않는다)
-// [260807-19] 반반 카드(전시·교육)의 우상단 단위 표기 **빈 칸** — 글자는 차트가 축을 정한 뒤 `_bizUnitWrite`가 채운다
+// [260807-20] 반반 카드(전시·교육)의 우상단 단위 표기 **빈 칸** — 글자는 차트가 축을 정한 뒤 `_bizUnitWrite`가 채운다
 //   (공연 카드가 260806-10부터 쓰던 `data-bizunit` 문법을 세 카드가 같이 쓴다 = 축과 표기가 갈릴 수 없다).
 //   ⚠ 바깥 `.sub` 껍데기(float:right·`--dim`)는 `_bizHalfCard`가 그대로 씌운다 = 잉크·자리 무접촉.
 var _BIZ_UNIT_SLOT='<span data-bizunit></span>';
@@ -7087,9 +7087,14 @@ function _ryDodPick(p){
 function _ryDodDate(bd){ var s=String(bd||'').replace(/[^0-9]/g,''); return (s.length===8)?(parseInt(s.slice(4,6),10)+'.'+parseInt(s.slice(6,8),10)):''; }
 function _ryDodCell(p){
   var d=_ryDodPick(p);
-  if(!d)return '<span style="color:var(--muted);font-size:12px">데이터 부족</span>';
+  if(!d)return '<span style="color:var(--dim);font-size:12px">데이터 부족</span>';
   var unit=p._unit||'석';
-  var tok=function(v){ return (v>0)?'--green':((v<0)?'--danger':'--muted'); };
+  // ── [260807-5 운영자 「너무 색이 여기 많아서 — **회색·검정·강조색1·강조색2만** 쓰도록 하자 · **+ 된 거는 강조색1 · −인 거는 그냥 회색**」] ──
+  //   이 칸의 잉크 사다리를 **둘**로 줄인다: 늘었으면 `--accent`(강조색1) · 줄었거나 그대로면 `--dim`(회색 하나).
+  //   ⚠ 구판 `--green`/`--danger`는 이 두 칸에서 **폐지** — 운영자 색 예산(4잉크) 밖이다. 부호 정보는 안 잃는다:
+  //     ① 글자 자체가 `+`/`−`/`±`를 달고 있고 ② 늘었을 때만 강조색이 붙는다(색+부호 이중단서 유지 · 기틀 §3.5③).
+  //   ⚠ 좌석과 금액은 **각자의 부호**로 칠한다 — 「0석인데 −2,000원」처럼 둘의 방향이 갈리는 행이 실제로 있다(운영자 260807 지목).
+  var tok=function(v){ return (v>0)?'--accent':'--dim'; };
   var sgn=function(v){ return (v>0)?'+':((v<0)?'':'±'); };   // 음수는 숫자가 이미 부호를 갖는다 · 0 = ±(요약 줄과 같은 문법)
   var num=function(v){ return sgn(v)+Math.round(v).toLocaleString(); };
   var tip=(d.from?(_ryDodDate(d.from)+' → '):'')+_ryDodDate(d.to)+' 대비'
@@ -7097,9 +7102,10 @@ function _ryDodCell(p){
   return '<span title="'+escapeHtml(tip)+'" style="display:inline-block;vertical-align:middle;text-align:right;width:'+_RY_DOD_W+'px">'
     +'<span style="display:block;font-variant-numeric:tabular-nums;white-space:nowrap">'
       +'<b style="color:var('+tok(d.seat)+');font-weight:800;font-size:14.5px">'+num(d.seat)+unit+'</b>'
-      +((d.pct===null)?'':'<span style="color:var(--dim);font-size:11.5px;font-weight:700;margin-left:5px">'+sgn(d.pct)+(Math.abs(d.pct)>=10?Math.round(d.pct):(Math.round(d.pct*10)/10))+'%</span>')
+      // [260807-5] 증감률은 **제 좌석과 같은 잉크**(tok) — 줄·0이면 회색 하나, 늘면 강조색1. 260807-4의 무변동 예외는 이 사다리에 흡수됐다.
+      +((d.pct===null)?'':'<span style="color:var('+tok(d.seat)+');font-size:11.5px;font-weight:700;margin-left:5px">'+sgn(d.pct)+(Math.abs(d.pct)>=10?Math.round(d.pct):(Math.round(d.pct*10)/10))+'%</span>')
     +'</span>'
-    +'<span style="display:block;font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;margin-top:2px;white-space:nowrap;color:var('+((d.mny===null)?'--muted':tok(d.mny))+')">'
+    +'<span style="display:block;font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;margin-top:2px;white-space:nowrap;color:var('+((d.mny===null)?'--dim':tok(d.mny))+')">'
       +((d.mny===null)?'—':(num(d.mny)+'원'))+'</span></span>';
 }
 function _srailTableHtml(perfs,exs){
@@ -8035,7 +8041,7 @@ function _bizExhibRows(year){
           start:sd||ed||null,end:ed||sd||null,cnt:m.days||0,
           paid:(m.tot||m.paid||0),seat:0,avg:0,                  // 목표관객 축 없음(거울엔 목표 「매출」뿐) → 달성률 생략
           _rev:((m.rev>0)?m.rev:null),_sold:((m.tot>0)?m.tot:null),
-          // [260807-19 운영자 「정산서에 인원과 함께 누적 판매 금액도 담겨져 있다 — 매출 토글 켜질 때 전시도 바뀌게」]
+          // [260807-20 운영자 「정산서에 인원과 함께 누적 판매 금액도 담겨져 있다 — 매출 토글 켜질 때 전시도 바뀌게」]
           //   ⚠ 구판은 거울 daily의 **4번째 칸(누계 금액)을 통째로 버렸다** — 파일 머리 주석이 이미
           //   `[기준일자, 누계 총인원, 누계 유료, 누계 총 금액(원)]`이라 적고 있는데 옮겨 담는 자리에서 셋만 집었다.
           //   그래서 정산서 금액이 레포에 **이미 들어와 있는데도** 화면에 매출 축을 세울 수가 없었다(값 창작 0 계약상 빈 축).
@@ -8111,7 +8117,7 @@ function _bizEduOpsIdx(year){
 // ⚠ [260807] 이 표는 이제 **두 화면을 먹인다** — 교육 카드(아래 attach)와 **연간 실적 `_YR` 교육 잠정치**
 //   (`tools/build_annual_yr.mjs`의 eduFromMirror가 이 리터럴을 원문 실행해 읽는다 = 160이 한 벌로 유지된다).
 //   여기 값을 고치면 `node tools/build_annual_yr.mjs --sync-partial --from-live`를 같이 돌려 _YR을 다시 찍어라.
-// ⚠ [260807-19 운영자 「교육은 지금 있는거 매출이 **160 × 3만5천원**이야 · 이거로 수치 db에 넣어서 교육도 바뀌게」
+// ⚠ [260807-20 운영자 「교육은 지금 있는거 매출이 **160 × 3만5천원**이야 · 이거로 수치 db에 넣어서 교육도 바뀌게」
 //   + 「교육 실제로 팔리는건 **꾸준히 팔려왔다** — 판매 기간을 5월부터 6월까지 두개로 나누고 **65 > 160(+95)** 이렇게
 //   꺾은선으로 동일하게(기획전시처럼)」] 이 표가 **한 프로그램의 확정 수치를 통째로** 진다 — 수량·단가·월별 누계 한 줄.
 //   · `v` = 판매 수량(명) · `p` = **1인 단가(원)** → 매출 = v × p (곱은 화면이 한다 = 5,600,000이 두 벌로 안 적힌다)
@@ -8136,7 +8142,7 @@ function _bizEduMoParse(x){
   if(bad||!out.length||Math.round(out[out.length-1][1])!==Math.round(x.v))return null;
   return out;
 }
-// [260807-19] 반환을 **행 자체**로 바꾼다(구판 = 수량 하나) — 같은 3조건으로 찾아 놓고 단가·월별 누계를 다시 찾으면
+// [260807-20] 반환을 **행 자체**로 바꾼다(구판 = 수량 하나) — 같은 3조건으로 찾아 놓고 단가·월별 누계를 다시 찾으면
 //   판정이 두 벌이 되고, 두 벌은 갈린다(이 파일이 _YR·폴백표에 반복해 못박은 그 축). 호출측이 `.v`를 집으면 종전 그대로다.
 function _bizEduFallbackRow(name,end){
   if(!end||!end.getFullYear)return null;
@@ -8172,7 +8178,7 @@ function _bizEduDailyIdx(year){
   try{
     var rows=(typeof _salesState!=='undefined'&&_salesState&&_salesState.daily&&_salesState.daily.rows)||[];
     if(!rows.length)return null;
-    // [260807-19] **금액 축도 같이 접는다** — 매출 토글이 켜지면 이 선은 「수강생 누계」가 아니라 「매출 누계」를 그린다.
+    // [260807-20] **금액 축도 같이 접는다** — 매출 토글이 켜지면 이 선은 「수강생 누계」가 아니라 「매출 누계」를 그린다.
     //   원천 = 같은 행의 `합계금액`(= 공연 카드·전일 대비가 이미 쓰는 그 열 · `_salesBuild` L6146과 같은 자) →
     //   새 집계 규칙 0. 좌석·금액을 **따로** 접는 이유 = 금액만 비어 있는 행이 섞여도 좌석 시계열이 안 무너진다.
     var last={}, lastM={};
@@ -8225,7 +8231,7 @@ function _bizEduMonthRows(year){
     if(v!=null){ g.paid=v; g._sold=v; }
     if(o&&o.genre)g._g2=o.genre;
     if(p&&isFinite(p.money)&&p.money>0)g._rev=p.money;
-    // [260807-19 운영자 「교육은 지금 있는거 매출이 160 × 3만5천원 · 이거로 수치 db에 넣어서 교육도 바뀌게」]
+    // [260807-20 운영자 「교육은 지금 있는거 매출이 160 × 3만5천원 · 이거로 수치 db에 넣어서 교육도 바뀌게」]
     //   폴백 매출 = **수량 × 단가**(둘 다 위 표의 확정값) — 곱은 여기서 한 번만 한다(5,600,000을 어디에도 안 적는다).
     //   ⚠ 계약은 종전 그대로 **실값이 이긴다** — 판매 축 금액(`p.money`)이 이미 들어왔으면 위 줄이 잡고 이 줄은 안 탄다.
     if(g._rev==null&&fbr&&fbr.v>0&&fbr.p>0)g._rev=fbr.v*fbr.p;
@@ -8235,7 +8241,7 @@ function _bizEduMonthRows(year){
     if(g._st!=='ended'){ var d0=dlyIdx?dlyIdx[k]:null;
       if(d0&&d0.mo&&d0.mo.length)g._mo=d0.mo;
       if(d0&&d0.rev&&d0.rev.length)g._moRev=d0.rev; }
-    // [260807-19 운영자 「교육 실제로 팔리는건 **꾸준히 팔려왔다** — 판매 기간을 5월부터 6월까지 두개로 나누고
+    // [260807-20 운영자 「교육 실제로 팔리는건 **꾸준히 팔려왔다** — 판매 기간을 5월부터 6월까지 두개로 나누고
     //   **65 > 160(+95)** 이렇게 꺾은선으로 동일하게 표현해주라 · **기획전시처럼**」]
     //   → 구 260805의 「끝난 교육은 막대 그대로」는 **이 지시로 개정**된다. 그때 막대였던 근거는 「끝난 교육의 정본이
     //   운영대장 한 값이라 **시계열이 없다**」였는데, 운영자가 그 시계열(5월 65 → 6월 160)을 확정해 줬으므로 근거가 사라졌다.
@@ -8562,7 +8568,7 @@ function _bizYearZones(y,x0,x1,dim,cut,tone){
   if(tx<x1){ box(tx,x1,_yrHexA(th,_bizZoneAlpha(th))); note(tx,x1,'<b>진행·예정</b>',th); }   // 강조 = 진행·예정 쪽(운영자 260806) · 색 = 분야색(운영자 260805) · 세기 = 교육 기준 정규화(운영자 260808)
   return {shapes:sh,notes:an};
 }
-// ── [260807-19] 차트 값 서식 = **최상위 한 벌** ────────────────────────────────────────────────
+// ── [260807-20] 차트 값 서식 = **최상위 한 벌** ────────────────────────────────────────────────
 //   왜 여기로 올렸나 = 매출 토글이 전시 반쪽까지 확장되면서, 같은 「반올림 정수 · 0으로 읽히면 안 적음」 규칙을
 //   `_bizDrawSalesBars`(막대)와 `_bizDrawExhibMonthly`(꺾은선) **두 함수가 같이** 써야 한다. 두 벌로 두면 갈린다
 //   (이 레포가 260809·260813에 값 라벨로 이미 세 번 겪은 그 사고 — 「같은 규칙 두 벌 금지」).
@@ -8577,7 +8583,7 @@ function _bizVFmt(v){
 //   ⚠ 받는 값은 언제나 **축 단위**(매출 = 백만원)다 — 되곱하는 자리를 여기 하나로 두어 ×1e6이 흩어지지 않게 한다.
 function _bizAxTxt(v,rev){ return rev?_bizMoney(v*1e6):(Math.round(v).toLocaleString()+'명'); }
 // 카드 우상단 「(단위: …)」 = **축을 정한 그 자리에서** 쓴다(축과 표기가 갈릴 수 없다 · 자리가 없는 카드면 조용히 지나간다).
-//   ⚠ [260807-19] 앵커 찾기를 `parentNode` → **`closest('.bizm-card')`**로 고친다. 반반 카드(전시·교육)는
+//   ⚠ [260807-20] 앵커 찾기를 `parentNode` → **`closest('.bizm-card')`**로 고친다. 반반 카드(전시·교육)는
 //     `_bizHalfCard`가 차트를 **flex 속칸 한 겹 안**에 넣어서, 구판 `div.parentNode.querySelector('.ct …')`는
 //     그 속칸에서 `.ct`를 못 찾고 **조용히 아무것도 안 썼다** — 교육 카드가 토글과 무관하게 「(단위: 명)」 하드코딩
 //     문자열을 달고 있던 진짜 이유가 이것이다(공연 카드만 구조가 맞아 우연히 동작했다).
@@ -8602,7 +8608,7 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
   //   이 함수는 원래 「매출이 조인됐으면 매출(백만 원) · 아니면 판매 인원(명)」으로 갈리게 돼 있었고(폴백 경로),
   //   값·라벨 서식·y축 제목·툴팁·축 중략이 전부 그 갈림목 하나(hasRev)를 보고 있다. 관객수 모드 = 그 갈림목을
   //   **명 쪽으로 고정**한다 = 새 계산·새 축·새 형태 0(집계값은 종전 그대로 · 창작 0).
-  //   ⚠ [260807-19 개정] 구 「교육 반쪽(ED)은 수강생 한 축뿐이라 이 토글 밖」은 **폐지**된다 — 운영자가 교육 매출
+  //   ⚠ [260807-20 개정] 구 「교육 반쪽(ED)은 수강생 한 축뿐이라 이 토글 밖」은 **폐지**된다 — 운영자가 교육 매출
   //     (160 × 35,000)을 확정해 수치 DB(`_BIZ_EDU_SOLD`)에 실었으므로 교육에도 매출 축이 생겼다. 이제 세 분야가
   //     **한 토글로 같이 갈아탄다**(그게 260806-9가 이 토글을 만든 이유 = 「셋이 같은 자 위에 서서 통째 비교」).
   //     카드 눈금 100~400 계약은 **수강생 축의 계약**이라 그대로 살아 있다 — 매출 축일 땐 애초에 걸리지 않는다(아래 _edTop).
@@ -8610,7 +8616,7 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
   var hasRev=!AUD&&rows.some(function(g){return g._rev!=null&&g._rev>0;});
   // ⚠ 매출 미조인(_rev==null)은 **0이 아니라 null** — 0으로 떨어뜨리면 "0.0" 막대가 깔려 「하나도 안 팔렸다」로 읽힌다(평의회6).
   //   null = 막대 없음 → 아래 파선 자리(값 없음)가 그 사업의 자리를 지킨다(시간축엔 이름 눈금이 없어, 안 그리면 통째로 사라진다).
-  // [260805 운영자] 교육도 **실값이 있으면 막대**로. [260807-19] 갈림목(hasRev)은 이제 공연·교육이 **같은 식**을 탄다 —
+  // [260805 운영자] 교육도 **실값이 있으면 막대**로. [260807-20] 갈림목(hasRev)은 이제 공연·교육이 **같은 식**을 탄다 —
   //   구판의 ED 전용 가지(`_sold` 고정)는 매출 축을 원천 봉쇄하던 자리였고, 값 자체는 두 식이 같다(교육은 `paid`=`_sold`).
   var valOf=function(g){ return hasRev?((g._rev!=null)?(g._rev/1e6):null):((g._sold!=null&&g._sold>0)?g._sold:(g.paid>0?g.paid:null)); };
   var unit=hasRev?'백만원':'명';   // [260806-10] 표기 = 「(단위: 백만원)」(운영자) · 상세 표 머리글 「(단위: 만원)」과 같은 붙임 표기 — 구 y축 세로 제목의 「백만 원」(띄어쓰기)에서 통일
@@ -8643,7 +8649,7 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
   //   (`_bizDrawExhibMonthly`: 진행중 = 빈 동그라미 · 선 뒤 고유색 50% 면 · 값 라벨 = 꼭자락 하나)을 그대로 얹는다.
   //   같은 y축(수강생 명)·같은 1~12월 x축 위라 **끝난 교육의 막대와 한 그림에서 읽힌다** = 새 축·새 형태 0.
   //   ⚠ 원천이 없으면(_mo 없음) 종전 그대로 — 막대(실값 있음)거나 파선 자리(값 없음). 값 창작 0.
-  //   [260807-19] 축이 매출이면 **금액 시계열**(`_moRev` · 원)을 같은 자로 그린다 — 백만원 환산은 막대(`valOf`)와
+  //   [260807-20] 축이 매출이면 **금액 시계열**(`_moRev` · 원)을 같은 자로 그린다 — 백만원 환산은 막대(`valOf`)와
   //     **같은 나눗셈 한 벌**(÷1e6)이라 선과 막대가 한 축 위에서 어긋날 수 없다. 금액 시계열이 없으면 선을 안 그린다
   //     (수강생 시계열을 금액 축에 얹으면 「명」이 「백만원」으로 둔갑한다 = 값 창작).
   var lnOf=function(g){ if(!ED)return null;
@@ -8673,7 +8679,7 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
   //     0을 지우자」(겹침 대책 = 뜻을 버려 모양을 얻음)였고, 여기서 지우는 근거는 **그 글자가 말하는 게 없다**는 것이다.
   //     겹침 대책은 종전 그대로 흰 반투명 판(ⓕ)이 진다 = 생략 금지 계약 무접촉.
   //   ⚠ 지우는 건 **글자 한 벌**뿐 — 값·툴팁·집계·자리·막대(높이 0으로 종전대로 선다)·히트존 전부 무접촉.
-  var vfmt=_bizVFmt;   // [260807-19] 서식 자체는 **최상위 한 벌**(_bizVFmt)로 올렸다 — 전시 반쪽도 같은 자를 써야 하기 때문(아래 참조)
+  var vfmt=_bizVFmt;   // [260807-20] 서식 자체는 **최상위 한 벌**(_bizVFmt)로 올렸다 — 전시 반쪽도 같은 자를 써야 하기 때문(아래 참조)
   // [260804] 축 중략 — 그릴 자리만 접는다(값·라벨·툴팁은 실값). plotPx = 실제 그림 높이(위 18 · 아래 34 여백 제외 — 45° 이름축 폐지로 아래 여백 96→34)
   var plotPx=Math.max(60,hgt-(18+_BIZ_AXB));   // [260806-5] 위 여백 18 + 아래 여백 _BIZ_AXB — 상수 34를 박아두면 아래 여백을 늘린 만큼 중략이 없는 자리를 있다고 착각한다(그림 영역 = 높이 − 두 여백) · [260809] 값 라벨 겹침도 이 자로 px 환산한다(자가 둘이면 판정이 갈린다)
   var brk=ED?null:_bizBarBreak(vals,plotPx);
@@ -8729,7 +8735,7 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
     marker:{color:rows.map(gcol),line:{width:0}},   // [260806 2차] 상태별 opacity·테두리 폐지 = 막대 농도 전부 동일 · 상태는 음영 구획이 말한다
     customdata:rows.map(function(g){return [g.name,(ED?(g._g2||'예술교육'):(g.genre||'-')),Math.round((g._sold!=null&&g._sold>0)?g._sold:g.paid),(g._rev!=null?_bizMoney(g._rev):'—'),(g.avg||0).toFixed(1),stName(g),dTxt(g),((ED&&g._vsrc)?(' · '+g._vsrc+'값'):'')];}),   // [260805] 교육 = 프로그램 시트/운영대장 장르(예: 인문학) · [7] = 값 출처 꼬리표(DB 미조인 폴백일 때만 · _BIZ_EDU_SOLD 주석)
     hovertemplate:'<b>%{customdata[0]}</b><br>%{customdata[6]} · %{customdata[5]} · %{customdata[1]}<br>'   // 눈금엔 달만 남는다 → 사업명·정확한 일자는 툴팁이 진다
-      +(ED?('수강생 %{customdata[2]:,}명'+(hasRev?'<br>매출 %{customdata[3]}':'')+'%{customdata[7]}<extra></extra>')   // [260805] 교육은 좌석·점유율 축이 없다 = 수강생 한 줄 · [260807-19] 매출 축일 땐 금액 한 줄이 더 선다(점유율은 여전히 없다)
+      +(ED?('수강생 %{customdata[2]:,}명'+(hasRev?'<br>매출 %{customdata[3]}':'')+'%{customdata[7]}<extra></extra>')   // [260805] 교육은 좌석·점유율 축이 없다 = 수강생 한 줄 · [260807-20] 매출 축일 땐 금액 한 줄이 더 선다(점유율은 여전히 없다)
           :'판매 %{customdata[2]:,}명<br>매출 %{customdata[3]}<br>점유율 %{customdata[4]}%<extra></extra>')};
   var vMax=Math.max.apply(null,vals.filter(function(v){return v!=null&&isFinite(v);}).concat([1]));
   var xAx={tickmode:'array',tickvals:ax.tickvals,ticktext:ax.ticktext,tickfont:{size:10.5,color:dim},
@@ -8738,13 +8744,13 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
   //   (프로그램 단위 실값이 들어오면 그 자에 그대로 얹힌다). 지금 게이지는 값이 없어 파선이고, 높이는 전 항목 **동일**(눈금 사이 =
   //   특정 눈금값과 겹치지 않는 자리)이라 값으로 읽히지 않는다 — 툴팁도 「수강생 집계 전」을 계속 말한다.
   //   ⚠ 실값이 400을 넘으면 축을 넓힌다(안 그러면 막대가 잘려 **작아 보인다** = 오독) — 눈금 간격은 100 유지, 넓어지면 사다리로.
-  //   ⚠ [260807-19] 이 계약은 **수강생 축의 계약**이다 — 매출 축(hasRev)일 땐 걸지 않는다(5.6백만을 100~400 눈금에
+  //   ⚠ [260807-20] 이 계약은 **수강생 축의 계약**이다 — 매출 축(hasRev)일 땐 걸지 않는다(5.6백만을 100~400 눈금에
   //     얹으면 막대가 바닥에 눌려 아예 안 보인다). 그때는 공연 반쪽과 **같은 자동 축**(vMax×1.12 · rangemode tozero)을 쓴다.
   var _EDA=(ED&&!hasRev);   // 교육 **수강생** 축(눈금 100~400 계약이 걸리는 자리)
   var _edTop=_ED_YMAX, _edTick=[100,200,300,400], _edMax=0;
   if(ED){
     // 꺾은선(판매중)의 **꼭자락**도 같은 자에 넣는다 — 축이 막대만 보고 잡히면 선이 천장을 뚫는다(누계는 단조 증가 = 마지막 점이 최댓값).
-    // ⚠ [260807-19] 이 계산을 `_EDA` 밖으로 뺐다 — 매출 축에선 교육이 **선 하나뿐**일 수 있고, 그때 `vals`는 전부 null이라
+    // ⚠ [260807-20] 이 계산을 `_EDA` 밖으로 뺐다 — 매출 축에선 교육이 **선 하나뿐**일 수 있고, 그때 `vals`는 전부 null이라
     //   `vMax`가 바닥값 1로 굳는다. 그 1로 라벨 px 환산(`_lbPxY`)을 하면 실제 축(0~5.6)과 5배 어긋나 겹침 판정이 통째로 헛돈다.
     _edMax=Math.max.apply(null,rows.map(valOf).filter(function(v){return v!=null&&isFinite(v);})
       .concat(rows.map(function(g){ var m=lnOf(g); return m?m[m.length-1][1]:null; }).filter(function(v){return v!=null&&isFinite(v);})).concat([0]));
@@ -8756,7 +8762,7 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
   // [260808-2] 예상 페이드 꼭대기가 접힌 축 상한을 넘으면 축을 그만큼 넓힌다 — 자르면 「예상이 낮다」로 오독된다.
   //   [260806-11] 여유 = 값 라벨 한 줄이 **그림 안에** 서는 만큼(글자 10.5 + 띄움 3 + 숨구멍 2.5 ≈ 16px)을 축 단위로 환산.
   //   고정 배수를 새로 정하지 않는다 — 그림 높이가 달라지면 필요한 비율도 달라지므로 픽셀에서 역산한다.
-  var axTop=brk?brk.rng:(_EDA?_edTop:(ED?Math.max(_edMax,1e-6):vMax)*1.12);   // [260807-19] 매출 축 교육 = 선 꼭자락까지 센 `_edMax`(위 ⚠)
+  var axTop=brk?brk.rng:(_EDA?_edTop:(ED?Math.max(_edMax,1e-6):vMax)*1.12);   // [260807-20] 매출 축 교육 = 선 꼭자락까지 센 `_edMax`(위 ⚠)
   // [260813-4] 예상이 있는 막대의 라벨은 **두 줄**이라 그만큼 더 띄운다(16 → 16 + 줄 하나 12.5 ≈ 29) —
   //   안 늘리면 윗줄(현재치)이 그림 밖으로 잘린다.
   if(brk&&fcIdx.length){ var _fcTop=Math.max.apply(null,fcIdx.map(function(a){return brk.map(a[1]);}))*(1+(16+_BIZ_LAB_LH)/plotPx);
@@ -8894,7 +8900,7 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
   //   ⚠ 꺾은선으로 그리는 항목(isLn)은 여기서 뺀다 — 선이 이미 그 사업의 자리를 지키고 있어서, 빈 자리까지 세우면
   //     같은 프로그램이 두 자리(선 + 빈 게이지)를 차지한다.
   var pidx=[],i2; for(i2=0;i2<rows.length;i2++)if(!isLn[i2]&&vals[i2]==null&&xs[i2]!=null)pidx.push(i2);   // [260806-3] 빈 자리 = **값이 없을 때만**. 구판은 `plan(row)||값없음`이라 값이 있는 진행·예정에도 자리 표식을 겹쳐 그렸다 — 그 자리는 막대 자신의 페이드(`_bizFadePlanned`)가 말한다
-  var pY=_EDA?(_edTop*0.62):axTop*0.07;   // [260809] axTop = 위에서 한 번만 정한 그 값(구판은 이 줄이 두 번째 계산이라 예상 칸이 축을 넓힌 경우 빈 자리 높이가 실축과 갈렸다)   // 교육 = 눈금 사이(축 상한의 62% = 특정 눈금과 안 겹침) 고정 높이 = 값으로 안 읽힌다 · 값 축은 종전 7% 자리   // [260807-19] 매출 축의 교육은 `_edTop`(수강생 400)이 축 밖 숫자다 → 공연과 같은 7% 자리를 탄다(안 그러면 빈 게이지가 차트 40배 높이로 솟는다)
+  var pY=_EDA?(_edTop*0.62):axTop*0.07;   // [260809] axTop = 위에서 한 번만 정한 그 값(구판은 이 줄이 두 번째 계산이라 예상 칸이 축을 넓힌 경우 빈 자리 높이가 실축과 갈렸다)   // 교육 = 눈금 사이(축 상한의 62% = 특정 눈금과 안 겹침) 고정 높이 = 값으로 안 읽힌다 · 값 축은 종전 7% 자리   // [260807-20] 매출 축의 교육은 `_edTop`(수강생 400)이 축 밖 숫자다 → 공연과 같은 7% 자리를 탄다(안 그러면 빈 게이지가 차트 40배 높이로 솟는다)
   if(pidx.length){
     tr2={type:'bar',width:W,marker:{color:'rgba(0,0,0,0)',line:{width:0}},showlegend:false,hoverinfo:'text',textposition:'none',
       x:pidx.map(function(i){return xs[i];}),y:pidx.map(function(){return pY;}),
@@ -8921,7 +8927,7 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
   //     시작일순 **스택 + 직각(hv 스텝)**으로만(_bizDrawExhibMonthly 철거 주석과 한 벌).
   //   · 점 = 전시 반쪽의 **그 규칙 그대로** — **종료 월(최종) 한 점만 채움**(선색 채움 + 카드 바탕 테두리) · 나머지·진행중은
   //     전부 빈 동그라미(카드 바탕 채움 + 선색 테두리).
-  //     ⚠ [260807-19 개정] 구판 주석 「점 = **전부** 빈 동그라미 — 아직 안 끝났으니 최종 점이 없다」는 **끝난 교육이
+  //     ⚠ [260807-20 개정] 구판 주석 「점 = **전부** 빈 동그라미 — 아직 안 끝났으니 최종 점이 없다」는 **끝난 교육이
   //       선으로 안 그려지던 시절**의 말이다. 운영자가 끝난 교육(화요살롱)을 「기획전시처럼」 꺾은선으로 지시하면서
   //       「최종 점」이 실제로 생겼고, 그러면 채움 규칙도 전시와 같아야 한다(정본이 갈리면 안 되는 자리 = 기틀 §2 #16 ④).
   //   · 값 라벨 = **꼭자락 하나뿐** · 달마다 찍지 않는다(운영자 「헤비」) — 월별 증가분은 선에 올릴 때(툴팁)만
@@ -8938,7 +8944,7 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
           color:mo.map(function(_p,j){ return (_lfin&&j===mo.length-1)?col:srf; }),
           line:{color:mo.map(function(_p,j){ return (_lfin&&j===mo.length-1)?srf:col; }),width:1.6}},
         showlegend:false,hoverinfo:'text',
-        text:mo.map(function(p,j){ var inc=p[1]-(j>0?mo[j-1][1]:0);   // [260807-19] 축 단위는 `_bizAxTxt` 한 벌이 말한다(명 ↔ 만원) · 그 달 증가분은 종전대로 툴팁 전용
+        text:mo.map(function(p,j){ var inc=p[1]-(j>0?mo[j-1][1]:0);   // [260807-20] 축 단위는 `_bizAxTxt` 한 벌이 말한다(명 ↔ 만원) · 그 달 증가분은 종전대로 툴팁 전용
           return g.name+'\n'+(p[0]+1)+'월 누계 '+_bizAxTxt(p[1],hasRev)+' (그 달 +'+_bizAxTxt(inc,hasRev)+')\n'
             +dTxt(g)+' · '+stName(g)+' · '+(g._g2||'예술교육')+((g._vsrc&&j===mo.length-1)?(' · '+g._vsrc+'값'):''); })});
       lnTip.push({i:i,x:lx[lx.length-1],y:ly[ly.length-1],col:col});
@@ -9112,7 +9118,7 @@ function _bizDrawExhibMonthly(divId,list,hgt){
   var md=function(d){ return ('0'+(d.getMonth()+1)).slice(-2)+'.'+('0'+d.getDate()).slice(-2); };
   var pd=function(v){ var s=String(v||'').replace(/[^0-9]/g,''); return (s.length>=8)?new Date(+s.slice(0,4),+s.slice(4,6)-1,+s.slice(6,8)):null; };   // 기준일자(YYYYMMDD류) → Date(_anaExhibBuild _d8와 같은 문법)
   var jan1=new Date(Y,0,1);
-  // ── [260807-19 운영자 「사업결과비교에 **매출 토글 켜질 때 전시도 바뀌게**」] 축 전환 ────────────────
+  // ── [260807-20 운영자 「사업결과비교에 **매출 토글 켜질 때 전시도 바뀌게**」] 축 전환 ────────────────
   //   지시의 배경 = 260806-9가 세운 「매출 ↔ 관객수」 토글은 **셋을 같은 자 위에 세우려고** 만든 것인데,
   //   실제로 갈아타는 건 공연 막대뿐이었다 — 전시·교육은 늘 「명」이라 매출을 눌러도 화면 3분의 2가 안 바뀌었다.
   //   원천은 이미 있었다: 전시일일 **`누계금액`**(= 운영자가 준 정산서의 「인원과 함께 담긴 누적 판매 금액」).
@@ -9235,7 +9241,7 @@ function _bizDrawExhibMonthly(divId,list,hgt){
   //   6월 3,827·3,080처럼 17px 떨어진 짝을 「안 겹침」으로 통과시켜 두 숫자가 선 위에 포개 보였다(실측 후 교정).
   var _hit=function(L,side){ return placed.some(function(p){ return p.side===side&&Math.abs(p.x-L.x)*pxPerDay<30&&Math.abs(p.y-L.y)*pxPerY<19; }); };
   labs.sort(function(a,b){ return b.v-a.v; }).forEach(function(L){
-    // [260807-19] 서식 = 막대 차트와 **같은 한 벌**(`_bizVFmt`) — 매출 축이 오면서 「반올림해서 0이 되는 값」이
+    // [260807-20] 서식 = 막대 차트와 **같은 한 벌**(`_bizVFmt`) — 매출 축이 오면서 「반올림해서 0이 되는 값」이
     //   이 차트에도 실제로 생긴다(예: 40만원 = 0.4백만). 인원 축은 정수 ≥1이라 종전 표기와 100% 같다.
     var _t=_bizVFmt(L.v); if(!_t)return;   // 0으로 읽히는 수는 안 적는다(260813-5 계약 · 정확값은 툴팁)
     // 천장에 붙은 점은 애초에 **점 아래**에서 시작한다 — 위에 두면 구획 라벨(「진행 완료」·「진행·예정」)과 글자가 포갠다.
@@ -9255,7 +9261,7 @@ function _bizDrawExhibMonthly(divId,list,hgt){
   //   메인 꼭자락 라벨이 이미 그 자리를 잡았으면(전시가 하나뿐인 달 = 누적 = 그 전시 값) **회색은 생략** — 같은 숫자를 두 번 쓰지 않는다.
   _bgSum.forEach(function(v,m){
     if(!(v>0))return;
-    var _bt=_bizVFmt(v); if(!_bt)return;   // [260807-19] 보조 회색 라벨도 같은 서식 한 벌(활자·잉크만 한 단 아래 = 보조)
+    var _bt=_bizVFmt(v); if(!_bt)return;   // [260807-20] 보조 회색 라벨도 같은 서식 한 벌(활자·잉크만 한 단 아래 = 보조)
     var L={x:mx(m),y:v};
     if(_hit(L,1))return;
     placed.push({x:L.x,y:L.y,side:1});
@@ -9265,7 +9271,7 @@ function _bizDrawExhibMonthly(divId,list,hgt){
     xaxis:{tickmode:'array',tickvals:ax.tickvals,ticktext:ax.ticktext,tickfont:{size:10.5,color:dim},range:[ax.x0,ax.x1],fixedrange:true,zeroline:false,showgrid:false,automargin:false},
     yaxis:{tickfont:{size:10.5,color:dim},gridcolor:grid,zeroline:false,fixedrange:true,range:[0,yTop]},   // 단위는 카드 우상단 「(단위: …)」이 말한다(아래 _bizUnitWrite — 축을 정한 그 자리에서 쓴다)
     shapes:shapes,annotations:notes};
-  _bizUnitWrite(div,REV?'백만원':'명');   // [260807-19] 공연 막대와 같은 문법 — 축과 표기가 갈릴 수 없다
+  _bizUnitWrite(div,REV?'백만원':'명');   // [260807-20] 공연 막대와 같은 문법 — 축과 표기가 갈릴 수 없다
   try{ Plotly.newPlot(div,data,lay,{displayModeBar:false,responsive:true}); }catch(_e){ console.warn('[biz exmonthly]',_e); }
 }
 // ── [260806 운영자] 면 하단 반반 = 좌 전시 판매현황 │ 우 교육 판매현황 ─────────────────────────
@@ -9429,7 +9435,7 @@ function _bizCompRender(el,half){
     _exBody='<div style="padding:34px 18px;text-align:center;color:var(--dim);font-size:12.5px">📭 '+_bizmState.year+'년 '+(_liveOnly?'진행중인 전시가 없어요':'전시 데이터가 없습니다')+'</div>';
   } else {
     // [260804 운영자] 설명문(막대 = …) 철거 — 우상단 단위 표기 하나만.
-    // [260807-19] 글자는 여기 안 박는다 — **차트가 축을 정한 그 자리에서** 쓴다(공연 카드가 260806-10부터 쓰던 그 문법 ·
+    // [260807-20] 글자는 여기 안 박는다 — **차트가 축을 정한 그 자리에서** 쓴다(공연 카드가 260806-10부터 쓰던 그 문법 ·
     //   `data-bizunit` 빈 칸 → `_bizUnitWrite`). 구판은 「(단위: 명)」을 마크업에 고정해 매출 토글과 어긋날 수밖에 없었다.
     _exSub=_BIZ_UNIT_SLOT;
     _exBody='<div id="bizm-ex-chart" style="height:'+_BIZ_HALF_CH+'px;margin:0 4px 2px"></div>';
@@ -9445,7 +9451,7 @@ function _bizCompRender(el,half){
     :(_liveOnly?('<div style="padding:34px 18px;text-align:center;color:var(--dim);font-size:12.5px">📭 진행중인 교육이 없어요</div>'):_bizEduEmptyHtml(_bizmState.year));
   var _split='<div'+((half===1)?' data-bizmfill':'')+' style="display:flex;gap:14px;align-items:stretch;flex-wrap:wrap">'
     +_bizHalfCard('기획 전시',_exSub,_exBody)
-    +_bizHalfCard('예술교육',(_eduAny?_BIZ_UNIT_SLOT:''),_eduBody)   // [260807-19] 하드코딩 「(단위: 명)」 → 차트가 쓰는 빈 칸(위 전시 반쪽과 같은 문법)
+    +_bizHalfCard('예술교육',(_eduAny?_BIZ_UNIT_SLOT:''),_eduBody)   // [260807-20] 하드코딩 「(단위: 명)」 → 차트가 쓰는 빈 칸(위 전시 반쪽과 같은 문법)
     +'</div>';
   // [260806 운영자] 「전체 ↔ 판매중」 토글 — 판매중 = 지금 팔고 있는 사업(_st==='active')만.
   //   ⚠ 거르는 자리는 **여기 한 곳**뿐이다 — KPI·막대·우 열 상세 표가 전부 이 list를 보므로, 세 곳이 어긋날 수 없다.
@@ -9953,7 +9959,11 @@ function _srailRenderInner(els){
     }
     if(exActives.length){
       var exSum=0,exHas=false;
-      exActives.forEach(function(e){ var last=(e.daily&&e.daily.length)?e.daily[e.daily.length-1]:null; var v=last?_salesNum(last['일일총인원']):null; if(v!==null){exSum+=v;exHas=true;} });
+      // [260807 운영자 「전시 -242 뜨는데 그러면 안돼」] 음수 일일총인원 = 누계 하향 보정의 산물(관객 발길이 음수일 수는 없다 ·
+      //   입력 흐름이 일일총인원을 누계 차분으로 파생 저장해 보정일에 음수가 시트에 남는다) → 요약 증감에서 제외(그 전시는
+      //   그날 표기 생략 = 「수집 전」과 같은 결). 시트 값 자체는 그대로(표기 규칙만 — 기계산출물 손편집 금지 축).
+      //   부수 결함 동시 소멸: 음수가 통과하면 부호가 「±-242」로 겹쳐 찍히던 것도 이 가드로 도달 불가.
+      exActives.forEach(function(e){ var last=(e.daily&&e.daily.length)?e.daily[e.daily.length-1]:null; var v=last?_salesNum(last['일일총인원']):null; if(v!==null&&v>=0){exSum+=v;exHas=true;} });
       if(exHas){hasNum=true;parts.push('<span>전시 <b style="color:'+(exSum>0?'var(--green)':'var(--text)')+'">'+(exSum>0?'+':'±')+exSum.toLocaleString()+'명</b></span>');}
     }
     // 접두어는 실제 증감 숫자가 있을 때만 — 「전일 대비 공연 증감 수집 전」 어색 조합 방지(분신술 감사3 LOW)
@@ -10294,16 +10304,29 @@ function _ryAccCell(n){
 function _ryCumCell(p){
   var isEx=(p&&p._kind==='ex'), tok=isEx?'--peach-text':'--accent', unit=isEx?'명':'석';
   var n=isEx?p._acc:p.seats, m=isEx?p._accM:p.money;
-  if(n===null||n===undefined||isNaN(n))return '<span style="color:var(--muted);font-size:12px">—</span>';
+  if(n===null||n===undefined||isNaN(n))return '<span style="color:var(--dim);font-size:12px">—</span>';
   var tot=isEx?null:p.totalOpen, pct=isEx?null:p.occ;
-  var head=Math.round(n).toLocaleString()+((tot!==null&&tot!==undefined&&tot>0)?('/'+Math.round(tot).toLocaleString()):'');
+  var hasTot=(tot!==null&&tot!==undefined&&tot>0);
+  // [260807-4 운영자 「/926 은 옆에 있는 회색과 동일하게 · 이 안의 회색이 2종류로 나뉜 것 같은데 같은 회색이도록」]
+  //   이 칸의 **보조 잉크는 `--dim` 한 가지**로 통일한다 — 분모 `/926석` · 증감률 `32%` · 누적 금액 셋 다.
+  //   ⚠ 구판은 금액만 `--neutral-text`였다 = 나머지 보조값(`--dim`)과 갈린 **두 번째 회색**(운영자 지목).
+  //     `--dim`이 이기는 이유 = 이 표가 **원래 쓰던 보조 회색**이다(판매율 칸 괄호 `(295/926)` · 7일 추이 「어제 +N」 둘 다 `--dim`).
+  //     `--neutral-text`는 사업 목록 표에서 따라온 남의 자 = 260807-2에서 내가 섞은 것.
+  //   ⚠ 강조색(분야색·800)이 남는 건 **분자 하나**뿐 — 「지금 몇 석 팔렸나」가 이 칸의 주어다.
+  var head=_ryNumSlot(Math.round(n).toLocaleString(),tok)
+    +(hasTot?'<span style="color:var(--dim);font-weight:700">/'+Math.round(tot).toLocaleString()+unit+'</span>'
+            :'<span style="color:var('+tok+');font-weight:800">'+unit+'</span>');
+  // [260807-4 운영자 「누적 32%랑 전일대비 0%가 광학 잉크 단위로 수평에 있는지 확인」] 실측 = **1px 어긋나 있었다**.
+  //   원인 = 두 칸의 첫 줄 주숫자 크기가 달랐다(누적 13px 상속 · 전일 대비 14.5px). 한 줄상자의 baseline은 그 안 **가장 큰 글자**가
+  //   정하므로, 옆 칸 줄상자만 baseline이 1px 내려가고 같은 11.5px `%`가 통째로 딸려 내려갔다.
+  //   → 주숫자를 **14.5px로 맞춘다**(옆 칸과 같은 자). 두 줄상자의 활자 지표가 같아져 `%`도 주숫자도 Δ0. 두 칸은 어차피 짝이라 크기가 같은 게 맞다.
   return '<span style="display:inline-block">'
-    +'<span style="display:block;white-space:nowrap">'+_ryNumSlot(head,tok)
-      +'<span style="color:var('+tok+');font-weight:800">'+unit+'</span>'
-      +((pct===null||pct===undefined||isNaN(pct))?'':'<span style="color:var(--dim);font-size:11.5px;font-weight:700;margin-left:5px;font-variant-numeric:tabular-nums">'+Math.round(pct)+'%</span>')
+    +'<span style="display:block;white-space:nowrap;font-size:14.5px">'+head
+      // [260807-5 운영자 「%는 강조색으로 하자 · 32%, 31% 이런 거는 강조색으로. 그 자리에 있는 것들」] → 제 분자와 **같은 강조색**(공연 1 · 전시 2).
+      +((pct===null||pct===undefined||isNaN(pct))?'':'<span style="color:var('+tok+');font-size:11.5px;font-weight:700;margin-left:5px;font-variant-numeric:tabular-nums">'+Math.round(pct)+'%</span>')
     +'</span>'
-    +'<span style="display:block;font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;margin-top:2px;white-space:nowrap;color:var('
-      +((m===null||m===undefined||isNaN(m))?'--muted">—':'--neutral-text">'+Math.round(m).toLocaleString()+'원')+'</span></span>';
+    +'<span style="display:block;font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;margin-top:2px;white-space:nowrap;color:var(--dim)">'
+      +((m===null||m===undefined||isNaN(m))?'—':(Math.round(m).toLocaleString()+'원'))+'</span></span>';
 }
 // [260729 운영자] 머리글 열 크기 조절 — 기본 폭(합 100) · 조절값은 기기 단위 기억(localStorage). 계정 축은 【바인딩】상 미배선이라 기기 저장이 상한.
 // [260731 운영자] 「사업 성격」 열 폐지 → 그 자리를 「장르」가 차지(6칸 → 5칸). 성격 폭 13은 장르(11)에 합산 = 24(총합 100 보존).
@@ -22167,29 +22190,42 @@ function _pcCard(t,sub,inner){ return '<div class="bizm-card" style="padding:14p
 function _pcRow(lead,main,sub,hot){ return '<div style="display:flex;gap:10px;align-items:baseline;padding:7px 0;border-top:1px solid var(--border)">'
   +'<span style="font-size:12px;font-weight:800;white-space:nowrap;font-variant-numeric:tabular-nums;color:'+(hot?'var(--danger-btn)':'var(--neutral-text)')+'">'+lead+'</span>'
   +'<span style="flex:1;font-size:13px;min-width:0">'+main+(sub?'<span style="display:block;font-size:11.5px;color:var(--dim)">'+sub+'</span>':'')+'</span></div>'; }
-function openPromoCheck(){
+// [260807 운영자 「ai 홍보 아래에 세부메뉴로 나눌게 — 판매 전략 설계 · 고객 분류 · 키워드 모니터링 이렇게 3개로」]
+//   tab 인자 = 상단 대메뉴 세부(드롭다운 _aipromoMenuBuild)가 그 탭으로 바로 연다. 인자 없음 = 종전 그대로(기본 = 판매 전략 설계).
+function openPromoCheck(tab){
   var el=document.getElementById('promo-check');
   if(!el){ el=document.createElement('div'); el.id='promo-check'; document.body.appendChild(el); }
   // 고객 분류 = admin 전용(예매집계·회원 둘 다 PII) — 탭 자체를 안 그린다. 숨기기가 아니라 없는 것이 맞다.
   var seg=(userRole==='admin');
-  // [260807 운영자] 점검 탭 통삭 — 기본 탭 = 전략 추론(총론 브리핑). 셸·크기 계약(_PC_BOX 고정 · 260806-18)은 무변.
+  var t0=(tab==='seg'&&!seg)?'ai':((tab==='seg'||tab==='sm')?tab:'ai');   // 권한 없는 seg 요청 = 기본 탭으로 (없는 탭을 여는 일이 없게)
+  // [260807 운영자] 점검 탭 통삭 — 기본 탭 = 판매 전략 설계(총론 브리핑). 셸·크기 계약(_PC_BOX 고정 · 260806-18)은 무변.
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closePromoCheck)">'
     + '<div class="modal" style="width:'+_PC_BOX.w+';height:'+_PC_BOX.h+';max-height:'+_PC_BOX.h+';--mpad-y:0;--mpad-x:0;position:relative;display:flex;flex-direction:column;overflow:hidden">'
     + '<button class="modal-x" onclick="closePromoCheck()" title="닫기" aria-label="닫기">✕</button>'
     + _mhead('AI 홍보','매일 아침 총론 브리핑으로 다음 홍보를 계획해요'+(seg?' · 고객 분류로 누가 봤는지 뽑아요':'')+' · 검색에 걸린 글을 모아봐요')
     + '<div style="padding:12px 24px 0;flex:none"><div id="pc-tabs" style="display:flex;gap:2px;background:var(--neutral);border-radius:8px;padding:3px;width:max-content">'
-    + '<button type="button" class="prog-tab active" data-t="ai" onclick="_pcTab(\'ai\')" style="flex:none">전략 추론</button>'
+    + '<button type="button" class="prog-tab active" data-t="ai" onclick="_pcTab(\'ai\')" style="flex:none">판매 전략 설계</button>'
     /* 인라인 padding 없음 = 260808 PR 720 패리티 청산 계승(정본 `.prog-tab`이 패딩을 정한다 — 자리마다 다시 타이핑하지 않는다).
        ⚠ 주석에 「샵+숫자 3자리」를 쓰지 마라 — check_design이 raw hex로 세어 baseline이 +1 된다(실제로 걸렸다). */
     + (seg?'<button type="button" class="prog-tab" data-t="seg" onclick="_pcTab(\'seg\')" style="flex:none">고객 분류</button>':'')
-    + '<button type="button" class="prog-tab" data-t="sm" onclick="_pcTab(\'sm\')" style="flex:none">검색 모니터링</button>'
+    + '<button type="button" class="prog-tab" data-t="sm" onclick="_pcTab(\'sm\')" style="flex:none">키워드 모니터링</button>'
     + '</div></div>'
     + '<div style="overflow:auto;flex:1;min-height:0;padding:16px 24px 20px">'
     + '<div id="pc-view-ai">'+_paViewHtml()+'</div>'
     + (seg?'<div id="pc-view-seg" style="display:none">'+_segViewHtml()+'</div>':'')
     + '<div id="pc-view-sm" style="display:none">'+_smViewHtml()+'</div>'
     + '</div></div></div>';
+  if(t0!=='ai')_pcTab(t0);   // 표시·활성 전환은 정본 한 곳(_pcTab)만 — 여기서 클래스를 다시 손대지 않는다
   _paAutoLoad();
+}
+// [260807 운영자] AI 홍보 세부메뉴 — 대메뉴 호버 드롭다운(캘린더·콘텐츠 제작과 같은 부품·같은 itemCss).
+//   클릭(호버 아님)은 종전 그대로 기본 탭으로 열린다 = 회귀 0. 고객 분류는 admin만(탭과 같은 게이트 — 없는 문을 만들지 않는다).
+function _aipromoMenuBuild(menu){
+  var itemCss='display:flex;align-items:center;gap:10px;width:100%;padding:11px 14px;border:0;text-align:left;font-size:13px;font-weight:600;color:var(--text);border-radius:9px;cursor:pointer;font-family:inherit;transition:background .12s';
+  menu.innerHTML='<div style="padding:8px 14px 6px;font-size:11px;color:var(--dim);font-weight:700">AI 홍보</div>'
+    +'<button type="button" onclick="_ddCloseAll();openPromoCheck(\'ai\')" style="'+itemCss+';background:rgba(74,77,231,0.06)" onmouseenter="this.style.background=\'rgba(74,77,231,0.12)\'" onmouseleave="this.style.background=\'rgba(74,77,231,0.06)\'"><span style="flex:1">판매 전략 설계</span><span style="font-size:10px;color:var(--accent);font-weight:700">기본</span></button>'
+    +((userRole==='admin')?'<button type="button" onclick="_ddCloseAll();openPromoCheck(\'seg\')" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'">고객 분류</button>':'')
+    +'<button type="button" onclick="_ddCloseAll();openPromoCheck(\'sm\')" style="'+itemCss+';background:none" onmouseenter="this.style.background=\'rgba(74,77,231,0.07)\'" onmouseleave="this.style.background=\'none\'">키워드 모니터링</button>';
 }
 var _PC_BOX={w:'min(760px,94vw)',h:'88vh'};
 function _pcTab(t){
@@ -23972,6 +24008,11 @@ let _designSeenTag = null;
 //   ⚠ 되풀이 방지 = 마지막 자동 리로드가 90초 안이면 자동으로 다시 하지 않는다(배포가 연달아 나거나 ETag가 흔들려도 무한 새로고침 0).
 var _designPending=false;
 function _designSafeNow(){
+  // [260807 운영자 「45초 폴링 자동 리로드 붙여줘」] 자동 반영 자체는 260806-8에 배선 완료 — 이 판정을 Q39 정본 busy(nmSync.busy)로
+  //   보강한다. 구판은 비행 중 쓰기(_apiWrites)·MSAL·AI 응답·메모/도화지 대기·저장 스피너·z99999 오버레이를 못 봐
+  //   「모달 닫힘~쓰기 완료」 창에서 리로드가 저장을 절단할 수 있었다(Q39 평의회6 C-2가 봉합한 바로 그 축).
+  //   합집합 유지 — 아래 기존 검사(SELECT 포커스·#promo-wizard)는 busy()에 없는 몫이라 그대로 둔다.
+  try{ if(window.nmSync&&typeof window.nmSync.busy==='function'&&window.nmSync.busy())return false; }catch(e){}
   if(document.querySelector('.modal-bg.show, .overlay-load.show, #promo-wizard.show'))return false;   // 떠 있는 창 위에서 안 바꾼다
   var a=document.activeElement;
   if(a&&(/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)||a.isContentEditable))return false;              // 입력 중이면 안 바꾼다
@@ -29161,10 +29202,12 @@ function _bkAnswer(q){
     +'· 전체 구매회원으로 환산하면 약 '+_memAiFmt(est)+'명(×'+_BK_SCALE+')</span>';
 }
 
-// ===== AI 홍보 ▸ 검색 모니터링 — _sm* (260807 · 260805-42 후속: Worker 스캔 축의 「보는 창」) =====
+// ===== AI 홍보 ▸ 키워드 모니터링 — _sm* (260807 · 260805-42 후속: Worker 스캔 축의 「보는 창」) =====
 // 서버(Worker)가 매시 첫 틱에 구글 알림 RSS 13종·다음(카카오) 검색·KOPIS 공연DB를 훑어 KV에 쌓는다(상한 300 · 알림 발화 0 = Q28).
 // 이 탭 = GET /api/monitor/feed 그대로 그리기 + [지금 확인] = POST /api/monitor/scan(크론과 같은 함수 1벌) 후 재조회.
-// 갈래 끔 = 키 미설정(Worker smReady가 그대로 말한다) — 키 이름·넣는 곳 = docs/KEYS.md §2. 부품 = .prog-tab·.u-empty·.ana-badge·.ve-val·.lm-foot·.btn 정본(신규 색 = 기존 토큰·알파 변주만).
+// [260807 운영자 「구글 알림 다음검색 켜짐 이런거는 없애줘」] 갈래 준비 칩(_smReadyHtml·#sm-ready) 삭제 — 켜짐/끔은 운영자가 키를 넣는 자리(Cloudflare)의 사정이지
+//   글을 보는 화면이 매번 말할 것이 아니다. 키가 하나도 없는 상태는 빈 화면 안내가 그대로 짚어준다(_smRender의 anyOn 분기 = 유지). 키 이름·넣는 곳 = docs/KEYS.md §2.
+// 부품 = .prog-tab·.u-empty·.ana-badge·.ve-val·.lm-foot·.btn 정본(신규 색 = 기존 토큰·알파 변주만).
 var _smState={loaded:false,busy:false,rows:[],total:0,anyOn:false,win:3,winTouched:false};
 var _SM_SRC={google:['구글 알림','var(--accent)','var(--accent-glow)'],naver:['네이버','var(--green)','rgba(26,107,60,.1)'],kakao:['다음 검색','var(--c2)','rgba(216,132,85,.14)'],kopis:['KOPIS 공연','var(--c5)','rgba(45,138,179,.12)']};
 function _smViewHtml(){
@@ -29173,17 +29216,8 @@ function _smViewHtml(){
       +'<button type="button" class="btn btn--primary btn--md" id="sm-run" onclick="_smScanNow()">지금 확인</button>'
       +'<span class="ve-val" id="sm-note"></span>'
     +'</div>'
-    +'<div id="sm-ready" style="margin:10px 0 2px;display:flex;gap:6px;flex-wrap:wrap"></div>'
     +'<div id="sm-win" style="display:none;margin:12px 0 2px"></div>'
     +'<div id="sm-out" style="margin-top:10px"><div class="u-empty">수집된 글을 불러오는 중…</div></div>';
-}
-// 갈래 칩 — 켜짐/끔을 smReady 그대로. 네이버 끔 = 신규발급 중단(260806 실측)이라 「발급 중단」으로 말한다(키 사냥 방지).
-function _smReadyHtml(rd){
-  var off={google:'키 대기',naver:'발급 중단',kakao:'키 대기',kopis:'키 대기'};
-  return ['google','naver','kakao','kopis'].map(function(k){
-    var on=!!(rd&&rd[k]),c=_SM_SRC[k];
-    return '<span class="ana-badge" style="'+(on?'background:rgba(26,107,60,.1);color:var(--green)':'background:var(--neutral);color:var(--neutral-text)')+'">'+c[0]+' · '+(on?'켜짐':off[k])+'</span>';
-  }).join('');
 }
 function _smRow(it){
   var c=_SM_SRC[it.src]||['기타','var(--neutral-text)','var(--neutral)'];
@@ -29200,10 +29234,9 @@ function _smRow(it){
 async function _smLoad(force){
   if(_smState.loaded&&!force)return;
   _smState.loaded=true;
-  var out=document.getElementById('sm-out'),ready=document.getElementById('sm-ready');
+  var out=document.getElementById('sm-out');
   try{
     var r=await api('GET','/api/monitor/feed?limit=150');
-    if(ready)ready.innerHTML=_smReadyHtml(r&&r.ready);
     _smState.rows=(r&&r.rows)||[];
     _smState.total=(r&&r.total)||_smState.rows.length;
     _smState.anyOn=!!(r&&r.ready&&(r.ready.google||r.ready.naver||r.ready.kakao||r.ready.kopis));

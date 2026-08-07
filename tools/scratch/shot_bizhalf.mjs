@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 /**
- * 3면 하단 반반 줄(기획 전시 │ 예술교육) 전/후 스샷 — 260807-19 매출 토글 확장 실측용.
+ * 3면 하단 반반 줄(기획 전시 │ 예술교육) 전/후 스샷 — 260807-20 매출 토글 확장 실측용.
  *
  * 왜 스크래치인가 = 게이트가 아니라 **눈으로 대조할 그림**을 뽑는 자리다(운영자 「전과 후를 이미지로」).
  * 데이터 = 커밋된 거울(`data/exhib_daily_2026.js` 정산서 + `_BIZ_EDU_SOLD` 운영자 확정) — 실API·PII 미접촉.
  *
  * 사용: node tools/scratch/shot_bizhalf.mjs <서빙할 index.html> <출력 접두사>
- *   예) node tools/scratch/shot_bizhalf.mjs index.html docs/reports/260807-19_후
+ *   예) node tools/scratch/shot_bizhalf.mjs index.html docs/reports/260807-20_후
  *   산출 = <접두사>_매출.png · <접두사>_관객수.png
  */
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
