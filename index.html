@@ -12160,13 +12160,22 @@ function openDailyInput(origin){
   let el=document.getElementById('daily-input');
   if(!el){el=document.createElement('div');el.id='daily-input';document.body.appendChild(el);}
   el.innerHTML='<div class="modal-bg show" style="z-index:99990" onclick="if(event.target===this)closeDailyInput()"><div class="modal" style="width:96vw;max-width:760px;max-height:90vh;overflow:auto;--mpad-y:0;--mpad-x:0;position:relative;background:#fff"><button class="modal-x" onclick="closeDailyInput()" title="닫기" aria-label="닫기">✕</button>'+_mhead('일일 판매 입력','오늘 판매분을 시트에 바로 적어요')+'<div id="daily-body" style="padding:18px 22px"><div style="text-align:center;color:#888;padding:30px">'+_ldHtml(16)+'공연 목록 불러오는 중</div></div></div></div>';
-  if(_dailyState.master&&_dailyState.programs&&_dailyState.exMaster){_dailyRenderForm();return;}
+  // [260807 운영자 「넣었으면 그만큼 변경할 수도 있어야 함(해당 날짜 리스트로 남아야 함)」] 단체 기존 내역 로드 —
+  //   수정 축이라 열 때마다 fresh(캐시 재사용 경로 포함). 실패해도 입력은 살고(gLoadOk=false = 기존 내역 수정만 잠금 · 신규 추가는 가능),
+  //   저장 시 replaceShow가 이 스냅샷 기준으로 그 공연만 교체한다(_srailEdit groupLoadOk 전삭제 방어와 같은 축).
+  var _gLoad=function(){ return api('GET','/api/ops?sheet='+encodeURIComponent('단체')+'&fresh=1').catch(function(){return {rows:[],headers:[],_loadFailed:1};}).then(function(gr){
+    _dailyState.gLoadOk=!(gr&&(gr._loadFailed||gr.note||!(gr.headers&&gr.headers.length)));
+    _dailyState.gEdit=(( (gr&&gr.rows)||[]).map(_salesNorm).map(function(r){return {공연명:String(r['공연명']||'').trim(),공연ID:String(r['공연ID']||'').trim(),기준일자:String(r['기준일자']||'').replace(/[^0-9]/g,''),좌석:(_salesNum(r['좌석'])==null?'':String(_salesNum(r['좌석']))),금액:(_salesNum(r['금액'])==null?'':String(_salesNum(r['금액']))),단체명:String(r['단체명']||'')};}).filter(function(r){return r.공연명;}))
+      .sort(function(a,b){return a.공연명===b.공연명?((parseInt(a.기준일자,10)||0)-(parseInt(b.기준일자,10)||0)):(a.공연명<b.공연명?-1:1);});
+    _dailyState.gSig=JSON.stringify(_dailyState.gEdit);
+  }); };
+  if(_dailyState.master&&_dailyState.programs&&_dailyState.exMaster){_gLoad().then(function(){_dailyRenderForm();});return;}
   Promise.all([
     api('GET','/api/ops?sheet='+encodeURIComponent('공연마스터')),
     api('GET','/api/programs').then(function(d){return (d&&d.programs)||[];}).catch(function(){return [];}),
     api('GET','/api/ops?sheet='+encodeURIComponent('전시마스터')).catch(function(){return {headers:[],rows:[]};}),   // [260723] 전시 입력용 — 실패해도 공연 입력은 되게 빈 시트 폴백
     api('GET','/api/ops?sheet='+encodeURIComponent('전시일일')).catch(function(){return {headers:[],rows:[]};})
-  ]).then(function(res){_dailyState.master=res[0];_dailyState.programs=res[1];_dailyState.exMaster=res[2];_dailyState.exDaily=res[3];_dailyRenderForm();}).catch(function(e){var b=document.getElementById('daily-body');if(b)b.innerHTML='<div style="color:var(--danger);text-align:center;padding:30px">공연 목록 로드 실패: '+escapeHtml(e.message||String(e))+'</div>';});
+  ]).then(function(res){_dailyState.master=res[0];_dailyState.programs=res[1];_dailyState.exMaster=res[2];_dailyState.exDaily=res[3];return _gLoad();}).then(function(){_dailyRenderForm();}).catch(function(e){var b=document.getElementById('daily-body');if(b)b.innerHTML='<div style="color:var(--danger);text-align:center;padding:30px">공연 목록 로드 실패: '+escapeHtml(e.message||String(e))+'</div>';});
 }
 function closeDailyInput(){ var el=document.getElementById('daily-input'); if(el)el.innerHTML=''; window._dsxState=null; window._dsxPending=null; window._dsxGen=(window._dsxGen||0)+1; if(_dailyState)_dailyState._gSaved=false; _dailyKind='공연'; }   // [260723] 다음 열 때 공연 탭부터
 // [260715] 저장 완료 후 '직전 메뉴'로 복원 — 캘린더 메인으로 빠지지 않게. 보드는 재오픈(새 실적 반영), 메뉴 진입은 드롭다운 재오픈(모바일 등 앵커 불가 시 판매 실적 조회로 대체).
@@ -12240,6 +12249,9 @@ function _dailyGroupReadDOM(){
 }
 function _dailyGroupAdd(){ _dailyRenderForm(_dailyReadDOM(), _dailyGroupReadDOM().concat([{}])); }
 function _dailyGroupRemove(btn){ var data=_dailyGroupReadDOM(); var rowEl=btn.closest('.dgroup-row'); var idx=Array.prototype.indexOf.call(document.querySelectorAll('#daily-body .dgroup-row'),rowEl); if(idx>=0)data.splice(idx,1); _dailyRenderForm(_dailyReadDOM(), data); }
+// [260807] 기존 단체 내역 인라인 수정·삭제 — 상태(_dailyState.gEdit)만 갱신, 저장 시 공연별 replaceShow로 반영
+function _dailyGExistSet(i,f,v){ if(_dailyState&&_dailyState.gEdit&&_dailyState.gEdit[i])_dailyState.gEdit[i][f]=v; }
+function _dailyGExistDel(i){ if(!(_dailyState&&_dailyState.gEdit))return; _dailyState.gEdit.splice(i,1); _dailyRenderForm(_dailyReadDOM(), _dailyGroupReadDOM()); }
 function _dailyRenderForm(rowsData, groupData){
   var body=document.getElementById('daily-body'); if(!body)return;
   var tabs=_dailyKindTabs();   // [260723] 공연·전시 종류 탭 — 전시 담당·진행중 전시가 있을 때만 노출(아니면 '' = 기존 공연 단독 UI 그대로)
@@ -12269,6 +12281,28 @@ function _dailyRenderForm(rowsData, groupData){
   h+='<div style="display:flex;gap:8px;font-size:11px;color:var(--dim);font-weight:600;margin-bottom:6px;padding:0 4px"><span style="flex:2;min-width:150px">공연</span><span style="flex:1;min-width:70px">좌석</span><span style="flex:1;min-width:70px">금액</span><span style="flex:1.4;min-width:90px">단체명</span><span style="width:24px"></span></div>';
   h+='<div id="dg-rows">'; grows.forEach(function(r){h+=_dailyGroupRowHtml(r);}); h+='</div>';
   h+='<button onclick="_dailyGroupAdd()" style="margin-top:4px;padding:6px 12px;border:1.5px dashed var(--border2);border-radius:8px;background:var(--neutral);color:var(--neutral-text);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">+ 단체 추가</button>';
+  // [260807 운영자] 기존 단체 내역 — 날짜 리스트로 상존 · 인라인 수정/삭제 → 저장 시 그 공연만 교체(replaceShow).
+  //   공연명은 라벨 고정(옮기려면 삭제+추가) · 입력은 oninput으로 상태만 갱신(재렌더 0 = 포커스 유지 · _kmSet 문법).
+  h+='<div style="margin-top:14px;padding-top:10px;border-top:1px dashed var(--border2)">';
+  h+='<div style="font-size:11px;font-weight:700;color:var(--dim);margin-bottom:6px">기존 단체 내역 — 고치면 저장 시 반영 · 날짜별로 남아요</div>';
+  if(!_dailyState.gLoadOk){
+    h+='<div style="font-size:11.5px;color:var(--dim);padding:4px 0 2px">기존 내역을 못 불러와서 수정은 잠시 잠갔어요(새 단체 추가는 가능) — 다시 열면 재시도해요</div>';
+  } else if(!(_dailyState.gEdit&&_dailyState.gEdit.length)){
+    h+='<div style="font-size:11.5px;color:var(--dim);padding:4px 0 2px">저장된 단체가 아직 없어요 — 위 [+ 단체 추가]로 첫 건을 넣어줘요</div>';
+  } else {
+    var gSt='box-sizing:border-box;padding:7px 9px;border:1.5px solid var(--border2);border-radius:7px;font-size:12px;font-family:inherit;background:var(--surface-solid);color:var(--text)';
+    _dailyState.gEdit.forEach(function(r,i){
+      h+='<div class="dgexist-row" style="display:flex;gap:8px;align-items:center;margin-bottom:6px;flex-wrap:wrap">'
+        +'<span style="flex:2;min-width:150px;font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+escapeHtml(r.공연명)+'">'+escapeHtml(r.공연명)+'</span>'
+        +'<input value="'+escapeHtml(r.기준일자)+'" inputmode="numeric" maxlength="8" placeholder="YYYYMMDD" oninput="_dailyGExistSet('+i+',\'기준일자\',this.value)" style="flex:1;min-width:88px;'+gSt+'">'
+        +'<input value="'+escapeHtml(r.좌석)+'" inputmode="numeric" placeholder="좌석" oninput="_dailyGExistSet('+i+',\'좌석\',this.value)" style="flex:1;min-width:64px;'+gSt+'">'
+        +'<input value="'+escapeHtml(r.금액)+'" inputmode="numeric" placeholder="금액" oninput="_dailyGExistSet('+i+',\'금액\',this.value)" style="flex:1;min-width:78px;'+gSt+'">'
+        +'<input type="text" value="'+escapeHtml(r.단체명)+'" placeholder="단체명" oninput="_dailyGExistSet('+i+',\'단체명\',this.value)" style="flex:1.4;min-width:90px;'+gSt+'">'
+        +'<button onclick="_dailyGExistDel('+i+')" title="이 단체 건 삭제(저장 시 반영)" aria-label="삭제" style="border:0;background:none;color:var(--danger);cursor:pointer;font-size:14px;padding:4px">✕</button>'
+        +'</div>';
+    });
+  }
+  h+='</div>';
   h+='</div>';
   h+='<div id="d-msg" style="font-size:12px;color:var(--danger);margin-top:10px;min-height:16px"></div>';
   h+='<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px;padding-top:14px;border-top:1px solid #eee"><button onclick="closeDailyInput()" class="m-btn cancel">취소</button><button onclick="_dailySubmit()" class="m-btn save" id="d-save">저장</button></div>';
@@ -12284,7 +12318,16 @@ async function _dailySubmit(){
   var entries=_dailyReadDOM().filter(function(r){return r.공연;});
   // [단체] 단체 행 — 공연 선택 + 좌석 있는 행만 저장. 같은 날 여러 건 OK. 상단 기준일자(ymd) 공유.
   var gEntries=_dailyGroupReadDOM().filter(function(r){return r.공연 && String(r.좌석||'').trim()!=='';});
-  if(!entries.length && !gEntries.length){if(msg)msg.textContent='공연을 1개 이상 선택하세요';return;}
+  // [260807] 기존 단체 내역 수정·삭제 감지 — 공연 단위 diff(그 공연만 replaceShow · 타 공연 무접촉)
+  var gDirty=false, gEditedShows={};
+  if(_dailyState&&_dailyState.gLoadOk&&_dailyState.gSig){
+    var _gBase=[]; try{_gBase=JSON.parse(_dailyState.gSig)||[];}catch(_ge){}
+    var _perShow=function(arr){var m={};(arr||[]).forEach(function(r){(m[r.공연명]=m[r.공연명]||[]).push(r);});return m;};
+    var _bm=_perShow(_gBase),_cm=_perShow(_dailyState.gEdit),_ns={};
+    Object.keys(_bm).forEach(function(n){_ns[n]=1;}); Object.keys(_cm).forEach(function(n){_ns[n]=1;});
+    Object.keys(_ns).forEach(function(n){ if(JSON.stringify(_bm[n]||[])!==JSON.stringify(_cm[n]||[])){gEditedShows[n]=1;gDirty=true;} });
+  }
+  if(!entries.length && !gEntries.length && !gDirty){if(msg)msg.textContent='공연을 1개 이상 선택하세요';return;}
   // [회차 보정 260723 운영자] needRc 공연에 회차수 입력됨 → 공연마스터 총회차 확정(분모 = 좌석×회차). masters(분모)도 즉시 갱신해 이 저장의 점유율까지 정확하게.
   var rcPatch={}, _mByName={}; _dailyMasters().forEach(function(m){ _mByName[m.name]=m; });
   entries.forEach(function(r){ var rcv=parseInt(r['d-rc'],10); var mo=_mByName[r.공연]; if(rcv>0&&mo&&mo.needRc&&mo.id){ var _op=(mo.base||_SALES_FALLBACK_SEAT)*rcv; rcPatch[mo.id]={총회차:rcv,총오픈석:_op}; masters[r.공연]=_op; } });   // [260723 운영자] 총회차 + 총오픈석(=기준석×회차) 동시 확정 — _salesBuild 분모가 총오픈석을 우선하므로, 단회차 총오픈석이 남아 있어도 이 값으로 확실히 덮어 오픈석×회차 분모 반영
@@ -12298,12 +12341,27 @@ async function _dailySubmit(){
   try{
     // [회차 보정 260723] 공연마스터 총회차 먼저 확정(분모 근본 수정) — 실패해도 실적 저장은 진행(경고). 로컬 캐시 직주입 + 아래 _salesState.master=null로 레일 재계산 반영.
     if(Object.keys(rcPatch).length){ try{ var _mpr=await _opsMasterPatch('공연마스터','ID',rcPatch); _dailyState.master={sheet:'공연마스터',headers:_mpr.headers,rows:_mpr.rows,count:_mpr.rows.length}; }catch(_me){ console.warn('[dailyRcPatch]',_me); showToast('회차 반영은 실패했지만 실적은 저장할게 — 분모는 잠시 후 카드 ▸ 회차·객석에서 확인','error'); } }
-    // [분신술 MED-1] 저장 순서 = 단체 먼저 → 개인 최후. 개인은 append(비idempotent)라 '성공 후 다른 스텝 실패→재시도' 시 개인 행이 중복된다.
-    //  개인을 마지막 단일 스텝으로 두면 개인 성공 = 전체 완료(중복 창 없음). 단체는 성공 플래그(_gSaved)로 재시도 시 스킵 = 단체 중복도 방지.
-    if(gRows.length && !(_dailyState&&_dailyState._gSaved)){ await _groupSave({newRows:gRows,mode:'append'}); if(_dailyState)_dailyState._gSaved=true; }
+    // [분신술 MED-1 + 260807 수정 축] 저장 순서 = 단체 먼저 → 개인 최후. 개인은 append(비idempotent)라 '성공 후 다른 스텝 실패→재시도' 시 개인 행이 중복된다.
+    //  ①수정·삭제된 공연 = replaceShow(멱등 — 재시도 무해 · 그 공연의 신규 추가분도 함께 실어 append 중복 차단)
+    //  ②무수정 공연 신규 = 종전 append(+_gSaved 재시도 가드) ③개인 최후 단일 스텝(종전 계약 그대로).
+    var gConsumed={};
+    if(gDirty){
+      var _toG=function(r){return {공연명:r.공연명,공연ID:r.공연ID||'',기준일자:String(r.기준일자||'').replace(/[^0-9]/g,''),좌석:parseInt(r.좌석,10)||0,금액:(String(r.금액||'').trim()===''?'':(parseInt(r.금액,10)||0)),단체명:(r.단체명||'')};};
+      var _shows=Object.keys(gEditedShows);
+      for(var _si=0;_si<_shows.length;_si++){
+        var _sn=_shows[_si];
+        var _mine=(_dailyState.gEdit||[]).filter(function(r){return r.공연명===_sn;}).map(_toG);
+        gRows.forEach(function(r,gi){ if(r.공연명===_sn&&!gConsumed[gi]){_mine.push(r);gConsumed[gi]=1;} });
+        await _groupSave({show:_sn,newRows:_mine,mode:'replaceShow'});
+      }
+      _dailyState.gSig=JSON.stringify(_dailyState.gEdit);   // 반영 완료 = 새 기준(재시도 시 같은 교체 = 멱등 무해)
+    }
+    var gAppend=gRows.filter(function(r,gi){return !gConsumed[gi];});
+    if(gAppend.length && !(_dailyState&&_dailyState._gSaved)){ await _groupSave({newRows:gAppend,mode:'append'}); if(_dailyState)_dailyState._gSaved=true; }
     if(rows.length) await api('POST','/api/ops',{sheet:'일일입력',mode:'append',rows:rows});
     if(_dailyState)_dailyState._gSaved=false;   // 전체 성공 → 플래그 리셋
-    showToast((rows.length?rows.length+'건':'')+((rows.length&&gRows.length)?' · ':'')+(gRows.length?'단체 '+gRows.length+'건':'')+' 저장됐어요 ('+date+')');
+    var _tp=[]; if(rows.length)_tp.push(rows.length+'건'); if(gRows.length)_tp.push('단체 '+gRows.length+'건'); if(gDirty)_tp.push('단체 수정 반영');
+    showToast(_tp.join(' · ')+' 저장됐어요 ('+date+')');
     closeDailyInput();
     _salesState.master=null;_salesState.daily=null;_salesState.rounds=null;
     try{_srailInit();}catch(_e){}  // 판매 레일 최신화(일일입력 반영 재fetch)
