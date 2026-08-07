@@ -59,7 +59,7 @@ async function run(page, label, seg) {
   out.result = await page.evaluate(RESULT);
   await SHOT(page, `${label}_명단.png`);
   // 「최근 5년」으로 바꿔 임의 N이 실제로 먹는지 — 운영자 「3년이 아니라 5년이면 5년으로」
-  await page.evaluate(`(()=>{document.getElementById('seg-num').value='5';document.getElementById('seg-min').value='3';})()`);
+  await page.evaluate(`_segQToForm(Object.assign({},_segQFromForm(),{span:'n',n:5,u:'년',thr:3}))`);
   await page.evaluate('_segRun()');
   await page.waitForTimeout(1200);
   out.result5 = await page.evaluate(RESULT);

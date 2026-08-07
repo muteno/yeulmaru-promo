@@ -29123,24 +29123,27 @@ function _bkSpanAll(){
   var a=Math.floor(st.lo/100),b=Math.floor(st.hi/100);
   return a===b?(a+'년'):(a+'~'+b+'년');
 }
+// 분포 키의 시간 축(`YYYYMM`·`YYYY`)이 창 안인가 — **이 판정은 한 곳뿐**(260814 통합).
+//   ⚠ 구판은 같은 5줄이 `_bkCount`·`_segGenreTop` 두 곳에 복사돼 있었다. 한쪽만 고치면 표의 장르 칸과 조건 계산이
+//     다른 기간을 보게 된다(눈에 안 띈다 — 숫자는 나오고 값만 틀리다).
+function _bkInWin(t,win){
+  if(!win)return true;
+  var v=parseInt(t,10);if(!v)return false;
+  if(t.length===6){
+    if(win.unit==='m')return v>=win.lo&&v<=win.hi;
+    var y6=Math.floor(v/100);return y6>=win.lo&&y6<=win.hi;
+  }
+  // 구 포맷(연 키)에 월 창을 물으면 연으로 낮춰 본다 — 경계 달을 통째로 포함한다(빠뜨리는 쪽보다 낫다)
+  if(win.unit==='m')return v>=Math.floor(win.lo/100)&&v<=Math.floor(win.hi/100);
+  return v>=win.lo&&v<=win.hi;
+}
 // 한 회원의 (기간창 × 장르) 관람 횟수 — 분포 키가 연(4자리)·월(6자리) 어느 쪽이든 받는다
 function _bkCount(rec,win,g){
   var c=0;
   for(var k in rec.d){
     var i=k.indexOf('|');if(i<0)continue;
-    var t=k.slice(0,i),gg=k.slice(i+1);
-    if(g&&gg!==g)continue;
-    if(win){
-      var v=parseInt(t,10);if(!v)continue;
-      if(t.length===6){
-        if(win.unit==='m'){ if(v<win.lo||v>win.hi)continue; }
-        else { var y6=Math.floor(v/100); if(y6<win.lo||y6>win.hi)continue; }
-      }else{
-        // 구 포맷(연 키)에 월 창을 물으면 연으로 낮춰 본다 — 경계 달을 통째로 포함한다(빠뜨리는 쪽보다 낫다)
-        if(win.unit==='m'){ var a=Math.floor(win.lo/100),b=Math.floor(win.hi/100); if(v<a||v>b)continue; }
-        else if(v<win.lo||v>win.hi)continue;
-      }
-    }
+    if(g&&k.slice(i+1)!==g)continue;
+    if(!_bkInWin(k.slice(0,i),win))continue;
     c+=rec.d[k];
   }
   return c;
@@ -29185,12 +29188,12 @@ function _bkAnswer(q){
       thr:tm?tm[1]:(/재구매|단골|여러\s*번|2회|두\s*번/.test(q)?2:1)});
     if(w0&&!w0.n){ask.span='range';ask.from=String(w0.lo).length===4?(w0.lo+'01'):String(w0.lo);ask.to=String(w0.hi).length===4?(w0.hi+'12'):String(w0.hi);}
   }
-  var win=_segQWin(ask),g=ask.g,by=_bkState.by,thr=ask.thr;
+  var win=_segQWin(ask),g=ask.g,by=_bkState.by;
   var hit=0,tix=0,byIdx=(ask.region?_segMemIdx():null);
   for(var k in by){
-    var c=_bkCount(by[k],win,g);if(c<thr)continue;
+    var c=_bkCount(by[k],win,g);if(!_segHitOk(c,ask))continue;   // 명단(_segCompute)과 **같은 판정 한 벌**
     if(ask.only&&_bkCountOther(by[k],win,g)>0)continue;
-    if(byIdx){var mm=byIdx[k];if(!mm||_segRegionOf(mm)!==ask.region)continue;}
+    if(byIdx){var mm=byIdx[k];if(!mm||!_segRegionMatch(mm,ask.region))continue;}
     hit++;tix+=by[k].tix;
   }
   var est=Math.round(hit*_BK_SCALE);
@@ -29329,11 +29332,7 @@ function _segGenreTop(rec,win){
   var g={};
   for(var k in rec.d){
     var i=k.indexOf('|');if(i<0)continue;
-    var t=k.slice(0,i),v=parseInt(t,10);if(!v)continue;
-    if(win){
-      if(t.length===6){ if(win.unit==='m'){ if(v<win.lo||v>win.hi)continue; } else { var y6=Math.floor(v/100); if(y6<win.lo||y6>win.hi)continue; } }
-      else { if(win.unit==='m'){ var a=Math.floor(win.lo/100),b=Math.floor(win.hi/100); if(v<a||v>b)continue; } else if(v<win.lo||v>win.hi)continue; }
-    }
+    if(!_bkInWin(k.slice(0,i),win))continue;          // 창 판정 = `_bkCount`와 **같은 한 줄**(_bkInWin)
     var gg=k.slice(i+1);g[gg]=(g[gg]||0)+rec.d[k];
   }
   return Object.keys(g).sort(function(x,y){return g[y]-g[x];}).slice(0,3).map(function(x){return {g:x,c:g[x]};});
@@ -29404,11 +29403,12 @@ function _segView(){
   }
   return out;
 }
-// ===== 조건 한 벌(SSOT · 260813) =====
+// ===== 조건 한 벌(SSOT · 260813 · 260814 축 2개 증설) =====
 // 폼 · 자연어 파서 · 예울이 채팅이 **같은 객체**를 주고받는다 — 조건을 각자 해석하면 같은 질문에 답이 둘이 된다.
-//   {span:'n'|'all'|'range', n, u:'년'|'개월', from:'YYYY-MM', to:'YYYY-MM', g, only, region, thr}
+//   {span:'n'|'all'|'range', n, u:'년'|'개월', from:'YYYY-MM', to:'YYYY-MM', g, only, region, thr, op}
 //   · only   = 「그 장르**만**」(다른 장르 0회) · g가 없으면 뜻이 없다
-//   · region = 회원 시트의 시 이름(`_memCityName` 산출값) — 데이터에 실존하는 값만(창작 지명 0)
+//   · region = 회원 시트의 시 이름(`_memCityName` 산출값) **또는** 묶음 키(`@`로 시작 · `_SEG_RGRP`) — 창작 지명 0
+//   · op     = 횟수 비교(260814 운영자 「이상」도 변수) · 'gte' = N회 이상 · 'lte' = 1~N회(안 본 사람은 안 든다)
 function _segQNorm(q){
   q=q||{};
   var out={span:(q.span==='all'||q.span==='range')?q.span:'n',
@@ -29417,10 +29417,18 @@ function _segQNorm(q){
     from:String(q.from||''),to:String(q.to||''),
     g:(q.g&&_BK_GENRES.indexOf(q.g)>=0)?q.g:null,
     only:!!q.only,region:q.region?String(q.region):null,
+    op:(q.op==='lte')?'lte':'gte',
     thr:Math.max(1,Math.min(99,parseInt(q.thr,10)||1))};
   if(!out.g)out.only=false;                                    // 장르가 없으면 「~만」은 말이 안 된다
+  if(out.region&&out.region.charAt(0)==='@'&&!_segRgrp(out.region))out.region=null;   // 모르는 묶음 키 = 조건 없음(있는 척 금지)
   return out;
 }
+// 횟수 판정 한 벌 — 명단(_segCompute)·채팅(_bkAnswer)이 **같은 줄**을 본다(갈리면 같은 조건에 답이 둘).
+//   ⚠ 「N회 이하」에 0회를 넣지 않는다 — 그 창에 한 번도 안 본 사람까지 들어와 「안 본 사람 명단」이 된다.
+function _segHitOk(c,q){ return (q.op==='lte')?(c>=1&&c<=q.thr):(c>=q.thr); }
+// 조건이 **아무 축도 안 좁히는가** — 기간 전체 + 장르 전체 + 거주지 전체 + 1회 이상 = 사실상 「전건」이다.
+//   [260814] 이 판정이 없어서 자연어 해석이 실패해도 「읽은 조건」이라 말하고 전건 명단을 그렸다(운영자 실측 10,119명).
+function _segQBlank(q){ q=_segQNorm(q); return q.span==='all'&&!q.g&&!q.region&&q.op==='gte'&&q.thr<=1; }
 function _segQWin(q){ return q.span==='all'?null:(q.span==='range'?_bkWinRange(q.from,q.to):_bkWinN(q.n,q.u)); }
 // 회원 시트에 실존하는 시 목록 — 폼 select와 자연어 파서가 같은 목록을 본다(둘이 갈리면 폼엔 있는데 말로는 안 되는 지역이 생긴다)
 function _segCities(){
@@ -29428,78 +29436,213 @@ function _segCities(){
   return idx?Object.keys(idx.byCity).sort(function(a,b){return idx.byCity[b]-idx.byCity[a];}):[];
 }
 function _segRegionOf(m){ return _memCityName(String(m['주소1']||'').trim(),String(m['주소2']||'').trim()); }
+// ===== 거주지 묶음(운영자 260814 지시 목록 그대로) =====
+// 「거주지는 좀 많잖아. 그래서 몇개만 제안해줄거야 — 여수시·순천시·광양시 / 여수·순천·광양 / 전남·광주 /
+//   수도권(서울·경기·인천) / 영·호남 / 기타 광역시」.
+//   ⚠ 묶음은 **서로 배타가 아니다** — 부산은 「영·호남」에도 「기타 광역시」에도 든다. 한 번에 하나만 고르는 렌즈지
+//     분할이 아니다(합계가 전체와 안 맞는 게 정상).
+//   ⚠ 시도 이름은 **회원 시트에 실존하는 값**만 쓴다(`_MEM_GEO` 어휘) — 전남·광주는 시트가 통합시 한 값으로 들고 있어
+//     `전남광주통합특별시` 하나가 전남 전 시군 + 옛 광주 5구를 덮는다.
+//   ⚠ 「기타 광역시」 = 전남·광주 밖 광역시급(부산·대구·인천·대전·울산·세종) — 서울은 위 「수도권」이 대표한다.
+var _SEG_RGRP=[
+  {v:'@ysgy',l:'여수·순천·광양',city:['여수시','순천시','광양시']},
+  {v:'@jngj',l:'전남·광주',sido:['전남광주통합특별시']},
+  {v:'@capi',l:'수도권(서울·경기·인천)',sido:['서울특별시','경기도','인천광역시']},
+  {v:'@yhho',l:'영·호남',sido:['전남광주통합특별시','전북특별자치도','부산광역시','대구광역시','울산광역시','경상남도','경상북도']},
+  {v:'@metr',l:'기타 광역시',sido:['부산광역시','대구광역시','인천광역시','대전광역시','울산광역시','세종특별자치시']}
+];
+function _segRgrp(v){ for(var i=0;i<_SEG_RGRP.length;i++)if(_SEG_RGRP[i].v===v)return _SEG_RGRP[i]; return null; }
+function _segRgrpHit(g,s1,city){ return g.city?(g.city.indexOf(city)>=0):(g.sido.indexOf(s1)>=0); }
+// 한 사람이 조건 거주지에 드는가 — 도시 한 곳(구판 그대로)이거나 묶음(`@`).
+function _segRegionMatch(m,r){
+  if(!r)return true;
+  if(r.charAt(0)==='@'){var g=_segRgrp(r);return g?_segRgrpHit(g,String(m['주소1']||'').trim(),_segRegionOf(m)):true;}
+  return _segRegionOf(m)===r;
+}
+function _segRegionLabel(r){ if(!r)return '전 지역'; var g=_segRgrp(r); return g?g.l:r; }
+// 장르별 **사람 수**(지금 기간 창 기준) — 목록에 같이 띄운다. 「어느 장르에 사람이 있나」를 고르기 전에 보여주는 자리다.
+//   ⚠ 횟수가 아니라 사람 수다(한 사람이 클래식 20번이면 1). 조건이 사람을 뽑으니 세는 단위도 사람이어야 한다.
+function _segGenreTally(win){
+  var by=(_bkState&&_bkState.by)||{},t={};
+  for(var k in by){
+    var rec=by[k],seen=null;
+    for(var d in rec.d){
+      var i=d.indexOf('|');if(i<0)continue;
+      if(!_bkInWin(d.slice(0,i),win))continue;
+      (seen=seen||{})[d.slice(i+1)]=1;
+    }
+    for(var g in seen)t[g]=(t[g]||0)+1;
+  }
+  return t;
+}
+// 후보별 회원 수 — 목록을 그릴 때 한 번만 센다(옵션마다 다시 훑으면 10열 × 만 행). 없으면 빈 표.
+function _segRegionTally(){
+  var rows=(_memState&&_memState.rows)||[],t={};
+  rows.forEach(function(r){
+    var s1=String(r['주소1']||'').trim(),c=_memCityName(s1,String(r['주소2']||'').trim());
+    if(c)t[c]=(t[c]||0)+1;
+    for(var i=0;i<_SEG_RGRP.length;i++)if(_segRgrpHit(_SEG_RGRP[i],s1,c))t[_SEG_RGRP[i].v]=(t[_SEG_RGRP[i].v]||0)+1;
+  });
+  t['']=rows.length;
+  return t;
+}
 
 // 폼 인라인 문법 = 회원 조회 필터줄(openMemberLookup) **계승** — 새 클래스·새 색 0(전부 기존 토큰).
 var _SEG_IN='padding:9px 12px;border:1px solid var(--border2);border-radius:var(--r-btn);font-size:13px;font-family:inherit;background:var(--surface-solid);color:var(--text)';
+// ===== 조건 = 「문장 안의 변수」(운영자 260814) =====
+// 지시: *「변수가 3년 / 클래식 / 5회 / 이상 / 여수시 — 이게 변수로 나오게 해줘 강조색으로, 누르면 토글되서 다른걸
+//        제안하게」* + *「따로 알약안에 안넣을께」* + *「검색하는 곳과 선택하는 곳의 간격을 좀 더 확보」* + *「1줄로 말끔히」*.
+// = 셀렉트 6개가 두 줄로 접히던 폼을 **읽히는 문장 한 줄**로 바꾼다 — 값이 아니라 **문장**이 조건을 말하고,
+//   바꿀 수 있는 자리(변수) 5개만 강조색 글자로 선다. 누르면 그 자리에 다른 값 목록이 열린다.
+// 부품은 전부 정본 계승 = 트리거 `.ry-yr-tg`(기틀 §2 #3 · 강조색 800 + `▾` 회전) · 목록 `_ddOpen`(§2 「드롭다운은
+//   이걸로만 · 동시 1개」) · 패널 `.ry-yr-dd`(항목 촤르륵) · 구분선 `var(--border)` — **신규 CSS·색·부품 0**.
+// ⚠ 문장은 접히면 안 된다(운영자 「1줄로」) — `flex-wrap:nowrap`. 좁은 창에서는 줄바꿈 대신 가로로 민다(가리지 않는다).
+// ⚠ 폼 상태는 이제 DOM이 아니라 **객체 `_segQ` 하나**다 — 값을 읽는 곳(`_segQFromForm`)과 쓰는 곳(`_segQToForm`)의
+//   이름·계약은 그대로 둔다(자연어·예울이·스모크가 그 이름으로 들어온다).
+var _segQ=_segQNorm({span:'n',n:3,u:'년',thr:5});
+var _SEG_TXT='font-size:12.5px;color:var(--neutral-text);white-space:nowrap';
+var _SEG_DDIT='display:block;width:100%;padding:7px 13px;border:0;background:none;text-align:left;font-size:12.5px;border-radius:9px;cursor:pointer;font-family:inherit;white-space:nowrap;transition:background .12s';
+var _SEG_DDSEP='<div style="height:1px;background:var(--border);margin:5px 9px"></div>';
+// 시트 값 → 화면 이름. 「발레/연극」은 **한 갈래**다(운영자 260814 「발레·무용/연극」 문의 — 시트 `장르1`이 둘을 한 값으로
+//   들고 있어 지금 데이터로는 못 쪼갠다). `/`가 파일명·경로로 새는 것도 막아 온 자리라 화면만 가운뎃점으로 읽는다.
+function _segGLab(g){ return g==='발레/연극'?'발레·연극':g; }
+// 운영자 지시 순서 먼저(클래식·뮤지컬·어린이·가족·발레·연극·시즌), 시트에 실존하는 나머지를 뒤에 — 목록에서 빠지는 장르 0
+var _SEG_GORD=['클래식','뮤지컬','어린이·가족','발레/연극','시즌','대중','국악','기타'];
+function _segGenreList(){ return _SEG_GORD.filter(function(g){return _BK_GENRES.indexOf(g)>=0;})
+  .concat(_BK_GENRES.filter(function(g){return _SEG_GORD.indexOf(g)<0;})); }
+function _segYmLab(s){ s=String(s||'').replace(/-/g,'.'); return s||'?'; }
+function _segSpanLab(q){ return q.span==='all'?'전 기간':(q.span==='range'?(_segYmLab(q.from)+'~'+_segYmLab(q.to)):('최근 '+q.n+q.u)); }
+function _segTokBtn(k,label,tip){
+  return '<button type="button" class="ry-yr-tg" data-k="'+k+'" aria-haspopup="listbox" aria-expanded="false"'
+    +' onclick="_segTokMenu(this,\''+k+'\')" title="'+_memEsc(tip)+'">'+_memEsc(label)+'<span class="cr" aria-hidden="true">▾</span></button>';
+}
+function _segTxt(s){ return '<span style="'+_SEG_TXT+'">'+_memEsc(s)+'</span>'; }
+// 조건 문장 — 「[최근 3년] 이내에 [클래식] 공연을 [5회] [이상] 관람한 [여수시] 거주 고객」
+function _segCondHtml(){
+  var q=_segQ;
+  return _segTokBtn('span',_segSpanLab(q),'기간 — 눌러서 바꿔요')
+    + _segTxt(q.span==='all'?'동안':'이내에')
+    + _segTokBtn('genre',q.g?_segGLab(q.g):'전 장르','장르 — 눌러서 바꿔요'+(q.g?' · 「그 장르만」도 여기서':''))
+    + _segTxt(q.only?'공연만':'공연을')
+    + _segTokBtn('thr',q.thr+'회','관람 횟수 — 눌러서 바꿔요')
+    + _segTokBtn('op',q.op==='lte'?'이하':'이상','이상 ↔ 이하 — 눌러서 바꿔요')
+    + _segTxt('관람한')
+    + _segTokBtn('region',_segRegionLabel(q.region),'거주지 — 눌러서 바꿔요')
+    + _segTxt('거주 고객')
+    + '<button type="button" class="btn btn--primary btn--sm" style="margin-left:auto;flex:none" onclick="_segRun()">조회</button>';
+}
+function _segCondRender(){ var e=document.getElementById('seg-cond'); if(e)e.innerHTML=_segCondHtml(); }
 function _segViewHtml(){
-  var gopt='<option value="">장르 전체</option>'+_BK_GENRES.map(function(g){return '<option value="'+_memEsc(g)+'">'+_memEsc(g)+'</option>';}).join('');
-  var ropt='<option value="">거주지 전체</option>'+_segCities().map(function(c){return '<option value="'+_memEsc(c)+'">'+_memEsc(c)+'</option>';}).join('');
   return _pcCard('누가 봤는지 뽑아요','예매기록의 휴대폰을 회원 정보와 맞춰 이름까지 되찾아요',
-      // ① 자연어 한 줄 — **폼을 채우는 입력**이다(답을 대신 만들지 않는다).
+      // ① 조건을 직접 적는 자리 — **문장을 채우는 입력**이다(답을 대신 만들지 않는다).
       //   로컬 해석이 0초로 먼저 붙고, 못 읽은 것만 예울이(claude-opus-5·medium)가 조건으로 번역한다.
       '<div style="display:flex;gap:8px;align-items:center;padding-top:11px">'
-    + '<input id="seg-nl" maxlength="120" placeholder="말로 물어보세요 — 예: 3년간 클래식만 본 여수 사람 3회 이상" style="'+_SEG_IN+';flex:1;min-width:0" onkeydown="if(event.key===\'Enter\'&&!event.isComposing)_segNlGo()">'
+    + '<input id="seg-nl" maxlength="120" placeholder="조건을 적어 보세요 — 예: 3년 이내 클래식 5회 이상 본 여수 사람" style="'+_SEG_IN+';flex:1;min-width:0" onkeydown="if(event.key===\'Enter\'&&!event.isComposing)_segNlGo()">'
     + '<button type="button" id="seg-nl-btn" class="btn btn--ghost btn--sm" style="flex:none" onclick="_segNlGo()">조건 만들기</button>'
     + '</div>'
-    + '<div id="seg-nl-note" style="font-size:11.5px;color:var(--dim);padding:6px 2px 0"></div>'
-      // ② 폼 = 위가 만든 조건이 **눈에 보이는 자리**. 틀렸으면 여기서 손으로 고치고 조회한다.
-    + '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding-top:11px">'
-    + '<select id="seg-span" onchange="_segSpanToggle()" style="'+_SEG_IN+';width:auto">'
-    +   '<option value="n">최근</option><option value="all">전 기간</option><option value="range">기간 지정</option></select>'
-    + '<input id="seg-num" type="number" min="1" max="99" value="3" style="'+_SEG_IN+';width:62px;text-align:center">'
-    + '<select id="seg-unit" style="'+_SEG_IN+';width:auto"><option value="년">년</option><option value="개월">개월</option></select>'
-    + '<input id="seg-from" type="month" style="'+_SEG_IN+';width:auto;display:none">'
-    + '<span id="seg-tilde" style="font-size:12.5px;color:var(--neutral-text);display:none">~</span>'
-    + '<input id="seg-to" type="month" style="'+_SEG_IN+';width:auto;display:none">'
-    + '<span style="font-size:12.5px;color:var(--neutral-text)">이내에</span>'
-    + '<select id="seg-region" style="'+_SEG_IN+';width:auto;max-width:150px">'+ropt+'</select>'
-    + '<select id="seg-genre" onchange="_segOnlyToggle()" style="'+_SEG_IN+';width:auto;max-width:150px">'+gopt+'</select>'
-    + '<label id="seg-only-wrap" style="display:flex;align-items:center;gap:5px;font-size:12.5px;color:var(--neutral-text);cursor:pointer;opacity:.45" title="그 장르 외에는 한 번도 안 본 사람만"><input type="checkbox" id="seg-only" disabled style="accent-color:var(--accent)">그 장르만</label>'
-    + '<input id="seg-min" type="number" min="1" max="99" value="5" style="'+_SEG_IN+';width:62px;text-align:center">'
-    + '<span style="font-size:12.5px;color:var(--neutral-text)">회 이상 관람</span>'
-    + '<button type="button" class="btn btn--primary btn--sm" onclick="_segRun()">조회</button>'
-    + '</div>')
+    + '<div id="seg-nl-note" style="font-size:11.5px;color:var(--dim);padding:7px 2px 0"></div>'
+      // ② 조건 문장 = 위가 만든 조건이 **눈에 보이는 자리**. 틀렸으면 변수를 눌러 고치고 조회한다.
+      //   위 검색줄과의 간격 = 운영자 260814 지시(「간격을 좀 더 확보」) — 11 → 24px.
+    + '<div id="seg-cond" style="display:flex;gap:4px;align-items:center;flex-wrap:nowrap;overflow-x:auto;padding-top:24px">'
+    + _segCondHtml()+'</div>')
     + '<div id="seg-result"></div>';
 }
-function _segSpanToggle(){
-  var sp=document.getElementById('seg-span'),v=sp?sp.value:'n';
-  ['seg-num','seg-unit'].forEach(function(id){var e=document.getElementById(id);if(e){e.disabled=(v!=='n');e.style.opacity=(v==='n')?'':'.45';}});
-  ['seg-from','seg-tilde','seg-to'].forEach(function(id){var e=document.getElementById(id);if(e)e.style.display=(v==='range')?'':'none';});
-  if(v==='range'){                                   // 빈 칸으로 조회하면 창이 null이 된다 — 데이터가 덮는 범위로 채워 둔다
-    var st=_bkState||{},f=document.getElementById('seg-from'),t=document.getElementById('seg-to');
-    var fmt=function(v6){return Math.floor(v6/100)+'-'+String(v6%100).padStart(2,'0');};
-    if(f&&!f.value&&st.lo)f.value=fmt(st.lo);
-    if(t&&!t.value&&st.hi)t.value=fmt(st.hi);
+// ── 변수 목록(드롭다운) ──────────────────────────────────────────────────
+function _segDdIt(act,label,on,sub,i,tip){
+  return '<button type="button" role="option" aria-selected="'+(on?'true':'false')+'" onclick="'+act+'"'
+    +(tip?' title="'+_memEsc(tip)+'"':'')+' style="'+_SEG_DDIT+';animation-delay:'+((i||0)*38)+'ms;'
+    +(on?'font-weight:800;color:var(--accent)':'font-weight:600;color:var(--text)')+'">'+_memEsc(label)
+    +(sub?'<span style="float:right;margin-left:16px;font-size:11px;font-weight:600;color:var(--dim);font-variant-numeric:tabular-nums">'+_memEsc(sub)+'</span>':'')
+    +'</button>';
+}
+function _segDdMenu(k){
+  var q=_segQ,h='',i=0,it=function(a,l,on,sub,tip){h+=_segDdIt(a,l,on,sub,i++,tip);};
+  if(k==='span'){
+    it("_segPick('span','all')",'전 기간',q.span==='all');
+    h+=_SEG_DDSEP;
+    ['6개월','1년','2년','3년','5년'].forEach(function(v){
+      var n=parseInt(v,10),u=(v.indexOf('개월')>0)?'개월':'년';
+      it("_segPick('span','"+v+"')",'최근 '+v,q.span==='n'&&q.n===n&&q.u===u);
+    });
+    h+=_SEG_DDSEP;
+    // 기간 지정 = 목록 안에서 끝낸다(문장 한 줄에 달력 두 개를 얹지 않는다). 빈 칸이면 데이터가 덮는 범위로 채워 둔다.
+    var st=_bkState||{},fmt=function(v6){return Math.floor(v6/100)+'-'+String(v6%100).padStart(2,'0');};
+    var fv=q.from||(st.lo?fmt(st.lo):''),tv=q.to||(st.hi?fmt(st.hi):'');
+    h+='<div style="display:flex;gap:5px;align-items:center;padding:5px 11px 3px">'
+      +'<input type="month" id="seg-dd-from" value="'+_memEsc(fv)+'" style="'+_SEG_IN+';font-size:12px;padding:6px 8px;width:134px">'
+      +'<span style="'+_SEG_TXT+'">~</span>'
+      +'<input type="month" id="seg-dd-to" value="'+_memEsc(tv)+'" style="'+_SEG_IN+';font-size:12px;padding:6px 8px;width:134px">'
+      +'<button type="button" class="btn btn--ghost btn--sm" style="flex:none" onclick="_segPick(\'span\',\'range\')">적용</button></div>';
+  }else if(k==='genre'){
+    // 옆 숫자 = **그 기간에 그 장르를 한 번이라도 본 사람 수**. 「어느 장르에 사람이 있나」를 고르기 전에 보여준다.
+    var gt=_segGenreTally(_segQWin(q));
+    it("_segPick('genre','')",'전 장르',!q.g);
+    h+=_SEG_DDSEP;
+    _segGenreList().forEach(function(g){ it("_segPick('genre','"+g.replace(/'/g,"\\'")+"')",_segGLab(g),q.g===g,_memAiFmt(gt[g]||0)+'명',
+      g==='발레/연극'?'시트 장르1이 발레·무용과 연극을 한 값(발레/연극)으로 들고 있어요 — 지금 데이터로는 못 쪼개요':''); });
+    h+=_SEG_DDSEP;
+    h+=q.g?_segDdIt("_segPick('only','')",(q.only?'「'+_segGLab(q.g)+'만」 끄기':_segGLab(q.g)+'만 본 사람'),q.only,'',i++,'그 장르 외에는 그 기간에 한 번도 안 본 사람만')
+          :'<div style="padding:7px 13px;font-size:11.5px;color:var(--muted)">장르를 고르면 「그 장르만」을 쓸 수 있어요</div>';
+  }else if(k==='thr'){
+    [1,2,3,5,10,20].forEach(function(n){ it("_segPick('thr',"+n+")",n+'회',q.thr===n); });
+    h+=_SEG_DDSEP;
+    h+='<div style="display:flex;gap:5px;align-items:center;padding:5px 11px 3px">'
+      +'<input type="number" id="seg-dd-thr" min="1" max="99" value="'+q.thr+'" style="'+_SEG_IN+';font-size:12px;padding:6px 8px;width:66px;text-align:center">'
+      +'<span style="'+_SEG_TXT+'">회</span>'
+      +'<button type="button" class="btn btn--ghost btn--sm" style="flex:none" onclick="_segPick(\'thr\',\'#\')">적용</button></div>';
+  }else if(k==='op'){
+    it("_segPick('op','gte')",'이상',q.op!=='lte','','그 횟수를 넘게 본 사람');
+    it("_segPick('op','lte')",'이하',q.op==='lte','','1회 이상 그 횟수 이하 — 안 본 사람은 안 들어와요');
+  }else if(k==='region'){
+    // 운영자 260814 지시 목록 그대로(구분선 자리까지) + 시트에 실존하는 나머지 시는 아래 스크롤 칸에.
+    var t=_segRegionTally(),num=function(v){return _memAiFmt(t[v]||0)+'명';};   // 0명도 적는다 — 빈 칸은 「모른다」로 읽힌다
+    it("_segPick('region','')",'거주지 전체',!q.region,num(''));
+    h+=_SEG_DDSEP;
+    ['여수시','순천시','광양시'].forEach(function(c){ it("_segPick('region','"+c+"')",c,q.region===c,num(c)); });
+    var gr=function(v){var g=_segRgrp(v);it("_segPick('region','"+v+"')",g.l,q.region===v,num(v),(g.sido||g.city).join(' · '));};
+    gr('@ysgy'); h+=_SEG_DDSEP; gr('@jngj'); gr('@capi'); h+=_SEG_DDSEP; gr('@yhho'); gr('@metr');
+    var rest=_segCities().filter(function(c){return ['여수시','순천시','광양시'].indexOf(c)<0;});
+    if(rest.length){
+      h+=_SEG_DDSEP+'<div style="padding:3px 13px 5px;font-size:11px;font-weight:700;color:var(--dim)">그 밖의 시 ('+rest.length+')</div>'
+        +'<div style="max-height:176px;overflow-y:auto">'+rest.map(function(c,j){return _segDdIt("_segPick('region','"+c.replace(/'/g,"\\'")+"')",c,q.region===c,num(c),j);}).join('')+'</div>';
+    }
   }
+  return h;
 }
-// 「그 장르만」은 장르를 골랐을 때만 쓸 수 있다 — 전체 장르에 「~만」은 뜻이 없다
-function _segOnlyToggle(){
-  var g=(document.getElementById('seg-genre')||{}).value,cb=document.getElementById('seg-only'),wr=document.getElementById('seg-only-wrap');
-  if(!cb||!wr)return;
-  cb.disabled=!g; wr.style.opacity=g?'':'.45';
-  if(!g)cb.checked=false;
+function _segTokMenu(btn,k){
+  if(!btn)return;
+  if(document.getElementById('dd-pop')&&btn.getAttribute('aria-expanded')==='true'){ _ddCloseAll(); btn.setAttribute('aria-expanded','false'); return; }   // 재클릭 = 닫기(정본 _bizmYearMenu 규약)
+  btn.setAttribute('aria-expanded','true');
+  _ddOpen(btn,function(p){ p.classList.add('ry-yr-dd'); p.innerHTML=_segDdMenu(k); },k==='region'?214:(k==='span'?150:112));
+  var ov=document.getElementById('dd-pop');
+  if(ov)ov.addEventListener('click',function(){ btn.setAttribute('aria-expanded','false'); });
+  document.addEventListener('keydown',function(e){ if(e.key==='Escape'){ _ddCloseAll(); btn.setAttribute('aria-expanded','false'); } },{once:true});
 }
-function _segQFromForm(){
-  var gv=(document.getElementById('seg-genre')||{}).value||null;
-  return _segQNorm({span:(document.getElementById('seg-span')||{}).value,
-    n:(document.getElementById('seg-num')||{}).value,u:(document.getElementById('seg-unit')||{}).value,
-    from:(document.getElementById('seg-from')||{}).value,to:(document.getElementById('seg-to')||{}).value,
-    g:gv,only:!!(document.getElementById('seg-only')||{}).checked,
-    region:(document.getElementById('seg-region')||{}).value||null,
-    thr:(document.getElementById('seg-min')||{}).value});
+// 변수 고르기 — 상태 하나(`_segQ`)만 바꾸고 문장을 다시 그린다. 이미 조회한 뒤면 그 자리에서 다시 센다
+//   (표가 떠 있는데 문장만 바뀌면 화면이 두 조건을 동시에 말한다).
+function _segPick(k,v){
+  var p={};
+  if(k==='span'){
+    if(v==='all')p={span:'all'};
+    else if(v==='range'){
+      var f=(document.getElementById('seg-dd-from')||{}).value||'',t2=(document.getElementById('seg-dd-to')||{}).value||'';
+      if(!f||!t2){showToast('기간을 둘 다 골라 주세요','error');return;}
+      p={span:'range',from:f,to:t2};
+    }else{ var m=/^(\d+)(개월|년)$/.exec(v); if(!m)return; p={span:'n',n:parseInt(m[1],10),u:m[2]}; }
+  }
+  else if(k==='genre')p={g:v||null,only:v?_segQ.only:false};
+  else if(k==='only')p={only:!_segQ.only};
+  else if(k==='thr'){ var n=(v==='#')?parseInt((document.getElementById('seg-dd-thr')||{}).value,10):v; if(!n||n<1)return; p={thr:n}; }
+  else if(k==='op')p={op:v};
+  else if(k==='region')p={region:v||null};
+  _ddCloseAll();
+  var q={};for(var a in _segQ)q[a]=_segQ[a];for(var b in p)q[b]=p[b];
+  _segQ=_segQNorm(q);
+  _segCondRender();
+  if(_segLast)_segRun();                              // 이미 명단이 떠 있으면 바로 다시 센다
 }
-function _segQToForm(q){
-  q=_segQNorm(q);
-  var set=function(id,v){var e=document.getElementById(id);if(e)e.value=v;};
-  set('seg-span',q.span);set('seg-num',q.n);set('seg-unit',q.u);
-  if(q.from)set('seg-from',q.from);if(q.to)set('seg-to',q.to);
-  set('seg-genre',q.g||'');set('seg-min',q.thr);
-  var rs=document.getElementById('seg-region');
-  if(rs){var ok=false;for(var i=0;i<rs.options.length;i++)if(rs.options[i].value===(q.region||'')){ok=true;break;}rs.value=ok?(q.region||''):'';}
-  _segSpanToggle();_segOnlyToggle();
-  var cb=document.getElementById('seg-only');if(cb&&!cb.disabled)cb.checked=!!q.only;
-  return q;
-}
+function _segQFromForm(){ return _segQNorm(_segQ); }
+function _segQToForm(q){ _segQ=_segQNorm(q); _segCondRender(); return _segQ; }
 async function _segRun(){
   if(userRole!=='admin'){showToast('고객 분류는 관리자 전용이에요','error');return;}
   var host=document.getElementById('seg-result');if(!host)return;
@@ -29510,17 +29653,13 @@ async function _segRun(){
   host=document.getElementById('seg-result');host=host||document.getElementById('seg-result');if(!host)return;
   if(!_bkState||!_bkState.n){host.innerHTML='<div class="u-empty">예매 집계를 못 불러왔어요'+(_bkState&&_bkState.err?' ('+_memEsc(_bkState.err)+')':'')+'</div>';return;}
   if(!_segMemIdx()){host.innerHTML='<div class="u-empty">회원 시트를 못 불러왔어요 — 이름을 붙이려면 회원 정보가 있어야 해요</div>';return;}
-  _segFillRegions();                                // 회원 시트를 이제 막 받았을 수 있다 — 거주지 목록을 그때 채운다
+  _segFillRegions();                                // 회원 시트를 이제 막 받았을 수 있다 — 조건 문장을 그때 다시 그린다
   _segCompute(_segQFromForm());
   _segRender();
 }
-// 거주지 목록은 회원 시트가 와야 만들 수 있다(탭을 그릴 땐 아직 없을 수 있음) — 비어 있을 때만 채운다
-function _segFillRegions(){
-  var rs=document.getElementById('seg-region');if(!rs||rs.options.length>1)return;
-  var cur=rs.value,cs=_segCities();if(!cs.length)return;
-  rs.innerHTML='<option value="">거주지 전체</option>'+cs.map(function(c){return '<option value="'+_memEsc(c)+'">'+_memEsc(c)+'</option>';}).join('');
-  rs.value=cur;
-}
+// [260814] 거주지 목록은 이제 **누를 때** 만든다(회원 수까지 같이 센다) — 여기서는 문장만 다시 그린다.
+//   이름을 남겨 둔 이유 = 부르는 자리가 셋(조회·자연어·「명단 보기」)이고, 「회원 시트가 막 도착했다」는 신호가 그 셋이다.
+function _segFillRegions(){ _segCondRender(); }
 // 조건 → 명단. 이름 역추출은 회원키(휴대폰) 한 번의 색인 조회뿐 — 퍼지 매칭은 반입 때 이미 끝났다.
 //   [260813] 인자가 `(win,g,thr)` 셋에서 **조건 객체 하나**로 바뀌었다 — 축이 늘 때마다 인자를 늘리면
 //   부르는 자리(폼·자연어·예울이)가 서로 다른 개수를 넘기기 시작한다.
@@ -29529,11 +29668,11 @@ function _segCompute(q){
   var win=_segQWin(q),by=_bkState.by,idx=_segMemIdx(),out=[],nomem=0,noreg=0,notonly=0;
   for(var k in by){
     var rec=by[k],c=_bkCount(rec,win,q.g);
-    if(c<q.thr)continue;
+    if(!_segHitOk(c,q))continue;                    // 이상/이하 = 한 벌(`_segHitOk`) — 채팅도 같은 줄을 본다
     if(q.only&&_bkCountOther(rec,win,q.g)>0){notonly++;continue;}   // 「그 장르만」 = 그 창에서 다른 장르 0회
     var m=idx[k];
     if(!m){nomem++;continue;}                       // 회원키가 회원 시트에 없다 = 이름을 못 붙인다(지어내지 않고 세어서 밝힌다)
-    if(q.region&&_segRegionOf(m)!==q.region){noreg++;continue;}
+    if(q.region&&!_segRegionMatch(m,q.region)){noreg++;continue;}   // 도시 한 곳 또는 묶음(`@`)
     out.push({key:k,c:c,rec:rec,m:m});
   }
   out.sort(function(a,b){return b.c-a.c||b.rec.tix-a.rec.tix;});
@@ -29543,8 +29682,8 @@ function _segCompute(q){
 // 조건 → 사람이 읽는 한 줄. 결과 머리줄과 예울이 답변이 **같은 문장**을 쓴다.
 function _segQLabel(q){
   q=_segQNorm(q);var win=_segQWin(q);
-  return (win?win.label:_bkSpanAll())+' · '+(q.region?q.region+' 거주 · ':'')
-    +(q.g?(q.g+(q.only?'만 ':' ')):'')+'공연 '+q.thr+'회 이상';
+  return (win?win.label:_bkSpanAll())+' · '+(q.region?_segRegionLabel(q.region)+' 거주 · ':'')
+    +(q.g?(_segGLab(q.g)+(q.only?'만 ':' ')):'')+'공연 '+q.thr+'회 '+(q.op==='lte'?'이하':'이상');
 }
 // 표 머리 = 2단(운영자 260812 「관람을 2행으로 인덱싱행을 구성」). 1행 높이는 여기 한 곳에서만 정한다 —
 //   2단 sticky의 아랫단이 `top`으로 그 값을 그대로 쓰기 때문에 갈리면 머리 두 줄이 겹치거나 벌어진다.
@@ -29712,7 +29851,7 @@ function _segCsv(){
   });
   // 파일명에 장르를 그대로 넣지 않는다 — 「발레/연극」의 `/`가 경로 구분자로 먹혀 저장이 깨진다
   var tag=String(L.g||'전체장르').replace(/[^0-9A-Za-z가-힣]/g,'');
-  downloadCsv(tsFilename('고객분류_'+tag+'_'+L.thr+'회이상'+(mask?'_번호가림':'')),rowsToCsv(rows,cols));
+  downloadCsv(tsFilename('고객분류_'+tag+'_'+L.thr+'회'+((L.q&&L.q.op==='lte')?'이하':'이상')+(mask?'_번호가림':'')),rowsToCsv(rows,cols));
   showToast(_memAiFmt(rows.length)+'명 CSV로 받았어요'+(mask?' (휴대폰 가림)':' (휴대폰 원본)'),'success');
 }
 // 예울이 답변의 「명단 보기」 → 같은 조건 그대로 이 탭으로. 질의를 두 번 해석하지 않는다(해석이 갈리면 답이 둘이 된다).
@@ -29738,7 +29877,9 @@ function _segFromAsk(){
 function _segAiSafe(q){ return !/01[016-9][-\s.]?\d{3,4}[-\s.]?\d{4}|\d{10,}/.test(String(q||'')); }
 // 로컬 해석 — 이미 있는 해석기(`_bkWin`·`_bkGenre`·`_memAiRegions`)를 모아 쓴다. 새 파서를 또 만들지 않는다.
 //   못 읽으면 null → 그때만 LLM. 「무엇을 읽었나」를 같이 돌려줘 화면이 근거를 말할 수 있게 한다.
-function _segParseLocal(s){
+//   [260814] `min` = 「몇 축을 읽어야 읽었다고 하나」(기본 2). 못 다루는 축을 짚은 질문에도 **읽힌 것만은 채워 주려고**
+//   1로 한 번 더 부른다 — 거절하면서 조건칸을 비워 두면 운영자가 처음부터 다시 골라야 한다.
+function _segParseLocal(s,min){
   var q=String(s||'').trim();if(!q)return null;
   var got=[],out={span:'all',thr:1};
   var win=_bkWin(q);
@@ -29754,16 +29895,33 @@ function _segParseLocal(s){
     if(rs.length===1){out.region=_memCityName('',rs[0].name)||rs[0].name;
       if(_segCities().indexOf(rs[0].name)>=0)out.region=rs[0].name;
       got.push('거주지 '+out.region);} }
+  // [260814] 이하도 읽는다 — 문장의 「이상」이 변수가 됐으니 말로도 그 자리를 짚을 수 있어야 한다
+  var lte=q.match(/(\d+)\s*[회번]\s*(?:이하|까지)/);
   var m=q.match(/(\d+)\s*회\s*이상/)||q.match(/(\d+)\s*번\s*이상/);
-  if(m){out.thr=parseInt(m[1],10);got.push(out.thr+'회 이상');}
+  if(lte){out.thr=parseInt(lte[1],10);out.op='lte';got.push(out.thr+'회 이하');}
+  else if(m){out.thr=parseInt(m[1],10);got.push(out.thr+'회 이상');}
   else if(/재구매|단골|여러\s*번|두\s*번/.test(q)){out.thr=2;got.push('2회 이상');}
-  if(got.length<2)return null;                      // 하나만 읽혔으면 「읽었다」고 하기 어렵다 → LLM에 넘긴다
+  if(got.length<(min||2))return null;               // 하나만 읽혔으면 「읽었다」고 하기 어렵다 → LLM에 넘긴다
   return {q:_segQNorm(out),why:got.join(' · ')};
 }
+// [260814] 이 도구에 **없는 축**을 짚은 질문 — LLM에 보내도 답이 없다(있는 축으로 뭉개진 조건이 온다).
+//   운영자 실측 = 「0789 끝자리인 번호로 예매한 이력을 확인해줘」 → 예울이가 30초~2분 걸려 「전 기간 · 1회 이상」을
+//   돌려줬고 앱은 그걸 「읽은 조건」이라 말하며 **전건 10,119명**을 그렸다. 없는 축은 왕복 전에 그 자리에서 말한다.
+var _SEG_NOAXIS=[
+  {re:/끝자리|뒷자리|뒤\s*네\s*자리|번호로|휴대폰|전화번호/,l:'휴대폰 번호'},
+  {re:/이름이|성함|이름으로/,l:'이름'},
+  {re:/공연명|프로그램명|작품명|무슨\s*공연|어떤\s*공연/,l:'공연·프로그램 이름'},
+  {re:/\d+\s*대\s|\d+\s*대$|연령|나이/,l:'연령대'},
+  {re:/금액|얼마|매출|객단가/,l:'구매 금액'},
+  {re:/좌석|매수|몇\s*장/,l:'구매 매수'}
+];
+function _segNoAxis(s){ var q=String(s||''); for(var i=0;i<_SEG_NOAXIS.length;i++)if(_SEG_NOAXIS[i].re.test(q))return _SEG_NOAXIS[i].l; return null; }
+var _SEG_AXES='지금 걸 수 있는 조건은 <b>기간 · 장르 · 거주지 · 관람 횟수</b> 넷이에요';
 // LLM 해석 — 질문 문장 + 고를 수 있는 값 목록(장르·거주지·데이터 범위)만 보낸다. 개인 데이터 0.
 async function _segParseAI(s,onTick){
   var st=_bkState||{};
   var ctx='장르 목록: '+_BK_GENRES.join(', ')
+    +'\n거주지 묶음(키로 답한다): '+_SEG_RGRP.map(function(g){return g.v+' = '+g.l;}).join(' · ')
     +'\n거주지 목록(이 중 하나만): '+_segCities().slice(0,60).join(', ')
     +'\n데이터가 덮는 기간: '+(st.lo?_bkYm(st.lo)+'~'+_bkYm(st.hi):'미상');
   var id='sp'+Date.now()+'r'+Math.floor(Math.random()*1e4);
@@ -29782,6 +29940,8 @@ async function _segParseAI(s,onTick){
       if(d.draft.ok===false)throw new Error(d.draft.error||'해석 실패');
       var raw=d.draft.cond||d.draft.text;
       var obj=(raw&&typeof raw==='object')?raw:JSON.parse(String(raw||'').replace(/^[^{]*/,'').replace(/[^}]*$/,''));
+      // [260814] 모델이 「이 축은 스키마에 없다」고 답한 경우 = 정직한 실패. 기본값으로 뭉개서 전건을 그리지 않는다.
+      if(obj&&obj.ok===false)throw new Error(String(obj.why||'조건으로 옮길 수 없는 질문이에요'));
       return _segQNorm(obj);
     }
   }
@@ -29803,6 +29963,16 @@ async function _segNlGo(){
     _segNlNote('읽은 조건 — <b style="color:var(--text)">'+_memEsc(_segQLabel(loc.q))+'</b> <span style="color:var(--muted)">(앱이 바로 읽음 · '+_memEsc(loc.why)+')</span>');
     _segRun();return;
   }
+  // [260814] ① 없는 축을 짚은 질문 = **왕복 전에** 그 자리에서 말한다(30초~2분 기다린 끝에 엉뚱한 조건이 오는 걸 막는다).
+  //   읽힌 축이 하나라도 있으면 그것만은 문장에 채워 둔다 — 거절하면서 조건칸까지 비우면 처음부터 다시 골라야 한다.
+  var miss=_segNoAxis(s);
+  if(miss){
+    var part=_segParseLocal(s,1);
+    if(part)_segQToForm(part.q);
+    _segNlNote('<b style="color:var(--peach-text)">「'+_memEsc(miss)+'」로는 아직 못 걸러요</b> — '+_SEG_AXES
+      +(part?' · 읽은 것만 아래에 채웠어요('+_memEsc(part.why)+')':'')+' · 아래 조건을 눌러 고르고 <b>조회</b>를 누르세요.');
+    return;
+  }
   if(!_segAiSafe(s)){_segNlNote('<b style="color:var(--danger)">전화번호가 섞여 있어 예울이에게 안 보냈어요</b> — 이 경로는 질문이 공개 저장소에 남아요. 번호 없이 조건만 적어 주세요.');return;}
   var btn=document.getElementById('seg-nl-btn');
   _segNlBusy=true;if(btn)btn.disabled=true;
@@ -29810,10 +29980,17 @@ async function _segNlGo(){
   try{
     var q=await _segParseAI(s,function(sec){_segNlNote(_ldHtml(13)+' 예울이가 조건으로 옮기는 중 — '+sec+'초 지났어요(보통 30초~2분)');});
     _segQToForm(q);
+    // [260814] ② **아무 축도 안 좁힌 조건 = 해석 실패다.** 구판은 이걸 「읽은 조건」이라 부르고 그대로 조회해
+    //   전건 명단(운영자 실측 10,119명)을 그렸다 — 못 읽었으면 못 읽었다고 말하고 **조회는 하지 않는다**.
+    if(_segQBlank(q)){
+      _segNlNote('<b style="color:var(--peach-text)">조건을 못 찾았어요</b> — 예울이가 돌려준 게 「전 기간 · 전 장르 · 1회 이상」(= 전건)이라 그대로는 안 세요. '
+        +_SEG_AXES+' · 아래 조건을 눌러 고르고 <b>조회</b>를 누르세요.');
+      return;
+    }
     _segNlNote('읽은 조건 — <b style="color:var(--text)">'+_memEsc(_segQLabel(q))+'</b> <span style="color:var(--muted)">(예울이 해석 · 틀리면 아래에서 고치고 다시 조회하세요)</span>');
     _segRun();
   }catch(e){
-    _segNlNote('<b style="color:var(--danger)">해석 실패</b> — '+_memEsc(String(e&&e.message||e))+' · 아래 폼으로 직접 골라 조회해 주세요.');
+    _segNlNote('<b style="color:var(--danger)">해석 실패</b> — '+_memEsc(String(e&&e.message||e))+' · 아래 조건을 눌러 고르고 조회해 주세요.');
   }finally{ _segNlBusy=false;if(btn)btn.disabled=false; }
 }
 

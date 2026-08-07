@@ -54,7 +54,7 @@ await page.waitForTimeout(500);
 await page.evaluate(`_pcTab('seg')`);
 await page.waitForTimeout(400);
 // 목데이터는 12명 소표본 — 「전 기간 · 1회 이상」으로 전건이 뜨게 한다
-await page.evaluate(`(function(){document.getElementById('seg-span').value='all';_segSpanToggle();document.getElementById('seg-min').value='1';})()`);
+await page.evaluate(`_segQToForm({span:'all',thr:1})`);   // [260814] 폼 = DOM이 아니라 조건 객체 하나(_segQ)
 await page.evaluate(`_segRun()`);
 await page.waitForTimeout(900);
 

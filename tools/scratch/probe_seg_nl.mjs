@@ -105,9 +105,7 @@ const ai=await page.evaluate(`(()=>{
       if(note.indexOf('읽은 조건')>=0||note.indexOf('실패')>=0||Date.now()-t0>30000){
         clearInterval(iv); window.api=real;
         r({note, sent:window.__disp, polls,
-           form:{span:document.getElementById('seg-span').value,n:document.getElementById('seg-num').value,
-                 g:document.getElementById('seg-genre').value,only:document.getElementById('seg-only').checked,
-                 region:document.getElementById('seg-region').value,thr:document.getElementById('seg-min').value},
+           form:_segQFromForm(),   // [260814] 폼 상태 = 조건 객체 하나(_segQ) — select/input 6개가 문장 한 줄로 바뀌었다
            lastQ:_segLast&&_segLast.q});
       }
     },300);
@@ -117,7 +115,7 @@ console.log('ai =',JSON.stringify(ai,null,1));
 T(ai.sent&&ai.sent.payload&&ai.sent.payload.segparse===1,'dispatch에 segparse=1로 나간다(예울이 채팅 분기와 분리)');
 T(ai.sent&&!/\\d{10,}|010-/.test(JSON.stringify(ai.sent)),'나가는 payload에 개인 식별 문자열 0 — 질문 문장 + 값 목록뿐');
 T(ai.polls>=2,`404(아직 안 나옴)는 계속 폴링한다(${ai.polls}회)`);
-T(ai.form.g==='뮤지컬'&&ai.form.only===true&&ai.form.n==='5'&&ai.form.thr==='4','LLM 조건이 **폼에 채워진다** — 무엇으로 이해했는지 눈에 보인다');
+T(ai.form.g==='뮤지컬'&&ai.form.only===true&&ai.form.n===5&&ai.form.thr===4,'LLM 조건이 **폼에 채워진다** — 무엇으로 이해했는지 눈에 보인다');
 T(ai.lastQ&&ai.lastQ.g==='뮤지컬'&&ai.lastQ.only===true,'그 조건 그대로 계산까지 이어진다');
 T(ai.note.indexOf('읽은 조건')>=0,`해석 문장 표시 — "${ai.note.slice(0,60)}"`);
 
