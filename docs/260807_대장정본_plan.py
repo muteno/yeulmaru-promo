@@ -61,6 +61,18 @@ OVERWRITE = {'월': C_월, '일': C_일, '사업구분': C_사업, '공연구분
              '티켓구분': C_티켓, '기본좌석': C_좌석, '발권유료': C_유료}
 NEWCOL = '발권초대'
 
+# [운영자 260807 확정] **원장·라이브 양쪽이 공란**이라 위 규칙으로는 안 채워지는 자리 중, 운영자가 직접 정한 값.
+#   세션 추정이 아니다 — 260804 장르 백필의 OPERATOR_GENRE와 같은 「묻고-편입」 경로다.
+#   키 = (공연명, 월, 일) — 이 행은 공연ID도 비어 있어 ID로 못 짚는다.
+#   ⚠ 공연ID는 안 채운다. 운영자가 정한 건 년도 하나고, ID 채번은 앱 백필 축(260804 perf_genre_backfill 계열)이다.
+OPERATOR_FIX = {
+    ('한중연합오케스트라', '6', '9'): {
+        '년도': '2012',
+        # 근거: 원장 자신의 2012 합계행이 이 행을 2012에 넣어 센다(25,267 = 나머지 24,337 + 이 행 930).
+        #       행 위치도 2012-06-02와 2012-06-14 사이다. 운영자 확답 = 「2012로 채운다」.
+    },
+}
+
 
 def S(v):
     return '' if v is None else str(v).strip()
@@ -241,7 +253,7 @@ def main():
     # ── ②③④ 값 병합 ────────────────────────────────────────────
     if NEWCOL not in headers:
         headers.append(NEWCOL)
-    diff = {'덮어씀': [], '보강': [], '추가': [], '비숫자좌석': [], '유지': len(keepL), '초대신규': 0}
+    diff = {'덮어씀': [], '보강': [], '추가': [], '비숫자좌석': [], '운영자확정': [], '유지': len(keepL), '초대신규': 0}
 
     # 공연ID = 라이브 규칙(YYMMDD_NN) 계승 — 같은 날·같은 공연의 기존 ID가 있으면 그걸 잇고, 없으면 새로 딴다.
     idbyday, namebyid = {}, {}
@@ -307,6 +319,18 @@ def main():
             seq.append({h: S(L[j].get(h)) for h in headers})
     assert len(seq) == len(pairs) + len(addX) + len(keepL), '행 수 불일치'
 
+    # ── 운영자 확정값(양쪽 공란 자리) ────────────────────────────
+    for r in seq:
+        k = (S(r.get('공연명')), md(r.get('월')), md(r.get('일')))
+        fx = OPERATOR_FIX.get(k)
+        if not fx:
+            continue
+        for col, val in fx.items():
+            if S(r.get(col)) == val:
+                continue
+            diff['운영자확정'].append({'공연명': k[0], '열': col, 'live': S(r.get(col)) or '(공란)', 'val': val})
+            r[col] = val
+
     plan = {'src': os.path.basename(src), 'sheet': SHEET,
             'fingerprint': fingerprint(L, list(live['headers'])),
             'live_count': len(L), 'headers': headers, 'rows': seq, 'diff': diff}
@@ -320,6 +344,9 @@ def main():
           str({k: sum(1 for e in diff['보강'] if e['열'] == k) for k in OVERWRITE if any(e['열'] == k for e in diff['보강'])}))
     print(f"  · 신규 행 {len(diff['추가'])}건 (취소공연 {sum(1 for e in diff['추가'] if e['상태']=='취소공연')} · 정상 {sum(1 for e in diff['추가'] if e['상태']=='정상')})")
     print(f"  · 라이브 전용 유지 {diff['유지']}행 · 발권초대 채운 행 {diff['초대신규']}")
+    if diff['운영자확정']:
+        print(f"  · 운영자 확정 {len(diff['운영자확정'])}건(양쪽 공란 자리): " +
+              ' · '.join(f"{e['공연명']} {e['열']} {e['live']}→{e['val']}" for e in diff['운영자확정']))
     if diff['비숫자좌석']:
         print(f"  · 기본좌석 비숫자 표기 {len(diff['비숫자좌석'])}건 = 미반영(공란 유지): " +
               ', '.join(sorted({e['xlsx'] for e in diff['비숫자좌석']})))
