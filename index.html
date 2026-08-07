@@ -7093,7 +7093,9 @@ function _ryDodCell(p){
   return '<span title="'+escapeHtml(tip)+'" style="display:inline-block;vertical-align:middle;text-align:right;width:'+_RY_DOD_W+'px">'
     +'<span style="display:block;font-variant-numeric:tabular-nums;white-space:nowrap">'
       +'<b style="color:var('+tok(d.seat)+');font-weight:800;font-size:14.5px">'+num(d.seat)+unit+'</b>'
-      +((d.pct===null)?'':'<span style="color:var(--dim);font-size:11.5px;font-weight:700;margin-left:5px">'+sgn(d.pct)+(Math.abs(d.pct)>=10?Math.round(d.pct):(Math.round(d.pct*10)/10))+'%</span>')
+      // [260807-4] 무변동 행의 증감률은 **그 행의 잉크를 따라간다**(`--muted`) — 아니면 `±0석`(--muted)과 `±0%`(--dim)가
+      //   나란히 두 회색으로 갈린다(운영자 「회색이 2종류로 나뉜 것 같음」과 같은 축). 값이 있는 행은 종전대로 `--dim` 보조 잉크.
+      +((d.pct===null)?'':'<span style="color:var('+(d.seat===0?'--muted':'--dim')+');font-size:11.5px;font-weight:700;margin-left:5px">'+sgn(d.pct)+(Math.abs(d.pct)>=10?Math.round(d.pct):(Math.round(d.pct*10)/10))+'%</span>')
     +'</span>'
     +'<span style="display:block;font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;margin-top:2px;white-space:nowrap;color:var('+((d.mny===null)?'--muted':tok(d.mny))+')">'
       +((d.mny===null)?'—':(num(d.mny)+'원'))+'</span></span>';
@@ -10174,14 +10176,26 @@ function _ryCumCell(p){
   var n=isEx?p._acc:p.seats, m=isEx?p._accM:p.money;
   if(n===null||n===undefined||isNaN(n))return '<span style="color:var(--muted);font-size:12px">—</span>';
   var tot=isEx?null:p.totalOpen, pct=isEx?null:p.occ;
-  var head=Math.round(n).toLocaleString()+((tot!==null&&tot!==undefined&&tot>0)?('/'+Math.round(tot).toLocaleString()):'');
+  var hasTot=(tot!==null&&tot!==undefined&&tot>0);
+  // [260807-4 운영자 「/926 은 옆에 있는 회색과 동일하게 · 이 안의 회색이 2종류로 나뉜 것 같은데 같은 회색이도록」]
+  //   이 칸의 **보조 잉크는 `--dim` 한 가지**로 통일한다 — 분모 `/926석` · 증감률 `32%` · 누적 금액 셋 다.
+  //   ⚠ 구판은 금액만 `--neutral-text`였다 = 나머지 보조값(`--dim`)과 갈린 **두 번째 회색**(운영자 지목).
+  //     `--dim`이 이기는 이유 = 이 표가 **원래 쓰던 보조 회색**이다(판매율 칸 괄호 `(295/926)` · 7일 추이 「어제 +N」 둘 다 `--dim`).
+  //     `--neutral-text`는 사업 목록 표에서 따라온 남의 자 = 260807-2에서 내가 섞은 것.
+  //   ⚠ 강조색(분야색·800)이 남는 건 **분자 하나**뿐 — 「지금 몇 석 팔렸나」가 이 칸의 주어다.
+  var head=_ryNumSlot(Math.round(n).toLocaleString(),tok)
+    +(hasTot?'<span style="color:var(--dim);font-weight:700">/'+Math.round(tot).toLocaleString()+unit+'</span>'
+            :'<span style="color:var('+tok+');font-weight:800">'+unit+'</span>');
+  // [260807-4 운영자 「누적 32%랑 전일대비 0%가 광학 잉크 단위로 수평에 있는지 확인」] 실측 = **1px 어긋나 있었다**.
+  //   원인 = 두 칸의 첫 줄 주숫자 크기가 달랐다(누적 13px 상속 · 전일 대비 14.5px). 한 줄상자의 baseline은 그 안 **가장 큰 글자**가
+  //   정하므로, 옆 칸 줄상자만 baseline이 1px 내려가고 같은 11.5px `%`가 통째로 딸려 내려갔다.
+  //   → 주숫자를 **14.5px로 맞춘다**(옆 칸과 같은 자). 두 줄상자의 활자 지표가 같아져 `%`도 주숫자도 Δ0. 두 칸은 어차피 짝이라 크기가 같은 게 맞다.
   return '<span style="display:inline-block">'
-    +'<span style="display:block;white-space:nowrap">'+_ryNumSlot(head,tok)
-      +'<span style="color:var('+tok+');font-weight:800">'+unit+'</span>'
+    +'<span style="display:block;white-space:nowrap;font-size:14.5px">'+head
       +((pct===null||pct===undefined||isNaN(pct))?'':'<span style="color:var(--dim);font-size:11.5px;font-weight:700;margin-left:5px;font-variant-numeric:tabular-nums">'+Math.round(pct)+'%</span>')
     +'</span>'
-    +'<span style="display:block;font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;margin-top:2px;white-space:nowrap;color:var('
-      +((m===null||m===undefined||isNaN(m))?'--muted">—':'--neutral-text">'+Math.round(m).toLocaleString()+'원')+'</span></span>';
+    +'<span style="display:block;font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;margin-top:2px;white-space:nowrap;color:var(--dim)">'
+      +((m===null||m===undefined||isNaN(m))?'—':(Math.round(m).toLocaleString()+'원'))+'</span></span>';
 }
 // [260729 운영자] 머리글 열 크기 조절 — 기본 폭(합 100) · 조절값은 기기 단위 기억(localStorage). 계정 축은 【바인딩】상 미배선이라 기기 저장이 상한.
 // [260731 운영자] 「사업 성격」 열 폐지 → 그 자리를 「장르」가 차지(6칸 → 5칸). 성격 폭 13은 장르(11)에 합산 = 24(총합 100 보존).
