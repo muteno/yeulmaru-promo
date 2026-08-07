@@ -1865,8 +1865,13 @@ async function geminiText(env, system, userText, maxTokens) {
 }
 __name(geminiText, "geminiText");
 
-async function claudeText(env, system, userText, maxTokens) {
-  const model = env.BLOG_MODEL || "claude-opus-5";
+// opt = { model, effort } — 미지정이면 종전 그대로(BLOG_MODEL 또는 opus-5 · effort 미전송 = API 기본 high).
+// ⚠ `effort`는 **`output_config` 안**이다(최상위 아님) · GA라 베타 헤더 불요 · low|medium|high|xhigh|max.
+// ⚠ 이 함수에 `temperature`/`top_p`/`top_k`를 되살리지 마라 — opus-5·sonnet-5는 400을 준다(제거된 파라미터).
+// ⚠ opus-5는 **thinking이 기본 ON**이고 `max_tokens`가 thinking+답변을 **함께** 덮는다 → 짧은 답이라도 여유를 준다.
+async function claudeText(env, system, userText, maxTokens, opt) {
+  opt = opt || {};
+  const model = opt.model || env.BLOG_MODEL || "claude-opus-5";
   const headers = { "content-type": "application/json", "anthropic-version": "2023-06-01" };
   if (env.ANTHROPIC_API_KEY) {
     headers["x-api-key"] = env.ANTHROPIC_API_KEY;
@@ -1877,9 +1882,11 @@ async function claudeText(env, system, userText, maxTokens) {
   const sysParam = (!env.ANTHROPIC_API_KEY && env.ANTHROPIC_AUTH_TOKEN)
     ? [{ type: "text", text: "You are Claude Code, Anthropic's official CLI for Claude." }, { type: "text", text: system }]
     : system;
+  const body = { model, max_tokens: maxTokens || 4000, system: sysParam, messages: [{ role: "user", content: userText }] };
+  if (opt.effort) body.output_config = { effort: opt.effort };
   const resp = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST", headers,
-    body: JSON.stringify({ model, max_tokens: maxTokens || 4000, system: sysParam, messages: [{ role: "user", content: userText }] })
+    body: JSON.stringify(body)
   });
   if (!resp.ok) throw new Error("Anthropic " + resp.status + ": " + (await resp.text()).slice(0, 300));
   const data = await resp.json();
@@ -2798,6 +2805,430 @@ function ghDecodeB64(b64) {
 }
 __name(ghDecodeB64, "ghDecodeB64");
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 검색 모니터링 — 「예울마루」가 어디에 걸렸나 (운영자 260806 · 절차 문서 = docs/reports/260805_검색모니터링_키발급_절차.html)
+//   출처 3갈래, 전부 **자격증명이 있을 때만** 켜진다(미설정 = 그 갈래만 조용히 건너뜀 · 앱 나머지 무관):
+//     ① 구글  = Google Alerts **RSS**(키 불요 · env.GALERT_RSS) — 구글 Custom Search JSON API는 신규 가입이 막혀 대안이 이것뿐
+//     ② 네이버 = 검색 오픈 API(env.NAVER_SEARCH_ID/SECRET) — ⛔ 260806 신규 발급 소멸 실측 · 키 확보 시에만 켜짐(코드는 존치)
+//     ②′ 카카오(다음) = Daum 검색 REST API(env.KAKAO_REST_KEY · 무료 쿼터) 웹문서·블로그·다음카페 — 네이버 카페 구멍의 실질 대체
+//     ③ 공연  = KOPIS OpenAPI(env.KOPIS_KEY) — 네이버 플레이스 「공연·전시」 탭의 원천. ⚠ **공연 전용(전시는 안 나온다)**
+//   ⚠ RSS 주소엔 운영자 구글 계정 ID가 들어간다 — 이 레포는 **Public**이라 코드에 박지 않고 env로만 받는다(GCAL_ICS_URL 선례).
+//   ⚠ Q28(260731 운영자 「홍보 알림 당분간 없애줘」) 준수 — 이 스캔은 **알림을 쏘지 않는다**. KV에 쌓고 API로만 내준다.
+//   저장 = KV 단일 값 `sm:state` {items[최근 300], seen[링크 해시 3000]} — 스캔 1회 = KV 읽기 1 + 쓰기 1(항목별 조회 0).
+//     seen을 items보다 넓게 잡는 이유 = items에서 밀려난 옛 글이 되살아나 「새 글」로 다시 뜨는 걸 막는다.
+// ═══════════════════════════════════════════════════════════════════════════
+var SM_KEY = "sm:state";
+var SM_MAX_ITEMS = 300;
+var SM_MAX_SEEN = 3e3;
+// 네이버 4갈래. webkr은 sort 파라미터가 없다(있는 갈래에만 sort=date → 최신순).
+var SM_NAVER_KINDS = [
+  { ep: "blog", label: "블로그", sort: "date" },
+  { ep: "news", label: "뉴스", sort: "date" },
+  { ep: "cafearticle", label: "카페글", sort: "date" },
+  { ep: "webkr", label: "웹문서", sort: "" }
+];
+// 카카오(다음) 3갈래 — 운영자 260807 「다음 등 주요 포털까지」. 네이버 카페 구멍(robots가 Googlebot 전면 차단)의 실질 대체이기도 하다.
+var SM_KAKAO_KINDS = [
+  { ep: "web", label: "웹문서" },
+  { ep: "blog", label: "블로그" },
+  { ep: "cafe", label: "카페글" }
+];
+
+// HTML 엔티티 해제 + 태그 제거.
+//   ⚠ 순서가 함정이다 — Google Alerts·네이버 검색 API는 제목을 **엔티티로 인코딩된 HTML**(`&lt;b&gt;`)로 보낸다.
+//     태그 제거를 먼저 하면 그때는 태그가 없다가 해제 직후 `<b>`로 되살아난다(실측 버그 · probe_sm_parse.mjs가 잡음).
+//     그렇다고 「해제 → 전체 태그 제거」로 뒤집으면 본문의 진짜 `&lt;A&gt;`(꺾쇠 글자)까지 먹는다.
+//   → 해제 뒤에는 **강조 태그만** 지운다. 꺾쇠 글자는 살고 <b>는 죽는다. &amp;는 항상 마지막(이중 해제 방지).
+function smText(s) {
+  return String(s || "")
+    .replace(/<!\[CDATA\[|\]\]>/g, "")
+    .replace(/<[^>]*>/g, "")
+    .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"')
+    .replace(/&#0?39;/g, "'").replace(/&apos;/g, "'").replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/<\/?(?:b|i|em|strong|br)\s*\/?>/gi, "")
+    .replace(/\s+/g, " ").trim();
+}
+__name(smText, "smText");
+
+// FNV-1a 32bit — 중복 판정용 링크 해시(암호용 아님). KV 값 하나에 수천 개를 담아야 해서 짧아야 한다.
+function smHash(s) {
+  const str = String(s || "");
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return (h >>> 0).toString(36);
+}
+__name(smHash, "smHash");
+
+// Google Alerts의 link는 google.com/url?…&url=<진짜주소> 리다이렉트 — 진짜 주소만 남긴다.
+function smUnwrapGoogle(href) {
+  const raw = String(href || "");
+  const m = raw.match(/[?&]url=([^&]+)/);
+  if (!m) return raw;
+  try { return decodeURIComponent(m[1]); } catch (e) { return m[1]; }
+}
+__name(smUnwrapGoogle, "smUnwrapGoogle");
+
+// Atom <entry> 최소 파서 — Workers엔 DOMParser가 없어 ICS 파서와 같은 정규식 축으로 뽑는다.
+function smParseAtom(xml) {
+  const out = [];
+  const re = /<entry\b[^>]*>([\s\S]*?)<\/entry>/g;
+  let m;
+  while ((m = re.exec(String(xml || "")))) {
+    const e = m[1];
+    const t = e.match(/<title\b[^>]*>([\s\S]*?)<\/title>/);
+    const l = e.match(/<link\b[^>]*href="([^"]*)"/);
+    const p = e.match(/<published\b[^>]*>([\s\S]*?)<\/published>/) || e.match(/<updated\b[^>]*>([\s\S]*?)<\/updated>/);
+    const link = smUnwrapGoogle(smText(l ? l[1] : ""));
+    if (!link) continue;
+    out.push({ title: smText(t ? t[1] : "") || link, link, date: String(p ? p[1] : "").slice(0, 10) });
+  }
+  return out;
+}
+__name(smParseAtom, "smParseAtom");
+
+// KOPIS는 XML(<db> 반복) — 블록 뽑기 + 태그값 뽑기 두 조각이면 충분하다.
+function smXmlBlocks(xml, tag) {
+  const out = [];
+  const re = new RegExp("<" + tag + "\\b[^>]*>([\\s\\S]*?)<\\/" + tag + ">", "g");
+  let m;
+  while ((m = re.exec(String(xml || "")))) out.push(m[1]);
+  return out;
+}
+__name(smXmlBlocks, "smXmlBlocks");
+
+function smXmlVal(block, tag) {
+  const m = String(block || "").match(new RegExp("<" + tag + "\\b[^>]*>([\\s\\S]*?)<\\/" + tag + ">"));
+  return m ? smText(m[1]) : "";
+}
+__name(smXmlVal, "smXmlVal");
+
+// 8초 타임아웃 fetch — 한 갈래가 늦어도 스캔 전체가 물리지 않게(AbortSignal 미지원이면 그냥 fetch).
+async function smFetch(url, init) {
+  const o = Object.assign({ headers: { "User-Agent": "yeulmaru-promo-worker" } }, init || {});
+  try { if (typeof AbortSignal !== "undefined" && AbortSignal.timeout) o.signal = AbortSignal.timeout(8e3); } catch (e) {}
+  return fetch(url, o);
+}
+__name(smFetch, "smFetch");
+
+// 피드 머리의 <title> = 그 알림의 검색어("Google 알리미 - 예울마루 공연"). 접두어를 떼면 그대로 키워드 꼬리표가 된다.
+//   ⚠ <entry> 안에도 <title>이 있으므로 **첫 entry 앞 구간에서만** 찾는다(안 그러면 첫 기사 제목을 검색어로 오인한다).
+function smFeedTitle(xml) {
+  const head = String(xml || "").split(/<entry\b/)[0];
+  const m = head.match(/<title\b[^>]*>([\s\S]*?)<\/title>/);
+  return smText(m ? m[1] : "").replace(/^Google\s*(알리미|Alert)\s*[-–—]\s*/i, "").trim();
+}
+__name(smFeedTitle, "smFeedTitle");
+
+// ① 구글 — Google Alerts RSS(복수 가능: 쉼표·공백·줄바꿈 구분 · 최대 16개). 키 불요.
+//   운영자 260806~07: 키워드 8종 + site: 5종(blog.naver/tistory/brunch/cafe.daum/yeosu.go.kr) = 13개 등록 → 상한 16은 여유분.
+async function smFromAlerts(env) {
+  const urls = String(env.GALERT_RSS || "").split(/[\s,]+/).map((s) => s.trim()).filter((s) => /^https?:\/\//.test(s));
+  if (!urls.length) return { on: false, items: [], note: "GALERT_RSS 미설정" };
+  const items = [];
+  let ok = 0;
+  for (const u of urls.slice(0, 16)) {
+    try {
+      const r = await smFetch(u);
+      if (!r.ok) { console.error("[sm/alerts]", r.status); continue; }
+      const xml = await r.text();
+      ok++;
+      const kw = smFeedTitle(xml);
+      for (const e of smParseAtom(xml)) items.push({ src: "google", kind: "알림", title: e.title, link: e.link, date: e.date, kw });
+    } catch (e) { console.error("[sm/alerts]", e); }
+  }
+  return { on: true, items, feeds: urls.length, ok };
+}
+__name(smFromAlerts, "smFromAlerts");
+
+// 네이버 항목의 날짜 — 블로그는 postdate(YYYYMMDD), 뉴스는 pubDate(RFC1123), 카페·웹은 없다.
+function smNaverDate(it) {
+  const pd = String((it && it.postdate) || "");
+  if (/^\d{8}$/.test(pd)) return pd.slice(0, 4) + "-" + pd.slice(4, 6) + "-" + pd.slice(6, 8);
+  const pub = String((it && it.pubDate) || "");
+  if (pub) { const d = new Date(pub); if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10); }
+  return "";
+}
+__name(smNaverDate, "smNaverDate");
+
+// ② 네이버 — 검색 오픈 API 4갈래. 키워드 × 갈래마다 1회(키워드 1개 = 시간당 4회 = 하루 96회, 한도 25,000의 0.4%).
+async function smFromNaver(env, keywords) {
+  const id = env.NAVER_SEARCH_ID, sec = env.NAVER_SEARCH_SECRET;
+  if (!id || !sec) return { on: false, items: [], note: "NAVER_SEARCH_ID/SECRET 미설정" };
+  const items = [];
+  for (const kw of keywords) {
+    for (const g of SM_NAVER_KINDS) {
+      try {
+        const u = "https://openapi.naver.com/v1/search/" + g.ep + ".json?display=20&query=" + encodeURIComponent(kw) + (g.sort ? "&sort=" + g.sort : "");
+        const r = await smFetch(u, { headers: { "X-Naver-Client-Id": id, "X-Naver-Client-Secret": sec, "User-Agent": "yeulmaru-promo-worker" } });
+        if (!r.ok) { console.error("[sm/naver]", g.ep, r.status); continue; }
+        const j = await r.json();
+        for (const it of (j && j.items) || []) {
+          const link = smText(it.originallink || it.link || "");
+          if (!link) continue;
+          items.push({ src: "naver", kind: g.label, title: smText(it.title) || link, link, date: smNaverDate(it), kw });
+        }
+      } catch (e) { console.error("[sm/naver]", g.ep, e); }
+    }
+  }
+  return { on: true, items };
+}
+__name(smFromNaver, "smFromNaver");
+
+// ②′ 카카오(다음) — Daum 검색 REST API(공식 문서 실측 260807: dapi.kakao.com/v2/search/{web,blog,cafe} ·
+//   헤더 `Authorization: KakaoAK <REST키>` · sort=recency · size≤50 · documents[].{title,contents,url,datetime}).
+//   카카오디벨로퍼스 앱의 REST API 키 = env.KAKAO_REST_KEY. 티스토리·브런치·다음카페가 이 축으로 들어온다.
+async function smFromKakao(env, keywords) {
+  const key = env.KAKAO_REST_KEY;
+  if (!key) return { on: false, items: [], note: "KAKAO_REST_KEY 미설정" };
+  const items = [];
+  for (const kw of keywords) {
+    for (const g of SM_KAKAO_KINDS) {
+      try {
+        const u = "https://dapi.kakao.com/v2/search/" + g.ep + "?sort=recency&size=20&query=" + encodeURIComponent(kw);
+        const r = await smFetch(u, { headers: { Authorization: "KakaoAK " + key, "User-Agent": "yeulmaru-promo-worker" } });
+        if (!r.ok) { console.error("[sm/kakao]", g.ep, r.status); continue; }
+        const j = await r.json();
+        for (const d of (j && j.documents) || []) {
+          const link = smText(d.url || "");
+          if (!link) continue;
+          items.push({ src: "kakao", kind: g.label, title: smText(d.title) || link, link, date: String(d.datetime || "").slice(0, 10), kw });
+        }
+      } catch (e) { console.error("[sm/kakao]", g.ep, e); }
+    }
+  }
+  return { on: true, items };
+}
+__name(smFromKakao, "smFromKakao");
+
+// KOPIS 응답(<db> 반복) → 표준 항목. 시설명이 우리 것이 아닌 건 여기서 버린다(폴백 경로 대비).
+//   id(mt20id)를 함께 남긴다 — 새 공연의 상세(가격·예매처)를 물을 때 필요.
+function smKopisRows(xml, fclt) {
+  const out = [];
+  for (const b of smXmlBlocks(xml, "db")) {
+    const id = smXmlVal(b, "mt20id");
+    const nm = smXmlVal(b, "prfnm");
+    if (!id || !nm) continue;
+    const fc = smXmlVal(b, "fcltynm");
+    if (fclt && fc && fc.indexOf(fclt) < 0) continue;
+    out.push({
+      src: "kopis", kind: smXmlVal(b, "genrenm") || "공연", title: nm, id,
+      link: "https://www.kopis.or.kr/por/db/pblprfr/pblprfrView.do?menuId=MNU_00020&mt20Id=" + encodeURIComponent(id),
+      date: smXmlVal(b, "prfpdfrom").replace(/\./g, "-"),
+      extra: [fc, smXmlVal(b, "prfstate")].filter(Boolean).join(" · ")
+    });
+  }
+  return out;
+}
+__name(smKopisRows, "smKopisRows");
+
+// 공연상세 /pblprfr/{mt20id} (공식 명세 · 운영자 260807 원문) — 가격(pcseguidance)·예매처(relates)·런타임·연령·출연.
+//   운영자 착안 「동일 공연 전국 평균 가격대」의 기초 데이터가 여기의 price다. 상세 XML → 화면에 필요한 최소만 남긴다.
+function smKopisDetailParse(xml) {
+  const b = smXmlBlocks(xml, "db")[0];
+  if (!b) return null;
+  const vendors = smXmlBlocks(b, "relate")
+    .map((r) => ({ nm: smXmlVal(r, "relatenm"), url: smXmlVal(r, "relateurl") }))
+    .filter((v) => v.url).slice(0, 6);
+  return {
+    price: smXmlVal(b, "pcseguidance"),
+    runtime: smXmlVal(b, "prfruntime"),
+    age: smXmlVal(b, "prfage"),
+    cast: smXmlVal(b, "prfcast").slice(0, 120),
+    time: smXmlVal(b, "dtguidance").slice(0, 160),
+    poster: smXmlVal(b, "poster"),
+    vendors
+  };
+}
+__name(smKopisDetailParse, "smKopisDetailParse");
+
+async function smKopisDetail(env, id) {
+  const xml = await smKopisGet("pblprfr/" + encodeURIComponent(id), "?service=" + encodeURIComponent(env.KOPIS_KEY));
+  return xml ? smKopisDetailParse(xml) : null;
+}
+__name(smKopisDetail, "smKopisDetail");
+
+// KOPIS 엔드포인트는 https·http 둘 다 도는 이력이 있어 순서대로 시도한다(한쪽이 막혀도 갈래가 안 죽게).
+async function smKopisGet(path, qs) {
+  for (const base of ["https://www.kopis.or.kr/openApi/restful/", "http://www.kopis.or.kr/openApi/restful/"]) {
+    try {
+      const r = await smFetch(base + path + qs);
+      if (!r.ok) continue;
+      const t = await r.text();
+      if (t && t.indexOf("<db>") >= 0) return t;
+    } catch (e) { console.error("[sm/kopis]", path, e); }
+  }
+  return "";
+}
+__name(smKopisGet, "smKopisGet");
+
+// ③ 공연 — KOPIS. 2단(시설코드 조회 → 코드로 필터)이 정본 경로고, 코드가 안 잡히면 목록을 훑어 시설명으로 거른다.
+//   공식 명세(운영자 260807 원문 확보): 엔드포인트 /openApi/restful/pblprfr · 필드 mt20id/prfnm/prfpdfrom/prfpdto/fcltynm/genrenm/prfstate
+//   ⚠ 결과코드 05 「최대 31일까지 조회가능」 → 기간은 **30일 창으로 쪼개서** 여러 번 묻는다(180일 한 방 = 전건 에러 05).
+//   ⚠ 결과코드 06 「최대 조회수 100건」 → rows=100이 상한(그대로 사용).
+//   ⚠ 시설코드 파라미터명(prfplccd)은 명세 예제에 없어 미확정 — 그래서 **폴백(시설명 필터 스캔)을 함께 둔다**(어느 쪽이든 결과 동일).
+//   실존 확인(260807 웹 실측): 예울마루 대극장 = FC000826 · 공연 페이지 PF247041(실내악 페스티벌 [여수]) — KOPIS DB에 우리 시설이 있다.
+async function smFromKopis(env) {
+  if (!env.KOPIS_KEY) return { on: false, items: [], note: "KOPIS_KEY 미설정" };
+  const fclt = String(env.KOPIS_FACILITY || "예울마루").trim();
+  const kst = new Date(Date.now() + 9 * 3600 * 1e3);
+  const ymd = (d) => String(d.getUTCFullYear()) + String(d.getUTCMonth() + 1).padStart(2, "0") + String(d.getUTCDate()).padStart(2, "0");
+  const svc = "service=" + encodeURIComponent(env.KOPIS_KEY);
+  // 오늘부터 ~180일을 30일 창 6개로 — 명세 05(31일 상한) 준수. 창 경계에 걸친 공연은 양쪽에 나와도 링크 해시가 걷어낸다.
+  const spans = [];
+  for (let i = 0; i < 6; i++) {
+    const s = new Date(kst.getTime() + i * 30 * 864e5);
+    const e2 = new Date(kst.getTime() + ((i + 1) * 30 - 1) * 864e5);
+    spans.push("&stdate=" + ymd(s) + "&eddate=" + ymd(e2));
+  }
+  let items = [], mode = "";
+  // (1) 정본 — 공연시설 목록에서 우리 시설 코드를 얻어 그 코드로만 공연을 받는다.
+  try {
+    const plc = await smKopisGet("prfplc", "?" + svc + "&cpage=1&rows=10&shprfnmfct=" + encodeURIComponent(fclt));
+    const ids = smXmlBlocks(plc, "db").map((b) => ({ id: smXmlVal(b, "mt10id"), nm: smXmlVal(b, "fcltynm") }))
+      .filter((x) => x.id && (!x.nm || x.nm.indexOf(fclt) >= 0)).slice(0, 3);
+    for (const x of ids) {
+      for (const span of spans) {
+        const xml = await smKopisGet("pblprfr", "?" + svc + span + "&cpage=1&rows=100&prfplccd=" + encodeURIComponent(x.id));
+        const rows = smKopisRows(xml, "");
+        if (rows.length) { items = items.concat(rows); mode = "prfplccd"; }
+      }
+    }
+  } catch (e) { console.error("[sm/kopis] plc", e); }
+  // (2) 폴백 — 코드 경로가 빈손이면 창마다 기간 목록을 페이지로 훑어 시설명으로 거른다(창당 3쪽 = 300건 상한).
+  if (!items.length) {
+    for (const span of spans) {
+      for (let p = 1; p <= 3; p++) {
+        const xml = await smKopisGet("pblprfr", "?" + svc + span + "&cpage=" + p + "&rows=100");
+        if (!xml) break;
+        items = items.concat(smKopisRows(xml, fclt));
+        if (smXmlBlocks(xml, "db").length < 100) break;
+      }
+    }
+    if (items.length) mode = "scan";
+  }
+  return { on: true, items, mode: mode || "none", facility: fclt };
+}
+__name(smFromKopis, "smFromKopis");
+
+async function smLoad(env) {
+  try {
+    const raw = await env.ops_kv.get(SM_KEY);
+    if (raw) {
+      const s = JSON.parse(raw);
+      return { items: Array.isArray(s.items) ? s.items : [], seen: Array.isArray(s.seen) ? s.seen : [], last: s.last || null };
+    }
+  } catch (e) { console.error("[sm/load]", e); }
+  return { items: [], seen: [], last: null };
+}
+__name(smLoad, "smLoad");
+
+// 스캔 1회 — 켜진 갈래를 모아 링크 해시로 중복을 걷어내고 새 것만 앞에 쌓는다. 알림 발화 0(Q28).
+async function smScan(env) {
+  const kws = String(env.MONITOR_KEYWORDS || "예울마루").split(",").map((s) => s.trim()).filter(Boolean).slice(0, 5);
+  const [g, n, kk, k] = await Promise.all([smFromAlerts(env), smFromNaver(env, kws), smFromKakao(env, kws), smFromKopis(env)]);
+  const st = await smLoad(env);
+  const seen = new Set(st.seen);
+  const stamp = new Date().toISOString();
+  const fresh = [];
+  for (const it of g.items.concat(n.items, kk.items, k.items)) {
+    const h = smHash(it.link);
+    if (seen.has(h)) continue;
+    seen.add(h);
+    fresh.push(Object.assign({ seenAt: stamp }, it));
+  }
+  // 새로 발견된 KOPIS 공연만 상세를 1회 붙인다(스캔당 ≤10건) — 가격·예매처·런타임(운영자 260807 가격대 축).
+  //   기존 항목은 다시 안 묻는다 = 상세 호출 총량이 「신작 수」에 비례(매시 반복 부담 0).
+  for (const t of fresh.filter((x) => x.src === "kopis" && x.id).slice(0, 10)) {
+    try { const d = await smKopisDetail(env, t.id); if (d) t.detail = d; } catch (e) { console.error("[sm/kopis] detail", t.id, e); }
+  }
+  const items = fresh.concat(st.items).slice(0, SM_MAX_ITEMS);
+  const last = {
+    at: stamp, added: fresh.length,
+    sources: { google: g.on ? g.items.length : null, naver: n.on ? n.items.length : null, kakao: kk.on ? kk.items.length : null, kopis: k.on ? k.items.length : null },
+    kopisMode: k.mode || null,
+    notes: [g.note, n.note, kk.note, k.note].filter(Boolean)
+  };
+  try { await env.ops_kv.put(SM_KEY, JSON.stringify({ items, seen: Array.from(seen).slice(-SM_MAX_SEEN), last })); }
+  catch (e) { console.error("[sm/save]", e); }
+  return last;
+}
+__name(smScan, "smScan");
+
+// 갈래별 준비 상태 — 화면이 「무엇이 아직 안 켜졌나」를 그대로 말할 수 있게.
+function smReady(env) {
+  return {
+    google: !!env.GALERT_RSS,
+    naver: !!(env.NAVER_SEARCH_ID && env.NAVER_SEARCH_SECRET),
+    kakao: !!env.KAKAO_REST_KEY,
+    kopis: !!env.KOPIS_KEY
+  };
+}
+__name(smReady, "smReady");
+// === [260806 운영자 「빠르게 뭐든 대답」] 예울이 채팅 — Worker 동기 호출 ===
+// 왜 Worker인가: 종전 경로는 GitHub Actions 왕복이라 **실측 40초**(nb-blog run #20 07:33:45→07:34:25 · 큐 대기 0)가
+//   바닥이었다 — 러너 부팅 + `npm install -g @anthropic-ai/claude-code` + 커밋·푸시. 대화에는 못 쓰는 지연이다.
+// 왜 되는가: 구독 OAuth 토큰(`sk-ant-oat…`)은 `Authorization: Bearer` + `anthropic-beta: oauth-2025-04-20` 로
+//   **원시 Messages API에서 그대로 동작한다**(공식 문서 경로). 이 레포는 이미 그 배선을 갖고 있다 — `claudeText`와
+//   `extractPromoInfo`가 쓰는 헤더 두 줄이 그것이고, 「system 첫 블록 = Claude Code 신원」 규약도 실측(403)으로 확정돼 있다.
+//   ⚠ 구 `docs/KEYS.md` 1-b의 「구독 OAuth는 Actions의 claude -p 에서만 동작(원시 Messages API 불가)」은 **오기**다 —
+//      같은 레포의 이 코드가 반증이고, 그 문구를 근거로 「유료 키 신규 발급이 필요하다」고 판단하면 있는 배선을 못 본다.
+// 모델 라우팅(운영자 260806) = 기본 `claude-sonnet-5` · effort **low** / 어려우면 `claude-opus-5` · effort **medium**.
+//   ⚠ 이 두 줄 = Worker 경로의 모델 SSOT. `.github/workflows/nb-blog.yml` 라우팅과 **같은 값**이어야 한다 —
+//      한쪽만 고치면 폴백이 탈 때 같은 질문에 다른 결로 답한다.
+// 페르소나 SSOT = 레포 `persona/yeuli.md`(카드 수정 = 말투 자동 추종). Worker는 체크아웃이 없으니 GitHub Contents API로
+//   읽고 KV에 10분 캐시한다 — 매 질문마다 왕복하면 「빠르게」가 도로 깨진다.
+var YEUL_PERSONA_TTL = 600;
+async function yeulPersonaCard(env) {
+  try { const c = await env.ops_kv.get("yeul:persona"); if (c) return c; } catch (e) {}
+  const cfg = ghBlogCfg(env);
+  if (!cfg.pat) return "";
+  try {
+    const r = await fetch(`https://api.github.com/repos/${cfg.repo}/contents/persona/yeuli.md?ref=${encodeURIComponent(cfg.branch)}`, {
+      headers: { "Authorization": "Bearer " + cfg.pat, "Accept": "application/vnd.github+json", "User-Agent": "yeulmaru-promo-worker" }
+    });
+    if (!r.ok) return "";
+    const j = await r.json();
+    const txt = ghDecodeB64(j.content).slice(0, 20000);
+    if (txt) { try { await env.ops_kv.put("yeul:persona", txt, { expirationTtl: YEUL_PERSONA_TTL }); } catch (e) {} }
+    return txt;
+  } catch (e) { return ""; }
+}
+__name(yeulPersonaCard, "yeulPersonaCard");
+
+// b = { q, persona(기기별 오버라이드), ctx(집계 요약 · 개인정보 없음), deep }
+// ⚠ `llmText`를 쓰지 않는다 — 그쪽은 GEMINI_API_KEY가 있으면 Gemini를 먼저 잡는다. 예울이는 운영자가 모델을 지정한 기능이라
+//    Claude로 고정한다(`claudeText` 직행).
+// 프롬프트는 `nb-blog.yml` yeulchat 분기와 **같은 문장**이다 — 두 경로가 같은 답을 내야 폴백이 티가 안 난다.
+// 복잡 질문 판정 — **판정 SSOT는 앱 `_yeulAiDeep`**(index.html)이고 앱은 매번 `deep`을 실어 보낸다.
+//   여기는 `deep`이 **아예 안 온 호출**만 받는 안전판이다. 없으면 그런 호출은 어려운 질문에도 조용히 sonnet·low로
+//   답한다(모델이 안 붙은 것처럼 보이는 바로 그 증상). 규칙은 앱과 같은 문장 — 한쪽을 고치면 **여기도 같이 고쳐라**.
+function yeulDeep(q) {
+  q = String(q || "");
+  return q.length >= 60 || /전략|기획|분석|설계|보고서|제안서?|비교|계획|정리해|작성해?\s*줘|써\s*줘|만들어|장단점|로드맵|개선안/.test(q);
+}
+__name(yeulDeep, "yeulDeep");
+
+async function yeulChat(env, b) {
+  const over = String(b.persona || "").slice(0, 6000).trim();
+  const card = over || (await yeulPersonaCard(env)) ||
+    "너는 GS칼텍스 예울마루(전남 여수의 복합문화예술공간)의 공식 도우미 캐릭터 「예울이」다. 밝고 정중한 존댓말로 간결하게 답한다.";
+  let p = "위 페르소나 카드의 인물 「예울이」로서, 예울마루 직원이 사내 앱 채팅으로 보낸 아래 질문에 답한다.\n";
+  p += "- 사실만: 카드·참고 정보에 없는 구체 사실(날짜·가격·규정 조항·인원수)은 지어내지 말고 「확실하지 않다」고 말한다.\n";
+  p += "- 길이: 2~6문장, 채팅 말풍선 하나 분량. 머리말·사고 과정 없이 답변 본문만 출력한다.\n";
+  if (b.ctx) p += "\n# 참고 정보 (앱이 동봉한 집계 요약 — 개인정보 없음)\n" + String(b.ctx).slice(0, 1200) + "\n";
+  p += "\n# 질문\n" + String(b.q || "").slice(0, 800);
+  // 앱이 보낸 판정을 우선 존중하고(SSOT), 필드가 없을 때만 서버가 판정한다.
+  const deep = (b.deep === undefined || b.deep === null) ? yeulDeep(b.q) : !!b.deep;
+  const model = deep ? "claude-opus-5" : "claude-sonnet-5";
+  const effort = deep ? "medium" : "low";
+  // max_tokens = 답변 2~6문장 + **thinking 몫**(두 모델 다 thinking이 기본 ON이고 max_tokens가 둘을 함께 덮는다).
+  //   빠듯하게 잡으면 생각만 하다 잘린 답이 나온다 — 짧은 답이라도 여유를 준다(생성한 만큼만 과금).
+  const text = await claudeText(env, card + "\n\n---\n\n# 지금 할 일", p, deep ? 4000 : 2000, { model, effort });
+  return { text, model, effort };
+}
+__name(yeulChat, "yeulChat");
+
 var index_default = {
   async scheduled(event, env, ctx) {
     const kst = new Date(Date.now() + 9 * 3600 * 1e3);
@@ -2819,6 +3250,11 @@ var index_default = {
         try { const t = await getToken(env); await gcalSyncPrograms(env, t, {}); }
         catch (e) { console.error("gcal sync (cron)", e); }
       })());
+    }
+    // [260806 운영자] 검색 모니터링 스캔 — 매시 첫 틱 1회(*/15 크론에서 시간당 1회 · 구글/네이버에 과하지 않은 간격).
+    //   갈래가 하나도 안 켜졌으면 아예 안 돈다(=KV 왕복 0). ⚠ 알림 발화 0 — Q28(「홍보 알림 당분간 없애줘」) 준수.
+    if (kst.getUTCMinutes() < 15 && (env.GALERT_RSS || (env.NAVER_SEARCH_ID && env.NAVER_SEARCH_SECRET) || env.KAKAO_REST_KEY || env.KOPIS_KEY)) {
+      ctx.waitUntil(smScan(env).then((r) => console.log("[sm]", JSON.stringify(r))).catch((e) => console.error("sm scan", e)));
     }
     // [260806 운영자] AI 홍보 자동 브리핑 — 매일 KST 08:30 틱에 서버가 포트폴리오 팩을 조립해 추론 디스패치
     //   (「누르지 않더라도 자동으로 그날그날」 · 총론 + 7/30/90일 시계 · opus 5 high). 중복 방어 = KV 일자 가드.
@@ -3065,6 +3501,23 @@ var index_default = {
         }
       }
 
+      // === 검색 모니터링 — 「예울마루」가 어디에 걸렸나 (260806) ===
+      //   GET  /api/monitor/feed  = 쌓인 목록(최신순) + 갈래별 준비 상태. ?src=google|naver|kopis · ?limit=1~300
+      //   POST /api/monitor/scan  = 지금 한 바퀴(평소엔 크론이 매시 1회). 알림 발화 0 — Q28 준수.
+      if (url.pathname === "/api/monitor/feed" && request.method === "GET") {
+        const st = await smLoad(env);
+        const src = String(url.searchParams.get("src") || "").trim();
+        const lim = Math.max(1, Math.min(SM_MAX_ITEMS, parseInt(url.searchParams.get("limit"), 10) || 100));
+        const rows = (src ? st.items.filter((x) => x && x.src === src) : st.items).slice(0, lim);
+        return json({ ok: true, count: rows.length, total: st.items.length, last: st.last, ready: smReady(env), rows }, env);
+      }
+      if (url.pathname === "/api/monitor/scan" && request.method === "POST") {
+        const rd = smReady(env);
+        if (!rd.google && !rd.naver && !rd.kakao && !rd.kopis) return json({ error: "no_source", note: "GALERT_RSS / NAVER_SEARCH_* / KAKAO_REST_KEY / KOPIS_KEY 중 하나는 있어야 한다", ready: rd }, env, 503);
+        try { return json({ ok: true, ready: rd, ...(await smScan(env)) }, env); }
+        catch (e) { console.error("[sm/scan]", e); return json({ error: String(e) }, env, 500); }
+      }
+
       // === 콘텐츠 제작 — 네이버 블로그 초안 AI 생성 (Graph 토큰 불요) ===
       // ANTHROPIC_API_KEY 미설정 시 503 → 프론트가 로컬 템플릿 생성기로 폴백.
       if (url.pathname === "/api/content/blog" && request.method === "POST") {
@@ -3112,6 +3565,22 @@ var index_default = {
           return json({ info }, env);
         } catch (e) {
           console.error("[content/structure]", e);
+          return json({ error: String((e && e.message) || e) }, env, 502);
+        }
+      }
+
+      // === [260806] 예울이 채팅 — 동기 즉답(1~3초). 종전 Actions 경로(40초)의 앞단이다. ===
+      // 인증 = 위 전역 게이트(X-App-Password). 미설정이면 503 → **앱이 조용히 Actions 경로로 폴백**하므로
+      //   키가 없어도 기능이 죽지 않는다(느려질 뿐). 그래서 여기서 502/503을 던지는 게 안전한 실패다.
+      if (url.pathname === "/api/yeul/chat" && request.method === "POST") {
+        if (!env.ANTHROPIC_API_KEY && !env.ANTHROPIC_AUTH_TOKEN) return json({ error: "no_api_key", note: "ANTHROPIC_* 미설정 — 앱이 Actions 경로로 폴백" }, env, 503);
+        let bb = {};
+        try { bb = await request.json(); } catch (e) {}
+        if (!String(bb.q || "").trim()) return json({ error: "질문이 필요해요" }, env, 400);
+        try {
+          return json(await yeulChat(env, bb), env);
+        } catch (e) {
+          console.error("[yeul/chat]", e);
           return json({ error: String((e && e.message) || e) }, env, 502);
         }
       }

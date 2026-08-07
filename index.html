@@ -28354,10 +28354,27 @@ var _YEULAI_LS='yeulai_persona';
 function _yeulAiPersona(){try{return String(localStorage.getItem(_YEULAI_LS)||'').slice(0,6000);}catch(_e){return '';}}
 // [260806 운영자 「sonnet 5 low 로 일단 배선 · 어려운 거면 opus 5.0 medium 전환」] 복잡 질문 판정.
 //   기본 = 소넷5·**low**(뭐든 빠르게) / deep = opus5·medium + 「기다려 달라」 안내 선표시.
-//   ⚠ 여기는 **판정만** 한다 — 모델명·effort의 SSOT는 `.github/workflows/nb-blog.yml` 라우팅 2줄(cmodel·ceffort).
-//     앱이 모델명을 들고 있으면 두 곳이 갈려 「고쳤는데 안 바뀐다」가 난다.
+//   ⚠ 여기는 **판정만** 한다 — 모델명·effort의 SSOT는 답하는 쪽 둘: Worker `yeulChat`(`src/index.js`)과
+//     `.github/workflows/nb-blog.yml` 라우팅 2줄(cmodel·ceffort). 앱이 모델명을 들고 있으면 세 곳이 갈린다.
+//     ⚠ 그 둘은 **서로 같은 값**을 유지해야 한다 — 폴백이 탈 때 같은 질문에 다른 결로 답하지 않게.
 function _yeulAiDeep(q){q=String(q||'');return q.length>=60||/전략|기획|분석|설계|보고서|제안서?|비교|계획|정리해|작성해?\s*줘|써\s*줘|만들어|장단점|로드맵|개선안/.test(q);}
+// [260806 운영자 「빠르게 뭐든 대답」 · 「워커에 이미 배선 되어있음」] 경로 2단.
+//   1차 = **Worker 동기 호출**(`POST /api/yeul/chat`) — 1~3초. 구독 OAuth 토큰이 원시 Messages API에서 동작하므로
+//         Actions를 거칠 이유가 없다(`src/index.js` claudeText·extractPromoInfo가 쓰던 그 배선 재사용 · 새 키 0).
+//   2차 = 종전 **Actions 왕복**(`/api/blog/dispatch` → nb-blog.yml → `/api/blog/draft` 폴링) — 실측 40초.
+//         Worker가 503(키 없음)·404(미배포)·502(상류 실패) 무엇을 내든 **조용히 여기로 양보**한다 = 기능이 죽지 않는다.
+//   ⚠ 모델·프롬프트는 두 경로가 같은 값이다(Worker `yeulChat` ↔ `nb-blog.yml` yeulchat 분기) — 한쪽만 고치면
+//     같은 질문에 폴백 여부에 따라 다른 결로 답한다.
+var _yeulAiLast={via:'',model:'',effort:''};   // 마지막 답이 어느 경로·모델이었나 — 챗봇로그 표기용(호출측이 읽는다)
+function _yeulAiTag(){var L=_yeulAiLast||{};return (L.model||'claude')+(L.effort?'·'+L.effort:'')+(L.via?'·'+L.via:'');}
 async function _yeulAiAsk(q,ctx,onTick){
+  var _deep=_yeulAiDeep(q)?1:0;
+  try{
+    var w=await api('POST','/api/yeul/chat',{q:String(q||'').slice(0,800),persona:_yeulAiPersona(),ctx:String(ctx||'').slice(0,1200),deep:_deep});
+    var wt=w&&String(w.text||'').trim();
+    if(wt){_yeulAiLast={via:'worker',model:(w.model||''),effort:(w.effort||'')};return wt;}
+  }catch(e){ /* 폴백 = 정상 흐름. 여기서 던지면 키 미설정 하나로 예울이가 통째로 죽는다 */ }
+  _yeulAiLast={via:'actions',model:_deep?'claude-opus-5':'claude-sonnet-5',effort:_deep?'medium':'low'};
   var id='yc'+Date.now()+'r'+Math.floor(Math.random()*1e4);
   var d0=await api('POST','/api/blog/dispatch',{payload:{yeulchat:1,id:id,q:String(q||'').slice(0,800),persona:_yeulAiPersona(),ctx:String(ctx||'').slice(0,1200),deep:_yeulAiDeep(q)?1:0}});   // [260803 v3] 시각 t 동봉 폐지 — 모드 2축 제거(운영자 "밤에 아무도 안 씀")
   if(!d0||!d0.ok)throw new Error((d0&&d0.error)||'요청 실패');
@@ -34730,9 +34747,10 @@ function _cbAiAnswer(q,ctx){
   const w=document.createElement('div');w.className='cb-msg bot';w.innerHTML=_ldHtml(12)+'…생각 중이에요.';
   if(b){b.appendChild(w);_cbScroll();}
   _yeulAiAsk(q,ctx||'',function(sec){w.innerHTML=_ldHtml(12)+'…생각 중이에요. '+sec+'초';})
-    // [260806] 로그 매칭칸에 **어느 모델이 답했는가**를 남긴다 — 챗봇로그 시트만 보고 라우팅 실동작을 확인할 수 있게
-    //   (운영자가 「모델이 배선 안 된 듯」이라고 본 이유 = 지금까지 어디에도 모델명이 안 남았다). 표기는 nb-blog.yml 라우팅과 같은 값.
-    .then(function(t){w.innerHTML=escapeHtml(String(t)).slice(0,4000);_cbScroll();_cbLog('AI답변',q,String(t).slice(0,80),'claude·'+(deepQ?'opus5·medium':'sonnet5·low'));})
+    // [260806] 로그 매칭칸에 **어느 모델이 어느 경로로 답했는가**를 남긴다 — 챗봇로그 시트만 보고 라우팅 실동작과
+    //   Worker/Actions 중 어디가 탔는지 확인할 수 있게(운영자가 「모델이 배선 안 된 듯」이라고 본 이유 =
+    //   지금까지 어디에도 모델명이 안 남았다). 값은 답한 쪽이 실제로 쓴 것 — 앱이 짐작해 적지 않는다.
+    .then(function(t){w.innerHTML=escapeHtml(String(t)).slice(0,4000);_cbScroll();_cbLog('AI답변',q,String(t).slice(0,80),_yeulAiTag());})
     .catch(function(e){w.innerHTML='죄송해요, 지금은 답을 못 가져왔어요 🙏 '+escapeHtml(String(e&&e.message||e).slice(0,110));_cbScroll();_cbLog('자유입력',q,'','AI실패');})
     .then(function(){_cbChips([{label:'다른 질문',fn:function(){_cbPickCat('회사');}},{label:'처음으로',fn:_cbHome,ghost:true}]);});
 }
