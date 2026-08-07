@@ -10042,6 +10042,21 @@ function _ryAccCell(n){
   return _ryNumSlot(Math.round(n).toLocaleString(),'--peach-text')
     +'<span style="color:var(--peach-text);font-weight:800">명</span>';
 }
+// [260807-2 운영자 「전일대비일 때 판매율 자리에 **누적좌석·누적금액** 나오게 · 위가 누적 좌석 · 그 아래가 누적 금액」]
+//   전일 대비 모드에서만 3열이 갈아끼워진다(끔 = 판매율·누적 관객수 그대로 = 회귀 0).
+//   문법은 옆 칸(_ryDodCell)과 **한 벌** — 윗줄 = 수량(분야 강조색·800) · 아랫줄 = 금액(중립 `--neutral-text`).
+//   ⚠ 아랫줄에 부호색(green/danger)을 쓰지 않는다 — 이 표에서 초록·빨강은 「어제보다 늘/줄」의 뜻이고, 누계는 증감이 아니다.
+//   값 = 화면이 이미 쓰는 그 두 수(공연 `p.seats`·`p.money` = 단체 포함 총량 · 전시 `_acc`·`_accM`) — 새 집계 0.
+function _ryCumCell(p){
+  var isEx=(p&&p._kind==='ex'), tok=isEx?'--peach-text':'--accent', unit=isEx?'명':'석';
+  var n=isEx?p._acc:p.seats, m=isEx?p._accM:p.money;
+  if(n===null||n===undefined||isNaN(n))return '<span style="color:var(--muted);font-size:12px">—</span>';
+  return '<span style="display:inline-block">'
+    +'<span style="display:block;white-space:nowrap">'+_ryNumSlot(Math.round(n).toLocaleString(),tok)
+      +'<span style="color:var('+tok+');font-weight:800">'+unit+'</span></span>'
+    +'<span style="display:block;font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;margin-top:2px;white-space:nowrap;color:var('
+      +((m===null||m===undefined||isNaN(m))?'--muted">—':'--neutral-text">'+Math.round(m).toLocaleString()+'원')+'</span></span>';
+}
 // [260729 운영자] 머리글 열 크기 조절 — 기본 폭(합 100) · 조절값은 기기 단위 기억(localStorage). 계정 축은 【바인딩】상 미배선이라 기기 저장이 상한.
 // [260731 운영자] 「사업 성격」 열 폐지 → 그 자리를 「장르」가 차지(6칸 → 5칸). 성격 폭 13은 장르(11)에 합산 = 24(총합 100 보존).
 //   구 6칸 저장값(localStorage ryColW)은 길이 검사에서 자동 탈락 → 기본 폭으로 리셋(마이그레이션 코드 불필요).
@@ -10136,8 +10151,11 @@ function _railYrmPerfTable(perfs,rateLab){
   // [260731 운영자] 「사업 성격」 열 삭제 · 그 자리에 「장르」 — 5칸(일자·프로그램·판매율·최근 7일 추이·장르).
   //   ([260803] 성격(예술성/사업성) 축 자체 폐지 — 데이터·필터·입력구 전부 제거)
   // [260807] 4열 = 토글 한 축으로 「최근 7일 추이 ↔ 전일 대비」 갈아끼움(열 신설 0 · 폭·경계 그대로).
+  // [260807-2] 같은 토글로 3열도 함께 갈아끼운다 — 「판매율/누적 관객수」 → **「누적 좌석·금액」**(운영자 지시).
+  //   왜 = 전일 대비만 보는 화면에서 판매율은 어제와 무관한 값이고, 운영자 일일 보고문은 「누적 좌석 · 누적 금액 · 전일대비」 세 줄이 한 벌이다.
   var DOD=(typeof _ryDodOn==='function')&&_ryDodOn();
-  var HL=['일자','프로그램',(rateLab||'판매율'),(DOD?'전일 대비':'최근 7일 추이'),'장르'];
+  var _isEx=!!(perfs&&perfs[0]&&perfs[0]._kind==='ex');   // 표는 분야별로 따로 그려진다 = 한 표의 행은 모두 같은 종류
+  var HL=['일자','프로그램',(DOD?(_isEx?'누적 관객·금액':'누적 좌석·금액'):(rateLab||'판매율')),(DOD?'전일 대비':'최근 7일 추이'),'장르'];
   // [260731 운영자 개정] 최근 7일 추이 = **가운데** 정렬(나머지는 좌측 유지).
   var HA=['left','left','left','center','left'];
   // [260731 운영자] 열 간격 벌리기 — 「프로그램↔판매율(전시 = 누적 관객수)」·「추이↔장르」 두 경계.
@@ -10165,7 +10183,8 @@ function _railYrmPerfTable(perfs,rateLab){
       :_mvBars(p.days,p.diff,p._unit,(p._kind==='ex')?'--peach-text':null,(p._kind==='ex')?'--peach-light':null)));   // [260731 운영자 4차] 전시 추이 = 전시색(--peach-text 사다리) — 3열 누적 관객수·그룹 블릿과 같은 축
     // 3열 = 공연·교육 「판매율」(N% (분자/분모)) · 전시 「누적 관객수」(누계 숫자) — 둘 다 강조색 볼드·좌측 정렬로 같은 문법
     var rate=p.noData?'<span style="color:var(--muted);font-size:12px">—</span>'
-      :((p._kind==='ex')?_ryAccCell(p._acc):_ryRateCell(p.seats,p.totalOpen,p.occ,'--accent'));
+      :(DOD?_ryCumCell(p)   // [260807-2] 전일 대비 모드 = 누적 좌석/금액 두 줄(옆 칸과 한 벌)
+      :((p._kind==='ex')?_ryAccCell(p._acc):_ryRateCell(p.seats,p.totalOpen,p.occ,'--accent')));
     var sub=_rySubLine((p._ryRun!==undefined&&p._ryRun!==null)?p._ryRun:_ryRunTxt(p),p._venue);
     var kind=(p._kind==='ex')?'ex':'perf', pkey=(p._kind==='ex')?(p.id||p.name):p.name;   // 드릴 키 = _srailUhaKey와 같은 축(전시 = ID 우선)
     h+='<tr class="clk" role="button" tabindex="0"'+(p._past?' style="background:var(--past-bg)"':'')+' data-uhakey="'+escapeHtml(_srailUhaKey(p))+'" onclick="_railYrmPick(\''+kind+'\',\''+_anaEsc(pkey)+'\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click();}" title="'+escapeHtml(p.name)+' — 클릭 = 아래 상세 보기">'
@@ -10196,7 +10215,11 @@ function _ryExRow(e){
   // [260807] mny = 전시일일 「누계금액」 — 공연 days의 mny(합계금액)와 같은 자리·같은 뜻(전일 대비 금액 소스). 없으면 null → 금액 줄만 '—'.
   var days=ds.map(function(r){ var v=_salesNum(r['누계총인원']); if(v===null)v=_salesNum(r['누계유료']); return {bd:_salesNum(r['기준일자']),seat:(v===null?0:v),mny:_salesNum(r['누계금액'])}; });
   var acc=(e._total!==null&&e._total!==undefined)?e._total:e._paid;   // 누적 관객수 = 누계총인원 → 없으면 누계유료
-  return {_kind:'ex',id:(e.id||''),name:e.name,_src:e,_past:(e._past?1:0),
+  // [260807-2] _accM = 누적 금액 — 전일 대비 모드의 3열 아랫줄(공연 p.money 자리). 마지막 실측 「누계금액」 → 없으면 마스터 「최종매출」.
+  var accM=null;
+  for(var _i=days.length-1;_i>=0;_i--){ if(days[_i].mny!==null&&days[_i].mny!==undefined){ accM=days[_i].mny; break; } }
+  if(accM===null)accM=_salesNum(e.최종매출);
+  return {_kind:'ex',id:(e.id||''),name:e.name,_src:e,_past:(e._past?1:0),_accM:accM,
     startDate:sd,endDate:ed,_ryDate:(ed||sd),
     dday:((e._dday===null||e._dday===undefined)?null:e._dday),
     noData:!!e.noData,seats:e._paid,totalOpen:e._goal,occ:((e.occ===null||e.occ===undefined)?null:e.occ),_acc:acc,
@@ -12282,17 +12305,16 @@ function _dailyRenderForm(rowsData, groupData){
   var _bk=_dailyMasters().filter(function(o){return o.back;});
   if(_bk.length)h+='<div style="font-size:11.5px;color:var(--dim);margin-top:8px;line-height:1.7">「<b style="color:var(--green)">· 종료(소급)</b>」 표시 = 이미 끝난 <b>예술교육</b>이에요 — 최종 실적을 뒤늦게 넣는 자리.<br>기준일자를 그 프로그램 <b>종료일</b>로 맞춰 주세요('+_bk.map(function(o){return escapeHtml(o.name)+' → '+o.back;}).join(' · ')+').</div>';
   if(regSet){ var _remain=_dailyMasters().filter(function(o){return !regSet[o.name];}).length; if(!_remain)h+='<div style="font-size:11.5px;color:var(--dim);margin-top:6px">이 날짜는 판매중 공연이 모두 입력됐어요 — 값 수정은 판매 현황 카드 ▸ <b>실적 수정</b>에서.</div>'; }
-  h+='<button onclick="_dailyAddRow()" style="margin-top:4px;padding:6px 12px;border:1.5px dashed #ccc;border-radius:8px;background:#fafafa;color:#666;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">+ 공연 추가</button>';
+  h+='<button type="button" class="nb-btn ghost" title="공연 추가" aria-label="공연 추가" onclick="_dailyAddRow()" style="margin-top:4px;flex-shrink:0;padding:0 14px;font-size:18px">＋</button>';   // [260807 운영자] + 버튼 = 정본 nb-btn ghost ＋(블로그 「한 줄 추가」 값 사본 — 구 대시 텍스트 버튼 폐지)
   // [단체 유입] 단체 섹션 — 상단 기준일자 공유. 같은 날 여러 건 OK. 색·형태 토큰 계승(신규 raw 0).
   h+='<div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border)">';
   h+='<div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:8px">단체</div>';
   h+='<div style="display:flex;gap:8px;font-size:11px;color:var(--dim);font-weight:600;margin-bottom:6px;padding:0 4px"><span style="flex:2;min-width:150px">공연</span><span style="flex:1;min-width:70px">좌석</span><span style="flex:1;min-width:70px">금액</span><span style="flex:1.4;min-width:90px">단체명</span><span style="width:24px"></span></div>';
   h+='<div id="dg-rows">'; grows.forEach(function(r){h+=_dailyGroupRowHtml(r);}); h+='</div>';
-  h+='<button onclick="_dailyGroupAdd()" style="margin-top:4px;padding:6px 12px;border:1.5px dashed var(--border2);border-radius:8px;background:var(--neutral);color:var(--neutral-text);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">+ 단체 추가</button>';
+  h+='<button type="button" class="nb-btn ghost" title="단체 추가" aria-label="단체 추가" onclick="_dailyGroupAdd()" style="margin-top:4px;flex-shrink:0;padding:0 14px;font-size:18px">＋</button>';   // [260807 운영자] 정본 nb-btn ghost ＋ — 공연 추가와 한 벌
   // [260807 운영자] 기존 단체 내역 — 날짜 리스트로 상존 · 인라인 수정/삭제 → 저장 시 그 공연만 교체(replaceShow).
   //   공연명은 라벨 고정(옮기려면 삭제+추가) · 입력은 oninput으로 상태만 갱신(재렌더 0 = 포커스 유지 · _kmSet 문법).
   h+='<div style="margin-top:14px;padding-top:10px;border-top:1px dashed var(--border2)">';
-  h+='<div style="font-size:11px;font-weight:700;color:var(--dim);margin-bottom:6px">기존 단체 내역 — 고치면 저장 시 반영 · 날짜별로 남아요</div>';
   if(!_dailyState.gLoadOk){
     h+='<div style="font-size:11.5px;color:var(--dim);padding:4px 0 2px">기존 내역을 못 불러와서 수정은 잠시 잠갔어요(새 단체 추가는 가능) — 다시 열면 재시도해요</div>';
   } else if(!(_dailyState.gEdit&&_dailyState.gEdit.length)){
@@ -13349,25 +13371,31 @@ var _YR_PARTIAL=2026;
 function _yrFullN(){var ys=_YR.years;return (ys[ys.length-1]===_YR_PARTIAL)?ys.length-1:ys.length;}   // 완결 연도 개수(잠정 연도 앞까지)
 // [260804 3차 운영자] 2026 **연간 예상치** — 차트 점선 마킹 전용. 막대·표·누계(_YR)에는 절대 안 섞는다(실적 ≠ 예상).
 //   산식 = 운영자 지시 그대로. 표본은 전부 앱이 이미 쓰는 정본(운영_세부운영관리대장(정리) · 프로그램 관리 시트) 실측 — 새 가정 창작 0.
-//   ① 공연 62,220 = (기획 27,971 + 대관 19,345) × 1.315
-//      · 기획(발권유료) = 상반기 실적 **10,710** + 하반기 17,261.
-//        ⚠ [260807 정정] 상반기 실적 항만 갈았다 — 구 9,568은 **회차 원장의 불완전본**(운영자가 회차를 나중에 채운다)이었고,
-//          공연대장 실측 2026 상반기 기획 발권유료 = 10,710이다. 산식 구조·계수(하반기 벤치마크·70%·1.315)는 운영자 결정 그대로 뒀다.
-//        ⚠ **미결(운영자 판단)**: ×1.315는 2025 전체(기획+대관) 혼합 환산비다. 이제 상반기는 유료·초대가 **둘 다 실측**이라
-//          환산이 필요 없고(23,601), 구분별 실측 환산비도 크게 다르다(기획 1.084 = 11,609/10,710 · 대관 1.021 = 11,992/11,741).
-//          「상반기 실측 + 하반기만 환산」으로 다시 짜면 약 50,076이 된다 — 어느 쪽을 정본으로 삼을지는 운영자 결정이라 손대지 않았다.
-//        하반기 = 프로그램 시트 2026 하반기 라인업 **15건**에 각 장르의 「회차당 평균 발권유료」를 곱한 합.
+//   ① 공연 56,298 = **상반기 실측 23,601** + (하반기 기획 17,261 + 하반기 대관 7,604) × 1.315
+//      ⚠ [260807-2 운영자 「상반기에는 무료+유료 관객이 확정된 거 아니야?」] **맞다 — 그래서 상반기엔 환산을 안 건다.**
+//        구판은 연간 전체(상반기 포함)에 ×1.315를 곱했다. 그 환산은 **원장에 무료·초대 열이 없던 시절의 대용품**이고,
+//        260807 공연대장 반입으로 상반기는 유료 22,451 + 초대 1,150이 **둘 다 실측**이 됐다. 확정된 반년에까지
+//        무료 보정을 곱하면 **없는 관객 약 3천 명이 얹힌다**(구 62,220 → 56,298 = 그 차이).
+//        환산이 남을 자리는 **아직 안 일어난 하반기**뿐이다.
+//      · 상반기(실측 · 환산 없음) = 기획 11,609(유료 10,710 + 초대 899) + 대관 11,992(유료 11,741 + 초대 251) = 23,601.
+//      · 하반기 대관(발권유료) = 운영자 연간 추정 19,345 − 상반기 실측 11,741 = 7,604.
+//        ⚠ 상반기 실측만으로 이미 연간 추정의 61%다 — 연간 19,345(2025×70%)가 낮게 잡혔을 수 있다. 계수는 운영자 것이라 안 고쳤다.
+//      · 하반기에 ×1.315를 그대로 쓰는 이유 = 운영자가 승인한 가정이고, 대안(2026 상반기 실측비 기획 1.084·대관 1.021)은
+//        「올해 상반기처럼 무료가 적을 것」이라는 **더 센 가정**이다. 실측 무료 비중이 해마다 요동친다(대관 2025 41% ↔ 2026 상반기 2%).
+//        그 대안으로 짜면 50,077 — 하반기 가정을 바꾸는 건 운영자 결정이라 안 건드렸다.
+//        하반기 기획 = 프로그램 시트 2026 하반기 라인업 **15건**에 각 장르의 「회차당 평균 발권유료」를 곱한 합.
 //        장르 벤치마크(원장 기획 2022~2025 실측) = 뮤지컬 627 · 어린이·가족 373 · 클래식 351 · 발레/연극 340 · 소극장급 210.
 //        회차 = 시트 「회차」 우선(8건), 빈칸은 공연일수 × 장르 회차/일(클래식 1.03 · 발레/연극 1.42 · 뮤지컬 1.64 · 어린이·가족 2.00).
 //        시트 장르 → 원장 장르1 대응: 뮤지컬(대형)·뮤지컬→뮤지컬 / 뮤지컬(어린이)→어린이·가족 / 연극·무용·인문학(발레)→발레/연극 / 시즌 기획·공백→클래식.
 //      · 대관(발권유료) = 2025 원장 대관 27,635 × 70%.
 //      · ×1.315 = **무료 포함 환산**(운영자 260804 4차 결정 「무료분까지 섞어서임 · 네 추천대로」). 배율 = 2025 실측 83,455(취합본) ÷ 63,444(원장 발권유료).
-//      ⚠ 왜 환산하나: 원장엔 무료·초대 열이 없다. 환산 없이 46,173을 그리면 **무료 포함인 다른 해 막대와 기준이 어긋나** 낙폭이 과장된다.
+//      ⚠ 왜 (하반기에) 환산하나: 하반기 예상은 **발권유료 기준**으로만 쌓인 값이다. 환산 없이 그리면 무료 포함인 다른 해 막대와 기준이 어긋나 낙폭이 과장된다.
+//        (구 문구 「원장엔 무료·초대 열이 없다」는 260807 반입 전 이야기 — 이제 `발권초대` 열이 있고 상반기는 실측이다.)
 //      ⚠ 폐기한 경로(3차): 「총 83,455 − 기획 35,809 = 대관 47,646」의 뺄셈은 기획의 무료분까지 대관으로 몰아넣는다(60,181).
 //        두 경로 차 = 556명(0.9%) — 어느 쪽이든 그림은 같고, 기준이 한 줄로 설명되는 환산 쪽을 정본으로 삼는다.
 //   ② 전시 24,147 = 2026 상반기 누적 8,049 × 3(운영자 가중치 · 전시DB는 원래 총인원 = 무료 포함이라 환산 불요)
 //   ③ 교육 917 = 2025 실적과 동일 수준(운영자 지시)
-var _YR_FC={'공연':{v:62220,why:'기획 27,971(상반기 실적 10,710 + 하반기 15건 장르 벤치마크 17,261) + 대관 19,345(전년 70%) → 무료 포함 환산 ×1.315'},'전시':{v:24147,why:'상반기 누적 8,049 × 3'},'교육':{v:917,why:'2025년과 동일 수준'}};
+var _YR_FC={'공연':{v:56298,why:'상반기 실측 23,601(유료 22,451 + 초대 1,150 · 환산 없음) + 하반기 24,865(기획 15건 장르 벤치마크 17,261 + 대관 7,604) × 무료 포함 환산 1.315'},'전시':{v:24147,why:'상반기 누적 8,049 × 3'},'교육':{v:917,why:'2025년과 동일 수준'}};
 var _YR_FCW=1.5;   // [260804 3차 운영자 「2026 표기가 다른 곳보다 1.5배 더 너비가 커야 함 · 다른 곳 간격을 줄이면 될 듯」] 2026 칸 폭 배율(다른 해 = 1) — 막대 폭도 같은 배율
 var _YR_FCX=0.5;   // 넓힌 2026 칸 안에서 예상 값 라벨의 자리(연도 단위 오른쪽 오프셋) — 기둥은 눈금 자리 그대로, 라벨만 오른쪽 여백으로
 function _yrBand(y,hl){   // 잠정(2026) 상시 강조 + 선택 하이라이트(선택 우선). 기존 토큰만.
