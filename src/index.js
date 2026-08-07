@@ -2490,20 +2490,26 @@ async function paBuildServerPack(env, token) {
     t: String(p["콘텐츠구분"] || "").trim(), id: String(p["프로그램ID"] || p["공연ID"] || "").trim(),
     s: paSerialISO(p["시작일"]), e: paSerialISO(p["종료일"]),
     ss: paSerialISO(p["판매시작일"]), se: paSerialISO(p["판매종료일"]), ps: paSerialISO(p["홍보시작일"]),
-    g: String(p["구분"] || "").trim(), g2: String(p["장르"] || "").trim(), l: String(p["장소"] || "").trim()
+    g: String(p["구분"] || "").trim(), g2: String(p["장르"] || "").trim(), l: String(p["장소"] || "").trim(),
+    u: String(p["URL"] || "").trim(),
+    rc: (() => { const n = parseInt(String(p["회차"] == null ? "" : p["회차"]).replace(/[^0-9]/g, ""), 10); return (n > 0 && n <= 999) ? n : 0; })(),   // 프로그램 관리 지정 회차(분모 명시 신호 — 프런트 _rc 합류축과 동일)
+    po: (() => { const f = String(p["홍보노출"] == null ? "" : p["홍보노출"]).trim(); return f !== "" ? /^(y|yes|true|1|o)/i.test(f) : !!paSerialISO(p["홍보시작일"]); })()   // 홍보 게이트(프런트 _promoOn 동형 — 닫힘 = 신청 자체 불가 = 구 점검 A0 신호)
   })).filter((p) => p.f && !/^R\d{6}_/.test(p.id))                    // R접두 = 대관 편입 행 제외(프런트 PERFS_GC 분리와 같은 계약 = 기획만)
     .filter((p) => { const end = p.se || p.e; return end && end >= today; })
     .sort((a, b) => String(a.ss || a.s || "9999").localeCompare(String(b.ss || b.s || "9999")))
     .slice(0, 20);
   if (!progs.length) return { v: 1, today, scope: "portfolio", auto: 1, programs: [] };
 
-  let daily = null, master = null, rounds = null, exDaily = null, exMaster = null, recs = [];
+  let daily = null, master = null, rounds = null, exDaily = null, exMaster = null, recs = [], opsL = null;
   try { daily = await getOpsCached(token, "운영_일일입력"); } catch (e) {}
   try { master = await getOpsCached(token, "운영_공연마스터"); } catch (e) {}
   try { rounds = await getOpsCached(token, "운영_회차상세"); } catch (e) {}
   try { exDaily = await getOpsCached(token, "운영_전시일일"); } catch (e) {}
   try { exMaster = await getOpsCached(token, "운영_전시마스터"); } catch (e) {}
   try { recs = await handleGetRecords(token); } catch (e) {}
+  try { opsL = await getOpsCached(token, "운영_세부운영관리대장(정리)"); } catch (e) {}   // [260807] 분모 신호 — 운영대장 행수 = 회차(프런트 _opsIndex 축 이식)
+  let grpS = null;
+  try { grpS = await getOpsCached(token, "운영_단체"); } catch (e) {}   // [260807 운영자 「단체라고 따로 구분지어 포함」] 단체 = 개인(일일입력·티켓셀러)과의 차이분 원장
 
   const dmap = {};
   ((daily && daily.rows) || []).forEach((r) => { const k = paNorm(r["공연명"]); if (!k || paNum(r["기준일자"]) === null) return; (dmap[k] = dmap[k] || []).push(r); });
@@ -2517,6 +2523,38 @@ async function paBuildServerPack(env, token) {
   Object.keys(exd).forEach((k) => exd[k].sort((a, b) => String(a["기준일자"]).localeCompare(String(b["기준일자"]))));
   const exm = {};
   ((exMaster && exMaster.rows) || []).forEach((r) => { const k = paNorm(r["전시명"]); if (k && !exm[k]) exm[k] = r; });
+  // 운영대장 인덱스 — (정규화 공연명|연도) → {count(행수 = 회차), base(기본좌석)} + 공연ID 직조인(프런트 _opsIndex 이식 · ±1년 가드)
+  const opsIdx = { byId: {}, byNY: {} };
+  ((opsL && opsL.rows) || []).forEach((r) => {
+    const k = paNorm(r["공연명"]); if (!k) return;
+    const y = parseInt(String(r["년도"] || "").replace(/[^0-9]/g, ""), 10) || null;
+    const kk = k + "|" + (y || "?");
+    const e = opsIdx.byNY[kk] = opsIdx.byNY[kk] || { count: 0, base: 0 };
+    e.count++; if (!e.base) e.base = paNum(r["기본좌석"]) || 0;
+    const rid = String(r["공연ID"] || "").trim(); if (rid) { const ei = opsIdx.byId[rid] = opsIdx.byId[rid] || { count: 0, base: 0 }; ei.count++; if (!ei.base) ei.base = paNum(r["기본좌석"]) || 0; }
+  });
+  const opsFor = (p) => {
+    if (p.id && opsIdx.byId[p.id]) return opsIdx.byId[p.id];
+    const k = paNorm(p.f), yy = parseInt((p.s || p.ss || today).slice(0, 4), 10);
+    for (const dy of [0, 1, -1]) { const hit = opsIdx.byNY[k + "|" + (yy + dy)]; if (hit) return hit; }   // ±1년 가드 = 재연 오매칭 방지(프런트 _opsLookup 동형)
+    return null;
+  };
+  // 단체 인덱스 — 건별 증분 합산(프런트 gmap 동형: 공연ID 우선 → 정규화명 폴백 · 시점 축은 안 실음 = 「언제 들어왔냐는 의미가 없다」)
+  const grpIdx = { byId: {}, byNorm: {} };
+  ((grpS && grpS.rows) || []).forEach((r) => {
+    const nm = String(r["공연명"] || "").trim(); if (!nm) return;
+    const seat = paNum(r["좌석"]) || 0, money = paNum(r["금액"]) || 0;
+    const gid = String(r["공연ID"] || "").trim();
+    const add = (o) => { o.seat += seat; o.money += money; o.cnt++; };
+    if (gid) add(grpIdx.byId[gid] = grpIdx.byId[gid] || { seat: 0, money: 0, cnt: 0 });
+    add(grpIdx.byNorm[paNorm(nm)] = grpIdx.byNorm[paNorm(nm)] || { seat: 0, money: 0, cnt: 0 });
+  });
+  const grpFor = (p, m) => {
+    const mid = m ? String(m["ID"] || "").trim() : "";
+    if (mid && grpIdx.byId[mid]) return grpIdx.byId[mid];
+    if (p.id && grpIdx.byId[p.id]) return grpIdx.byId[p.id];
+    return grpIdx.byNorm[paNorm(p.f)] || null;
+  };
 
   const salesFor = (p) => {
     if (p.t === "전시") {
@@ -2530,10 +2568,23 @@ async function paBuildServerPack(env, token) {
     const rows = dmap[paNorm(p.f)] || [];
     const m = mmap[paNorm(p.f)];
     if (!rows.length && !m) return { none: true, why: "일일입력·공연마스터 미등록(집계 전)" };
-    const seats = rows.length ? (paNum(rows[rows.length - 1]["합계좌석"]) || 0) : 0;
-    const base = (m && paNum(m["기준석"])) || 926;
-    const rc = Math.max((m && paNum(m["총회차"])) || 1, (m && rmap[String(m["ID"] || "").trim()] ? rmap[String(m["ID"] || "").trim()].n : 0), 1);
+    // [260807 운영자] 총누적 = 개인(일일입력 = 티켓셀러) + 단체(운영_단체 차이분 · 시점 무의미) — 운영 리포트와 같은 총량.
+    //   추이·페이스·최근7일·곡선은 개인 축으로만(프런트와 동일 = 단체가 추세를 오염하지 않는다).
+    const indiv = rows.length ? (paNum(rows[rows.length - 1]["합계좌석"]) || 0) : 0;
+    const grp = grpFor(p, m);
+    const seats = indiv + (grp ? grp.seat : 0);
+    const ops = opsFor(p);
+    const base = (m && paNum(m["기준석"])) || (ops && ops.base) || 926;
+    // [260807 운영자 「회차가 감안이 안 돼 100% 초과」] 분모 회차 = 프런트 _salesBuild 5신호 사다리 이식 —
+    //   max(마스터 총회차 · 회차상세 행수 · 운영대장 행수 · 프로그램 관리 지정 회차), 전부 0이면 공연 기간 일수(하루 1회 가정 · 추정 표기).
     const rs = m ? rmap[String(m["ID"] || "").trim()] : null;
+    let rc = Math.max((m && paNum(m["총회차"])) || 0, rs ? rs.n : 0, ops ? ops.count : 0, p.rc || 0);
+    let rcSrc = rc > 0 ? "명시" : "";
+    if (!rc) {
+      const d0 = p.s ? new Date(p.s + "T00:00:00") : null, d1 = p.e ? new Date(p.e + "T00:00:00") : null;
+      rc = (d0 && d1) ? Math.max(1, Math.round((d1 - d0) / 86400000) + 1) : 1;
+      rcSrc = "기간일수 추정";
+    }
     const rsOk = !!(rs && rs.n > 0 && rs.filled === rs.n && (!((m && paNum(m["총회차"])) > 1) || paNum(m["총회차"]) === rs.n));
     const totalOpen = rsOk ? rs.sum : ((m && paNum(m["총오픈석"])) ? paNum(m["총오픈석"]) : base * rc);
     let fcNum = 0, fcDen = 0;
@@ -2547,12 +2598,13 @@ async function paBuildServerPack(env, token) {
     const dday = p.s ? Math.round((new Date(p.s + "T00:00:00") - new Date(today + "T00:00:00")) / 86400000) : null;
     return {
       status: (p.ss && p.ss <= today && today <= (p.se || p.e || today)) ? "active" : (p.ss && p.ss > today ? "notyet" : "unknown"),
-      seats, totalOpen: totalOpen || null, occ: totalOpen ? Math.round(seats / totalOpen * 1000) / 10 : null,
+      seats, indiv, groupSeats: grp ? grp.seat : 0, groupCnt: grp ? grp.cnt : 0,
+      totalOpen: totalOpen || null, occ: totalOpen ? Math.round(seats / totalOpen * 1000) / 10 : null,
       target: (m && paNum(m["목표점유율"])) || null, dday,
       fcRate: (rows.length >= 2 && fcDen > 0) ? Math.round(fcNum / fcDen * 10) / 10 : null,
       last7: rows.slice(-7).map((r) => { const s = String(paNum(r["기준일자"]) || ""); return { d: s.length === 8 ? s.slice(4, 6) + "-" + s.slice(6, 8) : s, seat: paNum(r["합계좌석"]) || 0 }; }),
       curve: paCurve14(rows.map((r) => { const s = String(paNum(r["기준일자"]) || ""); return [s.length === 8 ? s.slice(4, 6) + "-" + s.slice(6, 8) : s, paNum(r["합계좌석"]) || 0]; })),
-      note: "서버 축약 집계(분모 3단 사다리) — 정밀 축은 화면 판매현황"
+      note: "분모 = " + (rsOk ? "회차별 오픈석 합" : ((m && paNum(m["총오픈석"])) ? "마스터 총오픈석" : ("기준석 " + base + "×" + rc + "회차(" + rcSrc + ")"))) + " — 화면 판매현황과 같은 신호 사다리"
     };
   };
   const recDate = (r) => { const y = r["연도"] ? String(r["연도"]) : ""; const mm = String(r["월"] || "").padStart(2, "0"); const dd = String(r["일"] || "").padStart(2, "0"); const d = y + "-" + mm + "-" + dd; return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : ""; };
@@ -2615,19 +2667,35 @@ async function paBuildServerPack(env, token) {
     }
   } catch (e) { audience = null; }
 
+  // [260807 운영자 「상세페이지의 할인율·마감 임박 같은 것도 추론에 포함」] 상세페이지 추출본 동봉 —
+  //   공용 KV 캐시(promoDetailGet · 카카오와 한 저장소 · maxAge 3일). 냉수집(OCR)은 런당 4건 상한 = 서브요청 예산 보호,
+  //   다음 런들이 이어서 데운다(캐시 히트는 KV 1읽기라 전 프로그램 무료). 실패·미수집 = null(브리핑이 「재료 없음」으로 정직 처리).
+  let coldLeft = 4;
+  const dets = {};
+  for (const p of progs) {
+    if (!p.u) continue;
+    const saleOn = p.ss && p.ss <= today; const soon = p.ss && p.ss > today && (new Date(p.ss) - new Date(today)) / 86400000 <= 45;
+    if (!saleOn && !soon) continue;
+    try {
+      const key = pdKey(p.u);
+      let hit = null; try { const raw2 = await env.ops_kv.get(key); if (raw2) { const dd = JSON.parse(raw2); if (dd && dd.ts && Date.now() - dd.ts < 3 * 86400000) hit = dd; } } catch (e2) {}
+      if (!hit) { if (coldLeft <= 0) continue; coldLeft--; hit = await promoDetailGet(env, p.u, {}); }
+      if (hit) dets[p.f] = { ts: hit.ts, text: String(hit.text || "").slice(0, 1000), ocr: String(hit.ocrText || "").slice(0, 1000) };
+    } catch (e) { /* 한 프로그램 실패 = 그 건만 재료 없음 */ }
+  }
   return {
     v: 1, today, scope: "portfolio", auto: 1,
-    programs: progs.map((p) => ({ name: p.f, short: p.n, type: typeLabel(p.t), genre: p.g2 || p.g, place: p.l, period: { show: [p.s, p.e], sale: [p.ss, p.se], promoStart: p.ps }, sales: salesFor(p), promo: promoFor(p) })),
+    programs: progs.map((p) => ({ name: p.f, short: p.n, type: typeLabel(p.t), genre: p.g2 || p.g, place: p.l, period: { show: [p.s, p.e], sale: [p.ss, p.se], promoStart: p.ps }, promoOpen: p.po, sales: salesFor(p), promo: promoFor(p), detail: dets[p.f] || null })),
     calendar: { busy: Object.keys(calBy).sort().map((d) => ({ d, what: calBy[d].join(" · ") })) },
     audience,
-    note: "서버 자동 조립(매일 KST 08:30) — 판매 분모는 축약 3단 사다리 · 고객 거주지는 시도 기준"
+    note: "서버 자동 조립(매일 KST 08:30) — 분모 = 5신호 사다리(화면 판매현황 동형) · 고객 거주지는 시도 기준 · 상세페이지 재료 = KV 캐시(냉수집 런당 4건)"
   };
 }
 __name(paBuildServerPack, "paBuildServerPack");
 
 // 브리핑 서식판 — 프롬프트(promo-advise.yml)의 말투·형식이 크게 바뀌면 이 값을 올린다 → 포인터 fv 불일치 =
 // 다음 15분 틱에 1회 자동 재생성(운영자가 안 눌러도 새 서식으로 「새로고침」). 선례 = nomute chan_brief PVER 해시 축.
-const PA_FMT_V = "v3-nomute-tone-260806";
+const PA_FMT_V = "v7-group-260807";   // v7 = 단체 구분(개인+단체 총량 · 추이는 개인 축) · v6 = 자기 산출 오류 서사화 금지(원칙 9-1) · v5 = 점검 신호 흡수 + 상세재료 + 분모 5신호 + 라벨 불릿
 // 자동 브리핑 1회 실행 — 크론(매일 08:30 KST)과 /api/promo/auto-run(admin 수동)이 같은 함수를 쓴다.
 async function paAutoBrief(env, opt) {
   opt = opt || {};
