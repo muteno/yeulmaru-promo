@@ -80,6 +80,7 @@
 - `KASI_KEY` — 공공데이터포털(한국천문연구원) 특일정보 = 공휴일
 - `ANTHROPIC_AUTH_TOKEN`(구독 OAuth `sk-ant-oat…`) **또는** `ANTHROPIC_API_KEY`(유료) — **예울이 채팅 즉답의 엔진**(`POST /api/yeul/chat` · 260806). 모델 = 기본 `claude-sonnet-5`·effort low / 어려우면 `claude-opus-5`·effort medium(SSOT = `src/index.js` `yeulChat`). 미설정이면 이 엔드포인트만 503 → **앱이 조용히 Actions 경로로 폴백**(느려질 뿐 기능은 산다). 블로그·분석의 `claudeText`/`extractPromoInfo`도 같은 키를 쓴다.
   - ⚠ 위 1-b 정정 참조 — 구독 OAuth 토큰이 원시 Messages API에서 동작한다. 이 슬롯을 채우려고 **유료 키를 새로 발급할 필요가 없다**(계정 5개의 `sk-ant-oat…` 중 하나를 넣으면 된다).
+  - **검색 모니터링 AI 선별(260807)도 이 키를 그대로 쓴다** — 크론(KST 8·11·14·17시 :15)이 `smJudge`로 최근 3일치 관련/무관을 판정(sonnet 5·effort low·회당 ≤60건 = 구독 쿼터에 티끌). 모델 교체는 비밀 아닌 변수 `MONITOR_JUDGE_MODEL`. 수동 1회 = `POST /api/monitor/judge`.
 - `GALERT_RSS` — **검색 모니터링 ① 구글 축**(키가 아니라 주소 목록): Google Alerts RSS 피드 주소를 줄바꿈(또는 쉼표·공백)으로 이어 **한 값**으로. 현행 13개 = 키워드 8종 + `site:` 5종(blog.naver/tistory/brunch/cafe.daum/yeosu.go.kr) · 코드 상한 16. 발급·회전 = alerts.google.com(RSS 전달 방식)에서 피드 추가/삭제 후 이 값 갱신. 미설정 = 구글 갈래만 꺼짐(`/api/monitor/*` 자체는 산다).
 - `KAKAO_REST_KEY` — **검색 모니터링 ②′ 다음(카카오) 검색** REST API 키(developers.kakao.com → 앱 → 앱 키 → REST API 키). 티스토리·브런치·다음카페 커버 = robots로 막힌 네이버 카페의 실질 대체(260807 실측). 회전 = 카카오 콘솔 재발급.
 - `KOPIS_KEY` — **검색 모니터링 ③ KOPIS 공연DB** 서비스키(kopis.or.kr 회원가입 → 인증키 신청 `openApiUseSend.do` → 승인 후 마이페이지에서 복사). **공연 전용**(전시는 안 나온다).

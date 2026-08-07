@@ -32,9 +32,24 @@ await p.screenshot({path:`${OUT}/smw_${MODE}_menu.png`,clip:{x:1600-560,y:0,widt
 if(MODE==='after'){
   await p.evaluate(()=>{_ddCloseAll();openSearchMonitor();});
   await p.waitForTimeout(1400);
-  const info=await p.evaluate(()=>{const t=document.querySelectorAll('#smw-body tbody tr').length;const s=(document.getElementById('smw-sum')||{}).innerText||'';return {rows:t,sum:s.slice(0,120)};});
-  console.log('modal:',JSON.stringify(info));
+  const info=await p.evaluate(()=>{const t=document.querySelectorAll('#smw-body tbody tr').length;const s=(document.getElementById('smw-sum')||{}).innerText||'';
+    const chips=Array.from(document.querySelectorAll('#smw-flt .ana-chip')).map(b=>b.textContent.trim());
+    return {rows:t,chips,sum:s.slice(0,160)};});
+  console.log('modal(관련 기본):',JSON.stringify(info));
   await p.screenshot({path:`${OUT}/smw_after_modal.png`});
+  await p.evaluate(()=>{_smwSetFlt('all');});
+  await p.waitForTimeout(250);
+  const all=await p.evaluate(()=>{const trs=Array.from(document.querySelectorAll('#smw-body tbody tr'));
+    return {rows:trs.length,dim:trs.filter(t=>t.getAttribute('style').indexOf('opacity:.55')>=0).length};});
+  console.log('modal(전체):',JSON.stringify(all));
+  await p.screenshot({path:`${OUT}/smw_after_modal_all.png`});
+  // 판매 추이 상세 — KOPIS 유관 타지역 줄
+  await p.evaluate(()=>{closeSearchMonitor();var o=_ryDrillOrder();var k=o.filter(x=>String(x).indexOf('perf:')===0)[0]||o[0];_ryDrillOpen(k,true);});
+  await p.waitForTimeout(1200);
+  const rel=await p.evaluate(()=>{const b=document.getElementById('ry-kopis-rel');
+    return {shown:!!(b&&b.style.display!=='none'),txt:b?b.innerText.slice(0,140):''};});
+  console.log('drill(KOPIS 유관):',JSON.stringify(rel));
+  await p.screenshot({path:`${OUT}/smw_after_drill.png`,clip:{x:790,y:60,width:810,height:700}});
 }
 await b.close();
 console.log(JSON.stringify({mode:MODE,errs:errs.slice(0,4)}));

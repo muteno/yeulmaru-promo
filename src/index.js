@@ -3128,10 +3128,10 @@ async function smLoad(env) {
     const raw = await env.ops_kv.get(SM_KEY);
     if (raw) {
       const s = JSON.parse(raw);
-      return { items: Array.isArray(s.items) ? s.items : [], seen: Array.isArray(s.seen) ? s.seen : [], last: s.last || null };
+      return { items: Array.isArray(s.items) ? s.items : [], seen: Array.isArray(s.seen) ? s.seen : [], last: s.last || null, judge: s.judge || null };
     }
   } catch (e) { console.error("[sm/load]", e); }
-  return { items: [], seen: [], last: null };
+  return { items: [], seen: [], last: null, judge: null };
 }
 __name(smLoad, "smLoad");
 
@@ -3161,11 +3161,114 @@ async function smScan(env) {
     kopisMode: k.mode || null,
     notes: [g.note, n.note, kk.note, k.note].filter(Boolean)
   };
-  try { await env.ops_kv.put(SM_KEY, JSON.stringify({ items, seen: Array.from(seen).slice(-SM_MAX_SEEN), last })); }
+  try { await env.ops_kv.put(SM_KEY, JSON.stringify({ items, seen: Array.from(seen).slice(-SM_MAX_SEEN), last, judge: st.judge || null })); }
   catch (e) { console.error("[sm/save]", e); }
   return last;
 }
 __name(smScan, "smScan");
+
+// === [260807 운영자 「3일 이내 올라온 것 중 예울마루와 관련된거를 … sonnet 5가 3시간마다 걸러내게」] AI 관련도 선별 ===
+// 왜: 키워드 「예울마루」로 걸린 글엔 동명·스치는 언급이 섞인다(운영자 「관련 없는것도 있어서」) — 제목·분류·검색어만으로
+//   sonnet 5(구독 OAuth 배선 claudeText 그대로 = 추가 비용 0)가 관련/무관을 판정해 항목에 rel(1/0)·relWhy를 새긴다.
+// 시각: scheduled()가 KST 8·11·14·17시 **:15 틱**에 부른다 — 3시간 간격 + 「밤 7시~오전 8시 멈춤」 + 같은 시각
+//   :00 틱의 smScan과 KV 마지막-쓰기 경합 회피(스캔은 초 단위로 끝난다). 알림 발화 0(Q28) — 화면 조회용 표식만.
+// 대상: 최근 3일(발행일 우선·수집시각 폴백) 중 미판정. KOPIS 갈래는 시설 필터로 수집돼 정의상 관련 = AI 없이 rel=1.
+function smItemAgeDays(it, now) {
+  const s = String((it && (it.date || it.seenAt)) || "");
+  const t = Date.parse(/^\d{4}-\d{2}-\d{2}$/.test(s) ? s + "T00:00:00Z" : s);
+  if (isNaN(t)) return Infinity;
+  return Math.max(0, (now - t) / 864e5);
+}
+__name(smItemAgeDays, "smItemAgeDays");
+async function smJudge(env) {
+  if (!env.ANTHROPIC_AUTH_TOKEN && !env.ANTHROPIC_API_KEY) return { ok: false, note: "ANTHROPIC_* 미설정" };
+  const st = await smLoad(env);
+  const now = Date.now();
+  const cand = [];
+  let auto = 0;
+  for (const it of st.items) {
+    if (!it || it.rel === 0 || it.rel === 1 || smItemAgeDays(it, now) > 3) continue;
+    if (it.src === "kopis") { it.rel = 1; it.relWhy = "시설 필터 수집(자동)"; auto++; continue; }
+    cand.push(it);
+  }
+  const batch = cand.slice(0, 60);   // 회당 상한 — 크론 3시간 간격이라 밀려도 다음 회가 잇는다
+  let judged = 0, rel = 0, note = "";
+  if (batch.length) {
+    const lines = batch.map((it, i) => JSON.stringify({ i, t: String(it.title || "").slice(0, 120), k: it.kind || "", kw: it.kw || "", d: it.date || "" }));
+    const sys = "너는 여수 GS칼텍스 예울마루(공연장·전시·예술교육 복합문화공간 · 예술의 섬 장도 포함) 홍보팀의 검색 결과 선별 담당이다. "
+      + "각 항목이 이 시설과 실질적으로 관련된 글인지 판정한다. 관련(r=1) = 예울마루의 공연·전시·교육·행사·시설·방문 후기를 실제로 다루는 글. "
+      + "무관(r=0) = 동명의 다른 장소·아파트·상호, 키워드만 스친 무관 문서, 다른 지역 이야기. 제목만으로 애매하면 r=1(놓치는 쪽보다 안전). "
+      + '답은 JSON 배열만: [{"i":번호,"r":0또는1,"w":"근거 15자 이내"}] — 다른 텍스트 금지.';
+    try {
+      const model = env.MONITOR_JUDGE_MODEL || "claude-sonnet-5";
+      const txt = await claudeText(env, sys, lines.join("\n"), 3000, { model, effort: "low" });
+      const m = txt.match(/\[[\s\S]*\]/);
+      for (const v of JSON.parse(m ? m[0] : txt)) {
+        const it = batch[v && v.i];
+        if (!it || (v.r !== 0 && v.r !== 1)) continue;
+        it.rel = v.r; it.relWhy = String(v.w || "").slice(0, 40); judged++; if (v.r === 1) rel++;
+      }
+    } catch (e) { console.error("[sm/judge]", e); note = String(e).slice(0, 120); }
+  }
+  st.judge = { at: new Date().toISOString(), model: env.MONITOR_JUDGE_MODEL || "claude-sonnet-5", pool: cand.length, judged, rel, irrel: judged - rel, auto, note };
+  try { await env.ops_kv.put(SM_KEY, JSON.stringify({ items: st.items, seen: st.seen.slice(-SM_MAX_SEEN), last: st.last, judge: st.judge })); }
+  catch (e) { console.error("[sm/judge save]", e); }
+  return { ok: true, ...st.judge };
+}
+__name(smJudge, "smJudge");
+
+// === [260807 운영자 「KOPIS 공연 상세에서 유관된 타지역 공연이 있는지 확인해서 알려주게」] 같은 공연 타지역 검색 ===
+// 앱 공연명 → 핵심 제목(마지막 <본제> 우선 · [지역]꼬리·장르 접두·연도 탈락) → KOPIS 기간 목록에 이름을 물어
+//   예울마루 제외 타지역만 남긴다. ⚠ shprfnm 파라미터는 명세 예제에 없어 미확정(prfplccd와 같은 상황) —
+//   무시돼 전 목록이 와도 **로컬 이름 대조가 최종 필터**라 결과는 같다(단 그땐 창당 1쪽 = 100건 너머는 못 본다).
+// 캐시 = KV 24h(sm:rel:해시) — 상세를 열 때마다 KOPIS를 두드리지 않는다.
+function smKopisCore(name) {
+  let s = String(name || "").trim();
+  const br = s.match(/<([^<>]{2,})>/g);
+  if (br && br.length) s = br[br.length - 1].replace(/[<>]/g, "");
+  return s.replace(/\[[^\]]*\]/g, " ")
+    .replace(/^(뮤지컬|연극|오페라|발레|무용|콘서트|클래식|국악|가족오페라|가족뮤지컬|어린이\s*뮤지컬)\s+/, "")
+    .replace(/\b20\d{2}\b/g, " ").replace(/\s+/g, " ").trim();
+}
+__name(smKopisCore, "smKopisCore");
+function smKopisNorm(s) { return String(s || "").replace(/\[[^\]]*\]/g, "").replace(/[<>〈〉《》]/g, "").replace(/\b20\d{2}\b/g, "").replace(/\s+/g, "").toLowerCase(); }
+__name(smKopisNorm, "smKopisNorm");
+async function smKopisRelated(env, name) {
+  if (!env.KOPIS_KEY) return { ok: false, error: "KOPIS_KEY 미설정" };
+  const core = smKopisCore(name);
+  if (core.length < 2) return { ok: true, name, core, rows: [] };
+  const ck = "sm:rel:" + smHash(core);
+  try { const c = await env.ops_kv.get(ck); if (c) return JSON.parse(c); } catch (e) {}
+  const fclt = String(env.KOPIS_FACILITY || "예울마루").trim();
+  const kst = new Date(Date.now() + 9 * 3600 * 1e3);
+  const ymd = (d) => String(d.getUTCFullYear()) + String(d.getUTCMonth() + 1).padStart(2, "0") + String(d.getUTCDate()).padStart(2, "0");
+  const svc = "service=" + encodeURIComponent(env.KOPIS_KEY);
+  const nc = smKopisNorm(core);
+  const out = [], ids = new Set();
+  for (let i = -1; i < 6 && out.length < 8; i++) {   // −30일~+180일 = 30일 창 7개(명세 05 「31일 상한」 준수)
+    const s = new Date(kst.getTime() + i * 30 * 864e5);
+    const e2 = new Date(kst.getTime() + ((i + 1) * 30 - 1) * 864e5);
+    const xml = await smKopisGet("pblprfr", "?" + svc + "&stdate=" + ymd(s) + "&eddate=" + ymd(e2) + "&cpage=1&rows=100&shprfnm=" + encodeURIComponent(core));
+    for (const b of smXmlBlocks(xml, "db")) {
+      const id = smXmlVal(b, "mt20id"), nm = smXmlVal(b, "prfnm"), fc = smXmlVal(b, "fcltynm");
+      if (!id || !nm || ids.has(id)) continue;
+      const nn = smKopisNorm(nm);
+      if (!(nn === nc || (nc.length >= 4 && (nn.indexOf(nc) >= 0 || nc.indexOf(nn) >= 0)))) continue;
+      ids.add(id);
+      if (fclt && fc && fc.indexOf(fclt) >= 0) continue;   // 우리 시설 = 「타지역」이 아니다
+      out.push({
+        id, title: nm, place: fc, area: smXmlVal(b, "area"), state: smXmlVal(b, "prfstate"),
+        from: smXmlVal(b, "prfpdfrom").replace(/\./g, "-"), to: smXmlVal(b, "prfpdto").replace(/\./g, "-"),
+        link: "https://www.kopis.or.kr/por/db/pblprfr/pblprfrView.do?menuId=MNU_00020&mt20Id=" + encodeURIComponent(id)
+      });
+      if (out.length >= 8) break;
+    }
+  }
+  const res = { ok: true, name, core, rows: out, at: new Date().toISOString() };
+  try { await env.ops_kv.put(ck, JSON.stringify(res), { expirationTtl: 86400 }); } catch (e) {}
+  return res;
+}
+__name(smKopisRelated, "smKopisRelated");
 
 // 갈래별 준비 상태 — 화면이 「무엇이 아직 안 켜졌나」를 그대로 말할 수 있게.
 function smReady(env) {
@@ -3267,6 +3370,14 @@ var index_default = {
     //   갈래가 하나도 안 켜졌으면 아예 안 돈다(=KV 왕복 0). ⚠ 알림 발화 0 — Q28(「홍보 알림 당분간 없애줘」) 준수.
     if (kst.getUTCMinutes() < 15 && (env.GALERT_RSS || (env.NAVER_SEARCH_ID && env.NAVER_SEARCH_SECRET) || env.KAKAO_REST_KEY || env.KOPIS_KEY)) {
       ctx.waitUntil(smScan(env).then((r) => console.log("[sm]", JSON.stringify(r))).catch((e) => console.error("sm scan", e)));
+    }
+    // [260807 운영자] 검색 모니터링 AI 선별 — sonnet 5가 최근 3일치의 관련/무관을 판정(「관련 없는것도 있어서 관련된 것만」).
+    //   시각 = KST 8·11·14·17시 **:15 틱** = 3시간 간격 + 「밤 7시~오전 8시 멈춤」 + 같은 시각 스캔(:00 틱)과 KV 경합 회피.
+    //   엔진 = 구독 OAuth claudeText 재사용(추가 비용 0) · 알림 발화 0(Q28) — 화면 조회용 rel 표식만 새긴다.
+    if ([8, 11, 14, 17].indexOf(h) >= 0 && kst.getUTCMinutes() >= 15 && kst.getUTCMinutes() < 30
+        && (env.ANTHROPIC_AUTH_TOKEN || env.ANTHROPIC_API_KEY)
+        && (env.GALERT_RSS || (env.NAVER_SEARCH_ID && env.NAVER_SEARCH_SECRET) || env.KAKAO_REST_KEY || env.KOPIS_KEY)) {
+      ctx.waitUntil(smJudge(env).then((r) => console.log("[sm/judge]", JSON.stringify(r))).catch((e) => console.error("sm judge", e)));
     }
     // [260806 운영자] AI 홍보 자동 브리핑 — 매일 KST 08:30 틱에 서버가 포트폴리오 팩을 조립해 추론 디스패치
     //   (「누르지 않더라도 자동으로 그날그날」 · 총론 + 7/30/90일 시계 · opus 5 high). 중복 방어 = KV 일자 가드.
@@ -3521,13 +3632,27 @@ var index_default = {
         const src = String(url.searchParams.get("src") || "").trim();
         const lim = Math.max(1, Math.min(SM_MAX_ITEMS, parseInt(url.searchParams.get("limit"), 10) || 100));
         const rows = (src ? st.items.filter((x) => x && x.src === src) : st.items).slice(0, lim);
-        return json({ ok: true, count: rows.length, total: st.items.length, last: st.last, ready: smReady(env), rows }, env);
+        return json({ ok: true, count: rows.length, total: st.items.length, last: st.last, judge: st.judge, ready: smReady(env), rows }, env);
       }
       if (url.pathname === "/api/monitor/scan" && request.method === "POST") {
         const rd = smReady(env);
         if (!rd.google && !rd.naver && !rd.kakao && !rd.kopis) return json({ error: "no_source", note: "GALERT_RSS / NAVER_SEARCH_* / KAKAO_REST_KEY / KOPIS_KEY 중 하나는 있어야 한다", ready: rd }, env, 503);
         try { return json({ ok: true, ready: rd, ...(await smScan(env)) }, env); }
         catch (e) { console.error("[sm/scan]", e); return json({ error: String(e) }, env, 500); }
+      }
+      // POST /api/monitor/judge = AI 관련도 선별 지금 1회(평소엔 크론이 KST 8·11·14·17시) — 운영자 260807
+      if (url.pathname === "/api/monitor/judge" && request.method === "POST") {
+        if (!env.ANTHROPIC_AUTH_TOKEN && !env.ANTHROPIC_API_KEY) return json({ error: "no_ai", note: "ANTHROPIC_AUTH_TOKEN(또는 ANTHROPIC_API_KEY)이 있어야 한다" }, env, 503);
+        try { return json(await smJudge(env), env); }
+        catch (e) { console.error("[sm/judge]", e); return json({ error: String(e) }, env, 500); }
+      }
+      // GET /api/monitor/kopis-related?name=공연명 = 같은 공연의 타지역 일정(예울마루 제외 · 24h 캐시) — 운영자 260807
+      if (url.pathname === "/api/monitor/kopis-related" && request.method === "GET") {
+        const nm = String(url.searchParams.get("name") || "").trim();
+        if (!nm) return json({ error: "name 필요" }, env, 400);
+        if (!env.KOPIS_KEY) return json({ error: "KOPIS_KEY 미설정" }, env, 503);
+        try { return json(await smKopisRelated(env, nm), env); }
+        catch (e) { console.error("[sm/rel]", e); return json({ error: String(e) }, env, 500); }
       }
 
       // === 콘텐츠 제작 — 네이버 블로그 초안 AI 생성 (Graph 토큰 불요) ===
