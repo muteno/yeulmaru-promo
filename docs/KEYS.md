@@ -66,7 +66,7 @@
 ## 2. Cloudflare Worker `yeulmaru-promo-api`
 
 - **위치**: 대시보드 → Workers & Pages → `yeulmaru-promo-api` → **Settings → Variables and Secrets** (또는 `wrangler secret put <NAME>`)
-- **배포**: Quick Edit 또는 `wrangler deploy` — **git push와 무관** (Worker 코드 고쳐도 Pages 반영 안 됨, 반대도)
+- **배포**: **main 머지 시 자동**(`.github/workflows/deploy-worker.yml` — `src/index.js`·`wrangler.toml` 변경 감지 → `wrangler deploy` · 260803 실측 최근 30회 전건 성공). 수동 배포 불필요 — Quick Edit/수동 `wrangler deploy`는 비상용. **시크릿은 대시보드에서 저장(및 배포)까지 완료해야 반영** — 반영 여부는 값 추측 말고 `/api/monitor/feed`의 `ready`(또는 해당 기능 5xx 여부)로 실측(260807 GALERT_RSS 입력 화면까지 가고도 라이브 `ready.google=false`였던 실례).
 - **소스**: `src/index.js` (단일 원본) · 설정: `wrangler.toml`
 
 **Secrets (🔒 값 비공개):**
@@ -80,9 +80,13 @@
 - `KASI_KEY` — 공공데이터포털(한국천문연구원) 특일정보 = 공휴일
 - `ANTHROPIC_AUTH_TOKEN`(구독 OAuth `sk-ant-oat…`) **또는** `ANTHROPIC_API_KEY`(유료) — **예울이 채팅 즉답의 엔진**(`POST /api/yeul/chat` · 260806). 모델 = 기본 `claude-sonnet-5`·effort low / 어려우면 `claude-opus-5`·effort medium(SSOT = `src/index.js` `yeulChat`). 미설정이면 이 엔드포인트만 503 → **앱이 조용히 Actions 경로로 폴백**(느려질 뿐 기능은 산다). 블로그·분석의 `claudeText`/`extractPromoInfo`도 같은 키를 쓴다.
   - ⚠ 위 1-b 정정 참조 — 구독 OAuth 토큰이 원시 Messages API에서 동작한다. 이 슬롯을 채우려고 **유료 키를 새로 발급할 필요가 없다**(계정 5개의 `sk-ant-oat…` 중 하나를 넣으면 된다).
+- `GALERT_RSS` — **검색 모니터링 ① 구글 축**(키가 아니라 주소 목록): Google Alerts RSS 피드 주소를 줄바꿈(또는 쉼표·공백)으로 이어 **한 값**으로. 현행 13개 = 키워드 8종 + `site:` 5종(blog.naver/tistory/brunch/cafe.daum/yeosu.go.kr) · 코드 상한 16. 발급·회전 = alerts.google.com(RSS 전달 방식)에서 피드 추가/삭제 후 이 값 갱신. 미설정 = 구글 갈래만 꺼짐(`/api/monitor/*` 자체는 산다).
+- `KAKAO_REST_KEY` — **검색 모니터링 ②′ 다음(카카오) 검색** REST API 키(developers.kakao.com → 앱 → 앱 키 → REST API 키). 티스토리·브런치·다음카페 커버 = robots로 막힌 네이버 카페의 실질 대체(260807 실측). 회전 = 카카오 콘솔 재발급.
+- `KOPIS_KEY` — **검색 모니터링 ③ KOPIS 공연DB** 서비스키(kopis.or.kr 회원가입 → 인증키 신청 `openApiUseSend.do` → 승인 후 마이페이지에서 복사). **공연 전용**(전시는 안 나온다).
+- `NAVER_SEARCH_ID` / `NAVER_SEARCH_SECRET` — 검색 모니터링 ② 네이버 검색 API. ⚠ **260806 실측 = 신규 발급 불가**(개발자센터 「검색」 소멸) — 코드만 존치, 키가 생기면 넣는 즉시 켜진다.
 - *(대체 경로, 현재 주력 아님)* `CLOVA_OCR_INVOKE_URL`/`CLOVA_OCR_SECRET`(네이버 CLOVA OCR), `GOOGLE_SA_EMAIL`/`GOOGLE_SA_PRIVATE_KEY`/`GOOGLE_VISION_KEY`(Google Vision OCR)
 
-**Config (비밀 아님):** `ALLOWED_ORIGIN=*` (`wrangler.toml [vars]`) · KV `ops_kv`(binding, 메모 등) · cron `0 1 * * *`(보류 자동취소)
+**Config (비밀 아님):** `ALLOWED_ORIGIN=*` (`wrangler.toml [vars]`) · KV `ops_kv`(binding, 메모 등) · cron `*/15 * * * *`(보류 자동취소는 KST 10시대 분기 · **검색 모니터링 스캔은 매시 첫 틱 1회**) · `MONITOR_KEYWORDS`(선택 — 네이버/카카오 갈래 검색어 CSV, 기본 「예울마루」 · 최대 5)
 
 ---
 
