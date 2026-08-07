@@ -2937,7 +2937,7 @@ async function smFromAlerts(env) {
       for (const e of smParseAtom(xml)) items.push({ src: "google", kind: "알림", title: e.title, link: e.link, date: e.date, kw });
     } catch (e) { console.error("[sm/alerts]", e); }
   }
-  return { on: true, items, feeds: urls.length, ok };
+  return { on: true, items, feeds: urls.length, ok, note: ok < urls.length ? "구글 피드 " + ok + "/" + urls.length + "만 응답" : "" };
 }
 __name(smFromAlerts, "smFromAlerts");
 
@@ -2982,22 +2982,31 @@ async function smFromKakao(env, keywords) {
   const key = env.KAKAO_REST_KEY;
   if (!key) return { on: false, items: [], note: "KAKAO_REST_KEY 미설정" };
   const items = [];
+  // 갈래별 실패를 스캔 응답의 notes로 내보낸다 — 콘솔 로그는 밖에서 안 보여 「0건」과 「인증 실패」가 구분이 안 됐다(260807 실가동 실측).
+  //   응답 본문 머리도 함께(카카오는 401/403에 원인 코드를 JSON으로 준다). 키 값은 절대 안 싣는다.
+  const errs = [];
   for (const kw of keywords) {
     for (const g of SM_KAKAO_KINDS) {
       try {
         const u = "https://dapi.kakao.com/v2/search/" + g.ep + "?sort=recency&size=20&query=" + encodeURIComponent(kw);
         const r = await smFetch(u, { headers: { Authorization: "KakaoAK " + key, "User-Agent": "yeulmaru-promo-worker" } });
-        if (!r.ok) { console.error("[sm/kakao]", g.ep, r.status); continue; }
+        if (!r.ok) {
+          let body = "";
+          try { body = (await r.text()).slice(0, 120); } catch (e) {}
+          console.error("[sm/kakao]", g.ep, r.status, body);
+          errs.push(g.ep + " HTTP " + r.status + (body ? " " + body : ""));
+          continue;
+        }
         const j = await r.json();
         for (const d of (j && j.documents) || []) {
           const link = smText(d.url || "");
           if (!link) continue;
           items.push({ src: "kakao", kind: g.label, title: smText(d.title) || link, link, date: String(d.datetime || "").slice(0, 10), kw });
         }
-      } catch (e) { console.error("[sm/kakao]", g.ep, e); }
+      } catch (e) { console.error("[sm/kakao]", g.ep, e); errs.push(g.ep + " " + String(e).slice(0, 60)); }
     }
   }
-  return { on: true, items };
+  return { on: true, items, note: errs.length ? "카카오: " + Array.from(new Set(errs)).slice(0, 3).join(" · ") : "" };
 }
 __name(smFromKakao, "smFromKakao");
 
