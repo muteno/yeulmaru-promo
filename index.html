@@ -1481,6 +1481,35 @@ table.promo-board-table th:last-child .col-resize-handle{display:none}
 .cb-name{font-size:10.5px;color:var(--dim);font-weight:700;padding-left:2px}
 .cb-brow{display:flex;align-items:flex-end;gap:6px;min-width:0}
 .cb-time{flex:none;font-size:10.5px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap;padding-bottom:2px}
+/* [260813 운영자 「예울이에 마우스 포인터가 올라가면 대화창이 위에 거주지 TOP5 있는 구간까지 쭉 올라가게 · 자연스럽게 이징 · 대화를 통해 고객질의」]
+   고객 분석(4면·모달) 우 열의 예울이 카드 = **바닥에 붙은 채 위로 자란다**. 접힘 = 종전과 같은 한 칸, 펼침 = 열 전체(= 막대 카드 「거주지 TOP 5」 윗선).
+   ⚠ 높이·마진 전이는 안 쓴다(게이트 ⑥ 잰크 = 프레임마다 리플로 · check_design BASE_LAYOUT_TRANS_INDEX 계약) —
+     카드를 **처음부터 열 전체 높이**로 깔고 아래 `--rise-h`만큼만 `clip-path`로 보여준 뒤, 펼침 = 그 잘라내기가 0으로 가는 것뿐이다.
+     리플로 0 · 합성만 · 입력줄은 한 픽셀도 안 움직인다(바닥 고정) = 「대화창이 위로 자란다」가 그대로 보인다.
+   문법 계승 = 모바일 네비 패널의 `clip-path` 말림(L390 `.55s`)과 같은 축 · 커브 = 이 파일 주력 `cubic-bezier(.215,.61,.355,1)`(.dd-menu·.nav-hover-bg 계승) · 신규 색·토큰 0.
+   자리 확보 = 열의 `padding-bottom`(= 접힘 칸 + 간격) → 위 막대 카드는 종전과 **같은 높이**를 갖는다(실측 1500×1000: 열 651 · 막대 414 · 카드 223 = 변경 전과 Δ0).
+   접힘 칸 `--rise-h` = 로그창(`--rise-log` = 종전 `clamp(96px,16vh,190px)` 그대로) + 입력줄+테두리(`--rise-foot` = _memAiPaint가 `.cb-foot` 실측으로 덮어씀 · 실측 61+2=63).
+   호버 지연 = 들어올 때 .1s(지나가는 마우스에 안 열림) · 나갈 때 0s는 급하니 .18s(스치듯 벗어나도 안 닫힘). `:focus-within` = 터치·키보드(입력칸 탭) 진입로. */
+/* [260813-2] 길이 .46s → **.59s**(운영자 선택값 · 시안 [선택값 복사] 그대로) — 커브·지연·펼침 범위는 초판 계승.
+   같은 회신에 있던 「접힘 칸 223 → 304px」는 260813-4에서 되돌렸다(아래) — **길이만 남는다**. */
+/* [260813-4 운영자 「위에 이미 있는 내용의 간격들은 그대로 유지하면서, 예울이 대화창이 켜졌을 때 잠시 슬라이드로 덮히는 정도만」]
+   → 260813-2의 접힘 칸 304px(로그창 상한 190 → 241)을 **되돌린다**. 접힘 칸은 열의 `padding-bottom`으로 **자리를 예약**하는 값이라,
+     키운 만큼 위 막대 카드(거주지 TOP 5·연령대)가 실제로 줄어든다 — 실측 **1500×1000 막대 414 → 333(−81)** · **1920×1080 474.8 → 406.6(−68)**.
+     운영자가 원하는 건 **쉼 상태 기하 = 손대기 전 그대로**이고, 넓어지는 건 **켜져 있는 동안 덮는 것**뿐이다.
+   → 접힘 칸 = 손대기 전 그대로 `clamp(96px,16vh,190px) + --rise-foot`(1500×1000 **223** · 1920×1080 **235.8** · 1366×768 **185.9** = 배선 전과 **Δ0**).
+     펼침은 종전대로 열 전체(`inset(0)`) — 카드가 절대배치·불투명(`--surface-solid`)이라 위 막대 카드를 **밀지 않고 덮는다** = 「슬라이드로 덮힌다」.
+   ⚠ 260813-3의 차트 우선 상한(`--rise-avail`·`_memRiseFit`·`_MEM_BAR_MIN`·`ResizeObserver`)도 **함께 걷어냈다** —
+     그건 304로 키운 자리를 낮은 창에서 되돌리려던 보정이고, 접힘 칸이 종전 값으로 돌아온 지금은 하한(96+63=159)에 먼저 걸려
+     **어느 창에서도 발동하지 않는 죽은 코드**다(측정 → CSS 변수 쓰기 → 리사이즈 관측 한 벌이 통째로 사라진다).
+   ⚠ `--rise-h`에 **백분율 금지**(260813-2에서 잡은 함정) — 같은 변수를 `padding-bottom`(%가 **폭** 기준)과
+     `clip-path`(%가 **높이** 기준)가 함께 써서 한 값이 두 뜻이 된다. 상한이 필요하면 px·vh로만. */
+.cb-rise-col{position:relative;--rise-log:clamp(96px,16vh,190px);--rise-foot:63px;--rise-h:calc(var(--rise-log) + var(--rise-foot));padding-bottom:calc(var(--rise-h) + var(--rise-gap,14px))}
+.cb-rise{position:absolute;left:0;right:0;top:0;bottom:0;z-index:1;
+  clip-path:inset(max(0px,calc(100% - var(--rise-h))) 0 0 0 round var(--radius));
+  transition:clip-path .59s cubic-bezier(.215,.61,.355,1) .18s,box-shadow .59s cubic-bezier(.215,.61,.355,1) .18s}
+.cb-rise:hover,.cb-rise:focus-within{clip-path:inset(0 0 0 0 round var(--radius));box-shadow:var(--elev);transition-delay:.1s}
+.cb-rise>.cb-body>:first-child{margin-top:auto}   /* 대화가 짧아도 입력줄 바로 위에 붙는다 — 로그창은 늘 열 전체 높이라 위로 붙이면 접힘 칸이 빈 칸이 된다 */
+@media (prefers-reduced-motion:reduce){.cb-rise{transition:none}}
 @keyframes cbIn{from{transform:translateY(10px) scale(0.96);opacity:0}to{transform:translateY(0) scale(1);opacity:1}}
 .cb-msg.bot a{color:var(--accent);font-weight:700}
 .cb-msg.bot .cb-card-t{font-weight:800;font-size:13.5px;color:var(--text);margin-bottom:3px}
@@ -4195,6 +4224,10 @@ async function initLoginScreen(){
   }
   if(email){
     _loginEmail=email;
+    // [로그인 프리로드 · 평의회6] MSAL 계정 캐시가 실존할 때만 선출발 — lastLoginEmail 폴백뿐인 email(로그아웃 직후 잔존 표시용)은
+    //   이탈 개연성이 높아 발사 0. 계정 캐시가 있으면 죽은 세션이라도 「계속」= loginPopup(페이지 생존)이라 발사분이 소비된다.
+    //   _msalGetEmailSilent가 방금 인스턴스를 초기화·setActiveAccount까지 해 둬서 이 재호출은 즉답(추가 대기 0).
+    try{ var _pli=window.msal?await _msalGet():null; if(_pli&&(_pli.getActiveAccount()||(_pli.getAllAccounts()||[]).length))_plKick(); }catch(_e){}   // window.msal 게이트 = CDN 사망 코너에서 「로드 실패」 토스트 중복 방지(평의회1 참고)
     // [260704] 이미 MS 로그인된 상태면 "계속" 클릭 없이 자동으로 PIN 단계로 이동 (재방문 편의).
     //  ⚠️ 1회만 — goToPinStep이 실패해 initLoginScreen으로 되돌아오면(_autoPinDone=true) 자동 진입을 멈추고
     //  아래 수동 "계속" 버튼을 보여준다 (등록X/휴직/네트워크 실패 시 무한루프 방지).
@@ -4255,6 +4288,7 @@ function _fullLogout(){
   try{password='';userRole='user';['pw','role','myApplicant','myUser','subAdminPin'].forEach(function(k){sessionStorage.removeItem(k);});}catch(e){} try{if(typeof _memPurge==='function')_memPurge();}catch(e){} console.log('[fullLogout] done'); }   // 회원 PII 캐시·모달 소거(분신술 보안 MED-4 — 비리로드 로그아웃 경로 힙 잔류 차단)
 async function goToPinStep(skipEnsure){
   try{
+  try{_plKick();}catch(_e){}   // [로그인 프리로드] PIN 단계 진입 확정(리다이렉트 복귀 _resumePin 직행 포함) — MS 재검증·PIN 타이핑 동안 첫 화면 데이터 선출발
   const step=document.getElementById('account-step');
   if(step)step.innerHTML='<div style="color:#999;font-size:13px;padding:24px 0">'+_ldHtml(12)+'Microsoft 인증 확인 중</div>';
   if(!skipEnsure){
@@ -4295,6 +4329,8 @@ async function goToPinStep(skipEnsure){
 }
 function _enterPinInputStep(){
   window._pinActive=true;
+  try{_plKick();}catch(_e){}   // [로그인 프리로드] PIN 직행 경로 안전망 — 신선 엔트리는 _plOne 가드가 skip. manager만 재워밍(goToPinStep이 방금 소비) = 의도된 1회: 완주 시 loadAllMasters가 소비해 총량 동수·콜드가 워밍으로(평의회4)
+
   // PIN 직행 경로(_resumePin 리로드·잠금 등)는 initLoginScreen을 안 거침 → 첫 화면과 동일한 유동 셰이더 배경 보장(이미 돌면 no-op)
   if(typeof startLoginShader==='function'){try{startLoginShader();}catch(e){}}
   if(!window._pinGuardInstalled){window._pinGuardInstalled=true;var _ga=document.getElementById('account-step');if(_ga){new MutationObserver(function(){if(window._pinActive && _ga.style.display!=='none'){console.trace('[pinGuard] account restored - culprit stack below');_ga.style.display='none';var _gp=document.getElementById('pin-step');if(_gp)_gp.style.display='';}}).observe(_ga,{attributes:true,attributeFilter:['style']});}}
@@ -4449,11 +4485,76 @@ function _qaDeepLink(){
     if(tries++<40){ setTimeout(go,100); }   // nav 빌드 대기(최대 ~4초)
   })();
 }
+/* ═══ [로그인 프리로드] 운영자 260807 「로그인 전에 이미 데이터를 불러와서 로딩 시간 단축」 ═══
+   로그인 화면이 떠 있는 동안(MS 인증 확인·PIN 타이핑 = 보통 수 초) initApp 첫 화면이 어차피 당길 공용 읽기 GET을
+   미리 출발시켜 두고, api()가 같은 경로 GET을 만나면 그 응답을 1회 재사용한다 → 진입 직후 재요청 0 = 즉시 렌더.
+   · 인증 = 읽기 비번 '0510' 리터럴 — goToPinStep·_authWithEmail의 로그인 전 loadManagers와 같은 전례(이 파일에 이미
+     내장된 값 = 새 노출 0. Worker 읽기 게이트는 X-App-Password뿐 · MS+PIN은 화면 신원 게이트라 데이터 접근권 불변).
+   · 대상 = 공용 읽기만: 광폭 18개(1차 11 + 레일 7) · 좁은 화면 14개(1차 11 + 레일 3) = initApp 첫 화면 공용 로더 중
+     gcal(자체 localStorage 캐시로 이미 즉시 페인트)·applysettings(자체 60초 캐시와 낡음 적층 — 평의회3) 제외 전수.
+     개인화·PII 축(메시지/프레즌스/회원)은 제외 — 로그인 전 메시지 API 봉인(분신술 B-HIGH)·회원 PII 소거(_memPurge) 경계 그대로.
+   · 신선도 = TTL 3분 — PIN 화면 방치 후 진입 시 낡은 그림 방지. 만료·실패·미적중 = api()가 정상 fetch 폴백(회귀 0).
+   · /api/lastmod 동봉 = 파랑 배지 기준선(_refreshSeenMod)이 records와 같은 시각(t0)으로 잡혀, 프리로드~진입 사이
+     시트 변경도 다음 45초 폴링이 정상 감지(records만 t0·기준선만 미래(t1)로 갈라지는 사각 차단).
+   · 레일 7시트 = records 프리로드 완료 뒤 발사 — 260711 「캘린더 네트워크 우선권」 원칙을 프리로드 구간에도 유지.
+   · 발사 조건 = 로그인·PIN·잠금(F5 복원) 화면뿐. QA(실네트워크 금지)·앱 진입 후(_appEnteredAt = 유휴 잠금은 복귀
+     시점 불명이라 낭비)·세션복원 직행(F5 = initApp이 곧장 당김)은 발사 0. */
+var _plJobs=Object.create(null), _PL_TTL=180000;
+function _plOne(path){
+  var j=_plJobs[path];
+  if(j&&(Date.now()-j.t)<_PL_TTL)return;   // 신선한 선행 잡 존재 = 중복 발사 0(initLoginScreen 재진입·발사점 중첩 대비)
+  var _o={headers:{'Content-Type':'application/json','X-App-Password':'0510'}};
+  try{ if(window.AbortSignal&&AbortSignal.timeout)_o.signal=AbortSignal.timeout(45000); }catch(_e){}   // [평의회5] 좀비 소켓 상한 — 45초 넘긴 프리로드는 끊는다(미지원 브라우저 = 상한 없이 종전대로)
+  var p=fetch(API+path,_o)
+    .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();});
+  _plJobs[path]={t:Date.now(),p:p};
+  // 도착 값 캡처(.v)·실패 도장(.err) — .v = _refreshSeenMod가 「records와 같은 t0의 lastmod 값」을 쓰는 통로(평의회3),
+  //   .err = records 소비 시 에폭 짝 판정 근거(평의회1). 실패 = 무음(unhandledrejection 차단, 소비 시 api()가 정상 fetch 폴백)
+  p.then(function(v){var jj=_plJobs[path];if(jj&&jj.p===p)jj.v=v;},function(){var jj=_plJobs[path];if(jj&&jj.p===p)jj.err=1;});
+}
+function _plKick(){
+  try{
+    if(window._QA)return;                 // QA 미리보기 = 실네트워크 차단 계약 유지
+    if(window._appEnteredAt)return;       // 앱 진입 후(유휴 잠금 등) = 발사 안 함
+    var enc=encodeURIComponent;
+    // applysettings는 제외(평의회3) — loadApplySettings의 자체 60초 캐시가 워밍 나이를 0으로 오인해 최악 ~4.5분 낡음 적층.
+    //   백그라운드 Promise.all 소속(첫 페인트 크리티컬 패스 밖)이라 프리로드 제외 = 체감 손실 0.
+    ['/api/records','/api/lastmod','/api/sheet/special','/api/programs','/api/sheet/manager',
+     '/api/sheet/platform','/api/sheet/content','/api/config',
+     '/api/ops?sheet='+enc('카페일정'),'/api/ops?sheet='+enc('장도'),
+     '/api/holidays?year='+new Date().getFullYear()].forEach(_plOne);
+    // [평의회4·7] 좁은 화면(<_BIZ_WIDE_MIN)은 레일이 안 뜬다(_srailInit의 _bizBookWide 게이트) — 좁은 부팅이 실제로 당기는
+    //   3시트(세부운영관리대장(정리)=_bizCompRender · 전시일일/전시마스터=_bizExhibEnsure)만 발사해 모바일 낭비 0.
+    //   빠른 진입으로 앱이 먼저 요청해도 _plOne·api() 소비가 dedupe = 요청 수 불변.
+    var _rails=function(){try{
+      var _w=true; try{_w=(typeof _bizBookWide==='function')?_bizBookWide():true;}catch(_e2){}
+      (_w?['일일입력','공연마스터','회차상세','세부운영관리대장(정리)','전시일일','전시마스터','단체']
+         :['세부운영관리대장(정리)','전시일일','전시마스터']).forEach(function(n){_plOne('/api/ops?sheet='+enc(n));});
+    }catch(_e){}};
+    var rj=_plJobs['/api/records'];
+    if(rj)rj.p.then(_rails,_rails); else _rails();   // records 실패여도 레일은 발사(initApp의 _calP 게이트와 같은 계약)
+  }catch(e){}
+}
 (function(){if(window._QA){try{_qaEnter();}catch(_qe){console.error('[QA] enter fail',_qe);}return;}try{localStorage.removeItem('myApplicant');localStorage.removeItem('myUserDept');}catch(e){}const s=sessionStorage.getItem('pw');if(s){var _lk=null;try{_lk=sessionStorage.getItem('_lockedAt');}catch(e){} if(_lk){try{if(!_loginEmail)_loginEmail=(sessionStorage.getItem('myEmail')||'').trim();}catch(e){} lockScreen();}else{_enterAppFromSession();_msalHasLiveSession();}}else{var _rp=null;try{_rp=localStorage.getItem('_resumePin');}catch(e){} if(_rp){try{localStorage.removeItem('_resumePin');}catch(e){} _loginEmail=_rp; if(typeof startLoginShader==='function'){try{startLoginShader();}catch(e){}} if(typeof goToPinStep==='function'){setTimeout(function(){goToPinStep(true);},0);}else{if(typeof initLoginScreen==='function')initLoginScreen();}}else{if(typeof initLoginScreen==='function')initLoginScreen();}}})();
 
 var _apiWrites=0;   // [Q39 평의회6] 비행 중 쓰기 재계 — nmSyncBusy가 읽어 배포 자동 리로드가 PATCH/POST를 절단하지 못하게(모달 닫힘~쓰기 완료 사이 무방비 창 봉합)
 async function api(method,path,body){
   if(window._QA)return _qaApi(method,path,body);   // [QA] 실네트워크 차단 — 목데이터만(실API·실데이터 미접촉)
+  // [로그인 프리로드] 같은 경로 GET의 선행 응답을 1회 재사용(신선할 때만) — 만료·실패는 아래 정상 fetch 폴백(회귀 0)
+  if(method==='GET'&&_plJobs[path]){
+    var _pl=_plJobs[path]; delete _plJobs[path];   // 1회 소비 — 이후 같은 경로(수동 새로고침·syncReload)는 항상 네트워크
+    // [평의회1] records↔lastmod 에폭 짝 — lastmod 프리로드가 이미 죽어 있으면(실패·만료) records 워밍도 버리고 둘 다
+    //   지금 네트워크로 정렬(화면=t0·배지 기준선=t1로 갈라지는 사각 차단). 미착(pending)은 h2 같은 연결이라 비대칭 스톨이
+    //   사실상 없고(전환·슬립은 둘 다 죽어 둘 다 폴백 = 정렬), 정상 도착분은 _refreshSeenMod의 .v 경로가 t0 값을 쓴다.
+    if(path==='/api/records'){ try{ var _lm=_plJobs['/api/lastmod']; if(_lm&&(_lm.err||(Date.now()-_lm.t)>=_PL_TTL))_pl=null; }catch(_e){} }
+    if(_pl&&(Date.now()-_pl.t)<_PL_TTL){
+      // [평의회5] 스톨 방어 — 죽은-pending 소켓(잠금 방치 중 네트워크 전환·슬립 복귀)은 TTL 검사로 못 끊는다 →
+      //   8초 안에 안 오면 버리고 아래 정상 fetch(오늘의 경로)로. 최악 추가 대기 8초 상한(구: 소켓 포기까지 수 분 무표시).
+      //   타임아웃은 reject가 아니라 센티널 resolve — 패배한 타이머가 나중에 터져도 unhandledrejection(관리자 오류 토스트) 0.
+      try{ var _plto={}; var _plgot=await Promise.race([_pl.p,new Promise(function(rs){setTimeout(rs,8000,_plto);})]); if(_plgot!==_plto) return _plgot; }
+      catch(_e){}   // 프리로드 실패 = 아래 정상 fetch 폴백
+    }
+  }
   const headers={'Content-Type':'application/json','X-App-Password':password};
   // 서브 admin: 본인 PIN을 헤더에 동봉 (Worker가 검증해 admin 권한 부여)
   const subPin=sessionStorage.getItem('subAdminPin');
@@ -5299,6 +5400,7 @@ function lockScreen(){
   _pinClear(false);
   if(typeof _pinFocusFirst==='function')_pinFocusFirst(); else if(pins[0])pins[0].focus();   // [260714] 잠금 재진입도 견고화 포커스로 통일(경로 일관성)
   if(typeof _pinFirstHintStart==='function')_pinFirstHintStart();   // [분신술 260710 감사5] 잠금 재진입도 PIN 진입 — 첫 칸 안내 링 발동(경로 일관성)
+  try{if(typeof _plKick==='function')_plKick();}catch(_e){}   // [로그인 프리로드] F5 잠금 복원(_lockedAt 도장) = 해제 즉시 initApp 재로딩 → 그 데이터 선출발(_appEnteredAt 가드가 앱 사용 중 유휴 잠금은 자동 제외)
 }
 function toggleMobileNav(){
   const c=document.getElementById('nav-menus');if(!c)return;
@@ -5980,7 +6082,9 @@ function _salesBuild(){
     // [분석보드] 추가 필드(기존 필드 불변): 최근 7일 점유율 스파크라인 / 어제대비 %p / 데이터 출처
     var spark=rows.slice(-7).map(function(r){return totalOpen>0?Math.min((_salesNum(r['합계좌석'])||0)/totalOpen*100,100):0;});
     // 레일 10일 추이용 — 최근 7일 실측(좌석·기준일자·점유율·x=예측 제외 표시). 예측(추세 연장·종료 예상)은 렌더 시 — 실측 7건부터(_SRAIL_FC_MIN).
-    var days=rows.slice(-7).map(function(r){var s=_salesNum(r['합계좌석']); return {bd:_salesNum(r['기준일자']),seat:(s==null?0:s),occ:(s!=null&&totalOpen>0)?Math.min(s/totalOpen*100,100):0,x:_fcExcl(r)?1:0};});
+    // [260807 운영자 「전일 대비 … +00% +000원」] mny = 그 날짜의 **누계 금액**(합계금액) — 전일 대비 금액을 같은 두 점에서 뽑기 위한 동봉값.
+    //   ⚠ 새 계산이 아니라 이미 읽고 있던 행의 열 하나를 같이 실어 보내는 것뿐 = 좌석·점유율·예측 축 무접촉(단체 금액도 종전대로 여기 미포함).
+    var days=rows.slice(-7).map(function(r){var s=_salesNum(r['합계좌석']); return {bd:_salesNum(r['기준일자']),seat:(s==null?0:s),mny:_salesNum(r['합계금액']),occ:(s!=null&&totalOpen>0)?Math.min(s/totalOpen*100,100):0,x:_fcExcl(r)?1:0};});
     var deltaPP=(diff!==null&&totalOpen>0)?diff/totalOpen*100:null;
     // [260710 운영자] 예측 일평균 fcRate(석/일) = (마지막 누적 − 첫 실측 누적) ÷ 달력일수 — 첫 실측점 기준선 제외(첫날 버스트 배제).
     // 구현 = 인접 구간(증분·달력일수) 합산: 제외 0건이면 기존 두 점 식과 동치, 「예측 제외」 체크일(단체 유입·2차 오픈 등)은
@@ -6824,6 +6928,45 @@ function _mvBars(days,diff,unit,tok,tokDim){
     +'<span style="display:inline-block;vertical-align:middle;margin-left:'+_RY_TREND_GAP+'px;text-align:right;width:'+_RY_TREND_NUMW+'px">'
     +'<span style="display:block;color:var('+tok+');font-weight:800;font-size:13px;font-variant-numeric:tabular-nums">+'+sum7.toLocaleString()+(unit||'석')+'</span>'
     +'<span style="display:block;color:var(--dim);font-size:11px;font-variant-numeric:tabular-nums;margin-top:2px">어제 '+(yest>=0?'+':'')+yest.toLocaleString()+'</span></span>';
+}
+// ── [260807 운영자 「어제 대비해서가 너무 눈에 안 띈다 … 오로지 전일하고 비교만 할 수 있게 · +00% +000원 등」] ──────
+//   같은 칸(최근 7일 추이 자리)을 **전일 대비 한 칸**으로 갈아끼운다 — 열 신설 0 · 폭 동일(막대 67 + 간격 10 + 숫자 56 = 133)이라
+//   토글을 눌러도 표의 세로 오와열(_ryColW 경계·머리글 중심)이 안 흔들린다.
+//   표기 문법 = 레일 머리 요약(「전일 대비 | 공연 -9석」)이 이미 쓰는 정본 그대로 — **부호·색만**(▲▼ 삼각형 폐지 · 운영자 260710):
+//     늘면 `--green` · 줄면 `--danger` · 그대로면 `--muted`(0은 조용해야 한다 — 표는 행이 여럿이라 요약 한 줄의 `--text`를 그대로 쓰면
+//     「아무 일 없음」이 프로그램 이름만큼 크게 읽힌다. 색은 지난 행 일자와 같은 중립 사다리 = 새 색 0).
+//   ⚠ 여기서 「전일」 = 달력 어제가 아니라 **직전 입력분**이다 — 시트가 매일 들어오지 않는 날이 있어, 시트 열 「전일대비(석)」이
+//     쓰는 뜻과 같은 축으로 맞춘다. 그래서 실제 두 날짜를 툴팁에 적는다(예: 8.6 → 8.7).
+var _RY_TREND_BARW=67, _RY_DOD_W=_RY_TREND_BARW+_RY_TREND_GAP+_RY_TREND_NUMW;   // 133 = 추이 칸 내용 폭(두 모드가 같은 폭을 쓴다)
+function _ryDodPick(p){
+  var ds=(p&&p.days)||[]; if(!ds.length)return null;
+  var b=ds[ds.length-1], a=(ds.length>=2)?ds[ds.length-2]:null;
+  // 좌석 = 시트 「전일대비(석)」(p.diff)이 정본 · 없으면 두 점 차(첫 입력분은 그날 누계가 곧 그날 판매분 — _mvBars와 같은 규칙)
+  var seat=(p.diff!==null&&p.diff!==undefined&&!isNaN(p.diff))?p.diff:(a?((b.seat||0)-(a.seat||0)):(b.seat||0));
+  var hasM=(b.mny!==null&&b.mny!==undefined);
+  var mny=hasM?(((a&&a.mny!==null&&a.mny!==undefined)?(b.mny-a.mny):b.mny)):null;
+  // 증감률 분모 = 「전일 누계」 = 오늘 누계 − 오늘 증감. a.seat를 그대로 쓰지 않는 이유 = 좌석을 시트 diff에서 받은 행에서
+  //   분자(시트)와 분모(days)가 서로 다른 출처가 돼 %만 혼자 어긋난다(둘이 일치하는 평시엔 a.seat와 같은 값).
+  var base=(b.seat||0)-seat;
+  return {seat:seat,mny:mny,pct:(a&&base>0)?(seat/base*100):null,from:(a?a.bd:null),to:b.bd};
+}
+function _ryDodDate(bd){ var s=String(bd||'').replace(/[^0-9]/g,''); return (s.length===8)?(parseInt(s.slice(4,6),10)+'.'+parseInt(s.slice(6,8),10)):''; }
+function _ryDodCell(p){
+  var d=_ryDodPick(p);
+  if(!d)return '<span style="color:var(--muted);font-size:12px">데이터 부족</span>';
+  var unit=p._unit||'석';
+  var tok=function(v){ return (v>0)?'--green':((v<0)?'--danger':'--muted'); };
+  var sgn=function(v){ return (v>0)?'+':((v<0)?'':'±'); };   // 음수는 숫자가 이미 부호를 갖는다 · 0 = ±(요약 줄과 같은 문법)
+  var num=function(v){ return sgn(v)+Math.round(v).toLocaleString(); };
+  var tip=(d.from?(_ryDodDate(d.from)+' → '):'')+_ryDodDate(d.to)+' 대비'
+    +(d.from?'':' (첫 입력분)');
+  return '<span title="'+escapeHtml(tip)+'" style="display:inline-block;vertical-align:middle;text-align:right;width:'+_RY_DOD_W+'px">'
+    +'<span style="display:block;font-variant-numeric:tabular-nums;white-space:nowrap">'
+      +'<b style="color:var('+tok(d.seat)+');font-weight:800;font-size:14.5px">'+num(d.seat)+unit+'</b>'
+      +((d.pct===null)?'':'<span style="color:var(--dim);font-size:11.5px;font-weight:700;margin-left:5px">'+sgn(d.pct)+(Math.abs(d.pct)>=10?Math.round(d.pct):(Math.round(d.pct*10)/10))+'%</span>')
+    +'</span>'
+    +'<span style="display:block;font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;margin-top:2px;white-space:nowrap;color:var('+((d.mny===null)?'--muted':tok(d.mny))+')">'
+      +((d.mny===null)?'—':(num(d.mny)+'원'))+'</span></span>';
 }
 function _srailTableHtml(perfs,exs){
   var pgIdx=_srailPgIdx();
@@ -8291,7 +8434,21 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
   //   막대 높이가 둘 다 사실상 0이라 그림으로도 안 갈린다 → 그 자리만 자릿수를 한 칸 열어 `0.0` ↔ `0.4`로 구분한다.
   //   ⚠ 구 260806-11 「항상 반올림해서 소숫점 없이」의 **0 한 칸 예외**다(1 이상은 종전 그대로 정수 · 두 문법이 섞이지 않는다).
   //   ⚠ 교육·관객수 축은 사람 수(정수 ≥1)라 이 가지에 애초에 안 걸린다 = 「0.0명」은 생기지 않는다.
-  var vfmt=function(v){ return (Math.round(v)===0)?v.toFixed(1):Math.round(v).toLocaleString(); };
+  // [260813-5 운영자 「**0, 0 은 표기를 애초에 안하면됨**」 + 「할거면 쟤도 `0` / `(0)` 이렇게 했어야지. 그리고
+  //   **몇일 지나기 전까지는 ai 예측도 못하잖아? 그니까 (0) 도 당연히 없어야 하는거고**」]
+  //   → 계약 = **0으로 읽히는 수는 안 적는다** — 윗줄 현재치도, 아랫줄 `(예상치)`도. 위 260813-2의 **`0.0` 갈래는 폐지**되고
+  //     남는 건 `0.4`처럼 **0이 아닌 걸 말하는** 소수 한 자리뿐이다(그 자리는 값이 있다 = 260809 ⓒ 생략 금지 **유지**).
+  //   왜 = 260813-4로 라벨이 두 줄이 된 뒤, 매출 0인 판매중 사업의 글자는 `0` / `(0)` 한 덩이가 된다(예상 꼭대기 = 실값×배율
+  //     = 0×r = 0이라 아랫줄도 0이다). 그런데 예상 엔진은 판매 시작 후 며칠이 지나야 값을 낸다(`_bizFcSeat` 게이트 =
+  //     남은 3일 미만·`_SRAIL_FC_MIN` 미만·집계 전은 **안 그린다**) → 그 `(0)`이 말하는 건 「예상이 0」이 아니라
+  //     **「아직 모른다」**다. 모르는 것을 0이라고 적는 건 값 창작이다. 윗줄 `0`도 막대 높이가 0이라 그림·숫자 어느 쪽도
+  //     새 사실을 주지 않는다(뜻은 툴팁·우 열 상세 표가 종전대로 진다 = 사업이 사라지는 게 아니다).
+  //   ⚠ 이건 260813-3이 **부결**한 「0 라벨 숨김」과 **다른 항**이다 — 그때 부결된 건 「라벨이 몰려 겹치니 **자리를 만들려고**
+  //     0을 지우자」(겹침 대책 = 뜻을 버려 모양을 얻음)였고, 여기서 지우는 근거는 **그 글자가 말하는 게 없다**는 것이다.
+  //     겹침 대책은 종전 그대로 흰 반투명 판(ⓕ)이 진다 = 생략 금지 계약 무접촉.
+  //   ⚠ 지우는 건 **글자 한 벌**뿐 — 값·툴팁·집계·자리·막대(높이 0으로 종전대로 선다)·히트존 전부 무접촉.
+  var vfmt=function(v){ var s=(Math.round(v)===0)?v.toFixed(1):Math.round(v).toLocaleString();
+    return /^-?0(?:\.0+)?$/.test(s)?'':s; };   // 「0」·「0.0」 = 0으로 읽히는 꼴 전부 빈 글자 · `0.4`는 그대로 남는다
   // [260804] 축 중략 — 그릴 자리만 접는다(값·라벨·툴팁은 실값). plotPx = 실제 그림 높이(위 18 · 아래 34 여백 제외 — 45° 이름축 폐지로 아래 여백 96→34)
   var plotPx=Math.max(60,hgt-(18+_BIZ_AXB));   // [260806-5] 위 여백 18 + 아래 여백 _BIZ_AXB — 상수 34를 박아두면 아래 여백을 늘린 만큼 중략이 없는 자리를 있다고 착각한다(그림 영역 = 높이 − 두 여백) · [260809] 값 라벨 겹침도 이 자로 px 환산한다(자가 둘이면 판정이 갈린다)
   var brk=ED?null:_bizBarBreak(vals,plotPx);
@@ -8440,7 +8597,9 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
   //   오게 뒤집는다(눈이 먼저 가는 수가 안 가려진다). 판은 양쪽 다 이므로 아래 깔린 쪽도 제 판 위에서 읽힌다.
   // [260813-4] 아랫줄 = 연한 `--dim` + 기울임. Plotly 주석이 지원하는 태그(`<br>`·`<i>`·`<span style>`)만 쓴다.
   var _lbSub=_yrCss('--dim')||dim;
-  var _lbTwo=function(cur,fc){ return (fc==null||fc===cur)?cur:(cur+'<br><i><span style="fill:'+_lbSub+'">('+fc+')</span></i>'); };
+  // [260813-5] `fc`가 **빈 글자**면(예상이 0으로 읽힌다 = `vfmt` 산출) 아랫줄을 안 붙인다 — 「반올림해서 같으면 생략」과
+  //   같은 자리에서 걸러야 `(0)`은 물론 `()`(빈 괄호)도 태어나지 않는다.
+  var _lbTwo=function(cur,fc){ return (fc==null||fc===''||fc===cur)?cur:(cur+'<br><i><span style="fill:'+_lbSub+'">('+fc+')</span></i>'); };
   var _lbList=rows.map(function(g,i){ return i; }).filter(function(i){ return labs[i]&&xs[i]!=null; })
     .map(function(i){ var f=fcOf[i];   // [260813-4] 예상 칸이 얹힌 행 = 현재치 / (예상치) 두 줄 · 반올림 동일이면 한 줄
       var t=_lbTwo(labs[i],(f!=null)?vfmt(f):null);
@@ -8553,7 +8712,8 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
     //   겹치면 판이 진다(운영자 「상단에 무조건 숫자가 있어야 함 · 차트 옆에 있는건 실패임 · 단 가려질 경우 흰색 반투명」).
     //   ⚠ yshift만 7 — 점(마커 지름 7)의 **가운데**가 기준이라 막대 꼭대기와 물리적 기준이 다르다(같은 벌의 예외 아님).
     lnTip.sort(function(a,b){ return a.y-b.y; }).forEach(function(L){   // [260813-3] 작은 값부터 = 큰 값이 위에 그려진다
-      var t=Math.round(L.y).toLocaleString(), w=_bizLabW(t);
+      var t=vfmt(L.y); if(!t)return;   // [260813-5] 0으로 읽히는 꼭자락은 안 적는다 — 자·문법 다 막대 값 라벨과 **한 벌**(`vfmt`) · 같은 규칙 두 벌 금지
+      var w=_bizLabW(t);
       var hid=_bizLabFit({x:L.x*pxPerDay,y:L.y*_lbPxY,w:w,h:_BIZ_LAB_H},_lbBox)||_lbHidden(-1,L.x*pxPerDay,Math.max(2,w-6),L.y*_lbPxY+7);
       var an={xref:'x',x:L.x,xanchor:'center',yref:'y',y:L.y,yanchor:'bottom',yshift:7,
         text:t,showarrow:false,font:{size:_BIZ_LAB_FS,color:_lbInk}};   // [260809-2 운영자 승인] 선 끝 숫자도 막대와 같은 흐린 검정(구 선색 = 260805 판정의 개정 · #16 ⓐ)
@@ -9955,7 +10115,9 @@ function _railYrmPerfTable(perfs,rateLab){
   var CW=_ryColW();
   // [260731 운영자] 「사업 성격」 열 삭제 · 그 자리에 「장르」 — 5칸(일자·프로그램·판매율·최근 7일 추이·장르).
   //   ([260803] 성격(예술성/사업성) 축 자체 폐지 — 데이터·필터·입력구 전부 제거)
-  var HL=['일자','프로그램',(rateLab||'판매율'),'최근 7일 추이','장르'];
+  // [260807] 4열 = 토글 한 축으로 「최근 7일 추이 ↔ 전일 대비」 갈아끼움(열 신설 0 · 폭·경계 그대로).
+  var DOD=(typeof _ryDodOn==='function')&&_ryDodOn();
+  var HL=['일자','프로그램',(rateLab||'판매율'),(DOD?'전일 대비':'최근 7일 추이'),'장르'];
   // [260731 운영자 개정] 최근 7일 추이 = **가운데** 정렬(나머지는 좌측 유지).
   var HA=['left','left','left','center','left'];
   // [260731 운영자] 열 간격 벌리기 — 「프로그램↔판매율(전시 = 누적 관객수)」·「추이↔장르」 두 경계.
@@ -9969,7 +10131,8 @@ function _railYrmPerfTable(perfs,rateLab){
   //       (머리글 padding-left 10 · 본문 8 · 본문 padding-right 8 · 내용 133 = 막대 67 + 간격 10 + 숫자 56 · 막대 절반 33.5)
   //       두 식을 같게 풀면 PRh = 76 — 열 폭 W와 무관하므로 드래그로 폭을 바꿔도 계속 맞는다(실측 확인).
   //   .ry-rz(열 너비 조절 손잡이)는 padding box 기준 right:-4px라 이 여백에 영향받지 않는다(경계에 그대로).
-  var HPR=[0,0,0,(_RY_TREND_NUMW+_RY_TREND_GAP+10),0];
+  //   [260807] 전일 대비 모드는 내용이 **막대 없는 한 덩어리**(폭 _RY_DOD_W가 셀 가운데) → 보정 0 = 머리글도 그 덩어리 중심에 선다.
+  var HPR=[0,0,0,(DOD?0:(_RY_TREND_NUMW+_RY_TREND_GAP+10)),0];
   var h='<table class="ana-tbl mv-tbl" style="font-size:13px;width:100%;table-layout:fixed">'+_ryColGroup(CW)+'<thead><tr>';
   HL.forEach(function(lab,i){
     h+='<td style="text-align:'+HA[i]+';'+(HP[i]?('padding-left:'+(10+HP[i])+'px;'):'')+(HPR[i]?('padding-right:'+HPR[i]+'px;'):'')+'">'+lab+(i<HL.length-1?('<i class="ry-rz" role="separator" aria-label="'+lab+' 열 너비 조절" onpointerdown="_ryRzDown(event,'+i+')"></i>'):'')+'</td>';
@@ -9978,7 +10141,8 @@ function _railYrmPerfTable(perfs,rateLab){
   perfs.forEach(function(p){
     var trend=p._past?'<span style="color:var(--muted);font-size:12px">판매 종료</span>'   // [260803] 지난 행 추이 = 「판매 종료」 문구(noData '오픈 예정' 문법 계승) — 최종 실적은 3열·행 클릭 상세가 담당
       :(p.noData?('<span style="color:var(--muted);font-size:12px">'+(_ryNotYetSold(p)?'오픈 예정':'데이터 부족')+'</span>')
-      :_mvBars(p.days,p.diff,p._unit,(p._kind==='ex')?'--peach-text':null,(p._kind==='ex')?'--peach-light':null));   // [260731 운영자 4차] 전시 추이 = 전시색(--peach-text 사다리) — 3열 누적 관객수·그룹 블릿과 같은 축
+      :(DOD?_ryDodCell(p)   // [260807] 전일 대비 모드 — 「판매 종료·오픈 예정·데이터 부족」 분기는 위 그대로(그 행들은 어제와 비교할 것이 없다)
+      :_mvBars(p.days,p.diff,p._unit,(p._kind==='ex')?'--peach-text':null,(p._kind==='ex')?'--peach-light':null)));   // [260731 운영자 4차] 전시 추이 = 전시색(--peach-text 사다리) — 3열 누적 관객수·그룹 블릿과 같은 축
     // 3열 = 공연·교육 「판매율」(N% (분자/분모)) · 전시 「누적 관객수」(누계 숫자) — 둘 다 강조색 볼드·좌측 정렬로 같은 문법
     var rate=p.noData?'<span style="color:var(--muted);font-size:12px">—</span>'
       :((p._kind==='ex')?_ryAccCell(p._acc):_ryRateCell(p.seats,p.totalOpen,p.occ,'--accent'));
@@ -10009,7 +10173,8 @@ function _ryExRow(e){
   var ds=((e.daily)||[]).slice().sort(function(a,b){ return String(a['기준일자']||'').localeCompare(String(b['기준일자']||'')); })
     .filter(function(r){ var d=String(r['기준일자']||'').replace(/[^0-9]/g,''); return !d||d<=tISO; });
   // 추이 = 3열 「누적 관객수」와 같은 축(누계총인원 → 없으면 누계유료)이라 막대 증분과 위 숫자가 같은 것을 센다
-  var days=ds.map(function(r){ var v=_salesNum(r['누계총인원']); if(v===null)v=_salesNum(r['누계유료']); return {bd:_salesNum(r['기준일자']),seat:(v===null?0:v)}; });
+  // [260807] mny = 전시일일 「누계금액」 — 공연 days의 mny(합계금액)와 같은 자리·같은 뜻(전일 대비 금액 소스). 없으면 null → 금액 줄만 '—'.
+  var days=ds.map(function(r){ var v=_salesNum(r['누계총인원']); if(v===null)v=_salesNum(r['누계유료']); return {bd:_salesNum(r['기준일자']),seat:(v===null?0:v),mny:_salesNum(r['누계금액'])}; });
   var acc=(e._total!==null&&e._total!==undefined)?e._total:e._paid;   // 누적 관객수 = 누계총인원 → 없으면 누계유료
   return {_kind:'ex',id:(e.id||''),name:e.name,_src:e,_past:(e._past?1:0),
     startDate:sd,endDate:ed,_ryDate:(ed||sd),
@@ -10202,6 +10367,18 @@ function _ryLivePref(){ if(_ryLiveMem!==null)return _ryLiveMem; try{return local
 //   그래서 올해가 아닌 칩에서는 판매중 축을 걷고(전부 노출) 토글 자체도 숨긴다(제목줄 도구 묶음에서 빠짐).
 //   저장된 선호는 건드리지 않는다 → 올해 칩으로 돌아오면 쓰던 상태 그대로 복귀.
 function _ryLiveOnly(){ return _ryLivePref()&&_ryYearIsNow(); }
+// ── [260807 운영자] 「전일 대비」 글자 토글 — 이웃 「판매중」과 **같은 부품 한 벌**(.ry-hd-div 구분선 + .ry-live-tg 글자 토글) ──
+//   지시: *"판매중 구분자 우측에 동일한 마진간격으로 전일 대비 라고 하나 만들어서 오로지 전일하고 비교만 할 수 있게"*.
+//   켬 = 「최근 7일 추이」 칸이 **전일 대비 한 칸**으로 바뀐다(_ryDodCell) · 끔 = 종전 7일 막대 그대로 = 회귀 0.
+//   라벨은 「판매중」과 같은 문법 = **고정 글자 + 켬/끔 상태**(색·굵기 이중단서는 부품이 이미 진다).
+//   상태 = 기기 기억(판매중 ryLiveOnly2·열 폭 ryColW4와 같은 축) + 메모리 폴백(프라이빗 모드) · 기본 = 끔.
+var _RY_DOD_KEY='ryDodOnly1', _ryDodMem=null;
+function _ryDodOn(){ if(_ryDodMem!==null)return _ryDodMem; try{return localStorage.getItem(_RY_DOD_KEY)==='1';}catch(_e){return false;} }
+function _ryDodToggle(){
+  var v=!_ryDodOn(); _ryDodMem=v;
+  try{localStorage.setItem(_RY_DOD_KEY,v?'1':'0');}catch(_e){}
+  _ryRepaintAnim(v?-1:1);   // 연도·판매중과 같은 교체 경로(좁혀 보기 = 좌→중앙 · 되돌리기 = 우→중앙)
+}
 function _ryLiveToggle(){
   var v=!_ryLivePref(); _ryLiveMem=v;
   try{localStorage.setItem(_RY_LIVE_KEY,v?'1':'0');}catch(_e){}
@@ -10222,7 +10399,12 @@ function _railYrmCardTitle(){
     +_ryYearTrigger()
     +(_ryYearIsNow()?('<span class="ry-hd-div" aria-hidden="true"></span>'
       +'<button type="button" class="ry-live-tg" role="switch" aria-checked="'+(live?'true':'false')+'" onclick="_ryLiveToggle()"'
-      +' title="'+(live?'켬 = 판매중 프로그램만 (눌러서 끄면 올해 지난 프로그램까지)':'끔 = 올해 지난(종료) 프로그램까지 (눌러서 켜면 판매중만)')+'">판매중</button>'):'')
+      +' title="'+(live?'켬 = 판매중 프로그램만 (눌러서 끄면 올해 지난 프로그램까지)':'끔 = 올해 지난(종료) 프로그램까지 (눌러서 켜면 판매중만)')+'">판매중</button>'
+      // [260807 운영자 「판매중 구분자 우측에 동일한 마진간격으로」] 구분선·간격(.ry-hd-tools gap:6px)은 앞 칸과 같은 부품 그대로 = 마진 창작 0.
+      //   ⚠ 지난 연도에는 안 세운다 — 그 해 행은 전부 「판매 종료」라 전일 대비가 나올 수 없는 죽은 조작부가 된다(판매중 토글과 같은 이유·같은 게이트).
+      +'<span class="ry-hd-div" aria-hidden="true"></span>'
+      +'<button type="button" class="ry-live-tg" role="switch" aria-checked="'+(_ryDodOn()?'true':'false')+'" onclick="_ryDodToggle()"'
+      +' title="'+(_ryDodOn()?'켬 = 직전 입력분 대비 증감만 (눌러서 끄면 최근 7일 추이)':'끔 = 최근 7일 추이 (눌러서 켜면 전일 대비 증감만)')+'">전일 대비</button>'):'')
     +'</span>';
 }
 // ── [260801 운영자 · Q.38] 3열 숫자 세로선 보증 — 그룹 표 폭 통일(JS 폴백) ──────────────────────
@@ -23259,6 +23441,12 @@ async function syncReload(expectedDelta){
 let _lastSeenMod = null;
 let _updateBadgeShown = false;
 async function _refreshSeenMod(){
+  // [평의회3] records가 프리로드(t0)로 그려진 진입은 기준선도 같은 t0의 lastmod «값»을 쓴다 — 기준선만 네트워크(t1)로
+  //   앞서가 t0~t1 사이 편집이 파랑 배지 사각이 되는 갈림 차단. 워밍 값이 없거나 만료 = 종전 그대로 네트워크(오늘과 동일).
+  try{
+    var _lj=(typeof _plJobs!=='undefined')?_plJobs['/api/lastmod']:null;
+    if(_lj&&_lj.v&&_lj.v.lastModified&&(Date.now()-_lj.t)<_PL_TTL){ delete _plJobs['/api/lastmod']; _lastSeenMod=_lj.v.lastModified; return; }
+  }catch(_e){}
   try{ const r = await api('GET','/api/lastmod'); if(r && r.lastModified){ _lastSeenMod = r.lastModified; } }catch(e){}
 }
 async function _checkForUpdates(){
@@ -25769,6 +25957,7 @@ function _bnavMore(){
   let h='<div class="bn-sheet">';
   const add=function(emo,label,fnStr){h+='<button class="bn-sheet-item" onclick="this.closest(\'.bn-sheet-bg\').remove();'+fnStr+'"><span class="emo">'+emo+'</span>'+label+'</button>';};
   add('📝','블로그·카페 포스팅','openNaverBlogTool()');   // [260805 운영자 2차] 이름 = 데스크톱 「콘텐츠 제작 ▸ SNS」와 통일(구 '네이버 블로그 글쓰기')
+  add('📰','보도자료 만들기','openPressKit()');   // [260806 운영자] 데스크톱 드롭다운(_contentMenuBuild)과 같은 진입점
   // [260805 운영자] 「로고 제작」 메뉴 숨김 — 데스크톱 드롭다운(_contentMenuBuild)과 같이 내림. 롤백 = 이 줄 주석 해제.
   //   숨김일 뿐 제거가 아니다: openLogoMaker()·_lm* 함수와 .lm-* CSS는 그대로 살아있다(.lm-wrap·.lm-col은 「카카오 메세지 설계」가 공용 — 지우면 그쪽이 깨진다).
   // add('🎯','로고 제작','openLogoMaker()');   // [260804 운영자] 데스크톱 「콘텐츠 제작」 드롭다운과 같은 진입점 — 좁은 폭에서도 닿게
@@ -25895,7 +26084,8 @@ function _contentMenuBuild(menu){
   menu.innerHTML='<div style="'+_CT_HD+'">콘텐츠 제작</div>'
     +'<div style="'+_CT_SEC+'">SNS</div>'
     +_ctItem("_ddCloseAll();openKakaoDesigner()",'카카오채널 톡')   /* 구 「카카오 메세지 설계」 개명(260805 2차) — 공연 상세 링크 → 포스터 OCR → 카카오 76자 문구 후보 */
-    +_ctItem("_ddCloseAll();openNaverBlogTool()",'블로그·카페 포스팅')   /* 구 「네이버 블로그」 개명(260805 2차) — 글쓰기 도우미 */
+    +_ctItem("_ddCloseAll();openNaverBlogTool()",'블로그·카페 포스팅')
+    +_ctItem("_ddCloseAll();openPressKit()",'보도자료 만들기')   /* [260806 운영자] 공연을 묶어 워드 보도자료 — 블로그 포스팅의 문서판 */   /* 구 「네이버 블로그」 개명(260805 2차) — 글쓰기 도우미 */
     +'<div style="'+_CT_SEC+'">Edit</div>'
     +_ctItem("_ddCloseAll();openCardMaker()",'이미지 편집')   /* 모달 안 탭 = 1 카드 제작(사진 절삭+문구→PNG) · 2 누끼따기(배경 제거 /cutout/ 임베드) */
     +_ctItem("_ddCloseAll();openVideoEditor('edit')",'영상 편집')   /* 모달 안 탭 = 1 영상 편집 · 2 자막 삽입 · 3 영상 프롬프팅([260711 운영자] 한 도구, 탭 3) */
@@ -28071,7 +28261,9 @@ function _memOvRender(targetId){   // [260731 4차] targetId = 인라인 4면(me
     //   구판은 예울이가 **줄 밖 전폭 자리**를 먹어서 ① 맵이 그 위에서 끊기고(하단선까지 못 감) ② 예울이 오른쪽이 통째로 빈 유리였다.
     //   → 예울이를 막대 카드 아래(우 열)로 옮기면 줄이 남는 높이를 전부 갖고, 맵은 align-items:stretch로 **같은 하단선(안선)**까지 늘어난다.
     //   막대 = flex:1 1 auto(남는 몫 흡수) · 예울이 = flex:0 0 auto(고정) → 마지막 흰 도형 하단 = 줄 하단 = 안선(계약 ②③ 유지).
-    +'<div style="flex:1 1 280px;min-width:250px;min-height:0'+(FIT?';max-height:100%':'')+';display:flex;flex-direction:column">'
+    // [260813 운영자 「예울이에 마우스가 올라가면 대화창이 거주지 TOP5 구간까지 쭉」] 이 열이 곧 예울이의 **자라는 자리**(.cb-rise-col = position:relative + 접힘 칸 padding 확보).
+    //   간격(막대 카드 ↔ 예울이)은 종전 카드 margin-top 자리 = --rise-gap(FIT 14 · 비FIT 24)로 옮겼다(카드가 절대배치라 margin이 안 먹는다).
+    +'<div class="cb-rise-col" style="--rise-gap:'+(FIT?14:24)+'px;flex:1 1 280px;min-width:250px;min-height:0'+(FIT?';max-height:100%':'')+';display:flex;flex-direction:column">'
     // [260804 2차 운영자 「좌측에 여백 더 주고, 타이틀도 그 여백에 맞춰서 우측으로」] 좌 안쪽 여백 17 → 26.
     //   제목·부제·도넛이 **전부 이 패딩 안**이라 한 값만 올리면 넷이 같은 선으로 함께 밀린다(제목 따로 미는 매직 오프셋 0).
     +'<div style="flex:1 1 auto;min-height:0;background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius);padding:13px 17px 13px 26px'+(FIT?';display:flex;flex-direction:column;overflow:hidden':'')+'">'+topHtml+ageHtml+'</div>'
@@ -28188,8 +28380,13 @@ function _memAiCardHtml(sfx,fit,col){
   // [260804 2차 운영자 「예울이를 가로 차트 아래로」] col = 우 열(막대 카드 아래) 스택 모드 — 폭은 **열이 이미 정한다**(=100%),
   //   위 ②의 40% 축소는 「전폭 줄에 홀로 놓일 때」의 규약이라 열 안에서는 오히려 빈 유리를 만든다(적용 제외).
   //   높이는 fit 여부와 무관하게 고정(flex:0 0 auto) = 막대 카드가 남는 몫을 갖고 예울이는 자기 크기만 쓴다.
-  return '<div style="margin-top:'+(fit?14:24)+'px;width:'+(col?'100%':'min(100%,max(300px,40%))')+';background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden'+((fit||col)?';flex:0 0 auto;display:flex;flex-direction:column':'')+'">'
-    +'<div id="mem-ai-log-'+sfx+'" class="cb-body" style="'+(fit?'flex:0 0 auto;height:clamp(96px,16vh,190px)':'min-height:96px;max-height:190px')+';overflow-y:auto;padding:12px 14px"></div>'
+  // [260813 운영자 「마우스 포인터가 올라가면 대화창이 위에 거주지 TOP5 있는 구간까지 쭉 올라가게 — 대화로 고객질의하게」]
+  //   col 모드 = 카드가 **열 전체 높이로 깔리고**(.cb-rise = 절대배치 inset 0) 평소엔 아래 --rise-h 칸만 `clip-path`로 보인다.
+  //   호버·포커스 = 잘라내기가 0으로 가며 열 끝(거주지 TOP 5 윗선)까지 열린다 — 모양·커브 SSOT = CSS `.cb-rise`(위 정의 · 인라인 재타이핑 0).
+  //   로그창은 늘 카드 전체를 채우고(flex:1 1 auto) 대화는 아래에 붙는다(.cb-rise>.cb-body>:first-child{margin-top:auto}) =
+  //   접힘 칸에 보이는 것도, 펼친 뒤 이어 보는 것도 **같은 한 벌**이라 스크롤이 튀지 않는다(칸 높이가 안 변한다).
+  return '<div'+(col?' id="mem-ai-card-'+sfx+'" class="cb-rise"':'')+' style="'+(col?'':'margin-top:'+(fit?14:24)+'px;')+'width:'+(col?'100%':'min(100%,max(300px,40%))')+';background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden'+((fit||col)?';flex:0 0 auto;display:flex;flex-direction:column':'')+'">'
+    +'<div id="mem-ai-log-'+sfx+'" class="cb-body" style="'+(col?'flex:1 1 auto;min-height:0':(fit?'flex:0 0 auto;height:clamp(96px,16vh,190px)':'min-height:96px;max-height:190px'))+';overflow-y:auto;padding:12px 14px"></div>'
     // 입력줄 = FAB 예울이 정본 부품(.cb-foot/.cb-in/.cb-send) 그대로 — 「질문」 글자 버튼 → 종이비행기 픽토그램(정본 svg 동일 path)
     +'<div class="cb-foot">'
     +'<input id="mem-ai-q-'+sfx+'" class="cb-in" maxlength="200" placeholder="예: 순천 20대 회원 몇 명이야?" onkeydown="if(event.key===\'Enter\'&&!event.isComposing)_memAiSend(\''+sfx+'\')">'
@@ -28213,6 +28410,16 @@ function _memAiPaint(sfx){
   // [260804] 첫 화면(대화 0)은 맨 위 고정 — 종전처럼 바닥으로 밀면 좁아진 칸에서 **인사 말풍선이 위로 잘려 나간다**(실측: 칩 2행이 칸을 넘김).
   //   대화가 시작된 뒤에만 최신 줄로 따라간다(종전 동작 그대로).
   log.scrollTop=_memAiHist.length?log.scrollHeight:0;
+  // [260813] 접힘 칸의 아랫단(입력줄 + 카드 위·아래 테두리) = **실측으로 못 박는다**. CSS의 `--rise-foot:63px`은 폴백이고,
+  //   활자·줌·브라우저가 바뀌어 입력줄 높이가 달라지면 접힘 칸이 그만큼 어긋난다(입력줄이 잘리거나 빈 띠가 남는다).
+  //   innerHTML 직후 **같은 태스크**에서 재고 넣으니 첫 페인트 전에 반영된다 = 깜빡임 0.
+  var card=document.getElementById('mem-ai-card-'+sfx),col=card&&card.parentElement;
+  if(col&&col.classList&&col.classList.contains('cb-rise-col')){
+    var ft=card.querySelector('.cb-foot');
+    if(ft&&ft.offsetHeight)col.style.setProperty('--rise-foot',(ft.offsetHeight+2)+'px');
+  }
+  // [260813-4] 접힘 칸이 종전 값으로 돌아오면서 260813-3의 차트 우선 상한(`_memRiseFit`·`--rise-avail`·`_MEM_BAR_MIN`)은 걷어냈다 —
+  //   그건 304로 키운 자리를 낮은 창에서 되돌리려던 보정이라, 지금은 어느 창에서도 하한(96+63=159)에 먼저 걸려 발동하지 않는다.
 }
 function _memAiPaintAll(){_memAiPaint('i');_memAiPaint('m');}
 function _memAiChip(sfx,t){var i=document.getElementById('mem-ai-q-'+sfx);if(i)i.value=t;_memAiSend(sfx);}
@@ -33192,6 +33399,379 @@ function _kmCopyFb(txt,done){   // 클립보드 API가 막힌 브라우저 폴�
     var ta=document.createElement('textarea');ta.value=txt;ta.style.cssText='position:fixed;left:-9999px;top:0';
     document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);done();
   }catch(e){showToast('복사하지 못했어요 — 문구를 직접 선택해 주세요','error');}
+}
+
+// ============================================================
+// 콘텐츠 제작 ▸ 보도자료 만들기 (pr-*) — 운영자 260806
+//  공연 여러 편 + 올린 자료(출연자 프로필·기획안)를 읽어 **워드 보도자료**를 쓴다.
+//
+//  ▸ 흐름 = 오피스문서 편집(_ofRun)과 같은 4단: upload(자료 원본·선택) → dispatch(press-release)
+//    → _nbPollDraft(공용 폴링 drafts/<id>.json) → /api/press/file 로 워드 수령.
+//  ▸ 부품은 전부 기존 것: 공연 목록 `_kmPerfs()`(카카오·블로그와 같은 한 벌) · 상세 읽기
+//    `/api/content/detail`(같은 KV 캐시 — 카카오에서 이미 읽은 공연은 즉시 온다) ·
+//    사진 자리 파서 `_nbPhotoParse()` · 폴링 `_nbPollDraft()` · 토글 `.sw`/`.sw-k` · 셸 `.nb-wrap`.
+//    신규 CSS 0 · 신규 색 0.
+//
+//  ▸ 어투 2종(운영자 260806-3) — 「타이틀은 보도자료형인데, 블로그 어투로 변형 토글을 키면」:
+//    토글 OFF(기본) = 보도자료형(관찰형 평서체 `~다`) / ON = 블로그 어투(존댓말 `~입니다`).
+//    두 어투의 계약은 앱이 아니라 **press-release.yml 프롬프트**가 갖는다(문안 정본 1곳).
+//
+//  ▸ 사진(운영자 「빈 공간에 사진도 넣을 수 있도록 완성된 워드파일」):
+//    워드에 **점선 빈 액자 + 캡션 초안**이 자리마다 박혀 나온다 → 워드에서 [삽입 ▸ 그림]만 하면 끝.
+//    ⚠ 사진을 앱에서 받아 서버로 올리지 않는다 — 이 레포는 공개라 행사 사진 커밋이 곧 노출이다.
+//      화면의 사진 자리 카드는 **어디에 무엇을 넣을지 미리 보는 용도**(첨부 아님).
+//
+//  🔒 공용 PC 원칙(다른 제작 도구와 동일): 닫으면 상태 전멸. 자료는 [만들기]를 누를 때만 서버로 나간다.
+// ============================================================
+var _PR_ETA_MIN = 30;          // 예상 소요(분) — 운영자 260806-3 「너가 소요한 시간 + 2분」.
+                               //   [260806-4 상향 26→30] 프롬프트에 「깊이 계약」이 붙어 리서치가 늘었다 —
+                               //   사람이 손으로 한 3판(상세페이지 전수 재조사 + 연주자 3인 1차 출처 교차확인)이 28분 + 2 = 30.
+                               //   ⚠ 이 숫자를 올리면 _PR_POLL_MS·워크플로 timeout-minutes도 같이 올려야 한다.
+                               //     셋은 「화면이 러너보다 먼저 포기」 순서(ETA < 폴 < 러너)로 정렬돼 있다.
+var _PR_POLL_MS = 40 * 60000;  // 폴 한도 40분 — 워크플로 timeout(42분)보다 짧게(러너가 죽기 전에 화면이 먼저 포기)
+var _PR_MAX_SRC = 6;           // 자료 첨부 상한
+var _PR_SRC_EXT = /\.(hwp|hwpx|docx|pptx|pdf|txt|md)$/i;
+var _PR_MAX_BYTES = 8 * 1024 * 1024;
+
+var _prState = null;
+function _prDefault(){
+  return {picks:[],           // [{name,url,detail,busy}]  고른 공연(상세는 고르는 즉시 읽는다)
+          main:'',            // 메인으로 강조할 공연 이름
+          hooks:['',''],      // 강조할 점
+          srcs:[],            // [{name,bytes}] 첨부 자료
+          blogTone:false,     // 토글 — OFF=보도자료형(기본) / ON=블로그 어투
+          busy:false, step:'', startedAt:0, tick:null,
+          text:'', versions:[], verCur:-1, docx:null, docxName:'', docxErr:'',
+          escHandler:null};
+}
+
+function openPressKit(){
+  if(_tminIs('pr-board')){_tminShow('pr-board');return;}   // 최소화 중 재열기 = 복원(러너 작업이 뒤에서 이어진다)
+  var el=document.getElementById('pr-board');
+  if(!el){el=document.createElement('div');el.id='pr-board';document.body.appendChild(el);}
+  try{if(_prState&&_prState.escHandler)document.removeEventListener('keydown',_prState.escHandler);}catch(_e){}
+  try{if(_prState&&_prState.tick)clearInterval(_prState.tick);}catch(_e){}
+  _prState=_prDefault();   // 🔒 매번 새로 — 이전 사용자의 공연·자료·초안을 복원하지 않는다
+  el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closePressKit)">'
+    +'<div class="modal" style="width:96vw;max-width:1180px;height:92vh;max-height:92vh;--mpad-y:0;--mpad-x:0;position:relative;display:flex;flex-direction:column;overflow:hidden;background:var(--surface-solid)">'
+    +'<button class="modal-x" onclick="closePressKit()" title="닫기" aria-label="닫기">✕</button>'
+    +_mhead('보도자료 만들기','공연을 고르면 자료를 읽고 워드 보도자료를 써요','<button class="modal-x" onclick="_tminHide(\'pr-board\',\'보도자료 만들기\')" title="최소화" aria-label="최소화">─</button>')
+    +'<div style="flex:1;min-height:0;padding:16px 24px 18px">'
+      +'<div class="nb-wrap">'
+        +'<div class="nb-col"><div class="nb-col-head">무엇을 담을까요</div><div id="pr-in"></div></div>'
+        +'<div class="nb-col"><div class="nb-col-head">보도자료 초안</div><div id="pr-out" style="flex:1;min-height:0;display:flex;flex-direction:column"></div></div>'
+      +'</div>'
+    +'</div>'
+    +'<input type="file" id="pr-src-file" accept=".hwp,.hwpx,.docx,.pptx,.pdf,.txt,.md" multiple style="display:none" onchange="_prOnSrc(this)">'
+    +'</div></div>';
+  _prState.escHandler=function(e){if(e.key==='Escape'&&!_prState.busy&&!_tminIs('pr-board'))closePressKit();};
+  document.addEventListener('keydown',_prState.escHandler);
+  _prRender();
+}
+function closePressKit(){
+  if(_prState&&_prState.escHandler)document.removeEventListener('keydown',_prState.escHandler);
+  if(_prState&&_prState.tick)clearInterval(_prState.tick);
+  _prState=_prDefault();   // 🔒 자료·초안·워드 전부 폐기(인메모리만 썼으므로 참조만 끊으면 끝)
+  var el=document.getElementById('pr-board');if(el)el.innerHTML='';
+}
+
+// ── 공연 고르기(다중) ────────────────────────────────────
+//  카카오·블로그는 한 편만 고른다. 보도자료는 여러 편을 묶는 글이라 여기만 다중이다 — 목록 자체는 같은 한 벌.
+function _prPickedIdx(name){
+  var k=-1;(_prState.picks||[]).forEach(function(p,i){if(p.name===name)k=i;});return k;
+}
+function _prTogglePerf(name){
+  var s=_prState,i=_prPickedIdx(name);
+  if(i>=0){
+    s.picks.splice(i,1);
+    if(s.main===name)s.main=(s.picks[0]&&s.picks[0].name)||'';
+  }else{
+    if(s.picks.length>=8){showToast('한 번에 8편까지 담을 수 있어요','error');return;}
+    var hit=_kmPerfs().filter(function(p){return p.f===name;})[0];
+    s.picks.push({name:name,url:hit?String(hit.u||'').trim():'',detail:'',busy:false});
+    if(!s.main)s.main=name;      // 첫 선택이 기본 메인 — 운영자가 라디오로 바꾼다
+    _prReadDetail(name);
+  }
+  _prRender();
+}
+// 상세페이지 읽기 = 고르는 순간(버튼을 한 번 더 누르게 하지 않는다). 카카오와 같은 엔드포인트·같은 KV 캐시.
+async function _prReadDetail(name){
+  var s=_prState,i=_prPickedIdx(name);if(i<0)return;
+  var it=s.picks[i];if(!it.url||it.busy||it.detail)return;
+  it.busy=true;_prRender();
+  var _st=_prState;   // 🔒 세대 가드
+  try{
+    var r=await api('POST','/api/content/detail',{url:it.url,fresh:0});
+    if(_st!==_prState)return;
+    var j=_prPickedIdx(name);if(j<0)return;
+    var a=String((r&&r.text)||'').trim(),b=String((r&&r.ocrText)||'').trim(),parts=[];
+    if(a)parts.push('[상세페이지 본문]\n'+a);
+    if(b)parts.push('[포스터·상세 이미지 OCR]\n'+b);
+    _prState.picks[j].detail=parts.join('\n\n');
+    _prState.picks[j].busy=false;_prRender();
+  }catch(e){
+    if(_st!==_prState)return;
+    var k=_prPickedIdx(name);if(k>=0){_prState.picks[k].busy=false;}
+    _prRender();
+    showToast('「'+name+'」 상세페이지를 못 읽었어요 — 자료를 직접 올려 주세요','error');
+  }
+}
+function _prSetMain(name){_prState.main=name;_prRender();}
+
+// ── 강조할 점 ────────────────────────────────────────────
+function _prHook(i,v){_prState.hooks[i]=v;}
+function _prHookAdd(){if(_prState.hooks.length<4)_prState.hooks.push('');_prRender();}
+function _prHookDel(i){_prState.hooks.splice(i,1);while(_prState.hooks.length<2)_prState.hooks.push('');_prRender();}
+
+// ── 자료 첨부 ────────────────────────────────────────────
+function _prSrcPick(){var f=document.getElementById('pr-src-file');if(f)f.click();}
+function _prOnSrc(input){
+  var files=(input&&input.files)?Array.prototype.slice.call(input.files):[];
+  if(input)input.value='';
+  var s=_prState;
+  files.forEach(function(file){
+    if(s.srcs.length>=_PR_MAX_SRC){showToast('자료는 '+_PR_MAX_SRC+'개까지 올릴 수 있어요','error');return;}
+    if(!_PR_SRC_EXT.test(file.name||'')){showToast('「'+(file.name||'')+'」는 못 읽어요 — 한글·워드·PPT·PDF·텍스트만 돼요','error');return;}
+    if(file.size>_PR_MAX_BYTES){showToast('「'+file.name+'」가 너무 커요(8MB 이하)','error');return;}
+    var _st=_prState,fr=new FileReader();
+    fr.onload=function(){
+      if(_st!==_prState)return;
+      _prState.srcs.push({name:file.name,bytes:new Uint8Array(fr.result)});
+      _prRender();
+    };
+    fr.onerror=function(){showToast('「'+file.name+'」를 읽지 못했어요','error');};
+    fr.readAsArrayBuffer(file);
+  });
+}
+function _prSrcDel(i){_prState.srcs.splice(i,1);_prRender();}
+
+// ── 어투 토글 ────────────────────────────────────────────
+function _prToneToggle(){_prState.blogTone=!_prState.blogTone;_prRender();}
+
+// ── 화면 ─────────────────────────────────────────────────
+function _prRender(){
+  var s=_prState;if(!s)return;
+  var box=document.getElementById('pr-in');
+  if(box){
+    var list=_kmPerfs();
+    var h='';
+    // 1) 공연
+    h+='<div class="nb-field"><span class="nb-label">공연 고르기<span class="req">*</span> <span style="font-weight:400;color:var(--dim)">— 고르면 상세페이지를 바로 읽어요</span></span>';
+    h+= list.length
+      ? '<div class="nb-chips">'+list.map(function(p){
+          var on=_prPickedIdx(p.f)>=0;
+          return '<button type="button" class="nb-chip'+(on?' on':'')+'" onclick="_prTogglePerf('+_qa(p.f)+')"'+(s.busy?' disabled':'')+'>'+escapeHtml(p.f)+'</button>';
+        }).join('')+'</div>'
+      : '<div style="font-size:12px;color:var(--dim);line-height:1.7">상세 링크가 있는 공연이 없어요 — 프로그램 관리에서 URL을 넣어 주세요</div>';
+    h+='</div>';
+    // 2) 담긴 공연 + 메인 라디오
+    if(s.picks.length){
+      h+='<div class="nb-field"><span class="nb-label">메인으로 강조할 공연 <span style="font-weight:400;color:var(--dim)">— 본문의 40% 안팎을 이 공연에 씁니다</span></span>';
+      h+=s.picks.map(function(p){
+        return '<div class="nb-tone-item" style="align-items:center">'
+          +'<input type="radio" name="pr-main" '+(s.main===p.name?'checked':'')+' onchange="_prSetMain('+_qa(p.name)+')" style="margin-top:1px;accent-color:var(--accent)">'
+          +'<span style="flex:1;min-width:0">'+escapeHtml(p.name)
+            +'<span style="display:block;font-size:11px;color:var(--dim);margin-top:2px">'
+              +(p.busy?'상세페이지 읽는 중':(p.detail?('상세 '+p.detail.length+'자 읽음'):(p.url?'상세를 못 읽었어요 — 자료를 올려 주세요':'상세 링크 없음')))
+            +'</span></span>'
+          +'<span class="x" onclick="_prTogglePerf('+_qa(p.name)+')" title="빼기" aria-label="빼기" style="cursor:pointer">✕</span></div>';
+      }).join('')+'</div>';
+    }
+    // 3) 강조할 점
+    h+='<div class="nb-field"><span class="nb-label">강조할 점 <span style="font-weight:400;color:var(--dim)">— 이번 보도자료에서 꼭 살릴 것</span></span>';
+    h+=s.hooks.map(function(v,i){
+      return '<div style="display:flex;gap:6px;margin-bottom:6px"><input class="nb-input" style="flex:1" value="'+escapeHtml(v)+'" oninput="_prHook('+i+',this.value)" placeholder="'+(i?'예) 전시도 박람회 기간에 맞춰 할인':'예) 클래식 여러 편을 묶어 할인한다')+'">'
+        +(s.hooks.length>2?'<button type="button" class="nb-btn ghost" style="padding:0 11px" onclick="_prHookDel('+i+')" title="이 줄 지우기" aria-label="이 줄 지우기">✕</button>':'')+'</div>';
+    }).join('');
+    if(s.hooks.length<4)h+='<button type="button" class="nb-btn ghost" style="padding:6px 13px;font-size:12px" onclick="_prHookAdd()">＋ 한 줄 더</button>';
+    h+='</div>';
+    // 4) 자료 첨부
+    h+='<div class="nb-field"><span class="nb-label">자료 첨부 <span style="font-weight:400;color:var(--dim)">— 출연자 프로필·기획안 (한글·워드·PPT·PDF·텍스트)</span></span>';
+    h+=s.srcs.map(function(f,i){
+      return '<div class="nb-tone-item" style="align-items:center"><span style="flex:1;min-width:0;word-break:break-all">'+escapeHtml(f.name)+' · '+_prSize(f.bytes.length)+'</span>'
+        +'<span class="x" onclick="_prSrcDel('+i+')" title="빼기" aria-label="빼기" style="cursor:pointer">✕</span></div>';
+    }).join('');
+    if(s.srcs.length<_PR_MAX_SRC)h+='<button type="button" class="nb-btn ghost" style="padding:6px 13px;font-size:12px;margin-top:'+(s.srcs.length?'7px':'0')+'" onclick="_prSrcPick()"'+(s.busy?' disabled':'')+'>＋ 자료 올리기</button>';
+    h+='</div>';
+    // 5) 어투 토글 — 정본 .sw 스위치(신규 컴포넌트 0)
+    h+='<div class="nb-field" style="display:flex;align-items:flex-start;gap:10px;margin-top:18px">'
+      +'<div style="flex:1;min-width:0"><span class="nb-label" style="margin:0">블로그 어투로 변형</span>'
+        +'<span style="display:block;font-size:11px;color:var(--dim);line-height:1.6;margin-top:3px">'
+        +(s.blogTone?'존댓말 블로그체로 씁니다 — 「~입니다 / ~하실 수 있습니다」, 꼭지마다 정보 불릿'
+                    :'끄면 보도자료체로 씁니다 — 관찰형 평서체 「~다」, 기자가 쓴 것처럼 담백하게')+'</span></div>'
+      +'<div class="sw'+(s.blogTone?' on':'')+'" onclick="_prToneToggle()" title="블로그 어투로 변형 ON/OFF" style="margin-top:1px"><div class="sw-k"></div></div></div>';
+    // 6) 실행
+    h+='<button type="button" id="pr-go" class="btn btn--primary btn--md" style="width:100%;margin-top:6px" onclick="_prGo()"'+(s.busy?' disabled':'')+'>'
+      +(s.busy?_ldHtml(14)+' '+escapeHtml(s.step||'쓰는 중'):'보도자료 만들기')+'</button>';
+    h+='<div style="font-size:11px;color:var(--dim);line-height:1.7;margin-top:8px">'
+      +'자료를 읽고 사실을 확인한 뒤 쓰기 때문에 <b style="color:var(--accent)">약 '+_PR_ETA_MIN+'분</b> 걸려요. '
+      +'창을 닫아도 되고, ─(최소화)로 내려 두면 다른 일을 하는 동안 계속 써요.</div>';
+    box.innerHTML=h;
+  }
+  _prOut();
+}
+function _prSize(n){return n>=1048576?((n/1048576).toFixed(1)+'MB'):(Math.round(n/1024)+'KB');}
+function _prPlain(t){return String(t||'').replace(/^===\w+===[ \t]*$/gm,'').replace(/\n{3,}/g,'\n\n').trim();}
+function _qa(s){return "'"+String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'")+"'";}   // onclick 인자용 따옴표 이스케이프
+
+function _prOut(){
+  var box=document.getElementById('pr-out');if(!box)return;
+  var s=_prState;
+  if(s.busy){
+    var el=Math.max(0,Math.round((Date.now()-s.startedAt)/1000));
+    var mm=Math.floor(el/60),ss=el%60;
+    var pct=Math.min(97,Math.round(el/(_PR_ETA_MIN*60)*100));
+    box.innerHTML='<div class="u-empty" style="margin:auto;max-width:340px">'
+      +'<div style="display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--accent);font-weight:700">'+_ldHtml(14)+escapeHtml(s.step||'쓰는 중')+'</div>'
+      +'<div style="height:6px;border-radius:99px;background:var(--neutral);margin:14px 0 8px;overflow:hidden"><div style="height:100%;width:100%;transform-origin:left;transform:scaleX('+(pct/100)+');background:var(--accent);border-radius:99px;transition:transform 1s linear"></div></div>'
+      +'<div style="font-size:12px;color:var(--dim);line-height:1.8">'
+        +'경과 '+mm+'분 '+(ss<10?'0':'')+ss+'초 · 예상 '+_PR_ETA_MIN+'분<br>'
+        +'자료를 읽고 사실을 확인한 뒤 쓰는 중이에요.<br>─(최소화)로 내려 두고 다른 일을 하셔도 돼요.</div></div>';
+    return;
+  }
+  if(!s.text){
+    box.innerHTML='<div class="u-empty" style="margin:auto"><div class="msg">공연을 고르고 [보도자료 만들기]를 눌러 주세요</div>'
+      +'<div style="font-size:12px;color:var(--dim);line-height:1.7">고른 공연의 상세페이지와 올린 자료를 읽고<br>'
+      +'사진 자리까지 잡힌 <b>워드 보도자료</b>를 만들어요</div></div>';
+    return;
+  }
+  var h='';
+  // 버전 — 코멘트로 다듬을 때마다 쌓인다(초안을 잃지 않는다)
+  if((s.versions||[]).length>1){
+    h+='<div class="nb-chips" style="margin-bottom:9px">'+s.versions.map(function(v,i){
+      return '<button type="button" class="nb-chip'+(i===s.verCur?' on':'')+'" style="padding:5px 11px;font-size:11.5px" onclick="_prVerGo('+i+')">'+escapeHtml(v.label)+'</button>';
+    }).join('')+'</div>';
+  }
+  h+='<div class="nb-row" style="gap:7px;margin-bottom:9px;flex-wrap:wrap">'
+    +(s.docx?'<button type="button" class="btn btn--primary btn--sm" onclick="_prDownload()">워드 내려받기</button>'
+            :'<span style="font-size:11.5px;color:var(--danger);align-self:center">워드 조립 실패 — 아래 본문은 그대로 쓸 수 있어요'+(s.docxErr?' ('+escapeHtml(s.docxErr.slice(0,60))+')':'')+'</span>')
+    +'<button type="button" class="btn btn--neutral btn--sm" onclick="_prCopy()">본문 복사</button></div>';
+  // 본문 — 사진 자리는 액자 카드로(어디에 무엇이 들어갈지 미리 보기). 파서는 블로그 도구와 같은 한 벌.
+  h+='<div class="nb-out" style="flex:1;overflow:auto;cursor:auto">';
+  // `===TITLE===` 류 구획 머리표는 **조립기와의 약속**이지 읽을 글이 아니다 — 화면에선 지운다(워드·복사도 동일).
+  _nbPhotoParse(_prPlain(s.text)).forEach(function(p){
+    if(p.t==='txt'){
+      var v=p.v.replace(/^\n+|\n+$/g,'');
+      if(v)h+='<div style="white-space:pre-wrap;margin:8px 0">'+escapeHtml(v)+'</div>';
+      return;
+    }
+    h+='<div style="margin:12px 0;border:1.5px dashed var(--accent);border-radius:12px;padding:14px;background:var(--accent-light);text-align:center">'
+      +'<div style="font-size:11.5px;font-weight:700;color:var(--accent)">사진 자리 '+(p.i+1)+'</div>'
+      +'<div style="font-size:11.5px;color:var(--text);margin-top:4px">'+escapeHtml(p.desc)+'</div>'
+      +(p.cap?'<div style="font-size:11px;color:var(--dim);margin-top:3px">캡션: '+escapeHtml(p.cap)+'</div>':'')
+      +'<div style="font-size:10.5px;color:var(--dim);margin-top:6px">워드 파일에 빈 액자로 들어가요 — 워드에서 사진을 넣어 주세요</div></div>';
+  });
+  h+='</div>';
+  // 코멘트 다듬기 — 초안이 나온 뒤 계속 고쳐 나가는 자리(블로그 도구 _nbCmtInlineSend와 같은 계약)
+  h+='<div style="margin-top:10px"><span class="nb-label">고칠 점을 적어 주세요 <span style="font-weight:400;color:var(--dim)">— 반영해서 다시 씁니다</span></span>'
+    +'<div style="display:flex;gap:7px">'
+    +'<input class="nb-input" id="pr-cmt" style="flex:1" placeholder="예) 조재혁 부분을 줄이고 전시 할인을 더 자세히" onkeydown="if(event.key===\'Enter\')_prComment()">'
+    +'<button type="button" class="btn btn--primary btn--sm" onclick="_prComment()">반영</button></div></div>';
+  box.innerHTML=h;
+}
+
+// ── 실행 ─────────────────────────────────────────────────
+function _prTickOn(){
+  var s=_prState;
+  if(s.tick)clearInterval(s.tick);
+  s.startedAt=Date.now();
+  s.tick=setInterval(function(){ if(_prState&&_prState.busy)_prOut(); },1000);   // 경과 초만 다시 그린다(입력칸 무접촉)
+}
+function _prTickOff(){if(_prState&&_prState.tick){clearInterval(_prState.tick);_prState.tick=null;}}
+
+async function _prRun(revise){
+  var s=_prState;if(s.busy)return;
+  if(!s.picks.length&&!s.srcs.length){showToast('공연을 고르거나 자료를 올려 주세요','error');return;}
+  var _st=_prState;   // 🔒 세대 가드 — 폴링 최장 30분, 그 사이 닫혔으면 결과 폐기
+  s.busy=true;s.step=s.srcs.length?'자료 올리는 중':'쓰는 중';_prTickOn();_prRender();
+  try{
+    var id='pr'+Date.now()+Math.floor(Math.random()*1000);
+    // 1) 자료 원본 업로드(있을 때만) — 러너가 .hwp까지 직접 읽는다(tools/press_srcext.py)
+    var srcs=[];
+    for(var i=0;i<s.srcs.length;i++){
+      var f=s.srcs[i];
+      var up=await fetch(API+'/api/press/upload',{method:'POST',headers:_nbApiHeaders(),
+        body:JSON.stringify({id:id,n:i,name:f.name,b64:_hwB64(f.bytes)})});
+      if(up.status===503)throw new Error('NO_PAT');
+      if(up.status===401)throw new Error('로그인이 필요해요 — 다시 로그인해 주세요');
+      if(!up.ok)throw new Error('upload '+up.status+': '+(await up.text()).slice(0,150));
+      if(_st!==_prState)return;
+      srcs.push(f.name);
+    }
+    // 2) 디스패치
+    _prState.step='쓰는 중';_prRender();
+    var body={id:id,tone:s.blogTone?'blog':'press',main:s.main,srcs:srcs,
+      hooks:(s.hooks||[]).map(function(x){return String(x||'').trim();}).filter(Boolean),
+      perfs:s.picks.map(function(p){return {name:p.name,url:p.url,detail:p.detail};})};
+    if(revise){body.revise=revise;body.prevDraft=s.text;}
+    var dp=await fetch(API+'/api/press/dispatch',{method:'POST',headers:_nbApiHeaders(),body:JSON.stringify(body)});
+    if(!dp.ok)throw new Error('dispatch '+dp.status+': '+(await dp.text()).slice(0,150));
+    if(_st!==_prState)return;
+
+    // 3) 폴링(공용 경로)
+    var res=await _nbPollDraft(id,_PR_POLL_MS);
+    if(_st!==_prState)return;
+    if(!res||res.ok===false||!String(res.text||'').trim())throw new Error((res&&res.error)||'빈 응답');
+
+    // 4) 워드 수령 — 본문은 이미 손에 있으니 워드가 없어도 죽이지 않는다
+    _prState.step='받는 중';_prRender();
+    var docx=null,derr=String(res.docxError||'');
+    if(!derr){
+      try{
+        var fr=await fetch(API+'/api/press/file?id='+encodeURIComponent(id)+'&t='+Date.now(),{headers:_nbApiHeaders()});
+        if(fr.ok)docx=new Uint8Array(await fr.arrayBuffer());
+        else derr='file '+fr.status;
+      }catch(e){derr=String((e&&e.message)||e);}
+    }
+    if(_st!==_prState)return;
+
+    _prTickOff();
+    _prState.busy=false;_prState.step='';
+    _prState.docx=docx;_prState.docxErr=derr;
+    _prState.docxName=String(res.name||'예울마루_보도자료_초안.docx');
+    _prSetText(res.text,revise?('코멘트: '+revise.slice(0,14)):'초안');
+    showToast(revise?'코멘트를 반영했어요 ✨':'보도자료 초안을 만들었어요'+(docx?' — [워드 내려받기]로 받으세요':'')+' ✨','success');
+  }catch(e){
+    if(_st!==_prState)return;
+    _prTickOff();
+    _prState.busy=false;_prState.step='';_prRender();
+    _nbGenErr(String((e&&e.message)||e));   // 오류 문구는 블로그 도구와 한 벌(NO_PAT·TIMEOUT 안내 공유)
+  }
+}
+function _prGo(){_prRun('');}
+function _prComment(){
+  var inp=document.getElementById('pr-cmt');
+  var t=String((inp&&inp.value)||'').trim();
+  if(!t){showToast('고칠 점을 적어 주세요','error');if(inp)inp.focus();return;}
+  if(!_prState.text){showToast('먼저 초안을 만들어 주세요','error');return;}
+  if(inp)inp.value='';
+  _prRun(t);
+}
+function _prSetText(text,label){
+  var s=_prState,vs=s.versions||(s.versions=[]);
+  vs.push({text:text,label:label||('초안 '+(vs.length+1)),docx:s.docx,docxName:s.docxName,docxErr:s.docxErr,ts:Date.now()});
+  s.verCur=vs.length-1;s.text=text;_prRender();
+}
+function _prVerGo(i){
+  var s=_prState,vs=s.versions||[];
+  if(i<0||i>=vs.length||i===s.verCur)return;
+  s.verCur=i;s.text=vs[i].text;s.docx=vs[i].docx;s.docxName=vs[i].docxName;s.docxErr=vs[i].docxErr;
+  _prRender();
+}
+function _prDownload(){
+  var s=_prState;if(!s.docx){showToast('내려받을 워드가 없어요','error');return;}
+  try{
+    var blob=new Blob([s.docx],{type:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'});
+    var a=document.createElement('a');a.href=URL.createObjectURL(blob);
+    a.download=s.docxName||'예울마루_보도자료_초안.docx';
+    document.body.appendChild(a);a.click();
+    setTimeout(function(){URL.revokeObjectURL(a.href);a.remove();},1500);
+  }catch(e){showToast('내려받지 못했어요 — '+String((e&&e.message)||e).slice(0,60),'error');}
+}
+function _prCopy(){
+  var t=_prState.text||'';
+  if(!t){showToast('먼저 초안을 만들어 주세요','error');return;}
+  _nbCopyText(_prPlain(t),'본문을 복사했어요 📋');
 }
 
 // ============================================================
