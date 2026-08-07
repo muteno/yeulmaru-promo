@@ -4449,6 +4449,7 @@ async function _qaApi(method,path){
   if(p.indexOf('/api/presence')===0)return{now:Date.now(),users:[]};
   if(p.indexOf('/api/memo')===0)return{text:''};
   if(p.indexOf('/api/config')===0||p.indexOf('/api/auth')===0)return{ok:true};
+  if(p.indexOf('/api/monitor')===0)return{ok:true,count:0,total:0,added:0,last:null,ready:{google:true,naver:false,kakao:false,kopis:false},rows:[]};   // 검색 모니터링 — QA는 빈 피드(실API 미접촉)
   // [260731] 대관(구글 캘린더) — QA는 이번 달 샘플 3건(단발·종일 다일·야간)으로 「대」 배지 렌더만 검증. 실피드 미접촉
   if(p.indexOf('/api/gcal')===0){
     var _off=function(n){var d=new Date();d.setHours(0,0,0,0);d.setDate(d.getDate()+n);return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);};
@@ -21732,23 +21733,26 @@ function openPromoCheck(){
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closePromoCheck)">'
     + '<div class="modal" style="width:'+_PC_BOX.w+';height:'+_PC_BOX.h+';max-height:'+_PC_BOX.h+';--mpad-y:0;--mpad-x:0;position:relative;display:flex;flex-direction:column;overflow:hidden">'
     + '<button class="modal-x" onclick="closePromoCheck()" title="닫기" aria-label="닫기">✕</button>'
-    + _mhead('AI 홍보','매일 아침 총론 브리핑으로 다음 홍보를 계획해요'+(seg?' · 고객 분류로 누가 봤는지 뽑아요':''))
+    + _mhead('AI 홍보','매일 아침 총론 브리핑으로 다음 홍보를 계획해요'+(seg?' · 고객 분류로 누가 봤는지 뽑아요':'')+' · 검색에 걸린 글을 모아봐요')
     + '<div style="padding:12px 24px 0;flex:none"><div id="pc-tabs" style="display:flex;gap:2px;background:var(--neutral);border-radius:8px;padding:3px;width:max-content">'
     + '<button type="button" class="prog-tab active" data-t="ai" onclick="_pcTab(\'ai\')" style="flex:none">전략 추론</button>'
     /* 인라인 padding 없음 = 260808 PR 720 패리티 청산 계승(정본 `.prog-tab`이 패딩을 정한다 — 자리마다 다시 타이핑하지 않는다).
        ⚠ 주석에 「샵+숫자 3자리」를 쓰지 마라 — check_design이 raw hex로 세어 baseline이 +1 된다(실제로 걸렸다). */
     + (seg?'<button type="button" class="prog-tab" data-t="seg" onclick="_pcTab(\'seg\')" style="flex:none">고객 분류</button>':'')
+    + '<button type="button" class="prog-tab" data-t="sm" onclick="_pcTab(\'sm\')" style="flex:none">검색 모니터링</button>'
     + '</div></div>'
     + '<div style="overflow:auto;flex:1;min-height:0;padding:16px 24px 20px">'
     + '<div id="pc-view-ai">'+_paViewHtml()+'</div>'
     + (seg?'<div id="pc-view-seg" style="display:none">'+_segViewHtml()+'</div>':'')
+    + '<div id="pc-view-sm" style="display:none">'+_smViewHtml()+'</div>'
     + '</div></div></div>';
   _paAutoLoad();
 }
 var _PC_BOX={w:'min(760px,94vw)',h:'88vh'};
 function _pcTab(t){
-  ['ai','seg'].forEach(function(k){var e=document.getElementById('pc-view-'+k);if(e)e.style.display=(k===t)?'':'none';});
+  ['ai','seg','sm'].forEach(function(k){var e=document.getElementById('pc-view-'+k);if(e)e.style.display=(k===t)?'':'none';});
   document.querySelectorAll('#pc-tabs .prog-tab').forEach(function(b){b.classList.toggle('active',b.dataset.t===t);});
+  if(t==='sm')_smLoad();   // 첫 진입에만 실조회(lazy) — 모달 열기만으로는 네트워크 0(QA·패리티 스모크 무접촉)
 }
 
 // ===== AI 홍보 ▸ 전략 추론(총론 브리핑) — _pa* =====
@@ -28650,6 +28654,83 @@ function _bkAnswer(q){
     +(hit&&userRole==='admin'?'<br><button type="button" class="btn btn--primary btn--sm" style="margin-top:9px" onclick="_segFromAsk()">명단 보기</button>':'')
     +'<br><span style="font-size:11px;color:var(--dim)">※ 예매기록에 회원이 확정 연결된 '+_memAiFmt(_bkState.n)+'명 기준이라 <b>하한</b>이에요 '
     +'· 전체 구매회원으로 환산하면 약 '+_memAiFmt(est)+'명(×'+_BK_SCALE+')</span>';
+}
+
+// ===== AI 홍보 ▸ 검색 모니터링 — _sm* (260807 · 260805-42 후속: Worker 스캔 축의 「보는 창」) =====
+// 서버(Worker)가 매시 첫 틱에 구글 알림 RSS 13종·다음(카카오) 검색·KOPIS 공연DB를 훑어 KV에 쌓는다(상한 300 · 알림 발화 0 = Q28).
+// 이 탭 = GET /api/monitor/feed 그대로 그리기 + [지금 확인] = POST /api/monitor/scan(크론과 같은 함수 1벌) 후 재조회.
+// 갈래 끔 = 키 미설정(Worker smReady가 그대로 말한다) — 키 이름·넣는 곳 = docs/KEYS.md §2. 부품 = .prog-tab·.u-empty·.ana-badge·.ve-val·.lm-foot·.btn 정본(신규 색 = 기존 토큰·알파 변주만).
+var _smState={loaded:false,busy:false};
+var _SM_SRC={google:['구글 알림','var(--accent)','var(--accent-glow)'],naver:['네이버','var(--green)','rgba(26,107,60,.1)'],kakao:['다음 검색','var(--c2)','rgba(216,132,85,.14)'],kopis:['KOPIS 공연','var(--c5)','rgba(45,138,179,.12)']};
+function _smViewHtml(){
+  return '<div style="font-size:12px;color:var(--dim);line-height:1.7;margin:2px 0 12px">「예울마루」가 인터넷 어디에 걸렸는지 서버가 <b>시간마다</b> 자동으로 훑어 모아요 — 구글 알림 13종(키워드 8 + blog.naver·티스토리·브런치·다음카페·여수시청) · 다음(카카오) 검색 · KOPIS 공연DB. 제목을 누르면 원문이 새 창으로 열려요.</div>'
+    +'<div class="lm-foot" style="margin:0 0 6px">'
+      +'<button type="button" class="btn btn--primary btn--md" id="sm-run" onclick="_smScanNow()">지금 확인</button>'
+      +'<span class="ve-val" id="sm-note"></span>'
+    +'</div>'
+    +'<div id="sm-ready" style="margin:10px 0 2px;display:flex;gap:6px;flex-wrap:wrap"></div>'
+    +'<div id="sm-out" style="margin-top:10px"><div class="u-empty">수집된 글을 불러오는 중…</div></div>';
+}
+// 갈래 칩 — 켜짐/끔을 smReady 그대로. 네이버 끔 = 신규발급 중단(260806 실측)이라 「발급 중단」으로 말한다(키 사냥 방지).
+function _smReadyHtml(rd){
+  var off={google:'키 대기',naver:'발급 중단',kakao:'키 대기',kopis:'키 대기'};
+  return ['google','naver','kakao','kopis'].map(function(k){
+    var on=!!(rd&&rd[k]),c=_SM_SRC[k];
+    return '<span class="ana-badge" style="'+(on?'background:rgba(26,107,60,.1);color:var(--green)':'background:var(--neutral);color:var(--neutral-text)')+'">'+c[0]+' · '+(on?'켜짐':off[k])+'</span>';
+  }).join('');
+}
+function _smRow(it){
+  var c=_SM_SRC[it.src]||['기타','var(--neutral-text)','var(--neutral)'];
+  var d=String(it.date||it.seenAt||'').slice(0,10);
+  var dd=/^\d{4}-\d{2}-\d{2}$/.test(d)?d.slice(5):'';
+  return '<div style="display:flex;gap:8px;align-items:baseline;padding:8px 2px;border-bottom:1px solid var(--border)">'
+    +'<span class="ve-val" style="width:36px;flex:none">'+(dd||'—')+'</span>'
+    +'<span class="ana-badge" style="background:'+c[2]+';color:'+c[1]+';flex:none">'+c[0]+'</span>'
+    +'<span style="flex:1;min-width:0;font-size:13px;line-height:1.5;word-break:break-all">'
+      +'<a href="'+escapeHtml(it.link||'')+'" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">'+escapeHtml(it.title||it.link||'')+' ↗</a>'
+      +(it.kw?' <span class="ve-val">「'+escapeHtml(it.kw)+'」</span>':'')
+    +'</span></div>';
+}
+async function _smLoad(force){
+  if(_smState.loaded&&!force)return;
+  _smState.loaded=true;
+  var out=document.getElementById('sm-out'),ready=document.getElementById('sm-ready');
+  try{
+    var r=await api('GET','/api/monitor/feed?limit=150');
+    if(ready)ready.innerHTML=_smReadyHtml(r&&r.ready);
+    var rows=(r&&r.rows)||[];
+    if(!out)return;
+    if(!rows.length){
+      var any=r&&r.ready&&(r.ready.google||r.ready.naver||r.ready.kakao||r.ready.kopis);
+      out.innerHTML='<div class="u-empty"><div class="ico">🔍</div>'+(any
+        ?'아직 수집된 글이 없어요 — 알림을 새로 만든 참이라, 구글이 <b>새 글</b>을 찾는 대로 여기 쌓여요(시간마다 자동)'
+        :'아직 키가 안 들어왔어요 — Cloudflare Worker(yeulmaru-promo-api) 변수에 <b>GALERT_RSS</b>를 저장하면 바로 켜져요')+'</div>';
+      return;
+    }
+    var h='';for(var i=0;i<rows.length;i++)h+=_smRow(rows[i]);
+    if(r.total>rows.length)h+='<div class="ve-val" style="padding:10px 2px">최근 '+rows.length+'건 표시 · 보관 '+r.total+'건(상한 300)</div>';
+    out.innerHTML=h;
+    var n=document.getElementById('sm-note');
+    if(n&&r.last&&r.last.at){var ld=new Date(r.last.at);if(!isNaN(ld.getTime()))n.textContent='마지막 수집 '+(ld.getMonth()+1)+'/'+ld.getDate()+' '+('0'+ld.getHours()).slice(-2)+':'+('0'+ld.getMinutes()).slice(-2)+' · 그때 새 글 '+(r.last.added||0)+'건';}
+  }catch(e){ _smState.loaded=false; if(out)out.innerHTML='<div class="u-empty">불러오지 못했어요 — 네트워크 확인 후 다시 열어보세요</div>'; }
+}
+async function _smScanNow(){
+  if(_smState.busy)return;
+  _smState.busy=true;
+  var btn=document.getElementById('sm-run');
+  var say=function(m){var n=document.getElementById('sm-note');if(n)n.textContent=m;};
+  _btnBusy(btn,true,'확인 중');
+  try{
+    say('서버가 검색을 한 바퀴 도는 중 — 몇 초 걸려요');
+    var r=await api('POST','/api/monitor/scan',{});
+    say('새로 '+((r&&r.added)||0)+'건 들어왔어요');
+    await _smLoad(true);
+  }catch(e){
+    var s=String(e&&e.message||e);
+    say(s.indexOf('503')===0?'아직 켜진 갈래가 없어요 — GALERT_RSS부터 저장해 주세요':('실패: '+s.slice(0,60)));
+  }
+  _btnBusy(btn,false);
+  _smState.busy=false;
 }
 
 // ===== AI 홍보 ▸ 고객 분류 (260808 운영자 「예매 데이터 × 회원 정보로 누가 예매한 건지 이름을 역으로」) — _seg* =====
