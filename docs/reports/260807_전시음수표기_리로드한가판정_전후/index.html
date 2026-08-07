@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>260807 전시 음수 표기 가드 + 자동 리로드 한가 판정 보강 — 전후</title>
+<style>
+  :root{--accent:#4A4DE7;--text:#1A1A2E;--dim:#888;--border:rgba(0,0,0,0.09)}
+  body{margin:0;padding:34px 26px 60px;font-family:'Pretendard','Noto Sans KR',sans-serif;background:linear-gradient(135deg,#FDF6F3 0%,#F0EBF5 50%,#EBF0F8 100%);color:var(--text)}
+  h1{font-size:20px;margin:0 0 6px}
+  .sub{color:var(--dim);font-size:13px;margin-bottom:28px;line-height:1.7}
+  h2{font-size:15px;margin:34px 0 12px;display:flex;align-items:center;gap:8px}
+  h2::before{content:'';width:4px;height:16px;border-radius:2px;background:var(--accent)}
+  .pair{display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start}
+  figure{margin:0;flex:0 1 auto;min-width:260px}
+  figcaption{font-size:12.5px;font-weight:700;margin-bottom:8px}
+  figcaption .b{color:var(--dim)} figcaption .a{color:var(--accent)}
+  img{max-width:100%;height:auto;border-radius:12px;border:1px solid var(--border);box-shadow:0 8px 32px rgba(74,77,231,0.08);display:block}
+  .note{font-size:12.5px;color:var(--dim);line-height:1.8;margin-top:10px;max-width:900px}
+  code{background:rgba(74,77,231,0.08);border-radius:4px;padding:1px 5px;font-size:12px}
+</style>
+</head>
+<body>
+<h1>전시 음수 표기 가드 + 자동 리로드 한가 판정 보강 (260807-17)</h1>
+<div class="sub">운영자 지시: 「45초 폴링 자동 리로드 그거 붙여줘 / 전시 -242 뜨는데 그러면안돼」<br>
+실측 = QA 목데이터(?qa=admin · 실API 미접촉) · 요약 블록은 배포 파일 원문 추출 실구동 · 자동 리로드는 배포 감지~리로드 전 구간 실연.</div>
+
+<h2>① 헤더 요약 「전일 대비」 — 전시 음수(누계 하향 보정) 표기 생략</h2>
+<div class="pair">
+  <figure><figcaption><span class="b">전 — 보정일에 「전시 ±-242명」(부호 겹침까지)</span></figcaption><img src="전_요약_전시음수표기.png" alt="전: 전시 ±-242명"></figure>
+  <figure><figcaption><span class="a">후 — 보정일은 전시 증감 표기 생략(다른 표기 무변)</span></figcaption><img src="후_요약_보정일생략.png" alt="후: 표기 생략"></figure>
+</div>
+<div class="note">원인 = 입력 흐름이 일일총인원을 누계 차분으로 파생 저장 → 누계를 내려 잡는 보정일에 음수가 시트에 남는다. 관객 발길은 음수일 수 없으므로 요약 증감에서 <b>음수 제외</b>(<code>v>=0</code> 가드 · 값 자체는 시트·상세 그대로). 7일 막대는 종전부터 음수를 0으로 클램프해 무접촉.</div>
+
+<h2>② 45초 자동 리로드 — 한가 판정을 Q39 정본 busy()로 보강</h2>
+<div class="pair">
+  <figure><figcaption><span class="a">후 — 쓰기 비행 중 배포 감지 = 리로드 보류 + 빨강 배지(수동 탈출구)</span></figcaption><img src="후_쓰기중_빨강배지보류.png" alt="후: 보류+배지"></figure>
+</div>
+<div class="note">자동 반영 축 자체는 260806-8에 배선 완료(45초 틱 → 배포 감지 → 한가하면 reload). 이번 보강 = <code>_designSafeNow</code>에 <code>nmSync.busy()</code> 합류 — 구판은 비행 중 쓰기(<code>_apiWrites</code>)·MSAL·AI 응답·저장 스피너·z99999 오버레이를 못 봐 저장 절단 창이 남아 있었다(실측: 전 = 쓰기 중에도 즉시 리로드 · 후 = 보류→배지→쓰기 끝나면 다음 판정에서 자동 탑재). 기존 검사(SELECT 포커스·프로모 마법사)는 busy()에 없는 몫이라 합집합 유지.</div>
+</body>
+</html>

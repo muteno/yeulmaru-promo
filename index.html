@@ -9827,7 +9827,11 @@ function _srailRenderInner(els){
     }
     if(exActives.length){
       var exSum=0,exHas=false;
-      exActives.forEach(function(e){ var last=(e.daily&&e.daily.length)?e.daily[e.daily.length-1]:null; var v=last?_salesNum(last['일일총인원']):null; if(v!==null){exSum+=v;exHas=true;} });
+      // [260807 운영자 「전시 -242 뜨는데 그러면 안돼」] 음수 일일총인원 = 누계 하향 보정의 산물(관객 발길이 음수일 수는 없다 ·
+      //   입력 흐름이 일일총인원을 누계 차분으로 파생 저장해 보정일에 음수가 시트에 남는다) → 요약 증감에서 제외(그 전시는
+      //   그날 표기 생략 = 「수집 전」과 같은 결). 시트 값 자체는 그대로(표기 규칙만 — 기계산출물 손편집 금지 축).
+      //   부수 결함 동시 소멸: 음수가 통과하면 부호가 「±-242」로 겹쳐 찍히던 것도 이 가드로 도달 불가.
+      exActives.forEach(function(e){ var last=(e.daily&&e.daily.length)?e.daily[e.daily.length-1]:null; var v=last?_salesNum(last['일일총인원']):null; if(v!==null&&v>=0){exSum+=v;exHas=true;} });
       if(exHas){hasNum=true;parts.push('<span>전시 <b style="color:'+(exSum>0?'var(--green)':'var(--text)')+'">'+(exSum>0?'+':'±')+exSum.toLocaleString()+'명</b></span>');}
     }
     // 접두어는 실제 증감 숫자가 있을 때만 — 「전일 대비 공연 증감 수집 전」 어색 조합 방지(분신술 감사3 LOW)
@@ -23846,6 +23850,11 @@ let _designSeenTag = null;
 //   ⚠ 되풀이 방지 = 마지막 자동 리로드가 90초 안이면 자동으로 다시 하지 않는다(배포가 연달아 나거나 ETag가 흔들려도 무한 새로고침 0).
 var _designPending=false;
 function _designSafeNow(){
+  // [260807 운영자 「45초 폴링 자동 리로드 붙여줘」] 자동 반영 자체는 260806-8에 배선 완료 — 이 판정을 Q39 정본 busy(nmSync.busy)로
+  //   보강한다. 구판은 비행 중 쓰기(_apiWrites)·MSAL·AI 응답·메모/도화지 대기·저장 스피너·z99999 오버레이를 못 봐
+  //   「모달 닫힘~쓰기 완료」 창에서 리로드가 저장을 절단할 수 있었다(Q39 평의회6 C-2가 봉합한 바로 그 축).
+  //   합집합 유지 — 아래 기존 검사(SELECT 포커스·#promo-wizard)는 busy()에 없는 몫이라 그대로 둔다.
+  try{ if(window.nmSync&&typeof window.nmSync.busy==='function'&&window.nmSync.busy())return false; }catch(e){}
   if(document.querySelector('.modal-bg.show, .overlay-load.show, #promo-wizard.show'))return false;   // 떠 있는 창 위에서 안 바꾼다
   var a=document.activeElement;
   if(a&&(/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)||a.isContentEditable))return false;              // 입력 중이면 안 바꾼다
