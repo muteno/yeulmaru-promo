@@ -155,7 +155,10 @@ export const INIT_SCRIPT = `(function(){
   // 판매중 목록(우 열) — 공연 7 + 전시 1(운영 화면 대표 형태)
   window._mockActives=function(){
     function D(m,d){ return new Date(2026,m-1,d); }
-    function days(base,step){ var a=[],s=base; for(var i=0;i<7;i++){ a.push({bd:20260726+i,seat:s}); s+=Math.max(0,Math.round(step*(0.4+rnd()))); } return a; }
+    // [260807] mny = 그 날짜의 **누계 금액** — 「전일 대비」 토글이 금액 증감을 이 두 점에서 뽑는다(_ryDodPick).
+    //   없으면 그 칸이 통째로 '—'라 모드가 무측정 = 형태만 재현(석당 단가 대역만 실제와 같은 자릿수).
+    //   ⚠ 누계라 **단조 증가**여야 한다 — 날마다 단가를 새로 굴려 s×단가로 만들면 좌석이 늘어도 금액이 줄어 실데이터에 없는 상태가 나온다.
+    function days(base,step){ var a=[],s=base,m=base*42000; for(var i=0;i<7;i++){ a.push({bd:20260726+i,seat:s,mny:m}); var ds=Math.max(0,Math.round(step*(0.4+rnd()))); s+=ds; m+=ds*(35000+Math.round(rnd()*25000)); } return a; }
     function perf(m,d,name,seats,open,genre,run){
       return {_kind:'perf',id:'',name:name,startDate:D(m,d),_ryDate:D(m,d),dday:30,noData:false,
         seats:seats,totalOpen:open,occ:seats/open*100,days:days(Math.max(0,seats-40),9),diff:null,_unit:'석',
@@ -172,8 +175,8 @@ export const INIT_SCRIPT = `(function(){
     ];
     a.push({_kind:'ex',noData:false,id:'EX1',name:'GS칼텍스 예울마루 기획전시 <숨: 쉬는 SUM>',profit:'공공성',
       occ:null,deltaPP:null,spark:[],daily:[
-        {'기준일자':'20260726','누계총인원':60},{'기준일자':'20260728','누계총인원':90},
-        {'기준일자':'20260730','누계총인원':124},{'기준일자':'20260801','누계총인원':155}],
+        {'기준일자':'20260726','누계총인원':60,'누계금액':300000},{'기준일자':'20260728','누계총인원':90,'누계금액':450000},
+        {'기준일자':'20260730','누계총인원':124,'누계금액':620000},{'기준일자':'20260801','누계총인원':155,'누계금액':775000}],
       '시작일':D(7,21),'종료일':D(11,1),_dday:-12,_endD:91,_paid:155,_total:155,_goal:null,_saleN:12,_venue:'7층 전시실'});
     return a;
   };

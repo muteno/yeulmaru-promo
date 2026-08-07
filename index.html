@@ -4883,6 +4883,8 @@ async function initApp(){
   ]).then(function(){ try{_memBootWarm();}catch(_e){console.warn('[initApp memBootWarm]',_e);} });   // [260810 운영자] 고객 분석(회원·예매집계) 선로딩 = 첫 화면 로더가 다 끝난 뒤 출발 — 사유·가드는 _memBootWarm 주석
   // MS(OneDrive) 토큰 미리 확보 — 폴더 선택 때 팝업 안 뜨게 (재방문 silent / 첫 로그인 popup 1회)
   _msalPrefetch();
+  // [260807 운영자] 투데이스 브리핑 — 로그인 후 사업 대시보드 한켠 팝업(세션 1회 · 「더 보지 않기」 존중 · 실패 무해)
+  setTimeout(function(){ try{_paTodayPop();}catch(_e){} },1500);
 }
 
 // === 날씨 위젯 (Open-Meteo · API키 불필요 · 위치=전남 여수시 고정) ===
@@ -5978,7 +5980,9 @@ function _salesBuild(){
     // [분석보드] 추가 필드(기존 필드 불변): 최근 7일 점유율 스파크라인 / 어제대비 %p / 데이터 출처
     var spark=rows.slice(-7).map(function(r){return totalOpen>0?Math.min((_salesNum(r['합계좌석'])||0)/totalOpen*100,100):0;});
     // 레일 10일 추이용 — 최근 7일 실측(좌석·기준일자·점유율·x=예측 제외 표시). 예측(추세 연장·종료 예상)은 렌더 시 — 실측 7건부터(_SRAIL_FC_MIN).
-    var days=rows.slice(-7).map(function(r){var s=_salesNum(r['합계좌석']); return {bd:_salesNum(r['기준일자']),seat:(s==null?0:s),occ:(s!=null&&totalOpen>0)?Math.min(s/totalOpen*100,100):0,x:_fcExcl(r)?1:0};});
+    // [260807 운영자 「전일 대비 … +00% +000원」] mny = 그 날짜의 **누계 금액**(합계금액) — 전일 대비 금액을 같은 두 점에서 뽑기 위한 동봉값.
+    //   ⚠ 새 계산이 아니라 이미 읽고 있던 행의 열 하나를 같이 실어 보내는 것뿐 = 좌석·점유율·예측 축 무접촉(단체 금액도 종전대로 여기 미포함).
+    var days=rows.slice(-7).map(function(r){var s=_salesNum(r['합계좌석']); return {bd:_salesNum(r['기준일자']),seat:(s==null?0:s),mny:_salesNum(r['합계금액']),occ:(s!=null&&totalOpen>0)?Math.min(s/totalOpen*100,100):0,x:_fcExcl(r)?1:0};});
     var deltaPP=(diff!==null&&totalOpen>0)?diff/totalOpen*100:null;
     // [260710 운영자] 예측 일평균 fcRate(석/일) = (마지막 누적 − 첫 실측 누적) ÷ 달력일수 — 첫 실측점 기준선 제외(첫날 버스트 배제).
     // 구현 = 인접 구간(증분·달력일수) 합산: 제외 0건이면 기존 두 점 식과 동치, 「예측 제외」 체크일(단체 유입·2차 오픈 등)은
@@ -6822,6 +6826,45 @@ function _mvBars(days,diff,unit,tok,tokDim){
     +'<span style="display:inline-block;vertical-align:middle;margin-left:'+_RY_TREND_GAP+'px;text-align:right;width:'+_RY_TREND_NUMW+'px">'
     +'<span style="display:block;color:var('+tok+');font-weight:800;font-size:13px;font-variant-numeric:tabular-nums">+'+sum7.toLocaleString()+(unit||'석')+'</span>'
     +'<span style="display:block;color:var(--dim);font-size:11px;font-variant-numeric:tabular-nums;margin-top:2px">어제 '+(yest>=0?'+':'')+yest.toLocaleString()+'</span></span>';
+}
+// ── [260807 운영자 「어제 대비해서가 너무 눈에 안 띈다 … 오로지 전일하고 비교만 할 수 있게 · +00% +000원 등」] ──────
+//   같은 칸(최근 7일 추이 자리)을 **전일 대비 한 칸**으로 갈아끼운다 — 열 신설 0 · 폭 동일(막대 67 + 간격 10 + 숫자 56 = 133)이라
+//   토글을 눌러도 표의 세로 오와열(_ryColW 경계·머리글 중심)이 안 흔들린다.
+//   표기 문법 = 레일 머리 요약(「전일 대비 | 공연 -9석」)이 이미 쓰는 정본 그대로 — **부호·색만**(▲▼ 삼각형 폐지 · 운영자 260710):
+//     늘면 `--green` · 줄면 `--danger` · 그대로면 `--muted`(0은 조용해야 한다 — 표는 행이 여럿이라 요약 한 줄의 `--text`를 그대로 쓰면
+//     「아무 일 없음」이 프로그램 이름만큼 크게 읽힌다. 색은 지난 행 일자와 같은 중립 사다리 = 새 색 0).
+//   ⚠ 여기서 「전일」 = 달력 어제가 아니라 **직전 입력분**이다 — 시트가 매일 들어오지 않는 날이 있어, 시트 열 「전일대비(석)」이
+//     쓰는 뜻과 같은 축으로 맞춘다. 그래서 실제 두 날짜를 툴팁에 적는다(예: 8.6 → 8.7).
+var _RY_TREND_BARW=67, _RY_DOD_W=_RY_TREND_BARW+_RY_TREND_GAP+_RY_TREND_NUMW;   // 133 = 추이 칸 내용 폭(두 모드가 같은 폭을 쓴다)
+function _ryDodPick(p){
+  var ds=(p&&p.days)||[]; if(!ds.length)return null;
+  var b=ds[ds.length-1], a=(ds.length>=2)?ds[ds.length-2]:null;
+  // 좌석 = 시트 「전일대비(석)」(p.diff)이 정본 · 없으면 두 점 차(첫 입력분은 그날 누계가 곧 그날 판매분 — _mvBars와 같은 규칙)
+  var seat=(p.diff!==null&&p.diff!==undefined&&!isNaN(p.diff))?p.diff:(a?((b.seat||0)-(a.seat||0)):(b.seat||0));
+  var hasM=(b.mny!==null&&b.mny!==undefined);
+  var mny=hasM?(((a&&a.mny!==null&&a.mny!==undefined)?(b.mny-a.mny):b.mny)):null;
+  // 증감률 분모 = 「전일 누계」 = 오늘 누계 − 오늘 증감. a.seat를 그대로 쓰지 않는 이유 = 좌석을 시트 diff에서 받은 행에서
+  //   분자(시트)와 분모(days)가 서로 다른 출처가 돼 %만 혼자 어긋난다(둘이 일치하는 평시엔 a.seat와 같은 값).
+  var base=(b.seat||0)-seat;
+  return {seat:seat,mny:mny,pct:(a&&base>0)?(seat/base*100):null,from:(a?a.bd:null),to:b.bd};
+}
+function _ryDodDate(bd){ var s=String(bd||'').replace(/[^0-9]/g,''); return (s.length===8)?(parseInt(s.slice(4,6),10)+'.'+parseInt(s.slice(6,8),10)):''; }
+function _ryDodCell(p){
+  var d=_ryDodPick(p);
+  if(!d)return '<span style="color:var(--muted);font-size:12px">데이터 부족</span>';
+  var unit=p._unit||'석';
+  var tok=function(v){ return (v>0)?'--green':((v<0)?'--danger':'--muted'); };
+  var sgn=function(v){ return (v>0)?'+':((v<0)?'':'±'); };   // 음수는 숫자가 이미 부호를 갖는다 · 0 = ±(요약 줄과 같은 문법)
+  var num=function(v){ return sgn(v)+Math.round(v).toLocaleString(); };
+  var tip=(d.from?(_ryDodDate(d.from)+' → '):'')+_ryDodDate(d.to)+' 대비'
+    +(d.from?'':' (첫 입력분)');
+  return '<span title="'+escapeHtml(tip)+'" style="display:inline-block;vertical-align:middle;text-align:right;width:'+_RY_DOD_W+'px">'
+    +'<span style="display:block;font-variant-numeric:tabular-nums;white-space:nowrap">'
+      +'<b style="color:var('+tok(d.seat)+');font-weight:800;font-size:14.5px">'+num(d.seat)+unit+'</b>'
+      +((d.pct===null)?'':'<span style="color:var(--dim);font-size:11.5px;font-weight:700;margin-left:5px">'+sgn(d.pct)+(Math.abs(d.pct)>=10?Math.round(d.pct):(Math.round(d.pct*10)/10))+'%</span>')
+    +'</span>'
+    +'<span style="display:block;font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;margin-top:2px;white-space:nowrap;color:var('+((d.mny===null)?'--muted':tok(d.mny))+')">'
+      +((d.mny===null)?'—':(num(d.mny)+'원'))+'</span></span>';
 }
 function _srailTableHtml(perfs,exs){
   var pgIdx=_srailPgIdx();
@@ -9970,7 +10013,9 @@ function _railYrmPerfTable(perfs,rateLab){
   var CW=_ryColW();
   // [260731 운영자] 「사업 성격」 열 삭제 · 그 자리에 「장르」 — 5칸(일자·프로그램·판매율·최근 7일 추이·장르).
   //   ([260803] 성격(예술성/사업성) 축 자체 폐지 — 데이터·필터·입력구 전부 제거)
-  var HL=['일자','프로그램',(rateLab||'판매율'),'최근 7일 추이','장르'];
+  // [260807] 4열 = 토글 한 축으로 「최근 7일 추이 ↔ 전일 대비」 갈아끼움(열 신설 0 · 폭·경계 그대로).
+  var DOD=(typeof _ryDodOn==='function')&&_ryDodOn();
+  var HL=['일자','프로그램',(rateLab||'판매율'),(DOD?'전일 대비':'최근 7일 추이'),'장르'];
   // [260731 운영자 개정] 최근 7일 추이 = **가운데** 정렬(나머지는 좌측 유지).
   var HA=['left','left','left','center','left'];
   // [260731 운영자] 열 간격 벌리기 — 「프로그램↔판매율(전시 = 누적 관객수)」·「추이↔장르」 두 경계.
@@ -9984,7 +10029,8 @@ function _railYrmPerfTable(perfs,rateLab){
   //       (머리글 padding-left 10 · 본문 8 · 본문 padding-right 8 · 내용 133 = 막대 67 + 간격 10 + 숫자 56 · 막대 절반 33.5)
   //       두 식을 같게 풀면 PRh = 76 — 열 폭 W와 무관하므로 드래그로 폭을 바꿔도 계속 맞는다(실측 확인).
   //   .ry-rz(열 너비 조절 손잡이)는 padding box 기준 right:-4px라 이 여백에 영향받지 않는다(경계에 그대로).
-  var HPR=[0,0,0,(_RY_TREND_NUMW+_RY_TREND_GAP+10),0];
+  //   [260807] 전일 대비 모드는 내용이 **막대 없는 한 덩어리**(폭 _RY_DOD_W가 셀 가운데) → 보정 0 = 머리글도 그 덩어리 중심에 선다.
+  var HPR=[0,0,0,(DOD?0:(_RY_TREND_NUMW+_RY_TREND_GAP+10)),0];
   var h='<table class="ana-tbl mv-tbl" style="font-size:13px;width:100%;table-layout:fixed">'+_ryColGroup(CW)+'<thead><tr>';
   HL.forEach(function(lab,i){
     h+='<td style="text-align:'+HA[i]+';'+(HP[i]?('padding-left:'+(10+HP[i])+'px;'):'')+(HPR[i]?('padding-right:'+HPR[i]+'px;'):'')+'">'+lab+(i<HL.length-1?('<i class="ry-rz" role="separator" aria-label="'+lab+' 열 너비 조절" onpointerdown="_ryRzDown(event,'+i+')"></i>'):'')+'</td>';
@@ -9993,7 +10039,8 @@ function _railYrmPerfTable(perfs,rateLab){
   perfs.forEach(function(p){
     var trend=p._past?'<span style="color:var(--muted);font-size:12px">판매 종료</span>'   // [260803] 지난 행 추이 = 「판매 종료」 문구(noData '오픈 예정' 문법 계승) — 최종 실적은 3열·행 클릭 상세가 담당
       :(p.noData?('<span style="color:var(--muted);font-size:12px">'+(_ryNotYetSold(p)?'오픈 예정':'데이터 부족')+'</span>')
-      :_mvBars(p.days,p.diff,p._unit,(p._kind==='ex')?'--peach-text':null,(p._kind==='ex')?'--peach-light':null));   // [260731 운영자 4차] 전시 추이 = 전시색(--peach-text 사다리) — 3열 누적 관객수·그룹 블릿과 같은 축
+      :(DOD?_ryDodCell(p)   // [260807] 전일 대비 모드 — 「판매 종료·오픈 예정·데이터 부족」 분기는 위 그대로(그 행들은 어제와 비교할 것이 없다)
+      :_mvBars(p.days,p.diff,p._unit,(p._kind==='ex')?'--peach-text':null,(p._kind==='ex')?'--peach-light':null)));   // [260731 운영자 4차] 전시 추이 = 전시색(--peach-text 사다리) — 3열 누적 관객수·그룹 블릿과 같은 축
     // 3열 = 공연·교육 「판매율」(N% (분자/분모)) · 전시 「누적 관객수」(누계 숫자) — 둘 다 강조색 볼드·좌측 정렬로 같은 문법
     var rate=p.noData?'<span style="color:var(--muted);font-size:12px">—</span>'
       :((p._kind==='ex')?_ryAccCell(p._acc):_ryRateCell(p.seats,p.totalOpen,p.occ,'--accent'));
@@ -10024,7 +10071,8 @@ function _ryExRow(e){
   var ds=((e.daily)||[]).slice().sort(function(a,b){ return String(a['기준일자']||'').localeCompare(String(b['기준일자']||'')); })
     .filter(function(r){ var d=String(r['기준일자']||'').replace(/[^0-9]/g,''); return !d||d<=tISO; });
   // 추이 = 3열 「누적 관객수」와 같은 축(누계총인원 → 없으면 누계유료)이라 막대 증분과 위 숫자가 같은 것을 센다
-  var days=ds.map(function(r){ var v=_salesNum(r['누계총인원']); if(v===null)v=_salesNum(r['누계유료']); return {bd:_salesNum(r['기준일자']),seat:(v===null?0:v)}; });
+  // [260807] mny = 전시일일 「누계금액」 — 공연 days의 mny(합계금액)와 같은 자리·같은 뜻(전일 대비 금액 소스). 없으면 null → 금액 줄만 '—'.
+  var days=ds.map(function(r){ var v=_salesNum(r['누계총인원']); if(v===null)v=_salesNum(r['누계유료']); return {bd:_salesNum(r['기준일자']),seat:(v===null?0:v),mny:_salesNum(r['누계금액'])}; });
   var acc=(e._total!==null&&e._total!==undefined)?e._total:e._paid;   // 누적 관객수 = 누계총인원 → 없으면 누계유료
   return {_kind:'ex',id:(e.id||''),name:e.name,_src:e,_past:(e._past?1:0),
     startDate:sd,endDate:ed,_ryDate:(ed||sd),
@@ -10217,6 +10265,18 @@ function _ryLivePref(){ if(_ryLiveMem!==null)return _ryLiveMem; try{return local
 //   그래서 올해가 아닌 칩에서는 판매중 축을 걷고(전부 노출) 토글 자체도 숨긴다(제목줄 도구 묶음에서 빠짐).
 //   저장된 선호는 건드리지 않는다 → 올해 칩으로 돌아오면 쓰던 상태 그대로 복귀.
 function _ryLiveOnly(){ return _ryLivePref()&&_ryYearIsNow(); }
+// ── [260807 운영자] 「전일 대비」 글자 토글 — 이웃 「판매중」과 **같은 부품 한 벌**(.ry-hd-div 구분선 + .ry-live-tg 글자 토글) ──
+//   지시: *"판매중 구분자 우측에 동일한 마진간격으로 전일 대비 라고 하나 만들어서 오로지 전일하고 비교만 할 수 있게"*.
+//   켬 = 「최근 7일 추이」 칸이 **전일 대비 한 칸**으로 바뀐다(_ryDodCell) · 끔 = 종전 7일 막대 그대로 = 회귀 0.
+//   라벨은 「판매중」과 같은 문법 = **고정 글자 + 켬/끔 상태**(색·굵기 이중단서는 부품이 이미 진다).
+//   상태 = 기기 기억(판매중 ryLiveOnly2·열 폭 ryColW4와 같은 축) + 메모리 폴백(프라이빗 모드) · 기본 = 끔.
+var _RY_DOD_KEY='ryDodOnly1', _ryDodMem=null;
+function _ryDodOn(){ if(_ryDodMem!==null)return _ryDodMem; try{return localStorage.getItem(_RY_DOD_KEY)==='1';}catch(_e){return false;} }
+function _ryDodToggle(){
+  var v=!_ryDodOn(); _ryDodMem=v;
+  try{localStorage.setItem(_RY_DOD_KEY,v?'1':'0');}catch(_e){}
+  _ryRepaintAnim(v?-1:1);   // 연도·판매중과 같은 교체 경로(좁혀 보기 = 좌→중앙 · 되돌리기 = 우→중앙)
+}
 function _ryLiveToggle(){
   var v=!_ryLivePref(); _ryLiveMem=v;
   try{localStorage.setItem(_RY_LIVE_KEY,v?'1':'0');}catch(_e){}
@@ -10237,7 +10297,12 @@ function _railYrmCardTitle(){
     +_ryYearTrigger()
     +(_ryYearIsNow()?('<span class="ry-hd-div" aria-hidden="true"></span>'
       +'<button type="button" class="ry-live-tg" role="switch" aria-checked="'+(live?'true':'false')+'" onclick="_ryLiveToggle()"'
-      +' title="'+(live?'켬 = 판매중 프로그램만 (눌러서 끄면 올해 지난 프로그램까지)':'끔 = 올해 지난(종료) 프로그램까지 (눌러서 켜면 판매중만)')+'">판매중</button>'):'')
+      +' title="'+(live?'켬 = 판매중 프로그램만 (눌러서 끄면 올해 지난 프로그램까지)':'끔 = 올해 지난(종료) 프로그램까지 (눌러서 켜면 판매중만)')+'">판매중</button>'
+      // [260807 운영자 「판매중 구분자 우측에 동일한 마진간격으로」] 구분선·간격(.ry-hd-tools gap:6px)은 앞 칸과 같은 부품 그대로 = 마진 창작 0.
+      //   ⚠ 지난 연도에는 안 세운다 — 그 해 행은 전부 「판매 종료」라 전일 대비가 나올 수 없는 죽은 조작부가 된다(판매중 토글과 같은 이유·같은 게이트).
+      +'<span class="ry-hd-div" aria-hidden="true"></span>'
+      +'<button type="button" class="ry-live-tg" role="switch" aria-checked="'+(_ryDodOn()?'true':'false')+'" onclick="_ryDodToggle()"'
+      +' title="'+(_ryDodOn()?'켬 = 직전 입력분 대비 증감만 (눌러서 끄면 최근 7일 추이)':'끔 = 최근 7일 추이 (눌러서 켜면 전일 대비 증감만)')+'">전일 대비</button>'):'')
     +'</span>';
 }
 // ── [260801 운영자 · Q.38] 3열 숫자 세로선 보증 — 그룹 표 폭 통일(JS 폴백) ──────────────────────
@@ -21528,74 +21593,10 @@ function _recPerfId(name){ var p=_findPerfByName(name); return (p&&p.id)||''; }
 //     캘린더 그리드·펫·날짜 패널이 이 면 위에 겹쳐 그려지고 F5 복원도 biz로 삼켜진다(평의회 blocker).
 //   같은 문법 선례 = buildNav의 platform 분기(대메뉴인데 화면 전환이 아니라 보드를 연다).
 // 판정 범위 = **오늘 이후**(평의회 결정4-A) — 과거 위반은 조치 불가라 소거 못 하는 경보가 된다.
-function _pcDaysTo(iso){
-  if(!iso)return null;
-  var a=new Date(_pcT()+'T00:00:00'), b=new Date(iso+'T00:00:00');
-  if(isNaN(b))return null;
-  return Math.round((b-a)/86400000);
-}
+// [260807 운영자 「AI 홍보 점검 부분 아예 없애줘」] 규칙 스캔(_promoCheckScan·A0/A5/A2/연일/위생)은 통삭 —
+//   그 신호(티켓오픈 임박 카카오 공석 · 마감 임박 계획 0 · 홍보 게이트 닫힘)는 자동 총론 브리핑 프롬프트(promo-advise.yml)가
+//   데이터로 직접 판정한다(흡수 이관 · 복원 지점 = PR 716~756 구간 git 이력). 발송 슬롯 하드 규칙(_slotRows·K1/S1)은 별개 축 = 보존.
 function _pcT(){ return (typeof getTodayKey==='function')?getTodayKey():new Date().toISOString().slice(0,10); }
-// 진단 스캔 — 순수 계산(서버 호출 0). PERFS·records·APPLY_SETTINGS만 읽는다.
-function _promoCheckScan(){
-  var today=_pcT(), rows=_slotRows(), perfs=(typeof PERFS!=='undefined'&&PERFS)?PERFS:[];
-  var future=rows.filter(function(r){return getRecDateKey(r)>=today;});
-  var out={a0:[],a5:[],a2:[],adj:[],hyg:[],stat:{}};
-  // A0 — 홍보 불가 상태(_promoOn=false)인데 판매시작이 임박. 앱이 신청 자체를 막으므로 사람이 프로그램 시트를 고쳐야 한다.
-  //      평의회 최대 값: 오늘 5건 발화하고 전부 실제 조치가 필요한 건이다.
-  perfs.forEach(function(p){
-    if(_promoOn(p))return;
-    var d=_pcDaysTo(p.ss);
-    if(d===null||d<0||d>60)return;
-    out.a0.push({p:p,d:d});
-  });
-  out.a0.sort(function(a,b){return a.d-b.d;});
-  // A5 — 티켓오픈 D-3 이내: 그날 카톡 자리가 비었는지 사실만 표시(K3 선점 규칙은 평의회가 삭제)
-  perfs.forEach(function(p){
-    if(!_promoOn(p))return;
-    var d=_pcDaysTo(p.ss);
-    if(d===null||d<0||d>3)return;
-    var taken=rows.some(function(r){return getRecDateKey(r)===p.ss&&platShort(r['플랫폼 1'])==='카카오';});
-    out.a5.push({p:p,d:d,taken:taken});
-  });
-  // A2 — 판매종료(=마감) D-14 이내인데 앞으로 남은 계획 0
-  perfs.forEach(function(p){
-    if(!_promoOn(p))return;
-    var end=p.se||p.e, d=_pcDaysTo(end);
-    if(d===null||d<0||d>14)return;
-    var left=future.filter(function(r){return String(r['프로그램']||'').trim()===String(p.f||'').trim();}).length;
-    if(!left)out.a2.push({p:p,d:d,end:end});
-  });
-  out.a2.sort(function(a,b){return a.d-b.d;});
-  // 연일 발송(K2/S2) — 차단 아님. 오늘 이후 건만 본다. 옵션(AI_연일회피)이 꺼져 있으면 아예 안 센다.
-  var seen={};
-  var adjOn=!!(typeof APPLY_SETTINGS!=='undefined'&&APPLY_SETTINGS&&APPLY_SETTINGS['AI_연일회피']);
-  (adjOn?future:[]).forEach(function(r){
-    var ps=platShort(r['플랫폼 1']); if(ps!=='카카오'&&ps!=='문자')return;
-    var adj=_promoAdjacentDays(r['플랫폼 1'],getRecDateKey(r),r._rowIndex);
-    adj.forEach(function(a){
-      var k=[getRecDateKey(r),a.date].sort().join('~')+'|'+ps;
-      if(seen[k])return; seen[k]=1;
-      out.adj.push({ps:ps,a:getRecDateKey(r),b:a.date,t1:r['콘텐츠 제목']||'',t2:a.rec['콘텐츠 제목']||''});
-    });
-  });
-  out.adj.sort(function(x,y){return x.a<y.a?-1:1;});
-  // 데이터 위생 — v1이 LLM 없이 잡을 수 있는 실제 결함
-  var byShort={};
-  perfs.forEach(function(p){ var n=String(p.n||'').trim(); if(!n)return; (byShort[n]=byShort[n]||[]).push(p); });
-  Object.keys(byShort).forEach(function(n){
-    if(byShort[n].length<2)return;
-    out.hyg.push({k:'줄임말 중복',v:'「'+n+'」 '+byShort[n].length+'건 — 이름으로 찾으면 항상 앞의 것만 잡혀 뒤 공연 홍보가 막힙니다',
-      sub:byShort[n].map(function(p){return p.f;}).join(' / ')});
-  });
-  var ym=(typeof getApplyMonths==='function')?getApplyMonths():[];
-  if(ym.length&&ym.indexOf(today.substring(0,7))<0&&ym.every(function(v){return v<today.substring(0,7);}))
-    out.hyg.push({k:'접수월 낡음',v:'접수월이 '+ym.join(', ')+' — 지금은 '+today.substring(0,7)+'입니다',
-      sub:'당월은 자동 허용되지만 그 다음 달부터는 일반 사용자가 신청할 수 없습니다(관리자는 예외)'});
-  var noJoin=future.filter(function(r){return !_findPerfByName(r['프로그램']);}).length;
-  if(noJoin)out.hyg.push({k:'프로그램 미조인',v:'앞으로 잡힌 계획 중 '+noJoin+'건이 프로그램 시트와 안 맞습니다',sub:'홍보창·마감 판정에서 빠집니다'});
-  out.stat={open:perfs.filter(function(p){return _promoOn(p)&&_pcDaysTo(p.se||p.e)>=0;}).length, future:future.length, rows:rows.length};
-  return out;
-}
 function closePromoCheck(){ var el=document.getElementById('promo-check'); if(el)el.innerHTML=''; }
 // 카드·행 빌더 — 점검·전략 추론 두 탭이 같은 한 벌을 쓴다(따로 타이핑 금지 — 값이 갈리면 한 모달 안에서 두 결이 생긴다).
 // [260805 운영자] 카드 사이 간격 = 정본 `.bizm-card` margin-bottom 14 → **21**(지시 「지금의 +50%」 · 14×1.5).
@@ -21609,77 +21610,30 @@ function _pcRow(lead,main,sub,hot){ return '<div style="display:flex;gap:10px;al
   +'<span style="font-size:12px;font-weight:800;white-space:nowrap;font-variant-numeric:tabular-nums;color:'+(hot?'var(--danger-btn)':'var(--neutral-text)')+'">'+lead+'</span>'
   +'<span style="flex:1;font-size:13px;min-width:0">'+main+(sub?'<span style="display:block;font-size:11.5px;color:var(--dim)">'+sub+'</span>':'')+'</span></div>'; }
 function openPromoCheck(){
-  // 4중 데이터 게이트 — 「진단 0건」과 「입력 0건」은 절대 같은 모양이면 안 된다(평의회 blocker)
-  var notReady=(typeof _perfReady!=='undefined'&&!_perfReady)||typeof PERFS==='undefined'||!PERFS||!PERFS.length||typeof records==='undefined'||!records;
   var el=document.getElementById('promo-check');
   if(!el){ el=document.createElement('div'); el.id='promo-check'; document.body.appendChild(el); }
   // 고객 분류 = admin 전용(예매집계·회원 둘 다 PII) — 탭 자체를 안 그린다. 숨기기가 아니라 없는 것이 맞다.
   var seg=(userRole==='admin');
-  var body;
-  if(notReady){
-    body='<div class="u-empty">데이터를 아직 못 불러왔어요<br>'
-       + '<button class="btn btn--neutral btn--sm" style="margin-top:12px" onclick="closePromoCheck();openPromoCheck()">다시 시도</button></div>';
-  }else{
-    var s=_promoCheckScan(), h=[];
-    var card=_pcCard, row=_pcRow;   // 정본 빌더(위 모듈 함수) — 전략 추론 탭과 같은 한 벌
-    if(s.a0.length)h.push(card('홍보를 못 여는데 판매가 임박했어요','프로그램 시트에서 홍보시작일·홍보노출을 채워야 신청이 열립니다',
-      s.a0.map(function(x,i){return row('D-'+x.d, escapeHtml(x.p.f||''), '판매시작 '+(x.p.ss||'')+' · 지금은 홍보 신청 자체가 막혀 있습니다', i===0);}).join('')));
-    if(s.a5.length)h.push(card('티켓오픈이 코앞이에요','',
-      s.a5.map(function(x,i){return row('D-'+x.d, escapeHtml(x.p.f||''), '오픈 '+(x.p.ss||'')+' · 그날 카카오톡 자리 '+(x.taken?'이미 있음':'비어 있음'), i===0&&!x.taken);}).join('')));
-    if(s.a2.length)h.push(card('마감이 가까운데 남은 계획이 없어요','',
-      s.a2.map(function(x,i){return row('D-'+x.d, escapeHtml(x.p.f||''), '판매종료 '+(x.end||''), i===0);}).join('')));
-    if(s.adj.length)h.push(card('연일 발송','차단하지는 않습니다 — 피하고 싶으시면 하루 옮기세요',
-      s.adj.map(function(x){return row(x.ps, escapeHtml(x.a)+' → '+escapeHtml(x.b), escapeHtml((x.t1||'')+' / '+(x.t2||'')), false);}).join('')));
-    if(s.hyg.length)h.push(card('데이터 손질이 필요해요','',
-      s.hyg.map(function(x){return row(x.k, escapeHtml(x.v), escapeHtml(x.sub||''), false);}).join('')));
-    var stat='<div style="font-size:12.5px;color:var(--neutral-text);padding:10px 2px">홍보창이 열린 공연 <b>'+s.stat.open
-      +'</b>개 · 앞으로 잡힌 계획 <b>'+s.stat.future+'</b>건 · 전체 홍보기록 '+s.stat.rows+'건</div>';
-    body=(h.length?h.join(''):'<div class="u-empty">지금 손볼 게 없어요</div>')+stat;
-  }
-  // [260805-22 운영자 「첨부1과 같이 기본 목업으로」] 틀 = 「카카오 메세지 설계」(openKakaoDesigner · km-*) 셸 계승 —
-  //   padding:0 모달 + 머리줄 밴드(제목 16px/700 + 부제 11.5px/600) + 본문 자체 패딩(18px 24px 20px)·자체 스크롤.
-  //   구 「X+제목 한 덩이 float」 수법(260805-11)은 밴드 구조가 대체 — X = 카카오 설계와 같은 절대 자리(top14/right22).
-  //   제목 활자 17px/800(앱에서 이 하나뿐이던 비정본 · 260805-15 리포트 §5)도 이 계승으로 정본 16px/700에 합류.
-  // 머리줄 음영 = 강조색1(--accent · 운영자 「저 부분 라인은 강조색1로 음영」) → 잉크는 흰 축으로 대응:
-  //   제목 var(--surface-solid) — 흰 on --accent 6.0:1(AA · 260805-11 「accent on 흰 6.0:1」의 역방향 동값) ·
-  //   부제 rgba(255,255,255,.85) = 기존 알파스텝 재사용(L168 등 3곳 · 신규 스텝 0) ·
-  //   X도 흰 잉크(정본 잉크 --accent는 accent 밴드 위에서 소실 — 원 배경 rgba(74,77,231,.08)·hover는 정본 그대로).
-  //   [260805-15] X 글자 = 정본 `✕`(U+2715) 유지 — check_design ⑦(정본 부품 일치)이 커밋에서 강제.
-  //   📡·📭 이모지는 운영자 「이모지 가능한 안 씀」으로 제거(위 body 조립부).
-  // [260806 운영자] 「AI 홍보」 = 2탭 — 점검(규칙 스캔 · 기존 그대로) + 전략 추론(claude 구독 OAuth 축 · _pa*).
-  //   탭 문법 = 영상 편집기(#ve-tabs) 정본 그대로(.prog-tab · --neutral 트랙 · flex:none) — 신규 부품·색 0.
-  //   [260805-34] padding 7px 16px는 정본 `.prog-tab`이 진다 — 자리마다 인라인으로 다시 적지 않는다(패리티 계약).
+  // [260807 운영자] 점검 탭 통삭 — 기본 탭 = 전략 추론(총론 브리핑). 셸·크기 계약(_PC_BOX 고정 · 260806-18)은 무변.
   el.innerHTML='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closePromoCheck)">'
     + '<div class="modal" style="width:'+_PC_BOX.w+';height:'+_PC_BOX.h+';max-height:'+_PC_BOX.h+';--mpad-y:0;--mpad-x:0;position:relative;display:flex;flex-direction:column;overflow:hidden">'
     + '<button class="modal-x" onclick="closePromoCheck()" title="닫기" aria-label="닫기">✕</button>'
-    + _mhead('AI 홍보','점검으로 지금 손볼 곳을 찾고 · 전략 추론으로 다음 홍보를 계획해요'+(seg?' · 고객 분류로 누가 봤는지 뽑아요':''))
+    + _mhead('AI 홍보','매일 아침 총론 브리핑으로 다음 홍보를 계획해요'+(seg?' · 고객 분류로 누가 봤는지 뽑아요':''))
     + '<div style="padding:12px 24px 0;flex:none"><div id="pc-tabs" style="display:flex;gap:2px;background:var(--neutral);border-radius:8px;padding:3px;width:max-content">'
-    + '<button type="button" class="prog-tab active" data-t="check" onclick="_pcTab(\'check\')" style="flex:none">점검</button>'
-    + '<button type="button" class="prog-tab" data-t="ai" onclick="_pcTab(\'ai\')" style="flex:none">전략 추론</button>'
+    + '<button type="button" class="prog-tab active" data-t="ai" onclick="_pcTab(\'ai\')" style="flex:none">전략 추론</button>'
     /* 인라인 padding 없음 = 260808 PR 720 패리티 청산 계승(정본 `.prog-tab`이 패딩을 정한다 — 자리마다 다시 타이핑하지 않는다).
        ⚠ 주석에 「샵+숫자 3자리」를 쓰지 마라 — check_design이 raw hex로 세어 baseline이 +1 된다(실제로 걸렸다). */
     + (seg?'<button type="button" class="prog-tab" data-t="seg" onclick="_pcTab(\'seg\')" style="flex:none">고객 분류</button>':'')
     + '</div></div>'
     + '<div style="overflow:auto;flex:1;min-height:0;padding:16px 24px 20px">'
-    + '<div id="pc-view-check">'+body+'</div>'
-    + '<div id="pc-view-ai" style="display:none">'+_paViewHtml()+'</div>'
+    + '<div id="pc-view-ai">'+_paViewHtml()+'</div>'
     + (seg?'<div id="pc-view-seg" style="display:none">'+_segViewHtml()+'</div>':'')
     + '</div></div></div>';
   _paAutoLoad();
 }
-// 탭 전환 — 뷰 display만 토글(상태·결과 보존 = 점검을 오가도 추론 결과가 안 사라진다)
-// [260806-18 운영자] 「ai홍보 창 크기를 **항상 동일하게** · 지금 **ai 홍보 점검 크기를 기준으로 고정**」 —
-//   창 = 점검 탭이 이미 갖고 있던 선언(폭 min(760px,94vw) · 88vh)을 **상한이 아니라 고정값으로 승격**한 한 벌.
-//   새 수치 0(둘 다 이 모달이 쓰던 값) · 셸 문법은 정본 워크스페이스 셸 `.pb-modal`(홍보 신청·확인 L16364) 계승
-//   = width/height 고정 + overflow:hidden + flex 세로 + 본문만 스크롤.
-//   ⚠ 구판은 탭이 폭을 정했다(고객 분류만 1180) — 그래서 탭을 누를 때마다 창이 760↔1180으로 튀었고
-//     높이도 내용대로 흘러 실측 4가지(299/399.78/270/534)였다. 이제 탭은 크기를 **못** 바꾼다(바꾸는 코드가 없다).
-//   ⚠ 값을 한 곳에만 둔다 — 조립부와 전환부 두 군데에 적으면 한쪽만 고쳐져 탭을 오갈 때 다시 튄다.
-//   ↔ 맞바꾼 것: 고객 분류 10열 표(min-width:860px)가 760 창에선 자기 스크롤 상자 안에서 가로로 밀린다
-//     (구 지시 「최대한 다 나오게」는 이 고정 지시가 덮는다 · 표는 이미 자체 overflow:auto라 레이아웃은 안 깨진다).
 var _PC_BOX={w:'min(760px,94vw)',h:'88vh'};
 function _pcTab(t){
-  ['check','ai','seg'].forEach(function(k){var e=document.getElementById('pc-view-'+k);if(e)e.style.display=(k===t)?'':'none';});
+  ['ai','seg'].forEach(function(k){var e=document.getElementById('pc-view-'+k);if(e)e.style.display=(k===t)?'':'none';});
   document.querySelectorAll('#pc-tabs .prog-tab').forEach(function(b){b.classList.toggle('active',b.dataset.t===t);});
 }
 
@@ -21778,7 +21732,16 @@ function _paRenderResult(){
       // 총론 = 헤드라인 한 줄(있으면) + 문단들(빈 줄 분리 — 구 회차의 통짜 서술은 문단 1개로 그대로)
       var paras=String(adv.verdict||'').split(/\n{2,}/).map(function(x){return x.trim();}).filter(Boolean);
       var vh=(adv.headline?'<div style="font-size:13.5px;font-weight:800;padding-top:8px">'+_paEm(adv.headline)+'</div>':'');
-      vh+=paras.map(function(pp,i){return '<div style="font-size:13px;line-height:1.8;padding-top:'+(i===0&&!adv.headline?8:9)+'px">'+_paEm(pp)+'</div>';}).join('');
+      // 문단 안 줄 단위 렌더 — 「- 라벨: 항목들」 줄은 불릿 행으로(운영자 260807 「나열은 라벨 불릿」 · 마커는 - 또는 * 허용)
+      vh+=paras.map(function(pp,i){
+        var lines=pp.split('\n').map(function(l){return l.trim();}).filter(Boolean);
+        var inner=lines.map(function(l){
+          var m=l.match(/^[-*]\s+(.*)$/);
+          if(m)return '<div style="display:flex;gap:8px;padding:2px 0"><span style="color:var(--dim)">•</span><span style="flex:1;min-width:0">'+_paEm(m[1])+'</span></div>';
+          return '<div>'+_paEm(l)+'</div>';
+        }).join('');
+        return '<div style="font-size:13px;line-height:1.8;padding-top:'+(i===0&&!adv.headline?8:9)+'px">'+inner+'</div>';
+      }).join('');
       h.push(_pcCard('총론','',vh));
     }
     var HZ=[['d7','앞으로 7일','당장 실행 — 빈 슬롯 지정 수준'],['d30','앞으로 30일','한 달 캠페인 축'],['d90','앞으로 90일','분기 축 — 빌드업·고객 관계']];
@@ -21798,6 +21761,44 @@ function _paRenderResult(){
   out.innerHTML=h.join('');
   var bs=document.getElementById('pa-basis'); if(bs)bs.textContent=(r.basis?String(r.basis):'(근거 요약 없음 — 구 회차)');
 }
+
+// ── 투데이스 브리핑 팝업(운영자 260807 「매 로그인 시 사업 대시보드 한켠에 · 총론+앞으로 7일 요약 · 더 보지 않기」) ──
+// 로그인(세션)당 1회 · biz(대시보드) 모드에서만 · 부품 = .bizm-card + .btn 정본(신규 클래스·색·X아이콘 0).
+// [더 보지 않기] = 이 기기 영구 off(localStorage — 기기 UI 취향 축 · wxLoc 선례) · 브리핑 자체는 「AI 홍보」 메뉴에 상존.
+var _PA_TODAY_LS='paTodayOff';
+async function _paTodayPop(){
+  try{
+    if(localStorage.getItem(_PA_TODAY_LS)==='1')return;
+    if(sessionStorage.getItem('paTodaySeen')==='1')return;
+    if(typeof _mainView!=='undefined'&&_mainView!=='biz')return;
+    var meta=await api('GET','/api/promo/auto-latest');
+    if(!meta||!meta.ok||!meta.id)return;
+    var d=null; try{ d=await api('GET','/api/blog/draft?id='+encodeURIComponent(meta.id)); }catch(_e){ return; }
+    if(!(d&&d.ready&&d.draft&&d.draft.ok!==false))return;
+    var adv=d.draft.advice||{}; if(!adv.headline&&!adv.verdict)return;
+    sessionStorage.setItem('paTodaySeen','1');
+    var el=document.getElementById('pa-today'); if(!el){el=document.createElement('div');el.id='pa-today';document.body.appendChild(el);}
+    var d7=((adv.horizons||{}).d7)||[];
+    var rows=d7.slice(0,4).map(function(x){
+      return '<div style="display:flex;gap:8px;padding:5px 0;border-top:1px solid var(--border);font-size:12px;line-height:1.55"><span style="color:var(--dim)">•</span>'
+        +'<span style="flex:1;min-width:0">'+(x.program?'<b>'+escapeHtml(String(x.program))+'</b> · ':'')+_paEm(x.when||'')+(x.channel?' · '+_paEm(x.channel):'')
+        +(x.message?'<span style="display:block;font-size:11.5px;color:var(--dim)">'+_paEm(x.message)+'</span>':'')+'</span></div>';
+    }).join('');
+    var firstPara=String(adv.verdict||'').split(/\n{2,}/)[0]||'';
+    el.innerHTML='<div class="bizm-card" style="position:fixed;right:18px;bottom:18px;z-index:8900;width:min(400px,calc(100vw - 32px));max-height:min(62vh,560px);overflow:auto;padding:14px 16px;box-shadow:var(--glass-shadow)">'
+      +'<div style="font-size:14px;font-weight:800;color:var(--accent)">투데이스 브리핑<span style="font-size:11px;font-weight:600;color:var(--neutral-text);margin-left:8px">'+escapeHtml(String(meta.ymd||''))+' 자동 생성</span></div>'
+      +(adv.headline?'<div style="font-size:13px;font-weight:800;margin-top:8px;line-height:1.6">'+_paEm(adv.headline)+'</div>':'')
+      +(firstPara?'<div style="font-size:12.5px;line-height:1.7;margin-top:6px">'+_paEm(firstPara)+'</div>':'')
+      +(rows?'<div style="font-size:12px;font-weight:800;margin-top:10px">앞으로 7일</div>'+rows:'')
+      +'<div style="display:flex;gap:8px;margin-top:12px;align-items:center;flex-wrap:wrap">'
+      +'<button type="button" class="btn btn--primary btn--sm" onclick="_paTodayClose();openPromoCheck()">자세히 보기</button>'
+      +'<button type="button" class="btn btn--neutral btn--sm" onclick="_paTodayClose()">닫기</button>'
+      +'<button type="button" class="btn btn--neutral btn--sm" style="margin-left:auto" onclick="_paTodayOff()">더 보지 않기</button>'
+      +'</div></div>';
+  }catch(_e){/* 팝업 실패 = 조용히 — 본 기능(모달·크론)엔 무영향 */}
+}
+function _paTodayClose(){ var el=document.getElementById('pa-today'); if(el)el.innerHTML=''; }
+function _paTodayOff(){ try{localStorage.setItem(_PA_TODAY_LS,'1');}catch(_e){} _paTodayClose(); showToast('투데이스 브리핑 팝업을 더 띄우지 않아요 — 「AI 홍보」 메뉴에선 계속 볼 수 있어요','ok'); }
 
 // === 발송 슬롯 규칙 엔진 (260804 운영자 확정 + 9인 평의회) ===
 // 고정 규칙(끌 수 없음) = 카카오톡 하루 1회 · 문자 하루 1회. 연일 회피는 여기서 차단하지 않는다(경고 축).
