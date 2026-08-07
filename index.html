@@ -8434,7 +8434,21 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
   //   막대 높이가 둘 다 사실상 0이라 그림으로도 안 갈린다 → 그 자리만 자릿수를 한 칸 열어 `0.0` ↔ `0.4`로 구분한다.
   //   ⚠ 구 260806-11 「항상 반올림해서 소숫점 없이」의 **0 한 칸 예외**다(1 이상은 종전 그대로 정수 · 두 문법이 섞이지 않는다).
   //   ⚠ 교육·관객수 축은 사람 수(정수 ≥1)라 이 가지에 애초에 안 걸린다 = 「0.0명」은 생기지 않는다.
-  var vfmt=function(v){ return (Math.round(v)===0)?v.toFixed(1):Math.round(v).toLocaleString(); };
+  // [260813-5 운영자 「**0, 0 은 표기를 애초에 안하면됨**」 + 「할거면 쟤도 `0` / `(0)` 이렇게 했어야지. 그리고
+  //   **몇일 지나기 전까지는 ai 예측도 못하잖아? 그니까 (0) 도 당연히 없어야 하는거고**」]
+  //   → 계약 = **0으로 읽히는 수는 안 적는다** — 윗줄 현재치도, 아랫줄 `(예상치)`도. 위 260813-2의 **`0.0` 갈래는 폐지**되고
+  //     남는 건 `0.4`처럼 **0이 아닌 걸 말하는** 소수 한 자리뿐이다(그 자리는 값이 있다 = 260809 ⓒ 생략 금지 **유지**).
+  //   왜 = 260813-4로 라벨이 두 줄이 된 뒤, 매출 0인 판매중 사업의 글자는 `0` / `(0)` 한 덩이가 된다(예상 꼭대기 = 실값×배율
+  //     = 0×r = 0이라 아랫줄도 0이다). 그런데 예상 엔진은 판매 시작 후 며칠이 지나야 값을 낸다(`_bizFcSeat` 게이트 =
+  //     남은 3일 미만·`_SRAIL_FC_MIN` 미만·집계 전은 **안 그린다**) → 그 `(0)`이 말하는 건 「예상이 0」이 아니라
+  //     **「아직 모른다」**다. 모르는 것을 0이라고 적는 건 값 창작이다. 윗줄 `0`도 막대 높이가 0이라 그림·숫자 어느 쪽도
+  //     새 사실을 주지 않는다(뜻은 툴팁·우 열 상세 표가 종전대로 진다 = 사업이 사라지는 게 아니다).
+  //   ⚠ 이건 260813-3이 **부결**한 「0 라벨 숨김」과 **다른 항**이다 — 그때 부결된 건 「라벨이 몰려 겹치니 **자리를 만들려고**
+  //     0을 지우자」(겹침 대책 = 뜻을 버려 모양을 얻음)였고, 여기서 지우는 근거는 **그 글자가 말하는 게 없다**는 것이다.
+  //     겹침 대책은 종전 그대로 흰 반투명 판(ⓕ)이 진다 = 생략 금지 계약 무접촉.
+  //   ⚠ 지우는 건 **글자 한 벌**뿐 — 값·툴팁·집계·자리·막대(높이 0으로 종전대로 선다)·히트존 전부 무접촉.
+  var vfmt=function(v){ var s=(Math.round(v)===0)?v.toFixed(1):Math.round(v).toLocaleString();
+    return /^-?0(?:\.0+)?$/.test(s)?'':s; };   // 「0」·「0.0」 = 0으로 읽히는 꼴 전부 빈 글자 · `0.4`는 그대로 남는다
   // [260804] 축 중략 — 그릴 자리만 접는다(값·라벨·툴팁은 실값). plotPx = 실제 그림 높이(위 18 · 아래 34 여백 제외 — 45° 이름축 폐지로 아래 여백 96→34)
   var plotPx=Math.max(60,hgt-(18+_BIZ_AXB));   // [260806-5] 위 여백 18 + 아래 여백 _BIZ_AXB — 상수 34를 박아두면 아래 여백을 늘린 만큼 중략이 없는 자리를 있다고 착각한다(그림 영역 = 높이 − 두 여백) · [260809] 값 라벨 겹침도 이 자로 px 환산한다(자가 둘이면 판정이 갈린다)
   var brk=ED?null:_bizBarBreak(vals,plotPx);
@@ -8583,7 +8597,9 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
   //   오게 뒤집는다(눈이 먼저 가는 수가 안 가려진다). 판은 양쪽 다 이므로 아래 깔린 쪽도 제 판 위에서 읽힌다.
   // [260813-4] 아랫줄 = 연한 `--dim` + 기울임. Plotly 주석이 지원하는 태그(`<br>`·`<i>`·`<span style>`)만 쓴다.
   var _lbSub=_yrCss('--dim')||dim;
-  var _lbTwo=function(cur,fc){ return (fc==null||fc===cur)?cur:(cur+'<br><i><span style="fill:'+_lbSub+'">('+fc+')</span></i>'); };
+  // [260813-5] `fc`가 **빈 글자**면(예상이 0으로 읽힌다 = `vfmt` 산출) 아랫줄을 안 붙인다 — 「반올림해서 같으면 생략」과
+  //   같은 자리에서 걸러야 `(0)`은 물론 `()`(빈 괄호)도 태어나지 않는다.
+  var _lbTwo=function(cur,fc){ return (fc==null||fc===''||fc===cur)?cur:(cur+'<br><i><span style="fill:'+_lbSub+'">('+fc+')</span></i>'); };
   var _lbList=rows.map(function(g,i){ return i; }).filter(function(i){ return labs[i]&&xs[i]!=null; })
     .map(function(i){ var f=fcOf[i];   // [260813-4] 예상 칸이 얹힌 행 = 현재치 / (예상치) 두 줄 · 반올림 동일이면 한 줄
       var t=_lbTwo(labs[i],(f!=null)?vfmt(f):null);
@@ -8696,7 +8712,8 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
     //   겹치면 판이 진다(운영자 「상단에 무조건 숫자가 있어야 함 · 차트 옆에 있는건 실패임 · 단 가려질 경우 흰색 반투명」).
     //   ⚠ yshift만 7 — 점(마커 지름 7)의 **가운데**가 기준이라 막대 꼭대기와 물리적 기준이 다르다(같은 벌의 예외 아님).
     lnTip.sort(function(a,b){ return a.y-b.y; }).forEach(function(L){   // [260813-3] 작은 값부터 = 큰 값이 위에 그려진다
-      var t=Math.round(L.y).toLocaleString(), w=_bizLabW(t);
+      var t=vfmt(L.y); if(!t)return;   // [260813-5] 0으로 읽히는 꼭자락은 안 적는다 — 자·문법 다 막대 값 라벨과 **한 벌**(`vfmt`) · 같은 규칙 두 벌 금지
+      var w=_bizLabW(t);
       var hid=_bizLabFit({x:L.x*pxPerDay,y:L.y*_lbPxY,w:w,h:_BIZ_LAB_H},_lbBox)||_lbHidden(-1,L.x*pxPerDay,Math.max(2,w-6),L.y*_lbPxY+7);
       var an={xref:'x',x:L.x,xanchor:'center',yref:'y',y:L.y,yanchor:'bottom',yshift:7,
         text:t,showarrow:false,font:{size:_BIZ_LAB_FS,color:_lbInk}};   // [260809-2 운영자 승인] 선 끝 숫자도 막대와 같은 흐린 검정(구 선색 = 260805 판정의 개정 · #16 ⓐ)
