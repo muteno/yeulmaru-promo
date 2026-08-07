@@ -139,6 +139,19 @@ export const INIT_SCRIPT = `(function(){
     {'프로그램ID':'QPF5','풀네임':'국립현대무용단 <트리플 빌>','줄임말':'트리플 빌','콘텐츠구분':'공연','장소':'대극장','구분':'무용','시작일':'2026-10-29','종료일':'2026-10-29'}
   ]};
 
+  // [260807] 검색량 확인(설정 톱니) 목 — 4갈래 대표 형태 6행(결정적 · 실API·실데이터 미접촉)
+  window.__MOCK_MONITOR={ok:true,count:6,total:6,ready:{google:true,naver:false,kakao:true,kopis:true},
+    last:{at:'2026-08-07T03:00:00.000Z',added:6,sources:{google:1,naver:null,kakao:3,kopis:2}},
+    // 순서 = Worker 실물(smScan: 배치 안 구글→카카오(최신순)→KOPIS · fresh.concat(기존)) — 화면은 이 「쌓인 순서」를 그대로 보인다(재정렬 없음)
+    rows:[
+      {src:'google',kind:'알림',title:'GS칼텍스 예울마루, 가을 시즌 프로그램 공개',link:'https://news.example/1',date:'2026-08-06',kw:'예울마루 공연',seenAt:'2026-08-07T03:00:00.000Z'},
+      {src:'kakao',kind:'블로그',title:'예울마루 브런치 콘서트 다녀왔어요',link:'https://blog.example/2',date:'2026-08-05',kw:'예울마루',seenAt:'2026-08-07T03:00:00.000Z'},
+      {src:'kakao',kind:'웹문서',title:'바다와 예술이 만나는 도시들',link:'https://web.example/4',date:'2026-08-02',kw:'예울마루',seenAt:'2026-08-07T03:00:00.000Z'},
+      {src:'kakao',kind:'카페글',title:'여수 여행 코스 — 예울마루 야경까지',link:'https://cafe.example/3',date:'2026-08-01',kw:'예울마루',seenAt:'2026-08-07T03:00:00.000Z'},
+      {src:'kopis',kind:'뮤지컬',title:'그날들 [여수]',link:'https://www.kopis.or.kr/',date:'2026-09-18',extra:'GS칼텍스 예울마루 · 공연예정',detail:{price:'R석 160,000원'},seenAt:'2026-08-07T03:00:00.000Z'},
+      {src:'kopis',kind:'서양음악(클래식)',title:'제10회 여수음악제, 개막연주회',link:'https://www.kopis.or.kr/',date:'2026-08-29',extra:'GS칼텍스 예울마루 · 공연예정',seenAt:'2026-08-07T03:00:00.000Z'}
+    ]};
+
   var real=null;
   function wrapped(method,path){
     var p=String(path||''), dp=decodeURIComponent(p);
@@ -239,6 +252,8 @@ export const FEED_SCRIPT = `(()=>{
       var dp=decodeURIComponent(String(path||''));
       if(dp.indexOf('/api/ops')===0&&dp.indexOf('sheet=예매집계')>=0)return Promise.resolve(window.__MOCK_BKAGG);
       if(dp.indexOf('/api/ops')===0&&dp.indexOf('sheet=회원')>=0)return Promise.resolve(window.__MOCK_MEM);
+      // [260807] 검색량 확인(설정 톱니) — _qaApi 접근자가 죽는 자리라 여기서 먹인다(_smwLoad의 실제 파싱 경로 측정)
+      if(dp.indexOf('/api/monitor/feed')===0)return Promise.resolve(window.__MOCK_MONITOR);
       return _realApi.apply(this,arguments);
     };
   }
