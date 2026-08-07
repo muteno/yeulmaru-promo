@@ -160,8 +160,10 @@ export const INIT_SCRIPT = `(function(){
     //   ⚠ 누계라 **단조 증가**여야 한다 — 날마다 단가를 새로 굴려 s×단가로 만들면 좌석이 늘어도 금액이 줄어 실데이터에 없는 상태가 나온다.
     function days(base,step){ var a=[],s=base,m=base*42000; for(var i=0;i<7;i++){ a.push({bd:20260726+i,seat:s,mny:m}); var ds=Math.max(0,Math.round(step*(0.4+rnd()))); s+=ds; m+=ds*(35000+Math.round(rnd()*25000)); } return a; }
     function perf(m,d,name,seats,open,genre,run){
+      var dd=days(Math.max(0,seats-40),9);
+      // [260807-2] money = 누적 금액 — 전일 대비 모드 3열 아랫줄(_ryCumCell)이 읽는 자리. 없으면 그 줄이 '—'라 모드가 무측정.
       return {_kind:'perf',id:'',name:name,startDate:D(m,d),_ryDate:D(m,d),dday:30,noData:false,
-        seats:seats,totalOpen:open,occ:seats/open*100,days:days(Math.max(0,seats-40),9),diff:null,_unit:'석',
+        seats:seats,money:dd[dd.length-1].mny,totalOpen:open,occ:seats/open*100,days:dd,diff:null,_unit:'석',
         deltaPP:null,'수익성':'공공성',genre:genre,_venue:'대극장',_ryRun:run};
     }
     var a=[
