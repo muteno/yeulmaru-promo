@@ -2625,6 +2625,9 @@ async function paBuildServerPack(env, token) {
 }
 __name(paBuildServerPack, "paBuildServerPack");
 
+// 브리핑 서식판 — 프롬프트(promo-advise.yml)의 말투·형식이 크게 바뀌면 이 값을 올린다 → 포인터 fv 불일치 =
+// 다음 15분 틱에 1회 자동 재생성(운영자가 안 눌러도 새 서식으로 「새로고침」). 선례 = nomute chan_brief PVER 해시 축.
+const PA_FMT_V = "v3-nomute-tone-260806";
 // 자동 브리핑 1회 실행 — 크론(매일 08:30 KST)과 /api/promo/auto-run(admin 수동)이 같은 함수를 쓴다.
 async function paAutoBrief(env, opt) {
   opt = opt || {};
@@ -2642,7 +2645,7 @@ async function paAutoBrief(env, opt) {
   const dp = await paGhDispatchAdvise(cfg, { id, effort: "high", auto: 1 });   // 자동 = opus 5 · high(운영자 260806)
   if (!dp.ok) return { ok: false, error: dp.err && dp.err.error, note: dp.err && dp.err.note };
   try { await env.ops_kv.put(guardKey, "1", { expirationTtl: 172800 }); } catch (e) {}
-  try { await env.ops_kv.put("pa:auto:latest", JSON.stringify({ id, ymd: paKstToday(), ts: Date.now() })); } catch (e) {}
+  try { await env.ops_kv.put("pa:auto:latest", JSON.stringify({ id, ymd: paKstToday(), ts: Date.now(), fv: PA_FMT_V })); } catch (e) {}
   return { ok: true, id };
 }
 __name(paAutoBrief, "paAutoBrief");
@@ -2754,12 +2757,19 @@ var index_default = {
     if (h === 8 && kst.getUTCMinutes() >= 30 && kst.getUTCMinutes() < 45) {
       ctx.waitUntil(paAutoBrief(env, {}).then((r) => console.log("[promo-auto]", JSON.stringify(r))).catch((e) => console.error("promo auto brief", e)));
     } else {
-      // 첫 가동 부트스트랩(운영자 260806 「일단 한바퀴 돌려줘」) — 포인터가 아예 없으면(한 번도 안 돈 상태 = 신규 배선·콜드스타트)
-      //   다음 틱에 즉시 1회 생성. 포인터가 생기는 순간 이 가지는 영구 무동작 · 일자 가드가 이중 방어라 하루 2회 불가.
+      // 부트스트랩 2축(운영자 260806) — ①포인터 부재(첫 가동·콜드스타트 「일단 한바퀴 돌려줘」) ②서식판(PA_FMT_V) 불일치
+      //   (프롬프트 개정 후 「그 느낌으로 새로고침해줘」): 다음 틱에 1회 재생성. 성공하면 포인터 fv가 갱신돼 영구 무동작 ·
+      //   시도 가드(KV 2h)가 실패 반복 발화를 막는다. 선례 = nomute chan_brief PVER(버전 불일치 = 다음 run 강제 재생성).
       ctx.waitUntil((async () => {
         try {
-          const v = await env.ops_kv.get("pa:auto:latest");
-          if (!v) { const r = await paAutoBrief(env, {}); console.log("[promo-auto:bootstrap]", JSON.stringify(r)); }
+          const raw = await env.ops_kv.get("pa:auto:latest");
+          let cur = null; try { cur = raw ? JSON.parse(raw) : null; } catch (e2) {}
+          if (cur && cur.fv === PA_FMT_V) return;
+          const kick = "pa:auto:kick:" + PA_FMT_V;
+          if (await env.ops_kv.get(kick)) return;
+          await env.ops_kv.put(kick, "1", { expirationTtl: 7200 });
+          const r = await paAutoBrief(env, { force: true });   // force = 서식판 갱신은 당일 재생성이 목적(일자 가드 통과)
+          console.log("[promo-auto:bootstrap]", JSON.stringify(r));
         } catch (e) { console.error("promo auto bootstrap", e); }
       })());
     }
