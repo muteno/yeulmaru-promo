@@ -7083,9 +7083,14 @@ function _ryDodPick(p){
 function _ryDodDate(bd){ var s=String(bd||'').replace(/[^0-9]/g,''); return (s.length===8)?(parseInt(s.slice(4,6),10)+'.'+parseInt(s.slice(6,8),10)):''; }
 function _ryDodCell(p){
   var d=_ryDodPick(p);
-  if(!d)return '<span style="color:var(--muted);font-size:12px">데이터 부족</span>';
+  if(!d)return '<span style="color:var(--dim);font-size:12px">데이터 부족</span>';
   var unit=p._unit||'석';
-  var tok=function(v){ return (v>0)?'--green':((v<0)?'--danger':'--muted'); };
+  // ── [260807-5 운영자 「너무 색이 여기 많아서 — **회색·검정·강조색1·강조색2만** 쓰도록 하자 · **+ 된 거는 강조색1 · −인 거는 그냥 회색**」] ──
+  //   이 칸의 잉크 사다리를 **둘**로 줄인다: 늘었으면 `--accent`(강조색1) · 줄었거나 그대로면 `--dim`(회색 하나).
+  //   ⚠ 구판 `--green`/`--danger`는 이 두 칸에서 **폐지** — 운영자 색 예산(4잉크) 밖이다. 부호 정보는 안 잃는다:
+  //     ① 글자 자체가 `+`/`−`/`±`를 달고 있고 ② 늘었을 때만 강조색이 붙는다(색+부호 이중단서 유지 · 기틀 §3.5③).
+  //   ⚠ 좌석과 금액은 **각자의 부호**로 칠한다 — 「0석인데 −2,000원」처럼 둘의 방향이 갈리는 행이 실제로 있다(운영자 260807 지목).
+  var tok=function(v){ return (v>0)?'--accent':'--dim'; };
   var sgn=function(v){ return (v>0)?'+':((v<0)?'':'±'); };   // 음수는 숫자가 이미 부호를 갖는다 · 0 = ±(요약 줄과 같은 문법)
   var num=function(v){ return sgn(v)+Math.round(v).toLocaleString(); };
   var tip=(d.from?(_ryDodDate(d.from)+' → '):'')+_ryDodDate(d.to)+' 대비'
@@ -7093,11 +7098,10 @@ function _ryDodCell(p){
   return '<span title="'+escapeHtml(tip)+'" style="display:inline-block;vertical-align:middle;text-align:right;width:'+_RY_DOD_W+'px">'
     +'<span style="display:block;font-variant-numeric:tabular-nums;white-space:nowrap">'
       +'<b style="color:var('+tok(d.seat)+');font-weight:800;font-size:14.5px">'+num(d.seat)+unit+'</b>'
-      // [260807-4] 무변동 행의 증감률은 **그 행의 잉크를 따라간다**(`--muted`) — 아니면 `±0석`(--muted)과 `±0%`(--dim)가
-      //   나란히 두 회색으로 갈린다(운영자 「회색이 2종류로 나뉜 것 같음」과 같은 축). 값이 있는 행은 종전대로 `--dim` 보조 잉크.
-      +((d.pct===null)?'':'<span style="color:var('+(d.seat===0?'--muted':'--dim')+');font-size:11.5px;font-weight:700;margin-left:5px">'+sgn(d.pct)+(Math.abs(d.pct)>=10?Math.round(d.pct):(Math.round(d.pct*10)/10))+'%</span>')
+      // [260807-5] 증감률은 **제 좌석과 같은 잉크**(tok) — 줄·0이면 회색 하나, 늘면 강조색1. 260807-4의 무변동 예외는 이 사다리에 흡수됐다.
+      +((d.pct===null)?'':'<span style="color:var('+tok(d.seat)+');font-size:11.5px;font-weight:700;margin-left:5px">'+sgn(d.pct)+(Math.abs(d.pct)>=10?Math.round(d.pct):(Math.round(d.pct*10)/10))+'%</span>')
     +'</span>'
-    +'<span style="display:block;font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;margin-top:2px;white-space:nowrap;color:var('+((d.mny===null)?'--muted':tok(d.mny))+')">'
+    +'<span style="display:block;font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;margin-top:2px;white-space:nowrap;color:var('+((d.mny===null)?'--dim':tok(d.mny))+')">'
       +((d.mny===null)?'—':(num(d.mny)+'원'))+'</span></span>';
 }
 function _srailTableHtml(perfs,exs){
@@ -10174,7 +10178,7 @@ function _ryAccCell(n){
 function _ryCumCell(p){
   var isEx=(p&&p._kind==='ex'), tok=isEx?'--peach-text':'--accent', unit=isEx?'명':'석';
   var n=isEx?p._acc:p.seats, m=isEx?p._accM:p.money;
-  if(n===null||n===undefined||isNaN(n))return '<span style="color:var(--muted);font-size:12px">—</span>';
+  if(n===null||n===undefined||isNaN(n))return '<span style="color:var(--dim);font-size:12px">—</span>';
   var tot=isEx?null:p.totalOpen, pct=isEx?null:p.occ;
   var hasTot=(tot!==null&&tot!==undefined&&tot>0);
   // [260807-4 운영자 「/926 은 옆에 있는 회색과 동일하게 · 이 안의 회색이 2종류로 나뉜 것 같은데 같은 회색이도록」]
@@ -10192,7 +10196,8 @@ function _ryCumCell(p){
   //   → 주숫자를 **14.5px로 맞춘다**(옆 칸과 같은 자). 두 줄상자의 활자 지표가 같아져 `%`도 주숫자도 Δ0. 두 칸은 어차피 짝이라 크기가 같은 게 맞다.
   return '<span style="display:inline-block">'
     +'<span style="display:block;white-space:nowrap;font-size:14.5px">'+head
-      +((pct===null||pct===undefined||isNaN(pct))?'':'<span style="color:var(--dim);font-size:11.5px;font-weight:700;margin-left:5px;font-variant-numeric:tabular-nums">'+Math.round(pct)+'%</span>')
+      // [260807-5 운영자 「%는 강조색으로 하자 · 32%, 31% 이런 거는 강조색으로. 그 자리에 있는 것들」] → 제 분자와 **같은 강조색**(공연 1 · 전시 2).
+      +((pct===null||pct===undefined||isNaN(pct))?'':'<span style="color:var('+tok+');font-size:11.5px;font-weight:700;margin-left:5px;font-variant-numeric:tabular-nums">'+Math.round(pct)+'%</span>')
     +'</span>'
     +'<span style="display:block;font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;margin-top:2px;white-space:nowrap;color:var(--dim)">'
       +((m===null||m===undefined||isNaN(m))?'—':(Math.round(m).toLocaleString()+'원'))+'</span></span>';
