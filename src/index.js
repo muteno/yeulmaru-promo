@@ -1865,8 +1865,13 @@ async function geminiText(env, system, userText, maxTokens) {
 }
 __name(geminiText, "geminiText");
 
-async function claudeText(env, system, userText, maxTokens) {
-  const model = env.BLOG_MODEL || "claude-opus-5";
+// opt = { model, effort } — 미지정이면 종전 그대로(BLOG_MODEL 또는 opus-5 · effort 미전송 = API 기본 high).
+// ⚠ `effort`는 **`output_config` 안**이다(최상위 아님) · GA라 베타 헤더 불요 · low|medium|high|xhigh|max.
+// ⚠ 이 함수에 `temperature`/`top_p`/`top_k`를 되살리지 마라 — opus-5·sonnet-5는 400을 준다(제거된 파라미터).
+// ⚠ opus-5는 **thinking이 기본 ON**이고 `max_tokens`가 thinking+답변을 **함께** 덮는다 → 짧은 답이라도 여유를 준다.
+async function claudeText(env, system, userText, maxTokens, opt) {
+  opt = opt || {};
+  const model = opt.model || env.BLOG_MODEL || "claude-opus-5";
   const headers = { "content-type": "application/json", "anthropic-version": "2023-06-01" };
   if (env.ANTHROPIC_API_KEY) {
     headers["x-api-key"] = env.ANTHROPIC_API_KEY;
@@ -1877,9 +1882,11 @@ async function claudeText(env, system, userText, maxTokens) {
   const sysParam = (!env.ANTHROPIC_API_KEY && env.ANTHROPIC_AUTH_TOKEN)
     ? [{ type: "text", text: "You are Claude Code, Anthropic's official CLI for Claude." }, { type: "text", text: system }]
     : system;
+  const body = { model, max_tokens: maxTokens || 4000, system: sysParam, messages: [{ role: "user", content: userText }] };
+  if (opt.effort) body.output_config = { effort: opt.effort };
   const resp = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST", headers,
-    body: JSON.stringify({ model, max_tokens: maxTokens || 4000, system: sysParam, messages: [{ role: "user", content: userText }] })
+    body: JSON.stringify(body)
   });
   if (!resp.ok) throw new Error("Anthropic " + resp.status + ": " + (await resp.text()).slice(0, 300));
   const data = await resp.json();
@@ -3158,6 +3165,69 @@ function smReady(env) {
   };
 }
 __name(smReady, "smReady");
+// === [260806 운영자 「빠르게 뭐든 대답」] 예울이 채팅 — Worker 동기 호출 ===
+// 왜 Worker인가: 종전 경로는 GitHub Actions 왕복이라 **실측 40초**(nb-blog run #20 07:33:45→07:34:25 · 큐 대기 0)가
+//   바닥이었다 — 러너 부팅 + `npm install -g @anthropic-ai/claude-code` + 커밋·푸시. 대화에는 못 쓰는 지연이다.
+// 왜 되는가: 구독 OAuth 토큰(`sk-ant-oat…`)은 `Authorization: Bearer` + `anthropic-beta: oauth-2025-04-20` 로
+//   **원시 Messages API에서 그대로 동작한다**(공식 문서 경로). 이 레포는 이미 그 배선을 갖고 있다 — `claudeText`와
+//   `extractPromoInfo`가 쓰는 헤더 두 줄이 그것이고, 「system 첫 블록 = Claude Code 신원」 규약도 실측(403)으로 확정돼 있다.
+//   ⚠ 구 `docs/KEYS.md` 1-b의 「구독 OAuth는 Actions의 claude -p 에서만 동작(원시 Messages API 불가)」은 **오기**다 —
+//      같은 레포의 이 코드가 반증이고, 그 문구를 근거로 「유료 키 신규 발급이 필요하다」고 판단하면 있는 배선을 못 본다.
+// 모델 라우팅(운영자 260806) = 기본 `claude-sonnet-5` · effort **low** / 어려우면 `claude-opus-5` · effort **medium**.
+//   ⚠ 이 두 줄 = Worker 경로의 모델 SSOT. `.github/workflows/nb-blog.yml` 라우팅과 **같은 값**이어야 한다 —
+//      한쪽만 고치면 폴백이 탈 때 같은 질문에 다른 결로 답한다.
+// 페르소나 SSOT = 레포 `persona/yeuli.md`(카드 수정 = 말투 자동 추종). Worker는 체크아웃이 없으니 GitHub Contents API로
+//   읽고 KV에 10분 캐시한다 — 매 질문마다 왕복하면 「빠르게」가 도로 깨진다.
+var YEUL_PERSONA_TTL = 600;
+async function yeulPersonaCard(env) {
+  try { const c = await env.ops_kv.get("yeul:persona"); if (c) return c; } catch (e) {}
+  const cfg = ghBlogCfg(env);
+  if (!cfg.pat) return "";
+  try {
+    const r = await fetch(`https://api.github.com/repos/${cfg.repo}/contents/persona/yeuli.md?ref=${encodeURIComponent(cfg.branch)}`, {
+      headers: { "Authorization": "Bearer " + cfg.pat, "Accept": "application/vnd.github+json", "User-Agent": "yeulmaru-promo-worker" }
+    });
+    if (!r.ok) return "";
+    const j = await r.json();
+    const txt = ghDecodeB64(j.content).slice(0, 20000);
+    if (txt) { try { await env.ops_kv.put("yeul:persona", txt, { expirationTtl: YEUL_PERSONA_TTL }); } catch (e) {} }
+    return txt;
+  } catch (e) { return ""; }
+}
+__name(yeulPersonaCard, "yeulPersonaCard");
+
+// b = { q, persona(기기별 오버라이드), ctx(집계 요약 · 개인정보 없음), deep }
+// ⚠ `llmText`를 쓰지 않는다 — 그쪽은 GEMINI_API_KEY가 있으면 Gemini를 먼저 잡는다. 예울이는 운영자가 모델을 지정한 기능이라
+//    Claude로 고정한다(`claudeText` 직행).
+// 프롬프트는 `nb-blog.yml` yeulchat 분기와 **같은 문장**이다 — 두 경로가 같은 답을 내야 폴백이 티가 안 난다.
+// 복잡 질문 판정 — **판정 SSOT는 앱 `_yeulAiDeep`**(index.html)이고 앱은 매번 `deep`을 실어 보낸다.
+//   여기는 `deep`이 **아예 안 온 호출**만 받는 안전판이다. 없으면 그런 호출은 어려운 질문에도 조용히 sonnet·low로
+//   답한다(모델이 안 붙은 것처럼 보이는 바로 그 증상). 규칙은 앱과 같은 문장 — 한쪽을 고치면 **여기도 같이 고쳐라**.
+function yeulDeep(q) {
+  q = String(q || "");
+  return q.length >= 60 || /전략|기획|분석|설계|보고서|제안서?|비교|계획|정리해|작성해?\s*줘|써\s*줘|만들어|장단점|로드맵|개선안/.test(q);
+}
+__name(yeulDeep, "yeulDeep");
+
+async function yeulChat(env, b) {
+  const over = String(b.persona || "").slice(0, 6000).trim();
+  const card = over || (await yeulPersonaCard(env)) ||
+    "너는 GS칼텍스 예울마루(전남 여수의 복합문화예술공간)의 공식 도우미 캐릭터 「예울이」다. 밝고 정중한 존댓말로 간결하게 답한다.";
+  let p = "위 페르소나 카드의 인물 「예울이」로서, 예울마루 직원이 사내 앱 채팅으로 보낸 아래 질문에 답한다.\n";
+  p += "- 사실만: 카드·참고 정보에 없는 구체 사실(날짜·가격·규정 조항·인원수)은 지어내지 말고 「확실하지 않다」고 말한다.\n";
+  p += "- 길이: 2~6문장, 채팅 말풍선 하나 분량. 머리말·사고 과정 없이 답변 본문만 출력한다.\n";
+  if (b.ctx) p += "\n# 참고 정보 (앱이 동봉한 집계 요약 — 개인정보 없음)\n" + String(b.ctx).slice(0, 1200) + "\n";
+  p += "\n# 질문\n" + String(b.q || "").slice(0, 800);
+  // 앱이 보낸 판정을 우선 존중하고(SSOT), 필드가 없을 때만 서버가 판정한다.
+  const deep = (b.deep === undefined || b.deep === null) ? yeulDeep(b.q) : !!b.deep;
+  const model = deep ? "claude-opus-5" : "claude-sonnet-5";
+  const effort = deep ? "medium" : "low";
+  // max_tokens = 답변 2~6문장 + **thinking 몫**(두 모델 다 thinking이 기본 ON이고 max_tokens가 둘을 함께 덮는다).
+  //   빠듯하게 잡으면 생각만 하다 잘린 답이 나온다 — 짧은 답이라도 여유를 준다(생성한 만큼만 과금).
+  const text = await claudeText(env, card + "\n\n---\n\n# 지금 할 일", p, deep ? 4000 : 2000, { model, effort });
+  return { text, model, effort };
+}
+__name(yeulChat, "yeulChat");
 
 var index_default = {
   async scheduled(event, env, ctx) {
@@ -3495,6 +3565,22 @@ var index_default = {
           return json({ info }, env);
         } catch (e) {
           console.error("[content/structure]", e);
+          return json({ error: String((e && e.message) || e) }, env, 502);
+        }
+      }
+
+      // === [260806] 예울이 채팅 — 동기 즉답(1~3초). 종전 Actions 경로(40초)의 앞단이다. ===
+      // 인증 = 위 전역 게이트(X-App-Password). 미설정이면 503 → **앱이 조용히 Actions 경로로 폴백**하므로
+      //   키가 없어도 기능이 죽지 않는다(느려질 뿐). 그래서 여기서 502/503을 던지는 게 안전한 실패다.
+      if (url.pathname === "/api/yeul/chat" && request.method === "POST") {
+        if (!env.ANTHROPIC_API_KEY && !env.ANTHROPIC_AUTH_TOKEN) return json({ error: "no_api_key", note: "ANTHROPIC_* 미설정 — 앱이 Actions 경로로 폴백" }, env, 503);
+        let bb = {};
+        try { bb = await request.json(); } catch (e) {}
+        if (!String(bb.q || "").trim()) return json({ error: "질문이 필요해요" }, env, 400);
+        try {
+          return json(await yeulChat(env, bb), env);
+        } catch (e) {
+          console.error("[yeul/chat]", e);
           return json({ error: String((e && e.message) || e) }, env, 502);
         }
       }
