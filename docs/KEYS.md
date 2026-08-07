@@ -47,7 +47,9 @@
 - **용도**: `nb-blog.yml`·`blog-draft.yml`에서 `claude -p --model claude-opus-5 --effort max` 실행 = **실제 글쓰기 엔진** (Max 구독이라 초안당 추가비용 0). 같은 체인을 `hwp-edit.yml`·`office-edit.yml`·`promo-advise.yml`(AI 홍보 전략 추론 · 260806)도 쓴다. 활성 계정(`vars.ACTIVE_ACCOUNT`, 없으면 EMS1130G)이 주간 쿼터로 막히면 `shared/claude_failover.js`가 체인의 다음 계정으로 **순환 폴오버**해 결과물을 확보.
 - **위치**: Repo → Settings → Secrets and variables → **Actions** → `CLAUDE_CODE_OAUTH_TOKEN_<계정명>` (각 계정 1개).
 - **발급/회전**: 각 계정 로컬에서 `claude setup-token` → 출력된 `sk-ant-oat…`를 해당 secret에 갱신.
-- **주의**: 구독 OAuth는 **Actions의 `claude -p`에서만** 동작(원시 Messages API 불가). 만료되면 그 계정만 폴오버로 건너뛰고, 전 계정 만료 시 초안 생성 실패.
+- **주의**: 만료되면 그 계정만 폴오버로 건너뛰고, 전 계정 만료 시 초안 생성 실패.
+- **⚠️ 정정(260806)**: 구판 문구 「구독 OAuth는 **Actions의 `claude -p`에서만** 동작 — 원시 Messages API 불가」는 **오기**다. 구독 OAuth 토큰(`sk-ant-oat…`)은 `Authorization: Bearer <토큰>` + `anthropic-beta: oauth-2025-04-20` 헤더로 **`api.anthropic.com/v1/messages`에서 그대로 동작**한다(공식 문서 경로). 단 하나의 추가 규약 = **system 첫 블록이 Claude Code 신원**이어야 한다(아니면 403 `Request not allowed`) — `src/index.js` `claudeText`·`extractPromoInfo`·`yeulChat`이 이미 그렇게 부르고 있다.
+  - *왜 정정하나*: 이 한 줄을 근거로 260806 세션이 「예울이를 Worker에서 즉답시키려면 **유료 `ANTHROPIC_API_KEY` 신규 발급 = 비용 발생**」이라고 운영자에게 보고했다. **이미 있는 배선을 못 본 오판**이었고, 문구를 고치지 않으면 다음 세션이 같은 오판을 반복한다.
 - **⚠️ 계정 추가/제거 시 동기화 지점(반드시 전부)**: ①`shared/claude_failover.js` `CHAIN` ②`shared/account_failover.py` `CHAIN` ③`nb-blog.yml` env `ACC_*` ④`blog-draft.yml` env `ACC_*` ⑤(체인 선두 변경 시) 각 워크플로 `|| 'EMS1130G'` 기본값 ⑥해당 `CLAUDE_CODE_OAUTH_TOKEN_*` 시크릿. CHAIN 4곳(①②③④)이 어긋나면 폴오버/승격 오작동.
 
 ### 1-c. Actions Secret `GH_VARS_TOKEN` — 활성 계정 자동 승격(sticky failover)
@@ -76,7 +78,9 @@
   - **카카오 76자 문구 제안(260805)도 키를 새로 안 만든다** — `POST /api/content/kakao`가 이 키 하나로 포스터 OCR(비전)과 문구 생성(텍스트)을 둘 다 한다. 미설정이면 이 엔드포인트만 503(앱 나머지 무관하게 정상) · 프론트는 「AI가 아직 연결되지 않았어요」 안내.
   - `LOGO_MODEL` 미설정 시 후보 순서 = `gemini-3.1-flash-image` → `gemini-2.5-flash-image`. 프리뷰 모델이 은퇴해 404가 나면 이 변수에 현행 모델명을 넣으면 코드 수정 없이 복구된다.
 - `KASI_KEY` — 공공데이터포털(한국천문연구원) 특일정보 = 공휴일
-- *(대체 경로, 현재 주력 아님)* `ANTHROPIC_API_KEY`/`ANTHROPIC_AUTH_TOKEN`, `CLOVA_OCR_INVOKE_URL`/`CLOVA_OCR_SECRET`(네이버 CLOVA OCR), `GOOGLE_SA_EMAIL`/`GOOGLE_SA_PRIVATE_KEY`/`GOOGLE_VISION_KEY`(Google Vision OCR)
+- `ANTHROPIC_AUTH_TOKEN`(구독 OAuth `sk-ant-oat…`) **또는** `ANTHROPIC_API_KEY`(유료) — **예울이 채팅 즉답의 엔진**(`POST /api/yeul/chat` · 260806). 모델 = 기본 `claude-sonnet-5`·effort low / 어려우면 `claude-opus-5`·effort medium(SSOT = `src/index.js` `yeulChat`). 미설정이면 이 엔드포인트만 503 → **앱이 조용히 Actions 경로로 폴백**(느려질 뿐 기능은 산다). 블로그·분석의 `claudeText`/`extractPromoInfo`도 같은 키를 쓴다.
+  - ⚠ 위 1-b 정정 참조 — 구독 OAuth 토큰이 원시 Messages API에서 동작한다. 이 슬롯을 채우려고 **유료 키를 새로 발급할 필요가 없다**(계정 5개의 `sk-ant-oat…` 중 하나를 넣으면 된다).
+- *(대체 경로, 현재 주력 아님)* `CLOVA_OCR_INVOKE_URL`/`CLOVA_OCR_SECRET`(네이버 CLOVA OCR), `GOOGLE_SA_EMAIL`/`GOOGLE_SA_PRIVATE_KEY`/`GOOGLE_VISION_KEY`(Google Vision OCR)
 
 **Config (비밀 아님):** `ALLOWED_ORIGIN=*` (`wrangler.toml [vars]`) · KV `ops_kv`(binding, 메모 등) · cron `0 1 * * *`(보류 자동취소)
 
