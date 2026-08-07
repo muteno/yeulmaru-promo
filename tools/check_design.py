@@ -90,7 +90,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # 1546 → 1545 = 패리티 잔여 갈래 정리(260805-34 운영자 「b는 착수」) — `.admin-item` 한쪽 빌더만 raw였던
 #               `background:#fff`를 형제 빌더와 같은 `var(--surface-solid)`로 맞추며 리터럴 1개 동반 청산.
 #               신규 반입 0 · 테두리 `rgba(0,0,0,0.08)`→`var(--border)`도 같은 자리(rgba는 hex 집계 밖).
-BASE_HEX_INDEX = 1545
+# 1545 → 1542 = 일일입력 +버튼 정본화(260807 운영자 「디자인 정본에 있는 +」) — 구 대시 텍스트 버튼의 #ccc·#fafafa·#666 청산(nb-btn ghost 재사용)
+BASE_HEX_INDEX = 1542
 BASE_HEX_SIGNAGE = 2          # signage/index.html: #000·#333
 BASE_ROOT_INDEX = 2           # L46(기본 팔레트 34토큰) + L1653(뉴트럴·z·c1~c6 27토큰) — 260803 실측 정정(구 표기 L14/32·L1322/26은 위치·개수 모두 stale)
 BASE_ROOT_SIGNAGE = 0
