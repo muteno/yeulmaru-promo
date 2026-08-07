@@ -2890,14 +2890,14 @@ function smFeedTitle(xml) {
 }
 __name(smFeedTitle, "smFeedTitle");
 
-// ① 구글 — Google Alerts RSS(복수 가능: 쉼표·공백·줄바꿈 구분 · 최대 12개). 키 불요.
-//   운영자 260806: 알림 7개 등록(예울마루 / 공연 / 전시 / 교육 / 지역 나눔 / 장도 예울마루 / 예술의 섬 장도) → 상한 12는 여유분.
+// ① 구글 — Google Alerts RSS(복수 가능: 쉼표·공백·줄바꿈 구분 · 최대 16개). 키 불요.
+//   운영자 260806~07: 키워드 8종 + site: 5종(blog.naver/tistory/brunch/cafe.daum/yeosu.go.kr) = 13개 등록 → 상한 16은 여유분.
 async function smFromAlerts(env) {
   const urls = String(env.GALERT_RSS || "").split(/[\s,]+/).map((s) => s.trim()).filter((s) => /^https?:\/\//.test(s));
   if (!urls.length) return { on: false, items: [], note: "GALERT_RSS 미설정" };
   const items = [];
   let ok = 0;
-  for (const u of urls.slice(0, 12)) {
+  for (const u of urls.slice(0, 16)) {
     try {
       const r = await smFetch(u);
       if (!r.ok) { console.error("[sm/alerts]", r.status); continue; }
