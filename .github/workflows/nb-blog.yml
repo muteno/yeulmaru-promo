@@ -71,15 +71,19 @@ jobs:
             //   명단·이름·전화는 애초에 오지 않는다(앱이 브라우저 안에서만 센다) → 공개 레포에 남는 산출물에 개인정보 0.
             // 모델(운영자 260813 지시) = claude-opus-5 · --effort medium. ⚠ 이 두 줄이 이 기능의 모델 SSOT다.
             if (p.segparse) {
-              const SCHEMA = '{"span":"n|all|range","n":정수,"u":"년|개월","from":"YYYY-MM","to":"YYYY-MM","g":"장르명 또는 null","only":true|false,"region":"거주지명 또는 null","thr":정수}';
+              const SCHEMA = '{"span":"n|all|range","n":정수,"u":"년|개월","from":"YYYY-MM","to":"YYYY-MM","g":"장르명 또는 null","only":true|false,"region":"거주지명·묶음키 또는 null","thr":정수,"op":"gte|lte"}';
               let sprompt = '너는 공연장 회원 조회 조건 파서다. 한국어 한 줄 질문을 아래 JSON 스키마로 옮긴다.\n';
               sprompt += '설명·머리말·코드블록 없이 **JSON 객체 하나만** 출력한다.\n\n# 스키마\n' + SCHEMA + '\n\n# 규칙\n';
               sprompt += '- span: "최근 N년/N개월"이면 "n"(n,u 채움) · "2023~2024년"처럼 구간이면 "range"(from,to 채움) · 기간 언급이 없으면 "all".\n';
               sprompt += '- g: 아래 장르 목록에 **정확히 있는 값**만. 없으면 null(비슷한 이름을 지어내지 말 것).\n';
               sprompt += '- only: "클래식만", "클래식 외에는 안 본" 처럼 그 장르 **외 관람이 0회**여야 할 때만 true. 애매하면 false.\n';
-              sprompt += '- region: 아래 거주지 목록에 **정확히 있는 값**만. 없으면 null.\n';
-              sprompt += '- thr: "N회 이상"이면 N · "재구매/단골"이면 2 · 언급 없으면 1.\n';
+              sprompt += '- region: 아래 거주지 목록에 **정확히 있는 값**, 또는 거주지 묶음의 **키**(@로 시작). 없으면 null.\n';
+              sprompt += '- thr/op: "N회 이상"이면 thr=N·op="gte" · "N회 이하"면 thr=N·op="lte" · "재구매/단골"이면 2 · 언급 없으면 1.\n';
               sprompt += '- 질문에 없는 조건은 채우지 말 것(기본값 그대로 둔다).\n';
+              // [260814] 못 옮기는 질문은 **못 옮긴다고 답한다**. 이 축이 없어서 「휴대폰 끝자리로 찾아줘」 같은 질문이
+              //   {span:"all",thr:1}(= 전 회원)로 돌아왔고, 앱은 그걸 「읽은 조건」이라 부르며 전건 명단을 그렸다.
+              sprompt += '- **이 스키마의 축(기간·장르·거주지·관람 횟수)으로 옮길 수 없는 질문**(휴대폰 번호·이름·공연 제목·연령·금액·매수로 찾아 달라는 등)이면\n';
+              sprompt += '  조건을 지어내지 말고 {"ok":false,"why":"짧은 한국어 사유"} 하나만 출력한다. 애매하게 기본값으로 채우는 것이 가장 나쁜 답이다.\n';
               if (p.ctx) sprompt += '\n# 고를 수 있는 값\n' + String(p.ctx).slice(0, 2000) + '\n';
               sprompt += '\n# 질문\n' + String(p.q || '').slice(0, 300) + '\n\n# 출력\nJSON 객체 하나만.';
               const spath = require('path');

@@ -57,7 +57,7 @@ T(pure.ph[0] === '010-****-1299' && pure.ph[1] === '010-8800-1299' && pure.ph[2]
 // ── 고객 분류 표 ─────────────────────────────────────────────────────────
 await page.evaluate(`openPromoCheck()`); await page.waitForTimeout(400);
 await page.evaluate(`_pcTab('seg')`); await page.waitForTimeout(300);
-await page.evaluate(`(function(){document.getElementById('seg-span').value='all';_segSpanToggle();document.getElementById('seg-min').value='1';})()`);
+await page.evaluate(`_segQToForm({span:'all',thr:1})`);   // [260814] 폼 = DOM이 아니라 조건 객체 하나(_segQ)
 await page.evaluate(`_segRun()`); await page.waitForTimeout(800);
 
 const geo = await page.evaluate(`(()=>{
