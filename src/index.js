@@ -2992,7 +2992,10 @@ async function smFromKakao(env, keywords) {
         const r = await smFetch(u, { headers: { Authorization: "KakaoAK " + key, "User-Agent": "yeulmaru-promo-worker" } });
         if (!r.ok) {
           let body = "";
-          try { body = (await r.text()).slice(0, 120); } catch (e) {}
+          try { body = (await r.text()).slice(0, 160); } catch (e) {}
+          // ⚠ 카카오 401 본문은 보낸 appKey를 그대로 메아리친다(260807 실측) — 유효 키가 notes·KV로 새지 않게
+          //   키 문자열과 appKey(...) 패턴을 가린 뒤에만 밖으로 내보낸다. 원문은 로그에도 안 남긴다.
+          body = body.split(key).join("«키»").replace(/appKey\([0-9a-zA-Z]+\)/g, "appKey(«가림»)").slice(0, 120);
           console.error("[sm/kakao]", g.ep, r.status, body);
           errs.push(g.ep + " HTTP " + r.status + (body ? " " + body : ""));
           continue;
