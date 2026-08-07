@@ -5352,7 +5352,8 @@ function _ddAdmin(btn){
       + items.map(function(it){ return _it('_ddCloseAll();adminRoute(\''+it[0]+'\')',it[1]); }).join('')
       + '<div style="height:1px;background:var(--border);margin:6px 10px"></div>'
       + _it('_ddCloseAll();openLockSettings()','자동 잠금 시간')   // [260724 운영자] 시스템 설정 성격 = 관리 6개(데이터 화면)와 구분선으로 분리 · 향후 관련 설정 모이면 '시스템 설정' 그룹으로
-      + _it('_ddCloseAll();openYeulPersona()','예울이 페르소나');   // [260803 운영자] 루시봇 컨셉 — AI 답변 말투 카드 조정(기본 = 레포 persona/yeuli.md)
+      + _it('_ddCloseAll();openYeulPersona()','예울이 페르소나')   // [260803 운영자] 루시봇 컨셉 — AI 답변 말투 카드 조정(기본 = 레포 persona/yeuli.md)
+      + _it('_ddCloseAll();openSearchMonitor()','검색량 확인');   // [260807 운영자] 검색 모니터링 열람 — 웹에 잡힌 예울마루(구글 알림·다음·KOPIS). 알림 아님 = 조회 화면(Q28)
   });
 }
 function showLogoutModal(){
@@ -5579,6 +5580,70 @@ function openLockSettings(){
   el.innerHTML=html;
 }
 function closeLockSettings(){var el=document.getElementById('admin-panel');if(el)el.innerHTML='';}
+// ── [260807 운영자 「설정- 검색량 확인 하나 만들어서 리스트업 · 디자인은 사업 대시보드 공연 리스트와 동일한 느낌」] ──
+//   검색 모니터링 열람 모달 — Worker sm* 축(/api/monitor/feed)이 매시 모아둔 「웹에 잡힌 예울마루」를 보여준다.
+//   알림이 아니라 조회 화면(Q28 「홍보 알림 당분간 없애줘」 준수) · 모달 골격 = openLockSettings 계승(#admin-panel 공유) ·
+//   표 문법 = _bizListTable 계승 — 머리글(sticky·--dim 12px·inset 하단선·좌 14px)·제브라(--past-bg)·행 하단선(--border)·
+//   제목 1행 말줄임(max-width:0 + width:100% · 말줄임은 칸 자체에 — 래퍼 금지, 표 복사 쪼개짐 방지)·tabular-nums.
+var _smwSrcName={google:'구글',kakao:'다음',kopis:'KOPIS',naver:'네이버'};
+function openSearchMonitor(){
+  var html='<div class="modal-bg show" onmousedown="modalBgMouseDown(event)" onclick="modalBgClick(event,closeSearchMonitor)">'
+    +'<div class="modal" style="width:920px;max-width:calc(100vw - 24px);position:relative">'
+    +'<button class="modal-x" onclick="closeSearchMonitor()" title="닫기" aria-label="닫기">✕</button>'
+    +_mhead('검색량 확인','웹에 잡힌 예울마루 — 구글 알림 · 다음(카카오) · KOPIS 공연')
+    +'<div id="smw-sum" style="display:flex;align-items:center;gap:10px;font-size:12px;color:var(--dim);margin-bottom:10px;flex-wrap:wrap"><span style="display:inline-flex;align-items:center;gap:7px">'+_ldHtml(14)+' 불러오는 중</span></div>'
+    +'<div id="smw-body" style="max-height:min(58vh,540px);overflow:auto;border:1px solid var(--border);border-radius:12px"></div>'
+    +'</div></div>';
+  var el=document.getElementById('admin-panel');
+  if(!el){el=document.createElement('div');el.id='admin-panel';document.body.appendChild(el);}
+  el.innerHTML=html;
+  _smwLoad();
+}
+function closeSearchMonitor(){var el=document.getElementById('admin-panel');if(el)el.innerHTML='';}
+async function _smwLoad(){
+  var sum=document.getElementById('smw-sum'),body=document.getElementById('smw-body');
+  if(!sum||!body)return;
+  try{
+    var d=await api('GET','/api/monitor/feed?limit=300');
+    var rows=(d&&d.rows)||[];
+    var by={};rows.forEach(function(r){by[r.src]=(by[r.src]||0)+1;});
+    var at=(d&&d.last&&d.last.at)?new Date(d.last.at):null;
+    var atTxt=(at&&!isNaN(at.getTime()))?at.toLocaleString('ko-KR',{timeZone:'Asia/Seoul',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}):'아직 없음';
+    sum.innerHTML='<span>마지막 수집 <b style="color:var(--text)">'+escapeHtml(atTxt)+'</b> · 총 <b style="color:var(--text)">'+rows.length+'건</b>'
+      +Object.keys(by).map(function(k){return ' · '+escapeHtml((_smwSrcName[k]||k)+' '+by[k]);}).join('')
+      +' · 매시 자동 수집</span><span style="flex:1 1 auto"></span>'
+      +'<button type="button" class="btn btn--ghost btn--sm" onclick="_smwLoad()">새로고침</button>';
+    body.innerHTML=rows.length?_smwTable(rows)
+      :'<div class="u-empty"><div class="ico">📡</div><div class="msg">아직 수집된 결과가 없어요 — 매시 자동으로 모아요</div></div>';
+  }catch(e){
+    sum.innerHTML='<span style="color:var(--danger)">불러오지 못했어요 — '+escapeHtml(String((e&&e.message)||e).slice(0,80))+'</span>'
+      +'<span style="flex:1 1 auto"></span><button type="button" class="btn btn--ghost btn--sm" onclick="_smwLoad()">다시 시도</button>';
+    body.innerHTML='';
+  }
+}
+function _smwTable(rows){
+  var h='<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="color:var(--dim);font-size:12px;text-align:left">';
+  ['일시','제목','출처','분류','키워드·비고'].forEach(function(c,i){
+    h+='<td style="padding:8px 12px;position:sticky;top:0;z-index:1;background:var(--surface-solid);box-shadow:inset 0 -2px 0 var(--border);white-space:nowrap;'
+      +(i===0?'padding-left:14px;':'')+(i>=2?'padding-left:22px;':'')+(i===4?'padding-right:14px;':'')+'">'+c+'</td>';
+  });
+  h+='</tr></thead><tbody>';
+  rows.forEach(function(r,idx){
+    var dt=r.date||String(r.seenAt||'').slice(0,10)||'—';
+    // 비고 = 걸린 검색어(「…」) 또는 KOPIS 부가(시설·상태) · KOPIS 상세가 있으면 가격을 이어 붙인다
+    var memo=r.kw?('「'+r.kw+'」'):(r.extra||'');
+    if(r.detail&&r.detail.price)memo=(memo?memo+' · ':'')+r.detail.price;
+    h+='<tr style="border-bottom:1px solid var(--border);'+(idx%2===1?'background:var(--past-bg);':'')+'">'
+      +'<td style="padding:7px 12px;padding-left:14px;white-space:nowrap;color:var(--neutral-text);font-variant-numeric:tabular-nums">'+escapeHtml(dt)+'</td>'
+      +'<td style="padding:7px 12px;max-width:0;width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+escapeHtml(r.title||'')+'">'
+        +'<a href="'+escapeHtml(r.link||'#')+'" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none;font-weight:600">'+escapeHtml(r.title||r.link||'—')+'</a></td>'
+      +'<td style="padding:7px 12px 7px 22px;white-space:nowrap;color:var(--neutral-text)">'+escapeHtml(_smwSrcName[r.src]||r.src||'—')+'</td>'
+      +'<td style="padding:7px 12px 7px 22px;white-space:nowrap;color:var(--neutral-text)">'+escapeHtml(r.kind||'—')+'</td>'
+      +'<td style="padding:7px 14px 7px 22px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:250px;color:var(--neutral-text)" title="'+escapeHtml(memo)+'">'+(memo?escapeHtml(memo):'<span style="color:var(--muted)">—</span>')+'</td>'
+      +'</tr>';
+  });
+  return h+'</tbody></table>';
+}
 // [260803 운영자] 예울이 페르소나 조정 — 루시봇 카드 컨셉(카드 문장 = 곧 말투): 기본 = 레포 persona/yeuli.md(SSOT),
 //   여기 적으면 이 기기에서만 오버라이드(localStorage — AI 요청에 동봉되어 카드 대신 주입). 모달 골격 = openLockSettings 계승.
 function openYeulPersona(){
