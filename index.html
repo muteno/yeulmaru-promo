@@ -2117,6 +2117,13 @@ table.promo-board-table th:last-child .col-resize-handle{display:none}
 .btn--danger:hover{background:#C73F3E}
 .btn--ghost{background:transparent;color:var(--accent);border-color:rgba(74,77,231,.25)}
 .btn--ghost:hover{background:rgba(74,77,231,.06)}
+/* [260807 운영자 「＋를 투명도 높이고 글래스모피즘 주변 어우러지게」] 유리 변형 — 새 형태가 아니라
+   기틀 §2 #12 글래스 톤(`--glass-surface` + `blur(8px)` + `--glass-shadow` = 260705 「앱 전체 글래스 통일」
+   값 그대로)을 정본 버튼 축에 얹은 것이다. 값·hex 신규 0.
+   `--ghost`와 **겹쳐** 쓴다(`btn btn--ghost btn--glass`) = 잉크·테두리는 ghost 자구를 계승하고 면만 유리로 바꾼다
+   → 흰 모달 위에서 배경에 스미면서도 옅은 강조 테두리로 「눌러야 할 것」임이 남는다(투명 100%는 어포던스가 0). */
+.btn--glass{background:var(--glass-surface);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);--btn-sh:var(--glass-shadow);box-shadow:var(--btn-sh)}
+.btn--glass:hover{background:var(--surface-solid);border-color:var(--accent)}
 .fill-accent:not(:placeholder-shown){border-color:var(--accent)!important;background:#fff!important}
 .u-backdrop{position:fixed;inset:0;background:var(--backdrop);
   -webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);
@@ -12248,6 +12255,42 @@ async function _opsMasterPatch(sheet, keyCol, patches){
   await api('POST','/api/ops',{sheet:sheet,headers:headers,rows:outRows});
   return {hit:hit, headers:headers, rows:outRows};
 }
+/* ── [260807 운영자 「여튼 지금 ui 개떡같거든?」] 일일 입력 폼 열 규격 SSOT ──────────────────
+   구판은 **머리글 span과 입력행 input이 각자 flex·min-width를 따로 타이핑**했다. 실측 결과 그 둘이 어긋나 있었다:
+     · 공연 머리글 「유료좌석」 라벨이 자기 칸보다 10.8px 오른쪽(머리글에만 있던 `padding:0 4px` + ✕칸 24 vs 실측 22)
+     · 단체 기존 내역은 5열(공연·기준일자·좌석·금액·단체명)인데 머리글은 4열 — 「좌석」 라벨이 **기준일자 칸 위**에
+       앉아 라벨이 통째로 한 칸씩 밀려 있었다(운영자가 「개떡」이라 부른 그 자리).
+   이제 머리글·행이 같은 배열에서 나온다 = 열을 늘리거나 폭을 바꾸면 머리글이 따라온다(드리프트 구조적 차단).
+   [열이름, flex, min-width(px)] — 값은 구판 행(input)의 것을 그대로 승계(픽셀 이동 최소).                */
+var _DAILY_COLS={
+  perf:[['공연',2,160],['유료좌석',1,78],['유료금액',1,78],['무료좌석',1,78]],
+  exhib:[['전시',2,160],['유료',1,78],['무료',1,78],['금액',1,78]],
+  grp:[['공연',2,150],['좌석',1,70],['금액',1,70],['단체명',1.4,90]],
+  gex:[['공연',2,150],['기준일자',1,88],['좌석',1,64],['금액',1,78],['단체명',1.4,90]]
+};
+var _DAILY_XW=22;   // 행 끝 ✕ 칸 폭 — 머리글 빈칸과 **같은 수**를 쓴다(구판 머리글 24 vs ✕ 실측 22 = 6px 어긋남의 원인)
+/* 입력칸용 = flex + 하한만. 입력칸은 `.modal input{box-sizing:border-box}` + 인라인 `padding:7px 8px` + `border:1.5px`라
+   flex 기저가 0이 아니라 **19px**(8+8+1.5+1.5)로 깔린다 — 남는 폭을 그만큼 덜 나눠 갖는다. */
+function _dailyColSt(c){ return 'flex:'+c[1]+';min-width:'+c[2]+'px'; }
+/* 글자 칸(머리글 라벨·공연명 라벨)용 = 같은 flex에 **입력칸과 같은 19px 기저**를 심는다.
+   ⚠ 이걸 안 맞추면 머리글은 2:1:1:1로, 행은 (19 뺀 뒤) 2:1:1:1로 나뉘어 라벨이 자기 칸을 벗어난다
+   — 260807 실측 최대 10.8px(공연 머리글)·25px(단체 기존 내역). 겸사 글자 시작점도 입력칸 안 글자와 같은 x가 된다. */
+function _dailyCellSt(c){ return _dailyColSt(c)+';box-sizing:border-box;padding:0 9.5px'; }
+function _dailyHeadHtml(cols){
+  return '<div style="display:flex;gap:8px;font-size:11px;color:var(--dim);font-weight:600;margin-bottom:6px">'
+    +cols.map(function(c){ return '<span style="'+_dailyCellSt(c)+'">'+c[0]+'</span>'; }).join('')
+    +'<span style="width:'+_DAILY_XW+'px;flex-shrink:0"></span></div>';
+}
+// 행 끝 삭제 ✕ — 정본 부품(글자 `✕` + title·aria-label 한 벌 · check_design ⑦)을 **한 곳에서만** 타이핑한다.
+function _dailyXBtn(onclick,title){
+  return '<button type="button" onclick="'+onclick+'" title="'+title+'" aria-label="삭제" style="width:'+_DAILY_XW+'px;flex-shrink:0;border:0;background:none;color:var(--danger);cursor:pointer;font-size:14px;padding:4px 0;line-height:1">✕</button>';
+}
+// ＋ 행 추가 — 정본 §2 #1 버튼 유리 변형(운영자 260807) · **우측** 정렬(같은 운영자 지시) · 마지막 행 바로 아래(근접성).
+//   구판은 좌측에 놓인 `nb-btn ghost` 회색 알약이라 입력칸 흐름과 무관한 덩어리로 떠 있었다.
+function _dailyAddBtn(onclick,label){
+  return '<div style="display:flex;justify-content:flex-end;margin-top:2px">'
+    +'<button type="button" class="btn btn--ghost btn--glass btn--sm" onclick="'+onclick+'" title="'+label+'" aria-label="'+label+'">＋ '+label+'</button></div>';
+}
 // [260723] 종류 선택 탭 — 진행중 전시가 있으면 노출. 아니면 기존 공연 단독 UI 100% 유지(디자인 기틀 계승).
 // [260723 운영자 버그수정] 구 게이트가 전시여부 플래그(또는 슈퍼admin)를 추가로 요구 → 슈퍼admin 폐기(role==='admin' 통일) 후 플래그 미보유 admin이 전시 입력 자체를 못 함. 모달이 이미 admin 전용(openDailyInput)이라 종류 제한은 불필요 → 진행중 전시 유무로만 판정.
 function _dailyKindTabs(){
@@ -12264,11 +12307,11 @@ function _dailyExhibBodyHtml(rowsData){
   var rows=(rowsData&&rowsData.length)?rowsData:[{}];
   var curDate=(document.getElementById('d-date')||{}).value||_dailyToday();
   var h='';
-  h+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><span style="font-size:12px;color:var(--dim);font-weight:600">기준일자</span><input type="date" id="d-date" value="'+curDate+'" style="padding:7px 10px;border:1.5px solid var(--border2);border-radius:7px;font-size:13px;font-family:inherit"></div>';
+  h+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><span style="font-size:12px;color:var(--dim);font-weight:600;white-space:nowrap;flex-shrink:0">기준일자</span><input type="date" id="d-date" value="'+curDate+'" style="width:170px;flex:0 0 auto;padding:7px 10px;border:1.5px solid var(--border2);border-radius:7px;font-size:13px;font-family:inherit"></div>';   // [260807] `.modal input{width:100%}`이 먹혀 날짜칸이 폼 전폭까지 늘고 라벨이 「기준일/자」로 잘렸다 — 라벨 nowrap + 날짜칸 고정폭
   h+='<div style="font-size:11.5px;color:var(--dim);margin-bottom:12px;line-height:1.5">그날 <b>새로 들어온</b> 인원·금액(증분)을 넣어줘 — 누계는 자동으로 더해져요. 전시 분모 = 목표관객(달성률).</div>';
-  h+='<div style="display:flex;gap:8px;font-size:11px;color:var(--dim);font-weight:600;margin-bottom:6px;padding:0 4px"><span style="flex:2;min-width:160px">전시</span><span style="flex:1;min-width:78px">유료</span><span style="flex:1;min-width:78px">무료</span><span style="flex:1;min-width:78px">금액</span><span style="width:24px"></span></div>';
+  h+=_dailyHeadHtml(_DAILY_COLS.exhib);
   h+='<div id="dx-rows">'; rows.forEach(function(r){h+=_dailyExhibRowHtml(r);}); h+='</div>';
-  h+='<button onclick="_dailyExhibAddRow()" style="margin-top:4px;padding:6px 12px;border:1.5px dashed var(--border2);border-radius:8px;background:var(--neutral);color:var(--neutral-text);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">+ 전시 추가</button>';
+  h+=_dailyAddBtn('_dailyExhibAddRow()','전시 추가');   // [260807] 구 점선 뉴트럴 버튼 폐지 — 같은 모달의 ＋ 3종(회색 알약·점선 뉴트럴·회색 알약)을 정본 유리 ＋ 한 벌로 통일
   h+='<div id="d-msg" style="font-size:12px;color:var(--danger);margin-top:10px;min-height:16px"></div>';
   h+='<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px;padding-top:14px;border-top:1px solid var(--border)"><button onclick="closeDailyInput()" class="m-btn cancel">취소</button><button onclick="_dailyExhibSubmit()" class="m-btn save" id="d-save">저장</button></div>';
   return h;
@@ -12276,12 +12319,12 @@ function _dailyExhibBodyHtml(rowsData){
 function _dailyExhibRowHtml(r){
   var opts=_dailyExhibMasters();
   var s='<div class="dexhib-row" style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">';
-  s+='<select class="dx-ex" style="flex:2;min-width:160px;padding:7px 8px;border:1.5px solid var(--border2);border-radius:7px;font-size:12px;font-family:inherit;background:var(--surface-solid)"><option value="">전시 선택</option>';
+  s+='<select class="dx-ex" style="'+_dailyColSt(_DAILY_COLS.exhib[0])+';padding:7px 8px;border:1.5px solid var(--border2);border-radius:7px;font-size:12px;font-family:inherit;background:var(--surface-solid)"><option value="">전시 선택</option>';
   opts.forEach(function(o){s+='<option value="'+escapeHtml(o.id)+'"'+((r&&r.id===o.id)?' selected':'')+'>'+escapeHtml(o.name)+'</option>';});
   s+='</select>';
-  function inp(cls,key){return '<input type="number" class="'+cls+'" min="0" value="'+((r&&r[key]!=null&&r[key]!=='')?escapeHtml(String(r[key])):'')+'" style="flex:1;min-width:78px;padding:7px 8px;border:1.5px solid var(--border2);border-radius:7px;font-size:12px;font-family:inherit">';}
-  s+=inp('dx-paid','유료')+inp('dx-free','무료')+inp('dx-money','금액');
-  s+='<button onclick="_dailyExhibRemoveRow(this)" title="삭제" aria-label="삭제" style="border:0;background:none;color:var(--danger);cursor:pointer;font-size:14px;padding:4px">✕</button>';
+  function inp(cls,key,col){return '<input type="number" class="'+cls+'" min="0" value="'+((r&&r[key]!=null&&r[key]!=='')?escapeHtml(String(r[key])):'')+'" style="'+_dailyColSt(col)+';padding:7px 8px;border:1.5px solid var(--border2);border-radius:7px;font-size:12px;font-family:inherit">';}
+  s+=inp('dx-paid','유료',_DAILY_COLS.exhib[1])+inp('dx-free','무료',_DAILY_COLS.exhib[2])+inp('dx-money','금액',_DAILY_COLS.exhib[3]);
+  s+=_dailyXBtn('_dailyExhibRemoveRow(this)','이 줄 삭제');
   s+='</div>'; return s;
 }
 function _dailyExhibReadDOM(){
@@ -12381,16 +12424,17 @@ function _dailyRowHtml(r,regSet){
   if(regSet)opts=opts.filter(function(o){return !regSet[o.name]||(r&&r.공연===o.name);});   // 이미 등록 제외(현재 행이 선택 중인 값은 유지 — 재렌더 선택 보존)
   var selO=null; if(r&&r.공연)opts.some(function(o){if(o.name===r.공연){selO=o;return true;}return false;});   // [회차 보정 260723] 선택 공연 = 회차칸 노출 판정
   var s='<div class="daily-row" style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">';
-  s+='<select class="d-perf" onchange="_dailyRenderForm(_dailyReadDOM())" style="flex:2;min-width:160px;padding:7px 8px;border:1.5px solid #ddd;border-radius:7px;font-size:12px;font-family:inherit;background:#fff"><option value="">'+(opts.length?'공연 선택':'이 날짜는 모두 입력됨')+'</option>';
+  s+='<select class="d-perf" onchange="_dailyRenderForm(_dailyReadDOM())" style="'+_dailyColSt(_DAILY_COLS.perf[0])+';padding:7px 8px;border:1.5px solid #ddd;border-radius:7px;font-size:12px;font-family:inherit;background:#fff"><option value="">'+(opts.length?'공연 선택':'이 날짜는 모두 입력됨')+'</option>';
   // [260805] `· 종료(소급)` 꼬리표 = 이미 끝난 예술교육(_dailyMasters back) — **보이는 글자만** 다르고 value는 공연명 그대로다
   //   (`_dailyReadDOM`이 value를 읽는다 = 저장 값 무변). 판매중 목록에 끝난 건이 섞이는 걸 눈으로 갈라 준다.
   opts.forEach(function(o){s+='<option value="'+escapeHtml(o.name)+'"'+((r&&r.공연===o.name)?' selected':'')+'>'+escapeHtml(o.name)+(o.back?' · 종료(소급)':'')+'</option>';});
   s+='</select>';
-  function inp(cls,val){return '<input type="number" class="'+cls+'" min="0" value="'+((r&&r[cls]!=null)?r[cls]:'')+'" style="flex:1;min-width:78px;padding:7px 8px;border:1.5px solid #ddd;border-radius:7px;font-size:12px;font-family:inherit">';}
-  s+=inp('d-paids',r)+inp('d-paida',r)+inp('d-free',r);
+  function inp(cls,col){return '<input type="number" class="'+cls+'" min="0" value="'+((r&&r[cls]!=null)?r[cls]:'')+'" style="'+_dailyColSt(col)+';padding:7px 8px;border:1.5px solid #ddd;border-radius:7px;font-size:12px;font-family:inherit">';}
+  s+=inp('d-paids',_DAILY_COLS.perf[1])+inp('d-paida',_DAILY_COLS.perf[2])+inp('d-free',_DAILY_COLS.perf[3]);
+  s+=_dailyXBtn('_dailyRemoveRow(this)','이 줄 삭제');
   // [회차 보정 260723 운영자] 선택 공연에 회차 신호(총회차·회차상세·운영대장)가 없으면 회차수 입력칸 노출 — 저장 시 공연마스터 총회차+총오픈석(=기준석×회차) 확정 → 분모 = 오픈석×회차(달 샤베트 다회차 문제 해결). 강조 = accent 토큰.
-  if(selO&&selO.needRc){ s+='<input type="number" class="d-rc" min="1" step="1" value="'+((r&&r['d-rc']!=null&&r['d-rc']!=='')?escapeHtml(String(r['d-rc'])):'')+'" placeholder="회차수" title="다회차면 총 회차수를 넣어줘 — 현재 분모 '+selO.totalOpen.toLocaleString()+'석. 예: 6 입력 → 분모 = 기준석 '+selO.base.toLocaleString()+' × 6 = '+(selO.base*6).toLocaleString()+'석(저장 시 공연마스터에 반영). 단회차면 비워둬." style="flex:1;min-width:74px;padding:7px 8px;border:1.5px solid var(--accent);border-radius:7px;font-size:12px;font-family:inherit;background:var(--accent-light);color:var(--text);font-weight:700">'; }
-  s+='<button onclick="_dailyRemoveRow(this)" title="삭제" aria-label="삭제" style="border:0;background:none;color:var(--danger);cursor:pointer;font-size:14px;padding:4px">✕</button>';
+  // [260807] 자리 = ✕ **뒤**의 `flex:0 0 100%` 둘째 줄(래퍼). 같은 줄에 끼우면 그 행만 열이 하나 늘어 앞 4열이 전부 줄어들고 머리글과 어긋난다(조건부 칸은 머리글이 알 수 없다). `_dailyReadDOM`은 자손 검색이라 무영향.
+  if(selO&&selO.needRc){ s+='<div style="flex:0 0 100%;display:flex;align-items:center;gap:8px;margin:2px 0 4px"><span style="font-size:11px;color:var(--accent);font-weight:700;flex-shrink:0">회차수</span><input type="number" class="d-rc" min="1" step="1" value="'+((r&&r['d-rc']!=null&&r['d-rc']!=='')?escapeHtml(String(r['d-rc'])):'')+'" placeholder="예: 6" title="다회차면 총 회차수를 넣어줘 — 현재 분모 '+selO.totalOpen.toLocaleString()+'석. 예: 6 입력 → 분모 = 기준석 '+selO.base.toLocaleString()+' × 6 = '+(selO.base*6).toLocaleString()+'석(저장 시 공연마스터에 반영). 단회차면 비워둬." style="width:96px;flex:0 0 auto;padding:7px 8px;border:1.5px solid var(--accent);border-radius:7px;font-size:12px;font-family:inherit;background:var(--accent-light);color:var(--text);font-weight:700"><span style="font-size:11px;color:var(--dim);min-width:0">비워두면 단회차 · 넣으면 분모 = 기준석 '+selO.base.toLocaleString()+'석 × 회차</span></div>'; }
   s+='</div>'; return s;
 }
 function _dailyReadDOM(){
@@ -12405,12 +12449,12 @@ function _dailyReadDOM(){
 function _dailyGroupRowHtml(r){
   var opts=_dailyMasters();
   var s='<div class="dgroup-row" style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">';
-  s+='<select class="dg-perf" style="flex:2;min-width:150px;padding:7px 8px;border:1.5px solid var(--border2);border-radius:7px;font-size:12px;font-family:inherit;background:var(--surface-solid)"><option value="">공연 선택</option>';
+  s+='<select class="dg-perf" style="'+_dailyColSt(_DAILY_COLS.grp[0])+';padding:7px 8px;border:1.5px solid var(--border2);border-radius:7px;font-size:12px;font-family:inherit;background:var(--surface-solid)"><option value="">공연 선택</option>';
   opts.forEach(function(o){s+='<option value="'+escapeHtml(o.name)+'"'+((r&&r.공연===o.name)?' selected':'')+'>'+escapeHtml(o.name)+'</option>';});
   s+='</select>';
-  function inp(cls,val,ph){return '<input type="'+(cls==='dg-nm'?'text':'number')+'" class="'+cls+'"'+(cls==='dg-nm'?'':' min="0"')+' value="'+((val!=null&&val!=='')?escapeHtml(String(val)):'')+'" style="flex:'+(cls==='dg-nm'?'1.4':'1')+';min-width:'+(cls==='dg-nm'?'90':'70')+'px;padding:7px 8px;border:1.5px solid var(--border2);border-radius:7px;font-size:12px;font-family:inherit">';}
-  s+=inp('dg-seat',r&&r.좌석)+inp('dg-money',r&&r.금액)+inp('dg-nm',r&&r.단체명);
-  s+='<button onclick="_dailyGroupRemove(this)" title="삭제" aria-label="삭제" style="border:0;background:none;color:var(--danger);cursor:pointer;font-size:14px;padding:4px">✕</button>';
+  function inp(cls,val,col,ph){return '<input type="'+(cls==='dg-nm'?'text':'number')+'" class="'+cls+'"'+(cls==='dg-nm'?'':' min="0"')+' value="'+((val!=null&&val!=='')?escapeHtml(String(val)):'')+'" placeholder="'+ph+'" style="'+_dailyColSt(col)+';padding:7px 8px;border:1.5px solid var(--border2);border-radius:7px;font-size:12px;font-family:inherit">';}
+  s+=inp('dg-seat',r&&r.좌석,_DAILY_COLS.grp[1],'좌석')+inp('dg-money',r&&r.금액,_DAILY_COLS.grp[2],'금액')+inp('dg-nm',r&&r.단체명,_DAILY_COLS.grp[3],'예: 전남교육청');
+  s+=_dailyXBtn('_dailyGroupRemove(this)','이 줄 삭제');
   s+='</div>'; return s;
 }
 function _dailyGroupReadDOM(){
@@ -12435,42 +12479,50 @@ function _dailyRenderForm(rowsData, groupData){
   }
   var rows=(rowsData&&rowsData.length)?rowsData:[{}];
   var grows=(groupData!==undefined)?groupData:(document.getElementById('dg-rows')?_dailyGroupReadDOM():[]);   // [단체] 재렌더 시 단체 행 보존(명시 전달 우선, 없으면 현재 DOM)
+  if(!grows.length)grows=[{}];   // [260807 운영자 「기본으로 입력할 수 있는 행을 1행만 예시로」] 단체도 공연 축(rows)과 같은 규칙 — 빈 행은 저장 필터(공연+좌석 有)가 걸러 아무것도 안 쓴다
   // [운영자 260710] 기준일자별 이미 등록 공연 제외 — 재렌더 시 사용자가 고른 날짜 보존 + 날짜 변경 시 목록 갱신(onchange 재렌더)
   var curDate=(document.getElementById('d-date')||{}).value||_dailyToday();
   var regSet=_dailyRegisteredSet(curDate.replace(/-/g,''));
   var h='<div id="d-xdrop" ondragover="event.preventDefault();this.style.background=\'rgba(74,77,231,0.06)\'" ondragleave="this.style.background=\'none\'" ondrop="_dsxDrop(event)" onclick="if(event.target.id!==\'d-xfile\')document.getElementById(\'d-xfile\').click()" style="border:1.5px dashed var(--accent);border-radius:var(--r-pop);padding:12px 16px;margin-bottom:14px;cursor:pointer;display:flex;align-items:center;gap:11px;transition:background .15s"><span style="font-size:22px">📄</span><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700;color:var(--accent)">티켓링크 판매현황 올리기</div><div style="font-size:11px;color:var(--dim);margin-top:2px">xls·xlsx 여러 개 가능 · 순판매를 날짜순 누적으로 자동 반영 (프로그램 자동인식 · 못 잡으면 직접 선택)</div></div><input type="file" id="d-xfile" accept=".xlsx,.xls" multiple style="display:none;width:auto" onchange="_dsxFiles(this)"></div>';
-  h+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px"><span style="font-size:12px;color:#888;font-weight:600">기준일자</span><input type="date" id="d-date" value="'+curDate+'" onchange="_dailyRenderForm(_dailyReadDOM())" style="padding:7px 10px;border:1.5px solid #ddd;border-radius:7px;font-size:13px;font-family:inherit"></div>';
-  h+='<div style="display:flex;gap:8px;font-size:11px;color:#999;font-weight:600;margin-bottom:6px;padding:0 4px"><span style="flex:2;min-width:160px">공연</span><span style="flex:1;min-width:78px">유료좌석</span><span style="flex:1;min-width:78px">유료금액</span><span style="flex:1;min-width:78px">무료좌석</span><span style="width:24px"></span></div>';
+  h+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px"><span style="font-size:12px;color:var(--dim);font-weight:600;white-space:nowrap;flex-shrink:0">기준일자</span><input type="date" id="d-date" value="'+curDate+'" onchange="_dailyRenderForm(_dailyReadDOM())" style="width:170px;flex:0 0 auto;padding:7px 10px;border:1.5px solid #ddd;border-radius:7px;font-size:13px;font-family:inherit"></div>';   // [260807] `.modal input{width:100%}`이 먹혀 날짜칸이 폼 전폭까지 늘고 라벨이 「기준일/자」로 잘렸다 — 라벨 nowrap + 날짜칸 고정폭
+  h+='<div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:8px">개인</div>';   // [260807] 단체와 같은 자격의 절 이름 — 구판은 단체만 이름이 있어서 위 블록이 뭔지 말해주는 글자가 없었다(코드·문서의 「개인(일일입력) vs 단체」 용어 계승)
+  h+=_dailyHeadHtml(_DAILY_COLS.perf);
   h+='<div id="d-rows">'; rows.forEach(function(r){h+=_dailyRowHtml(r,regSet);}); h+='</div>';
   // [260805 운영자 「6월 30일 종료 건」] 소급 안내 — 끝난 예술교육이 목록에 있을 때만. 기준일자를 **그 프로그램 종료일**로
   //   맞춰 넣어야 차트의 그 달 자리에 선다(일일입력은 기준일자로 달을 가른다 · _bizEduDailyIdx).
   var _bk=_dailyMasters().filter(function(o){return o.back;});
   if(_bk.length)h+='<div style="font-size:11.5px;color:var(--dim);margin-top:8px;line-height:1.7">「<b style="color:var(--green)">· 종료(소급)</b>」 표시 = 이미 끝난 <b>예술교육</b>이에요 — 최종 실적을 뒤늦게 넣는 자리.<br>기준일자를 그 프로그램 <b>종료일</b>로 맞춰 주세요('+_bk.map(function(o){return escapeHtml(o.name)+' → '+o.back;}).join(' · ')+').</div>';
   if(regSet){ var _remain=_dailyMasters().filter(function(o){return !regSet[o.name];}).length; if(!_remain)h+='<div style="font-size:11.5px;color:var(--dim);margin-top:6px">이 날짜는 판매중 공연이 모두 입력됐어요 — 값 수정은 판매 현황 카드 ▸ <b>실적 수정</b>에서.</div>'; }
-  h+='<button type="button" class="nb-btn ghost" title="공연 추가" aria-label="공연 추가" onclick="_dailyAddRow()" style="margin-top:4px;flex-shrink:0;padding:0 14px;font-size:18px">＋</button>';   // [260807 운영자] + 버튼 = 정본 nb-btn ghost ＋(블로그 「한 줄 추가」 값 사본 — 구 대시 텍스트 버튼 폐지)
+  h+=_dailyAddBtn('_dailyAddRow()','공연 추가');
   // [단체 유입] 단체 섹션 — 상단 기준일자 공유. 같은 날 여러 건 OK. 색·형태 토큰 계승(신규 raw 0).
   h+='<div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border)">';
   h+='<div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:8px">단체</div>';
-  h+='<div style="display:flex;gap:8px;font-size:11px;color:var(--dim);font-weight:600;margin-bottom:6px;padding:0 4px"><span style="flex:2;min-width:150px">공연</span><span style="flex:1;min-width:70px">좌석</span><span style="flex:1;min-width:70px">금액</span><span style="flex:1.4;min-width:90px">단체명</span><span style="width:24px"></span></div>';
+  h+=_dailyHeadHtml(_DAILY_COLS.grp);
   h+='<div id="dg-rows">'; grows.forEach(function(r){h+=_dailyGroupRowHtml(r);}); h+='</div>';
-  h+='<button type="button" class="nb-btn ghost" title="단체 추가" aria-label="단체 추가" onclick="_dailyGroupAdd()" style="margin-top:4px;flex-shrink:0;padding:0 14px;font-size:18px">＋</button>';   // [260807 운영자] 정본 nb-btn ghost ＋ — 공연 추가와 한 벌
+  h+=_dailyAddBtn('_dailyGroupAdd()','단체 추가');
   // [260807 운영자] 기존 단체 내역 — 날짜 리스트로 상존 · 인라인 수정/삭제 → 저장 시 그 공연만 교체(replaceShow).
   //   공연명은 라벨 고정(옮기려면 삭제+추가) · 입력은 oninput으로 상태만 갱신(재렌더 0 = 포커스 유지 · _kmSet 문법).
-  h+='<div style="margin-top:14px;padding-top:10px;border-top:1px dashed var(--border2)">';
+  // [260807 운영자 「단체 아래에 구분선 없애고」] 구 점선 구분선 폐지 — 절 나눔은 **여백 + 조용한 캡션**으로만
+  //   (2026 축: 규칙선을 얹는 대신 공백으로 묶는다). 캡션이 없으면 새로 넣는 칸과 저장된 칸이 한 덩어리로 보인다.
+  h+='<div style="margin-top:18px">';
   if(!_dailyState.gLoadOk){
     h+='<div style="font-size:11.5px;color:var(--dim);padding:4px 0 2px">기존 내역을 못 불러와서 수정은 잠시 잠갔어요(새 단체 추가는 가능) — 다시 열면 재시도해요</div>';
   } else if(!(_dailyState.gEdit&&_dailyState.gEdit.length)){
-    h+='<div style="font-size:11.5px;color:var(--dim);padding:4px 0 2px">저장된 단체가 아직 없어요 — 위 [+ 단체 추가]로 첫 건을 넣어줘요</div>';
+    h+='<div style="font-size:11.5px;color:var(--dim);padding:4px 0 2px">저장된 단체가 아직 없어요 — 위 [＋ 단체 추가]로 첫 건을 넣어줘요</div>';
   } else {
-    var gSt='box-sizing:border-box;padding:7px 9px;border:1.5px solid var(--border2);border-radius:7px;font-size:12px;font-family:inherit;background:var(--surface-solid);color:var(--text)';
+    // 저장된 내역은 **기준일자 칸이 하나 더** 있다(위 새 입력은 상단 기준일자를 공유) → 자기 열 머리글을 따로 세운다.
+    //   구판은 4열 머리글 하나를 5열 목록 위에 놓아 라벨이 통째로 한 칸씩 밀려 있었다(운영자 260807 실측).
+    h+='<div style="font-size:11.5px;color:var(--dim);font-weight:700;margin-bottom:6px">저장된 내역 '+_dailyState.gEdit.length+'건 <span style="font-weight:600;color:var(--muted)">· 고치면 저장할 때 그 공연 건만 교체돼요</span></div>';
+    h+=_dailyHeadHtml(_DAILY_COLS.gex);
+    var gSt='box-sizing:border-box;padding:7px 8px;border:1.5px solid var(--border2);border-radius:7px;font-size:12px;font-family:inherit;background:var(--surface-solid);color:var(--text)';   // [260807] 9px→8px = 폼 전체 입력칸과 같은 좌우 여백(열 기저 19px 한 갈래 = 머리글이 항상 맞는다)
     _dailyState.gEdit.forEach(function(r,i){
       h+='<div class="dgexist-row" style="display:flex;gap:8px;align-items:center;margin-bottom:6px;flex-wrap:wrap">'
-        +'<span style="flex:2;min-width:150px;font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+escapeHtml(r.공연명)+'">'+escapeHtml(r.공연명)+'</span>'
-        +'<input value="'+escapeHtml(r.기준일자)+'" inputmode="numeric" maxlength="8" placeholder="YYYYMMDD" oninput="_dailyGExistSet('+i+',\'기준일자\',this.value)" style="flex:1;min-width:88px;'+gSt+'">'
-        +'<input value="'+escapeHtml(r.좌석)+'" inputmode="numeric" placeholder="좌석" oninput="_dailyGExistSet('+i+',\'좌석\',this.value)" style="flex:1;min-width:64px;'+gSt+'">'
-        +'<input value="'+escapeHtml(r.금액)+'" inputmode="numeric" placeholder="금액" oninput="_dailyGExistSet('+i+',\'금액\',this.value)" style="flex:1;min-width:78px;'+gSt+'">'
-        +'<input type="text" value="'+escapeHtml(r.단체명)+'" placeholder="단체명" oninput="_dailyGExistSet('+i+',\'단체명\',this.value)" style="flex:1.4;min-width:90px;'+gSt+'">'
-        +'<button onclick="_dailyGExistDel('+i+')" title="이 단체 건 삭제(저장 시 반영)" aria-label="삭제" style="border:0;background:none;color:var(--danger);cursor:pointer;font-size:14px;padding:4px">✕</button>'
+        +'<span style="'+_dailyCellSt(_DAILY_COLS.gex[0])+';font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+escapeHtml(r.공연명)+'">'+escapeHtml(r.공연명)+'</span>'
+        +'<input value="'+escapeHtml(r.기준일자)+'" inputmode="numeric" maxlength="8" placeholder="YYYYMMDD" oninput="_dailyGExistSet('+i+',\'기준일자\',this.value)" style="'+_dailyColSt(_DAILY_COLS.gex[1])+';'+gSt+'">'
+        +'<input value="'+escapeHtml(r.좌석)+'" inputmode="numeric" placeholder="좌석" oninput="_dailyGExistSet('+i+',\'좌석\',this.value)" style="'+_dailyColSt(_DAILY_COLS.gex[2])+';'+gSt+'">'
+        +'<input value="'+escapeHtml(r.금액)+'" inputmode="numeric" placeholder="금액" oninput="_dailyGExistSet('+i+',\'금액\',this.value)" style="'+_dailyColSt(_DAILY_COLS.gex[3])+';'+gSt+'">'
+        +'<input type="text" value="'+escapeHtml(r.단체명)+'" placeholder="단체명" oninput="_dailyGExistSet('+i+',\'단체명\',this.value)" style="'+_dailyColSt(_DAILY_COLS.gex[4])+';'+gSt+'">'
+        +_dailyXBtn('_dailyGExistDel('+i+')','이 단체 건 삭제(저장 시 반영)')
         +'</div>';
     });
   }

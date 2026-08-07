@@ -91,7 +91,9 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 #               `background:#fff`를 형제 빌더와 같은 `var(--surface-solid)`로 맞추며 리터럴 1개 동반 청산.
 #               신규 반입 0 · 테두리 `rgba(0,0,0,0.08)`→`var(--border)`도 같은 자리(rgba는 hex 집계 밖).
 # 1545 → 1542 = 일일입력 +버튼 정본화(260807 운영자 「디자인 정본에 있는 +」) — 구 대시 텍스트 버튼의 #ccc·#fafafa·#666 청산(nb-btn ghost 재사용)
-BASE_HEX_INDEX = 1542
+# 1542 → 1540 = 일일입력 폼 정렬·유리 ＋ 개정(260807 운영자 「구분선 없애고 ＋ 투명도 높이고 … 지금 ui 개떡같거든?」)
+#               — 머리글을 열 규격 SSOT(_dailyHeadHtml)로 옮기며 인라인 #888·#999 → var(--dim) 청산 -2
+BASE_HEX_INDEX = 1540
 BASE_HEX_SIGNAGE = 2          # signage/index.html: #000·#333
 BASE_ROOT_INDEX = 2           # L46(기본 팔레트 34토큰) + L1653(뉴트럴·z·c1~c6 27토큰) — 260803 실측 정정(구 표기 L14/32·L1322/26은 위치·개수 모두 stale)
 BASE_ROOT_SIGNAGE = 0
