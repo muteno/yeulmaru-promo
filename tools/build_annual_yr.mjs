@@ -16,6 +16,9 @@
  *   · 재현되는 건 **진행 연도 잠정치**뿐이다. 실측 = 2026 전시 5건·203일·8,049 → 전시DB와 정확히 일치.
  *     공연 2026은 거울(ops_세부운영관리대장정리.csv)이 라이브보다 낡으면(실측 5행/4,210) 라이브 값(21/16/9,568)보다 **작게** 나온다.
  *     → 그 후퇴는 갱신이 아니라 **거울 낡음 신호**로 취급해 거부한다(--allow-shrink 없이는 안 쓴다).
+ *   · [260807 개정] **교육도 재현된다** — 구판 주석의 「교육은 연도별 원천 자체가 없다」는 이제 **틀렸다**.
+ *     원천 = 프로그램 시트(콘텐츠구분 예술교육) × 운영대장 교육 행, 값이 없으면 `_BIZ_EDU_SOLD` 운영자 확정 폴백.
+ *     자세한 계약·미구현 자리는 `eduFromMirror` 헤더에 있다. 장도·문화나눔은 여전히 원천이 없다.
  *
  * 그래서 기본 동작은 **검산**이고, 갱신은 명시적으로 시켜야 한다.
  *
@@ -83,6 +86,14 @@ function readYR(src) {
   }
   const body = src.slice(start, j + 1);
   return { start: i, end: j + 1, bodyStart: start, body, value: new Function('return ' + body)() };
+}
+
+// [260807] 교육 폴백표(`_BIZ_EDU_SOLD`)도 **원문 실행**으로 읽는다 — 여기 값을 다시 적으면 두 벌이 되고,
+//   두 벌은 반드시 갈린다(_YR을 파싱 대신 실행하는 것과 같은 이유). 없으면 조용히 [] = 폴백 없음.
+function readEduSold(src) {
+  const m = src.match(/var _BIZ_EDU_SOLD\s*=\s*(\[[^\]]*\])/);
+  if (!m) return [];
+  try { return new Function('return ' + m[1])(); } catch { return []; }
 }
 
 const CATS = ['공연', '전시', '교육'];
@@ -158,8 +169,9 @@ function recalc(YR) {
 // ── 진행 연도 잠정치 = 데이터 거울에서 계산 ──────────────────────────────────
 // 공연 = 운영_세부운영관리대장(정리): 행 1개 = 1회차 · 공연일수 = 고유 (월,일) · 인원 = 발권유료 합(무료·초대 미포함).
 // 전시 = 전시마스터: 그 해 등록 건수 · 운영일수 합 · 최종총인원 합(진행중 건 포함).
-// 교육·장도·문화나눔 = 거울에 연도별 원천이 없다 → 손대지 않는다(0으로 덮어쓰면 실적을 지운다).
-function partialFromMirror(year) {
+// 교육 = 프로그램 시트(콘텐츠구분 예술교육) × 운영대장 교육 행 — 아래 eduFromMirror 참조([260807] 신설).
+// 장도·문화나눔 = 거울에 연도별 원천이 없다 → 손대지 않는다(0으로 덮어쓰면 실적을 지운다).
+function partialFromMirror(year, eduSold) {
   const ops = parseCsv(readFileSync(join(DATA, 'ops_세부운영관리대장정리.csv'), 'utf8'))
     .filter(r => r['년도'] === String(year));
   const perf = {
@@ -174,7 +186,82 @@ function partialFromMirror(year) {
     일수: ex.reduce((a, r) => a + num(r['운영일수']), 0),
     인원: ex.reduce((a, r) => a + num(r['최종총인원']), 0),
   };
-  return { 공연: perf, 전시: exhib };
+  return { 공연: perf, 전시: exhib, 교육: eduFromMirror(year, eduSold) };
+}
+
+// ── 진행 연도 교육 잠정치 ────────────────────────────────────────────────────
+// [260807 신설 · 운영자 「그 칸에 160 넣고 배선」]
+//
+// 왜 없었나(260807 실측 = 이 칸이 0으로 굳은 3중 자물쇠):
+//   ① 이 스크립트가 교육을 아예 안 봤다(구판 partialFromMirror = {공연, 전시}만 · 동기화 루프도 두 분야뿐).
+//   ② 운영대장에 2026 교육 행이 **한 줄도 없다**(라이브 실측: 세부운영관리대장 2,262행 중 2026 = 공연 21행뿐 ·
+//      공연대장 1,442행 중 2026 = 25건 전부 기획·대관). 끝난 교육이 대장에 안 올라온다.
+//   ③ 검산은 산술 정합만 본다 — 0은 완벽히 정합이라 게이트가 PASS를 찍는다(「비었다」를 묻는 자가 없었다).
+//   그래서 화면엔 「2026 교육 0명」이 실적처럼 찍혔다(장도는 같은 미집계인데 null = 빈칸이라 티가 났다).
+//
+// ⚠ **새 집계 규칙을 만들지 않는다** — 앱의 교육 카드가 이미 쓰는 그 순서를 그대로 옮긴다(index.html `attach` ~L8063):
+//     ① 운영대장 교육 행 발권유료 합(`_bizEduOpsIdx`) → ② 판매 축 누계 → ③ `_BIZ_EDU_SOLD` 운영자 확정 폴백
+//   ②는 여기서 **구현하지 않는다**(구현했다고 착각하지 말 것). 그 축은 `_salesBuild()`라는 런타임 산출물이라
+//   거울 CSV로 재현하려면 렌더러를 복제해야 하고, 사본은 반드시 낡는다(이 파일 헤더의 「원문 실행」 원칙과 같은 축).
+//   2026 실측으로 손해가 0이라 미룬다 — `ops_일일입력.csv` 1,477행에 화요살롱 행이 **0건**이라 ②가 있어도 값이 같다.
+//   ②가 필요해지는 날(= 판매중 교육이 대장보다 먼저 값을 갖는 날)은 아래 로그가 「폴백」이라고 계속 말해 알려준다.
+//
+// ③ 폴백값은 **index.html의 `_BIZ_EDU_SOLD`에서 읽는다** — 여기 160을 다시 적으면 두 벌이 되고, 두 벌은 갈린다.
+//   (_YR을 파싱 대신 원문 실행하는 것과 같은 이유 · readEduSold 참조)
+//
+// 횟수·일수는 원천이 말하는 것만 쓴다 — 대장 행이 있으면 그 행들(공연과 같은 자), 없으면 프로그램 시트의
+//   회차·운영기간. 화요살롱 2026은 시작일 = 종료일 = 2026-06-30(소극장 단회 강연) → 1회 · 1일.
+const EDU_SG = new Set(['교육', '특강']);   // 운영대장 사업구분 — 「기타」는 예술교육 이름일 때만(아래 · _bizEduOpsIdx와 같은 규칙)
+const uName = s => String(s || '')
+  .replace(/\s*[-–—]\s*여수\s*$/, '').replace(/[〈〉<>「」『』\[\]（）()]/g, '')
+  .replace(/[_\-–—·.,’'"~!:：]/g, '').replace(/\s+/g, '').toLowerCase();   // index.html `_uName` 이식(정규화 규칙 SSOT는 그쪽)
+const ymd = s => { const m = String(s || '').match(/(\d{4})-(\d{2})-(\d{2})/); return m ? { y: +m[1], m: +m[2], d: +m[3] } : null; };
+
+function eduFromMirror(year, eduSold) {
+  const progs = parseCsv(readFileSync(join(DATA, 'programs.csv'), 'utf8'))
+    .filter(r => String(r['콘텐츠구분']).trim() === '예술교육')
+    .map(r => ({ name: String(r['풀네임'] || '').trim(), 회차: num(r['회차']), st: ymd(r['시작일']), ed: ymd(r['종료일']) }))
+    .filter(p => p.name && p.ed && p.ed.y === year);   // 그 해 **종료**한 교육(폴백표가 종료 연·월로 걸리는 것과 같은 자)
+  const eduNm = new Set(progs.map(p => uName(p.name)));
+
+  // 운영대장 교육 행 색인 — index.html `_bizEduOpsIdx`와 같은 규칙(취소·무료 제외 · 「기타」는 예술교육 이름만)
+  const idx = {};
+  parseCsv(readFileSync(join(DATA, 'ops_세부운영관리대장정리.csv'), 'utf8')).forEach(r => {
+    if (String(r['년도']).trim() !== String(year)) return;
+    if (String(r['상태'] || '').trim() === '취소공연') return;
+    if (String(r['티켓구분'] || '').trim() === '무료') return;
+    const nm = String(r['공연명'] || '').trim(); if (!nm) return;
+    const k = uName(nm), sg = String(r['사업구분'] || '').trim();
+    if (!EDU_SG.has(sg) && !(sg === '기타' && eduNm.has(k))) return;
+    const e = idx[k] || (idx[k] = { 인원: 0, 횟수: 0, days: new Set() });
+    e.인원 += num(r['발권유료']); e.횟수 += 1; e.days.add(r['월'] + '/' + r['일']);
+  });
+
+  const out = { 횟수: 0, 일수: 0, 인원: 0 }, srcs = [];
+  for (const p of progs) {
+    const o = idx[uName(p.name)];
+    if (o && o.인원 > 0) {   // ① 대장 실값이 이긴다
+      out.인원 += o.인원; out.횟수 += o.횟수; out.일수 += o.days.size;
+      srcs.push(`${p.name} = ${o.인원.toLocaleString()}명 (운영대장 ${o.횟수}행·${o.days.size}일)`);
+      continue;
+    }
+    const fb = eduFallback(p, eduSold);   // ③ 운영자 확정 폴백(② 판매 축 미구현 — 위 주석)
+    if (fb == null) { srcs.push(`${p.name} = 값 없음 (대장 행 0 · 폴백표 미등재 → 0으로 세지 않는다)`); continue; }
+    const days = (p.st && p.ed) ? Math.round((Date.UTC(p.ed.y, p.ed.m - 1, p.ed.d) - Date.UTC(p.st.y, p.st.m - 1, p.st.d)) / 86400000) + 1 : 1;
+    const cnt = p.회차 > 0 ? p.회차 : days;   // 회차 칸이 비면 운영일수 = 회차(단회 강연) · 값 창작이 아니라 원천 두 칸의 우선순위
+    out.인원 += fb; out.횟수 += cnt; out.일수 += days;
+    srcs.push(`${p.name} = ${fb.toLocaleString()}명 (운영자 확정 · _BIZ_EDU_SOLD · ${cnt}회·${days}일 = 프로그램 시트)`);
+  }
+  out._srcs = srcs;
+  return out;
+}
+
+/** index.html `_BIZ_EDU_SOLD` 폴백 규칙 이식 — 정규화 **부분** 일치 + 종료 연·월 3조건(그 표 주석). */
+function eduFallback(p, eduSold) {
+  if (!p.ed || !eduSold) return null;
+  const k = uName(p.name); if (!k) return null;
+  const hit = eduSold.find(x => k.indexOf(uName(x.key)) >= 0 && p.ed.y === x.y && p.ed.m === x.m);
+  return hit ? hit.v : null;
 }
 
 // ── 진행 연도 공연 잠정치 = 라이브 「운영_공연대장」(공연 단위 원장) ──────────────
@@ -289,7 +376,10 @@ let changed = false, notes = [];
 if (SYNC) {
   const yi = YR.years.indexOf(partialYear);
   if (yi < 0) { console.error(`[yr] FAIL — ${partialYear}년이 _YR.years에 없다. 먼저 연도 열을 추가해라.`); process.exit(1); }
-  const got = partialFromMirror(partialYear);
+  const got = partialFromMirror(partialYear, readEduSold(src));
+  console.log(`[yr] 교육 ${partialYear} 잠정치 원천 — 프로그램 시트 예술교육 ${got.교육._srcs.length}건:`);
+  got.교육._srcs.forEach(s => console.log('  · ' + s));
+  if (!got.교육._srcs.length) console.log('  · (없음 — 프로그램 시트에 그 해 종료 예술교육이 0건)');
   if (FROM_LIVE) {
     const rows = await fetchLedger();
     const chk = ledgerSelfCheck(rows, YR, partialYear);
@@ -301,7 +391,7 @@ if (SYNC) {
     got.공연 = live;
   }
   const shrunk = [];
-  for (const c of ['공연', '전시']) for (const k of ['횟수', '일수', '인원']) {
+  for (const c of CATS) for (const k of ['횟수', '일수', '인원']) {   // [260807] 구판 ['공연','전시'] — 교육이 빠져 그 칸이 0으로 굳었다(eduFromMirror 헤더 ①)
     const row = rowOf(YR.cats[c].rows, k); if (!row) continue;
     const cur = row.v[yi] || 0, next = got[c][k];
     if (next === cur) continue;
@@ -317,7 +407,8 @@ if (SYNC) {
   }
   console.log(`[yr] 진행 연도 ${partialYear} 잠정치 — 거울 반영 ${notes.length}건` + (notes.length ? ':' : ' (변화 없음)'));
   notes.forEach(s => console.log('  · ' + s));
-  console.log('  ※ 교육·장도·문화나눔은 거울에 연도별 원천이 없어 손대지 않았다(0 덮어쓰기 = 실적 삭제).');
+  console.log('  ※ 장도·문화나눔은 거울에 연도별 원천이 없어 손대지 않았다(0 덮어쓰기 = 실적 삭제).');
+  console.log('  ※ 교육은 260807부터 배선됨 — 값이 폴백(운영자 확정)에서 나오는 동안은 위 원천 줄이 그렇다고 계속 말한다.');
 }
 
 const before = JSON.stringify(YR);

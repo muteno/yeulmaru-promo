@@ -145,7 +145,17 @@ const bundle = {
       platforms: '홍보 플랫폼 3단 분류(라벨용).',
       contents: '콘텐츠구분·형식·진행상태 값 목록(필터용).',
       applySettings: '홍보 접수 설정(키-값).',
-      annual: '연간 실적(2012~2025) — 메인 대시보드 좌측 「연간 실적」 원천. years[14] + cats{공연·전시·교육}.rows[{sub,key,v[14],sum}] (key = 인원·횟수·일수·나눔) + total[동일 구조] + jangdo(장도 방문객) + grand(누적 3,690,031명). 기본 표시 지표 = 인원.',
+      // ⚠ [260807] 이 한 줄은 **손으로 적지 않는다** — 구판은 '2012~2025 · years[14] · grand(누적 3,690,031명)'을
+      //   박아 뒀는데, 그 사이 2026 열이 붙고(15칸) grand가 3,721,841이 되도록 아무도 못 고쳤다(실측 3중 낡음).
+      //   설명이 데이터를 따라가지 않으면 이 번들을 읽는 쪽이 **틀린 자릿수·틀린 총계**를 믿는다 → 값에서 파생시킨다.
+      annual: (() => {
+        const A = out.annual, ys = A?.years || [];
+        if (!ys.length) return '연간 실적 — _YR 추출 실패(warnings 참조).';
+        return `연간 실적(${ys[0]}~${ys[ys.length - 1]}) — 메인 대시보드 좌측 「연간 실적」 원천. `
+          + `years[${ys.length}] + cats{${Object.keys(A.cats || {}).join('·')}}.rows[{sub,key,v[${ys.length}],sum}] `
+          + `(key = 인원·횟수·일수·나눔) + total[동일 구조] + jangdo(장도 방문객) + grand(누적 ${(A.grand || 0).toLocaleString()}명). `
+          + `마지막 연도는 **잠정치**(진행 연도) · 기본 표시 지표 = 인원.`;
+      })(),
     },
     warnings,
   },
