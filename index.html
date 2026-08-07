@@ -5592,6 +5592,7 @@ function openSearchMonitor(){
     +'<button class="modal-x" onclick="closeSearchMonitor()" title="닫기" aria-label="닫기">✕</button>'
     +_mhead('검색량 확인','웹에 잡힌 예울마루 — 구글 알림 · 다음(카카오) · KOPIS 공연')
     +'<div id="smw-sum" style="display:flex;align-items:center;gap:10px;font-size:12px;color:var(--dim);margin-bottom:10px;flex-wrap:wrap"><span style="display:inline-flex;align-items:center;gap:7px">'+_ldHtml(14)+' 불러오는 중</span></div>'
+    +'<div id="smw-flt" style="display:none;gap:6px;flex-wrap:wrap;align-items:center;margin:0 0 10px"></div>'
     +'<div id="smw-body" style="max-height:min(58vh,540px);overflow:auto;border:1px solid var(--border);border-radius:12px"></div>'
     +'</div></div>';
   var el=document.getElementById('admin-panel');
@@ -5600,26 +5601,57 @@ function openSearchMonitor(){
   _smwLoad();
 }
 function closeSearchMonitor(){var el=document.getElementById('admin-panel');if(el)el.innerHTML='';}
+// [260807 운영자 「관련 없는것도 있어서 관련된 것만 추릴 수 있는지」] AI 선별 상태 — 서버 크론(sonnet 5 · KST 8·11·14·17시)이
+//   최근 3일치에 새긴 rel(1 관련 · 0 제외 · 없음 미판정)을 칩으로 거른다. 판정이 하나도 없으면 칩 자체가 안 뜬다(종전 화면 그대로).
+var _smwState={rows:[],judge:null,flt:null};
+function _smwRelCnt(rows){ var c={rel:0,irr:0,un:0}; rows.forEach(function(x){ if(x.rel===1)c.rel++; else if(x.rel===0)c.irr++; else c.un++; }); return c; }
+function _smwSetFlt(v){ _smwState.flt=v; _smwPaint(); }
 async function _smwLoad(){
   var sum=document.getElementById('smw-sum'),body=document.getElementById('smw-body');
   if(!sum||!body)return;
   try{
     var d=await api('GET','/api/monitor/feed?limit=300');
     var rows=(d&&d.rows)||[];
+    _smwState.rows=rows; _smwState.judge=(d&&d.judge)||null;
+    var c=_smwRelCnt(rows);
+    if(_smwState.flt===null)_smwState.flt=(c.rel>0)?'rel':'all';   // 첫 진입 기본 = 관련만(판정이 있을 때) — 지시 「관련된 것만」
     var by={};rows.forEach(function(r){by[r.src]=(by[r.src]||0)+1;});
-    var at=(d&&d.last&&d.last.at)?new Date(d.last.at):null;
-    var atTxt=(at&&!isNaN(at.getTime()))?at.toLocaleString('ko-KR',{timeZone:'Asia/Seoul',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}):'아직 없음';
+    var kst=function(iso){ var t=iso?new Date(iso):null; return (t&&!isNaN(t.getTime()))?t.toLocaleString('ko-KR',{timeZone:'Asia/Seoul',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}):null; };
+    var atTxt=kst(d&&d.last&&d.last.at)||'아직 없음', jdTxt=kst(_smwState.judge&&_smwState.judge.at);
     sum.innerHTML='<span>마지막 수집 <b style="color:var(--text)">'+escapeHtml(atTxt)+'</b> · 총 <b style="color:var(--text)">'+rows.length+'건</b>'
       +Object.keys(by).map(function(k){return ' · '+escapeHtml((_smwSrcName[k]||k)+' '+by[k]);}).join('')
-      +' · 매시 자동 수집</span><span style="flex:1 1 auto"></span>'
+      +' · 매시 자동 수집'+(jdTxt?' · AI 선별 <b style="color:var(--text)">'+escapeHtml(jdTxt)+'</b>':'')+'</span><span style="flex:1 1 auto"></span>'
       +'<button type="button" class="btn btn--ghost btn--sm" onclick="_smwLoad()">새로고침</button>';
-    body.innerHTML=rows.length?_smwTable(rows)
-      :'<div class="u-empty"><div class="ico">📡</div><div class="msg">아직 수집된 결과가 없어요 — 매시 자동으로 모아요</div></div>';
+    _smwPaint();
   }catch(e){
     sum.innerHTML='<span style="color:var(--danger)">불러오지 못했어요 — '+escapeHtml(String((e&&e.message)||e).slice(0,80))+'</span>'
       +'<span style="flex:1 1 auto"></span><button type="button" class="btn btn--ghost btn--sm" onclick="_smwLoad()">다시 시도</button>';
     body.innerHTML='';
   }
+}
+// 선별 줄(**세그먼트 `.fbar-seg` 정본** — 기간 줄과 같은 빌더 `_chipRow` 한 벌) + 표를 지금 선별 상태로 그린다.
+// ⚠ 260807-17에서 칩(.ana-chip) → 세그먼트로 통일했다: 관련/제외/미판정/전체는 **상호배타**라 「하나만」을 말하는 세그먼트가 맞다
+//   (칩은 규범상 「여러 개 고를 수 있다」 — Primer·M3·Mobbin 실측). 근거 = docs/reports/260807_기간필터_세그먼트_규범실측.md
+function _smwPaint(){
+  var body=document.getElementById('smw-body'),fl=document.getElementById('smw-flt');
+  if(!body)return;
+  var rows=_smwState.rows,c=_smwRelCnt(rows),judged=c.rel+c.irr;
+  if(fl){
+    if(!judged)fl.style.display='none';
+    else{
+      var segs=[{v:'rel',t:'관련 '+c.rel},{v:'irr',t:'제외 '+c.irr}];
+      if(c.un)segs.push({v:'un',t:'미판정 '+c.un});
+      segs.push({v:'all',t:'전체 '+rows.length});
+      fl.style.display='flex';
+      fl.innerHTML=_chipRow('AI 선별',segs,_smwState.flt,'_smwSetFlt')
+        +'<span style="font-size:11px;color:var(--muted)">sonnet 5 · 3시간마다(08~19시) 최근 3일치</span>';
+    }
+  }
+  if(!rows.length){ body.innerHTML='<div class="u-empty"><div class="ico">📡</div><div class="msg">아직 수집된 결과가 없어요 — 매시 자동으로 모아요</div></div>'; return; }
+  var flt=judged?_smwState.flt:'all';
+  var show=rows.filter(function(r){ return flt==='all'||(flt==='rel'&&r.rel===1)||(flt==='irr'&&r.rel===0)||(flt==='un'&&r.rel!==0&&r.rel!==1); });
+  body.innerHTML=show.length?_smwTable(show)
+    :'<div class="u-empty"><div class="ico">🔍</div><div class="msg">이 선별에 해당하는 글이 없어요 — 위 칩으로 넓혀 보세요</div></div>';
 }
 function _smwTable(rows){
   var h='<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="color:var(--dim);font-size:12px;text-align:left">';
@@ -5633,7 +5665,10 @@ function _smwTable(rows){
     // 비고 = 걸린 검색어(「…」) 또는 KOPIS 부가(시설·상태) · KOPIS 상세가 있으면 가격을 이어 붙인다
     var memo=r.kw?('「'+r.kw+'」'):(r.extra||'');
     if(r.detail&&r.detail.price)memo=(memo?memo+' · ':'')+r.detail.price;
-    h+='<tr style="border-bottom:1px solid var(--border);'+(idx%2===1?'background:var(--past-bg);':'')+'">'
+    // [260807] AI 제외 판정 행 = 흐리게 + 사유를 비고 맨 앞에(「전체」 칩에서 무엇이 왜 걸러졌는지 보이게)
+    var dim=(r.rel===0);
+    if(dim)memo='AI 제외'+(r.relWhy?(': '+r.relWhy):'')+(memo?' · '+memo:'');
+    h+='<tr style="border-bottom:1px solid var(--border);'+(idx%2===1?'background:var(--past-bg);':'')+(dim?'opacity:.55;':'')+'">'
       +'<td style="padding:7px 12px;padding-left:14px;white-space:nowrap;color:var(--neutral-text);font-variant-numeric:tabular-nums">'+escapeHtml(dt)+'</td>'
       +'<td style="padding:7px 12px;max-width:0;width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+escapeHtml(r.title||'')+'">'
         +'<a href="'+escapeHtml(r.link||'#')+'" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none;font-weight:600">'+escapeHtml(r.title||r.link||'—')+'</a></td>'
@@ -10112,13 +10147,22 @@ function _ryAccCell(n){
 //   문법은 옆 칸(_ryDodCell)과 **한 벌** — 윗줄 = 수량(분야 강조색·800) · 아랫줄 = 금액(중립 `--neutral-text`).
 //   ⚠ 아랫줄에 부호색(green/danger)을 쓰지 않는다 — 이 표에서 초록·빨강은 「어제보다 늘/줄」의 뜻이고, 누계는 증감이 아니다.
 //   값 = 화면이 이미 쓰는 그 두 수(공연 `p.seats`·`p.money` = 단체 포함 총량 · 전시 `_acc`·`_accM`) — 새 집계 0.
+// [260807-3 운영자 「누적 좌석 금액 표기에 **298/1,021석** 이렇게 오픈석이 나오게 하고 **몇 %인지도** 표기되게」]
+//   → 윗줄 = `누적/오픈석` + 단위 + `%`. 구 판매율 칸이 적던 세 수(`32% (298/926)`)를 **읽는 차례만 바꿔** 그대로 옮긴 것
+//     = 값·분모·반올림 규칙 전부 그 칸과 같은 자(`p.seats`·`p.totalOpen`·`p.occ`) · 새 계산 0.
+//   % 자리·잉크(`--dim` 11.5px/700)는 옆 칸 증감률과 **같은 자리** = 두 칸의 둘째 수가 한 세로선에서 읽힌다.
+//   ⚠ 전시는 분모를 안 붙인다 — 오픈석이라는 축 자체가 없고, 3열은 운영자 260729 판정(「달성률 아니라 **누적 관객수**, 숫자 누계만」)이 걸린 자리다.
 function _ryCumCell(p){
   var isEx=(p&&p._kind==='ex'), tok=isEx?'--peach-text':'--accent', unit=isEx?'명':'석';
   var n=isEx?p._acc:p.seats, m=isEx?p._accM:p.money;
   if(n===null||n===undefined||isNaN(n))return '<span style="color:var(--muted);font-size:12px">—</span>';
+  var tot=isEx?null:p.totalOpen, pct=isEx?null:p.occ;
+  var head=Math.round(n).toLocaleString()+((tot!==null&&tot!==undefined&&tot>0)?('/'+Math.round(tot).toLocaleString()):'');
   return '<span style="display:inline-block">'
-    +'<span style="display:block;white-space:nowrap">'+_ryNumSlot(Math.round(n).toLocaleString(),tok)
-      +'<span style="color:var('+tok+');font-weight:800">'+unit+'</span></span>'
+    +'<span style="display:block;white-space:nowrap">'+_ryNumSlot(head,tok)
+      +'<span style="color:var('+tok+');font-weight:800">'+unit+'</span>'
+      +((pct===null||pct===undefined||isNaN(pct))?'':'<span style="color:var(--dim);font-size:11.5px;font-weight:700;margin-left:5px;font-variant-numeric:tabular-nums">'+Math.round(pct)+'%</span>')
+    +'</span>'
     +'<span style="display:block;font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;margin-top:2px;white-space:nowrap;color:var('
       +((m===null||m===undefined||isNaN(m))?'--muted">—':'--neutral-text">'+Math.round(m).toLocaleString()+'원')+'</span></span>';
 }
@@ -10616,7 +10660,33 @@ function _ryDrillItem(want){
 function _ryDrillHtml(p,key){
   var card='';
   try{ card=(p._kind==='ex')?_srailCardEx(p):_srailCard(p); }catch(_e){ console.warn('[ry drill card]',_e); return ''; }
-  return '<div class="ry-detail"><div class="ry-detail-body">'+card+'</div>'+_ryDrillNav(key)+'</div>';
+  // [260807 운영자] #ry-kopis-rel = KOPIS 유관 타지역 줄 자리 — **body 밖**에 둔다(차트 폭 수렴 재그림이 body.innerHTML을 갈아치워도 생존)
+  return '<div class="ry-detail"><div class="ry-detail-body">'+card+'</div><div id="ry-kopis-rel" style="display:none;margin-top:8px"></div>'+_ryDrillNav(key)+'</div>';
+}
+// [260807 운영자 「KOPIS 공연 상세에서 유관된 타지역 공연이 있는지 확인해서 알려주게」] — 상세(AI 예상 아래)에 한 줄.
+//   Worker(/api/monitor/kopis-related)가 KOPIS 공연DB에서 같은 제목을 찾아 예울마루 제외 타지역만 준다(24h KV 캐시).
+//   실패·키 미설정 = 조용히 생략(보조 정보 — 상세 화면을 막지 않는다) · 문법 = .srail-fc(AI 예상 줄) 그대로, 라벨 색만 --c5.
+var _ryKopisSeq=0;
+function _ryKopisRel(p){
+  var box=document.getElementById('ry-kopis-rel'); if(!box)return;
+  box.style.display='none'; box.innerHTML='';
+  if(!p||p._kind!=='perf'||!p.name)return;   // 공연만 — 전시·교육은 KOPIS 축이 없다
+  var seq=++_ryKopisSeq;
+  api('GET','/api/monitor/kopis-related?name='+encodeURIComponent(p.name)).then(function(d){
+    if(seq!==_ryKopisSeq)return;   // 이미 다른 프로그램으로 넘어갔으면 폐기(넘김 연타 경합)
+    var b=document.getElementById('ry-kopis-rel'); if(!b)return;
+    if(!d||!d.ok||!Array.isArray(d.rows))return;
+    var md=function(s){ var m=String(s||'').match(/^\d{4}-(\d{2})-(\d{2})/); return m?(parseInt(m[1],10)+'.'+parseInt(m[2],10)):''; };
+    var h;
+    if(!d.rows.length)h='같은 공연의 타지역 일정 없음 <span style="color:var(--muted)">(KOPIS 공연DB 기준)</span>';
+    else h='같은 공연 타지역 <b style="color:var(--text)">'+d.rows.length+'건</b> — '+d.rows.slice(0,3).map(function(r){
+      var span=[md(r.from),md(r.to)].filter(Boolean).join('~');
+      return '<a href="'+escapeHtml(r.link||'#')+'" target="_blank" rel="noopener" style="color:inherit" title="'+escapeHtml(r.title||'')+'">'
+        +escapeHtml((r.area?r.area+' ':'')+(r.place||r.title||''))+(span?' ('+span+')':'')+'</a>';
+    }).join(' · ')+(d.rows.length>3?' 외 '+(d.rows.length-3)+'건':'');
+    b.innerHTML='<div class="srail-fc" style="--fc:var(--c5)"><b>KOPIS 유관</b> '+h+'</div>';
+    b.style.display='';
+  }).catch(function(){});
 }
 // 카드 클릭(레일 개별 분석으로 이동)은 떼어낸다 — 상세는 이 박스 안에서만 바뀐다
 function _ryDrillStrip(box){
@@ -10685,6 +10755,7 @@ function _ryDrillPaint(want,dir){
   _ryBackBtn(box,1);
   _ryFlip(box.querySelector('.ry-detail'),dir===undefined?1:dir);
   _ryDrill.key=want;
+  try{_ryKopisRel(p);}catch(_e){}   // [260807] KOPIS 유관 타지역 줄 — 비동기·실패 무음(상세를 막지 않는다)
   return true;
 }
 function _ryDrillOpen(want,silent){
