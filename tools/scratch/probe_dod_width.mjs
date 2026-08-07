@@ -8,7 +8,7 @@ const base=process.env.PLAYWRIGHT_BROWSERS_PATH||'/opt/pw-browsers';
 let exe=null; for(const d of readdirSync(base)) if(d.startsWith('chromium-')&&!d.includes('headless')){const p=join(base,d,'chrome-linux','chrome'); if(existsSync(p))exe=p;}
 const {chromium}=await import('playwright-core');
 const b=await chromium.launch({executablePath:exe,headless:true,args:['--no-sandbox','--no-proxy-server']});
-const page=await b.newPage({viewport:{width:1400,height:900}});
+const page=await b.newPage({viewport:{width:1920,height:1080}});
 page.on('pageerror',e=>console.error('[err]',String(e).split('\n')[0]));
 await page.route('**/*',r=>{const u=new NodeURL(r.request().url());
  if(u.hostname==='app.local'){let p=decodeURIComponent(u.pathname); if(p==='/')p='/index.html';
