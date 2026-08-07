@@ -1500,7 +1500,11 @@ table.promo-board-table th:last-child .col-resize-handle{display:none}
      그보다 낮은 창에서만 비례로 줄어 막대 카드가 산다(768 실측 = 접힘 255 · 막대 169).
    ⚠ `--rise-h`에 **백분율을 넣으면 안 된다** — 같은 변수를 `padding-bottom`(%가 **폭** 기준)과 `clip-path`(%가 **높이** 기준)가
      함께 쓰기 때문에 한 값이 두 뜻이 된다(낮은 창 상한을 `min(…,50%)`로 시도했다가 잡은 함정). 상한이 필요하면 px·vh로만. */
-.cb-rise-col{position:relative;--rise-log:clamp(96px,25vh,241px);--rise-foot:63px;--rise-h:calc(var(--rise-log) + var(--rise-foot));padding-bottom:calc(var(--rise-h) + var(--rise-gap,14px))}
+/* [260813-3 운영자 「위에 거주지랑 연령대 분포가 저렇게 줄여져서 보이는 거 아니지?」] 아니다 — **실제로 눌렸다**. 접힘 칸을 304로 키운 몫을 낮은 창에서 위 막대 카드가 그대로 뺏겼다
+   (1366×768 실측: 이 배선 **전** 막대 237.7px = 도넛 둘·범례 온전 → **후** 168px = 범례 반줄 잘림). → **차트가 안 눌리는 선을 접힘 칸보다 앞에 둔다.**
+   `--rise-avail` = 「막대 카드에 237px(위 실측 온전선)을 남기고 남는 몫」 — 열 높이는 CSS가 못 읽으니 `_memAiPaint`가 재서 넣는다(없으면 상한 없음 = 종전).
+   즉 **넉넉한 창에서는 운영자 값 304 그대로, 좁아지면 차트가 먼저 자리를 지키고 대화창이 양보한다**(하한 = 종전 최소 96+63=159). */
+.cb-rise-col{position:relative;--rise-log:clamp(96px,25vh,241px);--rise-foot:63px;--rise-h:max(159px,min(calc(var(--rise-log) + var(--rise-foot)),var(--rise-avail,100000px)));padding-bottom:calc(var(--rise-h) + var(--rise-gap,14px))}
 .cb-rise{position:absolute;left:0;right:0;top:0;bottom:0;z-index:1;
   clip-path:inset(max(0px,calc(100% - var(--rise-h))) 0 0 0 round var(--radius));
   transition:clip-path .59s cubic-bezier(.215,.61,.355,1) .18s,box-shadow .59s cubic-bezier(.215,.61,.355,1) .18s}
@@ -28253,7 +28257,27 @@ function _memAiPaint(sfx){
   if(col&&col.classList&&col.classList.contains('cb-rise-col')){
     var ft=card.querySelector('.cb-foot');
     if(ft&&ft.offsetHeight)col.style.setProperty('--rise-foot',(ft.offsetHeight+2)+'px');
+    _memRiseFit(col);
   }
+}
+// [260813-3 운영자 「거주지랑 연령대 분포가 저렇게 줄여져서 보이는 거 아니지?」] 접힘 칸이 위 막대 카드를 잡아먹지 않게 하는 상한.
+//   CSS는 열 높이를 못 읽는다(백분율은 padding에서 **폭** 기준이 돼 뜻이 갈린다 — 260813-2 함정) → 여기서 재서 `--rise-avail`로 넣는다.
+//   _MEM_BAR_MIN = 막대 카드(거주지 TOP·연령대)가 **도넛 둘 + 범례를 온전히 세우던 실측 높이**(1366×768 · 이 기능 배선 전 상태 237.7px).
+//   ⚠ 열 높이가 **확정된 경우에만** 건다(FIT = 인라인 이젤·모달). 자연 흐름(비FIT)은 열이 내용만큼 늘어나 뺏길 자리가 없고,
+//     거기서 패딩을 줄이면 열 높이가 다시 줄어 되먹임(관측 루프)이 된다 — 그래서 max-height가 잠긴 자리에서만.
+var _MEM_BAR_MIN=237;
+function _memRiseFit(col){
+  try{
+    if(col.style.maxHeight!=='100%'){col.style.removeProperty('--rise-avail');return;}   // 비FIT = 상한 없음(종전 그대로)
+    var gap=parseFloat(getComputedStyle(col).getPropertyValue('--rise-gap'))||14;
+    var avail=col.clientHeight-_MEM_BAR_MIN-gap;
+    if(avail>0)col.style.setProperty('--rise-avail',avail.toFixed(1)+'px');
+    else col.style.removeProperty('--rise-avail');
+    if(typeof ResizeObserver==='function'&&!col._riseRO){                                 // 창 크기가 바뀌면 다시 잰다(모달은 재렌더 없이 늘어난다)
+      col._riseRO=new ResizeObserver(function(){_memRiseFit(col);});
+      col._riseRO.observe(col);
+    }
+  }catch(_e){}
 }
 function _memAiPaintAll(){_memAiPaint('i');_memAiPaint('m');}
 function _memAiChip(sfx,t){var i=document.getElementById('mem-ai-q-'+sfx);if(i)i.value=t;_memAiSend(sfx);}

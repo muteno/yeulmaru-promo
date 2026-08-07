@@ -135,7 +135,7 @@ h1{font-size:20px;margin:0 0 4px}h2{font-size:15px;margin:30px 0 10px}
   <div class="shot"><span class="tag was">전 — 쉼 = 호버</span><img alt="전: 예울이 카드가 접힌 채 고정" src="${b64('260813_예울이_호버확장_전.png')}"><div class="cap">카드 223px 고정. 마우스를 올려도 <b>세 장의 캡처가 픽셀까지 동일</b>(70,959바이트 3장) = 반응 0. 대화가 길어지면 이 칸 안에서만 스크롤.</div></div>
   <div class="shot"><span class="tag">후 — 쉼</span><img alt="후: 접힘 상태(전과 동일 기하)" src="${b64('260813_예울이_호버확장_후_쉼.png')}"><div class="cap">접힘 칸 <b>304px</b>(260813-2 운영자 선택값) · 막대 카드 333px. 대화는 입력줄 쪽에 붙는다(메신저 규약).</div></div>
   <div class="shot"><span class="tag">후 — 올라가는 중</span><img alt="후: 전이 35% 지점" src="${b64('260813_예울이_호버확장_후_중간.png')}"><div class="cap">곡선 <b>35% 지점에서 정지</b>시켜 촬영(<code>Animation.currentTime</code>). 입력줄은 안 움직이고 <b>위쪽 선만</b> 올라간다.</div></div>
-  <div class="shot"><span class="tag">후 — 1366×768(낮은 창)</span><img alt="후: 낮은 창에서 접힘 칸 255px" src="${b64('260813_예울이_호버확장_후_낮은창.png')}"><div class="cap">창이 낮으면 접힘 칸이 <b>255px</b>로 줄어 위 막대 카드(168px)가 산다. 고정 304였으면 이 자리에서 도넛이 <b>전부 사라졌다</b>(막대 120px).</div></div>
+  <div class="shot"><span class="tag">후 — 1366×768(낮은 창)</span><img alt="후: 낮은 창에서 접힘 칸 255px" src="${b64('260813_예울이_호버확장_후_낮은창.png')}"><div class="cap">창이 낮으면 <b>차트가 먼저 자리를 지키고</b> 대화창이 양보한다 — 접힘 <b>187px</b> · 막대 카드 <b>236px</b>(이 기능 배선 전 237.7px과 사실상 동일). 상한이 없으면 막대 120px = 도넛 두 개가 통째로 사라졌다.</div></div>
   <div class="shot"><span class="tag">후 — 펼침</span><img alt="후: 열 전체로 펼쳐진 대화창" src="${b64('260813_예울이_호버확장_후_펼침.png')}"><div class="cap">열 전체 651px = 「거주지 TOP 5」 카드 윗선까지. 대화 자리가 <b>160px → 588px(3.7배)</b>.</div></div>
 </div></div>
 
@@ -174,7 +174,8 @@ h1{font-size:20px;margin:0 0 4px}h2{font-size:15px;margin:30px 0 10px}
 <b>입력줄은 한 픽셀도 안 움직인다</b> — 카드가 바닥에 고정돼 있고 위쪽 선만 올라가니, 타이핑 중에 열려도 커서가 안 흔들린다.<br>
 <b>자리 확보</b> = 열의 <code>padding-bottom:calc(var(--rise-h) + var(--rise-gap))</code>. 그래서 위 막대 카드 높이는 <b>전과 Δ0</b>(실측 414px).<br>
 <b>접힘 칸</b> <code>--rise-h</code> = 로그창 <code>clamp(96px,25vh,241px)</code> + 입력줄·테두리 <code>--rise-foot</code>(<code>_memAiPaint</code>가 <code>.cb-foot</code> 실측으로 덮어씀 · 실측 61+2=63) = <b>1000px대 창에서 정확히 304px</b>(운영자 선택값).<br>
-<b>낮은 창에서만 비례로 줄어든다</b> — 상한 241에 붙는 건 창 높이 ≥ 964px일 때. 고정 304로 못 박으면 1366×768에서 위 막대 카드가 <b>120px</b>로 눌려 도넛 두 개가 통째로 사라진다(실측 · 오른쪽 캡처가 상한 적용 후 = 막대 168px).<br>
+<b>차트가 접힘 칸보다 앞선다(260813-3)</b> — 위 막대 카드에 <b>237px</b>(도넛 둘 + 범례가 온전히 서던 실측선)을 남기고 <b>남는 몫까지만</b> 접힘 칸이 커진다. 열 높이는 CSS가 못 읽으니 <code>_memAiPaint</code>가 재서 <code>--rise-avail</code>로 넣고, 창 크기가 바뀌면 <code>ResizeObserver</code>가 다시 잰다(비FIT은 열이 내용만큼 늘어나 상한 자체가 필요 없다 · 되먹임 방지).<br>
+실측 = 1500×1000·1920×1080 접힘 <b>304</b>(운영자 값 그대로) · 1280×800 216 · 1366×768 <b>187</b>(막대 236 = 배선 전 237.7과 동일).<br>
 <b>진입로 2개</b> — <code>:hover</code>(마우스)와 <code>:focus-within</code>(터치·키보드로 입력칸에 들어갈 때). 감속 선호(<code>prefers-reduced-motion</code>)면 전이 없이 즉시 전환.<br>
 <b>대화는 아래에 붙는다</b>(<code>.cb-rise&gt;.cb-body&gt;:first-child{margin-top:auto}</code>) — 로그창이 늘 열 전체 높이라 위로 붙이면 접힘 칸이 빈 칸이 된다.
 </div>
