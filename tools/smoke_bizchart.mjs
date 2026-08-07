@@ -23,6 +23,8 @@
  *      ⓕ **가려진 라벨은 흰 반투명 판을 인다**(막대 관통·옆 숫자 포갬 둘 다) · 안 가려졌는데 판을 이면 잉여 = FAIL
  *      ⓖ 값 라벨 중심 == 제 **막대 정중앙**(Δ ≤ 2px · 운영자 260813-3 「차트 옆에 있는건 실패임」)
  *      ⓗ 예상 줄 `(N)`은 **본체보다 밝은 잉크 + 기울임**(운영자 260813-4 「(7)은 더 연하게 - 기울임체」)
+ *      ⓘ **0으로 읽히는 값 라벨 0개**(운영자 260813-5 「0, 0 은 표기를 애초에 안하면됨 · (0) 도 당연히 없어야」) —
+ *         `0`·`0.0`·`(0)` 전부 금지 · `0.4`처럼 0이 아닌 걸 말하는 소수는 그대로 남는다(ⓒ 생략 금지와 충돌 없음)
  *   ⑥ 그라데이션이 **다시 그려도 살아 있다**(운영자 260813 「다시 그라데이션 수치가 빠졌거든?」) — 예상 칸·빈 자리는
  *      투명으로 태어나 렌더 후 덧칠이 유일한 잉크라, Plotly가 한 번 다시 그리면 칠만 증발하고 **숫자는 예상 높이에 그대로
  *      남는다**(= 운영자가 본 화면). `relayout(height)`·`Plots.resize` 뒤 칠해진 칸 수가 줄면 FAIL.
@@ -75,6 +77,13 @@ function stubs() {
     name: s.name, money: s.rev, seats: s.paid, occ: s.occ, totalOpen: s.open, _rcEst: 1, genre: s.genre,
     startDate: D(s.date), endDate: D(s.dateEnd), status: s.status === '판매중' ? 'active' : 'ended'
   }));
+  // [260813-5] **매출 0 · 판매중** 한 줄 — 이 게이트가 ⓘ(0으로 읽히는 라벨 금지)를 **실제로 보게** 하는 표본이다.
+  //   실물 = 260813 화면의 「여수세계섬박람회 기념 음악회」(9/10 · 판매중 · 매출 0 · 판매 0석)가 `0.0`을 이고 서 있었다.
+  //   ⚠ 위 `sales`는 `s.paid > 0`으로 걸러 만들어져 **0인 행이 한 줄도 없다** — 스텁이 이 행을 안 들면 ⓘ는 늘 0을 보고
+  //     통과한다(= 게이트가 아니라 장식 · 킬테스트도 못 한다). 자리는 표본이 비어 있는 8월(원 데이터 공연 0건)로 잡아
+  //     기존 계약 실측(간격·포갬·가려짐)에 새 변수를 안 얹는다.
+  sales.push({ name: '매출 0 판매중(게이트 표본)', money: 0, seats: 0, occ: 0, totalOpen: 300, _rcEst: 1,
+    genre: '클래식', startDate: D('2026-08-20'), endDate: D('2026-08-25'), status: 'active' });
   const perfs = DATA.shows.filter(s => s.status === '예정')
     .map(s => ({ s: s.date, e: s.dateEnd, n: s.name, f: s.name, t: 'c', g: s.gu || '', g2: s.genre || '', rc: 1, id: '' }));
   return { opsRows, sales, perfs };
@@ -118,7 +127,7 @@ const MEASURE = `(()=>{
     const b=p.getBoundingClientRect(); if(b.height<0.5)return;
     bars.push({ti,cx:rr(b.x+b.width/2-R.x),x0:rr(b.x-R.x),x1:rr(b.x+b.width-R.x),top:rr(b.y-R.y),bot:rr(b.y+b.height-R.y)});   // [260813-2] x0·x1 = ⑤ⓕ 가림 판정용 사각형
   }));
-  const N='[0-9,]+(?:\\\\.[0-9]+)?';                                     // [260813-2] 반올림해서 0인 값만 소수 한 자리(\`0.0\`/\`0.4\`) — 그 꼴도 값 라벨이다
+  const N='[0-9,]+(?:\\\\.[0-9]+)?';                                     // [260813-2] 반올림해서 0인 값만 소수 한 자리(\`0.4\`) — 그 꼴도 값 라벨이다(\`0.0\` 갈래는 260813-5로 폐지 · 그래도 **재는 자는 그대로 둔다** = 되살아나면 ⓘ가 잡아야 하니까)
   const num=t=>new RegExp('^'+N+'(?:\\\\('+N+'\\\\))?$').test(t.textContent.trim());   // [260813] 예상 칸 라벨 = \`예측치(현재치)\` — 괄호꼴도 값 라벨이다(안 세면 ⓒ「숫자 없는 막대」가 오탐한다)
   const grab=(sel,src)=>[...d.querySelectorAll(sel)].filter(num).map(t=>{ const b=t.getBoundingClientRect();
     return {src,t:t.textContent.trim(),cx:rr(b.x+b.width/2-R.x),w:rr(b.width),bot:rr(b.y+b.height-R.y),fill:getComputedStyle(t).fill}; });
@@ -175,7 +184,12 @@ const MEASURE = `(()=>{
     const ok=sp.some(x=>{const c=getComputedStyle(x);return c.fontStyle==='italic'&&lum(c.fill)>lum(base)+0.02;});
     return {t:txt, ok, n:sp.length};
   }).filter(Boolean);
+  // ⑤ⓘ [260813-5] 「0으로 읽히는 수는 안 적는다」 — 괄호를 벗기고 쉼표를 떼서 **각 수를 따로** 본다(\`4(7)\` → 4·7 · \`10,000\` → 10000).
+  //   ⚠ 방향이 ⓒ와 반대다 — ⓒ는 「있어야 할 숫자가 없다」를, 여기는 「**없어야 할 0이 적혀 있다**」를 잡는다.
+  const zeroLab=t=>String(t).split(/[()]/).map(s=>s.replace(/,/g,'').trim()).filter(Boolean)
+    .some(s=>/^-?0(?:\\.0+)?$/.test(s));
   const lab={n:labs.length, trace:labs.filter(L=>L.src==='trace').length, nolab, ovl,
+    zero:labs.filter(L=>zeroLab(L.t)).map(L=>L.t),
     sub:sub.length, subBad:sub.filter(x=>!x.ok).map(x=>x.t+(x.n?'':'(줄 없음)')),
     inks:[...new Set(labs.map(L=>L.fill))],
     hidBare:plate.filter(p=>p.hid&&!p.bg).map(p=>p.t),      // 가려졌는데 판이 없다 = FAIL
@@ -312,7 +326,8 @@ async function main() {
     // ⓖ 「숫자는 제 막대 정중앙 위」(운영자 260813-3 「상단에 무조건 숫자가 있어야 함 · 차트 옆에 있는건 실패임」)
     if ((L.subBad || []).length) fails.push(`⑤ⓗ 예상 줄이 **연한 기울임**이 아닌 라벨 ${L.subBad.length}개(${L.subBad.slice(0, 4).join(' · ')}) — 「(7)은 더 연하게 - 기울임체」(운영자 260813-4 · 본체보다 밝아야 하고 font-style: italic이어야 한다).`);
     if ((L.offBad || []).length) fails.push(`⑤ⓖ 제 막대에서 옆으로 비켜 선 값 라벨 ${L.offBad.length}개(${L.offBad.slice(0, 4).join(' · ')}) — 숫자는 **언제나 제 막대 정중앙 위**다(가로 비킴 폐지 · 겹치면 판을 깐다).`);
-    infos.push(`⑤ 값 라벨 ${L.n}개 · 전부 주석 · 간격 Δ${L.gapSpread}px · 숫자 없는 막대 ${L.nolab} · 잉크 ${(L.inks || []).length}갈래 · 포갬 ${(L.ovl || []).length} · 가려진 라벨 ${L.hid}개(전건 판) · 막대 중심 이탈 최대 ${L.offMax}px · 예상 줄 ${L.sub}개(전건 연한 기울임)`);
+    if ((L.zero || []).length) fails.push(`⑤ⓘ 0으로 읽히는 값 라벨 ${L.zero.length}개(${L.zero.slice(0, 4).join(' · ')}) — 「0, 0 은 표기를 애초에 안하면됨 · **(0) 도 당연히 없어야**」(운영자 260813-5 · 기틀 §2 #18). 예상 엔진은 판매 며칠 뒤에야 값을 내므로 그 \`(0)\`은 「예상이 0」이 아니라 **「아직 모른다」**다 = 값 창작.`);
+    infos.push(`⑤ 값 라벨 ${L.n}개 · 전부 주석 · 간격 Δ${L.gapSpread}px · 숫자 없는 막대 ${L.nolab} · 0으로 읽히는 라벨 ${(L.zero || []).length} · 잉크 ${(L.inks || []).length}갈래 · 포갬 ${(L.ovl || []).length} · 가려진 라벨 ${L.hid}개(전건 판) · 막대 중심 이탈 최대 ${L.offMax}px · 예상 줄 ${L.sub}개(전건 연한 기울임)`);
   }
 
   // ⑥ 그라데이션 = 다시 그려도 살아 있다(운영자 260813 「다시 그라데이션 수치가 빠졌거든?」)
