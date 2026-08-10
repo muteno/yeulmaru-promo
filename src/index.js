@@ -1222,6 +1222,159 @@ async function getHolidays(env, year, forceRefresh) {
 __name(getHolidays, "getHolidays");
 
 // ═══════════════════════════════════════════════════════════════════════════
+// === 지역 방문자 지수 (한국관광공사 빅데이터 — 기초지자체 일별 방문자수) ===
+//   [260803] 여수·순천·광양 3개 시의 「요일별 기대 방문객」을 계산해 홍보 게시일 판단에 쓴다.
+//   ⚠ 실시간이 아니다 — 실측 집계 지연 = 23일(260803 기준 최신 데이터 20260711).
+//     그래서 「지금 붐비나」가 아니라 **요일·시기 패턴**만 제공한다(docs/공공API_발급절차.md §2-D).
+//   · 자격증명 = env.DATAGO_KEY (없으면 공휴일용 env.KASI_KEY로 폴백 — 같은 포털의 같은 계정 키).
+//     Encoding/Decoding 어느 판을 넣어도 동작하게 공휴일 쪽과 같은 관용구를 쓴다(%가 있으면 이미 인코딩된 것).
+//   · API에 지역 필터 파라미터가 없다 → 전국(하루 807행)이 통째로 오므로 signguNm으로 걸러 쓴다.
+//   · KV 24시간 캐시 + stale-while-revalidate(gcal과 같은 축). 원본이 하루 단위라 더 자주 받을 이유가 없다.
+var VISITOR_CITIES = ["여수시", "순천시", "광양시"];
+var VISITOR_DOW = ["월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일"];
+var VISITOR_WINDOW_DAYS = 28;   // 평균 낼 창 = 4주(요일마다 4표본)
+var VISITOR_TTL = 86400;
+
+function visitorKey(env) {
+  const k = env.DATAGO_KEY || env.KASI_KEY || "";
+  if (!k) return "";
+  return k.includes("%") ? k : encodeURIComponent(k);
+}
+__name(visitorKey, "visitorKey");
+
+function visitorYmd(d) {   // Date(UTC 기준 KST 시각) → YYYYMMDD
+  return d.toISOString().slice(0, 10).replace(/-/g, "");
+}
+__name(visitorYmd, "visitorYmd");
+
+// 포털 게이트웨이가 간헐적으로 연결을 끊는다(실측) → 1회 재시도. 재시도로도 실패하면 던진다.
+async function visitorFetch(env, startYmd, endYmd, numOfRows) {
+  const sk = visitorKey(env);
+  const url = `https://apis.data.go.kr/B551011/DataLabService/locgoRegnVisitrDDList` +
+    `?serviceKey=${sk}&MobileOS=ETC&MobileApp=yeulmaru-promo` +
+    `&startYmd=${startYmd}&endYmd=${endYmd}&numOfRows=${numOfRows}&pageNo=1&_type=json`;
+  let last;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const r = await fetch(url);
+      if (!r.ok) throw new Error("visitor http " + r.status);
+      const j = await r.json();
+      const body = j && j.response && j.response.body;
+      if (!body) throw new Error("visitor bad payload");
+      let items = body.items && body.items.item;
+      if (!items) items = [];
+      if (!Array.isArray(items)) items = [items];
+      return { total: Number(body.totalCount || 0), items };
+    } catch (e) { last = e; }
+  }
+  throw last || new Error("visitor fetch failed");
+}
+__name(visitorFetch, "visitorFetch");
+
+// 집계 지연폭이 고정이 아니므로 「데이터가 차 있는 마지막 날」을 매번 찾는다.
+//   7일 간격으로 뒤로 훑어 첫 히트를 찾고(최대 9회 = 63일), 거기서 하루씩 앞으로 6일까지 밀어 정확한 끝을 잡는다.
+async function visitorLatestYmd(env) {
+  const base = Date.now() + 9 * 3600 * 1e3;
+  let hit = null;
+  for (let back = 14; back <= 77; back += 7) {
+    const d = new Date(base - back * 86400 * 1e3);
+    const y = visitorYmd(d);
+    let res;
+    try { res = await visitorFetch(env, y, y, 1); } catch (e) { continue; }
+    if (res.total > 0) { hit = { ymd: y, back }; break; }
+  }
+  if (!hit) return null;
+  // 앞으로 밀 때는 호출 실패(≠0행)로 멈추면 최신 며칠을 잃는다 → 실패는 건너뛰고 계속, 0행에서만 멈춘다.
+  //   ⚠ 기준점(coarse)은 고정해 두고 fwd를 뺀다 — hit.back을 그때그때 빼면 걸음이 겹쳐 날짜를 건너뛴다.
+  const coarse = hit.back;
+  for (let fwd = 1; fwd <= 6; fwd++) {
+    const d = new Date(base - (coarse - fwd) * 86400 * 1e3);
+    const y = visitorYmd(d);
+    let res;
+    try { res = await visitorFetch(env, y, y, 1); } catch (e) { continue; }
+    if (res.total > 0) hit = { ymd: y, back: coarse - fwd }; else break;
+  }
+  return hit.ymd;
+}
+__name(visitorLatestYmd, "visitorLatestYmd");
+
+function visitorBuild(items, fromYmd, toYmd) {
+  // 외지인(b) = 일상생활권 밖에서 온 방문자 = 홍보 대상. 현지인(a)은 상주인구라 거의 상수라 제외한다.
+  const bucket = {};
+  for (const c of VISITOR_CITIES) bucket[c] = {};
+  for (const it of items) {
+    const city = String(it.signguNm || "");
+    if (!bucket[city]) continue;
+    if (!String(it.touDivNm || "").startsWith("외지인")) continue;
+    const w = String(it.daywkDivNm || "");
+    if (!bucket[city][w]) bucket[city][w] = [];
+    bucket[city][w].push(Number(it.touNum) || 0);
+  }
+  const cities = {};
+  for (const c of VISITOR_CITIES) {
+    const avg = VISITOR_DOW.map((w) => {
+      const v = bucket[c][w] || [];
+      return v.length ? Math.round(v.reduce((a, b) => a + b, 0) / v.length) : 0;
+    });
+    const used = avg.filter((v) => v > 0);
+    const mean = used.length ? used.reduce((a, b) => a + b, 0) / used.length : 0;
+    cities[c.replace(/시$/, "")] = {
+      avg,                                                     // 요일별 평균 외지인 수(월~일)
+      idx: avg.map((v) => mean ? Math.round(v / mean * 100) / 100 : 0),   // 전체 평균 대비 지수(1.00 기준)
+      peak: avg.indexOf(Math.max.apply(null, avg))             // 가장 붐비는 요일 인덱스
+    };
+  }
+  return { ok: true, dow: VISITOR_DOW, from: fromYmd, to: toYmd, cities };
+}
+__name(visitorBuild, "visitorBuild");
+
+async function visitorRefresh(env) {
+  const latest = await visitorLatestYmd(env);
+  if (!latest) throw new Error("visitor: 가용 데이터 없음");
+  const end = new Date(Date.UTC(+latest.slice(0, 4), +latest.slice(4, 6) - 1, +latest.slice(6, 8)));
+  const start = new Date(end.getTime() - (VISITOR_WINDOW_DAYS - 1) * 86400 * 1e3);
+  const fromYmd = visitorYmd(start);
+  // 하루 807행 × 28일 ≈ 22,600행. 한 번에 받아 캐시한다(지역 필터가 없어 나눠 받아도 이득이 없다).
+  const res = await visitorFetch(env, fromYmd, latest, VISITOR_WINDOW_DAYS * 900);
+  const payload = visitorBuild(res.items, fromYmd, latest);
+  const nowKst = new Date(Date.now() + 9 * 3600 * 1e3);
+  payload.lagDays = Math.round((Date.UTC(nowKst.getUTCFullYear(), nowKst.getUTCMonth(), nowKst.getUTCDate()) - end.getTime()) / 86400 / 1e3);
+  payload.cachedAt = (/* @__PURE__ */ new Date()).toISOString();
+  try { await env.ops_kv.put("visitors:idx", JSON.stringify(payload), { expirationTtl: VISITOR_TTL }); } catch (e) {}
+  try { await env.ops_kv.put("visitors:idx:last", JSON.stringify(payload)); } catch (e) {}
+  return payload;
+}
+__name(visitorRefresh, "visitorRefresh");
+
+async function visitorIndex(env, force, ctx) {
+  if (!visitorKey(env)) return { ok: false, error: "DATAGO_KEY 미설정", setup: true, cities: {} };
+  if (!force) {
+    try {
+      const c = await env.ops_kv.get("visitors:idx");
+      if (c) return JSON.parse(c);
+    } catch (e) {}
+    // 캐시가 식었으면 마지막 성공본을 즉시 주고 갱신은 뒤로 넘긴다(gcal과 같은 stale-while-revalidate).
+    try {
+      const stale = await env.ops_kv.get("visitors:idx:last");
+      if (stale && ctx && typeof ctx.waitUntil === "function") {
+        ctx.waitUntil(visitorRefresh(env).catch(() => {}));
+        const p = JSON.parse(stale); p.stale = true; return p;
+      }
+    } catch (e) {}
+  }
+  try {
+    return await visitorRefresh(env);
+  } catch (e) {
+    try {
+      const stale = await env.ops_kv.get("visitors:idx:last");
+      if (stale) { const p = JSON.parse(stale); p.stale = true; return p; }
+    } catch (e2) {}
+    return { ok: false, error: String(e && e.message || e), cities: {} };
+  }
+}
+__name(visitorIndex, "visitorIndex");
+
+// ═══════════════════════════════════════════════════════════════════════════
 // === 대관 일정 (구글 캘린더 비공개 iCal 피드) — KV 캐시 + 요청 시 창(window) 전개 ===
 //   운영자 260731: 「구글 스케줄 하나 붙이고 싶다 · 받아오면 대관 공연이 들어온다 · [대]로 캘린더에 명시」
 //   · 캘린더 자체가 대관 전용(운영자 확인) → 이 피드에서 온 일정은 전부 대관(t='r')으로 취급한다.
@@ -2447,6 +2600,14 @@ var index_default = {
         const year = parseInt(url.searchParams.get("year") || "", 10) || ky;
         const data = await getHolidays(env, year, url.searchParams.get("refresh") === "1");
         return json(data, env);
+      }
+
+      // [260803] 지역 방문자 지수 — GET /api/visitors [&refresh=1]. 앱 로그인 필요. KV 24h 캐시.
+      //   실시간 아님(집계 지연 ~23일) → 요일·시기 패턴 전용. 미설정이면 ok:false + setup:true (화면 무영향).
+      if (url.pathname === "/api/visitors") {
+        const pw = request.headers.get("X-App-Password") || "";
+        if (!roleOf(pw, env)) return json({ ok: false, error: "unauthorized" }, env, 401);
+        return json(await visitorIndex(env, url.searchParams.get("refresh") === "1", ctx), env);
       }
 
       // [260731 운영자] 대관 일정 — 구글 캘린더 비공개 iCal 피드. 앱 로그인(비번) 필요 = 대관 일정은 내부 정보.
