@@ -779,6 +779,10 @@ button{font-family:inherit;cursor:pointer}
 .dn.hol{color:#D64545}
 .hol-badge{font-size:9px;color:#D64545;font-weight:600;line-height:1.15;margin:0 0 2px 1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
 .hol-pill{display:inline-block;font-size:11px;font-weight:700;color:#D64545;white-space:nowrap;flex-shrink:0;margin-left:6px;overflow:hidden;text-overflow:ellipsis;max-width:130px}
+/* [260810] 여수 기대 방문객(요일 평균 외지인) — 날짜 줄 오른쪽 끝. 신규 색 0(기존 --dim/--muted 계승),
+   .dn이 이미 flex라 margin-left:auto만으로 우측 정렬된다. 데이터 없으면 아예 안 그린다(레이아웃 무변). */
+.vis-num{margin-left:auto;padding-left:6px;font-size:10px;font-weight:600;color:var(--dim);font-variant-numeric:tabular-nums;white-space:nowrap;flex-shrink:0}
+.c.past .vis-num{color:var(--muted)}
 .today-badge{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:var(--accent);color:#fff;font-size:12px;font-weight:700;box-shadow:0 2px 8px rgba(74,77,231,0.25)}
 .c-inner > .dn{position:sticky;top:0;z-index:2;background:inherit}
 .c.today .c-inner > .dn{padding:0 0 3px 0}
@@ -19657,7 +19661,7 @@ function getRecsForDate(d){
 
 function calDates(y,m){const first=new Date(y,m-1,1),dow=first.getDay(),offset=(dow-2+7)%7,start=new Date(y,m-1,1-offset),out=[];for(let w=0;w<6;w++){for(let d=0;d<6;d++){const dt=new Date(start);dt.setDate(dt.getDate()+w*7+d);out.push(dt);}}return out;}
 
-function render(){document.getElementById('nav-month').textContent=currentMonth;document.getElementById('nav-year').textContent=currentYear;loadHolidays(currentYear);try{loadRentals(currentYear,currentMonth);}catch(_e){}renderChips();renderCal();try{var _c9=document.getElementById('cal');if(_c9&&_c9.offsetHeight>120)localStorage.setItem('_calGridH',_c9.offsetHeight);}catch(e){}_panelAutoOpen();try{_srailAlignTop();}catch(e){}}
+function render(){document.getElementById('nav-month').textContent=currentMonth;document.getElementById('nav-year').textContent=currentYear;loadHolidays(currentYear);try{loadVisitors();}catch(_e){}try{loadRentals(currentYear,currentMonth);}catch(_e){}renderChips();renderCal();try{var _c9=document.getElementById('cal');if(_c9&&_c9.offsetHeight>120)localStorage.setItem('_calGridH',_c9.offsetHeight);}catch(e){}_panelAutoOpen();try{_srailAlignTop();}catch(e){}}
 var _holidays={},_holLoadedYears={};
 function loadHolidays(year){
   if(_holLoadedYears[year])return;_holLoadedYears[year]=true;
@@ -19665,6 +19669,29 @@ function loadHolidays(year){
     var ch=false;((d&&d.days)||[]).forEach(function(x){if(x&&x.date&&!_holidays[x.date]){_holidays[x.date]=x.name;ch=true;}});
     if(ch&&typeof renderCal==='function')renderCal();
   }).catch(function(){_holLoadedYears[year]=false;});
+}
+/* ═══ 지역 방문자 지수 (관광공사 빅데이터 → Worker /api/visitors) ═══
+   [260810 운영자] 「캘린더 날짜 셀에 · 실인원으로」 — 그 요일의 여수 평균 외지인 수를 날짜 줄 끝에 적는다.
+   ⚠ 실시간이 아니다. 원본 집계가 한 달 가까이 밀려 있어(lagDays, 실측 0803=23일 → 0810=30일)
+     「오늘 몇 명」이 아니라 「이 요일엔 보통 몇 명」이다 — 툴팁에 그 사실과 기준 기간을 반드시 적는다.
+   · 미설정(DATAGO_KEY 없음)·실패면 VISITOR_IDX가 비어 아무것도 안 그린다 = 기존 화면 그대로. */
+var VISITOR_IDX=null,_visLoading=false;
+function loadVisitors(){
+  if(VISITOR_IDX||_visLoading)return;_visLoading=true;
+  api('GET','/api/visitors').then(function(d){
+    if(d&&d.ok&&d.cities&&d.cities['여수']){VISITOR_IDX=d;if(typeof renderCal==='function')renderCal();}
+  }).catch(function(){}).then(function(){_visLoading=false;});
+}
+// 그 날짜(요일)의 여수 기대 방문객. 없으면 '' → 호출부가 아무것도 안 붙인다.
+function visNumHtml(d,nm){
+  if(nm||!VISITOR_IDX)return '';
+  var c=VISITOR_IDX.cities&&VISITOR_IDX.cities['여수'];if(!c||!c.avg)return '';
+  var wi=(d.getDay()+6)%7;   // JS 0=일 → 배열 0=월
+  var v=c.avg[wi];if(!v)return '';
+  var f=function(s){return String(s).replace(/(\d)(?=(\d{3})+$)/g,'$1,');};
+  var tip='여수 '+VISITOR_IDX.dow[wi]+' 평균 외지인 '+f(v)+'명 (기준 '+VISITOR_IDX.from+'~'+VISITOR_IDX.to
+    +' · 원본 집계가 '+VISITOR_IDX.lagDays+'일 밀려 있어 실시간 값이 아닙니다)';
+  return '<span class="vis-num" title="'+escapeHtml(tip)+'">'+f(v)+'</span>';
 }
 /* ═══ 대관 일정 (구글 캘린더 비공개 iCal 피드 → Worker /api/gcal) ═══
    운영자 260731: 「구글 스케줄 하나 붙이고 싶다 · 받아오면 대관 공연이 들어온다 · [대]로 캘린더에 명시」
@@ -20293,7 +20320,7 @@ function renderCal(){
         var doneCount=filteredRecs.filter(function(r){return (r['진행 상태']||'')==='완료';}).length;
         h+='<div class="c-count">'+doneCount+'/'+filteredRecs.length+'</div>';
       }
-      h+='<div class="c-inner"><div class="'+dnCls+'">'+(td&&!nm?'<span style="color:var(--accent);font-weight:700">'+d.getDate()+'</span>':d.getDate())+(holName?'<span class="hol-pill" title="'+escapeHtml(holName)+'">'+escapeHtml(holName)+'</span>':'')+renderPerfsHtml(perfs,td,past,key)+'</div>';
+      h+='<div class="c-inner"><div class="'+dnCls+'">'+(td&&!nm?'<span style="color:var(--accent);font-weight:700">'+d.getDate()+'</span>':d.getDate())+(holName?'<span class="hol-pill" title="'+escapeHtml(holName)+'">'+escapeHtml(holName)+'</span>':'')+renderPerfsHtml(perfs,td,past,key)+visNumHtml(d,nm)+'</div>';
       var _mineAppl='';try{_mineAppl=sessionStorage.getItem('myApplicant')||'';}catch(e){}
       filteredRecs.forEach(r=>{
         var p=r['플랫폼 1']||'',p2=r['플랫폼 2']||'',title=r['콘텐츠 제목']||'',col=platColor(p),st=r['진행 상태']||'예정';
