@@ -779,10 +779,6 @@ button{font-family:inherit;cursor:pointer}
 .dn.hol{color:#D64545}
 .hol-badge{font-size:9px;color:#D64545;font-weight:600;line-height:1.15;margin:0 0 2px 1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
 .hol-pill{display:inline-block;font-size:11px;font-weight:700;color:#D64545;white-space:nowrap;flex-shrink:0;margin-left:6px;overflow:hidden;text-overflow:ellipsis;max-width:130px}
-/* [260810] 여수 기대 방문객(요일 평균 외지인) — 날짜 줄 오른쪽 끝. 신규 색 0(기존 --dim/--muted 계승),
-   .dn이 이미 flex라 margin-left:auto만으로 우측 정렬된다. 데이터 없으면 아예 안 그린다(레이아웃 무변). */
-.vis-num{margin-left:auto;padding-left:6px;font-size:10px;font-weight:600;color:var(--dim);font-variant-numeric:tabular-nums;white-space:nowrap;flex-shrink:0}
-.c.past .vis-num{color:var(--muted)}
 .today-badge{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:var(--accent);color:#fff;font-size:12px;font-weight:700;box-shadow:0 2px 8px rgba(74,77,231,0.25)}
 .c-inner > .dn{position:sticky;top:0;z-index:2;background:inherit}
 .c.today .c-inner > .dn{padding:0 0 3px 0}
@@ -19679,19 +19675,24 @@ var VISITOR_IDX=null,_visLoading=false;
 function loadVisitors(){
   if(VISITOR_IDX||_visLoading)return;_visLoading=true;
   api('GET','/api/visitors').then(function(d){
-    if(d&&d.ok&&d.cities&&d.cities['여수']){VISITOR_IDX=d;if(typeof renderCal==='function')renderCal();}
+    if(!(d&&d.ok&&d.cities&&d.cities['여수']))return;
+    VISITOR_IDX=d;
+    // 응답이 늦게 와도 이미 열려 있는 패널에 값이 채워지도록 다시 그린다(캘린더 셀은 이 값을 안 쓴다).
+    try{if(panelOpen&&selected){var _p=selected.split('-').map(Number);var _dt=new Date(_p[0],_p[1]-1,_p[2]);openPanel(_dt,getRecsForDate(_dt));}}catch(_e){}
   }).catch(function(){}).then(function(){_visLoading=false;});
 }
-// 그 날짜(요일)의 여수 기대 방문객. 없으면 '' → 호출부가 아무것도 안 붙인다.
-function visNumHtml(d,nm){
-  if(nm||!VISITOR_IDX)return '';
-  var c=VISITOR_IDX.cities&&VISITOR_IDX.cities['여수'];if(!c||!c.avg)return '';
+// 날짜 패널(사이드바) 한 줄용 — 그 요일의 여수 기대 방문객. 없으면 null → 호출부가 줄 자체를 안 그린다.
+function visForDate(d){
+  if(!VISITOR_IDX)return null;
+  var c=VISITOR_IDX.cities&&VISITOR_IDX.cities['여수'];if(!c||!c.avg)return null;
   var wi=(d.getDay()+6)%7;   // JS 0=일 → 배열 0=월
-  var v=c.avg[wi];if(!v)return '';
-  var f=function(s){return String(s).replace(/(\d)(?=(\d{3})+$)/g,'$1,');};
-  var tip='여수 '+VISITOR_IDX.dow[wi]+' 평균 외지인 '+f(v)+'명 (기준 '+VISITOR_IDX.from+'~'+VISITOR_IDX.to
-    +' · 원본 집계가 '+VISITOR_IDX.lagDays+'일 밀려 있어 실시간 값이 아닙니다)';
-  return '<span class="vis-num" title="'+escapeHtml(tip)+'">'+f(v)+'</span>';
+  var v=c.avg[wi];if(!v)return null;
+  return {
+    text:(Math.round(v/1e3)/10).toFixed(1)+'만',   // 56,847 → 5.7만 (운영자 260810: 「5.6만 이정도로만」)
+    tip:'여수 '+VISITOR_IDX.dow[wi]+' 평균 외지인 '+String(v).replace(/(\d)(?=(\d{3})+$)/g,'$1,')+'명'
+      +' · 기준 '+VISITOR_IDX.from+'~'+VISITOR_IDX.to
+      +' · 원본 집계가 '+VISITOR_IDX.lagDays+'일 밀려 있어 실시간 값이 아니라 요일 평균입니다'
+  };
 }
 /* ═══ 대관 일정 (구글 캘린더 비공개 iCal 피드 → Worker /api/gcal) ═══
    운영자 260731: 「구글 스케줄 하나 붙이고 싶다 · 받아오면 대관 공연이 들어온다 · [대]로 캘린더에 명시」
@@ -20320,7 +20321,7 @@ function renderCal(){
         var doneCount=filteredRecs.filter(function(r){return (r['진행 상태']||'')==='완료';}).length;
         h+='<div class="c-count">'+doneCount+'/'+filteredRecs.length+'</div>';
       }
-      h+='<div class="c-inner"><div class="'+dnCls+'">'+(td&&!nm?'<span style="color:var(--accent);font-weight:700">'+d.getDate()+'</span>':d.getDate())+(holName?'<span class="hol-pill" title="'+escapeHtml(holName)+'">'+escapeHtml(holName)+'</span>':'')+renderPerfsHtml(perfs,td,past,key)+visNumHtml(d,nm)+'</div>';
+      h+='<div class="c-inner"><div class="'+dnCls+'">'+(td&&!nm?'<span style="color:var(--accent);font-weight:700">'+d.getDate()+'</span>':d.getDate())+(holName?'<span class="hol-pill" title="'+escapeHtml(holName)+'">'+escapeHtml(holName)+'</span>':'')+renderPerfsHtml(perfs,td,past,key)+'</div>';
       var _mineAppl='';try{_mineAppl=sessionStorage.getItem('myApplicant')||'';}catch(e){}
       filteredRecs.forEach(r=>{
         var p=r['플랫폼 1']||'',p2=r['플랫폼 2']||'',title=r['콘텐츠 제목']||'',col=platColor(p),st=r['진행 상태']||'예정';
@@ -20686,7 +20687,12 @@ function openPanel(dateObj,recs){
   // === 카페/장도 운영시간 (서비스 안내 — 본문 맨 위 고정) ===
   var _cfRaw=((window._cafeHours&&_cafeHours[dKey])||'').toString().trim();
   var _cfCell=(_cfRaw===''||_cfRaw==='-')?'<span class="panel-svc-val svc-tbd">(미정)</span>':'<span class="panel-svc-val">'+escapeHtml(_cfRaw)+'</span>';
-  h+='<div class="panel-svc"><div class="panel-svc-row">• 장도 입도 가능 시간 : <span class="panel-svc-val">'+escapeHtml((window._jangdoHours&&_jangdoHours[dKey])||'-')+'</span></div><div class="panel-svc-row">• 카페 운영 시간 : '+_cfCell+'</div></div>';
+  // [260810 운영자] 여수시 방문객 수 — 같은 안내 블록에 한 줄만 추가(신규 CSS 0, .panel-svc-row/val 재사용).
+  //   그 요일의 평균 외지인(관광공사 빅데이터). 실시간이 아니라 요일 평균이라 상세는 툴팁에 적는다.
+  //   데이터 없으면(키 미설정·실패) 줄 자체를 안 그려 기존 화면 그대로.
+  var _vis=(typeof visForDate==='function')?visForDate(dateObj):null;
+  var _visRow=_vis?('<div class="panel-svc-row" title="'+escapeHtml(_vis.tip)+'">• 여수시 방문객 수 : <span class="panel-svc-val">'+_vis.text+'</span></div>'):'';
+  h+='<div class="panel-svc"><div class="panel-svc-row">• 장도 입도 가능 시간 : <span class="panel-svc-val">'+escapeHtml((window._jangdoHours&&_jangdoHours[dKey])||'-')+'</span></div><div class="panel-svc-row">• 카페 운영 시간 : '+_cfCell+'</div>'+_visRow+'</div>';
   // === 특수 일정 섹션 (홍보 콘텐츠 위, 살구 톤 구분) ===
   var spItems=(PROMO_SPECIAL||[]).filter(function(s){return dKey>=s.start&&dKey<=s.end;});
   if(spItems.length>0){
