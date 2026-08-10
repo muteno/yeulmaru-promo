@@ -57,6 +57,56 @@
 > 다르면 KASI_KEY를 발급한 계정이 다른 계정이라는 뜻 → 어느 계정인지부터 확정할 것
 > (`docs/KEYS.md`에 공공데이터포털 계정이 명시돼 있지 않다 — 이번 기회에 채워 넣는다).
 
+### 0-3. 🔑 신청이 끝난 뒤 — 키를 어떻게 다루나 (활용신청 완료 시점의 정답)
+
+**최종적으로 관리할 키는 딱 2개다.**
+
+| 시크릿 이름 | 무엇 | 어디서 가져오나 |
+|---|---|---|
+| `DATAGO_KEY` | 공공데이터포털 인증키 — **①주차 + ②방문자수 + 기존 공휴일이 전부 이 키 하나** | https://www.data.go.kr/iim/api/selectAPIAcountView.do |
+| `KOPIS_KEY` | KOPIS 서비스키 (별도 체계) | KOPIS 마이페이지 |
+
+> 기존 `KASI_KEY`는 공휴일 코드가 참조 중이므로 **지우지 말고 같은 값으로 `DATAGO_KEY`를 병기**한다.
+> (이름만 범용화하는 것 — 나중에 공휴일 코드도 `DATAGO_KEY`를 보게 정리하면 `KASI_KEY`를 뗄 수 있다.)
+
+#### ⚠️ Encoding / Decoding — 여기서 제일 많이 틀린다
+
+마이페이지에 인증키가 **「일반 인증키(Encoding)」**·**「일반 인증키(Decoding)」** 두 줄로 나온다. **같은 키의 두 표기**다.
+
+- **URL 문자열에 그대로 이어붙일 때(curl·브라우저 주소창) → `Encoding` 판**
+- **코드가 `encodeURIComponent()`로 감싸 붙일 때 → `Decoding` 판**
+
+Decoding 값에 `+` `/` `=` 가 섞여 있어서, 그걸 그대로 URL에 붙이면 **정상 키인데도
+`SERVICE_KEY_IS_NOT_REGISTERED_ERROR`가 난다.** 키가 죽은 게 아니라 인코딩 실수인 경우가 대부분이다.
+→ **Worker 시크릿에는 `Decoding` 판을 넣고 코드에서 `encodeURIComponent()`로 감싼다**(이중 인코딩 방지).
+
+#### 넣는 곳 = Cloudflare Worker 시크릿 (브라우저 아님)
+
+이 앱의 프론트는 GitHub Pages 공개 사이트다. **`index.html`에 키를 박으면 그 순간 공개된다.**
+`GITHUB_PAT`을 브라우저→서버로 옮긴 것과 같은 이유(`docs/KEYS.md` §1-a)로, 키는 Worker에만 둔다.
+
+```powershell
+# 레포 루트(wrangler.toml 있는 곳)에서. 실행하면 값을 물어보므로 명령줄에 값을 적지 말 것.
+wrangler secret put DATAGO_KEY
+wrangler secret put KOPIS_KEY
+```
+
+대시보드로 넣어도 된다: Workers & Pages → `yeulmaru-promo-api` → Settings → Variables and Secrets → **Secret 추가**.
+
+> ⚠️ **시크릿은 `wrangler deploy`/자동 배포가 건드리지 않는다.** 코드 배포와 별개로 위 등록을 한 번 해야 한다.
+> 등록 후에는 재배포 없이도 다음 요청부터 반영된다.
+
+#### 하지 말 것
+
+- 키 값을 **커밋·이슈·PR·채팅에 붙여넣지 않는다**(이 문서와 `docs/KEYS.md`에도 값은 안 적는다 — 이름·위치만).
+- `.env`·`config.js` 같은 걸 새로 만들어 레포에 두지 않는다. 시크릿의 단일 보관처 = Cloudflare.
+- 키가 노출됐다면 포털 마이페이지에서 **재발급 → Worker 시크릿 갱신** 순서로 회전한다.
+
+#### 승인 상태부터 확인 (①은 심의승인이라 아직일 수 있다)
+
+②관광공사는 자동승인이라 신청 즉시 되지만, **①주차정보는 심의승인**이라 신청해도 대기 상태일 수 있다.
+마이페이지에서 상태가 「승인」인지 보고, 승인 전이면 §1-D 호출은 실패하는 게 정상이다.
+
 ---
 
 ## 1. 한국교통안전공단 주차정보 (실시간 잔여면수)
@@ -106,12 +156,17 @@ GS칼텍스 예울마루(전남 여수시) 공연·전시 홍보 계획 수립�
 
 ### 1-D. 승인 후 첫 검증 — **「여수 데이터가 실제로 있는가」** (미확인 · 반드시 먼저)
 
+> 🕒 **260803 현재 = 아직 심의 대기.** 발급된 인증키로 `/PrkSttusInfo`를 호출하면
+> `403 SERVICE_KEY_IS_NOT_REGISTERED_ERROR (returnReasonCode 30)`가 난다. 같은 키로 ②관광은
+> `0000 OK`가 나오므로 **키 문제가 아니라 이 API에 아직 키가 붙지 않은 것**(심의승인 대기)이다.
+> 마이페이지에서 상태가 「승인」으로 바뀐 뒤 아래를 돌린다.
+
 제공처가 "운영정보·실시간정보는 시설정보보다 수가 적다"고 명시했다. **여수·순천·광양 주차장이 이 시스템에
 연계돼 있는지는 키 없이 확인 불가**다. 승인되면 아래를 먼저 돌려 0건이면 이 축은 접는다.
 
 ```bash
-# {KEY} = 공공데이터포털 일반 인증키(Decoding)
-curl -sS "http://apis.data.go.kr/B553881/Parking/PrkSttusInfo?serviceKey={KEY}&pageNo=1&numOfRows=9999&format=2" \
+# {KEY} = 공공데이터포털 일반 인증키(**Encoding**) — URL에 그대로 붙일 때는 Encoding 판
+curl -sS "https://apis.data.go.kr/B553881/Parking/PrkSttusInfo?serviceKey={KEY}&pageNo=1&numOfRows=9999&format=2" \
   | python3 -c "import sys,json;d=json.load(sys.stdin);r=[x for x in d['response']['body']['items'] if any(k in (x.get('prk_plce_adres') or '') for k in ['여수','순천','광양'])];print(len(r),'건');[print(x['prk_center_id'],x['prk_plce_nm'],x['prk_plce_adres']) for x in r[:20]]"
 ```
 
@@ -119,7 +174,7 @@ PowerShell 판(운영자 PC):
 
 ```powershell
 $KEY="{KEY}"
-$r=Invoke-RestMethod "http://apis.data.go.kr/B553881/Parking/PrkSttusInfo?serviceKey=$KEY&pageNo=1&numOfRows=9999&format=2"
+$r=Invoke-RestMethod "https://apis.data.go.kr/B553881/Parking/PrkSttusInfo?serviceKey=$KEY&pageNo=1&numOfRows=9999&format=2"
 $r.response.body.items | Where-Object { $_.prk_plce_adres -match '여수|순천|광양' } |
   Select-Object prk_center_id, prk_plce_nm, prk_plce_adres | Format-Table -AutoSize
 ```
@@ -165,14 +220,42 @@ GS칼텍스 예울마루(전남 여수시) 공연·전시 홍보 계획 수립�
 ### 2-C. 신청 직후 검증 (자동승인이라 바로 됨)
 
 ```bash
-# {KEY} = 공공데이터포털 일반 인증키(Decoding) · 날짜는 최근 확정분으로
+# {KEY} = 공공데이터포털 일반 인증키(**Encoding**) · 날짜는 최근 확정분으로
 curl -sS "https://apis.data.go.kr/B551011/DataLabService/locgoRegnVisitrDDList?serviceKey={KEY}&MobileOS=ETC&MobileApp=yeulmaru-promo&startYmd=20260701&endYmd=20260707&numOfRows=9999&pageNo=1&_type=json" \
   | python3 -c "import sys,json;d=json.load(sys.stdin);it=d['response']['body']['items']['item'];r=[x for x in it if x.get('signguNm') in ('여수시','순천시','광양시')];print(len(r),'건');[print(x['baseYmd'],x['signguNm'],x['touDivNm'],x['touNum']) for x in r[:20]]"
 ```
 
-> 📌 **집계 지연 확인이 첫 과제**: `업데이트 주기: 실시간`으로 표기돼 있지만 실제 데이터는 일 단위 집계다.
-> 위 호출의 `endYmd`를 어제 → 1주 전 → 2주 전으로 옮겨가며 **몇 일 전까지 데이터가 차 있는지** 실측해
-> 이 문서에 기록할 것. 그 지연폭이 「홍보 시점 판단」에 쓸 수 있는지를 결정한다.
+### 2-D. ✅ 실호출 검증 완료 (260803) — 결과와 그 함의
+
+발급된 인증키로 실제 호출해 확인한 것:
+
+- **응답 정상** (`resultCode 0000 / OK`). 하루치 = **807행**(전국 시군구 × 관광객구분 3종),
+  7일 조회 시 5,649행. 여수·순천·광양은 `signguNm` 필터로 하루 9행씩 잡힌다.
+- **`touNum`은 소수점이 붙는다**(예: `7445.669999999999`) — 표시할 땐 반올림 필요.
+- **`touDivNm` 3종** = `현지인(a)` / `외지인(b)` / `외국인(c)`.
+  홍보 판단에 쓸 것은 **외지인(b)** — 현지인은 상주인구라 거의 상수다.
+
+#### 🚨 집계 지연 = **23일** (이게 이 데이터의 성격을 결정한다)
+
+일자별로 찔러 본 결과 **데이터가 차 있는 마지막 날 = 2026-07-11**, 07-12부터는 `totalCount 0`.
+조회 시점 08-03 기준 **약 3주 지연**이다(`업데이트 주기: 실시간` 표기는 갱신 방식을 말할 뿐 최신성이 아니다).
+
+| 조회일 | 결과 |
+|---|---|
+| 20260711 | 807행 ✅ |
+| 20260712 이후 (~0802) | 0행 ❌ |
+
+**→ 「이번 주말 붐빌까」에는 못 쓴다.** 대신 **요일·계절 패턴**으로는 충분히 쓸 수 있다.
+실제로 최근 30일치(0612~0711, 24,153행)로 외지인 요일 평균을 뽑으면:
+
+| | 월 | 화 | 수 | 목 | 금 | 토 | 일 |
+|---|---|---|---|---|---|---|---|
+| **여수시** | 56,847 | 56,178 | 52,202 | 56,828 | 67,542 | **88,535** | 79,858 |
+| 순천시 | 61,460 | 62,317 | 57,833 | 60,896 | 70,498 | **93,012** | 76,966 |
+| 광양시 | 32,761 | 35,438 | 32,453 | 33,982 | 36,919 | **44,445** | 41,150 |
+
+여수 기준 **토요일이 수요일의 1.70배**. 홍보 게시 요일을 정하는 근거로는 이 정도면 충분하다.
+→ 앱에는 「실시간 방문객」이 아니라 **「요일·시기별 기대 방문객 지수」**로 붙이는 것이 데이터 성격에 맞다.
 
 ---
 
@@ -262,3 +345,6 @@ curl -sS "http://www.kopis.or.kr/openApi/restful/pblprfr?service=TEST&stdate=202
 | 포털 전환 작업으로 신청 차단 (08-02) | 공지 원문 조회 + 게이트웨이 401 실측 | ✅ 확인 → **08-03 해소** |
 | 전환 종료·로그인 재개 (08-03 09:00 KST) | SSO 로그인 폼 200 + 게이트웨이 403 규격 에러 + 후속 공지 0건 | ✅ 확인 |
 | 개편 후 기존 `KASI_KEY` 유효성 | 키 필요 (밖에서 확인 불가) | ❌ 미확인 (§0 방법 2가지) |
+| ②방문자수 실호출 | 발급 키로 실제 조회 (260803) | ✅ 정상 `0000 OK` · 3개 시 데이터 존재 |
+| ②집계 지연폭 | 일자별 `totalCount` 이분 탐색 | ✅ **23일** (최신 = 20260711) |
+| ①주차 API 승인 상태 | 같은 키로 실호출 | ⏳ **심의 대기** (403 code 30) |
