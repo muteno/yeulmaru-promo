@@ -2631,6 +2631,9 @@ table.promo-board-table thead th:last-child{border-top-right-radius:11px}
 #rail-yrm{display:none}
 #app.biz-mode #sales-rail #rail-yrm{display:block}
 #app.biz-mode #sales-rail>.srail-ttlzone,#app.biz-mode #sales-rail>.srail{display:none !important}
+/* [260812 6차 운영자 「5시 방향 블러 창 없애줘」] 상세가 **슬롯 밖으로 튀어나온** 경우 = 빈 유리 창. 위 `>` 규칙과 같은 문법으로 함께 가린다.
+   슬롯(#rail-yrm-uha) 안에 있을 땐 아래 L2637 규칙이 유리를 벗기므로 이 규칙에 안 걸린다 = 정상 자리는 무영향. JS 짝 = `_bizOvUhaPark`. */
+#app.biz-mode #sales-rail>#srail-uha{display:none !important}
 /* [260724 운영자] 레이아웃 합침 — 상세(#srail-uha) = 연간실적 틀(_BIZM_BOX) 안 슬롯(#rail-yrm-uha)으로 이주(한 통). 자체 유리박스 탈피(배경·보더·그림자·라운드 해제 — 글래스 헤더·내부 카드 부품은 유지) · 노출은 종전대로 _srailUhaSync(데이터 있을 때만 flex) */
 #app.biz-mode #sales-rail #rail-yrm #srail-uha{margin-top:14px;background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none;border:none;border-radius:0;box-shadow:none;min-height:0;flex:none;animation:none}
 /* 선택 행 액티브 — 2×2에 지금 떠 있는 프로그램 표시(기틀 .cell 액티브 톤 계승: accent-light 배경 + 좌측 강조 바) */
@@ -7905,6 +7908,22 @@ function _bizOvRail(el){
   h+='<div id="rail-yrm-uha"></div>';   // 상세 슬롯 = 판매 실적 레일과 같은 자리
   h+='</div></div>';
   el.innerHTML=h;
+  _bizOvUhaPark();
+}
+// [260812 6차 운영자 「우측 아래 5시 방향 블러 창 없애줘」] 공연 상세(#srail-uha)를 제자리에 돌려놓고 재운다.
+//   무슨 일이 있었나: `#srail-uha`는 **자기 유리 패널**을 CSS로 들고 있고(L2406 배경·blur·테두리·그림자),
+//   그걸 지우는 규칙은 `#app.biz-mode #sales-rail #rail-yrm #srail-uha` = **슬롯 안에 있을 때만** 걸린다.
+//   그런데 좁은 화면 판매 실적 면이 그 노드를 `#sales-rail` 바로 밑으로 옮겨 놓고(`_bizInlineRender` page===2),
+//   사업 개요로 돌아와도 아무도 안 돌려놨다 → 슬롯 밖이라 규칙이 풀려 **빈 유리 창이 5시 방향에 되살아났다**.
+//   지우지 않고 **제자리+숨김**으로 두는 이유 = 판매 현황 덱이 그 노드를 그대로 다시 쓴다(지우면 상세가 갈 곳을 잃는다).
+function _bizOvUhaPark(){
+  try{
+    var u=document.getElementById('srail-uha'), slot=document.getElementById('rail-yrm-uha');
+    if(!u)return;
+    if(slot&&u.parentElement!==slot)slot.appendChild(u);   // 슬롯 안 = 유리 해제 규칙이 다시 걸린다
+    u.style.display='none'; u.setAttribute('data-on','0');  // 사업 개요 덱은 공연 상세를 안 쓴다(회전 기계도 함께 정지)
+    if(typeof _srailUhaStop==='function')_srailUhaStop();
+  }catch(_e){}
 }
 // ══ [260812 4차 운영자] 사업 지표 입력 창 ═══════════════════════════════════════════════
 //   지시: 「사업개요는 세부 메뉴 다 날리고, **일일 실적 입력 처럼 사업 지표 입력할 수 있는 창**을 만들어줘.
