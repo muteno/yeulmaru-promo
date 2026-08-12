@@ -79,13 +79,14 @@ async function postOnce(token, body, timeoutMs) {
 
 /**
  * 한 계정으로 1문답(서버도구를 쓰면 pause_turn 왕복까지 여기서 끝낸다). 실패 = throw.
- * @returns {{text:string, searches:number, toolsDropped:boolean}}
+ * @returns {{text:string, searches:number, searchErrs:string[], toolsDropped:boolean}}
  */
 async function askOnce(token, o) {
   const messages = [{ role: 'user', content: String(o.user || '') }];
   let tools = (Array.isArray(o.tools) && o.tools.length) ? o.tools : null;
   let toolsDropped = false;
   let searches = 0;
+  const searchErrs = [];
   const maxTurns = Math.max(1, o.maxTurns || 4);   // pause_turn 재개 상한 — 무한 재개 방지
 
   for (let turn = 0; turn < maxTurns; turn++) {
@@ -115,7 +116,16 @@ async function askOnce(token, o) {
     }
 
     // 검색을 몇 번 돌았나 = 서버가 실제로 쓴 값(짐작해 적지 않는다 · 산출물에 실려 챗봇로그에 남는다).
-    for (const b of (data.content || [])) if (b && b.type === 'server_tool_use') searches++;
+    //   ⚠ 「도구가 받아들여졌다」와 「검색이 됐다」는 다른 사건이다 — 정의는 통과했는데 실행이 실패하면
+    //     server_tool_use는 서고 결과 블록만 에러로 온다(모델은 그걸 「검색이 막혔다」로 읽고 답한다).
+    //     성공 결과의 content는 **배열**, 실패는 `{error_code}` **객체**다 — 그 갈래로 사유를 집어 온다.
+    for (const b of (data.content || [])) {
+      if (!b) continue;
+      if (b.type === 'server_tool_use') searches++;
+      if (b.type === 'web_search_tool_result' && b.content && !Array.isArray(b.content) && b.content.error_code) {
+        searchErrs.push(String(b.content.error_code));
+      }
+    }
 
     // 안전 분류기 거절 = 같은 모델이라 계정을 바꿔도 결과가 같다 → 체인을 더 태우지 않고 끝낸다.
     if (data.stop_reason === 'refusal') {
@@ -131,15 +141,15 @@ async function askOnce(token, o) {
     }
 
     const text = (data.content || []).filter((x) => x && x.type === 'text').map((x) => x.text).join('').trim();
-    return { text: text, searches: searches, toolsDropped: toolsDropped };
+    return { text: text, searches: searches, searchErrs: searchErrs, toolsDropped: toolsDropped };
   }
-  return { text: '', searches: searches, toolsDropped: toolsDropped };
+  return { text: '', searches: searches, searchErrs: searchErrs, toolsDropped: toolsDropped };
 }
 
 /**
  * ACTIVE_ACCOUNT 부터 체인을 순회하며 Messages API 호출. 첫 성공(비어있지 않은 텍스트)에서 반환.
  * @returns {{ok:boolean, text?:string, error?:string, account:?string, order:string[], triedIndex?:number,
- *            searches?:number, toolsDropped?:boolean}}
+ *            searches?:number, searchErrs?:string[], toolsDropped?:boolean}}
  */
 async function runClaudeApiWithFailover(opts) {
   opts = opts || {};
@@ -158,9 +168,11 @@ async function runClaudeApiWithFailover(opts) {
       const r = await askOnce(token, opts);
       if (r.text) {
         console.log('  ✅ ' + acct + ' 성공(' + r.text.length + '자' +
-          (r.searches ? ' · 검색 ' + r.searches + '회' : '') + (r.toolsDropped ? ' · 도구 벗김' : '') + ')');
+          (r.searches ? ' · 검색 ' + r.searches + '회' : '') +
+          (r.searchErrs && r.searchErrs.length ? ' · 검색실패 ' + r.searchErrs.length + '건[' + r.searchErrs.join(',') + ']' : '') +
+          (r.toolsDropped ? ' · 도구 벗김' : '') + ')');
         return { ok: true, text: r.text, account: acct, order: order, triedIndex: i,
-                 searches: r.searches, toolsDropped: r.toolsDropped };
+                 searches: r.searches, searchErrs: r.searchErrs, toolsDropped: r.toolsDropped };
       }
       lastErr = '빈 응답 (' + acct + ')';
       console.log('  ⚠️ ' + acct + ' 빈 응답 — 다음 계정 시도');   // 쿼터 확증 불가 → 신호 없이 폴오버
