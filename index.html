@@ -18733,8 +18733,12 @@ function openChangeWizard(rowIndex){
     let myAppl='';try{myAppl=sessionStorage.getItem('myApplicant')||'';}catch(e){}
     const isMine=_isMineRec(rec,myAppl);
     const st=rec['진행 상태']||'';
-    if(!isMine||st!=='신청 중'){
-      // A-2: user는 '신청 중'만 변경 가능 (예정은 관리자만)
+    if(!isMine||(st!=='신청 중'&&st!=='예정')){
+      // A-2: user는 본인 건의 '신청 중'·'예정'만 변경 가능 (그 외 상태·남의 건 = 차단)
+      // [260812 운영자 「확정났을 시 > 일시와 항목 제외하고 내용 등은 변경할 수 있게」]
+      //   구판은 '예정'(=확정)을 통째로 막아 제목 오타 하나에도 취소→재신청이었다. 문은 열되
+      //   슬롯(일시·항목)은 _renderChangeMenu의 _CW_LOCK_STEPS가 잠근다 — 권한 판정은 여기 한 곳뿐이니
+      //   잠금을 이 자리에 이중화하지 마라(경로별 분기 이중화 = 260805 일괄선택 회귀와 같은 함정).
       showToast('변경 권한이 없어요','error');
       return;
     }
@@ -18745,6 +18749,11 @@ function openChangeWizard(rowIndex){
 function _renderChangeMenu(rec){
   const isAdmin=userRole==='admin';
   const dt=_recDateKey(rec)+' '+_extractRecTime(rec);
+  // [260812 운영자 「확정났을 시 > 일시와 항목 제외하고 내용 등은 변경할 수 있게」]
+  //   확정('예정') = 담당자 시간·프로그램 슬롯이 이미 잡힌 상태 — 그 두 축만 잠그고 내용은 연다.
+  //   admin 제외 = 승인 주체는 슬롯을 다시 짤 수 있어야 한다(재배치가 admin의 일).
+  const _cwLock=(!isAdmin&&(rec['진행 상태']||'')==='예정');
+  const _CW_LOCK_STEPS=[1,3];   // 1=프로그램(항목) · 3=일자·시간(일시) — 아래 items의 step과 같은 축
   const items=[
     {step:1,icon:'🎭',label:'프로그램',desc:rec['프로그램']||'(없음)'},
     {step:2,icon:'📝',label:'콘텐츠 제목',desc:rec['콘텐츠 제목']||'(없음)'},
@@ -18763,12 +18772,21 @@ function _renderChangeMenu(rec){
   if(isAdmin && (rec['진행 상태']||'')==='신청 중'){
     html+='<div style="font-size:12px;color:#0F8B4C;padding:10px 12px;background:rgba(15,139,76,0.08);border-left:3px solid #0F8B4C;border-radius:6px;margin-bottom:14px;line-height:1.5">✓ <b>변경 시 자동 승인</b> — 저장하면 「신청 중」 → 「예정」으로 변경됩니다. 거절하려면 닫고 우클릭 → 보류를 사용하세요.</div>';
   }
+  // 확정 건 안내 — 잠긴 두 줄이 왜 회색인지 그 자리에서 말한다(체크가 안 되는 걸 오작동으로 읽지 않게)
+  if(_cwLock){
+    html+='<div style="font-size:12px;color:var(--dim);padding:10px 12px;background:var(--past-bg);border-left:3px solid var(--muted);border-radius:6px;margin-bottom:14px;line-height:1.5">🔒 <b>확정된 신청</b> — 일자·시간과 프로그램은 고정이에요. 그 둘을 바꿔야 하면 [신청 취소] 후 다시 신청하거나 관리자에게 요청하세요.</div>';
+  }
   html+='<div id="change-menu-list">';
   items.forEach(it=>{
-    html+='<label style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:10px;cursor:pointer;background:#fafafa;margin-bottom:8px;transition:all .15s;border:1.5px solid transparent" onmouseover="this.style.background=\'rgba(74,77,231,0.06)\';this.style.borderColor=\'rgba(74,77,231,0.2)\'" onmouseout="this.style.background=\'#fafafa\';this.style.borderColor=\'transparent\'">';
-    html+='<input type="checkbox" data-step="'+it.step+'" style="width:18px;height:18px;accent-color:var(--accent);flex-shrink:0;cursor:pointer">';
+    // 잠긴 줄 = 호버 반응·체크 둘 다 죽인다. 스타일 문자열은 갈래를 만들지 않고 조각만 갈아끼운다
+    //   (같은 #fafafa를 한 벌 더 타이핑하면 정본이 둘이 되고 raw hex 총량 래칫도 같이 오른다).
+    var _lk=_cwLock&&_CW_LOCK_STEPS.indexOf(it.step)>-1;
+    var _cur=_lk?'not-allowed':'pointer';
+    var _hv=_lk?'':' onmouseover="this.style.background=\'rgba(74,77,231,0.06)\';this.style.borderColor=\'rgba(74,77,231,0.2)\'" onmouseout="this.style.background=\'#fafafa\';this.style.borderColor=\'transparent\'"';
+    html+='<label style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:10px;cursor:'+_cur+';background:#fafafa;margin-bottom:8px;transition:all .15s;border:1.5px solid transparent'+(_lk?';opacity:.55':'')+'"'+_hv+'>';
+    html+='<input type="checkbox"'+(_lk?' disabled':'')+' data-step="'+it.step+'" style="width:18px;height:18px;accent-color:var(--accent);flex-shrink:0;cursor:'+_cur+'">';
     html+='<div style="flex:1;min-width:0">';
-    html+='<div style="font-size:13px;font-weight:600;color:#222">'+it.icon+' '+escapeHtml(it.label)+'</div>';
+    html+='<div style="font-size:13px;font-weight:600;color:#222">'+it.icon+' '+escapeHtml(it.label)+(_lk?' <span style="font-size:10px;font-weight:700;color:var(--dim)">🔒 확정 후 고정</span>':'')+'</div>';
     html+='<div style="font-size:11px;color:#888;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">현재: '+escapeHtml(it.desc)+'</div>';
     html+='</div></label>';
   });
