@@ -1,0 +1,132 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>브리핑 숨김 · 빗금칸 글자 · 완료 건 수정 — 전후 (260812)</title>
+<style>*{box-sizing:border-box}
+:root{--accent:#4A4DE7;--accent-light:#E8E8FD;--peach-text:#D88455;
+--bg:linear-gradient(135deg,#FDF6F3 0%,#F0EBF5 50%,#EBF0F8 100%);--surface-solid:#fff;
+--glass:rgba(255,255,255,0.55);--glass-surface:rgba(255,255,255,.78);--glass-bd:var(--glass);
+--glass-shadow:0 8px 32px rgba(74,77,231,0.08),0 2px 8px rgba(0,0,0,0.04);
+--border:rgba(0,0,0,0.09);--text:#1A1A2E;--dim:#888;--muted:#bbb;--neutral:#EEEDF3;--neutral-text:#6B6B7B;
+--green:#1A6B3C;--danger-btn:#E24B4A;--radius:16px;--radius-lg:20px}
+body{margin:0;background:var(--bg);color:var(--text);font-family:'Pretendard',-apple-system,BlinkMacSystemFont,system-ui,sans-serif;line-height:1.6}
+.wrap{max-width:1180px;margin:0 auto;padding:30px 20px 70px}
+h1{font-size:22px;margin:0 0 6px;letter-spacing:-.3px}
+.lead{color:var(--neutral-text);font-size:13px;margin:0 0 20px}
+section{background:var(--glass-surface);border:1px solid var(--glass-bd);border-radius:var(--radius-lg);box-shadow:var(--glass-shadow);padding:18px 20px 22px;margin:0 0 18px}
+section>h2{margin:0 0 4px;font-size:14px;font-weight:800;color:var(--accent);display:flex;align-items:center;gap:8px}
+section>h2::before{content:"";width:4px;height:14px;border-radius:2px;background:var(--accent)}
+section>.desc{margin:0 0 14px;font-size:12px;color:var(--neutral-text)}
+.ba{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.ba.one{grid-template-columns:1fr}
+@media(max-width:760px){.ba{grid-template-columns:1fr}}
+.card{background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.card>.hd{font-size:11.5px;font-weight:800;letter-spacing:.3px;padding:8px 12px;border-bottom:1px solid var(--border)}
+.hd.b{color:var(--danger-btn)}.hd.a{color:var(--green)}
+.card img{display:block;width:100%}
+table{width:100%;border-collapse:collapse;font-size:12px;background:var(--surface-solid);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+th,td{padding:7px 9px;border-top:1px solid var(--border);text-align:left;vertical-align:top}
+th{background:var(--neutral);color:var(--neutral-text);font-size:11px;font-weight:700;border-top:0;white-space:nowrap}
+td.c{text-align:center;white-space:nowrap}
+.ok{color:var(--green);font-weight:800}
+.no{color:var(--danger-btn);font-weight:800}
+ul{margin:8px 0 0;padding-left:18px;font-size:12.5px}li{margin:3px 0}
+code{background:var(--neutral);padding:1px 5px;border-radius:5px;font-size:11.5px}
+.warn{border-left:3px solid var(--peach-text);background:var(--surface-solid);border-radius:0 12px 12px 0;padding:10px 14px;font-size:12.5px;margin-top:12px}
+pre{background:var(--neutral);border-radius:10px;padding:10px 12px;font-size:11.5px;overflow:auto;margin:8px 0 0}
+</style></head><body><div class="wrap">
+<h1>260812 — 브리핑 숨김 · 빗금칸 글자 · <b style="color:var(--accent)">완료 건 내용 수정</b> 전후</h1>
+<p class="lead">운영자 지시 3건(①투데이스 브리핑 안 나오게 ②빗금은 옅게·글자는 원래 색 ③완료된 본인 건 내용 수정 + 관리자 알림) ·
+화면 = 결정적 목데이터(<code>tools/qa_mock_ops.mjs</code>) <code>?qa=</code> 경로 · 실API·실데이터·PII 미접촉.</p>
+
+<section>
+<h2>1. 투데이스 브리핑 — 로그인 후 자동 팝업 소거</h2>
+<p class="desc">끈 것은 <b>자동 팝업 한 자리</b>(<code>initApp</code>의 <code>_paTodayPop()</code> 호출)뿐이다. 브리핑 본체·「AI 홍보」 메뉴 경로·크론은 손대지 않았다.</p>
+<div class="ba">
+<div class="card"><div class="hd b">전 — 로그인 1.5초 뒤 우하단에 뜸</div><img src="260812_투데이스브리핑_전.png" alt="브리핑 팝업이 뜬 화면"></div>
+<div class="card"><div class="hd a">후 — 같은 조건에서 안 뜸</div><img src="260812_투데이스브리핑_후.png" alt="브리핑 팝업이 없는 화면"></div>
+</div>
+<p class="desc" style="margin:12px 0 0">실측: 브리핑 API 2종(<code>/api/promo/auto-latest</code>·<code>/api/blog/draft</code>)을 가짜 응답으로 채워 <b>팝업이 뜨는 조건을 갖춘 상태</b>에서 부팅 —
+전 <code>{shown:true}</code> · 후 <code>{shown:false}</code>(4.5초 대기).</p>
+<div class="warn"><b>지운 게 아니라 잠근 것.</b> <code>_paTodayPop</code>·<code>_paTodayOff</code>·<code>#pa-today</code>는 그대로 살아 있다. 롤백 = 주석 1줄 해제.</div>
+</section>
+
+<section>
+<h2>2. 캘린더 빗금 칸 — 빗금만 옅게, 날짜 글자는 원래 잉크</h2>
+<p class="desc">빗금(<code>.diag</code> = 45° 대각선 α.02)이 쳐지는 칸 = <b>다음 달 날짜 칸</b>(<code>.c.nm</code>). 구판은 빗금뿐 아니라 날짜 글자까지 <code>rgba(0,0,0,0.1)</code>로 지워 숫자가 안 읽혔다.</p>
+<div class="ba one">
+<div class="card"><div class="hd b">전 — 글자 <code>rgba(0,0,0,0.1)</code> (1·2·3·4·5·6이 거의 안 보임)</div><img src="260812_빗금칸_전.png" alt="빗금 칸 날짜가 흐린 상태"></div>
+<div class="card"><div class="hd a">후 — 글자 <code>var(--text)</code> = <code>rgb(26,26,46)</code> · 빗금은 그대로</div><img src="260812_빗금칸_후.png" alt="빗금 칸 날짜가 선명한 상태"></div>
+</div>
+<table style="margin-top:12px">
+<tr><th style="width:180px">축</th><th>전</th><th>후</th></tr>
+<tr><td>날짜 글자(<code>.dn.nm</code>)</td><td><code>rgba(0,0,0,0.1)</code></td><td><b><code>var(--text)</code></b> — 이번 달 칸과 같은 잉크</td></tr>
+<tr><td>빗금(<code>.diag</code>)</td><td colspan="2" class="c">무접촉 — <code>repeating-linear-gradient(45deg … rgba(0,0,0,0.02))</code> 그대로(실측 <code>diag:true</code> 유지)</td></tr>
+<tr><td>칸 배경(<code>.c.nm</code>)</td><td colspan="2" class="c">무접촉 — <code>var(--nm-bg)</code></td></tr>
+</table>
+</section>
+
+<section>
+<h2>3. 완료된 본인 신청 — 내용 수정 허용 + 관리자 알림</h2>
+<p class="desc">「본인이여야 함」이 유일한 관문(<code>_isMineRec</code>). 남의 건은 상태와 무관하게 열리지 않는다.
+잠금은 <b>일시·항목만</b> — 260812 확정('예정') 건 규칙(<code>_CW_LOCK_STEPS=[1,3]</code>)을 그대로 '완료'까지 확장했다(규칙 갈래 신설 0).</p>
+
+<table>
+<tr><th style="width:150px">경로</th><th style="width:44%">전</th><th>후</th></tr>
+<tr><td>캘린더 우클릭<br><span style="color:var(--dim)">(보드 행·날짜 패널 카드 공용)</span></td><td>✅ 완료된 신청 — <b>변경할 수 없습니다</b></td><td>✅ 완료된 신청 — 일자·프로그램은 고정 · 내용은 수정 가능<br>+ <b>[✏️ 내용 변경]</b></td></tr>
+<tr><td>조회 모달<br><span style="color:var(--dim)">(캘린더 좌클릭 · 일정 확인 보드 · 메시지함이 전부 지나는 길목)</span></td><td>버튼 없음 — 읽기만</td><td><b>[✏️ 내용 수정]</b>(<code>.btn btn--primary btn--sm</code> 정본) + 고정 축 안내</td></tr>
+<tr><td>변경 메뉴</td><td>안 열림(권한 차단)</td><td>열림 · <b>프로그램·일자/시간 2줄 자물쇠</b>, 제목·플랫폼/내용/담당자·비고는 열림</td></tr>
+<tr><td>저장</td><td>「완료·취소된 일정은 변경할 수 없어요」로 거부</td><td>PATCH 저장 + <b>관리자 전원에게 알림</b></td></tr>
+</table>
+
+<div class="ba" style="margin-top:14px">
+<div class="card"><div class="hd b">전 — 우클릭</div><img src="260812_완료건수정_우클릭_전.png" alt="변경할 수 없습니다 안내"></div>
+<div class="card"><div class="hd a">후 — 우클릭</div><img src="260812_완료건수정_우클릭_후.png" alt="내용 변경 항목이 생긴 메뉴"></div>
+</div>
+<div class="ba" style="margin-top:14px">
+<div class="card"><div class="hd b">전 — 조회 모달(버튼 없음)</div><img src="260812_완료건수정_조회모달_전.png" alt="버튼 없는 조회 모달"></div>
+<div class="card"><div class="hd a">후 — 조회 모달 [내용 수정]</div><img src="260812_완료건수정_조회모달_후.png" alt="내용 수정 버튼이 붙은 조회 모달"></div>
+</div>
+<div class="ba one" style="margin-top:14px">
+<div class="card"><div class="hd a">후 — 변경 메뉴(완료 건): 일자·시간과 프로그램만 자물쇠</div><img src="260812_완료건수정_변경메뉴_후.png" alt="잠금 2줄이 적용된 변경 메뉴"></div>
+</div>
+
+<div class="warn"><b>「모든 경로」를 진입점 복제로 풀지 않았다.</b> 캘린더 좌클릭·일정 확인 보드 행·날짜 패널 카드·메시지함 이동은 전부
+<code>renderReadOnlyView</code>(조회 모달) 한 곳을 지난다 — 버튼을 그 한 자리에 두면 전 경로가 동시에 열린다.
+우클릭 메뉴는 별도로 손봤다(터치 기기엔 우클릭이 없고, 마우스 사용자는 우클릭이 더 빠르다).
+<br>덤으로 <b>「신청 중」 본인 건</b>도 같은 버튼을 얻었다 — 구판은 우클릭에만 있어 터치 기기에선 본인 신청조차 못 고쳤다(같은 결손, 같은 자리에서 닫음).</div>
+</section>
+
+<section>
+<h2>4. 검증 실측 — 비관리자(<code>?qa=1</code>) 실렌더</h2>
+<table>
+<tr><th style="width:230px">항목</th><th style="width:110px">결과</th><th>실측값</th></tr>
+<tr><td>권한 술어 <code>_cwUserCanEdit</code></td><td class="c"><span class="ok">정확</span></td><td>내 완료 <b>true</b> · 내 예정 true · 내 신청 중 true · 내 취소 <b>false</b> · <b>타인 완료 false</b></td></tr>
+<tr><td>타인 완료 건 변경 메뉴</td><td class="c"><span class="ok">차단</span></td><td><code>openChangeWizard</code> 호출해도 모달 안 열림(<code>openedForOther:false</code>)</td></tr>
+<tr><td>변경 메뉴 잠금</td><td class="c"><span class="ok">2줄</span></td><td>step1(프로그램)·step3(일자·시간) <code>disabled</code> · step2·4·6 열림</td></tr>
+<tr><td>저장(내용만)</td><td class="c"><span class="ok">통과</span></td><td><code>PATCH /api/records/101</code> 1회 · 토스트 「변경 사항이 저장됐어요」</td></tr>
+<tr><td>관리자 알림</td><td class="c"><span class="ok">2명</span></td><td>관리자여부 ON 2명에게만(일반직원 제외 · 고친 본인 제외) — <code>trigger:'내용 수정'</code></td></tr>
+<tr><td>완료 건 일정 축 시도</td><td class="c"><span class="ok">차단</span></td><td>PATCH 0회 · 「완료된 일정은 일자·프로그램을 바꿀 수 없어요」</td></tr>
+<tr><td>조회 모달 버튼 실클릭</td><td class="c"><span class="ok">동작</span></td><td>변경 메뉴 열림 · 조회 모달 닫힘 · <code>_schedReturnFlag=false</code>(보드 되살아나 겹치는 것 차단)</td></tr>
+<tr><td>디자인 게이트</td><td class="c"><span class="ok">통과</span></td><td>raw hex index <b>1540/1540 증가 0</b> · <code>:root</code> 2/0 · X아이콘 84개 정본</td></tr>
+<tr><td><code>check_refs</code>·<code>check_wiring</code>·<code>build_annual_yr</code></td><td class="c"><span class="ok">통과</span></td><td>_YR 누계 1,537,516 · 누적 3,721,841</td></tr>
+<tr><td><code>smoke_login</code>·<code>smoke_layout</code></td><td class="c"><span class="ok">PASS</span></td><td>로그인 렌더·이젤 Δ0</td></tr>
+<tr><td>인라인 스크립트 <code>node --check</code></td><td class="c"><span class="ok">9/9</span></td><td>전 블록 파싱 · 헤드리스 JS 에러 0(전·후 각 3화면)</td></tr>
+</table>
+<pre>① 권한 술어 = {"myDone":true,"myPlan":true,"myOpen":true,"myCancel":false,"otherDone":false}
+⑤ 관리자 알림 = [{"to":"관리자A","trigger":"내용 수정","reason":"홍길동 님이 완료 건을 수정했어요 — 플랫폼·내용·담당자"},
+                 {"to":"관리자B", … }]
+   일정 축 시도 — PATCH [] toast ["error:완료된 일정은 일자·프로그램을 바꿀 수 없어요 — 내용만 수정할 수 있어요"]</pre>
+</section>
+
+<section>
+<h2>5. 함께 좁힌 검증 2곳 (완료 건에만)</h2>
+<p class="desc">완료 건의 내용 수정이 <b>다른 규칙에 걸려 조용히 막히는</b> 자리를 두 곳 열었다. 예정·신청 중 건의 판정은 무변이다.</p>
+<ul>
+<li><b>홍보 기간 창 검사</b> — 완료 건은 이미 나간 홍보라 창 판정 대상에서 제외(<code>_perf=null</code>). 안 그러면 「홍보 종료 후라 홍보할 수 없어요」가 오탈자 수정까지 막는다.</li>
+<li><b>카카오/문자 충돌 검사</b> — 완료 건은 <b>플랫폼 값이 실제로 바뀐 경우에만</b> 검사. 값이 그대로면 인접일 건의 「연일 회피」에 걸려 과거 실적의 문구 수정이 막힌다.</li>
+</ul>
+<div class="warn">완료 건에서 <b>일자·시간·프로그램</b>은 저장 단계에서도 한 번 더 거부한다(UI 자물쇠 + 서버 직전 가드 2중).</div>
+</section>
+
+<p class="lead" style="margin-top:22px">각주 — 3번 화면은 실제 시트 대신 목 레코드(신청자 「홍길동」)를 주입해 재현했다. 브리핑 팝업은 QA 모드에 실데이터가 없어 API 2종을 가짜 응답으로 채워 「뜨는 조건」만 만들었다 — 팝업 마크업·위치는 정본 그대로다.</p>
+</div></body></html>
