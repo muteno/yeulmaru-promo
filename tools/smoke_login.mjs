@@ -8,7 +8,7 @@
 //
 // 실행: node tools/smoke_login.mjs   ·  npm run smoke
 // 의존: playwright-core(devDependency) + chromium(원격 세션은 /opt/pw-browsers에 상주). 없으면 자동 SKIP.
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -42,7 +42,16 @@ async function main() {
   try {
     const ctx = await browser.newContext();
     // 외부(비 file://) 리소스 abort — 샌드박스 네트워크 차단으로 파서가 블로킹 외부 스크립트에서 멈추는 것 방지
-    await ctx.route('**', r => (r.request().url().startsWith('file:') ? r.continue() : r.abort()));
+    // [260812] 전면 개방 진입(`OPEN_ENTRY=true`)이면 로그인 화면이 아예 안 뜬다 — 이 스모크가 재려는 건
+    //   **로그인 화면 자체의 회귀**이므로, 그 스위치만 끈 판을 넘겨 종전 흐름을 그대로 잰다(파일은 안 고친다).
+    //   ⚠ 개방 진입 쪽 회귀는 `tools/scratch/shot_openentry.mjs`가 따로 잰다 — 둘을 한 판에서 재면 서로를 가린다.
+    const SRC = readFileSync(INDEX, 'utf8').replace('var OPEN_ENTRY=true;', 'var OPEN_ENTRY=false;');
+    await ctx.route('**', r => {
+      const u = r.request().url();
+      if (!u.startsWith('file:')) return r.abort();
+      if (u.endsWith('/index.html')) return r.fulfill({ status: 200, body: SRC, contentType: 'text/html; charset=utf-8' });
+      return r.continue();
+    });
     const page = await ctx.newPage();
     page.on('pageerror', e => pageErrors.push(String((e && e.stack) || e)));
     await page.goto('file://' + INDEX, { waitUntil: 'domcontentloaded', timeout: 30000 })

@@ -165,15 +165,56 @@ def txt(cells, ref):
     return re.sub(r"\s+", " ", str(cells.get(ref, "") or "")).strip()
 
 
+class N(int):
+    """숫자 셀 값 + **원천 상태**. `int`를 그대로 상속하므로 더하기·서식·비교는 한 글자도 안 바뀐다
+       (`sum()`·`%d`·`f"{v:,}"` 전부 종전 그대로 동작) — 상태를 얹기 위해 호출부를 고칠 필요가 없다.
+    ⚠ `__slots__`를 쓰지 않는다 — int 하위 타입은 빈 슬롯만 허용해서(가변 길이 타입) 붙이는 순간 TypeError다."""
+
+    def __new__(cls, v, st):
+        o = int.__new__(cls, v)
+        o.st = st
+        return o
+
+
+_FILL = ("bud", "vou", "fee", "rev", "paid", "inv")   # 「채웠나」를 묻는 금액·인원 6칸(cnt·mon·acct는 분야마다 축이 없어 제외)
+
+
 def num(cells, ref):
-    """숫자 셀 → int(원). 빈칸·'-'·에러값(#DIV/0!)은 0."""
+    """숫자 셀 → N(값, 상태). 상태 = '값'(숫자 있음) · '영'(원천이 진짜 0) · '빈'(셀 부재·'-'·에러·못 읽음).
+    ⚠ 구판은 셋을 **전부 0으로 뭉갰다**. 그래서 260812 실측에서 두 가지가 동시에 터졌다:
+       ① 「아직 안 적었다」와 「0원이 맞다」가 화면에서 구별되지 않았다(0인 99칸 중 진짜 미입력 72 · 정상 0 17).
+          그 결과 2026 수익율이 87.8%로 떴다 — 전표실적 14건이 미입력이라 분모가 빠진 것뿐인데
+          「2026이 제일 잘된 해」로 읽힌다. `2026-공연-04`는 3,639.8%가 그대로 표에 찍혔다.
+       ② `'3회'`·`'1480명'`처럼 **단위가 붙은 값 20칸이 조용히 0으로 사라졌다**(float() 실패 → 0).
+    그래서 여기서 상태를 갈라 두고, `mark_blank`가 행에 `blank`로 적는다. 화면은 그걸 읽어 「미입력」과 「0원」을 가른다."""
     s = str(cells.get(ref, "") or "").strip()
     if not s or s.startswith("#") or s in ("-", "—"):
-        return 0
+        return N(0, "빈")
+    body = s.replace(",", "")
     try:
-        return int(round(float(s)))
+        n = int(round(float(body)))
+        return N(n, "영" if n == 0 else "값")
     except ValueError:
-        return 0
+        pass
+    m = re.search(r"-?\d+(?:\.\d+)?", body)   # '3회'·'1480명'·'1,480 명' — 숫자만 떼어 회수한다
+    if not m:
+        return N(0, "빈")
+    try:
+        n = int(round(float(m.group())))
+    except ValueError:
+        return N(0, "빈")
+    # '구제' = 원본이 텍스트라 엑셀 SUM도 못 셌던 칸. 값은 살아났지만 **원천 합계 행과는 어긋난다**
+    #   → `audit`이 이 표시를 보고 「합계가 틀린 게 아니라 원천이 빠뜨린 것」을 구분한다.
+    return N(n, "구제")
+
+
+def mark_blank(row, axis=()):
+    """원천이 **빈칸이던** 칸 이름을 `blank`에 적는다 — 파생값이 아니라 원천 사실의 기록이다(그래서 저장해도 된다).
+    `axis` = 그 분야 원본 시트에 **열 자체가 없는** 칸. 채울 원천이 없으므로 「미기입」이라 적지 않는다
+       (적으면 담당자가 영원히 못 채우는 항목을 채우라고 재촉하는 오탐이 된다)."""
+    row["blank"] = "|".join(
+        k for k in _FILL if k not in axis and getattr(row.get(k), "st", "값") == "빈")
+    return row
 
 
 # index.html L6045 `_uName`과 **같은 정규화**(공연명 조인 축) — 한 글자도 다르면 조인이 갈린다
@@ -206,12 +247,12 @@ def pull_perf(cells, year, warn):
         name = txt(cells, "C%d" % r)
         if not name:
             continue
-        rows.append(dict(
+        rows.append(mark_blank(dict(
             cat="공연", acct=acct, name=name, mon=txt(cells, "D%d" % r),
             cnt=num(cells, "E%d" % r), bud=num(cells, "F%d" % r), vou=num(cells, "G%d" % r),
             fee=num(cells, "I%d" % r), rev=num(cells, "J%d" % r),
             paid=num(cells, "M%d" % r), inv=num(cells, "N%d" % r),
-        ))
+        )))   # 공연 시트는 6칸 축이 전부 있다 → 축 제외 없음
     audit(rows, tot_at(cells, tot_r, "FGIJMN"), "공연", warn)
     return rows
 
@@ -234,12 +275,12 @@ def pull_exhib(cells, year, warn):
         name = txt(cells, "%s%d" % (base, r))
         if not name:
             continue
-        rows.append(dict(
+        rows.append(mark_blank(dict(
             cat="전시", acct="", name=name, mon="", cnt=0,
             bud=num(cells, "%s%d" % (col("C"), r)), vou=num(cells, "%s%d" % (col("D"), r)),
             fee=num(cells, "%s%d" % (col("F"), r)), rev=num(cells, "%s%d" % (col("G"), r)),
             paid=num(cells, "%s%d" % (col("J"), r)), inv=num(cells, "%s%d" % (col("K"), r)),
-        ))
+        )))   # 전시 시트도 6칸 축이 전부 있다(회계구분·진행월·횟수만 없고, 그 셋은 애초에 `_FILL` 밖)
     audit(rows, tot_at(cells, tot_r, "".join(col(c) for c in "CDFGJK")), "전시", warn)
     return rows
 
@@ -290,9 +331,14 @@ def pull_edu(cells, year, warn):
         for lab, a, b in (("지출", vou, num(cells, "D%d" % r) * 1000), ("매출", rev, num(cells, "F%d" % r) * 1000)):
             if abs(a - b) > 1000:
                 warn.append("교육 %s %s 세부합 %s ≠ 요약 %s (Δ%s)" % (name, lab, f"{a:,}", f"{b:,}", f"{a-b:,}"))
+        # 세부표 대응 행이 없으면 금액 3종은 「0원」이 아니라 **못 읽은 것**이다 → N(0,'빈')으로 적어 화면이 가릴 수 있게 한다.
+        #   (구판은 sum()의 결과 0을 그대로 담아 「0원인 사업」처럼 보이게 했다.)
+        st3 = "값" if part else "빈"
         row = dict(cat="교육", acct=(part[0]["B"] if part and part[0]["B"] != name else ""), name=name,
-                   mon="", cnt=0, bud=num(cells, "C%d" % r) * 1000, vou=vou, fee=fee, rev=rev,
-                   paid=num(cells, "I%d" % r), inv=0)
+                   mon="", cnt=0, bud=N(num(cells, "C%d" % r) * 1000, num(cells, "C%d" % r).st),
+                   vou=N(vou, st3), fee=N(fee, st3), rev=N(rev, st3),
+                   paid=num(cells, "I%d" % r), inv=N(0, "빈"))
+        mark_blank(row, axis=("inv",))   # ⚠ 교육 원본 시트엔 **초대인원 열 자체가 없다** → 미기입이 아니라 「해당 없음」
         rows.append(row)
         pend.append(row)
     # 합계 = **세부표(원)** 쪽을 기준으로 검산한다(요약은 천원 반올림이라 원 단위 행합과 애초에 안 맞는다).
@@ -313,13 +359,29 @@ def tot_at(cells, row, cols):
 
 
 def audit(rows, tot, cat, warn):
-    """검산 ① 행 합 == 시트 합계 행. tot의 None 칸은 원본에 대응 합계가 없다는 뜻 = 건너뛴다."""
+    """검산 ① 행 합 == 시트 합계 행. tot의 None 칸은 원본에 대응 합계가 없다는 뜻 = 건너뛴다.
+
+    ⚠ 260812 실측으로 알게 된 예외 하나 — **엑셀 합계 행이 틀린 경우가 있다.**
+       원본에 `'1480명'`처럼 단위가 붙어 텍스트로 들어간 셀이 있으면 엑셀 `SUM()`은 그 칸을 **건너뛴다**.
+       구판 빌더도 같이 못 읽어서(float() 실패 → 0) 양쪽이 똑같이 틀린 채 검산을 통과했다.
+       이제 빌더는 숫자를 회수하므로 행합이 시트 합계보다 커진다 — 이건 우리가 틀린 게 아니라
+       **원천 합계가 빠뜨린 것**이다. 차이가 회수분으로 정확히 설명되면 실패가 아니라 경고로 남긴다
+       (덮지 않는다 · 설명이 안 되는 차이는 종전대로 하드 실패)."""
     for k, lab in (("bud", "예산"), ("vou", "전표실적"), ("fee", "판매수수료"),
                    ("rev", "매출"), ("paid", "유료인원"), ("inv", "초대인원")):
         if tot.get(k) is None:
             continue
         got = sum(r[k] for r in rows)
         if got != tot[k]:
+            # 회수분 = 숫자로 못 읽히던 셀에서 되찾은 값(엑셀 SUM이 셈에서 뺀 바로 그 칸들)
+            saved = [(r["name"], int(r[k])) for r in rows if getattr(r.get(k), "st", "") == "구제"]
+            if saved and got - tot[k] == sum(v for _, v in saved):
+                warn.append(
+                    "ℹ %s %s — 원천 합계가 %s인데 행합은 %s. 차이 %s = 엑셀 SUM이 못 읽은 텍스트 셀 %d칸(%s). "
+                    "빌더가 그 값을 회수했으므로 **행합 쪽이 맞다**." % (
+                        cat, lab, f"{int(tot[k]):,}", f"{int(got):,}", f"{int(got - tot[k]):,}",
+                        len(saved), " · ".join("%s %s" % (n, f"{v:,}") for n, v in saved)))
+                continue
             warn.append("%s %s 행합 %s ≠ 시트 합계 %s (Δ%s)" % (cat, lab, f"{got:,}", f"{tot[k]:,}", f"{got-tot[k]:,}"))
 
 
@@ -338,6 +400,10 @@ def emit(years, srcs, warn):
         "// 파생값(차액·수익율·계·비율)은 담지 않는다 — 화면이 센다: 차액=rev-vou · 수익율=rev/(vou+fee)*100 · 계=paid+inv.",
         "// 필드: no 사업NO(고유 인덱스) · cat 분야 · acct 회계구분(거르기 축) · name 사업명 · key 조인키(_uName)",
         "//       mon 진행월 · cnt 횟수 · bud 예산 · vou 전표실적(a) · fee 판매수수료 · rev 정산서매출(b) · paid 유료 · inv 초대",
+        "//       blank 원천이 **빈칸이던** 칸 이름(`|` 구분) — 파생값이 아니라 원천 사실이라 담는다.",
+        "//         이게 없으면 「아직 안 적었다(0)」와 「0원이 맞다」가 화면에서 같아진다. 실측 260812 = 0인 99칸 중",
+        "//         진짜 미입력 72 · 담당자가 적은 0 17 · 원천에 열 없음 9 · 못 읽음 1. 분야에 열 자체가 없는 칸은",
+        "//         「해당 없음」이라 여기 안 적는다(교육 inv). 화면 판정 = index.html `_finBlank`.",
         "var BIZ_FIN={ver:1,unit:'원',years:{",
     ]
     ykeys = sorted(years.keys())
@@ -345,10 +411,10 @@ def emit(years, srcs, warn):
         lines.append(" %d:{src:%s,rows:[" % (y, js_str(srcs[y])))
         for r in years[y]:
             lines.append(
-                "  {no:%s,cat:%s,acct:%s,name:%s,key:%s,mon:%s,cnt:%d,bud:%d,vou:%d,fee:%d,rev:%d,paid:%d,inv:%d},"
+                "  {no:%s,cat:%s,acct:%s,name:%s,key:%s,mon:%s,cnt:%d,bud:%d,vou:%d,fee:%d,rev:%d,paid:%d,inv:%d,blank:%s},"
                 % (js_str(r["no"]), js_str(r["cat"]), js_str(r["acct"]), js_str(r["name"]),
                    js_str(r["key"]), js_str(r["mon"]), r["cnt"], r["bud"], r["vou"], r["fee"],
-                   r["rev"], r["paid"], r["inv"]))
+                   r["rev"], r["paid"], r["inv"], js_str(r.get("blank", ""))))
         lines[-1] = lines[-1].rstrip(",")
         lines.append(" ]}%s" % ("," if yi < len(ykeys) - 1 else ""))
     lines.append("}};")
@@ -491,12 +557,18 @@ def main(argv):
     with open(OUT, "w", encoding="utf-8", newline="\n") as f:
         f.write(emit(years, srcs, warn))
     print("[사업비] → %s" % os.path.relpath(OUT, ROOT))
-    if warn:
-        print("\n[사업비] ❌ 검산 실패 %d건" % len(warn))
-        for w in warn:
+    # `ℹ` 머리표 = 실패가 아니라 **알림**(원천이 틀렸고 빌더가 바로잡은 자리). 덮지 않고 매 빌드 출력하되 rc는 0.
+    notes = [w for w in warn if w.startswith("ℹ ")]
+    bad = [w for w in warn if not w.startswith("ℹ ")]
+    for n in notes:
+        print("   " + n)
+    if bad:
+        print("\n[사업비] ❌ 검산 실패 %d건" % len(bad))
+        for w in bad:
             print("   · " + w)
         return 1
-    print("[사업비] ✅ 검산 통과(행합 == 시트 합계 · 교육 세부↔요약 일치 · NO 중복 0)")
+    print("[사업비] ✅ 검산 통과(행합 == 시트 합계 · 교육 세부↔요약 일치 · NO 중복 0%s)"
+          % (" · 원천 합계 정정 %d건" % len(notes) if notes else ""))
     return 0
 
 

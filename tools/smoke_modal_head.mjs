@@ -64,6 +64,12 @@ const MODALS = [
   ['불편사항 접수', '_qaOpen()'],
   ['불편사항 관리', 'openQaBoard()'],
   ['일일 판매 입력', 'openDailyInput()'],
+  // [260812 5차] 사업비 3종 등재 — 이 셋은 목록에 없어서 **한 번도 측정된 적이 없었고**, 그래서
+  //   머리줄을 `<div id="…-head">` 래퍼 안에 넣어 `.modal:has(>.mhead)` 정본이 통째로 안 먹던 걸 아무도 못 잡았다
+  //   (밴드 둘레 흰 1px 잔존 · 닫기 ✕가 인디고 잉크로 밴드 위에서 소실). 등재 = 다시 새면 이 스모크가 잡는다.
+  ['사업 지표 입력', "(function(){sessionStorage.setItem('isAcct','1');openBizFinInput(2025);})()"],
+  ['사업비 보드', "(function(){sessionStorage.setItem('isAcct','1');openFinanceBoard(2025);})()"],
+  ['사업비 상세', "(function(){sessionStorage.setItem('isAcct','1');_finModal(_finRows(2025)[0].no,2025);})()"],
   ['홍보 신청·확인', 'openPromoBoard()'],
   ['담당자 일정 추가', "openSpecialEntry('add')"],
   ['예울마루 전관도', 'openVenueMap()'],
