@@ -3177,7 +3177,12 @@ const DAY_NAMES=['일','월','화','수','목','금','토'];
 //   롤백 = 이 배열 + buildNav 분기 + _qaDeepLink ids/alias + 아래 5개 *MenuBuild 되돌리기.
 const MENUS=[
   // [260731 운영자 3차] 대메뉴 순서 = 1 대시보드 · 2 캘린더 · 3 판매 현황 · 4 콘텐츠 제작 (운영자 지시 순서에 있던 5 회원 관리는 #475에서 폐지 — 되살리지 않음)
-  {label:'대시보드',id:'biz'},   // [260723 운영자] 좌측 mv-seg 분리 토글 폐지 → 대시보드(사업 실적) 메인 전환. 클릭 = setMainView('biz') · 호버 = 세부(연간 실적·사업 결과 비교·연간 일정·회원 분포)
+  // [260812 운영자] 「지금 보는 모든 대시보드는 판매 현황 대시보드로 포함시키자 · 기존거를 판매 현황으로 · 신규를 사업 개요 ·
+  //   일단 똑같이 복제시키고 사업 개요를 수정할거임」 → 라벨만 개명(id는 `biz` 유지)하고 같은 화면을 가리키는 대메뉴를 하나 더 둔다.
+  //   ⚠ **id를 안 바꾼 이유**: `biz`는 `_mainView` 값·`data-mid`·딥링크 alias·`_mvSync`가 다 같이 쓰는 이름이라
+  //     바꾸면 33곳의 `_mainView!=='biz'` 가드와 딥링크가 조용히 끊긴다. 사람에게 보이는 건 label뿐이다.
+  {label:'판매 현황',id:'biz'},   // [260723 운영자] 좌측 mv-seg 분리 토글 폐지 → 대시보드(사업 실적) 메인 전환. 클릭 = setMainView('biz') · 호버 = 세부(연간 실적·사업 결과 비교·연간 일정·회원 분포)
+  {label:'사업 개요',id:'bizov'},   // [260812 운영자] 신규 — 지금은 「판매 현황」과 **완전히 같은 화면·같은 세부메뉴**(요청대로 복제만). 갈라내기 = _bizDeck 참조
   {label:'캘린더',id:'cal'},   // 클릭 = setMainView('cal') · 호버 = 세부(홍보 신청·온라인/오프라인 홍보 현황 — 구 '홍보 신청·확인' 대메뉴 흡수)
   // [260803 운영자] {label:'판매 현황',id:'sales'} 폐지 — 세부 이관: 실적 조회 → 대시보드 ▸ 판매 실적 바로 아래 · 실적 입력 → 대시보드 세부 맨 아래(관리자) · 상품 등록·변경 = 제거(openTicketReg 휴면 보존). 롤백 = 이 줄 복구 + buildNav sales 분기 2곳 + _qaDeepLink ids/alias + _salesMenuBuild 재연결.
   {label:'AI 홍보',id:'aipromo'},   // [260804 운영자] 상단 대메뉴 신설. 클릭 = openPromoCheck() 풀스크린 모달 — _mainView(biz|cal 2값) 무접촉이 계약(platform 분기와 같은 문법). 롤백 = 이 줄 + buildNav aipromo 분기 2곳
@@ -3186,6 +3191,30 @@ const MENUS=[
   //   회원 조회(표)는 나가는 문을 잃지 않게 회원 분포 모달 헤더의 [회원 조회] 버튼으로 진입(양방향 — 구 회원 조회 ▸ 기본 개요 버튼의 짝).
   // [260729 운영자] {label:'PLAY ZONE',id:'playzone'} 제거 — 세부는 콘텐츠 제작 드롭다운 「PLAY ZONE」 섹션으로 이관(_contentMenuBuild). 롤백 = 이 줄 복구 + 아래 _qaDeepLink alias 되돌리기.
 ];
+
+// ── [260812 운영자] 대시보드 「덱」 = 한 화면을 가리키는 두 대메뉴 ─────────────────────────
+//   「판매 현황」(기존 · sales)과 「사업 개요」(신규 · ov). **지금은 둘이 완전히 같다** — 운영자 요청이
+//   「일단 똑같이 복제시키고 사업 개요를 수정할거임」이라, 이 단계에서 화면을 가르지 않는다.
+//   덱 상태가 지금 하는 일은 **어느 대메뉴가 켜져 보이는가** 하나뿐이고, 나중에 사업 개요만 다른 면을
+//   그리게 될 때 그 분기점이 여기다(`_bizDeck==='ov'`).
+//   ⚠ **`_mainView`에 세 번째 값을 만들지 않았다.** 이 파일엔 `_mainView!=='biz'` 꼴 가드가 33곳 있어
+//     새 뷰 값을 도입하면 그 전부가 조용히 「대시보드가 아니다」로 판정한다(렌더·줌·레일 정렬이 통째로 꺼진다).
+//     그래서 뷰는 종전 2값('biz'|'cal') 그대로 두고 덱만 옆에 뒀다 = 기존 경로 회귀 0.
+//   ⚠ **선언 위치가 여기인 이유**: 부트 IIFE(아래 L4188)가 파싱 중에 `initApp()`→`buildNav()`를 부르므로,
+//     `_mainView`처럼 뒤쪽(L6970)에 두면 그 시점엔 `undefined`다(이 파일의 `_CT_IMG`·`_evSel` 전례와 같은 함정).
+//     MENUS 바로 아래 = 부트보다 앞 → 언제 읽어도 값이 있다.
+var _BIZ_DECK_MID={sales:'biz',ov:'bizov'};   // 덱 → 그 덱을 켜는 대메뉴 id(= .nav-btn[data-mid])
+var _bizDeck=(function(){try{return sessionStorage.getItem('bizDeck')==='ov'?'ov':'sales';}catch(_e){return 'sales';}})();   // 저장 축 = mvView와 동일(이번 접속만 · 새 접속 = 판매 현황)
+// 대메뉴 클릭 진입 — 덱을 기록하고 대시보드 화면으로. 이미 대시보드면 덱 표시만 갱신한다(무의미한 재렌더 0).
+function _bizDeckGo(k){
+  k=(k==='ov')?'ov':'sales';
+  var same=(_bizDeck===k);
+  _bizDeck=k;
+  try{sessionStorage.setItem('bizDeck',k);}catch(_e){}
+  if(typeof setMainView==='function'&&(typeof _mainView==='undefined'||_mainView!=='biz')){ setMainView('biz'); return; }
+  if(!same&&typeof _bizInlineRender==='function'){ try{_bizInlineRender();}catch(_e){} }   // 덱이 실제로 바뀐 경우에만 다시 그린다(지금은 내용 동일 = 무해)
+  if(typeof _mvSync==='function')_mvSync();
+}
 
 // === 플랫폼 트리 데이터 (Phase A1) ===
 const PLATFORM_TREE = {
@@ -4507,7 +4536,7 @@ function _qaDeepLink(){
   if(!window._QA) return;
   var raw=(location.hash||'').replace(/^#/,'').trim().toLowerCase();
   if(!raw) return;
-  var ids=['biz','cal','content'];   // [260803] 대메뉴 3종 — sales(판매 현황) 폐지, 세부는 대시보드 드롭다운으로(구 해시는 아래 alias 흡수 = 딥링크 끊김 0)
+  var ids=['biz','cal','content','bizov'];   // [260803] 대메뉴 3종 — sales(판매 현황) 폐지, 세부는 대시보드 드롭다운으로(구 해시는 아래 alias 흡수 = 딥링크 끊김 0) · [260812] bizov(사업 개요) 신설 — 구 해시 `#biz`·`#sales`는 종전대로 판매 현황으로 간다(끊김 0)
   var alias={dashboard:'biz',dash:'biz',home:'biz',calendar:'cal',year:'biz',status:'biz',bizstatus:'biz',product:'biz',prod:'biz',prodreg:'biz',promo:'cal',apply:'cal',promoapply:'cal',sale:'biz',sales:'biz',play:'content',playzone:'content',member:'biz'};   // [260803] sales·product류 = 실적 메뉴가 있는 대시보드로
   var id = ids.indexOf(raw)>=0 ? raw : (alias[raw]||null);
   if(!id){ try{console.warn('[QA] 알 수 없는 딥링크 해시:',raw,'· 사용가능=',ids.join('/'));}catch(e){} return; }
@@ -5493,7 +5522,9 @@ function buildNav(){
   menus.forEach(m=>{
     const b=document.createElement('button');
     var _mv=(typeof _mainView!=='undefined')?_mainView:'biz';   // [260723] 대시보드/캘린더 활성 = 현재 메인뷰 반영(구 캘린더 하드코딩 on 폐지 — 기본값 = 대시보드)
-    var _mvOn=((m.id==='biz'&&_mv==='biz')||(m.id==='cal'&&_mv==='cal'))?' on':'';
+    // [260812] 대시보드 대메뉴가 둘(판매 현황·사업 개요)이라 뷰만으로는 어느 쪽을 켤지 못 정한다 → 덱까지 본다.
+    var _dk=(typeof _bizDeck!=='undefined')?_bizDeck:'sales';
+    var _mvOn=((_mv==='biz'&&m.id===_BIZ_DECK_MID[_dk])||(m.id==='cal'&&_mv==='cal'))?' on':'';
     b.className='nav-btn'+_mvOn+(m.id==='admin'?' nav-admin':'');b.dataset.mid=m.id;b.textContent=m.label;
     b.onclick=()=>{
       _navHovStop(b);  // 클릭 직후 보류 중이던 호버 프레임 루프가 뒤늦게 재오픈하지 않게
@@ -5505,7 +5536,8 @@ function buildNav(){
         return;
       }
       closeMobileNav();  // 메뉴 클릭 시 모바일 드롭다운 자동 닫힘
-      if(m.id==='biz'&&typeof setMainView==='function'){setMainView('biz');return;}   // [260723 운영자] 대시보드 = 사업 실적 메인 전환 · 활성표시 = _mvSync가 .nav-btn.on 동기(기본값)
+      if(m.id==='biz'&&typeof setMainView==='function'){_bizDeckGo('sales');return;}   // [260723 운영자] 대시보드 = 사업 실적 메인 전환 · 활성표시 = _mvSync가 .nav-btn.on 동기(기본값) · [260812] 덱 기록 경유
+      if(m.id==='bizov'&&typeof setMainView==='function'){_bizDeckGo('ov');return;}     // [260812 운영자] 사업 개요 = 같은 화면·다른 덱(지금은 내용 동일)
       if(m.id==='cal'&&typeof setMainView==='function'){setMainView('cal');return;}   // [260723 운영자] 캘린더 = 서브(촤르륵 슬라이드 전환) · 활성표시 = _mvSync 동기
       if(m.id==='content'){_ddOpen(b,_contentMenuBuild,210,'content');return;}
       if(m.id==='annual'){openAnnualCalendar();return;}
@@ -5517,7 +5549,7 @@ function buildNav(){
     };
     // 세부메뉴 보유 메뉴 = 호버 즉시 드롭다운(운영자 260709 "바로" — 스침 오발 방지 가드 120ms만). 다른 팝업이 열려 있으면 안 뺏음.
     // [260731] 대메뉴 4종 전부 세부 보유(대시보드·캘린더는 클릭=화면 전환 + 호버=세부 — 구 prodreg "둘다" 패턴)
-    var _sub=(m.id==='content')?_contentMenuBuild:(m.id==='biz')?_bizMenuBuild:(m.id==='cal')?_calMenuBuild:(m.id==='aipromo')?_aipromoMenuBuild:(m.id==='playzone')?_playzoneMenuBuild:null;   // [260803] sales(_salesMenuBuild) 제거 — 대메뉴 폐지 · [260807] aipromo 세부 3종 신설(운영자)
+    var _sub=(m.id==='content')?_contentMenuBuild:(m.id==='biz'||m.id==='bizov')?_bizMenuBuild:(m.id==='cal')?_calMenuBuild:(m.id==='aipromo')?_aipromoMenuBuild:(m.id==='playzone')?_playzoneMenuBuild:null;   // [260803] sales(_salesMenuBuild) 제거 — 대메뉴 폐지 · [260807] aipromo 세부 3종 신설(운영자) · [260812] bizov = **같은 빌더**(세부메뉴도 복제 = 운영자 「똑같이 복제」 · 갈라낼 땐 여기서 다른 빌더로)
     if(_sub){ b.setAttribute('aria-haspopup','true');   // navigation-01 이식 — 세부메뉴 보유 표시(a11y · 딤 축과 동일 문법)
       // [260723 운영자] navigation-01 모바일 문법 — 세부메뉴 = 인라인 아코디언(내용 = 데스크탑 드롭다운과 같은 빌더 재사용 · 항목 탭 = 패널 닫고 이동)
       var _acc=document.createElement('div');_acc.className='nav-acc';
@@ -6987,9 +7019,12 @@ function _mvSlideLeft(dir){
 function _mvSync(){
   // [260723 운영자] 좌측 분리 토글(구 .mv-seg) 폐지 → 중앙 nav 「대시보드|캘린더」(.nav-btn)의 활성만 현재 메인뷰로 동기(별도 토글 UI 없음 · 표시·호버는 일반 nav 계승)
   var mv=(typeof _mainView!=='undefined')?_mainView:'biz';
+  // [260812] 대시보드 대메뉴 2종(판매 현황·사업 개요) = 뷰가 biz일 때 **덱이 가리키는 하나만** 켠다(둘 다 켜지면 어디 있는지 안 보인다).
+  var dk=(typeof _bizDeck!=='undefined')?_bizDeck:'sales';
+  var onMid=(mv==='biz')?_BIZ_DECK_MID[dk]:null;
   document.querySelectorAll('#nav-menus .nav-btn').forEach(function(b){
     var mid=b.dataset&&b.dataset.mid;
-    if(mid==='biz'){b.classList.toggle('on',mv==='biz');b.setAttribute('aria-pressed',mv==='biz');}
+    if(mid==='biz'||mid==='bizov'){var on=(mid===onMid);b.classList.toggle('on',on);b.setAttribute('aria-pressed',on);}
     else if(mid==='cal'){b.classList.toggle('on',mv==='cal');b.setAttribute('aria-pressed',mv==='cal');}
   });
 }
@@ -22854,8 +22889,15 @@ function _paRenderResult(){
 // 로그인(세션)당 1회 · biz(대시보드) 모드에서만 · 부품 = .bizm-card + .btn 정본(신규 클래스·색·X아이콘 0).
 // [더 보지 않기] = 이 기기 영구 off(localStorage — 기기 UI 취향 축 · wxLoc 선례) · 브리핑 자체는 「AI 홍보」 메뉴에 상존.
 var _PA_TODAY_LS='paTodayOff';
+// [260812 운영자 「투데이스 브리핑 안나오게해주」] 팝업 전면 OFF — **전 사용자**(기기별 localStorage 축이 아니다).
+//   왜 스위치인가: 「더 보지 않기」는 이 기기 하나만 끄고 새 기기·새 브라우저면 다시 뜬다 = 운영자가 말한 「안 나오게」가 안 된다.
+//   되살리려면 이 값을 true로. 함수·마크업·[더 보지 않기] 경로는 한 줄도 안 건드렸다(끄기만 한 것 = 되돌리기 1단어).
+//   ⚠ 브리핑 **자체는 살아 있다** — 크론(매일 08:30 생성)도, 「AI 홍보」 메뉴의 전략 추론 탭도 종전 그대로다.
+//   선례 = src/index.js `PROMO_NOTIFY.enabled:false`(260731 운영자 「홍보 알림 뜨는거 당분간 없애줘」)와 같은 문법.
+var _PA_TODAY_ON=false;
 async function _paTodayPop(){
   try{
+    if(!_PA_TODAY_ON)return;
     if(localStorage.getItem(_PA_TODAY_LS)==='1')return;
     if(sessionStorage.getItem('paTodaySeen')==='1')return;
     if(typeof _mainView!=='undefined'&&_mainView!=='biz')return;
