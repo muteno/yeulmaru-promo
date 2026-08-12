@@ -28898,6 +28898,20 @@ function _yeulAiPersona(){try{return String(localStorage.getItem(_YEULAI_LS)||''
 //     `.github/workflows/nb-blog.yml` 라우팅 2줄(cmodel·ceffort). 앱이 모델명을 들고 있으면 세 곳이 갈린다.
 //     ⚠ 그 둘은 **서로 같은 값**을 유지해야 한다 — 폴백이 탈 때 같은 질문에 다른 결로 답하지 않게.
 function _yeulAiDeep(q){q=String(q||'');return q.length>=60||/전략|기획|분석|설계|보고서|제안서?|비교|계획|정리해|작성해?\s*줘|써\s*줘|만들어|장단점|로드맵|개선안/.test(q);}
+// [260812-4 운영자 「그건 제 분야~ 이거는 어려운거 찾아봐야할때 몇초 걸릴때 미리 던지고 그거 바로 찾으러 가는거야」]
+//   = 「분야 밖」 투덜은 **답의 일부가 아니라 대기 말풍선**이다. 앱이 먼저 던지고, 그 몇 초 동안 모델이 검색하러 간다.
+//   판정은 여기서(0초·비용 0) · 문구는 호출부 둘(`_memAiSend`·`_cbAiAnswer`) · 모델에는 `payload.outq`로 **「이미 던졌다」만** 알린다.
+//   ⚠ 안 알리면 모델이 답 첫 줄에서 **같은 투덜을 한 번 더** 한다 = 두 번 툴툴대는 봇(낙차가 죽는다).
+//   ⚠ 예울마루 축 단어가 섞였으면 「내 일」이라 투덜 없이 바로 간다 — 밖 판정이 안쪽을 잡아먹으면 제 일에도 툴툴댄다.
+var _YEULAI_IN_RE=/예울마루|공연|전시|관객|회원|예매|티켓|좌석|대극장|소극장|장도|로비|담당자|규정|사내|직원|홍보|블로그|캘린더|실적|매출/;
+var _YEULAI_OUT_RE=/날씨|기온|강수|태풍|미세먼지|시세|주가|환율|코인|비트코인|금리|뉴스|기사|속보|맛집|카페|식당|영화|드라마|스포츠|야구|축구|경기|선수|선거|대통령|주식|부동산|항공|기차|호텔|숙소|번역|유래|무슨 뜻/;
+function _yeulAiOut(q){
+  q=String(q||'');
+  if(_YEULAI_IN_RE.test(q))return false;
+  if(_YEULAI_OUT_RE.test(q))return true;
+  // 시의성 질문 = 검색행. ⚠ 「어때」만 잡으면 「어땠어」가 새어 나간다(실측 오판 1건이 정확히 이 형태였다).
+  return /(오늘|지금|현재|최근|요즘|이번\s*주|어제|내일)/.test(q)&&/(어때|어땠|얼마|몇|뭐|무슨|어디|언제|알려)/.test(q);
+}
 // [260812 운영자 「워커 쓰지말고 깃에서해 그래야 4개 계정 배선이 돌아」 · 「액션」] 경로 = **Actions 한 갈래**.
 //   ⚠ 종전 1차였던 Worker 즉답(`POST /api/yeul/chat`)은 **뺐다**. 빠르긴 했지만 Worker는 토큰이 `ANTHROPIC_AUTH_TOKEN`
 //     **한 개**라 그 계정이 쿼터·만료로 막히면 그대로 죽는다 — 260812 실측이 그 상태였다(시크릿은 있는데 최근 채팅
@@ -28914,7 +28928,7 @@ async function _yeulAiAsk(q,ctx,onTick){
   var _deep=_yeulAiDeep(q)?1:0;
   _yeulAiLast={via:'actions',model:_deep?'claude-opus-5':'claude-sonnet-5',effort:_deep?'medium':'low',account:'',ms:0,searches:0};
   var id='yc'+Date.now()+'r'+Math.floor(Math.random()*1e4);
-  var d0=await api('POST','/api/blog/dispatch',{payload:{yeulchat:1,id:id,q:String(q||'').slice(0,800),persona:_yeulAiPersona(),ctx:String(ctx||'').slice(0,1200),deep:_deep}});   // [260803 v3] 시각 t 동봉 폐지 — 모드 2축 제거(운영자 "밤에 아무도 안 씀")
+  var d0=await api('POST','/api/blog/dispatch',{payload:{yeulchat:1,id:id,q:String(q||'').slice(0,800),persona:_yeulAiPersona(),ctx:String(ctx||'').slice(0,1200),deep:_deep,outq:_yeulAiOut(q)?1:0}});   // [260803 v3] 시각 t 동봉 폐지 — 모드 2축 제거(운영자 "밤에 아무도 안 씀") · [260812-4] outq = 「투덜은 앱이 이미 던졌다」 신호
   if(!d0||!d0.ok)throw new Error((d0&&d0.error)||'요청 실패');
   var t0=Date.now(),_first=true;
   while(Date.now()-t0<240000){
@@ -30310,8 +30324,10 @@ async function _memAiSend(sfx){
   var ans=null;try{ans=_memAiLocal(q,idx);}catch(e){console.warn('[mem-ai local]',e);}
   if(ans){if(warm)warm.b=ans;else _memAiHist.push({b:ans,t:nowT});_memAiPaintAll();return;}
   if(warm){var wi=_memAiHist.indexOf(warm);if(wi>=0)_memAiHist.splice(wi,1);}   // 예매어는 있었지만 집계 밖 질문 = 아래 AI 경로가 자기 대기 줄을 세운다
-  var deepQ=_yeulAiDeep(q);   // [260803 운영자] 복잡 질문 = opus 딥 라우팅 — 「기다려 달라」를 츤 결로 먼저(v3 「음 귀찮은 걸 물어보시네요?」 급)
-  var wait=deepQ?'음, 귀찮은 걸 물어보시네요? …그래도 제대로 생각해드릴게요. 조금 기다리세요.':'…생각 중이에요. 잠깐만요.';
+  var deepQ=_yeulAiDeep(q),outQ=_yeulAiOut(q);   // [260803 운영자] 복잡 질문 = opus 딥 라우팅 — 「기다려 달라」를 츤 결로 먼저(v3 「음 귀찮은 걸 물어보시네요?」 급)
+  // [260812-4] 분야 밖 = 검색하러 가는 몇 초를 **투덜로 먼저 채운다**(운영자 확정 문구 · 모델은 payload.outq를 받고 투덜을 반복하지 않는다).
+  var wait=outQ?'그건 제 분야는 아닌데, 이상한 걸 물으시네요? 제미나이한테나 물으시지…… 뭐, 물어는 보셨으니 알려드릴게요. 기다리세요.'
+    :(deepQ?'음, 귀찮은 걸 물어보시네요? …그래도 제대로 생각해드릴게요. 조금 기다리세요.':'…생각 중이에요. 잠깐만요.');
   var pend={b:_ldHtml(12)+wait,t:nowT};   // 집계 밖 질문 = 예울이 AI(깃 Actions claude — _yeulAiAsk 공용 브레인)
   _memAiHist.push(pend);_memAiBusy=true;_memAiPaintAll();
   _yeulAiAsk(q,_memAiCtx(idx),function(sec){pend.b=_ldHtml(12)+wait+' · '+sec+'초';_memAiPaintAll();})
@@ -35720,15 +35736,18 @@ function _cbRulesAnswer(q,qn){
 }
 // [260803 운영자] 규칙 기반 미스 → 예울이 AI 폴백 — 루시봇 컨셉(persona/yeuli.md 카드 + 깃 Actions claude · 공용 _yeulAiAsk).
 //   결과·실패는 챗봇로그에 그대로 적재(기존 '미응답' 자리를 'AI답변'/'AI실패'가 대체).
-// ctx = 약한 규정 후보 요약(_cbRuleCtx) — 없으면 빈 문자열. 모델·effort는 여기서 안 정한다(SSOT = nb-blog.yml 라우팅 2줄),
-//   앱은 「어려운 질문인가」 판정(_yeulAiDeep)만 payload.deep으로 실어 보낸다.
+// ctx = 약한 규정 후보 요약(_cbRuleCtx) — 없으면 빈 문자열. 모델·effort는 여기서 안 정한다(SSOT = yeul-chat.yml 라우팅 2줄),
+//   앱은 판정만 실어 보낸다 — 「어려운 질문인가」(_yeulAiDeep → payload.deep) · 「분야 밖인가」(_yeulAiOut → payload.outq).
 function _cbAiAnswer(q,ctx){
-  const deepQ=_yeulAiDeep(q);   // [260803 운영자 v3] 복잡 질문 = opus 딥 — 「기다려 달라」를 츤 결로 먼저
-  _cbBot(deepQ?'음, 귀찮은 걸 물어보시네요? 규정·FAQ에도 없는 거라 직접 생각해봐야 해요 — 조금 걸리니까 기다리세요.':'규정·FAQ엔 없네요. …하는 수 없죠, 제가 생각해서 알려드릴게요. 잠깐이면 돼요.');
+  const deepQ=_yeulAiDeep(q),outQ=_yeulAiOut(q);   // [260803 운영자 v3] 복잡 질문 = opus 딥 — 「기다려 달라」를 츤 결로 먼저
+  // [260812-4] 분야 밖 = 검색하러 가는 몇 초를 투덜로 먼저 채운다(운영자 확정 문구).
+  _cbBot(outQ?'그건 제 분야는 아닌데, 이상한 걸 물으시네요? 제미나이한테나 물으시지…… 뭐, 물어는 보셨으니 알려드릴게요. 기다리세요.'
+    :(deepQ?'음, 귀찮은 걸 물어보시네요? 규정·FAQ에도 없는 거라 직접 생각해봐야 해요 — 조금 걸리니까 기다리세요.':'규정·FAQ엔 없네요. …하는 수 없죠, 제가 생각해서 알려드릴게요. 잠깐이면 돼요.'));
   const b=document.getElementById('cb-body');
-  const w=document.createElement('div');w.className='cb-msg bot';w.innerHTML=_ldHtml(12)+'…생각 중이에요.';
+  const spin=outQ?'…찾아보는 중이에요.':'…생각 중이에요.';   // 밖 질문은 「생각」이 아니라 **검색**을 기다리는 시간이다
+  const w=document.createElement('div');w.className='cb-msg bot';w.innerHTML=_ldHtml(12)+spin;
   if(b){b.appendChild(w);_cbScroll();}
-  _yeulAiAsk(q,ctx||'',function(sec){w.innerHTML=_ldHtml(12)+'…생각 중이에요. '+sec+'초';})
+  _yeulAiAsk(q,ctx||'',function(sec){w.innerHTML=_ldHtml(12)+spin+' '+sec+'초';})
     // [260806] 로그 매칭칸에 **어느 모델이 어느 경로로 답했는가**를 남긴다 — 챗봇로그 시트만 보고 라우팅 실동작과
     //   Worker/Actions 중 어디가 탔는지 확인할 수 있게(운영자가 「모델이 배선 안 된 듯」이라고 본 이유 =
     //   지금까지 어디에도 모델명이 안 남았다). 값은 답한 쪽이 실제로 쓴 것 — 앱이 짐작해 적지 않는다.
