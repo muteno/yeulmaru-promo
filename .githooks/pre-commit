@@ -169,4 +169,27 @@ if [ -f "$ROOT/tools/smoke_press_kit.mjs" ] && command -v node >/dev/null 2>&1; 
     }
   fi
 fi
+
+# 사업비 인덱스 게이트 (260812 운영자 「그 공연에 매달아야함 · 인덱싱 no · 연도별 추가 데이터가 왔을때도 문제 없이 삽입」)
+# 잡는 것 = ①사업NO가 재빌드에 밀려 시트 행이 엉뚱한 사업에 붙는 것(이 축의 유일한 실질 위험)
+#          ②파생값(차액·수익율)을 저장해 원본 수식과 갈리는 것 ③정본 함수가 두 벌이 되는 것
+#          ④인덱스 축(no·회계구분·연결키)·회계 권한 축(프론트·Worker) 소실. 네트워크 0 · 하드 0 · 킬테스트 6/6.
+if [ -f "$ROOT/tools/check_finance.py" ]; then
+  python3 "$ROOT/tools/check_finance.py" || {
+    echo "[pre-commit] check_finance 위반 — 사업비 인덱스 파손. 위 출력을 보고 되돌린 뒤 커밋." >&2
+    exit 1
+  }
+fi
+
+# 사업비 「인덱스가 실제로 도는가」 스모크 (260812)
+# 정적 층이 못 보는 축 = 브라우저에서 씨앗이 실리고, 공연에 붙고, 화면 숫자가 원본과 같은가 · 권한 3층이 실제로 갈리는가.
+# fail-soft: playwright-core·chromium 미탐지 = SKIP. index.html 스테이징 시만.
+if [ -f "$ROOT/tools/smoke_finance.mjs" ] && command -v node >/dev/null 2>&1; then
+  if git diff --cached --name-only | grep -q '^index\.html$'; then
+    node "$ROOT/tools/smoke_finance.mjs" || {
+      echo "[pre-commit] 사업비 스모크 실패 — 사업비가 공연에 안 매달리거나, 화면 숫자·권한이 갈렸다." >&2
+      exit 1
+    }
+  fi
+fi
 exit 0
