@@ -27,7 +27,7 @@ function corsHeaders(env) {
   return {
     "Access-Control-Allow-Origin": env.ALLOWED_ORIGIN || "*",
     "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, X-App-Password, X-Sub-Admin-PIN",
+    "Access-Control-Allow-Headers": "Content-Type, X-App-Password, X-Sub-Admin-PIN, X-Acct-PIN",
     "Access-Control-Max-Age": "86400"
   };
 }
@@ -142,6 +142,29 @@ async function checkAdmin(request, env, token) {
   return { admin: false };
 }
 __name(checkAdmin, "checkAdmin");
+
+// [260812 운영자 「회계 담당자가 새로 신규 필요(권한)」] 회계 담당자 검증 — checkAdmin과 **같은 문법**
+//   (앱 비번 + 본인 PIN 헤더 → 담당자 시트로 재검증 · 휴직 제외). 다른 점은 보는 열 하나뿐: 관리자여부 → 회계여부.
+//   ⚠ 클라이언트 판정(`_isAcct()`)은 콘솔로 우회 가능하므로 **쓰기 허용은 반드시 여기서** 정한다(PII 시트 GET 선례와 같은 축).
+//   관리자는 상위 권한이라 호출측에서 `checkAdmin ∨ checkAccountant`로 묶는다 — 여기선 회계 열만 본다.
+async function checkAccountant(request, env, token) {
+  const pw = request.headers.get("X-App-Password");
+  if (pw !== env.APP_PASSWORD && pw !== env.ADMIN_PASSWORD) return { acct: false };
+  const pin = request.headers.get("X-Acct-PIN");
+  if (!pin) return { acct: false };
+  const rows = await getManagersCached(token);
+  const user = rows.find((r) =>
+    _pin4(r["PIN"]) === _pin4(pin) &&
+    isFlagOn(r["\uD68C\uACC4\uC5EC\uBD80"]) &&
+    !isFlagOn(r["\uD734\uC9C1\uC5EC\uBD80"])
+  );
+  if (user) return { acct: true, userName: user["\uB2F4\uB2F9\uC790"] };
+  return { acct: false };
+}
+__name(checkAccountant, "checkAccountant");
+
+// 회계 담당자가 쓸 수 있는 유일한 운영 시트. 여기 이름을 늘리는 건 **권한 확대**다 — 운영자 승인 없이 늘리지 마라.
+var ACCT_WRITE_SHEETS = ["\uC6B4\uC601_\uC0AC\uC5C5\uBE44"];
 
 function colLetter(n) {
   let s = "";
@@ -4605,14 +4628,28 @@ var index_default = {
           return json({ sheets }, env);
         }
         if (request.method === "POST") {
-          const opsAuth = await checkAdmin(request, env, token);
-          if (!opsAuth.admin) return json({ error: "Admin only (ops write)" }, env, 403);
+          // [260812] 권한 = admin **또는** 회계 담당자(단, 회계는 `ACCT_WRITE_SHEETS` 한 장뿐).
+          //   ⚠ 구판은 auth를 먼저 보고 body를 나중에 읽었다 — 어느 시트인지 알아야 회계를 판정할 수 있으므로
+          //     순서를 뒤집었다(`request.json()`은 한 번만 읽히므로 위로 올린다). admin 경로의 판정 결과는 무변.
           const body = await request.json();
           if (!body.sheet) return json({ error: "sheet name required" }, env, 400);
+          const opsAuth = await checkAdmin(request, env, token);
+          let opsWho = opsAuth.admin ? (opsAuth.userName || "admin") : null;
+          if (!opsAuth.admin) {
+            if (!ACCT_WRITE_SHEETS.includes(opsSheetName(body.sheet)))
+              return json({ error: "Admin only (ops write)" }, env, 403);
+            const acct = await checkAccountant(request, env, token);
+            if (!acct.acct) return json({ error: "Admin or accountant only (ops write)" }, env, 403);
+            opsWho = acct.userName || "acct";
+          }
           const rows = Array.isArray(body.rows) ? body.rows : [];
           opsCache = {};  // ops 쓰기 → ops 캐시 전체 무효화(대상 시트 소수)
           if (body.mode === "append") return json(await opsAppendRows(token, body.sheet, rows), env);
-          return json(await opsWriteSheet(token, body.sheet, body.headers || [], rows), env);
+          const opsRes = await opsWriteSheet(token, body.sheet, body.headers || [], rows);
+          // 사업비는 돈 원장이라 **누가 언제 몇 행을 썼는지**를 로그 시트에 남긴다(다른 운영 시트는 종전대로 무기록).
+          if (ACCT_WRITE_SHEETS.includes(opsSheetName(body.sheet)))
+            try { await logToSheet(token, opsWho || "?", "OPS", opsSheetName(body.sheet), 0, `write ${rows.length}\uD589`); } catch (e) {}
+          return json(opsRes, env);
         }
       }
 
@@ -4620,6 +4657,34 @@ var index_default = {
       //   이름 기반 조회(포지션 무관 = 열 밀림 사고 축과 무관) + confirm 문자열 재입력 필수(오타·오호출 방어) + 로그 시트 기록.
       //   ① POST /api/maint/delete-column {sheet, header, confirm:'<sheet>:<header>'} — 1행에서 헤더를 찾아 그 열 전체 물리 삭제(Range.delete shift:Left). 헤더 없음 = ok:false(멱등).
       //   ② POST /api/maint/delete-sheet {sheet:'운영_<이름>', confirm:'<sheet>'} — 운영_ 네임스페이스만(핵심 시트 보호). 시트 없음 = ok:false(멱등).
+      // [260812] ③ POST /api/maint/add-column {sheet, header} — 1행 **맨 끝에** 헤더를 심는다(멱등: 이미 있으면 무접촉).
+      //   왜 필요한가: 담당자 시트에 `회계여부`(P열)를 새로 다는데, 절대명령 9가 xlsm 직접 편집을 금지한다 →
+      //   시트 구조 변경도 Worker를 거쳐야 한다. delete-column의 짝이고 **끝 append만** 한다
+      //   (중간 삽입 = 뒤 열 전부 밀림 = 앱지침 「positional 시트 철칙」이 금지한 그 사고).
+      //   confirm 재입력은 안 건다 — 열 추가는 되돌릴 수 있고(delete-column) 기존 값을 한 칸도 안 건드린다.
+      if (url.pathname === "/api/maint/add-column" && request.method === "POST") {
+        const aAuth = await checkAdmin(request, env, token);
+        if (!aAuth.admin) return json({ error: "Admin only (maintenance)" }, env, 403);
+        const body = await request.json();
+        const sheet = String(body.sheet || "").trim(), header = String(body.header || "").trim();
+        if (!sheet || !header) return json({ error: "sheet/header required" }, env, 400);
+        const { driveId, itemId } = await findFile(token);
+        const meta = await graphGet(token, `${sheetPathFor(driveId, itemId, sheet)}/usedRange?$select=columnCount`);
+        const nCol = meta.columnCount || 0;
+        const hr = nCol ? await graphGet(token, `${sheetPathFor(driveId, itemId, sheet)}/range(address='A1:${colLetter(nCol)}1')?$select=values`) : { values: [[]] };
+        const headers = ((hr.values && hr.values[0]) || []).map((v) => String(v == null ? "" : v).trim());
+        const at = headers.indexOf(header);
+        if (at >= 0) return json({ ok: true, sheet, header, col: colLetter(at + 1), note: "already exists (no-op)" }, env);
+        // 끝의 빈 헤더 칸은 재사용한다(구 열 삭제 자국) — 없으면 그 다음 칸.
+        let idx = headers.length;
+        while (idx > 0 && !headers[idx - 1]) idx--;
+        const col = colLetter(idx + 1);
+        await graphPatch(token, `${sheetPathFor(driveId, itemId, sheet)}/range(address='${col}1:${col}1')`, { values: [[header]] });
+        invalidateSheetCache("manager");
+        opsCache = {};
+        await logToSheet(token, "admin", "MAINT", sheet, 0, `add-column ${header} (${col}\uC5F4)`);
+        return json({ ok: true, sheet, header, col }, env);
+      }
       if (url.pathname === "/api/maint/delete-column" && request.method === "POST") {
         const mAuth = await checkAdmin(request, env, token);
         if (!mAuth.admin) return json({ error: "Admin only (maintenance)" }, env, 403);
