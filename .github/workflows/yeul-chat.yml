@@ -1,0 +1,163 @@
+name: 예울이 채팅 (Messages API 직행 · 5계정 폴오버)
+
+# [260812 운영자 「워커 쓰지말고 깃에서해 그래야 4개 계정 배선이 돌아」 · 「액션」]
+# 예울이 채팅 전용 워크플로. 종전엔 nb-blog.yml 안의 한 분기였고, 그게 느림의 두 축이었다:
+#   ① `npm install -g @anthropic-ai/claude-code` — 질문마다 CLI를 새로 깐다(실측 20~30초).
+#   ② `concurrency: nb-blog` — 블로그 초안(수 분)이 돌고 있으면 채팅이 **그 뒤에 줄을 선다**.
+# 이 파일은 둘 다 없앤다: CLI 대신 Messages API 직행(`shared/claude_api_failover.js` · Node 20 내장 fetch로
+#   설치 0) + 질문마다 독립 concurrency. 5계정 폴오버·승격 신호 계약은 CLI판과 **같은 모듈**에서 온다.
+#
+# ⚠ 이벤트 타입이 왜 `nb-blog` 인가 = Worker `/api/blog/dispatch`가 `event_type: "nb-blog"` 로 **고정 발신**하기
+#   때문이다(`src/index.js`). 운영자 지시가 「워커 쓰지 말고」이므로 Worker를 고치는 대신 같은 이벤트를 함께 받고
+#   `yeulchat` 페이로드일 때만 도는 방식을 쓴다 → **Worker 무변경**. 짝 규칙: nb-blog.yml 은 `yeulchat` 이면 안 돈다
+#   (그쪽 job `if`) · 이 파일은 `yeulchat` 이 아니면 안 돈다. 한쪽만 고치면 한 질문에 워크플로가 둘 돌거나 0개 돈다.
+#
+# 산출 = drafts/yc<ts>r<n>.json {mode:'chat', ok, text} → 앱이 /api/blog/draft 로 폴링(경로 무변경).
+# ⚠ 공개 레포 커밋이다 — 민감 내용 질문 금지. 회수기(shared/drafts_retain.mjs)가 기능별 최근 3건만 남긴다.
+# 페르소나 SSOT = persona/yeuli.md(카드 수정 = 말투 자동 추종) · 앱 설정 오버라이드는 payload.persona.
+# 모델 라우팅 SSOT = 아래 2줄(기본 sonnet-5·low / deep opus-5·medium). 앱은 판정(payload.deep)만 보낸다.
+
+on:
+  repository_dispatch:
+    types: [nb-blog]
+  # 시험 사격(dry-run) — **커밋·푸시를 안 한다**. 왜 필요한가: `repository_dispatch`는 **기본 브랜치의 워크플로만**
+  #   실행하므로, 이 파일이 main에 들어가기 전엔 실경로를 한 번도 못 돌려본다. 그런데 260812 개편으로 채팅은
+  #   폴백이 없는 단일 갈래가 됐다(종전 Worker→Actions 2단) — 「머지해야 처음 돌아본다」는 그대로 못 받는 위험이다.
+  #   `workflow_dispatch`는 **브랜치를 골라 실행**할 수 있으니, PR 브랜치에서 토큰·API·폴오버·체크아웃까지
+  #   실물로 한 번 태워보고 머지한다. main을 건드리지 않으려고 산출물은 로그에만 남긴다.
+  workflow_dispatch:
+    inputs:
+      q:
+        description: '시험 질문(답은 로그에만 — 커밋 안 함)'
+        required: false
+        default: '오늘 날씨는 어때?'
+      deep:
+        description: 'deep 라우팅(opus-5·medium)으로 시험'
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: write
+
+# 질문마다 독립 그룹 — 채팅끼리도, 블로그 초안과도 줄서지 않는다(동시 push는 아래 rebase 재시도로 흡수).
+concurrency:
+  group: yeul-chat-${{ github.event.client_payload.d.id || github.event.client_payload.id || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  chat:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.client_payload.d.yeulchat || github.event.client_payload.yeulchat }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5   # 프론트 폴 한도(4분)보다 조금 길게 — 매달린 런이 다음 질문을 막지는 않는다(그룹이 질문별)
+    steps:
+      # 필요한 것만 받는다 — 이 레포 작업본엔 60MB 넘는 바이너리(zip·wasm·onnx·ai)가 있어 전체 체크아웃이 비싸다.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /persona/
+            /shared/
+            /drafts/
+
+      # setup-node 없음 — ubuntu-latest 는 Node 20+ 기본 탑재이고, 쓰는 것은 전역 fetch 뿐이다(의존성 0).
+      - name: 답변 생성(Messages API) + 커밋
+        uses: actions/github-script@v7
+        env:
+          # 계정 선택은 여기서만 — ACTIVE_ACCOUNT 부터 체인 순환(shared/claude_failover.js CHAIN).
+          # ⚠ 계정 추가·제거 시 동기화 지점 = docs/KEYS.md 1-b 목록(여기도 그 하나다).
+          ACTIVE_ACCOUNT: ${{ vars.ACTIVE_ACCOUNT || 'EMS1130G' }}
+          ACC_EMS1130G: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN_EMS1130G }}
+          ACC_EMS1130N: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN_EMS1130N }}
+          ACC_MUTENO: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN_MUTENO }}
+          ACC_MUTENONA: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN_MUTENONA }}
+          ACC_NOMUTEFB: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN_NOMUTEFB }}
+        with:
+          script: |
+            const { execFileSync } = require('child_process');
+            const fs = require('fs');
+            const path = require('path');
+            // dry = 시험 사격(workflow_dispatch). 생성까지는 실경로와 **완전히 같고**, 커밋·푸시만 안 한다.
+            const dry = context.eventName === 'workflow_dispatch';
+            const _in = (context.payload.inputs || {});
+            const _cp = context.payload.client_payload || {};
+            const p = dry
+              ? { q: _in.q || '오늘 날씨는 어때?', deep: (_in.deep === true || _in.deep === 'true') ? 1 : 0 }
+              : ((_cp && typeof _cp.d === 'object' && _cp.d) ? _cp.d : _cp);
+            const id = String(p.id || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 80) || ('yc' + Date.now());
+
+            // 페르소나 = persona/yeuli.md 원문(카드 수정이 곧 말투 · 코드 수정 0) · p.persona(앱 설정) 있으면 그쪽 우선.
+            let card = '';
+            try { card = fs.readFileSync('persona/yeuli.md', 'utf8'); } catch (e) { core.warning('페르소나 카드 없음: ' + e.message); }
+            const over = String(p.persona || '').slice(0, 6000).trim();
+            const sysCard = over || card ||
+              '너는 GS칼텍스 예울마루(전남 여수의 복합문화예술공간)의 공식 도우미 캐릭터 「예울이」다. 밝고 정중한 존댓말로 간결하게 답한다.';
+
+            // 프롬프트는 종전 CLI판과 **같은 문장**이다 — 엔진만 바뀌고 답의 결은 안 바뀌게.
+            let ask = '위 페르소나 카드의 인물 「예울이」로서, 예울마루 직원이 사내 앱 채팅으로 보낸 아래 질문에 답한다.\n';
+            ask += '- 사실만: 카드·참고 정보에 없는 구체 사실(날짜·가격·규정 조항·인원수)은 지어내지 말고 「확실하지 않다」고 말한다.\n';
+            ask += '- 길이: 2~6문장, 채팅 말풍선 하나 분량. 머리말·사고 과정 없이 답변 본문만 출력한다.\n';
+            if (p.ctx) ask += '\n# 참고 정보 (앱이 동봉한 집계 요약 — 개인정보 없음)\n' + String(p.ctx).slice(0, 1200) + '\n';
+            ask += '\n# 질문\n' + String(p.q || '').slice(0, 800);
+
+            // 모델 라우팅 = 이 2줄이 SSOT(앱은 판정만 보낸다). 기본 = 소넷5·low(뭐든 빠르게) / deep = opus5·medium.
+            const deep = !!p.deep;
+            const model = deep ? 'claude-opus-5' : 'claude-sonnet-5';
+            const effort = deep ? 'medium' : 'low';
+
+            const { runClaudeApiWithFailover } = require(path.join(process.env.GITHUB_WORKSPACE, 'shared/claude_api_failover.js'));
+            const t0 = Date.now();
+            const r = await runClaudeApiWithFailover({
+              model, effort,
+              system: sysCard + '\n\n---\n\n# 지금 할 일',
+              user: ask,
+              maxTokens: deep ? 4000 : 2000
+            });
+            core.info('[yeul-chat] ' + model + '·' + effort + ' · ' + (Date.now() - t0) + 'ms · 계정=' + (r.account || '-'));
+
+            // 앱이 「어느 모델·어느 계정이 답했나」를 그대로 읽을 수 있게 실측값을 실어 보낸다(짐작해 적지 않는다).
+            const out = r.ok
+              ? { id, mode: 'chat', ok: true, text: String(r.text).slice(0, 8000), model, effort, account: r.account, ms: Date.now() - t0, ts: new Date().toISOString() }
+              : { id, mode: 'chat', ok: false, error: String(r.error || '빈 응답').slice(0, 500), model, effort, ts: new Date().toISOString() };
+
+            // 시험 사격은 여기서 끝 — main에 아무것도 안 남긴다. 실측치(계정·소요·모델)는 로그로 확인.
+            if (dry) {
+              core.info('[dry-run] 커밋·푸시 생략. 질문=' + String(p.q).slice(0, 60));
+              core.info('[dry-run] 결과=' + (r.ok ? 'OK' : 'FAIL') + ' · 계정=' + (r.account || '-') + ' · ' + (Date.now() - t0) + 'ms');
+              core.info('[dry-run] 답변 ▼\n' + (r.ok ? String(r.text) : String(r.error)));
+              if (!r.ok) core.setFailed('시험 사격 실패: ' + String(r.error || '').slice(0, 300));
+              return;
+            }
+
+            fs.mkdirSync('drafts', { recursive: true });
+            fs.writeFileSync('drafts/' + id + '.json', JSON.stringify(out));
+
+            // 산출물 회수 — 기능별 최근 3개만(공용 회수기 · 공개 레포라 남은 개수가 곧 노출 면적이다).
+            try {
+              const { retainDrafts } = await import('file://' + path.join(process.env.GITHUB_WORKSPACE, 'shared/drafts_retain.mjs'));
+              const rr = retainDrafts({ root: process.env.GITHUB_WORKSPACE, keep: 3, protect: id });
+              core.info('[drafts] 회수 ' + rr.removed.length + '건 · 기능별 최근 ' + rr.keep + '건 유지');
+            } catch (e) { core.warning('[drafts] 회수 건너뜀: ' + e.message); }
+
+            execFileSync('git', ['config', 'user.name', 'github-actions[bot]']);
+            execFileSync('git', ['config', 'user.email', '41898282+github-actions[bot]@users.noreply.github.com']);
+            execFileSync('git', ['add', '-A', 'drafts']);
+            execFileSync('git', ['commit', '-m', 'chore(chat): ' + id + ' [skip ci]']);
+            let pushed = false;
+            for (let i = 0; i < 6; i++) {
+              try { execFileSync('git', ['push', 'origin', 'HEAD:main']); pushed = true; break; }
+              catch (e) { try { execFileSync('git', ['pull', '--rebase', 'origin', 'main']); } catch (e2) {} }
+            }
+            if (!pushed) core.setFailed('push 실패');
+            // 답이 안 나온 것 자체도 실패로 남긴다 — drafts에는 ok:false 가 이미 실려 앱이 사유를 말할 수 있다.
+            if (!r.ok) core.setFailed('생성 실패: ' + String(r.error || '').slice(0, 200));
+
+      # 활성 계정이 이번 런에 쿼터로 막혔으면 승격 신호를 로그에 남긴다(sticky 승격 자체는 nb-blog.yml 이 직렬로 담당 —
+      # 채팅은 질문별 병렬이라 vars PATCH 경쟁을 만들 수 있어 여기서는 승격하지 않는다).
+      - name: 활성 계정 쿼터 신호 확인
+        if: always()
+        run: |
+          if [ -f "$GITHUB_WORKSPACE/.nomute_active_quota" ]; then
+            echo "::warning::활성 계정이 쿼터로 막혀 폴오버했다 — 승격은 다음 nb-blog 런에서 누적·처리된다."
+          fi

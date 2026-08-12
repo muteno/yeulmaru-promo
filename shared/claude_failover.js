@@ -113,7 +113,10 @@ function runClaudeWithFailover(opts) {
   return { ok: false, error: lastErr || '전 계정 실패', account: null, order: order };
 }
 
-module.exports = { runClaudeWithFailover, CHAIN, QUOTA_RE, rotatedOrder };
+// ⚠ CHAIN·QUOTA_RE·rotatedOrder·markActiveQuota·scrubToken 은 **폴오버 계약의 SSOT**다 —
+//   같은 체인을 도는 다른 실행기(예: `shared/claude_api_failover.js` = Messages API 직행)는 여기서 가져다 쓴다.
+//   재선언하면 KEYS.md가 경고하는 「CHAIN 동기화 지점」이 하나 더 늘어난다(어긋나면 폴오버·승격 오작동).
+module.exports = { runClaudeWithFailover, CHAIN, QUOTA_RE, rotatedOrder, markActiveQuota, scrubToken, signalPath };
 
 // 로컬 점검용(claude 호출 안 함): node shared/claude_failover.js  → 체인·활성 기준 순환 순서·신호 경로 출력.
 if (require.main === module) {

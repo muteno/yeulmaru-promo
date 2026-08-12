@@ -3,12 +3,11 @@ name: 앱 블로그/분석 (claude -p · repository_dispatch)
 # 앱(index.html)이 repository_dispatch[nb-blog]로 입력을 던지면 claude -p(구독 OAuth)로
 # 초안(mode=blog) 또는 OCR 분석(mode=structure)을 만들어 drafts/<id>.json 으로 커밋.
 # 앱은 그 파일을 폴링해 결과를 받는다. (Worker는 OCR=Google Vision만 담당)
-# [260803 예울이 AI 채팅] payload.yeulchat=1 이면 블로그 경로 대신 「예울이」 분기 — persona/yeuli.md 카드(루시봇
-#   컨셉: 카드 원문 주입 = 카드 수정이 곧 말투, 코드 수정 0) + 질문 1턴 → drafts/yc<ts>r<n>.json 커밋(같은 폴링 경로).
-#   Worker는 여분 payload 키를 그대로 통과시키므로 배포된 /api/blog/dispatch·/api/blog/draft 를 무변경 재사용한다.
-#   모델 라우팅(운영자 260806 갱신): 기본 = claude-sonnet-5·effort **low**(뭐든 빠르게 답한다 — 260803 high에서 내림)
-#   / 복잡 질문(payload.deep=1, 앱 _yeulAiDeep 판정 — 이때 앱이 「기다려 달라」 말풍선을 먼저 띄움) = claude-opus-5·effort medium.
-#   (v3: payload.t 시각 동봉·카드 모드 2축은 폐지 — 운영자 "밤에 아무도 안 씀", 츤데레 단일 결.)
+# [260812 이사] 예울이 AI 채팅(payload.yeulchat=1)은 **이 파일에서 떠났다** → `.github/workflows/yeul-chat.yml`.
+#   왜 = ①아래 `npm install -g @anthropic-ai/claude-code`(실측 20~30초)를 질문마다 치른다 ②`concurrency: nb-blog`라
+#   블로그 초안이 돌면 채팅이 그 뒤에 줄을 선다. 새 파일은 CLI 대신 Messages API 직행(설치 0) + 질문별 concurrency다.
+#   모델 라우팅 SSOT도 그쪽으로 갔다(기본 sonnet-5·low / deep opus-5·medium) — 여기서 다시 정하지 마라.
+#   이 워크플로는 job `if` 로 yeulchat 페이로드를 걸러낸다(짝 규칙 = 저쪽은 yeulchat 이 아니면 안 돈다).
 # [260813 고객 분류 조건 파서] payload.segparse=1 이면 「자연어 한 줄 → 조건 JSON 하나」 분기 — 답변·명단을 만들지 않는다.
 #   받는 것 = 질문 문장 + 고를 수 있는 값 목록(장르·거주지·데이터 기간)뿐 · 돌려주는 것 = drafts/<id>.json {mode:'segparse', cond}.
 #   명단·이름·전화는 애초에 오지 않는다(앱이 브라우저 안에서만 센다) → 공개 레포에 남는 산출물에 개인정보 0.
@@ -34,6 +33,11 @@ concurrency:
 
 jobs:
   run:
+    # [260812] 예울이 채팅은 이 워크플로가 안 받는다 — 전용 `yeul-chat.yml`이 같은 이벤트를 받아 처리한다.
+    #   Worker `/api/blog/dispatch`가 event_type을 "nb-blog" 로 **고정 발신**하므로 타입으로는 못 가른다
+    #   (운영자 260812 「워커 쓰지말고」 = Worker 무변경) → 페이로드로 가른다. 저쪽 job `if` 와 **정확히 반대**여야
+    #   한 질문에 워크플로가 둘 돌거나 0개 도는 일이 없다.
+    if: ${{ !(github.event.client_payload.d.yeulchat || github.event.client_payload.yeulchat) }}
     runs-on: ubuntu-latest
     timeout-minutes: 12   # 리서치 멀티턴이 매달려도 다음 요청 큐(concurrency)를 오래 막지 않게 — 프론트 폴 한도(12분)와 정렬(감사 MED 반영)
     steps:
@@ -123,52 +127,11 @@ jobs:
               if (!spushed) core.setFailed('push 실패');
               return;
             }
-            if (p.yeulchat) {
-              let card = '';
-              try { card = fs.readFileSync('persona/yeuli.md', 'utf8'); } catch (e) {}
-              const over = String(p.persona || '').slice(0, 6000).trim();
-              const sysCard = over || card || '너는 GS칼텍스 예울마루(전남 여수의 복합문화예술공간)의 공식 도우미 캐릭터 「예울이」다. 밝고 정중한 존댓말로 간결하게 답한다.';
-              let cprompt = sysCard + '\n\n---\n\n# 지금 할 일\n';
-              cprompt += '위 페르소나 카드의 인물 「예울이」로서, 예울마루 직원이 사내 앱 채팅으로 보낸 아래 질문에 답한다.\n';
-              cprompt += '- 사실만: 카드·참고 정보에 없는 구체 사실(날짜·가격·규정 조항·인원수)은 지어내지 말고 「확실하지 않다」고 말한다.\n';
-              cprompt += '- 길이: 2~6문장, 채팅 말풍선 하나 분량. 머리말·사고 과정 없이 답변 본문만 출력한다.\n';
-              if (p.ctx) cprompt += '\n# 참고 정보 (앱이 동봉한 집계 요약 — 개인정보 없음)\n' + String(p.ctx).slice(0, 1200) + '\n';
-              cprompt += '\n# 질문\n' + String(p.q || '').slice(0, 800);
-              // [260806 운영자 「sonnet 5 low 로 일단 배선 · 빠르게 뭐든 대답 · 어려우면 opus 5.0 medium 전환」]
-              //   모델 라우팅 = 기본 소넷5·**low**(260803 high에서 내림 — 속도 우선) / 복잡(deep) opus5·medium(앱이 대기 안내 선표시).
-              //   ⚠ 이 두 줄이 「어떤 모델이 답하는가」의 SSOT다 — 앱은 판정(payload.deep)만 보내고 모델명·effort는 안 보낸다.
-              const cdeep = !!p.deep;
-              const cmodel = cdeep ? 'claude-opus-5' : 'claude-sonnet-5';
-              const ceffort = cdeep ? 'medium' : 'low';
-              const cpath = require('path');
-              const { runClaudeWithFailover: runChat } = require(cpath.join(process.env.GITHUB_WORKSPACE, 'shared/claude_failover.js'));
-              const cr = runChat({ args: ['-p', '--model', cmodel, '--effort', ceffort, '--max-turns', '1'], input: cprompt, cwd: process.env.RUNNER_TEMP || '/tmp' });
-              const cout = (cr.ok && String(cr.raw || '').trim())
-                ? { id, mode: 'chat', ok: true, text: String(cr.raw).trim().slice(0, 8000), ts: new Date().toISOString() }
-                : { id, mode: 'chat', ok: false, error: (cr.error || '빈 응답'), ts: new Date().toISOString() };
-              fs.mkdirSync('drafts', { recursive: true });
-              fs.writeFileSync('drafts/' + id + '.json', JSON.stringify(cout));
-              // 산출물 회수 — 기능별 **최근 3개**만 남긴다(공용 회수기 `shared/drafts_retain.mjs` · 운영자 260805).
-              // ⚠️ 구 방식은 채팅(yc*)만 3일 TTL로 지우고 **블로그 초안(nb*)은 무접촉**이라 계속 쌓였다
-              //    (260805 실측 = nb 18건 누적). 이 레포는 공개 레포라 남은 개수가 곧 노출 면적이다.
-              try {
-                const cpathlib = require('path');
-                const { retainDrafts } = await import('file://' + cpathlib.join(process.env.GITHUB_WORKSPACE, 'shared/drafts_retain.mjs'));
-                const rr = retainDrafts({ root: process.env.GITHUB_WORKSPACE, keep: 3, protect: id });
-                core.info('[drafts] 회수 ' + rr.removed.length + '건 · 기능별 최근 ' + rr.keep + '건 유지');
-              } catch (e) { core.warning('[drafts] 회수 건너뜀: ' + e.message); }
-              execFileSync('git', ['config', 'user.name', 'github-actions[bot]']);
-              execFileSync('git', ['config', 'user.email', '41898282+github-actions[bot]@users.noreply.github.com']);
-              execFileSync('git', ['add', '-A', 'drafts']);
-              execFileSync('git', ['commit', '-m', 'chore(chat): ' + id + ' [skip ci]']);
-              let cpushed = false;
-              for (let i = 0; i < 6; i++) {
-                try { execFileSync('git', ['push', 'origin', 'HEAD:main']); cpushed = true; break; }
-                catch (e) { try { execFileSync('git', ['pull', '--rebase', 'origin', 'main']); } catch (e2) {} }
-              }
-              if (!cpushed) core.setFailed('push 실패');
-              return;
-            }
+            // [260812] 예울이 채팅(yeulchat) 분기는 **여기서 떠났다** → `.github/workflows/yeul-chat.yml`.
+            //   왜: ①이 워크플로는 매 런마다 `claude -p` CLI를 설치한다(20~30초) ②`concurrency: nb-blog` 라
+            //   블로그 초안이 돌면 채팅이 그 뒤에 줄을 선다. 채팅은 둘 다 못 견딘다(운영자 260812 「액션」).
+            //   짝 규칙 = 아래 job `if` 가 yeulchat 을 걸러내고, 저쪽은 yeulchat 이 아니면 안 돈다.
+            //   ⚠ 여기에 채팅 분기를 되살리지 마라 — 한 질문에 워크플로가 둘 돌아 답이 두 번 커밋된다.
             const prevDraft = String(p.prevDraft || '').slice(0, 12000).trim();
             const revise = String(p.revise || '').slice(0, 1000).trim();
             // 리서치(BW-2)는 '새 초안'에서만 — 코멘트 수정은 빠른 반영이 우선(태그는 매번 재산출)
