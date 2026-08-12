@@ -20,18 +20,34 @@ name: 예울이 채팅 (Messages API 직행 · 5계정 폴오버)
 on:
   repository_dispatch:
     types: [nb-blog]
+  # 시험 사격(dry-run) — **커밋·푸시를 안 한다**. 왜 필요한가: `repository_dispatch`는 **기본 브랜치의 워크플로만**
+  #   실행하므로, 이 파일이 main에 들어가기 전엔 실경로를 한 번도 못 돌려본다. 그런데 260812 개편으로 채팅은
+  #   폴백이 없는 단일 갈래가 됐다(종전 Worker→Actions 2단) — 「머지해야 처음 돌아본다」는 그대로 못 받는 위험이다.
+  #   `workflow_dispatch`는 **브랜치를 골라 실행**할 수 있으니, PR 브랜치에서 토큰·API·폴오버·체크아웃까지
+  #   실물로 한 번 태워보고 머지한다. main을 건드리지 않으려고 산출물은 로그에만 남긴다.
+  workflow_dispatch:
+    inputs:
+      q:
+        description: '시험 질문(답은 로그에만 — 커밋 안 함)'
+        required: false
+        default: '오늘 날씨는 어때?'
+      deep:
+        description: 'deep 라우팅(opus-5·medium)으로 시험'
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: write
 
 # 질문마다 독립 그룹 — 채팅끼리도, 블로그 초안과도 줄서지 않는다(동시 push는 아래 rebase 재시도로 흡수).
 concurrency:
-  group: yeul-chat-${{ github.event.client_payload.d.id || github.event.client_payload.id }}
+  group: yeul-chat-${{ github.event.client_payload.d.id || github.event.client_payload.id || github.run_id }}
   cancel-in-progress: false
 
 jobs:
   chat:
-    if: ${{ github.event.client_payload.d.yeulchat || github.event.client_payload.yeulchat }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.client_payload.d.yeulchat || github.event.client_payload.yeulchat }}
     runs-on: ubuntu-latest
     timeout-minutes: 5   # 프론트 폴 한도(4분)보다 조금 길게 — 매달린 런이 다음 질문을 막지는 않는다(그룹이 질문별)
     steps:
@@ -62,8 +78,13 @@ jobs:
             const { execFileSync } = require('child_process');
             const fs = require('fs');
             const path = require('path');
+            // dry = 시험 사격(workflow_dispatch). 생성까지는 실경로와 **완전히 같고**, 커밋·푸시만 안 한다.
+            const dry = context.eventName === 'workflow_dispatch';
+            const _in = (context.payload.inputs || {});
             const _cp = context.payload.client_payload || {};
-            const p = (_cp && typeof _cp.d === 'object' && _cp.d) ? _cp.d : _cp;
+            const p = dry
+              ? { q: _in.q || '오늘 날씨는 어때?', deep: (_in.deep === true || _in.deep === 'true') ? 1 : 0 }
+              : ((_cp && typeof _cp.d === 'object' && _cp.d) ? _cp.d : _cp);
             const id = String(p.id || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 80) || ('yc' + Date.now());
 
             // 페르소나 = persona/yeuli.md 원문(카드 수정이 곧 말투 · 코드 수정 0) · p.persona(앱 설정) 있으면 그쪽 우선.
@@ -99,6 +120,15 @@ jobs:
             const out = r.ok
               ? { id, mode: 'chat', ok: true, text: String(r.text).slice(0, 8000), model, effort, account: r.account, ms: Date.now() - t0, ts: new Date().toISOString() }
               : { id, mode: 'chat', ok: false, error: String(r.error || '빈 응답').slice(0, 500), model, effort, ts: new Date().toISOString() };
+
+            // 시험 사격은 여기서 끝 — main에 아무것도 안 남긴다. 실측치(계정·소요·모델)는 로그로 확인.
+            if (dry) {
+              core.info('[dry-run] 커밋·푸시 생략. 질문=' + String(p.q).slice(0, 60));
+              core.info('[dry-run] 결과=' + (r.ok ? 'OK' : 'FAIL') + ' · 계정=' + (r.account || '-') + ' · ' + (Date.now() - t0) + 'ms');
+              core.info('[dry-run] 답변 ▼\n' + (r.ok ? String(r.text) : String(r.error)));
+              if (!r.ok) core.setFailed('시험 사격 실패: ' + String(r.error || '').slice(0, 300));
+              return;
+            }
 
             fs.mkdirSync('drafts', { recursive: true });
             fs.writeFileSync('drafts/' + id + '.json', JSON.stringify(out));
