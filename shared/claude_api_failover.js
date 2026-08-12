@@ -122,9 +122,16 @@ async function askOnce(token, o) {
     for (const b of (data.content || [])) {
       if (!b) continue;
       if (b.type === 'server_tool_use') searches++;
-      if (b.type === 'web_search_tool_result' && b.content && !Array.isArray(b.content) && b.content.error_code) {
-        searchErrs.push(String(b.content.error_code));
+      // 결과 블록 이름은 도구 버전에 따라 갈릴 수 있어 접미사로 잡는다(`web_search_tool_result` 등).
+      if (/tool_result$/.test(String(b.type || '')) && b.content && !Array.isArray(b.content)) {
+        const c = b.content;
+        if (c.error_code || c.type === 'web_search_tool_result_error') searchErrs.push(String(c.error_code || c.type));
       }
+    }
+    // 구조만 한 줄 — 내용은 안 찍는다(공개 레포 로그다). 「도구가 섰는데 결과가 없다」류를 여기서 읽는다.
+    if (tools) {
+      console.log('  · 블록 [' + (data.content || []).map((b) => (b && b.type) || '?').join(',') +
+        '] · stop=' + (data.stop_reason || '-'));
     }
 
     // 안전 분류기 거절 = 같은 모델이라 계정을 바꿔도 결과가 같다 → 체인을 더 태우지 않고 끝낸다.
