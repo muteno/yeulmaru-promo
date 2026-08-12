@@ -54,7 +54,8 @@
 - **주의**: 만료되면 그 계정만 폴오버로 건너뛰고, 전 계정 만료 시 초안 생성 실패.
 - **⚠️ 정정(260806)**: 구판 문구 「구독 OAuth는 **Actions의 `claude -p`에서만** 동작 — 원시 Messages API 불가」는 **오기**다. 구독 OAuth 토큰(`sk-ant-oat…`)은 `Authorization: Bearer <토큰>` + `anthropic-beta: oauth-2025-04-20` 헤더로 **`api.anthropic.com/v1/messages`에서 그대로 동작**한다(공식 문서 경로). 단 하나의 추가 규약 = **system 첫 블록이 Claude Code 신원**이어야 한다(아니면 403 `Request not allowed`) — `src/index.js` `claudeText`·`extractPromoInfo`·`yeulChat`이 이미 그렇게 부르고 있다.
   - *왜 정정하나*: 이 한 줄을 근거로 260806 세션이 「예울이를 Worker에서 즉답시키려면 **유료 `ANTHROPIC_API_KEY` 신규 발급 = 비용 발생**」이라고 운영자에게 보고했다. **이미 있는 배선을 못 본 오판**이었고, 문구를 고치지 않으면 다음 세션이 같은 오판을 반복한다.
-- **⚠️ 계정 추가/제거 시 동기화 지점(반드시 전부)**: ①`shared/claude_failover.js` `CHAIN` ②`shared/account_failover.py` `CHAIN` ③`nb-blog.yml` env `ACC_*` ④`blog-draft.yml` env `ACC_*` ⑤(체인 선두 변경 시) 각 워크플로 `|| 'EMS1130G'` 기본값 ⑥해당 `CLAUDE_CODE_OAUTH_TOKEN_*` 시크릿. CHAIN 4곳(①②③④)이 어긋나면 폴오버/승격 오작동.
+- **⚠️ 계정 추가/제거 시 동기화 지점(반드시 전부)**: ①`shared/claude_failover.js` `CHAIN` ②`shared/account_failover.py` `CHAIN` ③`nb-blog.yml` env `ACC_*` ④`blog-draft.yml` env `ACC_*` ⑤**`yeul-chat.yml` env `ACC_*`(260812 신설)** ⑥(체인 선두 변경 시) 각 워크플로 `|| 'EMS1130G'` 기본값 ⑦해당 `CLAUDE_CODE_OAUTH_TOKEN_*` 시크릿. CHAIN 5곳(①②③④⑤)이 어긋나면 폴오버/승격 오작동.
+  - ⚠ `shared/claude_api_failover.js`(Messages API 직행판 · 260812)는 **CHAIN을 재선언하지 않고** `claude_failover.js`에서 가져다 쓴다 — 동기화 지점을 늘리지 않으려는 의도다. 새 실행기를 만들 때도 같은 규약을 지켜라.
 
 ### 1-c. Actions Secret `GH_VARS_TOKEN` — 활성 계정 자동 승격(sticky failover)
 - **무엇**: Fine-grained **PAT**, 권한 = 이 레포 **Variables: Read and write** (딱 이것만 — 최소권한).
@@ -82,8 +83,10 @@
   - **카카오 76자 문구 제안(260805)도 키를 새로 안 만든다** — `POST /api/content/kakao`가 이 키 하나로 포스터 OCR(비전)과 문구 생성(텍스트)을 둘 다 한다. 미설정이면 이 엔드포인트만 503(앱 나머지 무관하게 정상) · 프론트는 「AI가 아직 연결되지 않았어요」 안내.
   - `LOGO_MODEL` 미설정 시 후보 순서 = `gemini-3.1-flash-image` → `gemini-2.5-flash-image`. 프리뷰 모델이 은퇴해 404가 나면 이 변수에 현행 모델명을 넣으면 코드 수정 없이 복구된다.
 - `KASI_KEY` — 공공데이터포털(한국천문연구원) 특일정보 = 공휴일
-- `ANTHROPIC_AUTH_TOKEN`(구독 OAuth `sk-ant-oat…`) **또는** `ANTHROPIC_API_KEY`(유료) — **예울이 채팅 즉답의 엔진**(`POST /api/yeul/chat` · 260806). 모델 = 기본 `claude-sonnet-5`·effort low / 어려우면 `claude-opus-5`·effort medium(SSOT = `src/index.js` `yeulChat`). 미설정이면 이 엔드포인트만 503 → **앱이 조용히 Actions 경로로 폴백**(느려질 뿐 기능은 산다). 블로그·분석의 `claudeText`/`extractPromoInfo`도 같은 키를 쓴다.
-  - ⚠ 위 1-b 정정 참조 — 구독 OAuth 토큰이 원시 Messages API에서 동작한다. 이 슬롯을 채우려고 **유료 키를 새로 발급할 필요가 없다**(계정 5개의 `sk-ant-oat…` 중 하나를 넣으면 된다).
+- `ANTHROPIC_AUTH_TOKEN`(구독 OAuth `sk-ant-oat…`) **또는** `ANTHROPIC_API_KEY`(유료) — 블로그·분석의 `claudeText`/`extractPromoInfo`, 검색 모니터링 AI 선별(`smJudge`)의 엔진.
+  - **⚠️ 정정(260812) — 예울이 채팅은 더 이상 이 키를 안 쓴다.** 구판 문구 「**예울이 채팅 즉답의 엔진**(`POST /api/yeul/chat`)」은 260812에 폐기됐다. 이유 = **이 슬롯은 토큰이 한 개**라 그 계정이 쿼터·만료로 막히면 채팅이 그대로 죽는데, 앱은 그걸 **조용히** Actions로 폴백해 「모델이 안 붙은 것처럼」 보인다. 260812 실측이 정확히 그 상태였다 — 시크릿은 설정돼 있는데(운영자 대시보드 확인) 최근 채팅 3건이 전부 Actions 커밋(`drafts/yc*.json`)으로 남았고 실측 소요 **~90초**였다. 운영자 결정 = 「워커 쓰지말고 깃에서해 **그래야 4개 계정 배선이 돌아**」 → 채팅 엔진은 **5계정 폴오버가 있는 Actions**(`.github/workflows/yeul-chat.yml`)로 일원화.
+  - Worker 엔드포인트 `POST /api/yeul/chat`(및 `yeulChat`)은 **코드에 남아 있으나 앱이 호출하지 않는다**(사장). 되살리려면 이 슬롯에 폴오버가 없다는 점을 먼저 해결해야 한다.
+  - ⚠ 위 1-b 정정 참조 — 구독 OAuth 토큰이 원시 Messages API에서 동작한다(이 사실은 유효하고, 지금은 **Actions 러너에서** `shared/claude_api_failover.js`가 그 배선을 쓴다). 이 슬롯을 채우려고 **유료 키를 새로 발급할 필요가 없다**.
   - **검색 모니터링 AI 선별(260807)도 이 키를 그대로 쓴다** — 크론(KST 8·11·14·17시 :15)이 `smJudge`로 최근 3일치 관련/무관을 판정(sonnet 5·effort low·회당 ≤60건 = 구독 쿼터에 티끌). 모델 교체는 비밀 아닌 변수 `MONITOR_JUDGE_MODEL`. 수동 1회 = `POST /api/monitor/judge`.
 - `GALERT_RSS` — **검색 모니터링 ① 구글 축**(키가 아니라 주소 목록): Google Alerts RSS 피드 주소를 줄바꿈(또는 쉼표·공백)으로 이어 **한 값**으로. 현행 13개 = 키워드 8종 + `site:` 5종(blog.naver/tistory/brunch/cafe.daum/yeosu.go.kr) · 코드 상한 16. 발급·회전 = alerts.google.com(RSS 전달 방식)에서 피드 추가/삭제 후 이 값 갱신. 미설정 = 구글 갈래만 꺼짐(`/api/monitor/*` 자체는 산다).
 - `KAKAO_REST_KEY` — **검색 모니터링 ②′ 다음(카카오) 검색** REST API 키(developers.kakao.com → 앱 → 앱 키 → REST API 키). 티스토리·브런치·다음카페 커버 = robots로 막힌 네이버 카페의 실질 대체(260807 실측). 회전 = 카카오 콘솔 재발급.

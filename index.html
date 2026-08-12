@@ -28885,8 +28885,9 @@ function _memOvMap(geo,fit){   // fit = 모달의 「창 높이 채움」 모드
 
 // === [260803 운영자] 예울이 AI — 전사 자유질문 공용 브레인 (루시봇 컨셉 이식: 페르소나 카드 + 깃 Actions claude -p 구독 OAuth) ===
 // 경로 = 이미 배포된 배선만 재사용(Worker 무변경): POST /api/blog/dispatch(payload.yeulchat=1 — Worker는 여분 키 그대로 통과)
-//   → nb-blog.yml yeulchat 분기(persona/yeuli.md 카드 원문 + 질문 → claude -p opus·high·5계정 폴오버) → drafts/yc*.json 커밋
-//   → GET /api/blog/draft?id= 폴링. 소요 30초~2분(Actions 큐) · 비용 0(구독 OAuth). 사용처 = FAB 예울이 미응답 폴백 + 고객 분석 채팅.
+//   → **yeul-chat.yml**(persona/yeuli.md 카드 원문 + 질문 → Messages API 직행 sonnet-5·low · 5계정 폴오버) → drafts/yc*.json 커밋
+//   → GET /api/blog/draft?id= 폴링. 비용 0(구독 OAuth). 사용처 = FAB 예울이 미응답 폴백 + 고객 분석 채팅.
+//   ⚠ 「소요 30초~2분」은 260812 개편 전 이야기다 — CLI 설치·공용 큐를 걷어내 그 두 축이 사라졌다.
 // 페르소나 SSOT = persona/yeuli.md(카드 수정 = 말투 자동 추종). 앱 설정 「예울이 페르소나」(openYeulPersona)가 기기별 오버라이드.
 // ⚠ 산출물 drafts/yc*.json = 공개 레포 커밋(블로그 초안과 동일 축) — 민감 내용 질문 금지 · 워크플로가 3일 지난 산출물 자동 정리.
 var _YEULAI_LS='yeulai_persona';
@@ -28897,29 +28898,28 @@ function _yeulAiPersona(){try{return String(localStorage.getItem(_YEULAI_LS)||''
 //     `.github/workflows/nb-blog.yml` 라우팅 2줄(cmodel·ceffort). 앱이 모델명을 들고 있으면 세 곳이 갈린다.
 //     ⚠ 그 둘은 **서로 같은 값**을 유지해야 한다 — 폴백이 탈 때 같은 질문에 다른 결로 답하지 않게.
 function _yeulAiDeep(q){q=String(q||'');return q.length>=60||/전략|기획|분석|설계|보고서|제안서?|비교|계획|정리해|작성해?\s*줘|써\s*줘|만들어|장단점|로드맵|개선안/.test(q);}
-// [260806 운영자 「빠르게 뭐든 대답」 · 「워커에 이미 배선 되어있음」] 경로 2단.
-//   1차 = **Worker 동기 호출**(`POST /api/yeul/chat`) — 1~3초. 구독 OAuth 토큰이 원시 Messages API에서 동작하므로
-//         Actions를 거칠 이유가 없다(`src/index.js` claudeText·extractPromoInfo가 쓰던 그 배선 재사용 · 새 키 0).
-//   2차 = 종전 **Actions 왕복**(`/api/blog/dispatch` → nb-blog.yml → `/api/blog/draft` 폴링) — 실측 40초.
-//         Worker가 503(키 없음)·404(미배포)·502(상류 실패) 무엇을 내든 **조용히 여기로 양보**한다 = 기능이 죽지 않는다.
-//   ⚠ 모델·프롬프트는 두 경로가 같은 값이다(Worker `yeulChat` ↔ `nb-blog.yml` yeulchat 분기) — 한쪽만 고치면
-//     같은 질문에 폴백 여부에 따라 다른 결로 답한다.
-var _yeulAiLast={via:'',model:'',effort:''};   // 마지막 답이 어느 경로·모델이었나 — 챗봇로그 표기용(호출측이 읽는다)
-function _yeulAiTag(){var L=_yeulAiLast||{};return (L.model||'claude')+(L.effort?'·'+L.effort:'')+(L.via?'·'+L.via:'');}
+// [260812 운영자 「워커 쓰지말고 깃에서해 그래야 4개 계정 배선이 돌아」 · 「액션」] 경로 = **Actions 한 갈래**.
+//   ⚠ 종전 1차였던 Worker 즉답(`POST /api/yeul/chat`)은 **뺐다**. 빠르긴 했지만 Worker는 토큰이 `ANTHROPIC_AUTH_TOKEN`
+//     **한 개**라 그 계정이 쿼터·만료로 막히면 그대로 죽는다 — 260812 실측이 그 상태였다(시크릿은 있는데 최근 채팅
+//     3건 전부 Actions로 조용히 폴백 = 90초). 5계정 순환 폴오버는 Actions에만 있고, 그게 「안 죽는 쪽」이다.
+//   대신 Actions를 빠르게 만들었다 → 전용 `.github/workflows/yeul-chat.yml`:
+//     ① `claude -p` CLI 설치(20~30초) 제거 = Messages API 직행(`shared/claude_api_failover.js`)
+//     ② `concurrency: nb-blog` 제거 = 질문별 독립 그룹(블로그 초안 뒤에 줄서지 않는다)
+//     ③ 폴 간격 6초 → 1.5초(첫 확인 2.5초) — 6초 고정은 평균 3초를 그냥 버린다.
+//   ⚠ 모델·프롬프트 SSOT = 그 워크플로 한 곳뿐이다(앱은 판정 `deep`만 보낸다) — 갈래가 하나라 더 이상 안 갈린다.
+var _yeulAiLast={via:'',model:'',effort:'',account:'',ms:0};   // 마지막 답이 어느 경로·모델·계정이었나 — 챗봇로그 표기용
+function _yeulAiTag(){var L=_yeulAiLast||{};return (L.model||'claude')+(L.effort?'·'+L.effort:'')+(L.via?'·'+L.via:'')+(L.account?'·'+L.account:'');}
 async function _yeulAiAsk(q,ctx,onTick){
   var _deep=_yeulAiDeep(q)?1:0;
-  try{
-    var w=await api('POST','/api/yeul/chat',{q:String(q||'').slice(0,800),persona:_yeulAiPersona(),ctx:String(ctx||'').slice(0,1200),deep:_deep});
-    var wt=w&&String(w.text||'').trim();
-    if(wt){_yeulAiLast={via:'worker',model:(w.model||''),effort:(w.effort||'')};return wt;}
-  }catch(e){ /* 폴백 = 정상 흐름. 여기서 던지면 키 미설정 하나로 예울이가 통째로 죽는다 */ }
-  _yeulAiLast={via:'actions',model:_deep?'claude-opus-5':'claude-sonnet-5',effort:_deep?'medium':'low'};
+  _yeulAiLast={via:'actions',model:_deep?'claude-opus-5':'claude-sonnet-5',effort:_deep?'medium':'low',account:'',ms:0};
   var id='yc'+Date.now()+'r'+Math.floor(Math.random()*1e4);
-  var d0=await api('POST','/api/blog/dispatch',{payload:{yeulchat:1,id:id,q:String(q||'').slice(0,800),persona:_yeulAiPersona(),ctx:String(ctx||'').slice(0,1200),deep:_yeulAiDeep(q)?1:0}});   // [260803 v3] 시각 t 동봉 폐지 — 모드 2축 제거(운영자 "밤에 아무도 안 씀")
+  var d0=await api('POST','/api/blog/dispatch',{payload:{yeulchat:1,id:id,q:String(q||'').slice(0,800),persona:_yeulAiPersona(),ctx:String(ctx||'').slice(0,1200),deep:_deep}});   // [260803 v3] 시각 t 동봉 폐지 — 모드 2축 제거(운영자 "밤에 아무도 안 씀")
   if(!d0||!d0.ok)throw new Error((d0&&d0.error)||'요청 실패');
-  var t0=Date.now();
+  var t0=Date.now(),_first=true;
   while(Date.now()-t0<240000){
-    await new Promise(function(r){setTimeout(r,6000);});
+    // 첫 확인 2.5초(러너 부팅 전엔 있을 리 없다) → 이후 1.5초 · 30초 넘어가면 3초로 늦춘다(장기전은 촘촘할 이유가 없다).
+    await new Promise(function(r){setTimeout(r,_first?2500:((Date.now()-t0)>30000?3000:1500));});
+    _first=false;
     if(onTick)try{onTick(Math.round((Date.now()-t0)/1000));}catch(_e){}
     var d=null;
     try{ d=await api('GET','/api/blog/draft?id='+encodeURIComponent(id)); }
@@ -28930,6 +28930,12 @@ async function _yeulAiAsk(q,ctx,onTick){
       throw e;                                                                 // 401/403/503 등 = 즉시 중단
     }
     if(d&&d.ready&&d.draft){
+      // 모델·계정·소요는 **답한 쪽이 실제로 쓴 값**을 그대로 받는다(앱이 짐작해 적지 않는다 — 260806 로그 규약).
+      //   폴오버가 탔는지(계정이 활성과 다른지)가 챗봇로그에 남아야 「왜 느렸나」를 나중에 읽을 수 있다.
+      if(d.draft.model)_yeulAiLast.model=d.draft.model;
+      if(d.draft.effort)_yeulAiLast.effort=d.draft.effort;
+      if(d.draft.account)_yeulAiLast.account=d.draft.account;
+      if(d.draft.ms)_yeulAiLast.ms=d.draft.ms;
       if(d.draft.ok===false)throw new Error(d.draft.error||'생성 실패');
       var t=String(d.draft.text||'').trim();
       if(!t)throw new Error('빈 응답');
