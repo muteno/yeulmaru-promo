@@ -28907,11 +28907,12 @@ function _yeulAiDeep(q){q=String(q||'');return q.length>=60||/전략|기획|분�
 //     ② `concurrency: nb-blog` 제거 = 질문별 독립 그룹(블로그 초안 뒤에 줄서지 않는다)
 //     ③ 폴 간격 6초 → 1.5초(첫 확인 2.5초) — 6초 고정은 평균 3초를 그냥 버린다.
 //   ⚠ 모델·프롬프트 SSOT = 그 워크플로 한 곳뿐이다(앱은 판정 `deep`만 보낸다) — 갈래가 하나라 더 이상 안 갈린다.
-var _yeulAiLast={via:'',model:'',effort:'',account:'',ms:0};   // 마지막 답이 어느 경로·모델·계정이었나 — 챗봇로그 표기용
-function _yeulAiTag(){var L=_yeulAiLast||{};return (L.model||'claude')+(L.effort?'·'+L.effort:'')+(L.via?'·'+L.via:'')+(L.account?'·'+L.account:'');}
+var _yeulAiLast={via:'',model:'',effort:'',account:'',ms:0,searches:0};   // 마지막 답이 어느 경로·모델·계정이었나 — 챗봇로그 표기용
+// [260812-3] 검색 횟수도 남긴다 — 「검색해서 답하라」가 실제로 탔는지 로그로 읽히지 않으면 회귀를 못 잡는다.
+function _yeulAiTag(){var L=_yeulAiLast||{};return (L.model||'claude')+(L.effort?'·'+L.effort:'')+(L.via?'·'+L.via:'')+(L.account?'·'+L.account:'')+(L.searches?'·검색'+L.searches:'');}
 async function _yeulAiAsk(q,ctx,onTick){
   var _deep=_yeulAiDeep(q)?1:0;
-  _yeulAiLast={via:'actions',model:_deep?'claude-opus-5':'claude-sonnet-5',effort:_deep?'medium':'low',account:'',ms:0};
+  _yeulAiLast={via:'actions',model:_deep?'claude-opus-5':'claude-sonnet-5',effort:_deep?'medium':'low',account:'',ms:0,searches:0};
   var id='yc'+Date.now()+'r'+Math.floor(Math.random()*1e4);
   var d0=await api('POST','/api/blog/dispatch',{payload:{yeulchat:1,id:id,q:String(q||'').slice(0,800),persona:_yeulAiPersona(),ctx:String(ctx||'').slice(0,1200),deep:_deep}});   // [260803 v3] 시각 t 동봉 폐지 — 모드 2축 제거(운영자 "밤에 아무도 안 씀")
   if(!d0||!d0.ok)throw new Error((d0&&d0.error)||'요청 실패');
@@ -28936,6 +28937,7 @@ async function _yeulAiAsk(q,ctx,onTick){
       if(d.draft.effort)_yeulAiLast.effort=d.draft.effort;
       if(d.draft.account)_yeulAiLast.account=d.draft.account;
       if(d.draft.ms)_yeulAiLast.ms=d.draft.ms;
+      if(typeof d.draft.searches==='number')_yeulAiLast.searches=d.draft.searches;   // 0이면 「안 찾고 답했다」가 그대로 남는다
       if(d.draft.ok===false)throw new Error(d.draft.error||'생성 실패');
       var t=String(d.draft.text||'').trim();
       if(!t)throw new Error('빈 응답');

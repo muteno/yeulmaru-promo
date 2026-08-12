@@ -16,6 +16,9 @@ name: 예울이 채팅 (Messages API 직행 · 5계정 폴오버)
 # ⚠ 공개 레포 커밋이다 — 민감 내용 질문 금지. 회수기(shared/drafts_retain.mjs)가 기능별 최근 3건만 남긴다.
 # 페르소나 SSOT = persona/yeuli.md(카드 수정 = 말투 자동 추종) · 앱 설정 오버라이드는 payload.persona.
 # 모델 라우팅 SSOT = 아래 2줄(기본 sonnet-5·low / deep opus-5·medium). 앱은 판정(payload.deep)만 보낸다.
+# [260812-3 운영자 「어지간한건 검색에서 확인해주게 해 · 꼭 여기에 있는것만 하지말고 · 그걸 페르소나에 맞춰서」]
+#   → **웹 검색(서버 도구 `web_search_20260209`)** 배선. 실행은 Anthropic 쪽이라 러너 설치물은 그대로 0(이 파일의 전제 유지).
+#   말투는 여기서 정하지 않는다 — 「분야 밖이라고 투덜대고는 결국 찾아준다」는 페르소나 카드 §3·§8 소관이다.
 
 on:
   repository_dispatch:
@@ -94,9 +97,20 @@ jobs:
             const sysCard = over || card ||
               '너는 GS칼텍스 예울마루(전남 여수의 복합문화예술공간)의 공식 도우미 캐릭터 「예울이」다. 밝고 정중한 존댓말로 간결하게 답한다.';
 
-            // 프롬프트는 종전 CLI판과 **같은 문장**이다 — 엔진만 바뀌고 답의 결은 안 바뀌게.
+            // 오늘 날짜(KST) — 「오늘·이번 주·최근」 질문은 모델이 날짜를 모르면 검색어부터 틀린다.
+            //   러너는 UTC라 +9h 해서 만든다(Actions에 TZ를 걸면 다른 스텝까지 물들어서 여기서만 계산).
+            const _kst = new Date(Date.now() + 9 * 3600 * 1000);
+            const _today = _kst.toISOString().slice(0, 10) + '(' + ['일','월','화','수','목','금','토'][_kst.getUTCDay()] + ')';
+
+            // 프롬프트 = 「할 일」 SSOT(말투 SSOT는 페르소나 카드 · 여기서 말투를 다시 적지 않는다).
+            // [260812-3 운영자 「어지간한건 검색에서 확인해주게 해 · 꼭 여기에 있는것만 하지말고」] 범위·검색 2줄 신설.
             let ask = '위 페르소나 카드의 인물 「예울이」로서, 예울마루 직원이 사내 앱 채팅으로 보낸 아래 질문에 답한다.\n';
-            ask += '- 사실만: 카드·참고 정보에 없는 구체 사실(날짜·가격·규정 조항·인원수)은 지어내지 말고 「확실하지 않다」고 말한다.\n';
+            ask += '- 오늘: ' + _today + ' (한국 시간). 「오늘·이번 주·최근」은 이 날짜 기준으로 읽는다.\n';
+            ask += '- 범위: 예울마루 밖 일반 질문(시사·상식·타 기관·다른 분야)도 밀어내지 말고 답한다 — 카드 §8 해금이 그렇게 정한다.\n';
+            ask += '- 검색: 카드·참고 정보로 확답이 안 되는 사실은 **web_search로 확인한 뒤** 답한다(기억으로 때우지 않는다). 시세·날씨·일정·최근 소식처럼 변하는 값은 반드시 검색한다.\n';
+            ask += '- 재검색: 한 번 찾아 원하는 값이 안 잡히면 **검색어를 바꿔 한 번 더** 찾아본다(지명·날짜·단위를 넣거나 빼는 식으로). 한 번 헛치고 포기하지 않는다 — 상한은 알아서 지켜진다.\n';
+            ask += '- 출처: 검색으로 확인한 사실은 마지막에 「— 출처: 매체명」 한 줄을 붙인다(링크는 안 붙인다 · 채팅 말풍선이라 길어진다).\n';
+            ask += '- 사실만: 검색해도 확실하지 않으면 지어내지 말고 「확실하지 않다」고 말한다. 예울마루 **내부** 수치·규정(좌석 수·가격·조항·인원)은 검색 결과를 단정하지 말고 「~라고 나오는데 담당자께 확인하세요」로 말한다.\n';
             ask += '- 길이: 2~6문장, 채팅 말풍선 하나 분량. 머리말·사고 과정 없이 답변 본문만 출력한다.\n';
             if (p.ctx) ask += '\n# 참고 정보 (앱이 동봉한 집계 요약 — 개인정보 없음)\n' + String(p.ctx).slice(0, 1200) + '\n';
             ask += '\n# 질문\n' + String(p.q || '').slice(0, 800);
@@ -106,19 +120,36 @@ jobs:
             const model = deep ? 'claude-opus-5' : 'claude-sonnet-5';
             const effort = deep ? 'medium' : 'low';
 
+            // 웹 검색(서버 도구) — 실행은 Anthropic 쪽이라 러너는 아무것도 안 깐다(설치 0 · 이 배선의 전제).
+            //   이름은 `web_search` 고정 · max_uses = 검색 횟수 상한 = **지연 상한**이기도 하다(1회 ≈ 2~4초).
+            //
+            // ⚠⚠ **기본판(`_20250305`)을 쓴다 — 최신 동적필터판(`_20260209`)으로 올리지 마라.** 260812 실측:
+            //   동적필터판은 **내부적으로 코드 실행을 태운다**(응답 블록에 `code_execution_tool_result`·
+            //   `bash_code_execution_tool_result`가 실제로 찍혔다). 그런데 구독 OAuth 토큰에서는 그 코드 실행이
+            //   `too_many_requests`로 막혀 **검색 2/2 전건 실패**했다(run 31566646517·31567163522·31567271098 3연속).
+            //   같은 계정·같은 질문을 기본판으로 바꾸자 **1발 성공**(run 31567382730 · 검색 1회 · 실패 0 · 6.3초).
+            //   = 막힌 것은 「웹 검색」이 아니라 「코드 실행」이다. 모델을 올리든 도구 버전이 새로 나오든,
+            //     올리기 전에 이 dry-run을 한 번 돌려 `검색실패[...]`가 안 뜨는지부터 보라.
+            const tools = [{ type: 'web_search_20250305', name: 'web_search', max_uses: deep ? 6 : 3 }];
+
             const { runClaudeApiWithFailover } = require(path.join(process.env.GITHUB_WORKSPACE, 'shared/claude_api_failover.js'));
             const t0 = Date.now();
             const r = await runClaudeApiWithFailover({
-              model, effort,
+              model, effort, tools,
               system: sysCard + '\n\n---\n\n# 지금 할 일',
               user: ask,
-              maxTokens: deep ? 4000 : 2000
+              // 검색이 붙으면 왕복이 늘고(도구 호출 블록도 출력 토큰이다) 인용 문장이 섞여 답이 길어진다 → 여유를 준다.
+              maxTokens: deep ? 6000 : 3000
             });
-            core.info('[yeul-chat] ' + model + '·' + effort + ' · ' + (Date.now() - t0) + 'ms · 계정=' + (r.account || '-'));
+            core.info('[yeul-chat] ' + model + '·' + effort + ' · ' + (Date.now() - t0) + 'ms · 계정=' + (r.account || '-') +
+              ' · 검색=' + (r.searches || 0) +
+              ((r.searchErrs && r.searchErrs.length) ? ' · ⚠검색실패[' + r.searchErrs.join(',') + ']' : '') +
+              (r.toolsDropped ? ' · ⚠도구벗김' : ''));
 
             // 앱이 「어느 모델·어느 계정이 답했나」를 그대로 읽을 수 있게 실측값을 실어 보낸다(짐작해 적지 않는다).
             const out = r.ok
-              ? { id, mode: 'chat', ok: true, text: String(r.text).slice(0, 8000), model, effort, account: r.account, ms: Date.now() - t0, ts: new Date().toISOString() }
+              ? { id, mode: 'chat', ok: true, text: String(r.text).slice(0, 8000), model, effort, account: r.account,
+                  searches: r.searches || 0, toolsDropped: !!r.toolsDropped, ms: Date.now() - t0, ts: new Date().toISOString() }
               : { id, mode: 'chat', ok: false, error: String(r.error || '빈 응답').slice(0, 500), model, effort, ts: new Date().toISOString() };
 
             // 시험 사격은 여기서 끝 — main에 아무것도 안 남긴다. 실측치(계정·소요·모델)는 로그로 확인.
