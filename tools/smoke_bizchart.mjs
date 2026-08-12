@@ -241,6 +241,12 @@ async function main() {
     })();`);
     await page.goto('https://app.local/index.html?qa=admin', { waitUntil: 'domcontentloaded', timeout: 30000 });
     await page.waitForSelector('#biz-main [data-bizmbox]', { timeout: 20000 });
+    // [260812 2차] 기본 진입 덱이 「사업 개요」(돈 축 · Plotly 미사용)로 바뀌었다 — 이 스모크가 재는 건
+    //   「판매 현황」 덱의 연간 사업 차트다. 덱을 안 옮기면 Plotly가 없어 **SKIP으로 조용히 빠진다**
+    //   (실측: 덱 기본값 변경 직후 `ReferenceError: Plotly is not defined`로 SKIP = 게이트가 통째로 무발화).
+    //   레포 규범 「환경 의존 게이트는 SKIP을 침묵시키지 않는다」에 따라, 여기서 명시적으로 그 덱으로 간다.
+    await page.evaluate("(()=>{ if(typeof _bizDeckGo==='function')_bizDeckGo('sales'); else if(typeof _bizDeck!=='undefined'){_bizDeck='sales'; if(typeof _bizInlineRender==='function')_bizInlineRender();} })()");
+    await page.waitForSelector('#biz-main [data-bizmbox]', { timeout: 20000 });
     await page.waitForTimeout(1200);
     await page.evaluate(`(()=>{
       try{ PERFS = ${JSON.stringify(perfs)}; }catch(e){}

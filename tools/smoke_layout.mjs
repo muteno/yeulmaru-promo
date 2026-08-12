@@ -156,6 +156,11 @@ async function main() {
     await page.addInitScript(INIT_SCRIPT);
     await page.goto('https://app.local/index.html?qa=admin', { waitUntil: 'domcontentloaded', timeout: 30000 });
     await page.waitForSelector('#biz-main [data-bizmbox]', { timeout: 20000 });
+    // [260812 2차] 기본 진입 덱이 「사업 개요」(단일 면 · 책 구조 미사용)로 바뀌었다 — 이 스모크가 재는 건
+    //   「판매 현황」 덱의 책 4면 이젤 정렬이다. 덱을 안 옮기고 `_bizBookGo`만 몰면 좌 열은 사업 개요를 그린 채
+    //   슬라이드 좌표만 움직여 **실사용에 없는 혼합 상태**를 재게 된다(실측: 그 상태에서 Δ171.8px로 FAIL).
+    await page.evaluate("(()=>{ if(typeof _bizDeckGo==='function')_bizDeckGo('sales'); })()");
+    await page.waitForSelector('#biz-main [data-bizmbox]', { timeout: 20000 });
     await page.waitForTimeout(2000);
 
     judge('슬라이드1(빈 데이터)', await page.evaluate(MEASURE), fails);

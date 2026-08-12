@@ -3181,8 +3181,9 @@ const MENUS=[
   //   일단 똑같이 복제시키고 사업 개요를 수정할거임」 → 라벨만 개명(id는 `biz` 유지)하고 같은 화면을 가리키는 대메뉴를 하나 더 둔다.
   //   ⚠ **id를 안 바꾼 이유**: `biz`는 `_mainView` 값·`data-mid`·딥링크 alias·`_mvSync`가 다 같이 쓰는 이름이라
   //     바꾸면 33곳의 `_mainView!=='biz'` 가드와 딥링크가 조용히 끊긴다. 사람에게 보이는 건 label뿐이다.
+  // [260812 운영자 2차 「사업개요가 그리고 더 메인임」] 순서 = 사업 개요가 **앞** · 기본 진입도 이쪽(`_bizDeck` 기본값 'ov').
+  {label:'사업 개요',id:'bizov'},   // [260812 2차] 사업 지표 면 — 관객·방문객이 아니라 **돈 축**(사업비·수입·수익률). 렌더 = _bizOvRender(좌)/_bizOvRail(우)
   {label:'판매 현황',id:'biz'},   // [260723 운영자] 좌측 mv-seg 분리 토글 폐지 → 대시보드(사업 실적) 메인 전환. 클릭 = setMainView('biz') · 호버 = 세부(연간 실적·사업 결과 비교·연간 일정·회원 분포)
-  {label:'사업 개요',id:'bizov'},   // [260812 운영자] 신규 — 지금은 「판매 현황」과 **완전히 같은 화면·같은 세부메뉴**(요청대로 복제만). 갈라내기 = _bizDeck 참조
   {label:'캘린더',id:'cal'},   // 클릭 = setMainView('cal') · 호버 = 세부(홍보 신청·온라인/오프라인 홍보 현황 — 구 '홍보 신청·확인' 대메뉴 흡수)
   // [260803 운영자] {label:'판매 현황',id:'sales'} 폐지 — 세부 이관: 실적 조회 → 대시보드 ▸ 판매 실적 바로 아래 · 실적 입력 → 대시보드 세부 맨 아래(관리자) · 상품 등록·변경 = 제거(openTicketReg 휴면 보존). 롤백 = 이 줄 복구 + buildNav sales 분기 2곳 + _qaDeepLink ids/alias + _salesMenuBuild 재연결.
   {label:'AI 홍보',id:'aipromo'},   // [260804 운영자] 상단 대메뉴 신설. 클릭 = openPromoCheck() 풀스크린 모달 — _mainView(biz|cal 2값) 무접촉이 계약(platform 분기와 같은 문법). 롤백 = 이 줄 + buildNav aipromo 분기 2곳
@@ -3204,7 +3205,7 @@ const MENUS=[
 //     `_mainView`처럼 뒤쪽(L6970)에 두면 그 시점엔 `undefined`다(이 파일의 `_CT_IMG`·`_evSel` 전례와 같은 함정).
 //     MENUS 바로 아래 = 부트보다 앞 → 언제 읽어도 값이 있다.
 var _BIZ_DECK_MID={sales:'biz',ov:'bizov'};   // 덱 → 그 덱을 켜는 대메뉴 id(= .nav-btn[data-mid])
-var _bizDeck=(function(){try{return sessionStorage.getItem('bizDeck')==='ov'?'ov':'sales';}catch(_e){return 'sales';}})();   // 저장 축 = mvView와 동일(이번 접속만 · 새 접속 = 판매 현황)
+var _bizDeck=(function(){try{return sessionStorage.getItem('bizDeck')==='sales'?'sales':'ov';}catch(_e){return 'ov';}})();   // [260812 2차 「사업개요가 더 메인임」] 기본값 = **ov**(새 접속 = 사업 개요) · 저장 축은 mvView와 동일(이번 접속만)
 // 대메뉴 클릭 진입 — 덱을 기록하고 대시보드 화면으로. 이미 대시보드면 덱 표시만 갱신한다(무의미한 재렌더 0).
 function _bizDeckGo(k){
   k=(k==='ov')?'ov':'sales';
@@ -3212,7 +3213,14 @@ function _bizDeckGo(k){
   _bizDeck=k;
   try{sessionStorage.setItem('bizDeck',k);}catch(_e){}
   if(typeof setMainView==='function'&&(typeof _mainView==='undefined'||_mainView!=='biz')){ setMainView('biz'); return; }
-  if(!same&&typeof _bizInlineRender==='function'){ try{_bizInlineRender();}catch(_e){} }   // 덱이 실제로 바뀐 경우에만 다시 그린다(지금은 내용 동일 = 무해)
+  if(!same){
+    // ⚠ [260812 2차] **두 열을 같이** 다시 그린다. 좌 열만 갈아끼우면 우 레일이 앞 덱 것으로 남는다
+    //   (사업 개요 → 판매 현황으로 옮겼는데 오른쪽엔 「사업 지표」가 그대로 서 있는 상태).
+    //   덱마다 좌·우가 한 벌이므로 신원 도장(`leftId`/`rightId`)도 둘 다 새로 찍혀야 한다.
+    //   실측 경위: 정본 컴포넌트 패리티 스윕이 58→56종으로 **줄어든 것**이 이 버그의 첫 신호였다(래칫은 감소를 안 잡는다).
+    try{ if(typeof _bizInlineRender==='function')_bizInlineRender(); }catch(_e){}
+    try{ if(typeof _railYrmRender==='function'&&document.getElementById('rail-yrm'))_railYrmRender(); }catch(_e){}
+  }
   if(typeof _mvSync==='function')_mvSync();
 }
 
@@ -7573,6 +7581,7 @@ function _bizWheelScrollable(node){
 }
 function _bizWheel(e){
   if(e.ctrlKey||e.metaKey)return;                                     // 브라우저 확대 제스처는 그대로
+  if(typeof _bizDeck!=='undefined'&&_bizDeck==='ov')return;           // [260812 2차] 사업 개요 덱 = 한 면 — 넘길 칸이 없다. 가로채면 표 세로 스크롤만 막는다(preventDefault 앞에서 빠진다)
   var app=document.getElementById('app');
   if(!app||!app.classList.contains('biz-mode'))return;                // 캘린더 모드 = 월 축(_calWheel)
   if(Math.abs(e.deltaY)<=Math.abs(e.deltaX))return;                   // 가로 스크롤 제스처는 통과
@@ -7693,9 +7702,168 @@ function _bizmHead(right,title,sub,ld){
 // [260806] position:relative = 박스 안 스윕(_SK_GL)의 절대배치 기준을 **못박는 것**. 실동작은 무변화(backdrop-filter가 이미 같은 기준을 세운다)지만,
 //   그 규칙을 안 따르는 브라우저에서 스윕이 바깥 래퍼(= 점줄 바까지)로 번지는 걸 막는다.
 var _BIZM_BOX='<div data-bizmbox style="position:relative;background:rgba(255,255,255,.15);backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px);border:1px solid rgba(255,255,255,.7);border-top:none;border-radius:0 0 var(--radius-lg) var(--radius-lg);box-shadow:var(--glass-shadow);padding:18px">';   // [260723c 선택값] 좌 유리 알파 .15 · 라운드 20 · [260723f] 패딩 균일 18 · [260724] data-bizmbox = 우 레일 하단 정렬 측정 앵커(슬라이드 점줄은 박스 밖이라 제외)
+// ══ [260812 운영자 2차] 사업 개요 = **돈 축** 면 ═══════════════════════════════════════════
+//   지시: 「사업개요가 그리고 더 메인임 · 사업개요에 있는 모든 판매 개요를 **사업 지표**에 다 맞춰 ·
+//          기존에 방문객·관객 위주였던거를 **사업 위주로(사업비, 수입, 수익률)** 이런식으로 표기해주셈」
+//   원천 = `BIZ_FIN`(운영자가 최상단에 올린 「<연도>년 예술사업 대시보드.xlsx」 반입분) ∪ 시트 `운영_사업비`.
+//   ⚠ 「없는자료는 없어도 되니」(운영자) — 사업비가 없는 해·분야는 **빈 값으로 두고 만들지 않는다**(숫자 창작 0).
+//   ⚠ **책(슬라이드) 구조를 안 쓴다.** 판매 현황 덱의 4면 넘김(좌·우 엇갈림·점줄·차례표 감사)은 「면이 여럿」을
+//     전제로 짜여 있는데 이 덱은 한 면이다. 그 기계에 한 면짜리 덱을 끼우면 점줄이 1칸이 되고 넘김이
+//     아무것도 안 바꾸는 상태가 된다(`_bizSlidesAudit`가 사고로 잡는 바로 그 모양). 그래서 여기서 곧장 그리고 끝낸다.
+//   부품 = 전부 기존 정본(`_bizmHead`·`_BIZM_BOX`·`.bizm-kpi`·`.bizm-card .ct`·`.ana-chip`) — 신규 클래스·색·값 0.
+var _bizOvYear=null;
+function _bizOvYearPick(){
+  var ys=_finYears();
+  if(_bizOvYear==null||ys.indexOf(_bizOvYear)<0)_bizOvYear=ys.length?ys[0]:(new Date()).getFullYear();
+  return _bizOvYear;
+}
+function _bizOvSetYear(y){ _bizOvYear=Number(y)||_bizOvYear; try{_bizInlineRender();}catch(_e){} try{_railYrmRender();}catch(_e){} }
+// 분야별 합 — 파생값은 여기서도 저장하지 않고 매번 센다(`_finCalc`와 같은 식).
+function _bizOvSum(rows){
+  var s={n:0,bud:0,vou:0,fee:0,rev:0,ppl:0};
+  rows.forEach(function(r){ var c=_finCalc(r); s.n++; s.bud+=r.bud||0; s.vou+=r.vou||0; s.fee+=r.fee||0; s.rev+=r.rev||0; s.ppl+=c.ppl; });
+  s.cost=s.vou+s.fee; s.diff=s.rev-s.vou; s.margin=s.cost>0?(s.rev/s.cost*100):null;
+  s.exec=s.bud>0?(s.vou/s.bud*100):null;
+  return s;
+}
+function _bizOvKpi(lab,val,sub,tok){
+  return '<div class="bizm-kpi" style="--kpitok:var('+(tok||'--accent')+')"><div class="lab">'+lab+'</div><div class="val">'+val+'</div>'
+    +(sub?'<div style="font-size:10.5px;color:var(--neutral-text);margin-top:2px;font-weight:600">'+sub+'</div>':'')+'</div>';
+}
+function _bizOvYearChips(cur){
+  var ys=_finYears();
+  if(ys.length<2)return '';
+  return ys.map(function(y){ return '<button type="button" class="ana-chip'+(y===cur?' on':'')+'" onclick="_bizOvSetYear('+y+')">'+y+'년</button>'; }).join('');
+}
+// 좌 열 = 사업 개요 본면(KPI 5칸 + 분야별 표 + 사업별 표)
+function _bizOvRender(el){
+  _finWarm();
+  var year=_bizOvYearPick(), rows=_finRows(year), S=_bizOvSum(rows);
+  var head=_bizmHead(_bizOvYearChips(year),'사업 개요',(rows.length?(year+'년 · 사업 '+rows.length+'건 · 단위 원'):' '));
+  if(!rows.length){
+    _bizmSwap(el,'<div style="position:relative">'+head+_BIZM_BOX
+      +'<div style="text-align:center;padding:56px 20px;color:var(--dim);font-size:13px">'+year+'년 사업비 자료가 아직 없어요'
+      +'<div style="font-size:11.5px;color:var(--muted);margin-top:8px">레포 최상단에 「'+year+'년 예술사업 대시보드.xlsx」를 두고 <code>python3 tools/build_biz_finance.py</code>를 돌리면 들어옵니다</div></div>'
+      +'</div></div>');
+    return;
+  }
+  var h='<div style="position:relative">'+head+_BIZM_BOX;
+  // ① KPI — 운영자가 지목한 세 축(사업비·수입·수익률)을 앞에 두고, 그 셋을 읽는 데 필요한 예산·차액을 붙인다.
+  h+='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">'
+    +_bizOvKpi('사업비 (전표실적+수수료)',_finWon(S.cost),'전표실적 '+_bizMoney(S.vou)+' · 수수료 '+_bizMoney(S.fee),'--peach-text')
+    +_bizOvKpi('수입 (정산서 매출)',_finWon(S.rev),null,'--green')
+    +_bizOvKpi('수익률',_finPct(S.margin),'수입 ÷ 사업비','--accent')
+    +_bizOvKpi('예산',_finWon(S.bud),'집행율 '+_finPct(S.exec),'--neutral-text')
+    +_bizOvKpi('차액 (수입−전표실적)',_finWon(S.diff),null,(S.diff<0?'--danger':'--green'))
+    +'</div>';
+  // ② 분야별 — 「어느 분야가 돈을 얼마 쓰고 얼마 벌었나」 한 눈에.
+  var cats=[]; rows.forEach(function(r){ if(r.cat&&cats.indexOf(r.cat)<0)cats.push(r.cat); });
+  h+='<div style="font-size:13px;font-weight:800;color:var(--text);margin:2px 0 6px">분야별</div>';
+  h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="color:var(--dim);font-size:11.5px;text-align:left">';
+  [['분야',''],['건수','건'],['예산','원'],['사업비','원'],['수입','원'],['차액','원'],['수익률','%']].forEach(function(c,i){
+    h+='<td style="padding:8px 10px;box-shadow:inset 0 -2px 0 var(--border);vertical-align:middle;white-space:nowrap'+(i>=1?';text-align:right':'')+'">'+c[0]
+      +(c[1]?'<div style="font-size:10px;font-weight:400;margin-top:2px">(단위: '+c[1]+')</div>':'')+'</td>';
+  });
+  h+='</tr></thead><tbody>';
+  cats.forEach(function(cat,i){
+    var g=_bizOvSum(rows.filter(function(r){return r.cat===cat;}));
+    h+='<tr style="border-bottom:1px solid var(--border);'+(i%2===1?'background:var(--past-bg);':'')+'">'
+      +'<td style="padding:7px 10px;font-weight:700;color:var(--text);white-space:nowrap">'+escapeHtml(cat)+'</td>'
+      +'<td style="padding:7px 10px;text-align:right;color:var(--neutral-text);font-variant-numeric:tabular-nums">'+g.n+'</td>'
+      +'<td style="padding:7px 10px;text-align:right;color:var(--neutral-text);font-variant-numeric:tabular-nums">'+g.bud.toLocaleString()+'</td>'
+      +'<td style="padding:7px 10px;text-align:right;color:var(--peach-text);font-weight:600;font-variant-numeric:tabular-nums">'+g.cost.toLocaleString()+'</td>'
+      +'<td style="padding:7px 10px;text-align:right;color:var(--green);font-weight:600;font-variant-numeric:tabular-nums">'+g.rev.toLocaleString()+'</td>'
+      +'<td style="padding:7px 10px;text-align:right;font-weight:600;color:var('+(g.diff<0?'--danger':'--green')+');font-variant-numeric:tabular-nums">'+g.diff.toLocaleString()+'</td>'
+      +'<td style="padding:7px 10px;text-align:right;color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums">'+_finPct(g.margin)+'</td></tr>';
+  });
+  h+='<tr style="border-top:2px solid var(--border2);font-weight:800">'
+    +'<td style="padding:9px 10px">계</td><td style="padding:9px 10px;text-align:right;font-variant-numeric:tabular-nums">'+S.n+'</td>'
+    +'<td style="padding:9px 10px;text-align:right;font-variant-numeric:tabular-nums">'+S.bud.toLocaleString()+'</td>'
+    +'<td style="padding:9px 10px;text-align:right;color:var(--peach-text);font-variant-numeric:tabular-nums">'+S.cost.toLocaleString()+'</td>'
+    +'<td style="padding:9px 10px;text-align:right;color:var(--green);font-variant-numeric:tabular-nums">'+S.rev.toLocaleString()+'</td>'
+    +'<td style="padding:9px 10px;text-align:right;color:var('+(S.diff<0?'--danger':'--green')+');font-variant-numeric:tabular-nums">'+S.diff.toLocaleString()+'</td>'
+    +'<td style="padding:9px 10px;text-align:right;color:var(--accent);font-variant-numeric:tabular-nums">'+_finPct(S.margin)+'</td></tr>';
+  h+='</tbody></table></div>';
+  // ③ 사업별 — 줄을 누르면 그 사업의 사업비 창(사업비 축의 정본 모달 한 벌 재사용).
+  h+='<div style="font-size:13px;font-weight:800;color:var(--text);margin:16px 0 6px">사업별 <span style="font-weight:500;font-size:11px;color:var(--dim)">— 수익률 높은 순 · 줄을 누르면 상세</span></div>';
+  h+='<div style="max-height:44vh;overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px"><thead><tr style="color:var(--dim);font-size:11.5px;text-align:left">';
+  [['사업NO',''],['분야',''],['회계구분',''],['사업명',''],['사업비','원'],['수입','원'],['수익률','%']].forEach(function(c,i){
+    h+='<td style="padding:8px 10px;position:sticky;top:0;z-index:1;background:var(--surface-solid);box-shadow:inset 0 -2px 0 var(--border);vertical-align:middle;white-space:nowrap'+(i>=4?';text-align:right':'')+'">'+c[0]
+      +(c[1]?'<div style="font-size:10px;font-weight:400;margin-top:2px">(단위: '+c[1]+')</div>':'')+'</td>';
+  });
+  h+='</tr></thead><tbody>';
+  rows.slice().sort(function(a,b){ var x=_finCalc(a).margin,y=_finCalc(b).margin; return (y==null?-1:y)-(x==null?-1:x); }).forEach(function(r,i){
+    var c=_finCalc(r);
+    h+='<tr onclick="_finModal(\''+_anaEsc(r.no)+'\','+year+')" style="cursor:pointer;border-bottom:1px solid var(--border);'+(i%2===1?'background:var(--past-bg);':'')+'" title="'+escapeHtml(r.name+' — 눌러서 사업비 상세')+'">'
+      +'<td style="padding:7px 10px;white-space:nowrap;color:var(--neutral-text);font-variant-numeric:tabular-nums">'+escapeHtml(r.no)+'</td>'
+      +'<td style="padding:7px 10px;white-space:nowrap;color:var(--neutral-text)">'+escapeHtml(r.cat)+'</td>'
+      +'<td style="padding:7px 10px;white-space:nowrap;color:var(--neutral-text)">'+escapeHtml(r.acct||'—')+'</td>'
+      +'<td style="padding:7px 10px;max-width:0;width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;color:var(--text)">'+escapeHtml(r.name)+'</td>'
+      +'<td style="padding:7px 10px;text-align:right;color:var(--peach-text);font-weight:600;font-variant-numeric:tabular-nums">'+c.cost.toLocaleString()+'</td>'
+      +'<td style="padding:7px 10px;text-align:right;color:var(--green);font-weight:600;font-variant-numeric:tabular-nums">'+(r.rev||0).toLocaleString()+'</td>'
+      +'<td style="padding:7px 10px;text-align:right;color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums">'+_finPct(c.margin)+'</td></tr>';
+  });
+  h+='</tbody></table></div>';
+  h+='<div style="font-size:11px;color:var(--dim);margin-top:10px;line-height:1.7">수익률 = 수입 ÷ 사업비 × 100 (사업비 = 전표실적 + 판매수수료 — 원본 엑셀 수식 그대로)'
+    +(S.ppl?('<br>관람·수강 인원 '+S.ppl.toLocaleString()+'명 — 이 면은 <b>돈 축</b>이라 인원은 참고로만 적는다(인원 축 = 「판매 현황」)'):'')+'</div>';
+  h+='</div></div>';
+  _bizmSwap(el,h);
+}
+// 우 열 = 같은 돈 축의 보조면(회계구분별 · 적자 사업). 「판매 실적」 레일이 이 덱에 남지 않게 여기서 통째로 갈아끼운다.
+function _bizOvRail(el){
+  var year=_bizOvYearPick(), rows=_finRows(year);
+  var h='<div style="position:relative">'+_bizmHead('','사업 지표',' ')+_BIZM_BOX;
+  if(!rows.length){
+    h+='<div style="text-align:center;padding:44px 16px;color:var(--dim);font-size:12.5px">'+year+'년 사업비 자료 없음</div></div></div>';
+    el.innerHTML=h; return;
+  }
+  var S=_bizOvSum(rows);
+  // 회계구분별 = 운영자가 말한 「회계쪽이랑 분류」 축을 그대로 보여주는 자리
+  var accs=[]; rows.forEach(function(r){ var k=r.acct||'(구분 없음)'; if(accs.indexOf(k)<0)accs.push(k); });
+  h+='<div class="bizm-card"><div class="ct">회계구분별</div>';
+  h+='<table style="width:100%;border-collapse:collapse;font-size:12.5px"><tbody>';
+  accs.forEach(function(a){
+    var g=_bizOvSum(rows.filter(function(r){return (r.acct||'(구분 없음)')===a;}));
+    // 1% 미만은 소수 한 자리로 — 0%로 반올림되면 「자료가 없다」로 읽힌다(공모사업 158만 = 0.08%가 실제로 그랬다)
+    var share=S.cost>0?(g.cost/S.cost*100):0, shareTxt=(share>0&&share<1)?share.toFixed(1):share.toFixed(0);
+    h+='<tr style="border-bottom:1px solid var(--border)">'
+      +'<td style="padding:7px 8px;font-weight:700;color:var(--text);white-space:nowrap">'+escapeHtml(a)+'<div style="font-size:10.5px;font-weight:500;color:var(--dim)">'+g.n+'건 · 사업비 비중 '+shareTxt+'%</div></td>'
+      +'<td style="padding:7px 8px;text-align:right;white-space:nowrap"><div style="color:var(--peach-text);font-weight:600;font-variant-numeric:tabular-nums">'+_bizMoney(g.cost)+'</div>'
+      +'<div style="color:var(--green);font-weight:600;font-variant-numeric:tabular-nums">'+_bizMoney(g.rev)+'</div></td>'
+      +'<td style="padding:7px 8px;text-align:right;color:var(--accent);font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap">'+_finPct(g.margin)+'</td></tr>';
+  });
+  h+='</tbody></table>';
+  h+='<div style="font-size:10.5px;color:var(--dim);margin-top:8px">칸 위 = 사업비(만) · 아래 = 수입(만)</div></div>';
+  // 적자 사업 = 「수입이 전표실적에 못 미친 사업」 — 돈 축 화면에서 가장 먼저 눈에 띄어야 할 줄
+  var loss=rows.filter(function(r){return _finCalc(r).diff<0;}).sort(function(a,b){return _finCalc(a).diff-_finCalc(b).diff;});
+  h+='<div class="bizm-card" style="margin-top:10px"><div class="ct">차액 적자 '+loss.length+'건</div>';
+  if(!loss.length)h+='<div style="padding:10px 8px;color:var(--dim);font-size:12px">없음</div>';
+  else{
+    h+='<table style="width:100%;border-collapse:collapse;font-size:12.5px"><tbody>';
+    loss.slice(0,8).forEach(function(r){
+      var c=_finCalc(r);
+      h+='<tr onclick="_finModal(\''+_anaEsc(r.no)+'\','+year+')" style="cursor:pointer;border-bottom:1px solid var(--border)" title="'+escapeHtml(r.name+' — 눌러서 사업비 상세')+'">'
+        +'<td style="padding:6px 8px;max-width:0;width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;color:var(--text)">'+escapeHtml(r.name)+'</td>'
+        +'<td style="padding:6px 8px;text-align:right;white-space:nowrap;color:var(--danger);font-weight:700;font-variant-numeric:tabular-nums">'+_bizMoney(c.diff)+'</td></tr>';
+    });
+    h+='</tbody></table>';
+    if(loss.length>8)h+='<div style="font-size:10.5px;color:var(--dim);margin-top:6px">외 '+(loss.length-8)+'건</div>';
+  }
+  h+='</div>';
+  h+='</div></div>';
+  el.innerHTML=h;
+}
 function _bizInlineRender(){
   var el=document.getElementById('biz-main'); if(!el)return;
   if(typeof _mainView==='undefined'||_mainView!=='biz')return;
+  // [260812 2차] 사업 개요 덱 = 책 구조를 안 탄다(위 절 참조) — 여기서 곧장 그리고 끝낸다.
+  if(typeof _bizDeck!=='undefined'&&_bizDeck==='ov'){
+    try{if(window.Plotly)['#bizm-chart','#bizm-ex-chart','#bizm-edu-chart','#bizm-genre','#bizm-season','#yrm-chart'].forEach(function(s){var n=el.querySelector(s); if(n)Plotly.purge(n);});}catch(_e){}   // 판매 현황 덱에서 넘어온 차트 정리(리스너·옵저버 누수 차단 — 아래 본 경로와 같은 규약)
+    _bizmState.leftId='ov';
+    try{ _bizOvRender(el); }catch(_e){ console.warn('[사업 개요]',_e); }
+    if(typeof requestAnimationFrame==='function')requestAnimationFrame(function(){try{_srailAlignTop();}catch(_e2){}});
+    return;
+  }
   if(typeof requestAnimationFrame==='function')requestAnimationFrame(function(){try{_srailAlignTop();}catch(_e){}});   // [260723 운영자] 좌 보드 렌더(innerHTML 반영) 후 우 판매현황 레일 높이 재캡 = 세로변 동일
   try{if(window.Plotly)['#bizm-chart','#bizm-ex-chart','#bizm-edu-chart','#bizm-genre','#bizm-season','#yrm-chart'].forEach(function(s){var n=el.querySelector(s); if(n)Plotly.purge(n);});}catch(_e){}   // [260723 평의회4] innerHTML 파기 전 purge — 리스너·옵저버 누수 차단 · [260801 5차] 좌 열(el) 안으로 한정 = 짝 면에서 우 열이 들고 있는 차트 오폭 방지
   // [260801 4차→5차] 책 4면 — 좌 열이 그리는 면 = 현재 면 그대로(넓은 화면에서 고정면 2만 좌 열이 안 그린다 · _bizLeftPage)
@@ -11502,6 +11670,16 @@ function _bizMemberEnsure(){
 }
 function _railYrmRender(){
   var el=document.getElementById('rail-yrm'); if(!el)return;
+  // [260812 2차 운영자 「사업개요에 있는 모든 판매 개요를 사업 지표에 다 맞춰」] 사업 개요 덱에선 우 열도 **돈 축**이다 —
+  //   여기서 갈아끼우지 않으면 「판매 실적」 레일이 그대로 남아 이 면에 판매 개요가 섞인다(운영자가 없애라고 한 그것).
+  //   ⚠ 상세(#srail-uha)는 파기 전에 레일로 대피시킨다(아래 본 경로와 같은 규약 — 엘리먼트·타이머·리스너 보존).
+  if(typeof _bizDeck!=='undefined'&&_bizDeck==='ov'){
+    try{ var _u=document.getElementById('srail-uha'), _r=document.getElementById('sales-rail'); if(_u&&_r&&el.contains(_u))_r.appendChild(_u); }catch(_e){}
+    try{ if(window.Plotly)['#bizm-chart','#bizm-ex-chart','#bizm-edu-chart','#yrm-chart'].forEach(function(q){var n=el.querySelector(q); if(n)Plotly.purge(n);}); }catch(_e){}
+    _bizmState.rightId='ov';
+    try{ _bizOvRail(el); }catch(_e){ console.warn('[사업 지표 레일]',_e); }
+    return;
+  }
   // [260724 운영자] 레이아웃 합침 — 상세(#srail-uha)를 틀 안 슬롯으로 이주. innerHTML 파기 전 밖으로 대피(엘리먼트·타이머·리스너 보존) 후 재장착.
   var uha=document.getElementById('srail-uha'), rail=document.getElementById('sales-rail');
   try{ if(uha&&rail&&el.contains(uha))rail.appendChild(uha); }catch(_e){}

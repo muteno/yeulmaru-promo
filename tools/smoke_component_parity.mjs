@@ -144,6 +144,15 @@ async function main() {
     await page.goto('https://app.local/index.html?qa=admin', { waitUntil: 'domcontentloaded', timeout: 30000 });
     await page.waitForTimeout(2500);
     merge(await page.evaluate(SWEEP));
+    // [260812 2차] 기본 진입 덱이 「사업 개요」로 바뀌면서 **판매 현황 덱의 부품 2종이 스윕 밖으로 빠졌다**(실측 58→56종).
+    //   래칫은 「늘면 실패」라 줄어도 통과해 버린다 = 커버리지가 조용히 준다. 두 덱을 다 훑어 종전 범위를 되찾는다.
+    for (const dk of ['sales', 'ov']) {
+      try {
+        await page.evaluate(`(()=>{ if(typeof _bizDeckGo==='function')_bizDeckGo('${dk}'); })()`);
+        await page.waitForTimeout(2200);
+        merge(await page.evaluate(SWEEP));
+      } catch { /* 덱 없음(구 버전) = 건너뜀 */ }
+    }
     for (const js of OPENERS) {
       try {
         await page.evaluate(`(function(){document.querySelectorAll('.modal-bg.show').forEach(function(e){e.classList.remove('show')});})()`);
