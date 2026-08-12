@@ -59,19 +59,40 @@ CAT_WORDS = [("공연", "공연"), ("전시", "전시"), ("교육", "교육")]
 TOTAL_LABELS = ("계", "합계", "합 계", "총계")
 
 
+# 시트가 스스로 밝히는 연도·분야 — 제목 셀 「2024 전시사업 운영 결과」 꼴(첫 5행 A~E칸).
+#   ⚠ **이름보다 이걸 믿는다.** 운영자가 지난해 파일을 복사해 새 해 파일을 만들면 시트 이름만 남고 내용은 지난해다
+#     (실측 260812: 2026 파일 안에 `25전시`·`25교육`이 그대로 있었고 내용도 2025였다 — 이름만 보면 2026 전시로 잘못 싣는다).
+#   이름이 `원문`·`수정`처럼 연도·분야를 아예 안 밝히는 시트도 이 규칙이면 읽힌다(2024 파일이 그 꼴).
+TITLE_RE = re.compile(r"(20\d\d)\s*년?\s*(공연|전시|교육)\s*사업")
+
+
+def sheet_says(cells):
+    for r in range(1, 6):
+        for c in "ABCDE":
+            m = TITLE_RE.search(txt(cells, "%s%d" % (c, r)))
+            if m:
+                return int(m.group(1)), m.group(2)
+    return None, None
+
+
 def pick_sheet(book, year, word):
+    """그 해 그 분야 시트 고르기 — ① 제목이 스스로 밝힌 것 우선 ② 없으면 이름 규칙 ③ 여럿이면 개정본 최신."""
     yy = str(year)[2:]
-    cands = []
+    said, named = [], []
     for n in book:
+        sy, sc = sheet_says(book[n])
         flat = n.replace(" ", "")
-        if not (flat.startswith(yy + word) or flat.startswith(str(year) + word)):
-            continue
-        rev = re.findall(r"(\d{6})", flat[len(yy) + len(word):])
-        cands.append((max(int(x) for x in rev) if rev else -1, -len(flat), n))
+        rev = re.findall(r"(\d{6})", flat)
+        key = (max(int(x) for x in rev) if rev else -1, 1 if "수정" in flat else 0, -len(flat), n)   # 개정 날짜 → 「수정」 표기 → 짧은 이름 순
+        if sy == year and sc == word:
+            said.append(key)
+        elif sy is None and (flat.startswith(yy + word) or flat.startswith(str(year) + word)):
+            named.append(key)   # 제목이 아무 말도 안 한 시트만 이름으로 건진다(제목이 다른 해를 밝히면 제외)
+    cands = said or named
     if not cands:
         return None
-    cands.sort(reverse=True)   # 개정 날짜 큰 것 → 없으면 이름 짧은 것
-    return cands[0][2]
+    cands.sort(reverse=True)
+    return cands[0][-1]   # 이름은 늘 튜플 마지막 — 정렬 키를 늘려도 안 깨진다(키를 늘렸다가 여기서 -2를 집어 KeyError 났다)
 
 
 def find_row(cells, col, want, lo=1, hi=80, contains=False):
@@ -198,22 +219,28 @@ def pull_perf(cells, year, warn):
 def pull_exhib(cells, year, warn):
     """전시: B사업명 C예산 D전표실적 F판매수수료 G정산서 J유료 K무료.
     ⚠ 이 시트엔 예술성/상업성 같은 회계 구분 축이 **없다** → acct는 비운다(없는 축을 창작하지 않는다)."""
-    head = find_row(cells, "B", "구분")
-    if not head:
-        warn.append("전시 시트에서 머리글(B열 '구분')을 못 찾았다")
+    # ⚠ 전시 표가 **A열에서 시작하는 해**가 있다(2024 실측: 구분이 A · 2025는 B). 한 칸 차이를 여기서 흡수한다 —
+    #   안 하면 머리글을 못 찾아 그 해 전시가 통째로 빈다(첫 판이 그랬다).
+    base = "B" if find_row(cells, "B", "구분") else ("A" if find_row(cells, "A", "구분") else "")
+    if not base:
+        warn.append("전시 시트에서 머리글('구분')을 A·B 어느 열에서도 못 찾았다")
         return []
-    data, tot_r = block_rows(cells, head)
+    sh = 0 if base == "B" else -1
+    col = lambda c: chr(ord(c) + sh)
+    head = find_row(cells, base, "구분")
+    data, tot_r = block_rows(cells, head, col=base)
     rows = []
     for r in data:
-        name = txt(cells, "B%d" % r)
+        name = txt(cells, "%s%d" % (base, r))
         if not name:
             continue
         rows.append(dict(
             cat="전시", acct="", name=name, mon="", cnt=0,
-            bud=num(cells, "C%d" % r), vou=num(cells, "D%d" % r), fee=num(cells, "F%d" % r),
-            rev=num(cells, "G%d" % r), paid=num(cells, "J%d" % r), inv=num(cells, "K%d" % r),
+            bud=num(cells, "%s%d" % (col("C"), r)), vou=num(cells, "%s%d" % (col("D"), r)),
+            fee=num(cells, "%s%d" % (col("F"), r)), rev=num(cells, "%s%d" % (col("G"), r)),
+            paid=num(cells, "%s%d" % (col("J"), r)), inv=num(cells, "%s%d" % (col("K"), r)),
         ))
-    audit(rows, tot_at(cells, tot_r, "CDFGJK"), "전시", warn)
+    audit(rows, tot_at(cells, tot_r, "".join(col(c) for c in "CDFGJK")), "전시", warn)
     return rows
 
 
@@ -361,23 +388,39 @@ def prev_ids():
 
 
 def main(argv):
-    paths = argv[1:] or sorted(glob.glob(os.path.join(ROOT, "*년 예술사업 대시보드.xlsx")))
+    paths = argv[1:] or sorted(glob.glob(os.path.join(ROOT, "*예술사업 대시보드*.xlsx")))
     if not paths:
         print("[사업비] 원본 xlsx를 못 찾았다 — 레포 최상단에 「<연도>년 예술사업 대시보드.xlsx」를 두거나 경로를 인자로 줘라")
         return 1
     old_ids, old_used, old_alias = prev_ids()
     years, srcs, warn = {}, {}, []
+    # [260812-6] **한 해에 파일이 여러 개**일 수 있다(실측: 2024가 공연·전시 두 파일로 왔다).
+    #   같은 연도 파일들의 시트를 한 책으로 합친다 — 시트 이름이 겹치면 파일 순서로 접미를 붙여 둘 다 살린다
+    #   (둘 다 `원문`이었다 · 어느 쪽이 어느 분야인지는 아래 제목 셀 판정이 가른다).
+    books_by_year = {}
+    for _p in paths:
+        _m = re.search(r"(20\d\d)", os.path.basename(_p))
+        if not _m:
+            continue
+        _y = int(_m.group(1))
+        _bk = books_by_year.setdefault(_y, {})
+        for _n, _c in load_book(_p).items():
+            _k = _n if _n not in _bk else ("%s#%d" % (_n, len(_bk)))
+            _bk[_k] = _c
     for p in paths:
         m = re.search(r"(20\d\d)", os.path.basename(p))
         if not m:
             warn.append("파일명에서 연도를 못 읽었다: %s" % os.path.basename(p))
             continue
-        year, book = int(m.group(1)), load_book(p)
+        year = int(m.group(1))
+        book = books_by_year.pop(year, None)
+        if book is None:
+            continue   # 이미 합쳐 처리한 해
         rows, used = [], {}
         for label, word in CAT_WORDS:
             nm = pick_sheet(book, year, word)
             if not nm:
-                warn.append("%d년 %s 시트를 못 찾았다(이름이 「%s%s…」로 시작해야 한다)" % (year, label, str(year)[2:], word))
+                print("[사업비] %d년 %s 자료 없음 — 건너뜀(그 해 그 분야는 화면에서 빈 칸으로 나온다)" % (year, label))
                 continue
             used[label] = nm
             rows += {"공연": pull_perf, "전시": pull_exhib, "교육": pull_edu}[label](book[nm], year, warn)

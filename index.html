@@ -846,7 +846,7 @@ button{font-family:inherit;cursor:pointer}
 .c.today .c-inner::-webkit-scrollbar-track{background:transparent;margin-top:24px;margin-bottom:8px}
 .c{height:123px;padding:7px 8px 8px 8px;border-right:1px solid rgba(0,0,0,.07);position:relative;overflow:hidden;transition:all .15s;background:rgba(255,255,255,0)}
 /* 과거 = 더 흐리게(운영자 확정: 글자 33%) */
-.c.past .c-inner{opacity:.33}
+.c.past .c-inner{opacity:1}   /* [260812-6 운영자 「내용은 그냥 진행 예정인거랑 동일하게」] 구 .33 흐리기 폐지 — 지난 표식은 빗금(.diag)과 무채색 플랫폼이 맡는다 */
 /* 일·월 통합 칸 = 한 셀 두 서브셀(일 3/4 · 월 1/4, 운영자 260706) — 월요일도 자체 날짜·일정·클릭 보유 */
 .c.sunmon .c-inner{width:calc(75% - 5px)}
 .c.sunmon .c-count{right:calc(25% + 6px)}
@@ -856,7 +856,7 @@ button{font-family:inherit;cursor:pointer}
 .c.sunmon .sp-area{right:calc(25% + 8px)}
 .mon-sub{position:absolute;top:0;right:0;bottom:0;width:25%;border-left:1px solid rgba(0,0,0,.07);padding:5px 5px 6px;overflow:hidden;cursor:pointer;z-index:5}
 .mon-sub .mev{font-size:9px;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text);margin-top:2px}
-.mon-sub.past .mev,.mon-sub.past .dn{opacity:.33}
+.mon-sub.past .mev,.mon-sub.past .dn{opacity:1}   /* [260812-6] 위와 같은 축 — 월요일 서브셀도 같은 규약(.ev/.mev 계약 동기) */
 .mon-sub.nm{cursor:default}
 /* 분할 요일 헤더(일|월) */
 .dh.dh-split{display:flex;padding:0;align-items:stretch}
@@ -908,7 +908,7 @@ button{font-family:inherit;cursor:pointer}
 .ev-plat{font-weight:600;flex-shrink:0;white-space:nowrap;max-width:60px;overflow:hidden;text-overflow:ellipsis}
 .ev-title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
 .ev-title.future{color:var(--text);font-weight:600}
-.ev-title.past{color:var(--past-text)}
+.ev-title.past{color:var(--text)}   /* [260812-6] 지난 제목도 예정 건과 같은 잉크 */
 /* 셀이 좁아지면 라인 안 깨지게 + 프로그램 풀이름 .pf → 줄임말 .ps 자동 전환 */
 .c.cell{container-type:inline-size}
 /* 셀 우하단 대각선 코너 — 내용이 꽉 차도 항상 사이드바(날짜 패널)를 여는 전용 핫스팟 */
@@ -931,7 +931,7 @@ button{font-family:inherit;cursor:pointer}
 @container (max-width:100px){
   .dn .pname{display:none !important}
 }
-.diag{position:absolute;inset:0;background:repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(0,0,0,0.02) 4px,rgba(0,0,0,0.02) 5px);pointer-events:none}
+.diag{position:absolute;inset:0;background:repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(0,0,0,0.01) 4px,rgba(0,0,0,0.01) 5px);pointer-events:none}   /* [260812-6 운영자 「빗금의 투명도를 50% 높이고」] alpha .02 → .01(딱 절반) — 지난 날 표식은 남기되 내용을 가리지 않는다 */
 /* 특별 일정 세로 슬라이드 (전광판) — 한 줄 영역 항상 확보, 위로 사라지는 느낌 */
 .sp-area{position:absolute;bottom:11px;left:8px;right:8px;height:19px;overflow:hidden;pointer-events:auto}
 .sp-item[draggable="true"]:active{cursor:grabbing !important}
@@ -941,7 +941,7 @@ button{font-family:inherit;cursor:pointer}
 .sp-time{font-weight:700;color:var(--accent);min-width:30px;display:inline-block;text-align:left;font-variant-numeric:tabular-nums;flex-shrink:0}
 .sp-time.off{color:#C04040}
 .sp-label{color:#555;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
-.c.past .sp-time,.c.past .sp-label{color:#bbb !important}
+.c.past .sp-time,.c.past .sp-label{color:var(--neutral-text) !important}   /* [260812-6] 특별일정도 흐리기 대신 무채색 한 단계 */
 
 /* 접힌 주차 — 저저번 주 이상 과거 자동 접힘 */
 .week-collapsed{
@@ -25652,9 +25652,11 @@ function renderCal(){
         else if(typeof ts==='number'){var tm=Math.round((ts%1)*1440),hh=Math.floor(tm/60),mm=tm%60;hhmm=String(hh).padStart(2,'0')+':'+String(mm).padStart(2,'0');}
         var nowH=new Date().getHours(),nowM=new Date().getMinutes(),evPast=false;
         if(td&&hhmm){var pp=hhmm.split(':');if(pp.length===2){var eh=parseInt(pp[0]),em=parseInt(pp[1]);if(eh<nowH||(eh===nowH&&em<=nowM))evPast=true;}}
-        var timeCol=done?'#bbb':past?'var(--past-text)':td?'var(--accent)':'var(--text)';
-        var platCol=done?'#bbb':past?'var(--past-text)':td?col:col;
-        var titleCol=done?'#bbb':past?'var(--past-text)':'var(--text)';
+        // [260812-6 운영자] 지난 건도 **내용은 예정 건과 똑같이** 보인다 — 지난 표식은 빗금(옅게)과 **무채색 플랫폼** 둘뿐.
+        //   구판은 시간·플랫폼·제목을 전부 `--past-text`로 죽여 지난 주가 통째로 안 읽혔다(운영자 지적).
+        var timeCol=done?'#bbb':td?'var(--accent)':'var(--text)';
+        var platCol=done?'#bbb':past?'var(--neutral-text)':col;   // ← 지난 건만 무채색(색으로 구분하던 플랫폼이 회색이 된다 = 지난 표식)
+        var titleCol=done?'#bbb':'var(--text)';
         var deco=done?'text-decoration:line-through;text-decoration-color:#555;text-decoration-thickness:1.5px;text-decoration-skip-ink:none;':'';
         var applyingBadge=applying?'<span style="display:inline-block;background:#fff8f3;color:#b35a30;font-size:8px;font-weight:700;padding:1px 4px;border-radius:3px;margin-right:3px;border:1px solid rgba(216,132,85,0.3);letter-spacing:0">신청중</span>':'';
         var draftBadge=draft?'<span style="display:inline-block;background:#EEF0FF;color:var(--accent);font-size:8px;font-weight:700;padding:1px 4px;border-radius:3px;margin-right:3px;border:1px solid rgba(74,77,231,0.35);letter-spacing:0">임시</span>':'';
@@ -25701,7 +25703,7 @@ function renderCal(){
           else if(typeof ts==='number'){var tm=Math.round((ts%1)*1440);mh=String(Math.floor(tm/60)).padStart(2,'0')+':'+String(tm%60).padStart(2,'0');}
           // [260804] 월요일 서브셀도 본 셀과 같은 계약 — data-ri(다중선택) + 항목 우클릭 메뉴.
           //   구판은 우클릭이 부모 `.mon-sub`의 셀 메뉴로 새어 월요일 건만 캘린더에서 완료 처리가 불가능했다.
-          h+='<div class="mev" data-ri="'+(r._rowIndex)+'"'+(mDone?' style="text-decoration:line-through;opacity:.6"':'')+' onclick="event.stopPropagation();if(_evSelClick(event,'+(r._rowIndex)+'))return;editRec('+(r._rowIndex)+',\''+mKey+'\',event,true)" oncontextmenu="event.stopPropagation();onEvContextMenu(event,'+(r._rowIndex)+',\''+mKey+'\')"><span style="color:var(--dim);font-weight:600">'+mh+'</span> <span style="color:'+platColor(p)+';font-weight:700">'+platDisplay(p,p2)+'</span></div>';
+          h+='<div class="mev" data-ri="'+(r._rowIndex)+'"'+(mDone?' style="text-decoration:line-through;opacity:.6"':'')+' onclick="event.stopPropagation();if(_evSelClick(event,'+(r._rowIndex)+'))return;editRec('+(r._rowIndex)+',\''+mKey+'\',event,true)" oncontextmenu="event.stopPropagation();onEvContextMenu(event,'+(r._rowIndex)+',\''+mKey+'\')"><span style="color:var(--dim);font-weight:600">'+mh+'</span> <span style="color:'+(mPast?'var(--neutral-text)':platColor(p))+';font-weight:700">'+platDisplay(p,p2)+'</span></div>';   // [260812-6] 지난 건 플랫폼은 무채색(.ev와 같은 규약 — 두 마크업이 갈리지 않게)
         });
         h+='</div>';
       }
@@ -27112,12 +27114,18 @@ function editRec(rowIndex,dateKey,ev,forceReadOnly){
   if(!rec)return;
   // 임시저장 본인 건 → 위저드 이어쓰기로 복귀
   if(_isDraftRec(rec)){var _ma='';try{_ma=sessionStorage.getItem('myApplicant')||'';}catch(e){}if(_isMineRec(rec,_ma)){_pwResumeDraft(rowIndex);return;}}
-  // === user 본인 '신청 중'만 → 변경 위저드 (예정은 읽기전용, A-2) ===
+  // === user 본인 건 → 변경 위저드 ('신청 중' 전체 · '예정'은 내용만) ===
+  // [260812-6 운영자 「본인이 신청한 홍보 내역은 **신청 예정으로 상태가 변경되었더라도 내용**(카카오라면 76바이트
+  //   그거를 말하는거임)에 한정해서는 변경될 수 잇게해줘, 문자나 등등 모든거 마찬가지」]
+  //   구판은 '신청 중'만 위저드로 보내고 '예정'은 읽기전용으로 되돌렸다 → 확정 뒤엔 오타 하나도 못 고쳤다.
+  //   ⚠ 무엇이 열리는지는 여기서 정하지 않는다 — `_renderChangeMenu`의 `_cwLock`이 이미
+  //     「'예정'이면 프로그램(1)·일자시간(3)만 잠그고 제목·플랫폼/내용/담당자·비고는 연다」로 정해져 있는데,
+  //     이 관문이 막고 있어 **그 규칙에 닿지도 못했다**. 관문만 열면 잠금 규칙이 그대로 발화한다(규칙 이원화 0).
   if(userRole!=='admin'&&!forceReadOnly){
     var myAppl='';try{myAppl=sessionStorage.getItem('myApplicant')||'';}catch(e){}
     var isMine=_isMineRec(rec,myAppl);
     var status=rec['진행 상태']||'';
-    if(isMine&&status==='신청 중'){
+    if(isMine&&(status==='신청 중'||status==='예정')){
       openChangeWizard(rowIndex);
       return;
     }
