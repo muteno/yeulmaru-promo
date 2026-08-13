@@ -29902,6 +29902,13 @@ function _salesMenuBuild(menu){
 // 로드 = /api/ops?sheet=회원 1회 → 메모리 캐시(_memState) · 새로고침 버튼만 재요청. 쓰기 없음(원천 = 홈페이지 회원 DB).
 // PII 위생(분신술 보안 MED-4): 로그아웃(_fullLogout)·유휴잠금(lockScreen)이 _memPurge()로 캐시+모달 소거.
 var _memState=null,_memLoading=false,_memEscH=null,_memQT=null,_memEpoch=0;
+// [260813-8 운영자 「판매현황에 고객데이터 떨어져 나갔던데 확인해줘」] 회원 로드 실패 **사유**를 여기 남긴다.
+//   왜: 실패 문구를 `#mem-sub`(회원 조회 **모달** 안 칸)에만 썼기 때문에, 같은 로더를 쓰는
+//   **인라인 4면(고객 분석)** 에서는 그 칸이 없어 사유가 통째로 사라졌다. 화면엔 늘 「시트를 확인해 주세요」만 떴고,
+//   실제 원인이 세션 만료(401)·권한(403)·네트워크여도 운영자가 시트만 들여다보게 됐다.
+//   ⚠ `_memState`에 담지 않는다 — `if(!_memState)`로 「아직 안 불러옴」을 재는 자리가 여러 곳이라
+//     빈 객체를 넣으면 그 판정이 뒤집힌다(재시도가 영영 안 걸린다).
+var _memErr=null;   // {kind:'empty'|'auth'|'perm'|'net', msg:'화면에 그대로 쓸 한 줄'}
 // [260731 운영자 "바로 안 열려요"] PII 재적재 가드를 「#member-lookup 존재」 → 「purge 에포크」로 교체.
 //   구 가드는 회원 조회 모달이 DOM에 없으면(= 회원 분포로 곧장 들어온 경우) 응답을 통째로 버려서 개요가 항상 "못 불러왔어요"였다.
 //   에포크 = _memPurge(로그아웃·유휴잠금)가 증가 → await 중 purge된 응답만 정확히 폐기(보안 의도 동일, 진입 경로 무관).
@@ -29914,6 +29921,15 @@ function _memPurge(){_memState=null;_memLoading=false;_bkState=null;_bkLoading=f
 //   클릭 시점엔 이미 캐시라 즉시 그려진다. 중복 발사는 _memLoading·_memState 가드로 차단(추가 API 호출 0).
 function _memWarm(){ if(userRole!=='admin')return; try{_bkWarm();}catch(e){}   /* [260804] 예매 집계도 같이 덥힌다 — 첫 예매 질문에서 「아직 안 불러왔어요」가 안 뜨게 */
   if(_memState||_memLoading)return; try{_memLoad(false);}catch(e){} }
+// [260813-8] 빈 화면의 [다시 시도] — **신선 재로드**(fresh=1)로 간다. 실패의 절반은 캐시가 빈 응답을 물고 있는 것이라
+//   같은 캐시를 다시 읽으면 같은 화면이 나온다. 그린 자리(모달·인라인 4면)를 스스로 알아내 그 자리만 다시 그린다.
+function _memRetry(){
+  if(_memLoading)return;
+  _memState=null; _memErr=null;
+  var inl=document.getElementById('mem-ov-inline');
+  if(inl)inl.innerHTML='<div style="text-align:center;padding:50px;color:var(--dim);font-size:13px">회원 데이터 불러오는 중…</div>';
+  _memLoad(true).then(function(){ try{ _memOvRender(document.getElementById('mem-ov-inline')?'mem-ov-inline':undefined); }catch(_e){} });
+}
 // [260810 운영자 「대시보드를 불러오는 순간 고객분석 데이터까지 다 · 애초에 이 웹앱이 열려있으면 데이터는 불러오게」]
 //   **부팅 선로딩** — 구판의 출발 신호는 세부메뉴 **호버**(위 _memWarm)와 책 4면 도착(_bizMemberEnsure) 둘뿐이라,
 //   책을 4면까지 넘겨야 그제서야 회원 시트를 부르기 시작했다. 신호를 「앱에 들어온 순간」(initApp)으로 앞당긴다.
@@ -29967,19 +29983,24 @@ async function _memLoad(force){
     var d=await api('GET','/api/ops?sheet='+encodeURIComponent('회원')+(force?'&fresh=1':''));
     if(ep!==_memEpoch)return;   // await 중 _memPurge(로그아웃·유휴잠금) = PII 재적재 금지(보안 재심사 잔여 LOW)
     if(!d||!d.rows||!d.rows.length){
-      if(sub)sub.innerHTML='<span style="color:var(--danger)">시트가 비어 있거나 없어요 — 통합문서에 시트 이름을 정확히 「운영_회원」으로(복사 시 뒤에 「 (2)」 같은 접미사 없이) 두었는지 확인해 주세요'+(d&&d.note?' · '+_memEsc(d.note):'')+'</span>';
+      _memErr={kind:'empty',msg:'시트가 비어 있거나 없어요 — 통합문서에 시트 이름을 정확히 「운영_회원」으로(복사 시 뒤에 「 (2)」 같은 접미사 없이) 두었는지 확인해 주세요'+(d&&d.note?' · '+String(d.note):'')};
+      if(sub)sub.innerHTML='<span style="color:var(--danger)">'+_memEsc(_memErr.msg)+'</span>';
       _memState={rows:[]};return;
     }
     // 스키마 검증(분신술 UX MED-1) — 구버전(v1)·다른 문서를 복사하면 빈 셀로 조용히 나오는 것 방지
     var hd=d.headers||[];
     var miss=['주소1','주소2','주소3','주소4','우편번호'].filter(function(k){return hd.indexOf(k)<0;});
     var noPhone=hd.indexOf('휴대폰정규화')<0&&hd.indexOf('휴대폰번호')<0;
+    _memErr=null;
     _memState={rows:d.rows,ts:Date.now(),schemaWarn:(miss.length||noPhone)?'⚠ 시트 컬럼이 v2 정제본과 달라요(누락: '+(noPhone?['휴대폰정규화'].concat(miss):miss).join(', ')+') — 「회원DB_주소정제_v2」의 운영_회원 시트를 복사해 주세요':''};
     _memFillSel(1);_memFillSel(2);_memFillSel(3);
     _memRender();
   }catch(e){
     var msg=String(e.message||e);
-    if(sub)sub.innerHTML='<span style="color:var(--danger)">'+(msg.indexOf('401')===0?'세션이 만료됐어요 — 다시 로그인해 주세요':(msg.indexOf('403')===0?'권한이 없어요 — 관리자 계정으로 로그인해 주세요':'로드 실패: '+_memEsc(msg.slice(0,120))))+'</span>';
+    _memErr=(msg.indexOf('401')===0)?{kind:'auth',msg:'세션이 만료됐어요 — 다시 로그인해 주세요'}
+           :(msg.indexOf('403')===0)?{kind:'perm',msg:'권한이 없어요 — 관리자 계정으로 로그인해 주세요'}
+           :{kind:'net',msg:'회원 시트를 불러오지 못했어요 — '+msg.slice(0,120)};
+    if(sub)sub.innerHTML='<span style="color:var(--danger)">'+_memEsc(_memErr.msg)+'</span>';
     _memState=null;
   }finally{
     _memLoading=false;
@@ -30078,7 +30099,16 @@ async function openMemberOverview(){
 function _memOvRender(targetId){   // [260731 4차] targetId = 인라인 4면(mem-ov-inline) 재사용 — 미지정 = 종전 모달(#mem-ov-body). 모달·인라인이 같은 id를 쓰면 getElementById 충돌(페이블 검수 HIGH)이라 컨테이너를 분리
   var body=document.getElementById(targetId||'mem-ov-body');
   if(!body)return;
-  if(!_memState||!_memState.rows.length){body.innerHTML='<div style="padding:40px;font-size:13px;color:var(--danger)">회원 데이터를 못 불러왔어요 — 통합문서 「운영_회원」 시트를 확인해 주세요</div>';return;}
+  // [260813-8] 빈 화면 = **왜 비었는지**를 적는다. 구판은 원인과 무관하게 늘 「시트를 확인해 주세요」였다
+  //   (401·403·네트워크여도 시트 탓으로 읽혔다 — 운영자가 멀쩡한 시트를 계속 들여다보게 된다).
+  if(!_memState||!_memState.rows.length){
+    var _me=(typeof _memErr!=='undefined'&&_memErr)?_memErr:null;
+    body.innerHTML='<div style="padding:40px 24px;font-size:13px;color:var(--danger);text-align:center;line-height:1.7">'
+      +'회원 데이터를 못 불러왔어요<div style="margin-top:6px;color:var(--neutral-text);font-size:12.5px">'
+      +escapeHtml(_me?_me.msg:'통합문서 「운영_회원」 시트를 확인해 주세요')+'</div>'
+      +'<button class="ana-chip" onclick="_memRetry()" style="margin-top:14px">다시 시도</button></div>';
+    return;
+  }
   // [260803 운영자 「저 창은 스크롤 없음 — 대화만 네모 박스 안에서」] FIT = 모달 전용 「창 높이 채움」 모드.
   //   모달은 높이가 고정(92vh)이라 막대·맵이 남는 높이를 나눠 갖고(행 17~36px 신축 · 최대치 = 종전 36px과 동일),
   //   대화는 채팅 박스 안에서만 스크롤한다.
