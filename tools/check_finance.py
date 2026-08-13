@@ -220,12 +220,31 @@ def main() -> int:
             before = {r["no"]: (y, r.get("key", "")) for y, rows in years.items() for r in rows}
             after = parse_seed(out)
             now = {(y, r.get("key", "")): r["no"] for y, rows in after.items() for r in rows}
-            moved = []
+            # ⚠ [260813-2] **원천이 레포에 없는 행은 재현 자체가 불가능하다** — 그건 「NO가 밀렸다」가 아니다.
+            #   `.gitignore`가 `*.xlsx`를 막고 있어서, 씨앗 `src`가 이름을 적어 둔 원천 중 레포에 실제로
+            #   없는 파일이 있으면 그 원천이 만든 행은 재빌드에서 통째로 사라진다(→None).
+            #   구판은 그걸 「밀렸다」로 적어 **main을 빨갛게 세웠다**(260813 실측: #806이 반입한
+            #   `2026년 기획사업 정산서 매출.xlsx`가 커밋 안 돼 2026-전시-01·02·03 · 2026-교육-01 4건이 →None).
+            #   그래서 「사라짐(→None)」과 「다른 번호로 바뀜(A→B)」을 가른다 — **후자만 사고**다.
+            #   원천이 다 있으면 사라짐도 사고로 그대로 잡는다(이빨을 안 뺀다).
+            declared = set(re.findall(r'"([^"]*\.xlsx)"', seed_src))
+            missing_src = sorted(f for f in declared if not (ROOT / f).exists())
+            moved, vanished = [], []
             for no, (y, k) in before.items():
                 if no == victim:
                     continue   # 일부러 지운 그 행만 새 번호를 받는 게 정상
-                if now.get((y, k)) != no:
-                    moved.append("%s→%s" % (no, now.get((y, k))))
+                got = now.get((y, k))
+                if got == no:
+                    continue
+                (vanished if got is None else moved).append("%s→%s" % (no, got))
+            if vanished:
+                if missing_src:
+                    warn_missing = ("⑧ 면책 %d건 — 원천 %s가 레포에 없어 재현 불가(`.gitignore`의 `*.xlsx`). "
+                                    "그 파일을 최상단에 두고 `python3 tools/build_biz_finance.py`를 돌리면 완전히 잰다: %s"
+                                    % (len(vanished), " · ".join(missing_src), ", ".join(vanished[:6])))
+                    print("   ℹ " + warn_missing)
+                else:
+                    moved.extend(vanished)
             if moved:
                 bad.append("이전본에서 한 줄이 빠졌을 뿐인데 **다른 사업 %d건의 NO가 밀렸다**: %s — "
                            "엑셀 중간에 줄을 끼우면 시트에 저장된 담당자 수정본이 엉뚱한 사업에 붙는다"
@@ -327,6 +346,41 @@ def main() -> int:
                        "보여 감사 때 「이 값 누가 정했나」에 답할 수 없다.")
         if "'수정일시':''" not in flat:
             bad.append("⑬ `_finSeedPush`가 `수정일시`를 빈칸으로 안 남긴다 — 위와 같은 이유.")
+
+    # ⑭ 기준일은 **오늘**이 아니다 (260813-2 운영자 「지금 오늘 기준이잖아? 데이터를 마지막으로 건드린 시점을 기준으로」)
+    #   회귀 모양이 아주 잘 난다: `_finAsOf`를 지우고 `new Date()` 한 줄로 갈아치우면 화면은 멀쩡해 보이는데
+    #   데이터가 반년째 그대로여도 늘 「오늘 기준」이라 **화면이 거짓말을 한다**. 눈으로는 절대 안 잡히는 결함이다.
+    #   ⚠ 주석을 먼저 지운다 — 이 자리를 설명하는 주석에 `new Date()`라는 글자가 들어 있다(⑤가 배운 그 교훈).
+    for fn, need in (("_finAsOf", ("r.at", "BIZ_FIN.built")), ("_finAsOfLab", ())):
+        m = re.search(r"function\s+" + fn + r"\s*\(rows\)\s*\{.*?\n\}", idx_src, re.S)
+        if not m:
+            bad.append("⑭ `%s`(기준일 정본)를 못 찾았다 — 이름이 바뀌었으면 이 검사도 같이 고쳐라." % fn)
+            continue
+        body = re.sub(r"//[^\n]*", "", m.group(0))
+        if re.search(r"new\s+Date|Date\.now", body):
+            bad.append("⑭ `%s`가 **오늘 날짜를 찍는다** — 데이터가 안 바뀌어도 늘 「오늘 기준」이 되어 거짓이 된다." % fn)
+        if "r.at" in need and ".at" not in body:
+            bad.append("⑭ `_finAsOf`가 시트 `수정일시`(행의 `at`)를 안 본다 — 담당자가 실제로 건드린 시각이 정본이다.")
+        if "BIZ_FIN.built" in need and "BIZ_FIN.built" not in body:
+            bad.append("⑭ `_finAsOf`에 씨앗 폴백(`BIZ_FIN.built`)이 없다 — 시트에 손댄 행이 없으면 기준일이 통째로 사라진다.")
+    # ⑮ 사업명 가르는 정규식은 **한 벌**이다 (260813-2)
+    #   260812-9 주석은 「`_finAliases`가 쓰는 것과 같은 한 벌」이라 적어 뒀지만 실제로는 복제본이 따로 살아 있었고,
+    #   그 탓에 표기 쪽만 꺾쇠(`<>`)를 배우고 조인 쪽은 못 배웠다(전시 「어린이 미술전 <냠냠>」의 후보에 「냠냠」 누락).
+    #   화면에 뜨는 이름과 공연↔사업비 조인이 **서로 다른 글자를 보면** 안 된다 — 그 갈라짐을 여기서 막는다.
+    n_lit = len(re.findall(r"\[\(（", re.sub(r"//[^\n]*", "", idx_src)))
+    if n_lit > 1:
+        bad.append("⑮ 사업명 괄호 정규식이 %d벌이다 — `_FIN_PAREN` 하나만 두고 전부 그걸 쓰게 해라"
+                   "(표기와 조인이 다른 글자를 보게 된다)." % n_lit)
+    m = re.search(r"function\s+_finAliases\s*\([^)]*\)\s*\{.*?\n\}", idx_src, re.S)
+    if m and "_FIN_PAREN" not in re.sub(r"//[^\n]*", "", m.group(0)):
+        bad.append("⑮ `_finAliases`가 `_FIN_PAREN`을 안 쓴다 — 조인 후보가 표기와 갈린다.")
+
+    #   씨앗의 `built`는 **빌더가 찍는다**(손편집 금지 규약 유지) — 발행 코드가 사라지면 폴백이 영영 안 채워진다.
+    bsrc = BUILDER.read_text(encoding="utf-8")
+    if "built:%s" not in bsrc or "def built_at(" not in bsrc:
+        bad.append("⑭ 빌더가 `built`(씨앗 생성 시각)를 안 찍는다 — `_finAsOf`의 폴백이 영영 비고, 기준일이 안 뜬다.")
+    if re.search(r"^\s*built:", seed_src, re.M) and not re.search(r"var BIZ_FIN=\{[^\n]*built:", seed_src):
+        bad.append("⑭ 씨앗의 `built`가 헤더가 아닌 행에 있다 — 손편집 흔적이다(빌더로 재생성해라).")
 
     if bad:
         print("✗ check_finance 실패 %d건" % len(bad))

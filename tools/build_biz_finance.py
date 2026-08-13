@@ -548,6 +548,13 @@ def js_str(s):
     return json.dumps(s, ensure_ascii=False)
 
 
+def built_at():
+    """씨앗 생성 시각(KST · 분까지). 앱의 `_finStamp()`와 **같은 문자열 꼴**이라 그대로 비교·정렬된다."""
+    import datetime
+    kst = datetime.timezone(datetime.timedelta(hours=9))
+    return datetime.datetime.now(tz=kst).strftime("%Y-%m-%d %H:%M")
+
+
 def emit(years, srcs, warn):
     lines = [
         "// [기계산출물 — 손편집 금지] tools/build_biz_finance.py가 「<연도>년 예술사업 대시보드.xlsx」(운영자 업로드)에서 생성.",
@@ -564,7 +571,10 @@ def emit(years, srcs, warn):
         "//         이게 없으면 「아직 안 적었다(0)」와 「0원이 맞다」가 화면에서 같아진다. 실측 260812 = 0인 99칸 중",
         "//         진짜 미입력 72 · 담당자가 적은 0 17 · 원천에 열 없음 9 · 못 읽음 1. 분야에 열 자체가 없는 칸은",
         "//         「해당 없음」이라 여기 안 적는다(교육 inv). 화면 판정 = index.html `_finBlank`.",
-        "var BIZ_FIN={ver:1,unit:'원',years:{",
+        "// built = 이 씨앗을 만든 시각(KST). 화면 「(YYYY. M. D. 기준)」의 **폴백**이다 —",
+        "//   시트에 `수정일시`가 있는 행이 하나라도 있으면 그쪽(담당자가 실제로 건드린 시각)이 이긴다(`_finAsOf`).",
+        "//   ⚠ 오늘 날짜를 화면이 스스로 찍으면 안 된다 — 데이터가 반년째 그대로여도 늘 「오늘 기준」이라 거짓이 된다.",
+        "var BIZ_FIN={ver:1,unit:'원',built:%s,years:{" % js_str(built_at()),
     ]
     ykeys = sorted(years.keys())
     for yi, y in enumerate(ykeys):

@@ -2690,6 +2690,18 @@ table.promo-board-table thead th:last-child{border-top-right-radius:11px}
    상단 패딩만 다른 `#app.biz-fit`(9px)도 같은 문법으로 따라간다. 절대배치는 유지 = 제목 흐름·줄 높이·이젤 기하 무접촉(260804 2차 규약). */
 .ry-hd-tools{position:absolute;right:14px;top:12px;bottom:2px;align-items:center}
 #app.biz-fit .ry-hd-tools{top:9px}
+/* [260813-2 운영자 「사업 결과라는 말하고 **광학 잉크 단위로 수평**이게 픽셀 측정」] 카드 제목 우측 기준일 라벨.
+   새 형태가 아니라 **기존 둘의 합성**이다 — 자리 = `.ry-hd-tools`(위 규칙 그대로 · 절대배치) ·
+   활자 = `.bizm-card .ct .sub`와 **같은 값**(11px/600/--dim). 새 색·새 토큰·새 raw hex 0.
+   `display:flex`가 여기 필요한 이유 = `.ry-hd-tools`는 `align-items:center`만 갖고 display를 안 정한다
+   (버튼 묶음 쪽은 각자 inline-flex를 들고 왔다). 그 한 칸만 채우고 나머지 기하는 위 규칙 것을 그대로 쓴다.
+   ⚠ 광학 보정 = 4배 DPR 잉크 실측(칠해진 화소만 스캔 · 260804 2차와 같은 자 · `tools/scratch/ink_asof.mjs`):
+     보정 전 = 제목 잉크 21.00~33.25 중심 27.125 / 라벨 잉크 22.50~33.25 중심 27.875 → **Δ +0.75px**(라벨이 아래).
+   고침 = `padding-bottom:1.5px`. 이 칸은 flex **컨테이너**라 안쪽 글자가 익명 플렉스 항목이고,
+   `align-items:center`는 **콘텐츠 상자** 기준으로 가운데를 잡는다 → 아래 패딩 1.5px = 글자가 정확히 0.75px 올라간다.
+   transform 대신 패딩인 이유 = 합성 레이어를 안 만들고 순수 배치로 끝나 DPR이 바뀌어도 같은 규칙으로 따라간다.
+   ⚠ 매직 넘버가 아니다 — 1.5 = 실측 Δ 0.75 × 2. 활자(11px/600)나 제목(13px/700)을 건드리면 **다시 재고 갱신**하라. */
+.ry-hd-asof{display:flex;padding-bottom:1.5px;font-size:11px;font-weight:600;color:var(--dim);letter-spacing:-.01em;white-space:nowrap;font-variant-numeric:tabular-nums}
 /* 도구 묶음 구분선 — 세로 1px(값 = KPI 스트립 칸 구분선 `.bizm-strip .cell` border-left와 같은 --border) */
 .ry-hd-div{width:1px;height:12px;background:var(--border);flex:0 0 auto}
 /* [260804 3차 운영자 「구분선 넣어서 판매중 이것도 글자 자체가 on off 토글일 수 있게」] .sw 스위치 pill 제거 = 글자가 곧 스위치.
@@ -7795,11 +7807,18 @@ function _finNoShort(no){ return String(no||'').replace(/^20\d\d-/,''); }
 //        「사업명은 지금 등록된 기존에 등록된 공연이랑 싱크를 맞춰서 표기해줘」
 //   ⚠ 가르는 정규식은 `_finAliases`가 쓰는 것과 **같은 한 벌**이다 — 두 곳이 갈리면 표에 뜨는 이름과
 //     공연↔사업비 조인이 서로 다른 글자를 보게 된다.
-var _FIN_PAREN=/^([^(（]*)[(（]([^)）]*)[)）]\s*$/;
+//   [260813-2] **꺾쇠 · 꼬리말까지** 같은 규칙으로 편다 — 전시가 통째로 안 갈리고 있었다(실측:
+//     「어린이 미술전 <냠냠>」이 한 칸에 그대로 · 비고 「—」). 전시 원본은 공연과 달리 작품명을 `<>`에 넣고,
+//     뒤에 꼬리말이 붙기도 한다(「어린이 미술전 <파르르 파르르>/연계 워크숍」).
+//     구판 정규식은 ⓐ `()`만 보고 ⓑ 닫는 괄호가 **문자열 끝**이어야 해서 둘 다 놓쳤다.
+//   꼬리말은 **작품 쪽**에 붙인다(그 사업의 일부지 묶음 이름이 아니다). 붙일 때 `/`·`·`·`,`로 시작하면 사이 공백 없이.
+var _FIN_PAREN=/^([^(（<〈]*?)\s*[(（<〈]([^)）>〉]*)[)）>〉]\s*(.*)$/;
 function _finNamePair(name){
   var t=String(name||'').trim(), m=t.match(_FIN_PAREN);
   if(!m)return {show:t,tag:''};
-  return {show:(m[2]||'').trim()||t, tag:(m[1]||'').trim()};
+  var tag=(m[1]||'').trim(), inner=(m[2]||'').trim(), tail=(m[3]||'').trim();
+  if(!tag||!inner)return {show:t,tag:''};          // 괄호가 맨 앞이거나 속이 빈 꼴 = 가를 게 없다
+  return {show:inner+(tail?(/^[\/·,]/.test(tail)?tail:' '+tail):''), tag:tag};
 }
 // 표에 적을 이름 = **운영대장에 등록된 공연명이 있으면 그것**(운영자 「기존에 등록된 공연이랑 싱크」).
 //   없으면 사업명 괄호 안으로 물러난다. 대장이 아직 안 실렸으면(`ready:false`) 조용히 괄호 안 —
@@ -7807,6 +7826,25 @@ function _finNamePair(name){
 function _finShowName(r,lm){
   try{ var ns=(lm&&lm.ready&&lm.byNo[r.no])||[]; if(ns.length)return ns.join(' / '); }catch(_e){}
   return _finNamePair(r.name).show;
+}
+// ── 기준일 — [260813-2 운영자] 「지금 **오늘 기준**이잖아? **데이터를 마지막으로 건드린 시점**을 기준으로 · (2026. 8. 13. 기준)」 ──
+//   ⚠ `new Date()`로 오늘을 찍으면 안 된다 — 데이터가 반년째 그대로여도 화면은 늘 「오늘 기준」이라 **거짓말**이 된다.
+//     운영자가 지적한 결함이 정확히 이것이라, 게이트(`check_finance` ⑭)가 오늘 찍기를 하드로 막는다.
+//   원천 순서 ① 시트 `수정일시`(담당자가 실제로 저장한 시각 · 정본) 중 가장 늦은 것
+//            ② 없으면 씨앗 `BIZ_FIN.built`(빌더가 찍는 씨앗 생성 시각 · `tools/build_biz_finance.py`)
+//            ③ 둘 다 없으면 **라벨을 아예 안 그린다** — 모르는 날짜를 지어내느니 비워 둔다.
+//   두 원천 모두 `_finStamp()`와 같은 'YYYY-MM-DD HH:MM' 꼴이라 문자열 비교로 그대로 정렬된다.
+//   ⚠ `_finSeedPush`는 반입 행의 `수정일시`를 **일부러 비워 둔다**(260812 9차 ⓒ) — 그래서 ①은
+//     「사람이 실제로 고친 적이 있는가」만 답하고, 반입만 한 상태에서는 ②로 내려간다. 그게 의도다.
+function _finAsOf(rows){
+  var best='';
+  (rows||[]).forEach(function(r){ var a=String((r&&r.at)||'').trim(); if(a&&a>best)best=a; });
+  if(!best){ try{ best=String(BIZ_FIN.built||''); }catch(_e){} }
+  return best;
+}
+function _finAsOfLab(rows){
+  var m=String(_finAsOf(rows)||'').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m?('('+m[1]+'. '+(+m[2])+'. '+(+m[3])+'. 기준)'):'';
 }
 // 분야별 합 — 파생값은 여기서도 저장하지 않고 매번 센다(`_finCalc`와 같은 식).
 function _bizOvSum(rows){
@@ -7832,7 +7870,7 @@ function _bizOvYearChips(cur){
 // 좌 열 = 사업 개요 본면(KPI 5칸 + 분야별 표 + 사업별 표)
 function _bizOvRender(el){
   _finWarm();
-  var year=_bizOvYearPick(), rows=_finRows(year), S=_bizOvSum(rows);
+  var year=_bizOvYearPick(), rows=_finRows(year), S=_bizOvSum(rows), _asof=_finAsOfLab(rows);
   // [260812 4차] 세부 메뉴를 없앴으므로 **머리줄 버튼이 유일한 입력 진입로**다(판매 실적의 [일일입력]과 같은 자리·같은 부품).
   var _inBtn=_isAcct()?_mheadBtn('openBizFinInput('+year+')','사업 지표 입력','var(--accent)','연도와 사업을 골라 예산·전표실적·판매수수료·정산서매출을 원 단위로 적어요'):'';
   // [260812 8차] 아직 안 적은 칸이 얼마나 되는지 **이 면에서** 말한다(구판은 입력 창에서만 보였다).
@@ -7886,9 +7924,16 @@ function _bizOvRender(el){
   //   ⚠ 예상 점선 기둥은 부제에서 뺀다 — 그 마킹은 정본이 **인원 지표에서만** 켠다(`_fcOn`), 없는 걸 적지 않는다.
   h+='<div class="bizm-card" style="margin-bottom:16px"><div class="ct"><span class="ct-bul"></span>연도별 매출 추이 <span class="sub">막대=정산서 매출 · 선=추세 (만원)</span></div><div id="bizov-chart" style="height:410px;margin:0 6px 6px;animation:fadeUp .45s ease"></div></div>';
   // [260813 운영자 「사업결과는 그 아래에 **상하 마진을 충분히 둬서 보기 좋게**」] — 차트와 붙어 답답하던 자리.
-  h+='<div class="bizm-card" style="margin-top:4px;padding-top:6px;padding-bottom:10px"><div class="ct"><span class="ct-bul"></span>사업 결과</div><div style="overflow-x:auto">';
+  //   [260813-2] ⓐ **차액 열 제거**(운영자 「사업 결과에 차액 안나와도 될것 같고」) — 축은 우 열 「차액 적자」 카드가 그대로 들고 있다.
+  //   ⓑ 우측에 **기준일** — 절대배치 `.ry-hd-tools`(분야별 카드 선택자와 **같은 부품·같은 자리**)라 제목 흐름·카드 높이 무접촉.
+  //      광학 수평은 `.ry-hd-asof`가 잡는다(잉크 중심 정렬 · CSS 주석에 실측치).
+  //      ⚠ 이 카드는 위 마진 지시로 `padding-top:6px`이 걸려 있다 — `.ry-hd-tools`는 `.ct` 상자 기준이라 그 값과 무관하지만,
+  //        제목 활자·`.ct` 패딩을 바꾸면 잉크 Δ를 **다시 재라**(`tools/scratch/ink_asof.mjs`).
+  h+='<div class="bizm-card" style="margin-top:4px;padding-top:6px;padding-bottom:10px"><div class="ct"><span class="ct-bul"></span>사업 결과'
+    +(_asof?'<span class="ry-hd-tools ry-hd-asof">'+escapeHtml(_asof)+'</span>':'')
+    +'</div><div style="overflow-x:auto">';
   h+='<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="color:var(--dim);font-size:12px;text-align:left">';
-  [['분야',''],['건수','건'],['예산','백만원'],['사업비','백만원'],['수입','백만원'],['차액','백만원'],['수익률','%']].forEach(function(c,i){
+  [['분야',''],['건수','건'],['예산','백만원'],['사업비','백만원'],['수입','백만원'],['수익률','%']].forEach(function(c,i){
     h+='<td style="padding:8px 12px;box-shadow:inset 0 -2px 0 var(--border);vertical-align:middle;white-space:nowrap'+(i===0?';padding-left:14px':'')+(i>=1?';text-align:right':'')+'">'+c[0]
       +(c[1]?'<div style="font-size:10.5px;font-weight:400;margin-top:2px">(단위: '+c[1]+')</div>':'')+'</td>';
   });
@@ -7915,7 +7960,6 @@ function _bizOvRender(el){
       +'<td style="padding:7px 12px;text-align:right;color:var(--neutral-text);font-variant-numeric:tabular-nums">'+_finMil(g.bud)+'</td>'
       +'<td style="padding:7px 12px;text-align:right;color:var(--peach-text);font-weight:600;font-variant-numeric:tabular-nums">'+_finMil(g.cost)+'</td>'
       +'<td style="padding:7px 12px;text-align:right;color:var(--green);font-weight:600;font-variant-numeric:tabular-nums">'+_finMil(g.rev)+'</td>'
-      +'<td style="padding:7px 12px;text-align:right;font-weight:600;color:var('+(g.diff<0?'--danger':'--green')+');font-variant-numeric:tabular-nums">'+_finMil(g.diff)+'</td>'
       +'<td style="padding:7px 14px 7px 12px;text-align:right;color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums">'+_finPct(g.margin)+'</td></tr>';
   });
   h+='<tr style="border-top:2px solid var(--border2);font-weight:800">'
@@ -7923,9 +7967,8 @@ function _bizOvRender(el){
     +'<td style="padding:9px 12px;text-align:right;font-variant-numeric:tabular-nums">'+_finMil(S.bud)+'</td>'
     +'<td style="padding:9px 12px;text-align:right;color:var(--peach-text);font-variant-numeric:tabular-nums">'+_finMil(S.cost)+'</td>'
     +'<td style="padding:9px 12px;text-align:right;color:var(--green);font-variant-numeric:tabular-nums">'+_finMil(S.rev)+'</td>'
-    // 합계 숫자 자체는 「지금까지 기록된 것」이라 참이다 — 가리지 않는다. 다만 **분모가 덜 차면 파생값은 거짓**이 되므로
-    //   차액·수익률만 `—`로 둔다(KPI 줄이 「사업비 미입력 N건」이라고 사유를 이미 말하고 있다).
-    +'<td style="padding:9px 12px;text-align:right;color:var('+(S.diff<0?'--danger':'--green')+');font-variant-numeric:tabular-nums">'+_finMil(S.diff)+'</td>'
+    // [260813-2] 차액 열은 제거됐다(운영자 「사업 결과에 차액 안나와도 될것 같고」) — 260813 #808의 「분모가 덜 차면
+    //   차액·수익률은 `—`」 판단 중 **수익률 쪽만** 남는다(차액 칸 자체가 없으니). 축은 우 열 「차액 적자」가 그대로 든다.
     +'<td style="padding:9px 14px 9px 12px;text-align:right;color:var(--accent);font-variant-numeric:tabular-nums">'+_finPct(S.margin)+'</td></tr>';
   h+='</tbody></table></div></div>';
   // ③ 사업별 카드 — 좌 열 **마지막 흰 도형** = data-bizmfill(남는 높이 흡수 · 판매 현황 「전체 실적표」와 같은 규약)
@@ -8006,7 +8049,13 @@ function _bizOvRail(el){
       +'<td style="padding:7px 12px;text-align:right;color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums">'+_finPct(c.margin,true)+'</td>'
       // 비고 = 사업명 앞 묶음 이름(클래식2·아동극1). 그게 없는 사업만 종전대로 회계구분이 선다.
       //   ⚠ 회계구분은 **거르기 축**이라 사라지면 안 된다 — 분야 선택자 옆 회계구분 필터와 사업비 보드가 계속 그걸 쓴다.
-      +'<td style="padding:7px 14px 7px 12px;white-space:nowrap;color:var(--neutral-text)">'+escapeHtml(r.tag||_finNamePair(r.name).tag||r.acct||'—')+'</td></tr>';
+      // 순서 = 운영자 확정 `tag`(#811 · 씨앗이 든다) → 이름에서 가른 묶음 이름 → 없으면 빈칸.
+      // [260813-2 운영자 「비고에 **예술성 대신해서** 사업명칭을 넣을게 … 그 다음에 **내가 부족분을 채울게**」]
+      //   ⚠ 마지막 `|| r.acct`를 뺐다 — 묶음 이름이 없으면 「예술성」·「클래스」가 도로 서던 자리인데,
+      //     그게 운영자가 빼달라고 지목한 바로 그 글자다. 없는 칸은 **비워 두는 게 맞다** —
+      //     그 빈칸이 곧 「내가 채울 부족분」이라, 다른 값으로 메우면 채울 곳이 안 보인다.
+      //   ⚠ 회계구분 축은 안 잃는다 — 상세 창·사업 지표 입력 창·사업비 보드가 그대로 들고 있고 거르기도 그쪽이 한다.
+      +'<td style="padding:7px 14px 7px 12px;white-space:nowrap;color:var(--neutral-text)">'+escapeHtml(r.tag||_finNamePair(r.name).tag||'—')+'</td></tr>';
   });
   h+='</tbody></table></div></div>';
   // [260813 운영자 「분야별이 거의 묻히는데 이거를 **차액적자를 아예 날리고** 저기에 붙인다는거임」]
@@ -8543,7 +8592,11 @@ function _finRows(year){
 //   정규화는 `_uName` 하나 — 판매 축(`_bizSalesIdx`)·목록(`_bizListBuild`)이 쓰는 그 함수라 축이 갈리지 않는다.
 function _finAliases(r){
   if(r.lnk)return r.lnk.split(/[|,]/).map(_uName).filter(Boolean);
-  var out=[_uName(r.name)],m=String(r.name||'').match(/^([^(（]*)[(（]([^)）]*)[)）]\s*$/);
+  // [260813-2] 정규식을 **`_FIN_PAREN` 한 벌로 합쳤다.** 260812-9 주석이 「가르는 정규식은 `_finAliases`가
+  //   쓰는 것과 같은 한 벌」이라 적어 뒀지만 실제로는 여기에 **복제본**이 따로 살아 있었다 — 그래서 표기 쪽만
+  //   꺾쇠(`<>`)를 배우고 조인 쪽은 못 배워 「어린이 미술전 <냠냠>」의 후보에 「냠냠」이 안 들어갔다.
+  //   합친 결과 전시·교육도 괄호 앞·안이 후보로 선다(공연은 종전과 완전히 동일 — `()` 처리가 안 바뀌었다).
+  var out=[_uName(r.name)],m=String(r.name||'').match(_FIN_PAREN);
   if(m){ if(m[1].trim())out.push(_uName(m[1])); if(m[2].trim())out.push(_uName(m[2])); }
   return out.filter(Boolean);
 }
