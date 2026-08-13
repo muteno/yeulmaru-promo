@@ -19,12 +19,19 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const EXPORT_DIR = join(ROOT, 'data', 'db_export');
-const OUT_JSON = join(ROOT, '이관본', 'miso_db.json');
-const KB_DIR = join(ROOT, '이관본', 'data');
 
 const INCLUDE_EMAILS = process.argv.includes('--include-emails');
 const INCLUDE_SECRETS = process.argv.includes('--include-secrets');
 const INCLUDE_MEMBERS = process.argv.includes('--include-members');
+// [260812 배선] PII를 반입하면 **산출 폴더 자체가 바뀐다** — `이관본/비공개/`(.gitignore 차단).
+//   `이관본/`은 커밋 대상이라(위 주석 = 「병합 산출물 이관본/miso_db.json·이관본/data/만 커밋」)
+//   회원 원장이 실린 번들을 거기 두면 실수 한 번에 공개 레포로 명부가 나간다. 경로를 사람 손(플래그·복사)에
+//   맡기지 않고 **반입 여부가 직접 정하게** 묶어 사고를 원천에서 없앤다.
+const PII_MODE = INCLUDE_MEMBERS || INCLUDE_SECRETS;
+const OUT_BASE = PII_MODE ? join(ROOT, '이관본', '비공개') : join(ROOT, '이관본');
+const REL_BASE = PII_MODE ? '이관본/비공개' : '이관본';
+const OUT_JSON = join(OUT_BASE, 'miso_db.json');
+const KB_DIR = join(OUT_BASE, 'data');
 
 // 파일명(slug/한글 시트명) → 데이터셋 이름. docs/앱지침.md SHEET_MAP + Worker(src/index.js) 시트 전수.
 const SHEET_ALIASES = {
@@ -44,7 +51,15 @@ const SHEET_ALIASES = {
   diagrams: 'diagrams', '도표': 'diagrams',
   '운영_전시일일': 'exhib_daily', exhib_daily: 'exhib_daily',
   '운영_전시마스터': 'exhib_master', exhib_master: 'exhib_master',
+  // [260812 배선] 회원 원장 — 앱은 `GET /api/ops?sheet=회원`으로 부르고 standalone shim은 그걸 `ops_회원`으로 찾는다.
+  //   이 줄이 없으면 파일명 그대로 `회원_운영_회원`으로 실려 **이름이 어긋난 채 끝까지 빈 화면**이 된다
+  //   (고객 분석 「시트가 비어 있거나 없어요」 — 데이터는 번들 안에 있는데 아무도 못 찾는 상태. 실사고 260812).
+  '회원_운영_회원': 'ops_회원', '운영_회원': 'ops_회원',
 };
+// [260812] --include-members로 실제 반입할 파일 = 앱이 읽는 **원장 한 벌**뿐.
+//   나머지 회원_*.csv(도로명혼재본 6.9MB · 주소요확인 6.0MB · 중복번호 · 집계 2종)는 주소 정제 중간산출물이라
+//   같이 실으면 standalone이 20MB+로 부푸는데 앱은 참조조차 안 한다(index.html grep 0).
+const MEMBER_ALLOW = new Set(['회원_운영_회원', '운영_회원']);
 const MEMBER_PAT = /회원/; // 운영_회원 등 — PII, 기본 미반입(구조 설계만)
 const EXPECTED_SHEETS = ['applysettings','records','programs','platforms','contents','managers','special','logs'];
 
@@ -117,7 +132,7 @@ function addDataset(name, headers, rawRows, source) {
 
 function ingestCsvFile(path, source) {
   const base = basename(path).replace(/\.csv$/i, '');
-  if (MEMBER_PAT.test(base) && !INCLUDE_MEMBERS) { // 회원 DB = 구조 설계만 (데이터 미반입)
+  if (MEMBER_PAT.test(base) && !(INCLUDE_MEMBERS && MEMBER_ALLOW.has(base))) { // 회원 DB = 구조 설계만 (반입해도 원장만)
     const grid = parseCsv(readFileSync(path, 'utf8'));
     report.memberSchema.push({ source, headers: grid[0]?.map(h => h.trim()) ?? [], dataRows: Math.max(0, grid.length - 1),
       note: '설계 전용 — 데이터 미반입(공개 레포 PII 차단). 반입은 --include-members(커밋 금지, MISO 직행만)' });
@@ -143,7 +158,7 @@ for (const f of readdirSync(ROOT)) {
     try {
       const j = JSON.parse(readFileSync(join(ROOT, f), 'utf8'));
       const base = basename(f).replace(/\.json$/i, '');
-      if (MEMBER_PAT.test(base) && !INCLUDE_MEMBERS) {
+      if (MEMBER_PAT.test(base) && !(INCLUDE_MEMBERS && MEMBER_ALLOW.has(base))) {
         const rows = Array.isArray(j) ? j : (j.rows || []);
         report.memberSchema.push({ source: f, headers: j.headers || [...new Set(rows.flatMap(o => Object.keys(o)))], dataRows: rows.length,
           note: '설계 전용 — 데이터 미반입(공개 레포 PII 차단). 반입은 --include-members(커밋 금지, MISO 직행만)' });
@@ -198,6 +213,9 @@ const meta = {
     contacts: INCLUDE_CONTACTS ? '⚠️ 포함' : '제외(전화·내선·휴대폰 — 앱 미표시 PII)',
     members: INCLUDE_MEMBERS ? '⚠️ 반입(커밋 금지)' : '미반입(구조 설계만 → meta.memberSchema)',
   },
+  // [260812] 이 번들이 스스로 「나는 PII를 싣고 있다」고 말한다 — build_standalone이 이 값만 보고 산출 경로를
+  //   비공개/로 고정한다. 빌더 사이에 플래그를 다시 넘길 필요가 없어 **플래그 망각이 무해**해진다.
+  pii: PII_MODE,
   note_names: '담당자·신청자 등 실명 컬럼은 앱 표시에 필수라 유지됨 — 공개 서빙 시 노출 주의(운영자 판단)',
   counts: Object.fromEntries(Object.entries(datasets).map(([k, v]) => [k, v.rows.length])),
   ...report,
@@ -209,8 +227,9 @@ for (const stale of readdirSync(KB_DIR).filter(f => f.endsWith('.csv') && !datas
 }
 for (const [name, d] of Object.entries(datasets)) writeFileSync(join(KB_DIR, `${name}.csv`), toCsv(d.headers, d.rows), 'utf8');
 
-console.log(`✅ 이관본/miso_db.json — 데이터셋 ${Object.keys(datasets).length}개, 행 ${Object.values(datasets).reduce((a, d) => a + d.rows.length, 0)}개`);
-console.log(`✅ 이관본/data/ — CSV ${Object.keys(datasets).length}개`);
+console.log(`✅ ${REL_BASE}/miso_db.json — 데이터셋 ${Object.keys(datasets).length}개, 행 ${Object.values(datasets).reduce((a, d) => a + d.rows.length, 0)}개`);
+console.log(`✅ ${REL_BASE}/data/ — CSV ${Object.keys(datasets).length}개`);
+if (PII_MODE) console.log('🔐 PII 모드 — 산출물 전량이 이관본/비공개/(gitignore 차단)로 나갔다. 공개 레포 커밋 불가.');
 for (const ms of report.memberSchema) console.log(`📐 회원 구조 설계 등재(데이터 미반입): ${ms.source} — ${ms.headers.length}열 × ${ms.dataRows}행`);
 if (Object.keys(report.maskedColumns).length) console.log('🔒 마스킹:', JSON.stringify(report.maskedColumns));
 if (report.blankRowsDropped) console.log('🧹 빈 행 제거(Worker 미러):', JSON.stringify(report.blankRowsDropped));

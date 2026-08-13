@@ -12,12 +12,19 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SRC = join(ROOT, 'index.html');
-const DB = join(ROOT, '이관본', 'miso_db.json');
-const OUT = join(ROOT, '이관본', 'standalone.html');
+// [260812 배선] PII 번들(이관본/비공개/miso_db.json)이 있으면 **그쪽이 정본** — 산출물도 같은 폴더에 둔다.
+//   경로 선택을 플래그가 아니라 번들이 들고 있는 meta.pii에 맡긴다 = 플래그를 빼먹어도 PII가 공개 경로로 새지 않는다.
+const DB_PRIV = join(ROOT, '이관본', '비공개', 'miso_db.json');
+const DB = existsSync(DB_PRIV) ? DB_PRIV : join(ROOT, '이관본', 'miso_db.json');
 const HOLIDAYS = [join(ROOT, 'tools', 'miso', 'holidays_2026.json'), join(ROOT, 'tools', 'miso', 'holidays_2027.json')];
 
-let html = readFileSync(SRC, 'utf8');
+let html = readFileSync(SRC, 'utf8').replace(/\r\n/g, '\n');   // [260812 재발] CRLF 클론 내성(Windows git autocrlf)
+//   아래 replaceOnce 앵커가 **전부 \n 기준**이라, 이 한 줄이 없으면 Windows에서 클론한 워킹트리(CRLF)에서는
+//   첫 치환부터 `ABORT: 매치 0회`로 죽는다 = standalone이 영영 갱신되지 않는다. 260812 실사고 —
+//   이 줄이 로컬 미커밋 상태로만 있다가 재클론에 쓸려나가면서 빌드가 통째로 멈췄다. **반드시 커밋된 채로 둘 것.**
 const db = JSON.parse(readFileSync(DB, 'utf8'));
+const PII = !!(db.meta && db.meta.pii);
+const OUT = PII ? join(ROOT, '이관본', '비공개', 'standalone.html') : join(ROOT, '이관본', 'standalone.html');
 
 // 이식판 데이터: 세션 감사 로그 + 앱 미참조 대용량 시트 제외(index.html grep 0 — 화면 손실 0, 용량 절감).
 // miso_db.json 원본은 유지(지식베이스 업로드용) — 여기서 빼는 건 standalone 내장분만.
@@ -200,4 +207,4 @@ replaceOnce('post-shim 주입', '</script>\n</body>\n</html>', '</script>\n' + p
 
 writeFileSync(OUT, html, 'utf8');
 const bytes = Buffer.byteLength(html, 'utf8');  // 문자수 아닌 실제 바이트(업로드 한도 기준 · 한글 3B)
-console.log(`✅ 이관본/standalone.html — ${(bytes / 1048576).toFixed(2)}MB (${bytes.toLocaleString()} bytes · 데이터셋 ${Object.keys(db.datasets).length}개 내장, 공휴일 ${Object.keys(db.holidays).join('/') || '없음'})`);
+console.log(`✅ ${PII ? '이관본/비공개' : '이관본'}/standalone.html — ${(bytes / 1048576).toFixed(2)}MB (${bytes.toLocaleString()} bytes · 데이터셋 ${Object.keys(db.datasets).length}개 내장, 공휴일 ${Object.keys(db.holidays).join('/') || '없음'})`);
