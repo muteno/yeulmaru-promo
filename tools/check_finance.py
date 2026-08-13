@@ -234,6 +234,77 @@ def main() -> int:
             #   다음 빈 번호가 곧 그 번호다(2024·2026이 들어오며 실제로 그 경우가 걸려 오탐이 났다).
             #   이 검사가 지켜야 할 계약은 「**살아남은 행이 안 밀린다**」 하나뿐이고, 그건 바로 위 `moved`가 본다.
 
+    # ══ ⑨~⑫ 사업 지표 입력 창 저장 계약 (260812-5 평의회5 · 260812-8 게이트 등재) ═══════════════════
+    #   왜 여기 있나: #801에서 「조용히 덮어쓰던 경로」 넷을 고쳤는데 **게이트가 없어서 누가 되돌려도 안 잡혔다.**
+    #   같은 상태(고쳤는데 안 잠금)를 전시 차트에서 이미 한 번 겪었다 — 고친 것은 반드시 잠근다.
+    #   ⚠ 판정 전에 **주석을 걷는다** — 260812 킬테스트 ⑤가 주석 안 글자 때문에 새어나간 전례가 있다.
+    def _strip(s):
+        s = re.sub(r"/\*.*?\*/", "", s, flags=re.S)
+        return re.sub(r"(?m)//[^\n]*", "", s)
+
+    def _fnbody(s, head):
+        i = s.find(head)
+        if i < 0:
+            return ""
+        m = re.search(r"\n(?:async )?function ", s[i + 10:])
+        return s[i: i + 10 + (m.start() if m else 4000)]
+
+    FILL = ("bud", "vou", "fee", "rev", "paid", "inv")   # 「채웠나」를 묻는 금액·인원 6칸 — index.html `_FIN_FILL`·빌더 `_FILL`과 같은 목록
+    code = _strip(idx_src)
+    save = _fnbody(code, "async function _finInSave")
+    paint = code[code.find("function _finInPaint"): code.find("async function _finInSave")]
+    write = _fnbody(code, "async function _finWrite")
+
+    if not save or not paint or not write:
+        bad.append("⑨ 입력 창·쓰기 정본 함수(`_finInPaint`/`_finInSave`/`_finWrite`)를 못 찾았다 — 이름이 바뀌었으면 이 검사도 같이 고쳐라.")
+    else:
+        # ⑨ 그리는 칸 ⊇ 저장하는 칸 — 칸을 하나라도 안 그리면 `el.value`가 ''이라 그 열이 **0으로 시트에 박힌다**
+        #    (문자칸이면 연결키가 통째로 날아가 자동 매칭으로 강등된다). 접힘·탭·조건부 숨김을 넣는 순간 터진다.
+        painted = set(re.findall(r"\b(?:num|txt)\('([a-z]+)'", paint))
+        patched = set(re.findall(r"patch\.([a-z]+)\s*=", save)) - {"blank"}
+        m_arr = re.search(r"_FIN_FILL\.concat\(\[([^\]]*)\]\)", save)
+        if m_arr:
+            patched |= set(re.findall(r"'([a-z]+)'", m_arr.group(1)))
+        patched |= set(FILL)
+        miss = sorted(patched - painted)
+        if miss:
+            bad.append("⑨ 입력 창이 **안 그리는** 칸을 저장한다: %s — 그 열은 0/빈칸으로 시트에 박힌다."
+                       % ", ".join("`%s`" % x for x in miss))
+        if not painted:
+            bad.append("⑨ `_finInPaint`에서 입력칸 빌더(num/txt)를 못 찾았다 — 폼 조립이 바뀌었으면 이 검사도 같이 고쳐라.")
+
+        # ⑩ 돈 칸을 저장하면 **반드시 낙관적 잠금**을 건다 — 구판은 sig=null이라 창을 열어 둔 사이 남이 고친 값을
+        #    조용히 덮었고, 시트를 못 읽어 씨앗만 보이던 화면이 **시트를 씨앗으로 되돌릴 수** 있었다.
+        #    ⚠ 「돈 칸을 쓰는 저장인가」를 `'bud'` 같은 **리터럴 실존**으로 판정하면 안 된다 — 260812-8 킬테스트에서
+        #      그 판정이 통째로 새어나갔다(`_FIN_FILL`로 묶는 리팩터를 하자 리터럴이 사라져 검사가 건너뛰어졌다).
+        #      돈 칸을 쓰는 저장 = **이름으로 못 박는다**(`_finBind`는 연결키만 써서 대상 아님 = null이 정상).
+        for head in ("async function _finInSave", "async function _finSave"):
+            b = _fnbody(code, head)
+            if not b:
+                bad.append("⑩ `%s`를 못 찾았다 — 이름이 바뀌었으면 이 검사도 같이 고쳐라." % head.split()[-1])
+                continue
+            m = re.search(r"_finWrite\(\s*[^,]+,\s*[^,]+,\s*[^,]+,\s*([^,]+),", b)
+            if not m:
+                bad.append("⑩ `%s`가 `_finWrite`를 안 부른다 — 쓰기 정본을 우회했다(유실 가드·수정자 스탬프가 통째로 빠진다)."
+                           % head.split()[-1])
+            elif m.group(1).strip() == "null":
+                bad.append("⑩ `%s`가 sig=null로 저장한다 — 창을 연 뒤 남이 고친 값을 조용히 덮는다(돈 원장이라 복구가 "
+                           "시트 이력뿐이다). 연 시점 행의 `_finSig(…)`를 넘겨라." % head.split()[-1])
+
+        # ⑪ 같은 사업NO가 시트에 두 줄이면 멈춘다 — 화면(`_finRows`)은 **첫** 줄을 보여주는데 쓰기가 **마지막** 줄을
+        #    고치면 「저장했는데 값이 그대로」가 된다. 씨앗 게이트 ②는 씨앗만 봐서 시트 중복을 못 잡는다.
+        if "hits.length>1" not in write.replace(" ", ""):
+            bad.append("⑪ `_finWrite`에 중복 사업NO 중단 가드가 없다 — 화면은 첫 줄, 쓰기는 다른 줄을 고를 수 있다.")
+
+        # ⑫ 재진입 가드 — 지금 이중 제출을 막는 건 전면 오버레이 하나뿐이라, 버튼 스피너로 바꾸는 순간
+        #    같은 fresh 스냅샷으로 두 요청이 각자 push해 **같은 사업NO가 두 줄** 생긴다(그러면 ⑪에 걸려 저장이 막힌다).
+        #    ⚠ 낱말 `busy` 실존만 보면 샌다 — 가드를 지워도 `_finIn.busy=1`/`=0` 대입이 남아 통과한다(260812-8 킬테스트 실증).
+        #      **되돌아가는 그 모양**(값을 읽어 즉시 return)을 직접 요구한다.
+        if not re.search(r"if\(_finIn\.busy\)\s*return", save.replace(" ", "")):
+            bad.append("⑫ `_finInSave`에 재진입 가드(`if(_finIn.busy)return;`)가 없다 — 이중 제출 시 같은 사업NO가 두 줄 생긴다.")
+        if not re.search(r"_finIn\.busy\s*=\s*0", save):
+            bad.append("⑫ `_finInSave`가 `_finIn.busy`를 0으로 안 되돌린다 — 한 번 저장하면 그 창은 영영 안 눌린다.")
+
     if bad:
         print("✗ check_finance 실패 %d건" % len(bad))
         for b in bad:
