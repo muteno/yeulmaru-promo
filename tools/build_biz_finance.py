@@ -643,6 +643,120 @@ def emit(years, srcs, warn):
     return "\n".join(lines) + "\n"
 
 
+def prev_full():
+    """이전 산출물을 (연도별 {사업NO: 행}, 연도별 src 지도)로 읽는다 — 실행하지 않고 정규식으로(`prev_ids`와 같은 규약)."""
+    rows, srcs = {}, {}
+    if not os.path.exists(OUT):
+        return rows, srcs
+    try:
+        src = open(OUT, encoding="utf-8").read()
+    except OSError:
+        return rows, srcs
+    cur = None
+    for line in src.split("\n"):
+        m = re.match(r"\s*(20\d\d):\{src:(\{.*?\}),rows:\[", line)
+        if m:
+            cur = int(m.group(1))
+            rows[cur] = {}
+            try:
+                srcs[cur] = json.loads(m.group(2))
+            except ValueError:
+                srcs[cur] = {}
+            continue
+        rm = re.search(r'\{no:"[^"]+".*\}', line)
+        if not rm or cur is None:
+            continue
+        d = {}
+        for k, v in re.findall(r'(\w+):("(?:[^"\\]|\\.)*"|-?\d+)', rm.group(0)):
+            d[k] = json.loads(v) if v.startswith('"') else int(v)
+        if d.get("no"):
+            rows[cur][d["no"]] = d
+    return rows, srcs
+
+
+def carry_missing(years, srcs):
+    """레포에 **없는 원천**이 만들었던 값·행을 이전 산출물에서 그대로 이어받는다.
+
+    왜 필요한가 (실측 260813):
+      `.gitignore`가 `*.xlsx`를 막아서 「2026년 기획사업 정산서 매출.xlsx」가 커밋되지 않았다.
+      그 파일이 없는 상태로 재빌드하면 그게 만들던 것이 **조용히 사라진다** —
+      2026-전시-01·02·03 · 2026-교육-01 **4행이 통째로 없어지고**(83→79), 2026-공연-06 매출
+      31,922,000 → 0, 공연-07 17,922,000... 아니 17,269,000 → 0으로 **되돌아갔다**.
+      기계산출물은 「언제 다시 돌려도 같은 것이 나온다」가 전제인데, 원천 하나가 손에 없다고
+      **기록된 값을 지우는 빌더**는 그 전제를 깬다. 그래서 재현 못 하는 것은 **건드리지 않는다**.
+
+    규칙 두 줄:
+      ⓐ 이전엔 있었는데 이번엔 안 나온 행 → 이전 행을 그대로 가져온다.
+      ⓑ 이전엔 값이 있었는데 이번엔 `blank`(원천이 빈칸)로 돌아온 칸 → 이전 값을 되살리고 `blank`에서 뺀다.
+    ⚠ **원천이 다 있으면 아무 것도 안 한다** — 진짜로 지워진 행·값은 그대로 사라져야 맞다(그게 원본의 뜻이니까).
+    ⚠ 조용히 하지 않는다 — 이어받은 것은 전부 줄 단위로 찍는다(silent truncation의 반대).
+    """
+    prev_rows, prev_srcs = prev_full()
+    if not prev_rows:
+        return []
+    missing = sorted({v for sm in prev_srcs.values() for v in sm.values()
+                      if str(v).lower().endswith(".xlsx") and not os.path.exists(os.path.join(ROOT, str(v)))})
+    if not missing:
+        return []
+    # 그 해 정산서 파일이 **없을 때만** 그 표가 「없는 원천의 소유 목록」이 된다(있으면 원천이 직접 쓴다).
+    _settle_owned = {y: {no for _, no in tbl}
+                     for y, tbl in SETTLE_MAP.items()
+                     if not glob.glob(os.path.join(ROOT, "*%d*기획사업 정산서 매출*.xlsx" % y))}
+    notes = []
+    for y in sorted(prev_rows):
+        if y not in years:
+            continue
+        cur = {r["no"]: r for r in years[y]}
+        # ⚠ 이어받기 범위는 **조인키로** 정한다 — NO로 정하면 「NO가 밀린 사고」까지 덮어버린다.
+        #   실측 260813 킬테스트: 빌더의 NO 재사용을 지웠더니 모든 행이 새 번호를 받았고, 그러면 옛 NO가
+        #   전부 「이번에 안 나온 행」으로 보여 **통째로 되살아나** 게이트 ⑧이 사고를 못 보고 통과했다.
+        #   같은 사업이 키로 이미 이 빌드에 있으면 그건 「사라진 게 아니라 번호가 밀린 것」 = 사고다. 안 덮는다.
+        cur_keys = {r.get("key") for r in years[y]}
+        for no, pr in sorted(prev_rows[y].items()):
+            r = cur.get(no)
+            if r is None:                                     # ⓐ 행 통째
+                if pr.get("key") in cur_keys:
+                    continue                                  # 같은 사업이 다른 번호로 이미 있다 = ⑧이 잡을 사고
+                years[y].append(dict(pr))
+                cur_keys.add(pr.get("key"))
+                notes.append("ℹ %d년 %s 「%s」 — 원천이 없어 재현 못 해 이전 산출물에서 이어받았다" % (y, no, pr.get("name", "")))
+                continue
+            pb = [k for k in str(pr.get("blank", "")).split("|") if k]
+            nb = [k for k in str(r.get("blank", "")).split("|") if k]
+            back = [k for k in _FILL if k in nb and k not in pb and pr.get(k)]
+            for k in back:                                    # ⓑ 칸 단위 — 값이 있었는데 「빈칸」으로 돌아온 것
+                r[k] = pr[k]
+                notes.append("ℹ %d년 %s %s — 원천이 없어 0으로 돌아갈 뻔한 값을 이전 산출물에서 이어받았다(%s)"
+                             % (y, no, k, f"{pr[k]:,}"))
+            if back:
+                r["blank"] = "|".join(k for k in nb if k not in back)
+            # ⓒ 그 원천이 **덮어쓰던** 칸 — 빈칸이 아니라 **다른 수**로 돌아온다(ⓑ가 못 잡는다).
+            #   실측 260813: 2026-공연-15 매출이 정산서값 11,722,000 → 대시보드값 11,838,000으로 되돌아갔다.
+            #   어느 칸이 그 원천 소유인지는 **빌더 자신이 안다** — `SETTLE_MAP`이 (그 해, 사업NO)를 적어 둔 표다.
+            #   추측이 아니라 표를 보고 되살린다. 정산서가 「가장 최신 매출 지표」라 그쪽이 대시보드를 이긴다.
+            if no in _settle_owned.get(y, ()) and pr.get("rev") and r.get("rev") != pr["rev"] and "rev" not in nb:
+                notes.append("ℹ %d년 %s rev — 정산서(최신 매출)가 덮어쓰던 칸이라 되돌아갈 뻔한 것을 지켰다(%s ← 대시보드 %s)"
+                             % (y, no, f'{pr["rev"]:,}', f'{r["rev"]:,}'))
+                r["rev"] = pr["rev"]
+        # ⚠ **정렬하지 마라.** `sort(key=no)`로 줄을 세우면 교육이 전시 앞으로 가는 식으로
+        #   **파일 전체 순서가 흔들린다**(실측 260813: 값은 그대로인데 diff가 12줄 났다).
+        #   씨앗의 줄 순서는 원본 엑셀의 분야 순서(공연 → 전시 → 교육)를 그대로 들고 있는 값이라 지켜야 한다.
+        #   이어받은 행은 **이전 산출물에서 있던 자리**로 돌려놓고, 진짜 새 행만 뒤에 붙는다.
+        _pos = {no: i for i, no in enumerate(prev_rows[y])}
+        years[y].sort(key=lambda r: (_pos.get(r["no"], len(_pos)),))
+        # 원천 이름표는 유지한다 — 이 해가 그 파일에 기대고 있다는 사실 자체가 정보다.
+        for k, v in (prev_srcs.get(y) or {}).items():
+            srcs.setdefault(y, {}).setdefault(k, v)
+    if notes:
+        print("[사업비] ⚠ 레포에 없는 원천: %s" % " · ".join(missing))
+        print("        그 원천이 만든 값 %d건을 이전 산출물에서 이어받았다(지우지 않는다). 파일을 최상단에 두고 다시 돌리면 원천에서 새로 읽는다." % len(notes))
+        for n in notes[:12]:
+            print("        " + n[2:])
+        if len(notes) > 12:
+            print("        … 외 %d건" % (len(notes) - 12))
+    return notes
+
+
 def prev_ids():
     """이전 산출물에서 (연도, 조인키) → 사업NO 지도와 연도·분야별 최대 순번을 읽는다.
 
@@ -807,6 +921,9 @@ def main(argv):
     if not years:
         print("[사업비] 담을 연도가 없다")
         return 1
+    # 레포에 없는 원천이 만들던 값·행은 지우지 않고 이전 산출물에서 이어받는다(위 `carry_missing` 주석 참조).
+    #   ⚠ 검산·NO 배정이 다 끝난 **뒤**에 얹는다 — 이어받은 행은 이미 NO를 갖고 있어 번호를 다시 매기면 안 된다.
+    carry_missing(years, srcs)
     with open(OUT, "w", encoding="utf-8", newline="\n") as f:
         f.write(emit(years, srcs, warn))
     print("[사업비] → %s" % os.path.relpath(OUT, ROOT))
