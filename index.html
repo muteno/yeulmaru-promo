@@ -7935,10 +7935,23 @@ function _bizOvRender(el){
   // [260813 운영자 「공연 전시 교육 순이고, 각각 블릿으로 나타내도됨 범례」] 범례를 차트 밖 **머리줄**로 뺀다.
   //   ⚠ 차트 안 범례는 아래쪽 한 줄을 통째로 먹는다 — 그걸 빼는 게 「높이를 좀 줄여줄래?」의 가장 큰 몫이다.
   //   불릿 = 정본 `.ct-bul` 그대로, 색만 차트가 쓰는 그 토큰(공연 --accent · 전시 --peach-text · 교육 --green).
-  var _lg=_YR_CATLIST.map(function(c){
+  // [260813-6] 범례 = **실제로 막대가 선 분야만**. 시간축 차트라 일자를 모르는 사업은 세울 자리가 없는데,
+  //   범례가 세 분야를 늘 말하면 「전시는 왜 없나」로 읽힌다(전시·교육은 사업비 원장에 진행월이 아예 없다).
+  //   못 세운 건수는 부제에 적어 오른쪽 표로 보낸다 = 사라지는 사업 0.
+  var _bars=_bizOvBars(rows,year);
+  var _barCat={}; _bars.forEach(function(g){ _barCat[g.genre]=1; });
+  var _noD=rows.length-_bars.length;
+  var _lg=_YR_CATLIST.filter(function(c){ return _barCat[c]; }).map(function(c){
     var t={'공연':'--accent','전시':'--peach-text','교육':'--green'}[c]||'--accent';
     return '<span class="ct-bul" style="background:var('+t+')"></span>'+c; }).join('<span style="width:10px;display:inline-block"></span>');
-  h+='<div class="bizm-card" style="margin-bottom:12px"><div class="ct"><span class="ct-bul"></span>연도별 매출 추이 <span class="sub">막대=정산서 매출 · 선=추세 (백만원)</span>'
+  // [260813-6 운영자 「2026이 선택되어있으면 **2026년만** 나오게 · 형태는 판매현황-사업결과비교와 같은 형태」]
+  //   구판 = 2012~2026 열다섯 해를 한 판에 그리는 추이선이라 **연도 선택자가 차트에 아무 영향이 없었다**
+  //   (선택자는 아래 표·KPI만 갈아끼웠다) = 「2026을 골랐는데 왜 2012가 보이나」.
+  //   → 「사업 결과 비교」(면 3)의 정본 그림으로 갈아끼운다: **1~12월 시간축 위에 사업별 막대**(막대 = 정산서 매출 ·
+  //     막대가 서는 자리 = 그 사업의 공연 일자 · 색 = 분야). 그리는 함수도 그 정본(`_bizDrawSalesBars`) 그대로 부른다.
+  //   ⚠ 단위 글자는 여기 박지 않는다 — `[data-bizunit]` 자리에 그리는 함수가 자기 축을 적는다(축과 표기가 갈릴 수 없다).
+  h+='<div class="bizm-card" style="margin-bottom:12px"><div class="ct"><span class="ct-bul"></span>'+year+' 사업별 매출 <span class="sub" data-bizunit></span>'
+    +(_noD?'<span class="sub" title="사업비 원장에 진행월이 없고 등록된 공연과도 안 이어진 사업이에요 — 오른쪽 분야별 표에서 볼 수 있어요">· 일자 미상 '+_noD+'건 제외</span>':'')
     +'<span style="margin-left:auto;display:inline-flex;align-items:center;font-size:11px;color:var(--neutral-text);font-weight:600">'+_lg+'</span></div>'
     +'<div id="bizov-chart" style="height:'+_bizOvChartH()+'px;margin:0 6px 4px;animation:fadeUp .45s ease"></div></div>';
   // [260813 운영자 「사업결과는 그 아래에 **상하 마진을 충분히 둬서 보기 좋게**」] — 차트와 붙어 답답하던 자리.
@@ -7998,9 +8011,8 @@ function _bizOvRender(el){
   // ⚠ 여기서 그린다 — `_bizmSwap`이 끝나야 `#bizov-chart`가 DOM에 선다.
   //   실패해도 코드를 지우지 않는다: 빈 카드 대신 **사유를 그 칸에 적는다**(`_bizChartNote`).
   _bizEnsurePlotly(function(){
-    // 상태(`_YRM_ST`)도 판매 현황 1면과 **같은 것**을 쓴다 — 두 면이 같은 차트를 보여주므로 상태가 갈리면 안 된다.
-    try{ _bizOvYrRevRows(); _yrDrawChart(true,'bizov',_BIZOV_ST); }
-    catch(_e){ console.warn('[bizov chart]',_e); _bizChartNote('bizov-chart','연도별 추이를 그리지 못했어요 — 새로고침 해주세요'); }
+    try{ _bizDrawSalesBars('bizov-chart',_bars,_bizOvChartH(),null,{year:year,rev:true}); }
+    catch(_e){ console.warn('[bizov chart]',_e); _bizChartNote('bizov-chart',year+'년 사업별 매출을 그리지 못했어요 — 새로고침 해주세요'); }
   });
 }
 // 우 열 = 같은 돈 축의 보조면(회계구분별 · 적자 사업). 「판매 실적」 레일이 이 덱에 남지 않게 여기서 통째로 갈아끼운다.
@@ -8009,6 +8021,24 @@ function _bizOvRender(el){
 //   → 고정값을 버리고 **남는 공간에서 센다**. 창을 줄여도 늘려도 한 화면에 들어온다.
 //   ⚠ 하한 240 = 이 차트가 15개 연도를 세로로 읽을 수 있는 최소치(그 밑으로는 값 라벨이 서로 붙는다).
 //     상한 410 = 종전 값(넓은 화면에서 종전과 똑같이 보이게).
+// [260813-6] 사업비 행 → 「사업 결과 비교」 막대가 먹는 모양. **값을 만들지 않고 있는 값을 옮긴다.**
+//   start/end = 등록된 공연의 일자(없으면 진행월 1일 · `_finDateOf`) · _rev = 정산서 매출(원) · 색 = 분야.
+//   ⚠ 매출이 **미기입**인 사업은 `_rev=null`로 둔다 — 0으로 떨어뜨리면 「하나도 안 팔렸다」로 읽힌다
+//     (그 계약은 `_bizDrawSalesBars` 주석이 이미 세워 둔 것 = 파선 자리가 그 사업의 자리를 지킨다).
+//   ⚠ 일자를 끝내 모르는 사업(진행월도 글자뿐 = 「연중」)은 **안 그린다** — 시간축에 세울 자리가 없다.
+//     그 사업이 사라지는 게 아니라, 오른쪽 분야별 표가 종전대로 맨 뒤에서 들고 있다.
+function _bizOvBars(rows,year){
+  var dm=_finDateMap(year);
+  var col={'공연':_yrCss('--accent'),'전시':_yrCss('--peach-text'),'교육':_yrCss('--green')};
+  var out=[];
+  (rows||[]).forEach(function(r){
+    var d=_finDateOf(r,year,dm); if(!d.s)return;
+    out.push({name:r.name,start:d.s,end:d.e||d.s,genre:r.cat,_col:col[r.cat]||col['공연'],
+      _rev:(_finBlank(r).indexOf('rev')>=0)?null:(Number(r.rev)||0),
+      _sold:null,paid:(Number(r.paid)||0),avg:0,_st:'ended'});
+  });
+  return out;
+}
 function _bizOvChartH(){
   try{
     var box=document.querySelector('#biz-main [data-bizmbox]');
@@ -8052,24 +8082,40 @@ function _bizOvRail(el){
           +'<button type="button" class="ry-live-tg" role="radio" aria-checked="'+(on?'true':'false')+'" onclick="_bizOvSetCat(\''+_anaEsc(c)+'\')"'
           +' title="'+escapeHtml(lab+' 사업만 보기')+'">'+escapeHtml(lab)+'</button>'; }).join('')
     +'</span>'):'';
-  h+='<div class="bizm-card" data-bizmfill data-bizmcap style="display:flex;flex-direction:column;margin-bottom:0"><div class="ct" style="flex:0 0 auto"><span class="ct-bul"></span>분야별 <span class="sub">사업NO 순 · 줄을 누르면 상세'+(_blkOv?' · 미기입 '+_blkOv+'건':'')+'</span>'+_ovSel+'</div>'
+  h+='<div class="bizm-card" data-bizmfill data-bizmcap style="display:flex;flex-direction:column;margin-bottom:0"><div class="ct" style="flex:0 0 auto"><span class="ct-bul"></span>분야별 <span class="sub">공연 일자 순 · 줄을 누르면 상세'+(_blkOv?' · 미기입 '+_blkOv+'건':'')+'</span>'+_ovSel+'</div>'
     // [260813 운영자 「그 아래 표와 어느정도 높이 간격을 유지해야 할 듯」] 제목·선택자 줄과 표 머리가 붙어 있던 자리.
     //   ⚠ 카드 높이는 안 건드린다(`data-bizmcap`이 상·하한을 유리 박스 안선에 못박은 상태) — 안쪽 여백만 준다.
     +'<div style="overflow:auto;flex:1 1 auto;min-height:0;padding-top:8px">';
   h+='<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="color:var(--dim);font-size:12px;text-align:left">';
-  [['NO',''],['사업명',''],['사업비','백만원'],['수입','백만원'],['수익률','%'],['비고','']].forEach(function(c,i){
+  [['일자',''],['사업명',''],['사업비','백만원'],['수입','백만원'],['수익률','%'],['비고','']].forEach(function(c,i){
     h+='<td style="padding:8px 12px;position:sticky;top:0;z-index:1;background:var(--surface-solid);box-shadow:inset 0 -2px 0 var(--border);vertical-align:middle;white-space:nowrap'+(i===0?';padding-left:14px':'')+((i>=2&&i<=4)?';text-align:right':'')+(i===5?';padding-right:14px':'')+'">'+c[0]
       +(c[1]?'<div style="font-size:10.5px;font-weight:400;margin-top:2px">(단위: '+c[1]+')</div>':'')+'</td>';
   });
   h+='</tr></thead><tbody>';
   if(!_ovRows.length)h+='<tr><td colspan="6" style="padding:20px 14px;color:var(--dim);font-size:12.5px">'+escapeHtml((_BIZOV_CAT_LAB[_ovCat]||_ovCat||'해당 분야'))+' 사업이 이 해에는 없어요</td></tr>';
-  // [260812 9차 운영자 「공연 no에 따라 나열 쭉 해주고 순서대로」] 정렬 = **사업NO 오름차순**(구판 = 수익률 내림차순).
-  //   숫자 비교(`numeric:true`) — 문자 비교면 `공연-10`이 `공연-2`보다 앞에 온다.
+  // [260813-6 운영자 「공연 no를 대체해서 **공연 일자로** 나열시켜줘」] 정렬 = **공연 일자 오름차순**.
+  //   (구판 = 사업NO 오름차순 · 260812 9차 지시. 사업NO는 정체성 축이라 원장·상세·툴팁에 그대로 살아 있고,
+  //    화면 나열만 사람이 일하는 순서인 **날짜 순**으로 바꾼다.)
+  //   ⚠ 날짜를 모르는 사업(등록 공연 미조인 + 진행월도 글자뿐)은 **맨 뒤**로 — 앞에 몰아 두면 「1월 사업」처럼 읽힌다.
+  //     같은 날짜끼리는 사업NO로 다시 세운다 = 다시 그려도 순서가 안 흔들린다.
   var _lm=_finLinkMap(year);   // 등록된 공연명 지도 — 줄마다 부르지 않고 한 번만
-  _ovRows.slice().sort(function(a,b){ return String(a.no).localeCompare(String(b.no),'en',{numeric:true}); }).forEach(function(r,i){
+  var _dm=_finDateMap(year);   // 사업NO → 등록 공연의 일자(없으면 진행월로 물러난다)
+  var _dcache={};
+  var _dOf=function(r){ return _dcache[r.no]||(_dcache[r.no]=_finDateOf(r,year,_dm)); };
+  _ovRows.slice().sort(function(a,b){
+    var da=_dOf(a).s,db=_dOf(b).s;
+    var ta=da?da.getTime():9e15, tb=db?db.getTime():9e15;
+    return (ta-tb)||String(a.no).localeCompare(String(b.no),'en',{numeric:true});
+  }).forEach(function(r,i){
+    var _d=_dOf(r);
+    // 표기 = 판매 추이 표와 같은 정본 상자(`_bizDateCell` = `M/D` · 같은 달 범위면 `M/D-D`).
+    //   등록 공연을 못 찾았으면 원장이 아는 그대로(「연중」·「3/6/9/12월」)를 적는다 — 없는 날짜를 지어내지 않는다.
+    var _dTxt=_d.exact?_bizDateCell(_d.s,_d.e,_d.s.getTime()===_d.e.getTime())
+             :(String(r.mon||'').trim()||'—');
     var c=_finCalc(r), _bl=_finBlank(r), _noCost=(_bl.indexOf('vou')>=0||_bl.indexOf('fee')>=0);
-    h+='<tr onclick="_finModal(\''+_anaEsc(r.no)+'\','+year+')" style="cursor:pointer;border-bottom:1px solid var(--border);'+(i%2===1?'background:var(--past-bg);':'')+'" title="'+escapeHtml(r.name+' — 눌러서 사업비 상세'+(_bl.length?(' · 아직 안 적은 칸: '+_bl.join(', ')):''))+'">'
-      +'<td style="padding:7px 12px 7px 14px;white-space:nowrap;color:var(--neutral-text);font-variant-numeric:tabular-nums">'+escapeHtml(_finNoShort(r.no))+'</td>'
+    h+='<tr onclick="_finModal(\''+_anaEsc(r.no)+'\','+year+')" style="cursor:pointer;border-bottom:1px solid var(--border);'+(i%2===1?'background:var(--past-bg);':'')+'" title="'+escapeHtml(_finNoShort(r.no)+' · '+r.name+' — 눌러서 사업비 상세'+(_bl.length?(' · 아직 안 적은 칸: '+_bl.join(', ')):''))+'">'
+      // 일자 칸 = 판매 추이 표와 같은 결(강조색·굵게·자릿수 고정). 미조인(진행월로 미룬 값)은 **옅은 잉크**로 구분한다.
+      +'<td style="padding:7px 12px 7px 14px;white-space:nowrap;font-variant-numeric:tabular-nums;font-weight:'+(_d.exact?'700':'600')+';color:var('+(_d.exact?'--accent':'--neutral-text')+')">'+escapeHtml(_dTxt)+'</td>'
       // [260813-4] 이름과 「미기입 N」을 **한 줄 두 칸**으로 나눈다 — 구판은 둘을 한 덩이로 두고 칸 전체에 말줄임을 걸어서,
       //   운영자 확정 공연명이 길어지자(2024·2025 동기화) 말줄임이 **뒤에 있는 미기입 표시를 먼저 잘라 먹었다**
       //   (실측: 「2024 GS칼텍스 예울마루 위크 미…」). 말줄임은 이름만 받고, 미기입은 안 줄어드는 자리에 둔다.
@@ -8683,6 +8729,41 @@ function _finLinkMap(year){
     });
   }catch(_e){}
   return out;
+}
+// ── [260813-6 운영자 「공연 no를 대체해서 **공연 일자로** 나열」] 사업NO → 그 사업에 매달린 공연의 일자 ──────
+//   사업비 원장에는 날짜가 없다(있는 건 진행월 글자 `mon` = 「1월」·「3/6/9/12월」·「연중」).
+//   진짜 일자는 **운영대장에 등록된 그 공연**이 들고 있으므로, 이미 있는 연결(`_finOf`)을 타고 가져온다
+//   = 새 원천 0 · 새 매칭 규칙 0(연결키가 자동 매칭을 이기는 규약도 그대로 상속).
+//   ⚠ 운영대장이 아직 안 실렸으면(`ready:false`) 「일자 없음」이 아니라 **모르는 것**이다 — 그때는 진행월로 물러난다.
+function _finDateMap(year){
+  var out={ready:false,byNo:{}};
+  try{
+    if(typeof _bizState==='undefined'||!_bizState||!_bizState.raw)return out;
+    var recs=_bizClean().filter(function(r){return r._year===year;});
+    if(!recs.length)return out;
+    out.ready=true;
+    _bizListBuild(recs,year).forEach(function(g){
+      var f=_finOf(g.name,year); if(!f)return;
+      var cur=out.byNo[f.no];
+      if(!cur)out.byNo[f.no]={s:g.start,e:g.end,genre:g.genre,n:1};
+      else{ if(g.start<cur.s)cur.s=g.start; if(g.end>cur.e)cur.e=g.end; cur.n++; }   // 한 사업에 회차가 여럿이면 **처음~마지막**을 잡는다
+    });
+  }catch(_e){}
+  return out;
+}
+// 진행월 글자에서 첫 달만 읽는다(정렬용 폴백). 「연중」처럼 숫자가 없으면 null = 맨 뒤로.
+function _finMonD(r,year){
+  var m=String(r&&r.mon||'').match(/\d+/);
+  if(!m)return null;
+  var mo=parseInt(m[0],10);
+  return (mo>=1&&mo<=12)?new Date(year,mo-1,1):null;
+}
+// 한 사업의 일자 = {s,e,exact}. exact=false면 「등록된 공연을 못 찾아 진행월로 미룬 값」이라 화면에도 그렇게 적는다.
+function _finDateOf(r,year,dm){
+  var hit=(dm&&dm.byNo)?dm.byNo[r.no]:null;
+  if(hit&&hit.s)return {s:hit.s,e:hit.e||hit.s,exact:true};
+  var d=_finMonD(r,year);
+  return {s:d,e:d,exact:false};
 }
 // 파생값 한 곳 — 원본 엑셀 수식과 같은 식. 저장하지 않고 매번 센다.
 //   수익율 = 매출 ÷ (전표실적 + 판매수수료) × 100  (원본 25공연 P열 `=J/(G+I)*100` · 25전시 M열 동일 ·
@@ -9750,7 +9831,11 @@ function _bizUnitWrite(div,unit){
   try{ var card=div&&div.closest&&div.closest('.bizm-card'); if(!card)card=div&&div.parentNode;
     var el=card&&card.querySelector('.ct [data-bizunit]'); if(el)el.textContent='(단위: '+unit+')'; }catch(_e){}
 }
-function _bizDrawSalesBars(divId,list,hgt,dom){
+// [260813-6] `opt` = 이 차트를 **다른 면에서도** 쓰기 위한 두 손잡이(기본값 = 종전 동작 그대로).
+//   `opt.year` = 축 연도(미지정이면 판매 현황 덱의 `_bizmState.year`) · `opt.rev` = 매출 축 고정(관객수 토글 무시).
+//   왜 필요한가: 사업 개요 덱이 같은 형태를 쓰는데(운영자 「사업결과비교와 같은 형태」) 그 덱은 **자기 연도 선택자**를
+//   따로 갖고 있고, 축은 늘 돈이다. 인자 없이 부르는 기존 호출부 3곳은 한 글자도 안 바뀐다.
+function _bizDrawSalesBars(divId,list,hgt,dom,opt){
   if(!window.Plotly)return;
   var ED=(dom==='edu');
   var div=document.getElementById(divId); if(!div)return;
@@ -9762,7 +9847,7 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
   //   ⚠ 교육 반쪽(dom='edu')은 무접촉 — 그쪽 「예정 = 일정 게이지」는 260804·260805 지시가 세운 별개 자리다.
   if(!ED)rows=rows.filter(function(g){ return g._st!=='planned'; });
   if(!rows.length){ try{Plotly.purge(div);}catch(_e0){} return; }
-  var dim=_yrCss('--dim'), grid=_yrCss('--border'), Y=_bizmState.year;
+  var dim=_yrCss('--dim'), grid=_yrCss('--border'), Y=(opt&&opt.year)||_bizmState.year;
   // [260806-9 운영자 「지금이 매출이고, 누르면 관객수」] 축 전환 = **이미 있는 갈래를 손으로 잡는 것**뿐이다 —
   //   이 함수는 원래 「매출이 조인됐으면 매출(백만 원) · 아니면 판매 인원(명)」으로 갈리게 돼 있었고(폴백 경로),
   //   값·라벨 서식·y축 제목·툴팁·축 중략이 전부 그 갈림목 하나(hasRev)를 보고 있다. 관객수 모드 = 그 갈림목을
@@ -9771,7 +9856,7 @@ function _bizDrawSalesBars(divId,list,hgt,dom){
   //     (160 × 35,000)을 확정해 수치 DB(`_BIZ_EDU_SOLD`)에 실었으므로 교육에도 매출 축이 생겼다. 이제 세 분야가
   //     **한 토글로 같이 갈아탄다**(그게 260806-9가 이 토글을 만든 이유 = 「셋이 같은 자 위에 서서 통째 비교」).
   //     카드 눈금 100~400 계약은 **수강생 축의 계약**이라 그대로 살아 있다 — 매출 축일 땐 애초에 걸리지 않는다(아래 _edTop).
-  var AUD=_bizmAudMode();
+  var AUD=(opt&&opt.rev)?false:_bizmAudMode();   // [260813-6] 사업 개요는 돈 축 전용 면 — 판매 현황의 관객수 토글이 여기까지 넘어오면 안 된다
   var hasRev=!AUD&&rows.some(function(g){return g._rev!=null&&g._rev>0;});
   // ⚠ 매출 미조인(_rev==null)은 **0이 아니라 null** — 0으로 떨어뜨리면 "0.0" 막대가 깔려 「하나도 안 팔렸다」로 읽힌다(평의회6).
   //   null = 막대 없음 → 아래 파선 자리(값 없음)가 그 사업의 자리를 지킨다(시간축엔 이름 눈금이 없어, 안 그리면 통째로 사라진다).
