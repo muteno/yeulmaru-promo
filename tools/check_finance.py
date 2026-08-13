@@ -40,6 +40,13 @@ smoke_* 는 픽셀·열림이다. 여기서만 묻는 것 = **「인덱스가 �
   (교훈: 리터럴 실존·순서 검사는 주석을 걷어내고 재야 한다 — `check_wide_threshold` ③이 같은 이유로
    줄머리 앵커를 요구하게 된 것과 같은 축.)
 
+⑯ 킬테스트 4/4 차단 실증(260813-7 증설분 — 일자 원천 사다리):
+  Ⓔ `_FIN_DATE_SRC` 선언 제거 → rc=1  ·  Ⓕ 사다리 칸(전시) 삭제 → rc=1
+  Ⓖ 분야별 표가 `_finDateOf` 대신 제 손으로 날짜를 셈 → rc=1  ·  Ⓗ 「데이터 없음」 표기 제거 → rc=1
+  · 전부 원복하면 rc=0
+  왜 이걸 잠그나: 이 절의 값어치는 「지금 전시 일자가 나온다」가 아니라 **「원천이 늘 때 한 곳만 고치면 된다」**이고,
+  그 성질은 소비처가 원천을 직접 물기 시작하는 순간 조용히 사라진다(그 뒤로는 아무도 사다리를 안 본다).
+
 짝(런타임 층) = `tools/smoke_finance.mjs` — 「소스에 축이 있나」가 아니라 「브라우저에서 실제로 도는가」를 잰다.
 
 실행: python3 tools/check_finance.py   (위반 시 exit 1)
@@ -421,13 +428,49 @@ def main() -> int:
     except Exception as _e:
         bad.append("⑭ 정산서 매출 대조 중 오류: %s" % _e)
 
+    # ⑯ 일자 원천 = **사다리 한 곳** (260813-7 운영자 「가능한 끌어와보고 안 되는 건 데이터 없음으로 채우고 ·
+    #   공연 기준으로 틀을 만들어 놓고 추후 데이터를 가져왔을 때 **배선하기 쉽게**」)
+    #   이 절의 값어치는 「지금 전시 일자가 나온다」가 아니라 **「나중에 원천이 늘 때 한 곳만 고치면 된다」**이다.
+    #   그 성질은 코드가 흩어지는 순간 조용히 사라진다(원천 하나를 소비처에 직접 박으면 그 뒤로는 아무도 사다리를 안 본다).
+    #   그래서 세 가지를 못 박는다: ⓐ 사다리 선언 실존 ⓑ 소비처가 사다리를 거쳐서만 일자를 얻는다
+    #   ⓒ 못 찾은 일자는 빈칸이 아니라 **「데이터 없음」**으로 적는다.
+    ix_nc = _strip(idx_src)
+    flat_nc = ix_nc.replace(" ", "")
+    if "var_FIN_DATE_SRC=[" not in flat_nc:
+        bad.append("⑯ `_FIN_DATE_SRC`(일자 원천 사다리) 선언이 없다 — 원천이 늘 때 고칠 **한 곳**이 사라졌다.")
+    else:
+        # ⓐ 사다리 칸 = {k, rows} 짝. 한 칸이라도 모양이 깨지면 `_finDateMap`이 조용히 건너뛴다.
+        _blk = re.search(r"var\s+_FIN_DATE_SRC\s*=\s*\[(.*?)\n\];", ix_nc, re.S)
+        _body = _blk.group(1) if _blk else ""
+        _ks = re.findall(r"\{k:'([^']+)'", _body.replace(" ", ""))
+        if len(_ks) < 3:
+            bad.append("⑯ 일자 원천이 %d칸이다(공연·전시·교육 셋이 기본) — 칸을 지우면 그 분야는 영영 「데이터 없음」이다. 실측 %s"
+                       % (len(_ks), _ks or "없음"))
+        if _body.count("rows:function") != len(_ks):
+            bad.append("⑯ 사다리 칸 수(%d)와 `rows:function` 수(%d)가 다르다 — 짝이 깨진 칸은 `_finDateMap`이 건너뛴다."
+                       % (len(_ks), _body.count("rows:function")))
+    # ⓑ 소비처는 `_finDateOf`로만 일자를 얻는다 — 분야별 표·사업별 매출 차트 둘 다.
+    for _fn, _lab in (("_bizOvRail", "분야별 표"), ("_bizOvBars", "사업별 매출 차트")):
+        _b = _fnbody(ix_nc, "function %s(" % _fn)
+        if not _b:
+            bad.append("⑯ `%s`(%s)를 못 찾았다 — 이름이 바뀌었으면 이 검사도 같이 고쳐라." % (_fn, _lab))
+        elif "_finDateOf(" not in _b.replace(" ", ""):
+            bad.append("⑯ `%s`(%s)가 `_finDateOf`를 안 쓴다 — 일자를 제 손으로 세기 시작하면 원천이 둘로 갈린다."
+                       % (_fn, _lab))
+    # ⓒ 「데이터 없음」 표기 — 못 찾은 일자를 빈칸으로 두면 「0일」인지 「모름」인지 사람이 못 가른다.
+    if "'데이터 없음'" not in ix_nc:
+        bad.append("⑯ 「데이터 없음」 표기가 사라졌다 — 일자를 못 찾은 사업이 빈칸으로 남으면 모르는 것을 없는 것으로 적는 셈이다.")
+    _dof = _fnbody(ix_nc, "function _finDateOf(")
+    if _dof and "src:null" not in _dof.replace(" ", ""):
+        bad.append("⑯ `_finDateOf`가 「원천 없음」(`src:null`)을 안 돌려준다 — 화면이 「데이터 없음」과 폴백을 구분할 수 없다.")
+
     if bad:
         print("✗ check_finance 실패 %d건" % len(bad))
         for b in bad:
             print("   · " + b)
         return 1
     print("✅ check_finance 통과 — 씨앗 %d건/%d개 연도 · 사업NO 유일·정체성 고정(중간 삽입 무영향) · 조인키 유일 · "
-          "파생값 미저장 · 정본 함수 %d종 각 1 · 인덱스 축(%s) · 회계 권한 축(프론트·Worker) 실존."
+          "파생값 미저장 · 정본 함수 %d종 각 1 · 인덱스 축(%s) · 회계 권한 축(프론트·Worker) · 일자 원천 사다리 한 곳 실존."
           % (total, len(years), len(CANON), "·".join(AXES)))
     return 0
 
