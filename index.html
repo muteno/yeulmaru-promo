@@ -7784,7 +7784,9 @@ function _bizOvCatPick(rows){
   if(_bizOvCat&&cs.indexOf(_bizOvCat)>=0)return _bizOvCat;
   return cs.indexOf('공연')>=0?'공연':cs[0];
 }
-function _bizOvSetCat(c){ _bizOvCat=String(c||'')||null; try{_bizInlineRender();}catch(_e){} }
+// ⚠ 분야별 표는 260813에 **우 레일로 옮겨갔다** — 좌 열만 다시 그리면 버튼이 안 먹는 것처럼 보인다
+//   (실측: 눌러도 표가 그대로였다). 연도 칩(`_bizOvSetYear`)은 처음부터 두 열을 같이 불렀는데 이 줄만 빠져 있었다.
+function _bizOvSetCat(c){ _bizOvCat=String(c||'')||null; try{_bizInlineRender();}catch(_e){} try{_railYrmRender();}catch(_e){} }
 // 사업NO 표기 — [260813 운영자] 「사업no 디테일한 뒤에 실제 표기는 **공연-01만** 나오면 될듯」
 //   연도는 이미 면 전체의 축(머리줄 연도 칩)이라 행마다 다시 적을 이유가 없다. **값은 안 건드린다**(표기만 줄인다).
 function _finNoShort(no){ return String(no||'').replace(/^20\d\d-/,''); }
@@ -7838,8 +7840,6 @@ function _bizOvRender(el){
   //   「제일 잘된 해」로 읽힌다. 로그인만 하면 보이는 기본 면에 경고가 없으면 그 오독을 아무도 못 막는다.
   //   저장하지 않는다 — 그릴 때마다 센다(파생값 미저장 계약과 같은 축).
   var _blk=rows.filter(function(r){ return _finBlank(r).length; }).length;
-  var _blkCost=rows.filter(function(r){ var b=_finBlank(r); return b.indexOf('vou')>=0||b.indexOf('fee')>=0; }).length;   // 수익률 **분모**가 빠진 건수
-  var _blkRev=rows.filter(function(r){ return _finBlank(r).indexOf('rev')>=0; }).length;                                   // 분자가 빠진 건수
   // [260813] 부제에서 「단위 원」을 뺀다 — 자가 두 층(KPI 억 · 표 백만원)이 된 뒤로 **면 전체를 한 자로 말하면 거짓**이 된다.
   //   단위는 각 칸이 이미 스스로 말한다(KPI `.val .u` = 억 · 표 머리 「(단위: 백만원)」).
   var head=_bizmHead(_bizOvYearChips(year)+_inBtn,'사업 개요',
@@ -7867,9 +7867,9 @@ function _bizOvRender(el){
     +_bizOvKpi('수입 (정산서 매출)',_finEok(S.rev),'억',null,'--green')
     // ⚠ 분모(전표실적·수수료)가 빠진 사업이 있으면 수익률이 **실제보다 높게** 나온다 — 그 사실을 숫자 바로 밑에 적는다.
     //   나무라지 않는다(담당자가 아직 입력 중인 정상 상태이기도 하다) → 색은 「주의」 톤 --peach-text · --danger 안 쓴다.
-    +_bizOvKpi('수익률',(S.margin==null?'—':S.margin.toFixed(1)),'%',
-        (_blkCost?'<span style="color:var(--peach-text);font-weight:600">사업비 미입력 '+_blkCost+'건 — 실제보다 높게 나와요</span>'
-                 :(_blkRev?'<span style="color:var(--peach-text);font-weight:600">매출 미입력 '+_blkRev+'건</span>':'수입 ÷ 사업비')),'--accent')
+    // [260813 운영자 「사업비 미입력 저 내용 없어도됨」] KPI 밑줄의 미입력 경고 철거 — 밑줄은 식 설명으로 되돌린다.
+    //   ⚠ 축을 잃는 건 아니다: 어느 사업이 덜 찼는지는 분야별 표의 **「미기입 N」** 표시가 줄마다 그대로 말한다.
+    +_bizOvKpi('수익률',(S.margin==null?'—':S.margin.toFixed(1)),'%','수입 ÷ 사업비','--accent')
     +'</div>';
   // ② 사업 결과 카드 — [260813 운영자] 「분야별 1번, 지금 그대로 좋음. 단 **용어를 사업 결과**」
   //   = 열·정렬·색 전부 종전 그대로, 카드 이름과 **돈 자(원 → 백만원)만** 바뀐다.
@@ -7975,7 +7975,10 @@ function _bizOvRail(el){
           +'<button type="button" class="ry-live-tg" role="radio" aria-checked="'+(on?'true':'false')+'" onclick="_bizOvSetCat(\''+_anaEsc(c)+'\')"'
           +' title="'+escapeHtml(lab+' 사업만 보기')+'">'+escapeHtml(lab)+'</button>'; }).join('')
     +'</span>'):'';
-  h+='<div class="bizm-card" data-bizmfill data-bizmcap style="display:flex;flex-direction:column;margin-bottom:0"><div class="ct" style="flex:0 0 auto"><span class="ct-bul"></span>분야별 <span class="sub">사업NO 순 · 줄을 누르면 상세'+(_blkOv?' · 미기입 '+_blkOv+'건':'')+'</span>'+_ovSel+'</div><div style="overflow:auto;flex:1 1 auto;min-height:0">';
+  h+='<div class="bizm-card" data-bizmfill data-bizmcap style="display:flex;flex-direction:column;margin-bottom:0"><div class="ct" style="flex:0 0 auto"><span class="ct-bul"></span>분야별 <span class="sub">사업NO 순 · 줄을 누르면 상세'+(_blkOv?' · 미기입 '+_blkOv+'건':'')+'</span>'+_ovSel+'</div>'
+    // [260813 운영자 「그 아래 표와 어느정도 높이 간격을 유지해야 할 듯」] 제목·선택자 줄과 표 머리가 붙어 있던 자리.
+    //   ⚠ 카드 높이는 안 건드린다(`data-bizmcap`이 상·하한을 유리 박스 안선에 못박은 상태) — 안쪽 여백만 준다.
+    +'<div style="overflow:auto;flex:1 1 auto;min-height:0;padding-top:8px">';
   h+='<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="color:var(--dim);font-size:12px;text-align:left">';
   [['NO',''],['사업명',''],['사업비','백만원'],['수입','백만원'],['수익률','%'],['비고','']].forEach(function(c,i){
     h+='<td style="padding:8px 12px;position:sticky;top:0;z-index:1;background:var(--surface-solid);box-shadow:inset 0 -2px 0 var(--border);vertical-align:middle;white-space:nowrap'+(i===0?';padding-left:14px':'')+((i>=2&&i<=4)?';text-align:right':'')+(i===5?';padding-right:14px':'')+'">'+c[0]
@@ -8003,7 +8006,7 @@ function _bizOvRail(el){
       +'<td style="padding:7px 12px;text-align:right;color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums">'+_finPct(c.margin,true)+'</td>'
       // 비고 = 사업명 앞 묶음 이름(클래식2·아동극1). 그게 없는 사업만 종전대로 회계구분이 선다.
       //   ⚠ 회계구분은 **거르기 축**이라 사라지면 안 된다 — 분야 선택자 옆 회계구분 필터와 사업비 보드가 계속 그걸 쓴다.
-      +'<td style="padding:7px 14px 7px 12px;white-space:nowrap;color:var(--neutral-text)">'+escapeHtml(_finNamePair(r.name).tag||r.acct||'—')+'</td></tr>';
+      +'<td style="padding:7px 14px 7px 12px;white-space:nowrap;color:var(--neutral-text)">'+escapeHtml(r.tag||_finNamePair(r.name).tag||r.acct||'—')+'</td></tr>';
   });
   h+='</tbody></table></div></div>';
   // [260813 운영자 「분야별이 거의 묻히는데 이거를 **차액적자를 아예 날리고** 저기에 붙인다는거임」]
@@ -8519,7 +8522,7 @@ function _finFromSheet(r){
 }
 function _finFromSeed(s,year){
   return {no:s.no,y:year,cat:s.cat,acct:s.acct,name:s.name,lnk:'',mon:s.mon,cnt:s.cnt,bud:s.bud,vou:s.vou,
-    fee:s.fee,rev:s.rev,paid:s.paid,inv:s.inv,memo:'',by:'',at:'',blank:String(s.blank||''),src:'seed'};
+    fee:s.fee,rev:s.rev,paid:s.paid,inv:s.inv,memo:'',by:'',at:'',blank:String(s.blank||''),tag:String(s.tag||''),src:'seed'};
 }
 // 한 해의 사업비 = 시트 행 ∪ (시트에 없는 NO의 씨앗). 시트가 이긴다.
 function _finRows(year){
