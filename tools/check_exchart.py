@@ -109,12 +109,30 @@ def main():
             if ink != '_lbInk':
                 bad.append("⑧ 꼭자락 라벨 잉크가 `%s`다 — 선색으로 되돌아갔다. 값 라벨은 `_lbInk`(--neutral-text) 한 벌(#16 ⓐ 260809-2 개정)." % ink)
 
+    # ⑨ 차트 칸 전건이 실패 안내 목록에 있나 (260812-7 운영자 「출력이 잘 안되는 변수를 줄이려는 거임」)
+    #   잡는 것 = **조용히 빈 칸으로 남는 차트**. 구판은 `_plotlyFailNote` 안에 두 칸만 하드코딩돼 있어서
+    #   CDN이 막히면 전시·교육·장르·시즌 칸이 아무 말 없이 비었다(실측 260812: 안내 2/6 · 침묵 4칸).
+    #   빈 칸은 「자료가 없는 것」인지 「고장난 것」인지 사람이 구분할 수 없다 = 그게 「출력이 안 된다」의 정체다.
+    m = re.search(r"var\s+_BIZ_CHART_SLOTS\s*=\s*\[([^\]]*)\]", src)
+    if not m:
+        bad.append("⑨ `_BIZ_CHART_SLOTS`(차트 칸 정본 목록) 선언이 없다 — 실패 안내가 어디에 들어가는지 한 곳에서 못 센다.")
+    else:
+        listed = set(re.findall(r"'([^']+)'", m.group(1)))
+        # 실제 차트 칸 = 마크업에 있는 `id="…chart"` 전부(문자열 조립으로 만드는 자리도 잡는다)
+        found = set(re.findall(r"""id=\\?["']((?:biz|bizm)-[a-z-]*chart)\\?["']""", src))
+        miss = sorted(found - listed)
+        if miss:
+            bad.append("⑨ 차트 칸 %s 이(가) `_BIZ_CHART_SLOTS`에 없다 — 라이브러리 로드가 실패하면 그 칸은 "
+                       "**아무 말 없이 빈 칸**으로 남는다. 목록에 넣어라." % ', '.join('`%s`' % x for x in miss))
+        if '_BIZ_CHART_SLOTS.forEach' not in src.replace(' ', ''):
+            bad.append("⑨ `_plotlyFailNote`가 `_BIZ_CHART_SLOTS`를 안 돈다 — 목록을 만들어 놓고 안 쓰면 침묵이 되살아난다.")
+
     if bad:
         print('[exchart] ✗ 판매 추이 차트 정본 위반 %d건 (기틀 §2 #16)' % len(bad))
         for b in bad:
             print('   · ' + b)
         return 1
-    print('[exchart] PASS — 판매 추이 차트 정본(기틀 §2 #16) 유지 · 스택 hvh · tozeroy 0 · 알파 보조역 · 점 배열 분기 · 라벨 임계·뒤집기 · 값 라벨 잉크 한 벌 ✓')
+    print('[exchart] PASS — 판매 추이 차트 정본(기틀 §2 #16) 유지 · 스택 hvh · tozeroy 0 · 알파 보조역 · 점 배열 분기 · 라벨 임계·뒤집기 · 값 라벨 잉크 한 벌 · 차트 칸 전건 실패 안내 등재 ✓')
     return 0
 
 

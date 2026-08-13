@@ -10212,7 +10212,10 @@ function _bizDrawExhibMonthly(divId,list,hgt){
     yaxis:{tickfont:{size:10.5,color:dim},gridcolor:grid,zeroline:false,fixedrange:true,range:[0,yTop]},   // 단위는 카드 우상단 「(단위: …)」이 말한다(아래 _bizUnitWrite — 축을 정한 그 자리에서 쓴다)
     shapes:shapes,annotations:notes};
   _bizUnitWrite(div,REV?'백만원':'명');   // [260807-20] 공연 막대와 같은 문법 — 축과 표기가 갈릴 수 없다
-  try{ Plotly.newPlot(div,data,lay,{displayModeBar:false,responsive:true}); }catch(_e){ console.warn('[biz exmonthly]',_e); }
+  // [260812 7차] 그리기 실패는 **화면에도** 남긴다 — 구판은 console.warn만이라 사용자에겐 빈 칸이었고,
+  //   「자료가 없는 것」인지 「고장난 것」인지 구분할 수가 없었다(운영자 「출력이 잘 안되는 변수를 줄이려는 거임」).
+  try{ Plotly.newPlot(div,data,lay,{displayModeBar:false,responsive:true}); }
+  catch(_e){ console.warn('[biz exmonthly]',_e); _bizChartNote(divId,'전시 차트를 그리지 못했어요 — 새로고침 해주세요'); }
 }
 // ── [260806 운영자] 면 하단 반반 = 좌 전시 판매현황 │ 우 교육 판매현황 ─────────────────────────
 //   지시: *"여기 하단에 장르별 판매 축적 대신에, 반으로 갈라서, 좌 전시 판매현황 우 교육 판매현황 · 보이는건 공연 처럼 연간으로"*.
@@ -10441,8 +10444,13 @@ function _bizCompRender(el,half){
   h+='</div>'+DOTS+'</div>';
   _bizmSwap(el,h);   // [260802] 프레임 유지·안쪽만 교체(1-2면 ↔ 3-4면 두 열 동시 넘김의 번쩍임 제거)
   _bizEnsurePlotly(function(){ try{ if(half!==2){_bizDrawSalesBars('bizm-chart', list, 430);} }catch(_e){console.warn('[bizm chart]',_e);}
-    try{ if(half!==2&&_exRows&&_exRows.length)_bizDrawExhibMonthly('bizm-ex-chart',_exRows,_BIZ_HALF_CH); }catch(_e){console.warn('[bizm ex chart]',_e);}   // [260805] 전시 반쪽 = 누계 꺾은선(운영자) · 높이 고정 = fit 흡수 대상 아님
-    try{ if(half!==2&&_eduAny)_bizDrawSalesBars('bizm-edu-chart',_eduRows,_BIZ_HALF_CH,'edu'); }catch(_e){console.warn('[bizm edu chart]',_e);}   // [260804] 교육 반쪽 = 당해 연도 월별 일정 게이지(세로)
+    // [260812 7차] ⚠ `_bizEnsurePlotly`로 감싼다. 구판은 여기서 **맨몸으로** 불렀다 — Plotly가 아직 안 실린 순간에
+    //   이 경로로 들어오면 두 함수 첫 줄의 `if(!window.Plotly)return;`으로 조용히 빠져나가고, 나중에 로드돼도
+    //   **아무도 다시 안 불러서** 그 면이 빈 칸으로 남았다(같은 그림을 그리는 L10407 경로는 이미 감싸고 있었다 = 두 경로가 갈려 있었다).
+    _bizEnsurePlotly(function(){
+      try{ if(half!==2&&_exRows&&_exRows.length)_bizDrawExhibMonthly('bizm-ex-chart',_exRows,_BIZ_HALF_CH); }catch(_e){console.warn('[bizm ex chart]',_e);}   // [260805] 전시 반쪽 = 누계 꺾은선(운영자) · 높이 고정 = fit 흡수 대상 아님
+      try{ if(half!==2&&_eduAny)_bizDrawSalesBars('bizm-edu-chart',_eduRows,_BIZ_HALF_CH,'edu'); }catch(_e){console.warn('[bizm edu chart]',_e);}   // [260804] 교육 반쪽 = 당해 연도 월별 일정 게이지(세로)
+    });
     try{_bizFitSeason();}catch(_e){}   // [260805] 인라인 시즌 추세 철거 → 그리기 호출도 같이 내림(모달 _bizDrawSeason()은 무접촉 = 인자 없는 기본 divId 'biz-season-chart')
     // [260804] fit이 차트를 줄인 뒤(430→180~) 실높이로 **한 번만** 다시 그린다 — 중략 기하는 그릴 때의 px 배분으로
     //   데이터 좌표에 구워지기 때문에, 430 기준으로 접어 놓고 198px에 표시하면 띠가 3px로 무너져 「목표선」처럼 보이고
@@ -14454,7 +14462,15 @@ function _bizEnsurePlotly(cb){
   s.onerror=function(){window._plotlyQ=null;window._plotlyDead=1;_plotlyFailNote();};   // [260723 평의회1·2·4] 모달·메인 인라인 양쪽 표기 + 재삽입 차단
   document.head.appendChild(s);
 }
-function _plotlyFailNote(){ ['biz-chart','bizm-chart'].forEach(function(id){ var el=document.getElementById(id); if(el)el.innerHTML='<div style="color:var(--danger);text-align:center;padding:40px;font-size:13px">차트 라이브러리 로드 실패 (오프라인?)</div>'; }); }
+// [260812 7차 운영자 「출력이 잘 안되는 변수를 줄이려는 거임」] 차트 칸 정본 목록.
+//   왜 상수로 빼나: 구판은 `_plotlyFailNote` 안에 **['biz-chart','bizm-chart'] 두 개만** 하드코딩돼 있었다.
+//   실제 차트 칸은 6개다 → CDN이 막히면 전시(bizm-ex-chart)·교육(bizm-edu-chart)·장르·시즌 칸은
+//   **아무 말도 없이 그냥 빈 칸**으로 남았다(「전시 차트가 안 나온다」의 정체). 목록을 한 곳에 두고 게이트가 잠근다.
+var _BIZ_CHART_SLOTS=['biz-chart','bizm-chart','bizm-ex-chart','bizm-edu-chart','biz-genre-chart','biz-season-chart'];
+// 그 칸에 사람이 읽을 안내를 남긴다 — 빈 칸은 「고장」인지 「자료 없음」인지 사람이 구분할 수 없다.
+function _bizChartNote(id,msg){ var el=document.getElementById(id); if(!el)return false;
+  el.innerHTML='<div style="color:var(--danger);text-align:center;padding:40px;font-size:13px">'+escapeHtml(msg)+'</div>'; return true; }
+function _plotlyFailNote(){ _BIZ_CHART_SLOTS.forEach(function(id){ _bizChartNote(id,'차트 라이브러리 로드 실패 (오프라인?)'); }); }
 function _bizDrawChart(list,multi,divId,hgt){   // [260723] divId·hgt = 메인 인라인 보드(bizm-chart·300) 재사용 — 미지정 = 기존 모달(biz-chart·430) 불변
   if(!window.Plotly)return;
   var div=document.getElementById(divId||'biz-chart');if(!div)return;
