@@ -305,6 +305,29 @@ def main() -> int:
         if not re.search(r"_finIn\.busy\s*=\s*0", save):
             bad.append("⑫ `_finInSave`가 `_finIn.busy`를 0으로 안 되돌린다 — 한 번 저장하면 그 창은 영영 안 눌린다.")
 
+    # ⑬ 씨앗 반입이 「미입력 ↔ 0원」 구분을 뭉개지 않는다 (260812-9)
+    #   구판 `_finSeedPush`는 ⓐ 안 적은 칸을 `String(r.vou||0)`로 **0으로 굳히고** ⓑ `미기입` 열을 아예 안 쓰고
+    #   ⓒ 모든 행에 `수정자`·`수정일시`를 찍었다. 시트가 씨앗을 이기므로 한 번 굳으면 **원본 엑셀로도 못 되돌린다**
+    #   = 화면에서 애써 가른 구분이 반입 버튼 한 번에 사라진다. 그리고 반입 직후 전 행이 「사람이 고친 행」이 돼
+    #   「이 값 누가 정했나」에 답할 수 없다(반입 주체는 Worker 로그 시트가 이미 남긴다 = 축이 다르다).
+    push = _fnbody(code, "async function _finSeedPush")
+    if not push:
+        bad.append("⑬ `_finSeedPush`를 못 찾았다 — 이름이 바뀌었으면 이 검사도 같이 고쳐라.")
+    else:
+        flat = push.replace(" ", "")
+        if "'미기입':" not in flat:
+            bad.append("⑬ `_finSeedPush`가 `미기입` 열을 안 쓴다 — 반입하는 순간 어느 칸이 비었는지가 사라진다.")
+        for col in ("'전표실적':", "'정산서매출':"):
+            m2 = re.search(re.escape(col) + r"String\(r\.\w+\|\|0\)", flat)
+            if m2:
+                bad.append("⑬ `_finSeedPush`가 %s를 `||0`으로 굳힌다 — 안 적은 칸이 「0원」이 되고, 시트가 씨앗을 "
+                           "이기므로 원본 엑셀로도 못 되돌린다. 빈칸으로 올려라." % col.strip("':"))
+        if not re.search(r"'수정자':\s*''", flat.replace("''", "''")) and "'수정자':''" not in flat:
+            bad.append("⑬ `_finSeedPush`가 `수정자`를 빈칸으로 안 남긴다 — 반입 직후 전 행이 「사람이 고친 행」으로 "
+                       "보여 감사 때 「이 값 누가 정했나」에 답할 수 없다.")
+        if "'수정일시':''" not in flat:
+            bad.append("⑬ `_finSeedPush`가 `수정일시`를 빈칸으로 안 남긴다 — 위와 같은 이유.")
+
     if bad:
         print("✗ check_finance 실패 %d건" % len(bad))
         for b in bad:
