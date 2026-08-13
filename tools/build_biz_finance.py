@@ -390,6 +390,63 @@ SETTLE_MAP = {
 SETTLE_NEW_CAT = {"기획전시": "전시", "기획교육": "교육", "기획공연": "공연"}
 
 
+# ══ [260813 운영자] 사업명 = **이미 저장된 공연명**으로 교체 ═══════════════════════════════
+#   지시: 「지금 이미 저장된 공연명으로 최대한 매칭시켜서 바꿔봐 사업명을」 + 운영자가 준 이름 목록.
+#   왜 여기냐: `data/biz_finance.js`는 기계산출물이라 손으로 못 고친다 — 값을 바꾸려면 이 빌더를 고친다.
+#   ⚠ **이름으로 자동 매칭하지 않는다**(SETTLE_MAP과 같은 이유) — 260813 실측에서 자동 매칭이
+#     「100층짜리 집」을 「미세스 다웃파이어」에 붙였다. 사람이 읽고 고칠 수 있는 사업NO 대응표로만 간다.
+#   ⚠ 사업NO는 **안 바뀐다** — 이름이 바뀌어도 `prev_ids()`의 alias(그 NO가 가졌던 옛 키)가 NO를 붙잡는다.
+#     재빌드 로그의 「NO 재사용 N건 / 신규 0건」이 그 실증이다.
+NAME_MAP = {
+    2026: {
+        "2026-공연-01": "2026 신년음악회",
+        "2026-공연-02": "2026 실내악 페스티벌",
+        #   ⚠ 괄호를 안 쓴다 — 화면(`_finNamePair`)이 괄호 안을 공연명으로 읽어 「김영욱, 춘자씨」만 떴다.
+        #     운영자 표기 「김영욱, 춘자씨 > 2026 공모사업」의 화살표 오른쪽이 사업명이다.
+        "2026-공연-03": "2026 공모사업",
+        "2026-공연-06": "연극 <노인의 꿈>",
+        "2026-공연-07": "2026 헬로!오페라",
+        "2026-공연-08": "조재혁 피아노 리사이틀",
+        "2026-공연-09": "국립현대무용단 <트리플 빌>",
+        # ⚠ 「다비드 바뱅 & 아드리앙 몽도 <피아노 피아노>」는 씨앗에 **두 줄**이 걸린다
+        #   (`2026-공연-10 피아노&피아노` · `2026-공연-11 클래식4(피아노&피아노)`) — 둘 다 10월·예술성.
+        #   운영자 목록엔 한 줄뿐이라 **`클래식4` 묶음을 단 공연-11**을 택했다(다른 클래식1~3이 전부
+        #   실제 공연 한 편씩을 달고 있어 그 계열이 맞다). 공연-10은 이름을 안 건드리고 남긴다
+        #   = 중복인지 별개 공연인지는 원본을 아는 사람이 정할 일이라, 추측으로 지우지 않는다.
+        "2026-공연-11": "다비드 바뱅 & 아드리앙 몽도 <피아노 피아노>",
+    },
+}
+
+
+def apply_names(rows, year, warn):
+    """사업명을 운영자 확정 이름으로 바꾼다. 반환 = 바뀐 건수."""
+    table = NAME_MAP.get(year) or {}
+    if not table:
+        return 0
+    by_no = {r.get("no"): r for r in rows if r.get("no")}
+    n = 0
+    for no, nm in sorted(table.items()):
+        r = by_no.get(no)
+        if r is None:
+            warn.append("사업명 대응표의 `%s`가 %d년 씨앗에 없다 — 표를 고쳐라(사업이 지워졌거나 NO가 바뀌었다)" % (no, year))
+            continue
+        if r["name"] == nm:
+            continue
+        # ⚠ 이름을 바꾸기 **전에** 원본의 묶음 이름(괄호 앞 「클래식3」·「연극2」…)을 `tag`로 남긴다.
+        #   화면 비고 열이 그걸 쓰는데, 새 이름엔 괄호가 없어(`연극 <노인의 꿈>`) 그냥 바꾸면 비고가
+        #   회계구분(예술성)으로 주저앉는다 = 운영자가 「비고에 클래식2, 아동극1」이라고 정한 축이 사라진다.
+        #   ⚠ 원본에 괄호가 **없던** 행은 남기지 않는다 — 사업명을 통째로 비고에 복사하게 되고,
+        #     그건 「묶음 이름」이 아니다(첫 판에서 공연-01 비고가 「신년음악회」가 됐다). 그 행은 종전대로 회계구분이 선다.
+        m = re.match(r"^([^(（]*)[(（][^)）]*[)）]\s*$", str(r["name"]).strip())
+        tg = (m.group(1).strip() if m else "")
+        if tg:
+            r["tag"] = tg
+        print("[사업비] %d년 사업명 %s %-28s → %-34s (비고 %s)" % (year, no, str(r["name"])[:28], nm, tg))
+        r["name"] = nm
+        n += 1
+    return n
+
+
 def pull_settle(cells, year, warn):
     """`매출` 시트 → [(구분, 제목, 금액)]. 합계·주석 줄은 건너뛴다."""
     out = []
@@ -491,6 +548,13 @@ def js_str(s):
     return json.dumps(s, ensure_ascii=False)
 
 
+def built_at():
+    """씨앗 생성 시각(KST · 분까지). 앱의 `_finStamp()`와 **같은 문자열 꼴**이라 그대로 비교·정렬된다."""
+    import datetime
+    kst = datetime.timezone(datetime.timedelta(hours=9))
+    return datetime.datetime.now(tz=kst).strftime("%Y-%m-%d %H:%M")
+
+
 def emit(years, srcs, warn):
     lines = [
         "// [기계산출물 — 손편집 금지] tools/build_biz_finance.py가 「<연도>년 예술사업 대시보드.xlsx」(운영자 업로드)에서 생성.",
@@ -502,20 +566,25 @@ def emit(years, srcs, warn):
         "// 필드: no 사업NO(고유 인덱스) · cat 분야 · acct 회계구분(거르기 축) · name 사업명 · key 조인키(_uName)",
         "//       mon 진행월 · cnt 횟수 · bud 예산 · vou 전표실적(a) · fee 판매수수료 · rev 정산서매출(b) · paid 유료 · inv 초대",
         "//       blank 원천이 **빈칸이던** 칸 이름(`|` 구분) — 파생값이 아니라 원천 사실이라 담는다.",
+        "//       tag 원본 사업명의 묶음 이름(「클래식3」·「연극2」…) — 사업명을 운영자 확정 공연명으로 바꿔도",
+        "//         화면 **비고** 열이 그걸 계속 쓸 수 있게 남긴다(이름 교체가 있던 행에만 있다).",
         "//         이게 없으면 「아직 안 적었다(0)」와 「0원이 맞다」가 화면에서 같아진다. 실측 260812 = 0인 99칸 중",
         "//         진짜 미입력 72 · 담당자가 적은 0 17 · 원천에 열 없음 9 · 못 읽음 1. 분야에 열 자체가 없는 칸은",
         "//         「해당 없음」이라 여기 안 적는다(교육 inv). 화면 판정 = index.html `_finBlank`.",
-        "var BIZ_FIN={ver:1,unit:'원',years:{",
+        "// built = 이 씨앗을 만든 시각(KST). 화면 「(YYYY. M. D. 기준)」의 **폴백**이다 —",
+        "//   시트에 `수정일시`가 있는 행이 하나라도 있으면 그쪽(담당자가 실제로 건드린 시각)이 이긴다(`_finAsOf`).",
+        "//   ⚠ 오늘 날짜를 화면이 스스로 찍으면 안 된다 — 데이터가 반년째 그대로여도 늘 「오늘 기준」이라 거짓이 된다.",
+        "var BIZ_FIN={ver:1,unit:'원',built:%s,years:{" % js_str(built_at()),
     ]
     ykeys = sorted(years.keys())
     for yi, y in enumerate(ykeys):
         lines.append(" %d:{src:%s,rows:[" % (y, js_str(srcs[y])))
         for r in years[y]:
             lines.append(
-                "  {no:%s,cat:%s,acct:%s,name:%s,key:%s,mon:%s,cnt:%d,bud:%d,vou:%d,fee:%d,rev:%d,paid:%d,inv:%d,blank:%s},"
+                "  {no:%s,cat:%s,acct:%s,name:%s,key:%s,mon:%s,cnt:%d,bud:%d,vou:%d,fee:%d,rev:%d,paid:%d,inv:%d,blank:%s,tag:%s},"
                 % (js_str(r["no"]), js_str(r["cat"]), js_str(r["acct"]), js_str(r["name"]),
                    js_str(r["key"]), js_str(r["mon"]), r["cnt"], r["bud"], r["vou"], r["fee"],
-                   r["rev"], r["paid"], r["inv"], js_str(r.get("blank", ""))))
+                   r["rev"], r["paid"], r["inv"], js_str(r.get("blank", "")), js_str(r.get("tag", ""))))
         lines[-1] = lines[-1].rstrip(",")
         lines.append(" ]}%s" % ("," if yi < len(ykeys) - 1 else ""))
     lines.append("}};")
@@ -652,6 +721,13 @@ def main(argv):
                   % (year, reused, len(rows) - reused))
         if _settle_hit:
             settle_apply_rev(rows, _settle_hit, year, warn)   # NO 배정 **뒤** — 그 전엔 행에 no가 없다
+        # 사업명 교체도 NO 배정 뒤 — 대응표가 사업NO를 쓴다.
+        # ⚠ **조인키(`key`)는 다시 세지 않는다.** 키는 원본 엑셀 이름에서 나온 값이고, 그게 곧
+        #   「이 사업이 누구인가」의 지문이다(`prev_ids()`가 (연도, 키)로 NO를 붙잡는다).
+        #   바꾼 이름으로 키를 다시 세면, 다음 재빌드가 **엑셀의 옛 이름**과 못 이어 NO를 새로 매긴다
+        #   = 시트에 저장된 담당자 수정본이 통째로 고아가 된다(260813 실측: 8건 전부 새 번호를 받았다).
+        #   표시 이름과 조인키가 갈리는 건 의도된 것이다 — 키는 사람이 보는 값이 아니다.
+        apply_names(rows, year, warn)
         years[year], srcs[year] = rows, used
         print("[사업비] %d년 %d행 — %s" % (year, len(rows), " · ".join("%s=%s" % kv for kv in used.items())))
         for cat in ("공연", "전시", "교육"):

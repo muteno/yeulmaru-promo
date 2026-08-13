@@ -45,7 +45,11 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const INDEX = join(ROOT, 'index.html');
+// [260813 운영자 「db 정제」] `_YR`은 index.html 본문에서 **`data/annual_yr.js`로 분리**됐다.
+//   이 빌더는 종전대로 `var _YR={` 마커를 찾아 중괄호를 맞춰 떼어내고 제자리에 다시 쓴다 — 읽고 쓰는 **파일만** 바뀐다.
+//   ⚠ 그래서 그 마커 글자는 어느 파일 주석에도 두면 안 된다(주석을 먼저 잡는다 — 260813 실측으로 한 번 걸렸다).
+const YRFILE = join(ROOT, 'data', 'annual_yr.js');
+const INDEX = join(ROOT, 'index.html');   // `_BIZ_EDU_SOLD` 등 **다른 상수**를 읽을 때만 쓴다(_YR은 위 파일)
 const DATA = join(ROOT, '이관본', 'data');
 const ARGV = process.argv.slice(2);
 const has = f => ARGV.includes(f);
@@ -367,7 +371,7 @@ function rewrite(src, YR, loc) {
 }
 
 // ── main ─────────────────────────────────────────────────────────────────────
-const src = readFileSync(INDEX, 'utf8');
+const src = readFileSync(YRFILE, 'utf8');
 const loc = readYR(src);
 const YR = loc.value;
 const partialYear = YEAR_ARG ? parseInt(YEAR_ARG, 10) : YR.years[YR.years.length - 1];
@@ -376,7 +380,9 @@ let changed = false, notes = [];
 if (SYNC) {
   const yi = YR.years.indexOf(partialYear);
   if (yi < 0) { console.error(`[yr] FAIL — ${partialYear}년이 _YR.years에 없다. 먼저 연도 열을 추가해라.`); process.exit(1); }
-  const got = partialFromMirror(partialYear, readEduSold(src));
+  // ⚠ `_BIZ_EDU_SOLD`는 **index.html**에 있다 — `src`는 이제 `data/annual_yr.js`라 여기서 따로 읽는다.
+  //   (260813 _YR 분리 때 이 줄이 `src`를 그대로 받아 폴백표를 못 읽을 뻔했다.)
+  const got = partialFromMirror(partialYear, readEduSold(readFileSync(INDEX, 'utf8')));
   console.log(`[yr] 교육 ${partialYear} 잠정치 원천 — 프로그램 시트 예술교육 ${got.교육._srcs.length}건:`);
   got.교육._srcs.forEach(s => console.log('  · ' + s));
   if (!got.교육._srcs.length) console.log('  · (없음 — 프로그램 시트에 그 해 종료 예술교육이 0건)');
@@ -429,9 +435,9 @@ if (bad.length) {
 }
 
 if (changed) {
-  writeFileSync(INDEX, rewrite(src, YR, loc));
+  writeFileSync(YRFILE, rewrite(src, YR, loc));
   const tot = YR.total.find(r => r.key === '인원');
-  console.log(`[yr] 기록 — index.html _YR 갱신 · 누계 ${tot.sum.toLocaleString()} · 누적(grand) ${YR.grand.toLocaleString()}`);
+  console.log(`[yr] 기록 — data/annual_yr.js 갱신 · 누계 ${tot.sum.toLocaleString()} · 누적(grand) ${YR.grand.toLocaleString()}`);
   console.log('  ⚠ 미러도 같이: node tools/miso/build_single_json.mjs');
 } else {
   const tot = YR.total.find(r => r.key === '인원');

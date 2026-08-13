@@ -2690,6 +2690,18 @@ table.promo-board-table thead th:last-child{border-top-right-radius:11px}
    상단 패딩만 다른 `#app.biz-fit`(9px)도 같은 문법으로 따라간다. 절대배치는 유지 = 제목 흐름·줄 높이·이젤 기하 무접촉(260804 2차 규약). */
 .ry-hd-tools{position:absolute;right:14px;top:12px;bottom:2px;align-items:center}
 #app.biz-fit .ry-hd-tools{top:9px}
+/* [260813-2 운영자 「사업 결과라는 말하고 **광학 잉크 단위로 수평**이게 픽셀 측정」] 카드 제목 우측 기준일 라벨.
+   새 형태가 아니라 **기존 둘의 합성**이다 — 자리 = `.ry-hd-tools`(위 규칙 그대로 · 절대배치) ·
+   활자 = `.bizm-card .ct .sub`와 **같은 값**(11px/600/--dim). 새 색·새 토큰·새 raw hex 0.
+   `display:flex`가 여기 필요한 이유 = `.ry-hd-tools`는 `align-items:center`만 갖고 display를 안 정한다
+   (버튼 묶음 쪽은 각자 inline-flex를 들고 왔다). 그 한 칸만 채우고 나머지 기하는 위 규칙 것을 그대로 쓴다.
+   ⚠ 광학 보정 = 4배 DPR 잉크 실측(칠해진 화소만 스캔 · 260804 2차와 같은 자 · `tools/scratch/ink_asof.mjs`):
+     보정 전 = 제목 잉크 21.00~33.25 중심 27.125 / 라벨 잉크 22.50~33.25 중심 27.875 → **Δ +0.75px**(라벨이 아래).
+   고침 = `padding-bottom:1.5px`. 이 칸은 flex **컨테이너**라 안쪽 글자가 익명 플렉스 항목이고,
+   `align-items:center`는 **콘텐츠 상자** 기준으로 가운데를 잡는다 → 아래 패딩 1.5px = 글자가 정확히 0.75px 올라간다.
+   transform 대신 패딩인 이유 = 합성 레이어를 안 만들고 순수 배치로 끝나 DPR이 바뀌어도 같은 규칙으로 따라간다.
+   ⚠ 매직 넘버가 아니다 — 1.5 = 실측 Δ 0.75 × 2. 활자(11px/600)나 제목(13px/700)을 건드리면 **다시 재고 갱신**하라. */
+.ry-hd-asof{display:flex;padding-bottom:1.5px;font-size:11px;font-weight:600;color:var(--dim);letter-spacing:-.01em;white-space:nowrap;font-variant-numeric:tabular-nums}
 /* 도구 묶음 구분선 — 세로 1px(값 = KPI 스트립 칸 구분선 `.bizm-strip .cell` border-left와 같은 --border) */
 .ry-hd-div{width:1px;height:12px;background:var(--border);flex:0 0 auto}
 /* [260804 3차 운영자 「구분선 넣어서 판매중 이것도 글자 자체가 on off 토글일 수 있게」] .sw 스위치 pill 제거 = 글자가 곧 스위치.
@@ -3076,6 +3088,7 @@ html::-webkit-scrollbar-thumb{background:rgba(0,0,0,.15)}
 <script src="data/edu_rooms.js"></script>
 <script src="data/perf_access_stats.js"></script><!-- [260731] 공연별 페이지 접속통계(드릴 2면) — 기계산출물: tools/build_access_stats.mjs가 data/access_stats/*.csv에서 생성 -->
 <script src="data/exhib_daily_2026.js"></script><!-- [260805] 기획전시 일일실적 거울(3면 기획 전시 누적범위 보충) — 기계산출물: tools/build_exhib_daily.py가 운영자 업로드 「2026 기획전시 일일실적내역.xlsx」에서 생성 -->
+<script src="data/annual_yr.js"></script><!-- [260813] 연간 실적(_YR) — 기계산출물: tools/build_annual_yr.mjs. index.html 본문에 박혀 있던 상수를 데이터 파일로 분리 -->
 <script src="data/biz_finance.js"></script><!-- [260812] 사업비 씨앗(전표실적·판매수수료·정산서매출) — 기계산출물: tools/build_biz_finance.py가 운영자 업로드 「<연도>년 예술사업 대시보드.xlsx」에서 생성. 정본은 시트 「운영_사업비」(같은 사업NO가 시트에 있으면 시트가 이긴다 — index.html _finRows) -->
 
 <script>
@@ -7783,7 +7796,9 @@ function _bizOvCatPick(rows){
   if(_bizOvCat&&cs.indexOf(_bizOvCat)>=0)return _bizOvCat;
   return cs.indexOf('공연')>=0?'공연':cs[0];
 }
-function _bizOvSetCat(c){ _bizOvCat=String(c||'')||null; try{_bizInlineRender();}catch(_e){} }
+// ⚠ 분야별 표는 260813에 **우 레일로 옮겨갔다** — 좌 열만 다시 그리면 버튼이 안 먹는 것처럼 보인다
+//   (실측: 눌러도 표가 그대로였다). 연도 칩(`_bizOvSetYear`)은 처음부터 두 열을 같이 불렀는데 이 줄만 빠져 있었다.
+function _bizOvSetCat(c){ _bizOvCat=String(c||'')||null; try{_bizInlineRender();}catch(_e){} try{_railYrmRender();}catch(_e){} }
 // 사업NO 표기 — [260813 운영자] 「사업no 디테일한 뒤에 실제 표기는 **공연-01만** 나오면 될듯」
 //   연도는 이미 면 전체의 축(머리줄 연도 칩)이라 행마다 다시 적을 이유가 없다. **값은 안 건드린다**(표기만 줄인다).
 function _finNoShort(no){ return String(no||'').replace(/^20\d\d-/,''); }
@@ -7792,11 +7807,18 @@ function _finNoShort(no){ return String(no||'').replace(/^20\d\d-/,''); }
 //        「사업명은 지금 등록된 기존에 등록된 공연이랑 싱크를 맞춰서 표기해줘」
 //   ⚠ 가르는 정규식은 `_finAliases`가 쓰는 것과 **같은 한 벌**이다 — 두 곳이 갈리면 표에 뜨는 이름과
 //     공연↔사업비 조인이 서로 다른 글자를 보게 된다.
-var _FIN_PAREN=/^([^(（]*)[(（]([^)）]*)[)）]\s*$/;
+//   [260813-2] **꺾쇠 · 꼬리말까지** 같은 규칙으로 편다 — 전시가 통째로 안 갈리고 있었다(실측:
+//     「어린이 미술전 <냠냠>」이 한 칸에 그대로 · 비고 「—」). 전시 원본은 공연과 달리 작품명을 `<>`에 넣고,
+//     뒤에 꼬리말이 붙기도 한다(「어린이 미술전 <파르르 파르르>/연계 워크숍」).
+//     구판 정규식은 ⓐ `()`만 보고 ⓑ 닫는 괄호가 **문자열 끝**이어야 해서 둘 다 놓쳤다.
+//   꼬리말은 **작품 쪽**에 붙인다(그 사업의 일부지 묶음 이름이 아니다). 붙일 때 `/`·`·`·`,`로 시작하면 사이 공백 없이.
+var _FIN_PAREN=/^([^(（<〈]*?)\s*[(（<〈]([^)）>〉]*)[)）>〉]\s*(.*)$/;
 function _finNamePair(name){
   var t=String(name||'').trim(), m=t.match(_FIN_PAREN);
   if(!m)return {show:t,tag:''};
-  return {show:(m[2]||'').trim()||t, tag:(m[1]||'').trim()};
+  var tag=(m[1]||'').trim(), inner=(m[2]||'').trim(), tail=(m[3]||'').trim();
+  if(!tag||!inner)return {show:t,tag:''};          // 괄호가 맨 앞이거나 속이 빈 꼴 = 가를 게 없다
+  return {show:inner+(tail?(/^[\/·,]/.test(tail)?tail:' '+tail):''), tag:tag};
 }
 // 표에 적을 이름 = **운영대장에 등록된 공연명이 있으면 그것**(운영자 「기존에 등록된 공연이랑 싱크」).
 //   없으면 사업명 괄호 안으로 물러난다. 대장이 아직 안 실렸으면(`ready:false`) 조용히 괄호 안 —
@@ -7804,6 +7826,25 @@ function _finNamePair(name){
 function _finShowName(r,lm){
   try{ var ns=(lm&&lm.ready&&lm.byNo[r.no])||[]; if(ns.length)return ns.join(' / '); }catch(_e){}
   return _finNamePair(r.name).show;
+}
+// ── 기준일 — [260813-2 운영자] 「지금 **오늘 기준**이잖아? **데이터를 마지막으로 건드린 시점**을 기준으로 · (2026. 8. 13. 기준)」 ──
+//   ⚠ `new Date()`로 오늘을 찍으면 안 된다 — 데이터가 반년째 그대로여도 화면은 늘 「오늘 기준」이라 **거짓말**이 된다.
+//     운영자가 지적한 결함이 정확히 이것이라, 게이트(`check_finance` ⑭)가 오늘 찍기를 하드로 막는다.
+//   원천 순서 ① 시트 `수정일시`(담당자가 실제로 저장한 시각 · 정본) 중 가장 늦은 것
+//            ② 없으면 씨앗 `BIZ_FIN.built`(빌더가 찍는 씨앗 생성 시각 · `tools/build_biz_finance.py`)
+//            ③ 둘 다 없으면 **라벨을 아예 안 그린다** — 모르는 날짜를 지어내느니 비워 둔다.
+//   두 원천 모두 `_finStamp()`와 같은 'YYYY-MM-DD HH:MM' 꼴이라 문자열 비교로 그대로 정렬된다.
+//   ⚠ `_finSeedPush`는 반입 행의 `수정일시`를 **일부러 비워 둔다**(260812 9차 ⓒ) — 그래서 ①은
+//     「사람이 실제로 고친 적이 있는가」만 답하고, 반입만 한 상태에서는 ②로 내려간다. 그게 의도다.
+function _finAsOf(rows){
+  var best='';
+  (rows||[]).forEach(function(r){ var a=String((r&&r.at)||'').trim(); if(a&&a>best)best=a; });
+  if(!best){ try{ best=String(BIZ_FIN.built||''); }catch(_e){} }
+  return best;
+}
+function _finAsOfLab(rows){
+  var m=String(_finAsOf(rows)||'').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m?('('+m[1]+'. '+(+m[2])+'. '+(+m[3])+'. 기준)'):'';
 }
 // 분야별 합 — 파생값은 여기서도 저장하지 않고 매번 센다(`_finCalc`와 같은 식).
 function _bizOvSum(rows){
@@ -7829,7 +7870,7 @@ function _bizOvYearChips(cur){
 // 좌 열 = 사업 개요 본면(KPI 5칸 + 분야별 표 + 사업별 표)
 function _bizOvRender(el){
   _finWarm();
-  var year=_bizOvYearPick(), rows=_finRows(year), S=_bizOvSum(rows);
+  var year=_bizOvYearPick(), rows=_finRows(year), S=_bizOvSum(rows), _asof=_finAsOfLab(rows);
   // [260812 4차] 세부 메뉴를 없앴으므로 **머리줄 버튼이 유일한 입력 진입로**다(판매 실적의 [일일입력]과 같은 자리·같은 부품).
   var _inBtn=_isAcct()?_mheadBtn('openBizFinInput('+year+')','사업 지표 입력','var(--accent)','연도와 사업을 골라 예산·전표실적·판매수수료·정산서매출을 원 단위로 적어요'):'';
   // [260812 8차] 아직 안 적은 칸이 얼마나 되는지 **이 면에서** 말한다(구판은 입력 창에서만 보였다).
@@ -7837,8 +7878,6 @@ function _bizOvRender(el){
   //   「제일 잘된 해」로 읽힌다. 로그인만 하면 보이는 기본 면에 경고가 없으면 그 오독을 아무도 못 막는다.
   //   저장하지 않는다 — 그릴 때마다 센다(파생값 미저장 계약과 같은 축).
   var _blk=rows.filter(function(r){ return _finBlank(r).length; }).length;
-  var _blkCost=rows.filter(function(r){ var b=_finBlank(r); return b.indexOf('vou')>=0||b.indexOf('fee')>=0; }).length;   // 수익률 **분모**가 빠진 건수
-  var _blkRev=rows.filter(function(r){ return _finBlank(r).indexOf('rev')>=0; }).length;                                   // 분자가 빠진 건수
   // [260813] 부제에서 「단위 원」을 뺀다 — 자가 두 층(KPI 억 · 표 백만원)이 된 뒤로 **면 전체를 한 자로 말하면 거짓**이 된다.
   //   단위는 각 칸이 이미 스스로 말한다(KPI `.val .u` = 억 · 표 머리 「(단위: 백만원)」).
   var head=_bizmHead(_bizOvYearChips(year)+_inBtn,'사업 개요',
@@ -7866,40 +7905,61 @@ function _bizOvRender(el){
     +_bizOvKpi('수입 (정산서 매출)',_finEok(S.rev),'억',null,'--green')
     // ⚠ 분모(전표실적·수수료)가 빠진 사업이 있으면 수익률이 **실제보다 높게** 나온다 — 그 사실을 숫자 바로 밑에 적는다.
     //   나무라지 않는다(담당자가 아직 입력 중인 정상 상태이기도 하다) → 색은 「주의」 톤 --peach-text · --danger 안 쓴다.
-    +_bizOvKpi('수익률',(S.margin==null?'—':S.margin.toFixed(1)),'%',
-        (_blkCost?'<span style="color:var(--peach-text);font-weight:600">사업비 미입력 '+_blkCost+'건 — 실제보다 높게 나와요</span>'
-                 :(_blkRev?'<span style="color:var(--peach-text);font-weight:600">매출 미입력 '+_blkRev+'건</span>':'수입 ÷ 사업비')),'--accent')
+    // [260813 운영자 「사업비 미입력 저 내용 없어도됨」] KPI 밑줄의 미입력 경고 철거 — 밑줄은 식 설명으로 되돌린다.
+    //   ⚠ 축을 잃는 건 아니다: 어느 사업이 덜 찼는지는 분야별 표의 **「미기입 N」** 표시가 줄마다 그대로 말한다.
+    +_bizOvKpi('수익률',(S.margin==null?'—':S.margin.toFixed(1)),'%','수입 ÷ 사업비','--accent')
     +'</div>';
   // ② 사업 결과 카드 — [260813 운영자] 「분야별 1번, 지금 그대로 좋음. 단 **용어를 사업 결과**」
   //   = 열·정렬·색 전부 종전 그대로, 카드 이름과 **돈 자(원 → 백만원)만** 바뀐다.
   var cats=[]; rows.forEach(function(r){ if(r.cat&&cats.indexOf(r.cat)<0)cats.push(r.cat); });
   // [260813] 좌 메인 차트 — 운영자 「좌측은 판매현황 그 메인 차트처럼 나오게 하면 됨」.
-  //   자리·부품은 판매 현황 1면(`_yrmRender`)과 같은 꼴: `.bizm-card` + `.ct` + 그 안 차트 칸 한 개.
   //   ⚠ 그리기는 **`_bizmSwap` 뒤**에 `_bizEnsurePlotly`로 부른다 — 이 자리에서 바로 그리면 칸이 아직 DOM에 없어
   //     조용히 무발화한다(260812 첫 시도가 `plotted:false`로 끝난 원인이고, #803에서 고친 것과 같은 축이다).
-  //   자가 두 층이라(KPI 억 · 표 백만원) 차트는 **백만원**으로 통일한다 — 표와 같은 자를 쓴다.
   // [260813 운영자 「여기 나오는 차트는 기존에 만들어진 차트 사용하면돼(판매 현황에 있는 원래 있던거)」]
   //   ⚠ 첫 판에서 **차트를 새로 만들었다** — 규칙 3(디자인은 기존 정본만 · 창조 금지) 위반이라 통째로 지웠다.
   //   지금은 판매 현황 1면(`_yrmRender`)의 카드 마크업을 **글자 그대로** 쓰고, 그리기도 그 정본 함수
   //   `_yrDrawChart(first, pfx, stO)`를 그대로 부른다. 새 조립 코드 0 · 칸 id만 pfx가 바꿔 준다
   //   (`_yrDrawChart` 첫 줄 = `document.getElementById((pfx||'yr')+'-chart')`).
-  h+='<div class="bizm-card"><div class="ct"><span class="ct-bul"></span>연도별 관람·수강 추이 <span class="sub">막대=실적 · 선=추세 · 점선 기둥=2026 예상 누적 (만명)</span></div><div id="bizov-chart" style="height:410px;margin:0 6px 6px;animation:fadeUp .45s ease"></div></div>';
-  h+='<div class="bizm-card"><div class="ct"><span class="ct-bul"></span>사업 결과</div><div style="overflow-x:auto">';
+  // [260813 운영자 「차트를 매출 데이터로 대체」] 모양은 판매 현황 「관람·수강 추이」 그대로, 담기는 값만 **매출**.
+  //   ⚠ 예상 점선 기둥은 부제에서 뺀다 — 그 마킹은 정본이 **인원 지표에서만** 켠다(`_fcOn`), 없는 걸 적지 않는다.
+  h+='<div class="bizm-card" style="margin-bottom:16px"><div class="ct"><span class="ct-bul"></span>연도별 매출 추이 <span class="sub">막대=정산서 매출 · 선=추세 (만원)</span></div><div id="bizov-chart" style="height:410px;margin:0 6px 6px;animation:fadeUp .45s ease"></div></div>';
+  // [260813 운영자 「사업결과는 그 아래에 **상하 마진을 충분히 둬서 보기 좋게**」] — 차트와 붙어 답답하던 자리.
+  //   [260813-2] ⓐ **차액 열 제거**(운영자 「사업 결과에 차액 안나와도 될것 같고」) — 축은 우 열 「차액 적자」 카드가 그대로 들고 있다.
+  //   ⓑ 우측에 **기준일** — 절대배치 `.ry-hd-tools`(분야별 카드 선택자와 **같은 부품·같은 자리**)라 제목 흐름·카드 높이 무접촉.
+  //      광학 수평은 `.ry-hd-asof`가 잡는다(잉크 중심 정렬 · CSS 주석에 실측치).
+  //      ⚠ 이 카드는 위 마진 지시로 `padding-top:6px`이 걸려 있다 — `.ry-hd-tools`는 `.ct` 상자 기준이라 그 값과 무관하지만,
+  //        제목 활자·`.ct` 패딩을 바꾸면 잉크 Δ를 **다시 재라**(`tools/scratch/ink_asof.mjs`).
+  h+='<div class="bizm-card" style="margin-top:4px;padding-top:6px;padding-bottom:10px"><div class="ct"><span class="ct-bul"></span>사업 결과'
+    +(_asof?'<span class="ry-hd-tools ry-hd-asof">'+escapeHtml(_asof)+'</span>':'')
+    +'</div><div style="overflow-x:auto">';
   h+='<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="color:var(--dim);font-size:12px;text-align:left">';
-  [['분야',''],['건수','건'],['예산','백만원'],['사업비','백만원'],['수입','백만원'],['차액','백만원'],['수익률','%']].forEach(function(c,i){
+  [['분야',''],['건수','건'],['예산','백만원'],['사업비','백만원'],['수입','백만원'],['수익률','%']].forEach(function(c,i){
     h+='<td style="padding:8px 12px;box-shadow:inset 0 -2px 0 var(--border);vertical-align:middle;white-space:nowrap'+(i===0?';padding-left:14px':'')+(i>=1?';text-align:right':'')+'">'+c[0]
       +(c[1]?'<div style="font-size:10.5px;font-weight:400;margin-top:2px">(단위: '+c[1]+')</div>':'')+'</td>';
   });
   h+='</tr></thead><tbody>';
+  // [260813] 분야 안에 **아직 안 적은 칸이 하나라도 있으면** 그 합계는 덜 찬 값이다 → `0` 대신 `—`.
+  //   0으로 찍으면 「사업비 0원 썼다」로 읽혀 차액이 통째로 흑자로 보인다
+  //   (실측 260813: 2026 전시가 사업비 0 · 차액 +32백만원 = 매출만 들어왔을 뿐인데 「남는 사업」으로 읽혔다).
+  //   사업별 표에서 이미 쓰는 규칙과 **같은 한 벌** — 두 표가 다른 말을 하면 안 된다.
+  //   ⚠ 판정은 「하나라도 비었나」가 **아니라** 「**전부** 비었나」다. 공연은 20건 중 14건이 미기입이어도
+  //     나머지 6건의 사업비 511백만원은 **실제로 기록된 값**이라, `—`로 가리면 있는 데이터를 숨기는 게 된다(첫 판이 그랬다).
+  //     일부만 빈 경우는 숫자를 그대로 두고 **툴팁으로** 덜 찬 값임을 알린다.
+  var _allBlank=function(list,keys){ return list.length>0 && list.every(function(r){ var b=_finBlank(r);
+    return keys.every(function(k){ return b.indexOf(k)>=0; }); }); };
+  var _anyBlank=function(list,keys){ return list.some(function(r){ var b=_finBlank(r);
+    return keys.some(function(k){ return b.indexOf(k)>=0; }); }); };
   cats.forEach(function(cat,i){
-    var g=_bizOvSum(rows.filter(function(r){return r.cat===cat;}));
-    h+='<tr style="border-bottom:1px solid var(--border);'+(i%2===1?'background:var(--past-bg);':'')+'">'
+    var _cr=rows.filter(function(r){return r.cat===cat;}), g=_bizOvSum(_cr);
+    var _nB=_allBlank(_cr,['bud']), _nC=_allBlank(_cr,['vou','fee']), _nR=_allBlank(_cr,['rev']);
+    var _part=_anyBlank(_cr,['bud','vou','fee','rev']);
+    h+='<tr style="border-bottom:1px solid var(--border);'+(i%2===1?'background:var(--past-bg);':'')+'"'
+      +(_part?' title="'+escapeHtml(cat+' — 아직 안 적은 칸이 있어 합계가 덜 찬 값이에요')+'"':'')+'>'
       +'<td style="padding:7px 12px 7px 14px;font-weight:600;color:var(--text);white-space:nowrap">'+escapeHtml(cat)+'</td>'
       +'<td style="padding:7px 12px;text-align:right;color:var(--neutral-text);font-variant-numeric:tabular-nums">'+g.n+'</td>'
       +'<td style="padding:7px 12px;text-align:right;color:var(--neutral-text);font-variant-numeric:tabular-nums">'+_finMil(g.bud)+'</td>'
       +'<td style="padding:7px 12px;text-align:right;color:var(--peach-text);font-weight:600;font-variant-numeric:tabular-nums">'+_finMil(g.cost)+'</td>'
       +'<td style="padding:7px 12px;text-align:right;color:var(--green);font-weight:600;font-variant-numeric:tabular-nums">'+_finMil(g.rev)+'</td>'
-      +'<td style="padding:7px 12px;text-align:right;font-weight:600;color:var('+(g.diff<0?'--danger':'--green')+');font-variant-numeric:tabular-nums">'+_finMil(g.diff)+'</td>'
       +'<td style="padding:7px 14px 7px 12px;text-align:right;color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums">'+_finPct(g.margin)+'</td></tr>';
   });
   h+='<tr style="border-top:2px solid var(--border2);font-weight:800">'
@@ -7907,13 +7967,41 @@ function _bizOvRender(el){
     +'<td style="padding:9px 12px;text-align:right;font-variant-numeric:tabular-nums">'+_finMil(S.bud)+'</td>'
     +'<td style="padding:9px 12px;text-align:right;color:var(--peach-text);font-variant-numeric:tabular-nums">'+_finMil(S.cost)+'</td>'
     +'<td style="padding:9px 12px;text-align:right;color:var(--green);font-variant-numeric:tabular-nums">'+_finMil(S.rev)+'</td>'
-    +'<td style="padding:9px 12px;text-align:right;color:var('+(S.diff<0?'--danger':'--green')+');font-variant-numeric:tabular-nums">'+_finMil(S.diff)+'</td>'
+    // [260813-2] 차액 열은 제거됐다(운영자 「사업 결과에 차액 안나와도 될것 같고」) — 260813 #808의 「분모가 덜 차면
+    //   차액·수익률은 `—`」 판단 중 **수익률 쪽만** 남는다(차액 칸 자체가 없으니). 축은 우 열 「차액 적자」가 그대로 든다.
     +'<td style="padding:9px 14px 9px 12px;text-align:right;color:var(--accent);font-variant-numeric:tabular-nums">'+_finPct(S.margin)+'</td></tr>';
   h+='</tbody></table></div></div>';
   // ③ 사업별 카드 — 좌 열 **마지막 흰 도형** = data-bizmfill(남는 높이 흡수 · 판매 현황 「전체 실적표」와 같은 규약)
   // 정본 꼴(판매 현황 목록 표) = 바깥 `data-bizmfill data-bizmcap` + `flex-direction:column`, **안쪽 칸이 스크롤러**.
   //   cap이 상·하한을 박스 안선에 못 박고, 넘치는 행은 안쪽에서 스크롤한다 → 흰 카드 하단선이 좌·우 같은 줄에 선다.
   //   ⚠ cap 없이 fill만 걸면 카드가 `overflow:hidden`이라 **행이 소리 없이 잘린다**(32건 중 12건만 보였다 · 운영자 지적).
+  h+='</div></div>';
+  _bizmSwap(el,h);
+  // ⚠ 여기서 그린다 — `_bizmSwap`이 끝나야 `#bizov-chart`가 DOM에 선다.
+  //   실패해도 코드를 지우지 않는다: 빈 카드 대신 **사유를 그 칸에 적는다**(`_bizChartNote`).
+  _bizEnsurePlotly(function(){
+    // 상태(`_YRM_ST`)도 판매 현황 1면과 **같은 것**을 쓴다 — 두 면이 같은 차트를 보여주므로 상태가 갈리면 안 된다.
+    try{ _bizOvYrRevRows(); _yrDrawChart(true,'bizov',_BIZOV_ST); }
+    catch(_e){ console.warn('[bizov chart]',_e); _bizChartNote('bizov-chart','연도별 추이를 그리지 못했어요 — 새로고침 해주세요'); }
+  });
+}
+// 우 열 = 같은 돈 축의 보조면(회계구분별 · 적자 사업). 「판매 실적」 레일이 이 덱에 남지 않게 여기서 통째로 갈아끼운다.
+function _bizOvRail(el){
+  // ⚠ 틀 = 판매 실적 레일(`_railYrmFrame`) 그대로 — 머리줄 + 유리박스 + `.bizm-card` + **`#rail-yrm-uha` 슬롯**.
+  //   슬롯을 빼면 상세(#srail-uha)가 갈 곳을 잃는다(레일이 그 자리를 전제로 옮겨 담는다).
+  var year=_bizOvYearPick(), rows=_finRows(year);
+  var h='<div style="position:relative">'+_bizmHead('','사업 지표',' ')+_BIZM_BOX;
+  if(!rows.length){
+    h+='<div class="bizm-card" data-bizmfill style="padding:34px 18px;text-align:center;color:var(--dim);font-size:13px;display:flex;align-items:center;justify-content:center">'+year+'년 사업비 자료가 없습니다</div>'
+      +'<div id="rail-yrm-uha"></div></div></div>';
+    el.innerHTML=h; return;
+  }
+  // [260813 운영자 「**회계 구분별 사업지표는 필요없고**」] 구 「회계구분별」 카드 철거.
+  //   축은 안 잃는다 — 회계구분은 좌 열 「분야별」 표의 **비고 열**로 옮겨 사업마다 그대로 보인다(같은 화면 안 이동).
+  // [260813 운영자 「분야별 표 이거 우측으로 보내줘」] 좌 열에 있던 「분야별」 표를 이 레일로 옮긴다.
+  //   ⚠ 표 조립은 **한 글자도 안 바꿨다** — 좌 열에 있던 것을 그대로 들고 왔다(자리만 이동).
+  //   높이 = 운영자 「흰색 박스는 항상 높이가 고정이고 내용이 많아지면 스크롤로 내려가야해」 →
+  //     `data-bizmcap`(상·하한을 유리 박스 안선에 못박음) + 안쪽 칸이 스크롤러. 카드 자체는 안 늘어난다.
   // [260813 운영자] 구 「사업별」 → **분야별**(선택자로 한 분야만) · 열 = NO › 사업명 › 사업비 › 수입 › 수익률 › 비고.
   //   지시: 「사업별을 > 분야별로 해서 (박스 안) 우측 상단에 공연 전시 예술교육 선택자 · 기본 공연 ·
   //          사업no 디테일한 뒤에 실제 표기는 공연-01만 · 분야는 이제 선택자에서 걸러지니까 없어도 됨 ·
@@ -7930,7 +8018,10 @@ function _bizOvRender(el){
           +'<button type="button" class="ry-live-tg" role="radio" aria-checked="'+(on?'true':'false')+'" onclick="_bizOvSetCat(\''+_anaEsc(c)+'\')"'
           +' title="'+escapeHtml(lab+' 사업만 보기')+'">'+escapeHtml(lab)+'</button>'; }).join('')
     +'</span>'):'';
-  h+='<div class="bizm-card" data-bizmfill data-bizmcap style="display:flex;flex-direction:column;margin-bottom:0"><div class="ct" style="flex:0 0 auto"><span class="ct-bul"></span>분야별 <span class="sub">사업NO 순 · 줄을 누르면 상세'+(_blkOv?' · 미기입 '+_blkOv+'건':'')+'</span>'+_ovSel+'</div><div style="overflow:auto;flex:1 1 auto;min-height:0">';
+  h+='<div class="bizm-card" data-bizmfill data-bizmcap style="display:flex;flex-direction:column;margin-bottom:0"><div class="ct" style="flex:0 0 auto"><span class="ct-bul"></span>분야별 <span class="sub">사업NO 순 · 줄을 누르면 상세'+(_blkOv?' · 미기입 '+_blkOv+'건':'')+'</span>'+_ovSel+'</div>'
+    // [260813 운영자 「그 아래 표와 어느정도 높이 간격을 유지해야 할 듯」] 제목·선택자 줄과 표 머리가 붙어 있던 자리.
+    //   ⚠ 카드 높이는 안 건드린다(`data-bizmcap`이 상·하한을 유리 박스 안선에 못박은 상태) — 안쪽 여백만 준다.
+    +'<div style="overflow:auto;flex:1 1 auto;min-height:0;padding-top:8px">';
   h+='<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="color:var(--dim);font-size:12px;text-align:left">';
   [['NO',''],['사업명',''],['사업비','백만원'],['수입','백만원'],['수익률','%'],['비고','']].forEach(function(c,i){
     h+='<td style="padding:8px 12px;position:sticky;top:0;z-index:1;background:var(--surface-solid);box-shadow:inset 0 -2px 0 var(--border);vertical-align:middle;white-space:nowrap'+(i===0?';padding-left:14px':'')+((i>=2&&i<=4)?';text-align:right':'')+(i===5?';padding-right:14px':'')+'">'+c[0]
@@ -7948,57 +8039,28 @@ function _bizOvRender(el){
       +'<td style="padding:7px 12px;max-width:0;width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;color:var(--text)" title="'+escapeHtml(r.name)+'">'+escapeHtml(_finShowName(r,_lm))
         // 아직 안 적은 칸이 있으면 그 줄에 적는다 — 이 줄의 사업비·수익률이 **덜 찬 값**이라는 뜻이다(0원이 아니다).
         +(_bl.length?' <span style="font-weight:600;color:var(--peach-text)">미기입 '+_bl.length+'</span>':'')+'</td>'
-      // ⚠ 아직 안 적은 칸은 **`0`이 아니라 `—`**로 적는다. 0으로 찍으면 「0원 썼다」로 읽혀서 미기입 표시를 붙인 뜻이 없어진다.
-      //   사업비는 전표실적·수수료 둘 중 하나라도 비면 합계 자체가 덜 찬 값이다.
-      +'<td style="padding:7px 12px;text-align:right;color:var(--peach-text);font-weight:600;font-variant-numeric:tabular-nums">'+(_noCost?'—':_finMil(c.cost))+'</td>'
-      +'<td style="padding:7px 12px;text-align:right;color:var(--green);font-weight:600;font-variant-numeric:tabular-nums">'+((_bl.indexOf('rev')>=0)?'—':_finMil(r.rev||0))+'</td>'
-      // 분모가 덜 찼으면 수익률도 `—`. 사업비를 「—」라 해놓고 그걸로 나눈 값을 옆에 적으면 앞뒤가 안 맞는다
-      //   (실측 260812: `2026-공연-04`가 사업비 —인데 3639.8%로 찍혔다 = 전표실적만 미입력이라 수수료로만 나눈 수였다).
-      +'<td style="padding:7px 12px;text-align:right;color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums">'+(_noCost?'—':_finPct(c.margin,true))+'</td>'
+      // [260813 운영자 「기존에 데이터가 없는 곳은 그냥 0으로 표기해」] 숫자 칸은 **0으로 적는다**.
+      //   ⚠ 「안 적음 ↔ 0원」 구분이 사라지는 건 아니다 — 사업명 옆 **「미기입 N」** 표시가 그 역할을 계속 한다.
+      //     (구판은 여기를 `—`로 뒀는데, 표가 온통 대시라 숫자 표로 안 읽혔다.)
+      +'<td style="padding:7px 12px;text-align:right;color:var(--peach-text);font-weight:600;font-variant-numeric:tabular-nums">'+_finMil(c.cost)+'</td>'
+      +'<td style="padding:7px 12px;text-align:right;color:var(--green);font-weight:600;font-variant-numeric:tabular-nums">'+_finMil(r.rev||0)+'</td>'
+      // 수익률만은 분모가 덜 차면 안 적는다 — 사업비가 0인 채로 나눈 수는 뜻이 없다(`2026-공연-04`가 3639.8%로 찍혔던 자리).
+      //   `_finPct`가 분모 0이면 스스로 `—`를 준다 = 여기서 따로 가릴 게 없다.
+      +'<td style="padding:7px 12px;text-align:right;color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums">'+_finPct(c.margin,true)+'</td>'
       // 비고 = 사업명 앞 묶음 이름(클래식2·아동극1). 그게 없는 사업만 종전대로 회계구분이 선다.
       //   ⚠ 회계구분은 **거르기 축**이라 사라지면 안 된다 — 분야 선택자 옆 회계구분 필터와 사업비 보드가 계속 그걸 쓴다.
-      +'<td style="padding:7px 14px 7px 12px;white-space:nowrap;color:var(--neutral-text)">'+escapeHtml(_finNamePair(r.name).tag||r.acct||'—')+'</td></tr>';
+      // 순서 = 운영자 확정 `tag`(#811 · 씨앗이 든다) → 이름에서 가른 묶음 이름 → 없으면 빈칸.
+      // [260813-2 운영자 「비고에 **예술성 대신해서** 사업명칭을 넣을게 … 그 다음에 **내가 부족분을 채울게**」]
+      //   ⚠ 마지막 `|| r.acct`를 뺐다 — 묶음 이름이 없으면 「예술성」·「클래스」가 도로 서던 자리인데,
+      //     그게 운영자가 빼달라고 지목한 바로 그 글자다. 없는 칸은 **비워 두는 게 맞다** —
+      //     그 빈칸이 곧 「내가 채울 부족분」이라, 다른 값으로 메우면 채울 곳이 안 보인다.
+      //   ⚠ 회계구분 축은 안 잃는다 — 상세 창·사업 지표 입력 창·사업비 보드가 그대로 들고 있고 거르기도 그쪽이 한다.
+      +'<td style="padding:7px 14px 7px 12px;white-space:nowrap;color:var(--neutral-text)">'+escapeHtml(r.tag||_finNamePair(r.name).tag||'—')+'</td></tr>';
   });
   h+='</tbody></table></div></div>';
-  h+='</div></div>';
-  _bizmSwap(el,h);
-  // ⚠ 여기서 그린다 — `_bizmSwap`이 끝나야 `#bizov-chart`가 DOM에 선다.
-  //   실패해도 코드를 지우지 않는다: 빈 카드 대신 **사유를 그 칸에 적는다**(`_bizChartNote`).
-  _bizEnsurePlotly(function(){
-    // 상태(`_YRM_ST`)도 판매 현황 1면과 **같은 것**을 쓴다 — 두 면이 같은 차트를 보여주므로 상태가 갈리면 안 된다.
-    try{ _yrDrawChart(true,'bizov',_YRM_ST); }
-    catch(_e){ console.warn('[bizov chart]',_e); _bizChartNote('bizov-chart','연도별 추이를 그리지 못했어요 — 새로고침 해주세요'); }
-  });
-}
-// 우 열 = 같은 돈 축의 보조면(회계구분별 · 적자 사업). 「판매 실적」 레일이 이 덱에 남지 않게 여기서 통째로 갈아끼운다.
-function _bizOvRail(el){
-  // ⚠ 틀 = 판매 실적 레일(`_railYrmFrame`) 그대로 — 머리줄 + 유리박스 + `.bizm-card` + **`#rail-yrm-uha` 슬롯**.
-  //   슬롯을 빼면 상세(#srail-uha)가 갈 곳을 잃는다(레일이 그 자리를 전제로 옮겨 담는다).
-  var year=_bizOvYearPick(), rows=_finRows(year);
-  var h='<div style="position:relative">'+_bizmHead('','사업 지표',' ')+_BIZM_BOX;
-  if(!rows.length){
-    h+='<div class="bizm-card" data-bizmfill style="padding:34px 18px;text-align:center;color:var(--dim);font-size:13px;display:flex;align-items:center;justify-content:center">'+year+'년 사업비 자료가 없습니다</div>'
-      +'<div id="rail-yrm-uha"></div></div></div>';
-    el.innerHTML=h; return;
-  }
-  // [260813 운영자 「**회계 구분별 사업지표는 필요없고**」] 구 「회계구분별」 카드 철거.
-  //   축은 안 잃는다 — 회계구분은 좌 열 「분야별」 표의 **비고 열**로 옮겨 사업마다 그대로 보인다(같은 화면 안 이동).
-  // 차액 적자 = 돈 축 화면에서 가장 먼저 눈에 띄어야 할 줄 · 레일 **마지막 흰 도형** = data-bizmfill
-  //   ⚠ 자 = 좌 열 표와 같은 **백만원**(260813 운영자 지시 축) — 한 화면에 만원·백만원이 섞여 있던 걸 하나로 맞춘다.
-  var loss=rows.filter(function(r){return _finCalc(r).diff<0;}).sort(function(a,b){return _finCalc(a).diff-_finCalc(b).diff;});
-  h+='<div class="bizm-card" data-bizmfill data-bizmcap style="display:flex;flex-direction:column;margin-bottom:0"><div class="ct" style="flex:0 0 auto"><span class="ct-bul"></span>차액 적자 <span class="sub">'+loss.length+'건 · 수입 − 전표실적 (백만원)</span></div><div style="overflow:auto;flex:1 1 auto;min-height:0">';
-  if(!loss.length)h+='<div style="padding:14px;color:var(--dim);font-size:12.5px">없음</div>';
-  else{
-    h+='<table style="width:100%;border-collapse:collapse;font-size:13px"><tbody>';
-    loss.forEach(function(r,i){
-      var c=_finCalc(r);
-      h+='<tr onclick="_finModal(\''+_anaEsc(r.no)+'\','+year+')" style="cursor:pointer;border-bottom:1px solid var(--border);'+(i%2===1?'background:var(--past-bg);':'')+'" title="'+escapeHtml(r.name+' — 눌러서 사업비 상세')+'">'
-        +'<td style="padding:7px 12px 7px 14px;max-width:0;width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;color:var(--text)">'+escapeHtml(r.name)+'</td>'
-        +'<td style="padding:7px 14px 7px 12px;text-align:right;white-space:nowrap;color:var(--danger);font-weight:700;font-variant-numeric:tabular-nums">'+_finMil(c.diff)+'</td></tr>';
-    });
-    h+='</tbody></table>';
-  }
-  h+='</div></div>';
+  // [260813 운영자 「분야별이 거의 묻히는데 이거를 **차액적자를 아예 날리고** 저기에 붙인다는거임」]
+  //   구 「차액 적자」 카드 철거 — 그 자리를 분야별 표가 통째로 쓴다.
+  //   ⚠ 축은 안 잃는다: 적자 여부는 분야별 표의 **수익률**과 좌 열 「사업 결과」의 **차액** 열이 그대로 보여준다.
   h+='<div id="rail-yrm-uha"></div>';   // 상세 슬롯 = 판매 실적 레일과 같은 자리
   h+='</div></div>';
   el.innerHTML=h;
@@ -8509,7 +8571,7 @@ function _finFromSheet(r){
 }
 function _finFromSeed(s,year){
   return {no:s.no,y:year,cat:s.cat,acct:s.acct,name:s.name,lnk:'',mon:s.mon,cnt:s.cnt,bud:s.bud,vou:s.vou,
-    fee:s.fee,rev:s.rev,paid:s.paid,inv:s.inv,memo:'',by:'',at:'',blank:String(s.blank||''),src:'seed'};
+    fee:s.fee,rev:s.rev,paid:s.paid,inv:s.inv,memo:'',by:'',at:'',blank:String(s.blank||''),tag:String(s.tag||''),src:'seed'};
 }
 // 한 해의 사업비 = 시트 행 ∪ (시트에 없는 NO의 씨앗). 시트가 이긴다.
 function _finRows(year){
@@ -8530,7 +8592,11 @@ function _finRows(year){
 //   정규화는 `_uName` 하나 — 판매 축(`_bizSalesIdx`)·목록(`_bizListBuild`)이 쓰는 그 함수라 축이 갈리지 않는다.
 function _finAliases(r){
   if(r.lnk)return r.lnk.split(/[|,]/).map(_uName).filter(Boolean);
-  var out=[_uName(r.name)],m=String(r.name||'').match(/^([^(（]*)[(（]([^)）]*)[)）]\s*$/);
+  // [260813-2] 정규식을 **`_FIN_PAREN` 한 벌로 합쳤다.** 260812-9 주석이 「가르는 정규식은 `_finAliases`가
+  //   쓰는 것과 같은 한 벌」이라 적어 뒀지만 실제로는 여기에 **복제본**이 따로 살아 있었다 — 그래서 표기 쪽만
+  //   꺾쇠(`<>`)를 배우고 조인 쪽은 못 배워 「어린이 미술전 <냠냠>」의 후보에 「냠냠」이 안 들어갔다.
+  //   합친 결과 전시·교육도 괄호 앞·안이 후보로 선다(공연은 종전과 완전히 동일 — `()` 처리가 안 바뀌었다).
+  var out=[_uName(r.name)],m=String(r.name||'').match(_FIN_PAREN);
   if(m){ if(m[1].trim())out.push(_uName(m[1])); if(m[2].trim())out.push(_uName(m[2])); }
   return out.filter(Boolean);
 }
@@ -14725,57 +14791,35 @@ function _bizRender(){
 //   (Plotly는 CSS var()를 못 읽어 getComputedStyle로 런타임 해석 → 소스 raw hex 0, 게이트 총량 동결 유지).
 //   필터 = 연도별(select) + 공연/전시/교육 별(칩) · 애니메이션 = KPI 카운트업·막대 성장·표 페이드업.
 // ============================================================
-var _YR={
-  years:[2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024,2025,2026],
-  // [260804 운영자 「2026 지금 되어있는 것까지 배선」] 2026 상반기 잠정치(완결 취합본이 나오면 그 값으로 교체):
-  //   공연 = **운영_공연대장** 2026년 1~6월 확보분 · `발권유료 + 발권초대`(= 무료 포함 = 다른 해와 같은 자 · 260807 개정).
-  //     구판은 회차 원장(운영_세부운영관리대장(정리))의 발권유료만 써서 9,568이었다 — 회차 원장의 2026은 운영자가 나중에 채우는 자리라
-  //     늘 늦고(실측 21행), 초대가 빠져 자도 달랐다. 공연대장은 공연이 끝나는 대로 채워진다(실측 25건 · 23,601).
-  //     갱신 = `node tools/build_annual_yr.mjs --sync-partial --from-live`(과거 연도 재현 수를 같이 찍는다).
-  //     내역 = 신년음악회 1회 + 미세스 다웃파이어 4회 + 인터파크 최종정산 편입 16회차(브런치Ⅰ·실내악4·100층집6·편한음악·피터와늑대·브런치Ⅱ·헬로오페라2) · 8 Seasons(5/7)·노인의 꿈(6/13) 자료 미수집.
-  //   전시 = 전시마스터 2026년 5건 누적 총인원(진행중 2건 포함) · 장도 = 집계 전 null(빈칸).
-  //   교육 = **160명 · 1회 · 1일**([260807] 운영자 「그 칸에 160 넣고 배선」 — 구판은 0이 박혀 있었다).
-  //     원천 = 프로그램 시트 예술교육 1건 「2026 화요살롱 - 이낙준(6월)」(시작일=종료일 2026-06-30 소극장 단회) ×
-  //       수강생 160 = 아래 `_BIZ_EDU_SOLD` 운영자 확정값(운영대장에 2026 교육 행이 **0줄**이라 실값 축이 아직 비어 있다).
-  //     ⚠ 값이 **두 벌이 되지 않게** 여기 160을 손으로 적지 마라 — 폴백표가 SSOT고, 이 칸은 빌더가 거기서 읽어 찍는다.
-  //     구 「교육·장도 = 집계 전 0/null」이 이 칸이 0으로 굳은 자리였다: 0은 산술 검산을 그대로 통과해(0도 정합)
-  //       게이트가 PASS를 찍었고, 화면엔 「2026 교육 0명」이 실적처럼 나갔다(장도는 null이라 빈칸이었다 = 티가 났다).
-  // [260804 2차 운영자 「2026년 누적본도 나오게 · 누계에 2026 포함 · 2026까지」] 구 별도 'q'(「26 잠정」 고정 열) 폐지 → 그 값을 **years 마지막 칸**으로 옮겨 정식 연도 열로 편입.
-  //   같은 값이 두 자리(연도창 밖 잠정 칸)에 있으면 누계가 어느 쪽을 먹는지 화면에서 안 보였다 — 1차 배선이 누계·grand를 ~2025로 남긴 게 그 자리.
-  //   누계(sum)·grand = 2026 포함 재계산: 공연 970,091+9,568=979,657→979,659(횟수 2,107+21 · 일수 1,623+16) · 전시 500,801+8,049=508,850 · 계 1,505,706+17,617=1,523,323 · grand 3,690,031+17,617=3,707,648(장도 2026 미집계 = 가산 0).
-  //   ⚠ [260807] 2026 열의 **기준 차이는 해소**됐다(공연 = 유료+초대 = 무료 포함). 남은 잠정 사유는 「상반기까지」 하나뿐이라 각주도 그렇게 고쳤다.
-  cats:{
-    '공연':{tok:'--accent',rows:[
-      {sub:'공연횟수',key:'횟수',v:[85,169,162,180,151,131,124,154,61,141,184,200,187,178,54],sum:2161},
-      {sub:'공연일수',key:'일수',v:[77,143,145,154,127,111,99,116,51,99,128,128,121,124,35],sum:1658},
-      {sub:'관람인원',key:'인원',v:[57418,101534,73021,74875,77070,67004,66864,78506,17769,38543,74322,81048,78662,83455,23601],sum:993692},
-      {sub:'문화나눔',key:'나눔',v:[1102,1347,697,592,513,624,430,612,0,0,2700,129,2078,1258,0],sum:12082}
-    ]},
-    '전시':{tok:'--peach-text',rows:[
-      {sub:'전시건수',key:'횟수',v:[9,9,10,10,13,12,11,16,16,23,22,14,15,18,5],sum:203},
-      {sub:'전시일수',key:'일수',v:[149,251,260,246,279,261,269,273,301,335,299,241,235,258,203],sum:3860},
-      {sub:'관람인원',key:'인원',v:[26090,35537,33122,31484,28432,23629,19477,76734,35287,46679,59582,32455,25508,26785,8049],sum:508850},
-      {sub:'문화나눔',key:'나눔',v:[430,4381,1151,652,839,961,1062,856,264,0,0,125,6206,27569,0],sum:44496}
-    ]},
-    '교육':{tok:'--green',rows:[
-      {sub:'교육횟수',key:'횟수',v:[0,63,172,138,165,213,252,247,64,259,266,258,194,231,1],sum:2523},
-      {sub:'교육일수',key:'일수',v:[0,44,67,53,81,87,114,121,34,152,133,105,99,133,1],sum:1224},
-      {sub:'수강생',key:'인원',v:[0,286,459,380,930,2216,2660,3019,403,1811,11019,6516,4198,917,160],sum:34974},
-      {sub:'문화나눔',key:'나눔',v:[0,0,0,0,0,0,0,0,0,0,9060,4149,2574,0,0],sum:15783}
-    ]}
-  },
-  total:[
-    {sub:'횟수',key:'횟수',v:[94,241,344,328,329,356,387,417,141,423,472,472,396,427,60],sum:4887},
-    {sub:'일수',key:'일수',v:[226,438,472,453,487,459,482,510,386,586,560,474,455,515,239],sum:6742},
-    {sub:'인원',key:'인원',v:[83508,137357,106602,106739,106432,92849,89001,158259,53459,87033,144923,120019,108368,111157,31810],sum:1537516},
-    {sub:'나눔인원',key:'나눔',v:[1532,5728,1848,1244,1352,1585,1492,1468,264,0,11760,4403,10858,28894,0],sum:72428}
-  ],
-  jangdo:{v:[null,null,null,null,null,null,null,161690,288200,334913,405124,374039,336036,284323,null],sum:2184325},
-  grand:3721841
-};
+// [260813] 연간 실적 상수(_YR) = **`data/annual_yr.js`로 이관**(기계산출물 · `tools/build_annual_yr.mjs`가 읽고 쓴다).
+//   여기 다시 적지 마라 — 두 벌이 되는 순간 갈린다. 값을 바꾸려면 그 빌더를 돌려라.
+
 var _yrState={cats:{'공연':true,'전시':true,'교육':true},metric:'인원',year:'all',esc:null,opened:false};
 var _YR_METRICS=[{k:'인원',l:'관람·수강'},{k:'횟수',l:'횟수·건수'},{k:'일수',l:'일수'},{k:'나눔',l:'문화나눔'}];
 var _YR_CATLIST=['공연','전시','교육'];
+// [260813 운영자 「관람 수강 추이 차트의 **모양만** 따라하라는 것이지 그대로 가져오라는 게 아니라 거기에 매출을 채우라는 거임.
+//   안채워지는 부분은 0으로 하면 되는거고」]
+//   → 새 차트를 만들지 않는다. 정본 `_yrDrawChart`가 `st.metric`으로 지표를 고르므로, **매출 지표 한 줄을 얹는다**.
+//     그리기 코드·색·라벨·콜아웃 규약은 한 글자도 안 바뀐다 = 모양이 같을 수밖에 없다.
+//   ⚠ `_YR` 파일(기계산출물)에는 안 적는다 — 사업비 씨앗에서 **그릴 때마다 센다**(파생값 미저장 계약과 같은 축).
+//   ⚠ `_YR.years`에 맞춰 자리를 채우고, 사업비 자료가 없는 해는 **0**(운영자 지시).
+function _bizOvYrRevRows(){
+  try{
+    if(typeof _YR==='undefined'||!_YR.cats||typeof BIZ_FIN==='undefined')return false;
+    _YR_CATLIST.forEach(function(cat){
+      var c=_YR.cats[cat]; if(!c||!c.rows)return;
+      var v=_YR.years.map(function(y){
+        var rs=(BIZ_FIN.years&&BIZ_FIN.years[y]&&BIZ_FIN.years[y].rows)||[];
+        var t=0; rs.forEach(function(r){ if(r.cat===cat)t+=Number(r.rev)||0; });
+        return t;   // 자료 없는 해 = 0
+      });
+      var hit=null; c.rows.forEach(function(r){ if(r.key==='매출')hit=r; });
+      if(hit)hit.v=v; else c.rows.push({key:'매출',v:v});
+    });
+    return true;
+  }catch(_e){ console.warn('[bizov 매출 지표]',_e); return false; }
+}
+var _BIZOV_ST={cats:{'공연':true,'전시':true,'교육':true},metric:'매출',year:'all'};   // 사업 개요 차트 전용 고정 상태(판매 현황 `_YRM_ST` 무오염)
 function _yrCss(n){try{return getComputedStyle(document.documentElement).getPropertyValue(n).trim();}catch(e){return '';}}
 function _yrHexA(hex,a){var m=String(hex||'').trim().replace('#','');if(m.length===3)m=m[0]+m[0]+m[1]+m[1]+m[2]+m[2];var r=parseInt(m.slice(0,2),16),g=parseInt(m.slice(2,4),16),b=parseInt(m.slice(4,6),16);return isNaN(r)?'rgba(0,0,0,'+a+')':'rgba('+r+','+g+','+b+','+a+')';}   // 팔레트 토큰 해석값(hex)→rgba(area 음영 알파 변주 · 소스 raw hex 0)
 function _yrFmt(n){return (n===null||n===undefined||n==='')?'':Number(n).toLocaleString();}
@@ -14914,6 +14958,7 @@ function _yrDrawChart(first,pfx,stO){
   if(st.year==='all'){
     var annos=[];
     function _man(v){return (v/10000).toFixed(1);}   // [260723 운영자] 만명 단위(소수1) — 숫자만 표기 · 단위는 우상단에
+    var _uu=(st.metric==='매출')?'원':'명';   // [260813] 툴팁 단위만 지표에서 고른다 — 숫자·자·모양은 전부 종전 그대로
     var _fcOn=(st.metric==='인원'&&years[years.length-1]===_YR_PARTIAL);   // [260804 3차] 예상 마킹 = 관람·수강(인원) 지표에서만 — 횟수·일수·나눔은 예상 산식이 없다(없는 걸 그리지 않는다)
     var fcShapes=[],fcHover={x:[],y:[],cd:[]};   // [260804 4차] 예상 기둥(점선 테두리 shape) + 그 꼭대기 투명 hover 점
     var ordered=selCats.slice().sort(function(a,b){var ra=_yrRow(a,st.metric),rb=_yrRow(b,st.metric);return (rb?Math.max.apply(null,rb.v):0)-(ra?Math.max.apply(null,ra.v):0);});   // [260723 운영자] z-순서: 값 큰 분야 먼저(아래)→작은 분야 나중(위) = 낮은 수치가 안 가려짐
@@ -14923,10 +14968,10 @@ function _yrDrawChart(first,pfx,stO){
       var _fn=Math.min(_yrFullN(),vv.length);   // [260804 2차] 완결 연도까지 = 최고·최저 콜아웃과 추세 곡선의 사정거리(잠정 2026은 막대·점 수치로만 등장)
       var pi=0;for(var i2=1;i2<_fn;i2++)if(vv[i2]>vv[pi])pi=i2;
       var vi=-1;for(var i3=0;i3<_fn;i3++)if(vv[i3]>0&&(vi<0||vv[i3]<vv[vi]))vi=i3;
-      traces.push({type:'bar',name:c,x:years,y:vm,customdata:vv,width:years.map(function(y){return (_fcOn&&y===_YR_PARTIAL)?0.4*_YR_FCW:0.4;}),marker:{color:hex,opacity:.14},hovertemplate:'%{x}년 '+c+'<br>%{customdata:,}명<extra></extra>',showlegend:false});   // [260723 운영자] 막대 = 얇고 옅은 보조(곡선이 주역) · [260804 4차] 폭 명시(bargap .6과 같은 0.4) + 2026만 ×1.5 = 「2026 기둥이 다른 곳보다 1.5배」(운영자)
+      traces.push({type:'bar',name:c,x:years,y:vm,customdata:vv,width:years.map(function(y){return (_fcOn&&y===_YR_PARTIAL)?0.4*_YR_FCW:0.4;}),marker:{color:hex,opacity:.14},hovertemplate:'%{x}년 '+c+'<br>%{customdata:,}'+_uu+'<extra></extra>',showlegend:false});   // [260723 운영자] 막대 = 얇고 옅은 보조(곡선이 주역) · [260804 4차] 폭 명시(bargap .6과 같은 0.4) + 2026만 ×1.5 = 「2026 기둥이 다른 곳보다 1.5배」(운영자)
       var _mo=_yrMono(years.slice(0,_fn),vm.slice(0,_fn),16);   // [260804 2차] 곡선 끝점 = 마지막 **완결** 연도. 잠정 반년치까지 이으면 급락해 「반토막 났다」로 읽힌다 — 집계 중인 걸 추세로 그리지 않는다.
       traces.push({type:'scatter',mode:'lines',name:c,x:_mo.x,y:_mo.y,line:{color:hex,width:2.6,shape:'linear'},fill:'tozeroy',fillcolor:_yrHexA(hex,.09),hoverinfo:'skip',showlegend:true});   // [260723 운영자] 곡선(단조 큐빅·왜곡0) + 아래 아주 옅은 area 음영 = 주역
-      traces.push({type:'scatter',mode:'markers+text',name:c+' 점',x:years,y:vm,customdata:vv,text:vv.map(function(v,idx){return (v>0&&idx!==pi&&idx!==vi)?_man(v):'';}),textposition:vv.map(function(v,idx){return (idx===vv.length-1&&_oi===1)?'bottom center':'top center';}),textfont:{color:hex,size:8.5},marker:{color:hex,size:5,line:{color:paper,width:1}},hovertemplate:'%{x}년 '+c+'<br>%{customdata:,}명<extra></extra>',showlegend:false,cliponaxis:false});   // [260723 운영자] 각 점 위 수치(만명·소수1) · 최고/최저는 콜아웃이 담당(중복 제거) · [260804 3차] 마지막(잠정) 칸만 2등분야 라벨을 점 아래로 = 2026 「1.0(공연)」과 「0.8(전시)」가 8px 차라 겹쳐 읽히던 것 분리(다른 해는 종전 그대로)
+      traces.push({type:'scatter',mode:'markers+text',name:c+' 점',x:years,y:vm,customdata:vv,text:vv.map(function(v,idx){return (v>0&&idx!==pi&&idx!==vi)?_man(v):'';}),textposition:vv.map(function(v,idx){return (idx===vv.length-1&&_oi===1)?'bottom center':'top center';}),textfont:{color:hex,size:8.5},marker:{color:hex,size:5,line:{color:paper,width:1}},hovertemplate:'%{x}년 '+c+'<br>%{customdata:,}'+_uu+'<extra></extra>',showlegend:false,cliponaxis:false});   // [260723 운영자] 각 점 위 수치(만명·소수1) · 최고/최저는 콜아웃이 담당(중복 제거) · [260804 3차] 마지막(잠정) 칸만 2등분야 라벨을 점 아래로 = 2026 「1.0(공연)」과 「0.8(전시)」가 8px 차라 겹쳐 읽히던 것 분리(다른 해는 종전 그대로)
       annos.push({x:years[pi],y:vm[pi],text:'최고 '+_man(vv[pi]),showarrow:true,arrowhead:0,arrowwidth:1,arrowcolor:hex,ax:0,ay:-24,font:{color:hex,size:9.5},bgcolor:paper,bordercolor:hex,borderwidth:1,borderpad:3});   // [260723 운영자·한수] 최고 콜아웃(만명) — 리더선으로 빼내 불투명 칩+드롭섀도
       if(vi>=0&&vi!==pi)annos.push({x:years[vi],y:vm[vi],text:'최저 '+_man(vv[vi]),showarrow:true,arrowhead:0,arrowwidth:1,arrowcolor:hex,ax:0,ay:28,font:{color:hex,size:9.5},bgcolor:paper,bordercolor:hex,borderwidth:1,borderpad:3});   // 최저 콜아웃(만명)
     });
@@ -14965,7 +15010,7 @@ function _yrDrawChart(first,pfx,stO){
       }
     }
     var _m=(pfx==='yrm');   // [260801 운영자 "차트가 쭈그라들게 보인다 · 가로가 비어있음"] 대시보드 인라인(yrm) = 죽은 여백 회수 대상
-    annos.push({x:1,y:(_m?1.02:1.07),xref:'paper',yref:'paper',text:'(단위: 만명)',showarrow:false,xanchor:'right',yanchor:'bottom',font:{color:fc,size:10.5}});   // [260723 운영자] 우상단 단위 표기 · [260801] yrm은 1.07→1.02(상단 마진 축소분에 맞춰 붙임 — 잘림 0)
+    annos.push({x:1,y:(_m?1.02:1.07),xref:'paper',yref:'paper',text:'(단위: 만'+_uu+')',showarrow:false,xanchor:'right',yanchor:'bottom',font:{color:fc,size:10.5}});   // [260723 운영자] 우상단 단위 표기 · [260801] yrm은 1.07→1.02(상단 마진 축소분에 맞춰 붙임 — 잘림 0)
     // [260725 운영자] yrm(대시보드 좌 보드)만 높이 560 — 모달(pfx='yr')은 410 그대로.
     // [260801 운영자] yrm 차트가 「쭈그라들어」 보이던 원인 = 카드 안 죽은 여백. 실측(1920 · _bizFitViewport로 컨테이너 399px):
     //   플롯 795×261 → 하단에 88px(전체 높이의 22%)이 통째로 빈 가로 띠였다. 범례 y:-0.18(플롯 높이 비례)이 눈금 라벨 아래로
