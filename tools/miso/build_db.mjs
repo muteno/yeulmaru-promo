@@ -60,6 +60,20 @@ const SHEET_ALIASES = {
 //   나머지 회원_*.csv(도로명혼재본 6.9MB · 주소요확인 6.0MB · 중복번호 · 집계 2종)는 주소 정제 중간산출물이라
 //   같이 실으면 standalone이 20MB+로 부푸는데 앱은 참조조차 안 한다(index.html grep 0).
 const MEMBER_ALLOW = new Set(['회원_운영_회원', '운영_회원']);
+// [260812 실측] 회원 원장은 **Worker(memberSheetRead)와 같은 규격으로 변환해서** 싣는다.
+//   앱은 생년월일 **원값을 쓰지 않는다** — index.html L29775 「연령대 필드는 Worker 파생값(생년월일 원값 미전송)」.
+//   17열 원장을 그대로 실으면 지역 분포는 멀쩡히 그려지는데 **연령대만 전원 '미상'**으로 죽는다(MISO 프리뷰 실측).
+//   Worker와 동형으로 맞추면 스키마 일치 + PII도 같이 줄어든다(전화·이메일·아이디·생년월일 원값이 아예 안 실린다).
+const MEMBER_KEEP = 7;   // A~G = 휴대폰정규화·이름·주소1~4·우편번호 (v2 정제본 열 순서 고정 — Worker KEEP와 같은 값)
+const _kstYear = new Date(Date.now() + 9 * 3600e3).getUTCFullYear();
+function memberAgeBand(birth) {   // src/index.js ageBand와 **한 글자도 다르지 않게** 유지할 것
+  const m = String(birth == null ? '' : birth).trim().match(/^(19|20)\d{2}/);
+  if (!m) return '';
+  const age = _kstYear - parseInt(m[0], 10);
+  if (age < 0 || age > 110) return '';
+  if (age < 10) return '10세 미만';
+  return Math.min(Math.floor(age / 10), 8) * 10 + '대';   // 80대+ = 80대로 캡
+}
 const MEMBER_PAT = /회원/; // 운영_회원 등 — PII, 기본 미반입(구조 설계만)
 const EXPECTED_SHEETS = ['applysettings','records','programs','platforms','contents','managers','special','logs'];
 
@@ -142,6 +156,16 @@ function ingestCsvFile(path, source) {
     || (base.startsWith('운영_') ? 'ops_' + base.slice(3) : base.replace(/[^\w가-힣]/g, '_')); // 미인식명 = 그대로 반입
   const grid = parseCsv(readFileSync(path, 'utf8'));
   if (!grid.length) { report.warnings.push(`${source}: 빈 파일 (건너뜀)`); return; }
+  if (MEMBER_ALLOW.has(base)) {   // 회원 원장 = Worker 응답과 동형(A~G + 연령대)으로 좁혀 싣는다
+    const hdr0 = grid[0].map(h => h.trim());
+    const bi = hdr0.indexOf('생년월일') >= 0 ? hdr0.indexOf('생년월일') : 11;   // Worker와 같은 폴백(L열)
+    const kept = hdr0.slice(0, MEMBER_KEEP).concat(['연령대']);
+    const rows = grid.slice(1).map(r => kept.map((h, i) => i < MEMBER_KEEP ? (r[i] ?? '') : memberAgeBand(r[bi])));
+    const band = {}; for (const r of rows) { const b = r[MEMBER_KEEP] || '미상'; band[b] = (band[b] || 0) + 1; }
+    report.memberAgeBands = band;
+    addDataset(name, kept, rows, source + ' (Worker 동형 8열 · 연령대 파생)');
+    return;
+  }
   addDataset(name, grid[0].map(h => h.trim()), grid.slice(1), source);
 }
 
