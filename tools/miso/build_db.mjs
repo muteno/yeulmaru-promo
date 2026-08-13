@@ -220,6 +220,7 @@ const meta = {
   counts: Object.fromEntries(Object.entries(datasets).map(([k, v]) => [k, v.rows.length])),
   ...report,
 };
+mkdirSync(OUT_BASE, { recursive: true });   // [260812] PII_MODE면 이관본/비공개/ — .gitignore 폴더라 새 클론엔 존재하지 않는다(재클론 실사고 ENOENT).
 writeFileSync(OUT_JSON, JSON.stringify({ meta, datasets }, null, 1), 'utf8');
 mkdirSync(KB_DIR, { recursive: true });
 for (const stale of readdirSync(KB_DIR).filter(f => f.endsWith('.csv') && !datasets[f.replace(/\.csv$/, '')])) {
