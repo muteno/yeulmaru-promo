@@ -119,7 +119,9 @@ def main():
     else:
         listed = set(re.findall(r"'([^']+)'", m.group(1)))
         # 실제 차트 칸 = 마크업에 있는 `id="…chart"` 전부(문자열 조립으로 만드는 자리도 잡는다)
-        found = set(re.findall(r"""id=\\?["']((?:biz|bizm)-[a-z-]*chart)\\?["']""", src))
+        # ⚠ 접두 목록을 박아두면 샌다 — `bizov-chart`를 새로 만들었을 때 `biz-`/`bizm-`에 안 걸려
+        #   **방금 고친 그 구멍이 그대로 다시 났다**(260813 실측). 이름 규칙을 좁히지 말고 「…chart로 끝나는 id」를 다 잡는다.
+        found = set(re.findall(r"""id=\\?["']([a-z][a-z0-9-]*chart)\\?["']""", src))
         miss = sorted(found - listed)
         if miss:
             bad.append("⑨ 차트 칸 %s 이(가) `_BIZ_CHART_SLOTS`에 없다 — 라이브러리 로드가 실패하면 그 칸은 "
