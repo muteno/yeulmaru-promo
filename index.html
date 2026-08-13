@@ -7759,6 +7759,34 @@ function _bizOvYearPick(){
   return _bizOvYear;
 }
 function _bizOvSetYear(y){ _bizOvYear=Number(y)||_bizOvYear; try{_bizInlineRender();}catch(_e){} try{_railYrmRender();}catch(_e){} }
+// ── [260813 운영자] 분야 선택자 — 「(박스 안) **우측 상단에 공연 전시 예술교육 선택자**가 있게 · **기본으로 공연**」 ──
+//   부품 = 정본 도구 묶음 한 벌(`.ry-hd-tools` 절대배치 + `.ry-live-tg` 글자 토글 + `.ry-hd-div` 구분선) —
+//     260804 3차(우 열 표 머리)·260806(3면 조작부)에서 이미 확립된 그것 그대로 · 신규 CSS·색·값 0.
+//   ⚠ **틀 불변의 근거** = `.ry-hd-tools{position:absolute}` + `.bizm-card>.ct{position:relative}`(기존 규칙 둘).
+//     절대배치라 제목 줄 높이·카드 높이·이젤(유리 박스) 기하를 **한 픽셀도 안 민다** — 운영자 「지금의 틀을 안 넘어가게 주의」가 이 한 줄이다.
+//   ⚠ 칩(`.ana-chip`)을 안 쓴다 — 칩은 규범상 「여러 개 고를 수 있다」, 이 축은 상호배타 「하나만」이다
+//     (260807-17에서 같은 이유로 칩 → 세그먼트로 통일한 그 판단 · docs/reports/260807_기간필터_세그먼트_규범실측.md).
+var _bizOvCat=null;
+var _BIZOV_CAT_LAB={교육:'예술교육'};   // **화면 표기만** — 데이터의 분야 값(`cat`)은 「교육」 그대로다(씨앗·시트·조인키 무접촉)
+function _bizOvCats(rows){
+  var order=['공연','전시','교육'],has={};
+  rows.forEach(function(r){ if(r.cat)has[r.cat]=1; });
+  var out=order.filter(function(c){ return has[c]; });
+  Object.keys(has).forEach(function(c){ if(out.indexOf(c)<0)out.push(c); });   // 새 분야가 생겨도 안 사라진다(순서만 뒤로)
+  return out;
+}
+// 고른 분야 — 기본 **공연**. 그 해에 그 분야가 없으면 있는 첫 분야로 물러난다(빈 표 대신 있는 걸 보여준다 ·
+//   2026처럼 공연만 있는 해에서 전시를 골라 둔 채 연도를 옮겨도 빈 화면이 안 뜬다).
+function _bizOvCatPick(rows){
+  var cs=_bizOvCats(rows);
+  if(!cs.length)return null;
+  if(_bizOvCat&&cs.indexOf(_bizOvCat)>=0)return _bizOvCat;
+  return cs.indexOf('공연')>=0?'공연':cs[0];
+}
+function _bizOvSetCat(c){ _bizOvCat=String(c||'')||null; try{_bizInlineRender();}catch(_e){} }
+// 사업NO 표기 — [260813 운영자] 「사업no 디테일한 뒤에 실제 표기는 **공연-01만** 나오면 될듯」
+//   연도는 이미 면 전체의 축(머리줄 연도 칩)이라 행마다 다시 적을 이유가 없다. **값은 안 건드린다**(표기만 줄인다).
+function _finNoShort(no){ return String(no||'').replace(/^20\d\d-/,''); }
 // 분야별 합 — 파생값은 여기서도 저장하지 않고 매번 센다(`_finCalc`와 같은 식).
 function _bizOvSum(rows){
   var s={n:0,bud:0,vou:0,fee:0,rev:0,ppl:0};
@@ -7793,8 +7821,10 @@ function _bizOvRender(el){
   var _blk=rows.filter(function(r){ return _finBlank(r).length; }).length;
   var _blkCost=rows.filter(function(r){ var b=_finBlank(r); return b.indexOf('vou')>=0||b.indexOf('fee')>=0; }).length;   // 수익률 **분모**가 빠진 건수
   var _blkRev=rows.filter(function(r){ return _finBlank(r).indexOf('rev')>=0; }).length;                                   // 분자가 빠진 건수
+  // [260813] 부제에서 「단위 원」을 뺀다 — 자가 두 층(KPI 억 · 표 백만원)이 된 뒤로 **면 전체를 한 자로 말하면 거짓**이 된다.
+  //   단위는 각 칸이 이미 스스로 말한다(KPI `.val .u` = 억 · 표 머리 「(단위: 백만원)」).
   var head=_bizmHead(_bizOvYearChips(year)+_inBtn,'사업 개요',
-    (rows.length?(year+'년 · 사업 '+rows.length+'건 · 단위 원'+(_blk?' · 아직 안 적은 사업 '+_blk+'건':'')):' '));
+    (rows.length?(year+'년 · 사업 '+rows.length+'건'+(_blk?' · 아직 안 적은 사업 '+_blk+'건':'')):' '));
   if(!rows.length){
     _bizmSwap(el,'<div style="position:relative">'+head+_BIZM_BOX
       +'<div style="text-align:center;padding:56px 20px;color:var(--dim);font-size:13px">'+year+'년 사업비 자료가 아직 없어요'
@@ -7809,22 +7839,25 @@ function _bizOvRender(el){
   //   ⚠ 자체 `max-height`·`overflow:auto`를 **넣지 마라** — 유리 박스(이젤)가 이미 높이를 정하는데 안쪽에 또 스크롤을 두면
   //     내용이 박스 밖으로 흘러넘치고 KPI 줄이 위로 잘린다(첫 판이 정확히 그 모양이었다 · 운영자 캡처).
   //     가로 넘침만 카드 안 래퍼(`overflow-x:auto`)가 받는다.
+  // [260813 운영자] KPI = **네 칸**(총 예산 → 사업비 → 수입 → 수익률) · 자는 **억**.
+  //   지시: 「예산이 더 앞에 개념 · 그니까 총 예산 / 사업비 / 수입 / 수익률 **이 4개만** 나오면 됨. 차액은 일단 없어도 되고」
+  //   ⚠ 차액은 **지우는 게 아니라 KPI에서만 내린다** — 분야별(사업 결과) 표와 우 열 「차액 적자」가 그대로 들고 있다(축 유실 0).
   h+='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">'
-    +_bizOvKpi('사업비 (전표실적+수수료)',_bizMoney(S.cost,true),'만','전표실적 '+_bizMoney(S.vou)+' · 수수료 '+_bizMoney(S.fee),'--peach-text')
-    +_bizOvKpi('수입 (정산서 매출)',_bizMoney(S.rev,true),'만',null,'--green')
+    +_bizOvKpi('총 예산',_finEok(S.bud),'억','집행율 '+_finPct(S.exec),'--neutral-text')
+    +_bizOvKpi('사업비 (전표실적+수수료)',_finEok(S.cost),'억','전표실적 '+_finEok(S.vou)+'억 · 수수료 '+_finEok(S.fee)+'억','--peach-text')
+    +_bizOvKpi('수입 (정산서 매출)',_finEok(S.rev),'억',null,'--green')
     // ⚠ 분모(전표실적·수수료)가 빠진 사업이 있으면 수익률이 **실제보다 높게** 나온다 — 그 사실을 숫자 바로 밑에 적는다.
-    //   경고 문구를 안 쓰고 사실만 적는다(담당자가 아직 입력 중인 정상 상태이기도 하다 · 색은 「주의」 톤 --peach-text).
+    //   나무라지 않는다(담당자가 아직 입력 중인 정상 상태이기도 하다) → 색은 「주의」 톤 --peach-text · --danger 안 쓴다.
     +_bizOvKpi('수익률',(S.margin==null?'—':S.margin.toFixed(1)),'%',
         (_blkCost?'<span style="color:var(--peach-text);font-weight:600">사업비 미입력 '+_blkCost+'건 — 실제보다 높게 나와요</span>'
                  :(_blkRev?'<span style="color:var(--peach-text);font-weight:600">매출 미입력 '+_blkRev+'건</span>':'수입 ÷ 사업비')),'--accent')
-    +_bizOvKpi('예산',_bizMoney(S.bud,true),'만','집행율 '+_finPct(S.exec),'--neutral-text')
-    +_bizOvKpi('차액 (수입−전표실적)',_bizMoney(S.diff,true),'만',null,(S.diff<0?'--danger':'--green'))
     +'</div>';
-  // ② 분야별 카드
+  // ② 사업 결과 카드 — [260813 운영자] 「분야별 1번, 지금 그대로 좋음. 단 **용어를 사업 결과**」
+  //   = 열·정렬·색 전부 종전 그대로, 카드 이름과 **돈 자(원 → 백만원)만** 바뀐다.
   var cats=[]; rows.forEach(function(r){ if(r.cat&&cats.indexOf(r.cat)<0)cats.push(r.cat); });
-  h+='<div class="bizm-card"><div class="ct"><span class="ct-bul"></span>분야별</div><div style="overflow-x:auto">';
+  h+='<div class="bizm-card"><div class="ct"><span class="ct-bul"></span>사업 결과</div><div style="overflow-x:auto">';
   h+='<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="color:var(--dim);font-size:12px;text-align:left">';
-  [['분야',''],['건수','건'],['예산','원'],['사업비','원'],['수입','원'],['차액','원'],['수익률','%']].forEach(function(c,i){
+  [['분야',''],['건수','건'],['예산','백만원'],['사업비','백만원'],['수입','백만원'],['차액','백만원'],['수익률','%']].forEach(function(c,i){
     h+='<td style="padding:8px 12px;box-shadow:inset 0 -2px 0 var(--border);vertical-align:middle;white-space:nowrap'+(i===0?';padding-left:14px':'')+(i>=1?';text-align:right':'')+'">'+c[0]
       +(c[1]?'<div style="font-size:10.5px;font-weight:400;margin-top:2px">(단위: '+c[1]+')</div>':'')+'</td>';
   });
@@ -7834,50 +7867,63 @@ function _bizOvRender(el){
     h+='<tr style="border-bottom:1px solid var(--border);'+(i%2===1?'background:var(--past-bg);':'')+'">'
       +'<td style="padding:7px 12px 7px 14px;font-weight:600;color:var(--text);white-space:nowrap">'+escapeHtml(cat)+'</td>'
       +'<td style="padding:7px 12px;text-align:right;color:var(--neutral-text);font-variant-numeric:tabular-nums">'+g.n+'</td>'
-      +'<td style="padding:7px 12px;text-align:right;color:var(--neutral-text);font-variant-numeric:tabular-nums">'+g.bud.toLocaleString(undefined,{maximumFractionDigits:1})+'</td>'
-      +'<td style="padding:7px 12px;text-align:right;color:var(--peach-text);font-weight:600;font-variant-numeric:tabular-nums">'+g.cost.toLocaleString(undefined,{maximumFractionDigits:1})+'</td>'
-      +'<td style="padding:7px 12px;text-align:right;color:var(--green);font-weight:600;font-variant-numeric:tabular-nums">'+g.rev.toLocaleString(undefined,{maximumFractionDigits:1})+'</td>'
-      +'<td style="padding:7px 12px;text-align:right;font-weight:600;color:var('+(g.diff<0?'--danger':'--green')+');font-variant-numeric:tabular-nums">'+g.diff.toLocaleString(undefined,{maximumFractionDigits:1})+'</td>'
+      +'<td style="padding:7px 12px;text-align:right;color:var(--neutral-text);font-variant-numeric:tabular-nums">'+_finMil(g.bud)+'</td>'
+      +'<td style="padding:7px 12px;text-align:right;color:var(--peach-text);font-weight:600;font-variant-numeric:tabular-nums">'+_finMil(g.cost)+'</td>'
+      +'<td style="padding:7px 12px;text-align:right;color:var(--green);font-weight:600;font-variant-numeric:tabular-nums">'+_finMil(g.rev)+'</td>'
+      +'<td style="padding:7px 12px;text-align:right;font-weight:600;color:var('+(g.diff<0?'--danger':'--green')+');font-variant-numeric:tabular-nums">'+_finMil(g.diff)+'</td>'
       +'<td style="padding:7px 14px 7px 12px;text-align:right;color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums">'+_finPct(g.margin)+'</td></tr>';
   });
   h+='<tr style="border-top:2px solid var(--border2);font-weight:800">'
     +'<td style="padding:9px 12px 9px 14px">계</td><td style="padding:9px 12px;text-align:right;font-variant-numeric:tabular-nums">'+S.n+'</td>'
-    +'<td style="padding:9px 12px;text-align:right;font-variant-numeric:tabular-nums">'+S.bud.toLocaleString(undefined,{maximumFractionDigits:1})+'</td>'
-    +'<td style="padding:9px 12px;text-align:right;color:var(--peach-text);font-variant-numeric:tabular-nums">'+S.cost.toLocaleString(undefined,{maximumFractionDigits:1})+'</td>'
-    +'<td style="padding:9px 12px;text-align:right;color:var(--green);font-variant-numeric:tabular-nums">'+S.rev.toLocaleString(undefined,{maximumFractionDigits:1})+'</td>'
-    +'<td style="padding:9px 12px;text-align:right;color:var('+(S.diff<0?'--danger':'--green')+');font-variant-numeric:tabular-nums">'+S.diff.toLocaleString(undefined,{maximumFractionDigits:1})+'</td>'
+    +'<td style="padding:9px 12px;text-align:right;font-variant-numeric:tabular-nums">'+_finMil(S.bud)+'</td>'
+    +'<td style="padding:9px 12px;text-align:right;color:var(--peach-text);font-variant-numeric:tabular-nums">'+_finMil(S.cost)+'</td>'
+    +'<td style="padding:9px 12px;text-align:right;color:var(--green);font-variant-numeric:tabular-nums">'+_finMil(S.rev)+'</td>'
+    +'<td style="padding:9px 12px;text-align:right;color:var('+(S.diff<0?'--danger':'--green')+');font-variant-numeric:tabular-nums">'+_finMil(S.diff)+'</td>'
     +'<td style="padding:9px 14px 9px 12px;text-align:right;color:var(--accent);font-variant-numeric:tabular-nums">'+_finPct(S.margin)+'</td></tr>';
   h+='</tbody></table></div></div>';
   // ③ 사업별 카드 — 좌 열 **마지막 흰 도형** = data-bizmfill(남는 높이 흡수 · 판매 현황 「전체 실적표」와 같은 규약)
   // 정본 꼴(판매 현황 목록 표) = 바깥 `data-bizmfill data-bizmcap` + `flex-direction:column`, **안쪽 칸이 스크롤러**.
   //   cap이 상·하한을 박스 안선에 못 박고, 넘치는 행은 안쪽에서 스크롤한다 → 흰 카드 하단선이 좌·우 같은 줄에 선다.
   //   ⚠ cap 없이 fill만 걸면 카드가 `overflow:hidden`이라 **행이 소리 없이 잘린다**(32건 중 12건만 보였다 · 운영자 지적).
-  h+='<div class="bizm-card" data-bizmfill data-bizmcap style="display:flex;flex-direction:column;margin-bottom:0"><div class="ct" style="flex:0 0 auto"><span class="ct-bul"></span>사업별 <span class="sub">수익률 높은 순 · 줄을 누르면 상세'+(_blk?' · 미기입 '+_blk+'건':' · 전건 기입')+'</span></div><div style="overflow:auto;flex:1 1 auto;min-height:0">';
+  // [260813 운영자] 구 「사업별」 → **분야별**(선택자로 한 분야만) · 열 = NO › 사업명 › 사업비 › 수입 › 수익률 › 비고.
+  //   지시: 「사업별을 > 분야별로 해서 (박스 안) 우측 상단에 공연 전시 예술교육 선택자 · 기본 공연 ·
+  //          사업no 디테일한 뒤에 실제 표기는 공연-01만 · 분야는 이제 선택자에서 걸러지니까 없어도 됨 ·
+  //          회계 구분 - 이거 **비고**라고 표기해서 맨 우측 · 사업명이 좀 더 표출되어야 함 ·
+  //          no › 사업명 › 사업비 수입 수익률 비고 이렇게 순차적으로」
+  //   ⚠ 사업명 칸이 넓어진 실제 출처 = **분야 열을 뺀 자리**다(사업명은 `max-width:0;width:100%`라 남는 폭을 통째로 흡수한다).
+  //     회계구분은 지운 게 아니라 「비고」 이름으로 맨 오른쪽에 그대로 서 있다 = 거르기 축(회계) 유실 0.
+  var _ovCats=_bizOvCats(rows), _ovCat=_bizOvCatPick(rows), _ovRows=rows.filter(function(r){ return r.cat===_ovCat; });
+  // [260812 8차] 미기입 건수는 **지금 보고 있는 분야 기준**으로 센다(선택자가 걸러낸 뒤라 전체 건수를 적으면 표와 어긋난다).
+  var _blkOv=_ovRows.filter(function(r){ return _finBlank(r).length; }).length;
+  var _ovSel=_ovCats.length?('<span class="ry-hd-tools" style="display:inline-flex;gap:6px" role="radiogroup" aria-label="분야 선택">'
+    +_ovCats.map(function(c,i){ var on=(c===_ovCat), lab=_BIZOV_CAT_LAB[c]||c;
+        return (i?'<span class="ry-hd-div" aria-hidden="true"></span>':'')
+          +'<button type="button" class="ry-live-tg" role="radio" aria-checked="'+(on?'true':'false')+'" onclick="_bizOvSetCat(\''+_anaEsc(c)+'\')"'
+          +' title="'+escapeHtml(lab+' 사업만 보기')+'">'+escapeHtml(lab)+'</button>'; }).join('')
+    +'</span>'):'';
+  h+='<div class="bizm-card" data-bizmfill data-bizmcap style="display:flex;flex-direction:column;margin-bottom:0"><div class="ct" style="flex:0 0 auto"><span class="ct-bul"></span>분야별 <span class="sub">수익률 높은 순 · 줄을 누르면 상세'+(_blkOv?' · 미기입 '+_blkOv+'건':'')+'</span>'+_ovSel+'</div><div style="overflow:auto;flex:1 1 auto;min-height:0">';
   h+='<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="color:var(--dim);font-size:12px;text-align:left">';
-  [['사업NO',''],['분야',''],['회계구분',''],['사업명',''],['사업비','원'],['수입','원'],['수익률','%']].forEach(function(c,i){
-    h+='<td style="padding:8px 12px;position:sticky;top:0;z-index:1;background:var(--surface-solid);box-shadow:inset 0 -2px 0 var(--border);vertical-align:middle;white-space:nowrap'+(i===0?';padding-left:14px':'')+(i>=4?';text-align:right':'')+'">'+c[0]
+  [['NO',''],['사업명',''],['사업비','백만원'],['수입','백만원'],['수익률','%'],['비고','']].forEach(function(c,i){
+    h+='<td style="padding:8px 12px;position:sticky;top:0;z-index:1;background:var(--surface-solid);box-shadow:inset 0 -2px 0 var(--border);vertical-align:middle;white-space:nowrap'+(i===0?';padding-left:14px':'')+((i>=2&&i<=4)?';text-align:right':'')+(i===5?';padding-right:14px':'')+'">'+c[0]
       +(c[1]?'<div style="font-size:10.5px;font-weight:400;margin-top:2px">(단위: '+c[1]+')</div>':'')+'</td>';
   });
   h+='</tr></thead><tbody>';
-  rows.slice().sort(function(a,b){ var x=_finCalc(a).margin,y=_finCalc(b).margin; return (y==null?-1:y)-(x==null?-1:x); }).forEach(function(r,i){
-    var c=_finCalc(r), _bl=_finBlank(r);
+  if(!_ovRows.length)h+='<tr><td colspan="6" style="padding:20px 14px;color:var(--dim);font-size:12.5px">'+escapeHtml((_BIZOV_CAT_LAB[_ovCat]||_ovCat||'해당 분야'))+' 사업이 이 해에는 없어요</td></tr>';
+  _ovRows.slice().sort(function(a,b){ var x=_finCalc(a).margin,y=_finCalc(b).margin; return (y==null?-1:y)-(x==null?-1:x); }).forEach(function(r,i){
+    var c=_finCalc(r), _bl=_finBlank(r), _noCost=(_bl.indexOf('vou')>=0||_bl.indexOf('fee')>=0);
     h+='<tr onclick="_finModal(\''+_anaEsc(r.no)+'\','+year+')" style="cursor:pointer;border-bottom:1px solid var(--border);'+(i%2===1?'background:var(--past-bg);':'')+'" title="'+escapeHtml(r.name+' — 눌러서 사업비 상세'+(_bl.length?(' · 아직 안 적은 칸: '+_bl.join(', ')):''))+'">'
-      +'<td style="padding:7px 12px 7px 14px;white-space:nowrap;color:var(--neutral-text);font-variant-numeric:tabular-nums">'+escapeHtml(r.no)+'</td>'
-      +'<td style="padding:7px 12px;white-space:nowrap;color:var(--neutral-text)">'+escapeHtml(r.cat)+'</td>'
-      +'<td style="padding:7px 12px;white-space:nowrap;color:var(--neutral-text)">'+escapeHtml(r.acct||'—')+'</td>'
+      +'<td style="padding:7px 12px 7px 14px;white-space:nowrap;color:var(--neutral-text);font-variant-numeric:tabular-nums">'+escapeHtml(_finNoShort(r.no))+'</td>'
       +'<td style="padding:7px 12px;max-width:0;width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;color:var(--text)">'+escapeHtml(r.name)
         // 아직 안 적은 칸이 있으면 그 줄에 적는다 — 이 줄의 사업비·수익률이 **덜 찬 값**이라는 뜻이다(0원이 아니다).
         +(_bl.length?' <span style="font-weight:600;color:var(--peach-text)">미기입 '+_bl.length+'</span>':'')+'</td>'
-      // ⚠ 아직 안 적은 칸은 **`0`이 아니라 `—`**로 적는다. 0으로 찍으면 「0원 썼다」로 읽혀서, 미기입 표시를 붙인 뜻이 없어진다.
+      // ⚠ 아직 안 적은 칸은 **`0`이 아니라 `—`**로 적는다. 0으로 찍으면 「0원 썼다」로 읽혀서 미기입 표시를 붙인 뜻이 없어진다.
       //   사업비는 전표실적·수수료 둘 중 하나라도 비면 합계 자체가 덜 찬 값이다.
-      +'<td style="padding:7px 12px;text-align:right;color:var(--peach-text);font-weight:600;font-variant-numeric:tabular-nums">'
-        +((_bl.indexOf('vou')>=0||_bl.indexOf('fee')>=0)?'—':c.cost.toLocaleString(undefined,{maximumFractionDigits:1}))+'</td>'
-      +'<td style="padding:7px 12px;text-align:right;color:var(--green);font-weight:600;font-variant-numeric:tabular-nums">'
-        +((_bl.indexOf('rev')>=0)?'—':(r.rev||0).toLocaleString(undefined,{maximumFractionDigits:1}))+'</td>'
-      // 분모(전표실적·수수료)가 덜 찼으면 수익률도 `—`. 사업비를 「—」라고 해놓고 그걸로 나눈 값을 옆에 적으면 앞뒤가 안 맞는다
-      //   (실측 260812: `2026-공연-04`가 사업비 —인데 3639.8%로 찍혔다 — 전표실적만 미입력이라 수수료로 나눈 수였다).
-      +'<td style="padding:7px 14px 7px 12px;text-align:right;color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums">'
-        +((_bl.indexOf('vou')>=0||_bl.indexOf('fee')>=0)?'—':_finPct(c.margin))+'</td></tr>';
+      +'<td style="padding:7px 12px;text-align:right;color:var(--peach-text);font-weight:600;font-variant-numeric:tabular-nums">'+(_noCost?'—':_finMil(c.cost))+'</td>'
+      +'<td style="padding:7px 12px;text-align:right;color:var(--green);font-weight:600;font-variant-numeric:tabular-nums">'+((_bl.indexOf('rev')>=0)?'—':_finMil(r.rev||0))+'</td>'
+      // 분모가 덜 찼으면 수익률도 `—`. 사업비를 「—」라 해놓고 그걸로 나눈 값을 옆에 적으면 앞뒤가 안 맞는다
+      //   (실측 260812: `2026-공연-04`가 사업비 —인데 3639.8%로 찍혔다 = 전표실적만 미입력이라 수수료로만 나눈 수였다).
+      +'<td style="padding:7px 12px;text-align:right;color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums">'+(_noCost?'—':_finPct(c.margin))+'</td>'
+      +'<td style="padding:7px 14px 7px 12px;white-space:nowrap;color:var(--neutral-text)">'+escapeHtml(r.acct||'—')+'</td></tr>';
   });
   h+='</tbody></table></div></div>';
   h+='</div></div>';
@@ -7894,26 +7940,12 @@ function _bizOvRail(el){
       +'<div id="rail-yrm-uha"></div></div></div>';
     el.innerHTML=h; return;
   }
-  var S=_bizOvSum(rows);
-  // 회계구분별 = 운영자가 말한 「회계쪽이랑 분류」 축 그대로
-  var accs=[]; rows.forEach(function(r){ var k=r.acct||'(구분 없음)'; if(accs.indexOf(k)<0)accs.push(k); });
-  h+='<div class="bizm-card"><div class="ct"><span class="ct-bul"></span>회계구분별 <span class="sub">위=사업비 · 아래=수입 (만원)</span></div><div style="overflow-x:auto">';
-  h+='<table style="width:100%;border-collapse:collapse;font-size:13px"><tbody>';
-  accs.forEach(function(a,i){
-    var g=_bizOvSum(rows.filter(function(r){return (r.acct||'(구분 없음)')===a;}));
-    var share=S.cost>0?(g.cost/S.cost*100):0, shareTxt=(share>0&&share<1)?share.toFixed(1):share.toFixed(0);
-    h+='<tr style="border-bottom:1px solid var(--border);'+(i%2===1?'background:var(--past-bg);':'')+'">'
-      +'<td style="padding:7px 12px 7px 14px;white-space:nowrap"><div style="font-weight:600;color:var(--text)">'+escapeHtml(a)+'</div>'
-      +'<div style="font-size:11px;color:var(--dim)">'+g.n+'건 · 비중 '+shareTxt+'%</div></td>'
-      +'<td style="padding:7px 12px;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums">'
-      +'<div style="color:var(--peach-text);font-weight:600">'+_bizMoney(g.cost,true)+'</div>'
-      +'<div style="color:var(--green);font-weight:600">'+_bizMoney(g.rev,true)+'</div></td>'
-      +'<td style="padding:7px 14px 7px 12px;text-align:right;color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap">'+_finPct(g.margin)+'</td></tr>';
-  });
-  h+='</tbody></table></div></div>';
+  // [260813 운영자 「**회계 구분별 사업지표는 필요없고**」] 구 「회계구분별」 카드 철거.
+  //   축은 안 잃는다 — 회계구분은 좌 열 「분야별」 표의 **비고 열**로 옮겨 사업마다 그대로 보인다(같은 화면 안 이동).
   // 차액 적자 = 돈 축 화면에서 가장 먼저 눈에 띄어야 할 줄 · 레일 **마지막 흰 도형** = data-bizmfill
+  //   ⚠ 자 = 좌 열 표와 같은 **백만원**(260813 운영자 지시 축) — 한 화면에 만원·백만원이 섞여 있던 걸 하나로 맞춘다.
   var loss=rows.filter(function(r){return _finCalc(r).diff<0;}).sort(function(a,b){return _finCalc(a).diff-_finCalc(b).diff;});
-  h+='<div class="bizm-card" data-bizmfill data-bizmcap style="display:flex;flex-direction:column;margin-bottom:0"><div class="ct" style="flex:0 0 auto"><span class="ct-bul"></span>차액 적자 <span class="sub">'+loss.length+'건 · 수입 − 전표실적 (만원)</span></div><div style="overflow:auto;flex:1 1 auto;min-height:0">';
+  h+='<div class="bizm-card" data-bizmfill data-bizmcap style="display:flex;flex-direction:column;margin-bottom:0"><div class="ct" style="flex:0 0 auto"><span class="ct-bul"></span>차액 적자 <span class="sub">'+loss.length+'건 · 수입 − 전표실적 (백만원)</span></div><div style="overflow:auto;flex:1 1 auto;min-height:0">';
   if(!loss.length)h+='<div style="padding:14px;color:var(--dim);font-size:12.5px">없음</div>';
   else{
     h+='<table style="width:100%;border-collapse:collapse;font-size:13px"><tbody>';
@@ -7921,7 +7953,7 @@ function _bizOvRail(el){
       var c=_finCalc(r);
       h+='<tr onclick="_finModal(\''+_anaEsc(r.no)+'\','+year+')" style="cursor:pointer;border-bottom:1px solid var(--border);'+(i%2===1?'background:var(--past-bg);':'')+'" title="'+escapeHtml(r.name+' — 눌러서 사업비 상세')+'">'
         +'<td style="padding:7px 12px 7px 14px;max-width:0;width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;color:var(--text)">'+escapeHtml(r.name)+'</td>'
-        +'<td style="padding:7px 14px 7px 12px;text-align:right;white-space:nowrap;color:var(--danger);font-weight:700;font-variant-numeric:tabular-nums">'+_bizMoney(c.diff,true)+'</td></tr>';
+        +'<td style="padding:7px 14px 7px 12px;text-align:right;white-space:nowrap;color:var(--danger);font-weight:700;font-variant-numeric:tabular-nums">'+_finMil(c.diff)+'</td></tr>';
     });
     h+='</tbody></table>';
   }
@@ -8515,6 +8547,15 @@ function _finCalc(r){
 }
 function _finWon(v){ return (v==null||!isFinite(v))?'—':Number(v).toLocaleString(undefined,{maximumFractionDigits:1})+'원'; }
 function _finPct(v){ return (v==null||!isFinite(v))?'—':v.toFixed(1)+'%'; }
+// ── [260813 운영자] 사업 개요 표기 자 = **두 층**(KPI = 억 · 표 = 백만원) ──────────────────────
+//   지시: 「사업비는 **0.0억**으로 표기했으면 좋겠고 · 수익도 0.0억 · 수익률은 정상」
+//        「각 분야별 사업별 … 그 부분에 **예산을 백만원 단위로 하고 반올림**할게 그니까 1,470,284,757 이면 **1,470 백만 원**」
+//   왜 한 자로 안 통일하나 = 두 자리가 요구하는 해상도가 다르다. KPI는 **전체 규모 한 눈**(19.2억)이라 억이 맞고,
+//     표는 **사업끼리 비교**라 억으로 줄이면 차이가 뭉갠다(1,470,284,757 ↔ 1,455,038,020 = 둘 다 14.7억으로 같아진다).
+//   ⚠ 파생값 미저장 계약과 무관 — 이 둘은 **표기 함수**다(값을 만들지 않고 있는 값을 읽는 자만 바꾼다).
+//   ⚠ -0 방지: Math.round(-400000/1e6) = -0 → toLocaleString()이 「-0」을 뱉는다(반올림해 0이 된 적자가 마이너스로 보인다).
+function _finEok(v){ if(v==null||!isFinite(v))return '—'; var n=Math.round(v/1e7)/10; return (n===0?0:n).toFixed(1); }
+function _finMil(v){ if(v==null||!isFinite(v))return '—'; var n=Math.round(v/1e6); return (n===0?0:n).toLocaleString(); }
 // 회계 담당자 — 담당자 시트 `회계여부`(맨 끝 append 열). 관리자는 상위 권한이라 포함한다.
 function _isAcct(){ try{ if(typeof userRole!=='undefined'&&userRole==='admin')return true; return sessionStorage.getItem('isAcct')==='1'; }catch(_e){ return false; } }
 // 시트 적재 — 시트가 아직 없으면 `/api/ops`가 `note:'시트 없음 (미동기화)'` + 빈 rows로 답한다(에러 아님)
