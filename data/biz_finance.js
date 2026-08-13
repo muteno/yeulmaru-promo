@@ -74,14 +74,14 @@ var BIZ_FIN={ver:1,unit:'원',years:{
   {no:"2025-교육-05",cat:"교육",acct:"공모사업",name:"희망에너지교실",key:"희망에너지교실",mon:"",cnt:0,bud:3000000,vou:550000,fee:198000,rev:5802000,paid:50,inv:0,blank:""},
   {no:"2025-교육-06",cat:"교육",acct:"공모사업",name:"새롬교실",key:"새롬교실",mon:"",cnt:0,bud:2000000,vou:786200,fee:49500,rev:1450500,paid:20,inv:0,blank:""}
  ]},
- 2026:{src:{"공연": "26공연"},rows:[
+ 2026:{src:{"공연": "26공연", "정산서매출": "2026년 기획사업 정산서 매출.xlsx"},rows:[
   {no:"2026-공연-01",cat:"공연",acct:"예술성",name:"신년음악회",key:"신년음악회",mon:"1월",cnt:1,bud:48500000,vou:48326820,fee:1203170,rev:38284950,paid:908,inv:10,blank:""},
   {no:"2026-공연-02",cat:"공연",acct:"예술성",name:"클래식1(실내악페스티벌)",key:"클래식1실내악페스티벌",mon:"4월",cnt:4,bud:150500000,vou:150441377,fee:431486,rev:14795000,paid:502,inv:337,blank:""},
   {no:"2026-공연-03",cat:"공연",acct:"예술성",name:"공모사업(김영욱,춘자씨,그때도오늘)",key:"공모사업김영욱춘자씨그때도오늘",mon:"5/10/11월",cnt:5,bud:32000000,vou:4835810,fee:127496,rev:3938500,paid:179,inv:30,blank:""},
   {no:"2026-공연-04",cat:"공연",acct:"예술성",name:"클래식2(한국페스티발앙상블)",key:"클래식2한국페스티발앙상블",mon:"5월",cnt:1,bud:22500000,vou:0,fee:146009,rev:5314500,paid:176,inv:34,blank:"vou"},
   {no:"2026-공연-05",cat:"공연",acct:"예술성",name:"협력사업1(국립심포니오케스트라)",key:"협력사업1국립심포니오케스트라",mon:"5월",cnt:1,bud:116500000,vou:0,fee:0,rev:11514000,paid:0,inv:0,blank:"vou|fee|paid|inv"},
-  {no:"2026-공연-06",cat:"공연",acct:"예술성",name:"연극2(노인의 꿈)",key:"연극2노인의꿈",mon:"6월",cnt:4,bud:0,vou:0,fee:0,rev:0,paid:0,inv:0,blank:"bud|vou|fee|rev|paid|inv"},
-  {no:"2026-공연-07",cat:"공연",acct:"예술성",name:"헬로시리즈",key:"헬로시리즈",mon:"6/11월",cnt:4,bud:61500000,vou:0,fee:0,rev:0,paid:0,inv:0,blank:"vou|fee|rev|paid|inv"},
+  {no:"2026-공연-06",cat:"공연",acct:"예술성",name:"연극2(노인의 꿈)",key:"연극2노인의꿈",mon:"6월",cnt:4,bud:0,vou:0,fee:0,rev:31922000,paid:0,inv:0,blank:"bud|vou|fee|paid|inv"},
+  {no:"2026-공연-07",cat:"공연",acct:"예술성",name:"헬로시리즈",key:"헬로시리즈",mon:"6/11월",cnt:4,bud:61500000,vou:0,fee:0,rev:17269000,paid:0,inv:0,blank:"vou|fee|paid|inv"},
   {no:"2026-공연-08",cat:"공연",acct:"예술성",name:"클래식3(조재혁 리사이틀)",key:"클래식3조재혁리사이틀",mon:"9월",cnt:1,bud:16400000,vou:0,fee:0,rev:0,paid:0,inv:0,blank:"vou|fee|rev|paid|inv"},
   {no:"2026-공연-09",cat:"공연",acct:"예술성",name:"국립현대무용단",key:"국립현대무용단",mon:"10월",cnt:1,bud:0,vou:0,fee:0,rev:0,paid:0,inv:0,blank:"bud|vou|fee|rev|paid|inv"},
   {no:"2026-공연-10",cat:"공연",acct:"예술성",name:"피아노&피아노",key:"피아노&피아노",mon:"10월",cnt:1,bud:0,vou:0,fee:0,rev:0,paid:0,inv:0,blank:"bud|vou|fee|rev|paid|inv"},
@@ -89,11 +89,15 @@ var BIZ_FIN={ver:1,unit:'원',years:{
   {no:"2026-공연-12",cat:"공연",acct:"예술성",name:"연극1(소극장, 미정)",key:"연극1소극장미정",mon:"12월",cnt:10,bud:61500000,vou:0,fee:0,rev:0,paid:0,inv:0,blank:"vou|fee|rev|paid|inv"},
   {no:"2026-공연-13",cat:"공연",acct:"예술성",name:"문화나눔콘서트(재단20주년 음악회)",key:"문화나눔콘서트재단20주년음악회",mon:"",cnt:0,bud:106500000,vou:0,fee:0,rev:0,paid:0,inv:0,blank:"vou|fee|rev|paid|inv"},
   {no:"2026-공연-14",cat:"공연",acct:"예술성",name:"뮤지컬1(미세스 다웃파이어)",key:"뮤지컬1미세스다웃파이어",mon:"2월",cnt:4,bud:215500000,vou:214423700,fee:9615860,rev:243206500,paid:3286,inv:46,blank:""},
-  {no:"2026-공연-15",cat:"공연",acct:"상업성",name:"브런치콘서트",key:"브런치콘서트",mon:"4,6,9,12월",cnt:4,bud:50000000,vou:11236500,fee:346302,rev:11838000,paid:581,inv:42,blank:""},
+  {no:"2026-공연-15",cat:"공연",acct:"상업성",name:"브런치콘서트",key:"브런치콘서트",mon:"4,6,9,12월",cnt:4,bud:50000000,vou:11236500,fee:346302,rev:11722000,paid:581,inv:42,blank:""},
   {no:"2026-공연-16",cat:"공연",acct:"상업성",name:"아동극1(100층짜리 집)",key:"아동극1100층짜리집",mon:"5월",cnt:6,bud:66500000,vou:65292500,fee:4166809,rev:119328300,paid:3185,inv:174,blank:""},
   {no:"2026-공연-17",cat:"공연",acct:"상업성",name:"뮤지컬2(그날들)",key:"뮤지컬2그날들",mon:"9월",cnt:4,bud:170300000,vou:0,fee:0,rev:0,paid:0,inv:0,blank:"vou|fee|rev|paid|inv"},
   {no:"2026-공연-18",cat:"공연",acct:"상업성",name:"아동극2(미정)",key:"아동극2미정",mon:"10월",cnt:6,bud:61500000,vou:0,fee:0,rev:0,paid:0,inv:0,blank:"vou|fee|rev|paid|inv"},
   {no:"2026-공연-19",cat:"공연",acct:"상업성",name:"청소년 뮤지컬(러커스 더 스쿨)",key:"청소년뮤지컬러커스더스쿨",mon:"11월",cnt:6,bud:66500000,vou:0,fee:0,rev:0,paid:0,inv:0,blank:"vou|fee|rev|paid|inv"},
-  {no:"2026-공연-20",cat:"공연",acct:"상업성",name:"크리스마스1(호두까기)",key:"크리스마스1호두까기",mon:"12월",cnt:2,bud:56500000,vou:0,fee:0,rev:0,paid:0,inv:0,blank:"vou|fee|rev|paid|inv"}
+  {no:"2026-공연-20",cat:"공연",acct:"상업성",name:"크리스마스1(호두까기)",key:"크리스마스1호두까기",mon:"12월",cnt:2,bud:56500000,vou:0,fee:0,rev:0,paid:0,inv:0,blank:"vou|fee|rev|paid|inv"},
+  {no:"2026-전시-01",cat:"전시",acct:"",name:"GS칼텍스 예울마루 어린이 미술전 <우리 SUM 타볼래?>",key:"gs칼텍스예울마루어린이미술전우리sum타볼래?",mon:"",cnt:0,bud:0,vou:0,fee:0,rev:21055500,paid:0,inv:0,blank:"bud|vou|fee|paid|inv"},
+  {no:"2026-전시-02",cat:"전시",acct:"",name:"GS칼텍스 예울마루 창작스튜디오 '창작스튜디오 7기 입주작가 프리뷰전'",key:"gs칼텍스예울마루창작스튜디오창작스튜디오7기입주작가프리뷰전",mon:"",cnt:0,bud:0,vou:0,fee:0,rev:1656000,paid:0,inv:0,blank:"bud|vou|fee|paid|inv"},
+  {no:"2026-전시-03",cat:"전시",acct:"",name:"(장도)GS칼텍스 예울마루 기획전시 '섬냥이 in 장도'",key:"장도gs칼텍스예울마루기획전시섬냥이in장도",mon:"",cnt:0,bud:0,vou:0,fee:0,rev:9024000,paid:0,inv:0,blank:"bud|vou|fee|paid|inv"},
+  {no:"2026-교육-01",cat:"교육",acct:"",name:"2026 화요살롱 이낙준(한산이가) - 여수",key:"2026화요살롱이낙준한산이가",mon:"",cnt:0,bud:0,vou:0,fee:0,rev:4236750,paid:0,inv:0,blank:"bud|vou|fee|paid"}
  ]}
 }};

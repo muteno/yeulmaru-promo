@@ -7787,6 +7787,24 @@ function _bizOvSetCat(c){ _bizOvCat=String(c||'')||null; try{_bizInlineRender();
 // 사업NO 표기 — [260813 운영자] 「사업no 디테일한 뒤에 실제 표기는 **공연-01만** 나오면 될듯」
 //   연도는 이미 면 전체의 축(머리줄 연도 칩)이라 행마다 다시 적을 이유가 없다. **값은 안 건드린다**(표기만 줄인다).
 function _finNoShort(no){ return String(no||'').replace(/^20\d\d-/,''); }
+// [260812 9차 운영자] 사업명 「클래식2(한국페스티발앙상블)」 = 앞이 **묶음 이름**, 안이 **공연명**이다.
+//   지시: 「비고에 예술성 사업성 대신해서 클래식2, 아동극1 이런거는 비고로 빠질게」
+//        「사업명은 지금 등록된 기존에 등록된 공연이랑 싱크를 맞춰서 표기해줘」
+//   ⚠ 가르는 정규식은 `_finAliases`가 쓰는 것과 **같은 한 벌**이다 — 두 곳이 갈리면 표에 뜨는 이름과
+//     공연↔사업비 조인이 서로 다른 글자를 보게 된다.
+var _FIN_PAREN=/^([^(（]*)[(（]([^)）]*)[)）]\s*$/;
+function _finNamePair(name){
+  var t=String(name||'').trim(), m=t.match(_FIN_PAREN);
+  if(!m)return {show:t,tag:''};
+  return {show:(m[2]||'').trim()||t, tag:(m[1]||'').trim()};
+}
+// 표에 적을 이름 = **운영대장에 등록된 공연명이 있으면 그것**(운영자 「기존에 등록된 공연이랑 싱크」).
+//   없으면 사업명 괄호 안으로 물러난다. 대장이 아직 안 실렸으면(`ready:false`) 조용히 괄호 안 —
+//   「아직 모름」을 「등록 안 됨」으로 바꿔 적지 않는다(`_finLinkMap`이 정한 규약 그대로).
+function _finShowName(r,lm){
+  try{ var ns=(lm&&lm.ready&&lm.byNo[r.no])||[]; if(ns.length)return ns.join(' / '); }catch(_e){}
+  return _finNamePair(r.name).show;
+}
 // 분야별 합 — 파생값은 여기서도 저장하지 않고 매번 센다(`_finCalc`와 같은 식).
 function _bizOvSum(rows){
   var s={n:0,bud:0,vou:0,fee:0,rev:0,ppl:0};
@@ -7901,7 +7919,7 @@ function _bizOvRender(el){
           +'<button type="button" class="ry-live-tg" role="radio" aria-checked="'+(on?'true':'false')+'" onclick="_bizOvSetCat(\''+_anaEsc(c)+'\')"'
           +' title="'+escapeHtml(lab+' 사업만 보기')+'">'+escapeHtml(lab)+'</button>'; }).join('')
     +'</span>'):'';
-  h+='<div class="bizm-card" data-bizmfill data-bizmcap style="display:flex;flex-direction:column;margin-bottom:0"><div class="ct" style="flex:0 0 auto"><span class="ct-bul"></span>분야별 <span class="sub">수익률 높은 순 · 줄을 누르면 상세'+(_blkOv?' · 미기입 '+_blkOv+'건':'')+'</span>'+_ovSel+'</div><div style="overflow:auto;flex:1 1 auto;min-height:0">';
+  h+='<div class="bizm-card" data-bizmfill data-bizmcap style="display:flex;flex-direction:column;margin-bottom:0"><div class="ct" style="flex:0 0 auto"><span class="ct-bul"></span>분야별 <span class="sub">사업NO 순 · 줄을 누르면 상세'+(_blkOv?' · 미기입 '+_blkOv+'건':'')+'</span>'+_ovSel+'</div><div style="overflow:auto;flex:1 1 auto;min-height:0">';
   h+='<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="color:var(--dim);font-size:12px;text-align:left">';
   [['NO',''],['사업명',''],['사업비','백만원'],['수입','백만원'],['수익률','%'],['비고','']].forEach(function(c,i){
     h+='<td style="padding:8px 12px;position:sticky;top:0;z-index:1;background:var(--surface-solid);box-shadow:inset 0 -2px 0 var(--border);vertical-align:middle;white-space:nowrap'+(i===0?';padding-left:14px':'')+((i>=2&&i<=4)?';text-align:right':'')+(i===5?';padding-right:14px':'')+'">'+c[0]
@@ -7909,11 +7927,14 @@ function _bizOvRender(el){
   });
   h+='</tr></thead><tbody>';
   if(!_ovRows.length)h+='<tr><td colspan="6" style="padding:20px 14px;color:var(--dim);font-size:12.5px">'+escapeHtml((_BIZOV_CAT_LAB[_ovCat]||_ovCat||'해당 분야'))+' 사업이 이 해에는 없어요</td></tr>';
-  _ovRows.slice().sort(function(a,b){ var x=_finCalc(a).margin,y=_finCalc(b).margin; return (y==null?-1:y)-(x==null?-1:x); }).forEach(function(r,i){
+  // [260812 9차 운영자 「공연 no에 따라 나열 쭉 해주고 순서대로」] 정렬 = **사업NO 오름차순**(구판 = 수익률 내림차순).
+  //   숫자 비교(`numeric:true`) — 문자 비교면 `공연-10`이 `공연-2`보다 앞에 온다.
+  var _lm=_finLinkMap(year);   // 등록된 공연명 지도 — 줄마다 부르지 않고 한 번만
+  _ovRows.slice().sort(function(a,b){ return String(a.no).localeCompare(String(b.no),'en',{numeric:true}); }).forEach(function(r,i){
     var c=_finCalc(r), _bl=_finBlank(r), _noCost=(_bl.indexOf('vou')>=0||_bl.indexOf('fee')>=0);
     h+='<tr onclick="_finModal(\''+_anaEsc(r.no)+'\','+year+')" style="cursor:pointer;border-bottom:1px solid var(--border);'+(i%2===1?'background:var(--past-bg);':'')+'" title="'+escapeHtml(r.name+' — 눌러서 사업비 상세'+(_bl.length?(' · 아직 안 적은 칸: '+_bl.join(', ')):''))+'">'
       +'<td style="padding:7px 12px 7px 14px;white-space:nowrap;color:var(--neutral-text);font-variant-numeric:tabular-nums">'+escapeHtml(_finNoShort(r.no))+'</td>'
-      +'<td style="padding:7px 12px;max-width:0;width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;color:var(--text)">'+escapeHtml(r.name)
+      +'<td style="padding:7px 12px;max-width:0;width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;color:var(--text)" title="'+escapeHtml(r.name)+'">'+escapeHtml(_finShowName(r,_lm))
         // 아직 안 적은 칸이 있으면 그 줄에 적는다 — 이 줄의 사업비·수익률이 **덜 찬 값**이라는 뜻이다(0원이 아니다).
         +(_bl.length?' <span style="font-weight:600;color:var(--peach-text)">미기입 '+_bl.length+'</span>':'')+'</td>'
       // ⚠ 아직 안 적은 칸은 **`0`이 아니라 `—`**로 적는다. 0으로 찍으면 「0원 썼다」로 읽혀서 미기입 표시를 붙인 뜻이 없어진다.
@@ -7922,8 +7943,10 @@ function _bizOvRender(el){
       +'<td style="padding:7px 12px;text-align:right;color:var(--green);font-weight:600;font-variant-numeric:tabular-nums">'+((_bl.indexOf('rev')>=0)?'—':_finMil(r.rev||0))+'</td>'
       // 분모가 덜 찼으면 수익률도 `—`. 사업비를 「—」라 해놓고 그걸로 나눈 값을 옆에 적으면 앞뒤가 안 맞는다
       //   (실측 260812: `2026-공연-04`가 사업비 —인데 3639.8%로 찍혔다 = 전표실적만 미입력이라 수수료로만 나눈 수였다).
-      +'<td style="padding:7px 12px;text-align:right;color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums">'+(_noCost?'—':_finPct(c.margin))+'</td>'
-      +'<td style="padding:7px 14px 7px 12px;white-space:nowrap;color:var(--neutral-text)">'+escapeHtml(r.acct||'—')+'</td></tr>';
+      +'<td style="padding:7px 12px;text-align:right;color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums">'+(_noCost?'—':_finPct(c.margin,true))+'</td>'
+      // 비고 = 사업명 앞 묶음 이름(클래식2·아동극1). 그게 없는 사업만 종전대로 회계구분이 선다.
+      //   ⚠ 회계구분은 **거르기 축**이라 사라지면 안 된다 — 분야 선택자 옆 회계구분 필터와 사업비 보드가 계속 그걸 쓴다.
+      +'<td style="padding:7px 14px 7px 12px;white-space:nowrap;color:var(--neutral-text)">'+escapeHtml(_finNamePair(r.name).tag||r.acct||'—')+'</td></tr>';
   });
   h+='</tbody></table></div></div>';
   h+='</div></div>';
@@ -8546,7 +8569,9 @@ function _finCalc(r){
           ppl:(r.paid||0)+(r.inv||0),exec:(r.bud>0)?((r.vou||0)/r.bud*100):null};
 }
 function _finWon(v){ return (v==null||!isFinite(v))?'—':Number(v).toLocaleString(undefined,{maximumFractionDigits:1})+'원'; }
-function _finPct(v){ return (v==null||!isFinite(v))?'—':v.toFixed(1)+'%'; }
+// [260812 9차 운영자 「수익률에 단위 % 들어가있으니까 여기에 % 직접적으로 안써줘도됌」]
+//   `bare=true`면 값만 — 열 머리가 이미 「(단위: %)」라고 말하는 자리에서 쓴다(KPI 등 다른 자리는 종전대로 %가 붙는다).
+function _finPct(v,bare){ return (v==null||!isFinite(v))?'—':(v.toFixed(1)+(bare?'':'%')); }
 // ── [260813 운영자] 사업 개요 표기 자 = **두 층**(KPI = 억 · 표 = 백만원) ──────────────────────
 //   지시: 「사업비는 **0.0억**으로 표기했으면 좋겠고 · 수익도 0.0억 · 수익률은 정상」
 //        「각 분야별 사업별 … 그 부분에 **예산을 백만원 단위로 하고 반올림**할게 그니까 1,470,284,757 이면 **1,470 백만 원**」
@@ -8882,14 +8907,22 @@ async function _finSeedPush(){
     rows.forEach(function(x){ have[String(x['사업NO']||'').trim()]=1; });
     var headers=(fresh.headers&&fresh.headers.length)?fresh.headers.slice():[];
     _FIN_COLS.forEach(function(c){ if(headers.indexOf(c)<0)headers.push(c); });
-    var who=''; try{ who=sessionStorage.getItem('myApplicant')||''; }catch(_e){}
-    var stamp=_finStamp(),added=0;
+    var added=0;
     seed.forEach(function(r){
       if(have[r.no])return;
+      // [260812 9차] 반입은 **엑셀 원본을 그대로 옮기는 일**이다 — 세 가지를 지킨다.
+      //   ⓐ 아직 안 적은 칸은 `0`이 아니라 **빈칸**으로 올린다. 0으로 굳히면 시트가 씨앗을 이기므로
+      //      원본 엑셀을 봐도 못 되돌린다 = 화면에서 애써 가른 「미입력 ↔ 0원」이 반입 한 번에 사라진다.
+      //   ⓑ 어느 칸이 비었는지는 **`미기입` 열**이 들고 간다(구판은 이 열을 아예 안 썼다).
+      //   ⓒ `수정자`·`수정일시`는 **안 찍는다**. 이 값들을 정한 건 사람이 아니라 엑셀이다 —
+      //      전부 찍으면 반입 직후 79행이 죄다 「사람이 고친 행」으로 보여 「이 값 누가 정했나」에 답할 수 없다.
+      //      반입을 누가 언제 했는지는 Worker가 로그 시트에 이미 남긴다(축이 다르다).
+      var bl={}; String(r.blank||'').split('|').forEach(function(k){ if(k)bl[k]=1; });
+      var v=function(k,col){ return bl[k]?'':String(r[k]||0); };
       rows.push({'사업NO':r.no,'연도':String(year),'분야':r.cat,'회계구분':r.acct,'사업명':r.name,'연결키':'',
-        '진행월':r.mon||'','횟수':String(r.cnt||0),'예산':String(r.bud||0),'전표실적':String(r.vou||0),
-        '판매수수료':String(r.fee||0),'정산서매출':String(r.rev||0),'유료인원':String(r.paid||0),
-        '초대인원':String(r.inv||0),'비고':'','수정자':who,'수정일시':stamp});
+        '진행월':r.mon||'','횟수':String(r.cnt||0),'예산':v('bud'),'전표실적':v('vou'),
+        '판매수수료':v('fee'),'정산서매출':v('rev'),'유료인원':v('paid'),
+        '초대인원':v('inv'),'비고':'','수정자':'','수정일시':'','미기입':String(r.blank||'')});
       added++;
     });
     if(!added){ showToast('이미 전부 시트에 있어요','info'); return; }
