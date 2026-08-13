@@ -7874,10 +7874,8 @@ function _bizOvRender(el){
   //   = 열·정렬·색 전부 종전 그대로, 카드 이름과 **돈 자(원 → 백만원)만** 바뀐다.
   var cats=[]; rows.forEach(function(r){ if(r.cat&&cats.indexOf(r.cat)<0)cats.push(r.cat); });
   // [260813] 좌 메인 차트 — 운영자 「좌측은 판매현황 그 메인 차트처럼 나오게 하면 됨」.
-  //   자리·부품은 판매 현황 1면(`_yrmRender`)과 같은 꼴: `.bizm-card` + `.ct` + 그 안 차트 칸 한 개.
   //   ⚠ 그리기는 **`_bizmSwap` 뒤**에 `_bizEnsurePlotly`로 부른다 — 이 자리에서 바로 그리면 칸이 아직 DOM에 없어
   //     조용히 무발화한다(260812 첫 시도가 `plotted:false`로 끝난 원인이고, #803에서 고친 것과 같은 축이다).
-  //   자가 두 층이라(KPI 억 · 표 백만원) 차트는 **백만원**으로 통일한다 — 표와 같은 자를 쓴다.
   // [260813 운영자 「여기 나오는 차트는 기존에 만들어진 차트 사용하면돼(판매 현황에 있는 원래 있던거)」]
   //   ⚠ 첫 판에서 **차트를 새로 만들었다** — 규칙 3(디자인은 기존 정본만 · 창조 금지) 위반이라 통째로 지웠다.
   //   지금은 판매 현황 1면(`_yrmRender`)의 카드 마크업을 **글자 그대로** 쓰고, 그리기도 그 정본 함수
@@ -7891,9 +7889,23 @@ function _bizOvRender(el){
       +(c[1]?'<div style="font-size:10.5px;font-weight:400;margin-top:2px">(단위: '+c[1]+')</div>':'')+'</td>';
   });
   h+='</tr></thead><tbody>';
+  // [260813] 분야 안에 **아직 안 적은 칸이 하나라도 있으면** 그 합계는 덜 찬 값이다 → `0` 대신 `—`.
+  //   0으로 찍으면 「사업비 0원 썼다」로 읽혀 차액이 통째로 흑자로 보인다
+  //   (실측 260813: 2026 전시가 사업비 0 · 차액 +32백만원 = 매출만 들어왔을 뿐인데 「남는 사업」으로 읽혔다).
+  //   사업별 표에서 이미 쓰는 규칙과 **같은 한 벌** — 두 표가 다른 말을 하면 안 된다.
+  //   ⚠ 판정은 「하나라도 비었나」가 **아니라** 「**전부** 비었나」다. 공연은 20건 중 14건이 미기입이어도
+  //     나머지 6건의 사업비 511백만원은 **실제로 기록된 값**이라, `—`로 가리면 있는 데이터를 숨기는 게 된다(첫 판이 그랬다).
+  //     일부만 빈 경우는 숫자를 그대로 두고 **툴팁으로** 덜 찬 값임을 알린다.
+  var _allBlank=function(list,keys){ return list.length>0 && list.every(function(r){ var b=_finBlank(r);
+    return keys.every(function(k){ return b.indexOf(k)>=0; }); }); };
+  var _anyBlank=function(list,keys){ return list.some(function(r){ var b=_finBlank(r);
+    return keys.some(function(k){ return b.indexOf(k)>=0; }); }); };
   cats.forEach(function(cat,i){
-    var g=_bizOvSum(rows.filter(function(r){return r.cat===cat;}));
-    h+='<tr style="border-bottom:1px solid var(--border);'+(i%2===1?'background:var(--past-bg);':'')+'">'
+    var _cr=rows.filter(function(r){return r.cat===cat;}), g=_bizOvSum(_cr);
+    var _nB=_allBlank(_cr,['bud']), _nC=_allBlank(_cr,['vou','fee']), _nR=_allBlank(_cr,['rev']);
+    var _part=_anyBlank(_cr,['bud','vou','fee','rev']);
+    h+='<tr style="border-bottom:1px solid var(--border);'+(i%2===1?'background:var(--past-bg);':'')+'"'
+      +(_part?' title="'+escapeHtml(cat+' — 아직 안 적은 칸이 있어 합계가 덜 찬 값이에요')+'"':'')+'>'
       +'<td style="padding:7px 12px 7px 14px;font-weight:600;color:var(--text);white-space:nowrap">'+escapeHtml(cat)+'</td>'
       +'<td style="padding:7px 12px;text-align:right;color:var(--neutral-text);font-variant-numeric:tabular-nums">'+g.n+'</td>'
       +'<td style="padding:7px 12px;text-align:right;color:var(--neutral-text);font-variant-numeric:tabular-nums">'+_finMil(g.bud)+'</td>'
@@ -7907,6 +7919,8 @@ function _bizOvRender(el){
     +'<td style="padding:9px 12px;text-align:right;font-variant-numeric:tabular-nums">'+_finMil(S.bud)+'</td>'
     +'<td style="padding:9px 12px;text-align:right;color:var(--peach-text);font-variant-numeric:tabular-nums">'+_finMil(S.cost)+'</td>'
     +'<td style="padding:9px 12px;text-align:right;color:var(--green);font-variant-numeric:tabular-nums">'+_finMil(S.rev)+'</td>'
+    // 합계 숫자 자체는 「지금까지 기록된 것」이라 참이다 — 가리지 않는다. 다만 **분모가 덜 차면 파생값은 거짓**이 되므로
+    //   차액·수익률만 `—`로 둔다(KPI 줄이 「사업비 미입력 N건」이라고 사유를 이미 말하고 있다).
     +'<td style="padding:9px 12px;text-align:right;color:var('+(S.diff<0?'--danger':'--green')+');font-variant-numeric:tabular-nums">'+_finMil(S.diff)+'</td>'
     +'<td style="padding:9px 14px 9px 12px;text-align:right;color:var(--accent);font-variant-numeric:tabular-nums">'+_finPct(S.margin)+'</td></tr>';
   h+='</tbody></table></div></div>';
@@ -7948,13 +7962,14 @@ function _bizOvRender(el){
       +'<td style="padding:7px 12px;max-width:0;width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;color:var(--text)" title="'+escapeHtml(r.name)+'">'+escapeHtml(_finShowName(r,_lm))
         // 아직 안 적은 칸이 있으면 그 줄에 적는다 — 이 줄의 사업비·수익률이 **덜 찬 값**이라는 뜻이다(0원이 아니다).
         +(_bl.length?' <span style="font-weight:600;color:var(--peach-text)">미기입 '+_bl.length+'</span>':'')+'</td>'
-      // ⚠ 아직 안 적은 칸은 **`0`이 아니라 `—`**로 적는다. 0으로 찍으면 「0원 썼다」로 읽혀서 미기입 표시를 붙인 뜻이 없어진다.
-      //   사업비는 전표실적·수수료 둘 중 하나라도 비면 합계 자체가 덜 찬 값이다.
-      +'<td style="padding:7px 12px;text-align:right;color:var(--peach-text);font-weight:600;font-variant-numeric:tabular-nums">'+(_noCost?'—':_finMil(c.cost))+'</td>'
-      +'<td style="padding:7px 12px;text-align:right;color:var(--green);font-weight:600;font-variant-numeric:tabular-nums">'+((_bl.indexOf('rev')>=0)?'—':_finMil(r.rev||0))+'</td>'
-      // 분모가 덜 찼으면 수익률도 `—`. 사업비를 「—」라 해놓고 그걸로 나눈 값을 옆에 적으면 앞뒤가 안 맞는다
-      //   (실측 260812: `2026-공연-04`가 사업비 —인데 3639.8%로 찍혔다 = 전표실적만 미입력이라 수수료로만 나눈 수였다).
-      +'<td style="padding:7px 12px;text-align:right;color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums">'+(_noCost?'—':_finPct(c.margin,true))+'</td>'
+      // [260813 운영자 「기존에 데이터가 없는 곳은 그냥 0으로 표기해」] 숫자 칸은 **0으로 적는다**.
+      //   ⚠ 「안 적음 ↔ 0원」 구분이 사라지는 건 아니다 — 사업명 옆 **「미기입 N」** 표시가 그 역할을 계속 한다.
+      //     (구판은 여기를 `—`로 뒀는데, 표가 온통 대시라 숫자 표로 안 읽혔다.)
+      +'<td style="padding:7px 12px;text-align:right;color:var(--peach-text);font-weight:600;font-variant-numeric:tabular-nums">'+_finMil(c.cost)+'</td>'
+      +'<td style="padding:7px 12px;text-align:right;color:var(--green);font-weight:600;font-variant-numeric:tabular-nums">'+_finMil(r.rev||0)+'</td>'
+      // 수익률만은 분모가 덜 차면 안 적는다 — 사업비가 0인 채로 나눈 수는 뜻이 없다(`2026-공연-04`가 3639.8%로 찍혔던 자리).
+      //   `_finPct`가 분모 0이면 스스로 `—`를 준다 = 여기서 따로 가릴 게 없다.
+      +'<td style="padding:7px 12px;text-align:right;color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums">'+_finPct(c.margin,true)+'</td>'
       // 비고 = 사업명 앞 묶음 이름(클래식2·아동극1). 그게 없는 사업만 종전대로 회계구분이 선다.
       //   ⚠ 회계구분은 **거르기 축**이라 사라지면 안 된다 — 분야 선택자 옆 회계구분 필터와 사업비 보드가 계속 그걸 쓴다.
       +'<td style="padding:7px 14px 7px 12px;white-space:nowrap;color:var(--neutral-text)">'+escapeHtml(_finNamePair(r.name).tag||r.acct||'—')+'</td></tr>';
