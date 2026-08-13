@@ -382,6 +382,45 @@ def main() -> int:
     if re.search(r"^\s*built:", seed_src, re.M) and not re.search(r"var BIZ_FIN=\{[^\n]*built:", seed_src):
         bad.append("⑭ 씨앗의 `built`가 헤더가 아닌 행에 있다 — 손편집 흔적이다(빌더로 재생성해라).")
 
+    # ⑭ 정산서 매출 = **매출의 정본** (260813 운영자 「정산서 매출이 최종본으로 해서 정리해」)
+    #   그 해 `<연도>년 기획사업 정산서 매출.xlsx`가 있으면, 대응표에 걸린 사업의 `rev`는 **그 파일 값이어야 한다.**
+    #   왜 잠그나: 대시보드 엑셀에도 매출 칸이 있어서, 빌더 순서가 한 번만 뒤집혀도 **대시보드가 정산서를 덮는다**
+    #   = 화면이 조용히 옛 매출로 돌아간다(숫자만 보면 알 수 없다). 그래서 실제 파일을 다시 읽어 대조한다.
+    try:
+        import glob as _glob
+        spec2 = importlib.util.spec_from_file_location("_bf_settle", BUILDER)
+        bf2 = importlib.util.module_from_spec(spec2)
+        spec2.loader.exec_module(bf2)
+        for _sp in sorted(_glob.glob(str(ROOT / "*기획사업 정산서 매출*.xlsx"))):
+            _m = bf2.SETTLE_FILE_RE.search(os.path.basename(_sp)) or re.search(r"(20\d\d)", os.path.basename(_sp))
+            if not _m:
+                continue
+            _y = int(_m.group(1))
+            _bk = bf2.load_book(_sp)
+            _sh = next((n for n in _bk if "매출" in n), None)
+            if not _sh:
+                bad.append("⑭ 정산서 매출 파일에 `매출` 시트가 없다: %s" % os.path.basename(_sp))
+                continue
+            _hit, _un = bf2.settle_split(bf2.pull_settle(_bk[_sh], _y, []), _y)
+            _seed = {r["no"]: r for r in years.get(_y, []) if "no" in r}
+            for _no, _amt in sorted(_hit.items()):
+                _r = _seed.get(_no)
+                if _r is None:
+                    bad.append("⑭ 정산서 대응표의 `%s`가 씨앗에 없다 — 대응표를 고쳐라" % _no)
+                elif int(_r.get("rev") or 0) != int(_amt):
+                    bad.append("⑭ `%s` 매출이 정산서와 다르다: 씨앗 %s ≠ 정산서 %s — **정산서가 정본**이다"
+                               "(대시보드 엑셀이 덮었는지 빌더 순서를 봐라)."
+                               % (_no, f"{int(_r.get('rev') or 0):,}", f"{int(_amt):,}"))
+            if _un:
+                # 대응표에 없는 줄 = 새 사업으로 서 있어야 한다(버려지면 매출이 통째로 사라진다)
+                _names = {str(r.get("name", "")).strip() for r in years.get(_y, [])}
+                for _c, _t, _a2 in _un:
+                    if re.sub(r"\s+", " ", _t).strip() not in _names:
+                        bad.append("⑭ 정산서 줄 「%s」(%s)가 씨앗 어디에도 없다 — 대응표에 넣거나 새 사업으로 서야 한다"
+                                   % (_t[:30], f"{_a2:,}"))
+    except Exception as _e:
+        bad.append("⑭ 정산서 매출 대조 중 오류: %s" % _e)
+
     if bad:
         print("✗ check_finance 실패 %d건" % len(bad))
         for b in bad:

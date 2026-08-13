@@ -74,22 +74,29 @@ def main():
         print('[modal-head] SKIP — index.html 없음.')
         return 0
     src = open(INDEX, encoding='utf-8').read()
+    # ⚠ [260813] 리터럴 실존 검사는 **주석을 걷고** 재야 한다.
+    #   실측 킬테스트: 머리줄 호출을 지우고 그 자리에 `/* 나중에 _mhead( 로 넣을 예정 */`만 남겼더니 **통과했다**.
+    #   = 코드가 아니라 주석의 글자를 세고 있었다. 이 세션에서만 같은 축이 여섯 번 샜다
+    #     (주석 글자·리터럴·낱말·접두·마커·이번). 검사는 **코드만** 봐야 한다.
+    #   ⚠ 문자열 안의 `//`(URL 등)를 지우지 않도록 줄 주석은 앞에 따옴표가 없을 때만 걷는다.
+    code = re.sub(r"/\*.*?\*/", "", src, flags=re.S)
+    code = re.sub(r"(?m)(?<![:'\"])//[^\n]*", "", code)
     fails = []
 
-    shells = list(SHELL.finditer(src))
+    shells = list(SHELL.finditer(code))   # 셸도 code에서 찾는다(주석 안 가짜 셸을 세지 않게)
     if not shells:
         fails.append('셸을 하나도 못 찾았다 — 검사기가 앱 구조를 놓쳤다(정규식 점검 필요).')
 
     # ① 머리줄 실존 + ④ 셸 인라인 padding 금지
     for k, m in enumerate(shells):
-        end = shells[k + 1].start() if k + 1 < len(shells) else len(src)
-        win = src[m.end():min(end, m.end() + 2500)]
+        end = shells[k + 1].start() if k + 1 < len(shells) else len(code)
+        win = code[m.end():min(end, m.end() + 2500)]
         if '_mhead(' not in win and 'class="mhead"' not in win:
-            line = src.count('\n', 0, m.start()) + 1
+            line = code.count('\n', 0, m.start()) + 1
             fails.append('L%d: 머리줄 없는 모달 — `_mhead(제목, 부제)` 한 줄을 셸 바로 뒤에 넣어라.' % line)
         style = m.group(1) or ''
         if re.search(r'(^|;)\s*padding\s*:', style):
-            line = src.count('\n', 0, m.start()) + 1
+            line = code.count('\n', 0, m.start()) + 1
             fails.append('L%d: 셸 인라인에 `padding:` — `--mpad-y:…;--mpad-x:…`로 바꿔라'
                          '(안 그러면 머리줄 음수 마진과 어긋나 밴드가 안쪽으로 들어간다).' % line)
 
@@ -97,7 +104,7 @@ def main():
     for m in INLINE_BAND.finditer(src):
         st = m.group(0)
         if 'font-size:16px' in st and 'font-weight:700' in st:
-            line = src.count('\n', 0, m.start()) + 1
+            line = code.count('\n', 0, m.start()) + 1
             fails.append('L%d: 머리줄 밴드를 인라인으로 다시 침 — `_mhead(...)`를 써라(내용 SSOT).' % line)
 
     # ③ 모양 SSOT
