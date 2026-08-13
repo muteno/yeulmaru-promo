@@ -227,31 +227,17 @@ def main() -> int:
             before = {r["no"]: (y, r.get("key", "")) for y, rows in years.items() for r in rows}
             after = parse_seed(out)
             now = {(y, r.get("key", "")): r["no"] for y, rows in after.items() for r in rows}
-            # ⚠ [260813-2] **원천이 레포에 없는 행은 재현 자체가 불가능하다** — 그건 「NO가 밀렸다」가 아니다.
-            #   `.gitignore`가 `*.xlsx`를 막고 있어서, 씨앗 `src`가 이름을 적어 둔 원천 중 레포에 실제로
-            #   없는 파일이 있으면 그 원천이 만든 행은 재빌드에서 통째로 사라진다(→None).
-            #   구판은 그걸 「밀렸다」로 적어 **main을 빨갛게 세웠다**(260813 실측: #806이 반입한
-            #   `2026년 기획사업 정산서 매출.xlsx`가 커밋 안 돼 2026-전시-01·02·03 · 2026-교육-01 4건이 →None).
-            #   그래서 「사라짐(→None)」과 「다른 번호로 바뀜(A→B)」을 가른다 — **후자만 사고**다.
-            #   원천이 다 있으면 사라짐도 사고로 그대로 잡는다(이빨을 안 뺀다).
-            declared = set(re.findall(r'"([^"]*\.xlsx)"', seed_src))
-            missing_src = sorted(f for f in declared if not (ROOT / f).exists())
-            moved, vanished = [], []
+            # ⚠ [260813-3] 면책을 **뗐다.** 260813-2에 「원천이 레포에 없으면 그 행의 사라짐은 면책」을 넣었는데,
+            #   그건 증상 가리개였다 — 진짜 문제는 **빌더가 재현 못 하는 값을 지운다**는 것이었다.
+            #   빌더 `carry_missing()`이 「없는 원천이 만든 값·행은 이전 산출물에서 이어받는다」로 고쳐져
+            #   재빌드가 **무손실**이 됐다(실측: 83행 → 83행 · 값 변화 0). 그래서 면책이 필요 없다 =
+            #   ⑧이 원래 강도로 돌아왔다(사라짐도 번호 바뀜도 전부 사고로 잡는다).
+            moved = []
             for no, (y, k) in before.items():
                 if no == victim:
                     continue   # 일부러 지운 그 행만 새 번호를 받는 게 정상
-                got = now.get((y, k))
-                if got == no:
-                    continue
-                (vanished if got is None else moved).append("%s→%s" % (no, got))
-            if vanished:
-                if missing_src:
-                    warn_missing = ("⑧ 면책 %d건 — 원천 %s가 레포에 없어 재현 불가(`.gitignore`의 `*.xlsx`). "
-                                    "그 파일을 최상단에 두고 `python3 tools/build_biz_finance.py`를 돌리면 완전히 잰다: %s"
-                                    % (len(vanished), " · ".join(missing_src), ", ".join(vanished[:6])))
-                    print("   ℹ " + warn_missing)
-                else:
-                    moved.extend(vanished)
+                if now.get((y, k)) != no:
+                    moved.append("%s→%s" % (no, now.get((y, k))))
             if moved:
                 bad.append("이전본에서 한 줄이 빠졌을 뿐인데 **다른 사업 %d건의 NO가 밀렸다**: %s — "
                            "엑셀 중간에 줄을 끼우면 시트에 저장된 담당자 수정본이 엉뚱한 사업에 붙는다"
@@ -370,6 +356,36 @@ def main() -> int:
             bad.append("⑭ `_finAsOf`가 시트 `수정일시`(행의 `at`)를 안 본다 — 담당자가 실제로 건드린 시각이 정본이다.")
         if "BIZ_FIN.built" in need and "BIZ_FIN.built" not in body:
             bad.append("⑭ `_finAsOf`에 씨앗 폴백(`BIZ_FIN.built`)이 없다 — 시트에 손댄 행이 없으면 기준일이 통째로 사라진다.")
+    # ⑯ **재빌드 무손실(멱등)** — 빌더를 그대로 다시 돌리면 지금 씨앗과 값·행이 같아야 한다 (260813-3)
+    #   왜 필요한가: ⑧은 **사업NO만** 본다. 그래서 「번호는 그대로인데 값이 0으로 돌아가는」 사고를 아무도 안 봤다.
+    #   실측 260813 — `2026년 기획사업 정산서 매출.xlsx`가 `.gitignore`(`*.xlsx`)로 커밋되지 않은 채
+    #   누가 빌더를 돌리면 **4행이 사라지고**(83→79) 2026-공연-06 매출 31,922,000 → 0, 공연-07 17,269,000 → 0으로
+    #   되돌아갔다. 기계산출물은 「언제 다시 돌려도 같은 것이 나온다」가 전제인데 그게 깨져 있었다.
+    #   빌더 `carry_missing()`이 그걸 고쳤고, 이 검사가 **다시 깨지면 그 자리에서 잡는다**.
+    #   ⚠ `built`(생성 시각)는 매번 달라지는 게 정상이라 비교에서 뺀다.
+    rc2, out2 = run_builder_with_prev(seed_src)
+    if rc2 != 0:
+        bad.append("⑯ 재빌드가 rc=%d로 실패했다 — 씨앗을 다시 만들 수 없는 상태다" % rc2)
+    else:
+        def _rows_txt(s):
+            return {m.group(1): m.group(0) for m in re.finditer(r'\{no:"([^"]+)".*?\}', s)}
+        a, b = _rows_txt(seed_src), _rows_txt(out2)
+        gone = sorted(set(a) - set(b))
+        chg = sorted(k for k in a if k in b and a[k] != b[k])
+        if gone:
+            bad.append("⑯ 재빌드하면 %d행이 **사라진다**(원천이 레포에 없어 재현 못 하는 값을 빌더가 지운다): %s"
+                       % (len(gone), ", ".join(gone[:6])))
+        if chg:
+            bad.append("⑯ 재빌드하면 %d행의 **값이 바뀐다**(기록된 값이 되돌아간다): %s"
+                       % (len(chg), ", ".join(chg[:6])))
+        # 줄 순서까지 같아야 한다 — 값이 같아도 순서가 흔들리면 diff가 통째로 뒤집혀
+        #   동시 편집 세션끼리 **없어도 될 충돌**이 난다(260813 실측: 값 변화 0인데 12줄 diff).
+        #   씨앗의 줄 순서는 원본 엑셀의 분야 순서(공연 → 전시 → 교육)를 들고 있는 값이기도 하다.
+        if not gone and not chg and list(a) != list(b):
+            bad.append("⑯ 재빌드하면 **줄 순서가 바뀐다**(값은 같다) — 없어도 될 diff·충돌이 난다. 첫 어긋남: %s → %s"
+                       % (next((x for x, y2 in zip(a, b) if x != y2), "?"),
+                          next((y2 for x, y2 in zip(a, b) if x != y2), "?")))
+
     # ⑮ 사업명 가르는 정규식은 **한 벌**이다 (260813-2)
     #   260812-9 주석은 「`_finAliases`가 쓰는 것과 같은 한 벌」이라 적어 뒀지만 실제로는 복제본이 따로 살아 있었고,
     #   그 탓에 표기 쪽만 꺾쇠(`<>`)를 배우고 조인 쪽은 못 배웠다(전시 「어린이 미술전 <냠냠>」의 후보에 「냠냠」 누락).
