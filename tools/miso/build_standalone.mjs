@@ -108,6 +108,14 @@ const preShim = `<script id="miso-db" type="application/json">${dbJson}</script>
            GET이 JSON이 아니면 차단으로 간주하고 번들 폴백(앱이 HTML 파싱 실패로 빈 화면 되는 것 방지). */
         var ct=(r.headers&&r.headers.get&&(r.headers.get('content-type')||''))||'';
         if(method==='GET'&&ct.indexOf('json')===-1){ _miss++; _retryAt=Date.now()+60000; return res(offline(u,method)); }
+        /* [260812 실측] GET 401/403 = 권한 차단 → 번들 폴백. 이식판은 MSAL/Graph를 _pinActive로 봉인했으므로
+           서버는 PII 시트(운영_회원 등)에 반드시 403 「Admin only (personal data)」를 돌려준다. 그런데 그 데이터는
+           **바로 이 파일 안에 내장돼 있다** — 403이 JSON이라는 이유로 그대로 앱에 넘기면 「회원 데이터를 못
+           불러왔어요」가 뜬다(MISO 프리뷰 실측: api('GET','/api/ops?sheet=회원') → 403). 권한 차단은
+           앱 입장에서 오프라인과 같은 사건이니 같은 폴백을 탄다.
+           ⚠ _miss는 올리지 않는다 — 서버가 죽은 게 아니라 이 경로만 거절된 것이라, 올리면 오프라인 래치가
+           걸려 멀쩡한 다른 GET까지 60초간 번들로 묶인다(실서버 최신값을 잃는다). */
+        if(method==='GET'&&(r.status===401||r.status===403))return res(offline(u,method));
         _miss=0; res(r);
       }, function(){ if(done)return; done=true; if(t)clearTimeout(t); _miss++; _retryAt=Date.now()+60000; res(offline(u,method)); });
     });
