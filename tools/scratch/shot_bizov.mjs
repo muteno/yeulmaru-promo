@@ -39,14 +39,15 @@ await page.route('**/*', route => {
 await page.goto('https://app.local/index.html?qa=admin#bizov', { waitUntil: 'domcontentloaded', timeout: 30000 });
 await page.waitForTimeout(2500);
 // 연도 고정 + 사업 개요 강제 렌더
-await page.evaluate(`(()=>{ try{ _bizDeckGo('ov'); }catch(_e){} try{ _bizOvSetYear(${YEAR}); }catch(_e){} ${process.argv[4] ? `try{ _bizOvSetCat('${process.argv[4]}'); }catch(_e){}` : ''} })()`);
+await page.evaluate(`(()=>{ try{ if(!BIZ_FIN.built)BIZ_FIN.built='2026-08-13 11:00'; }catch(_e){} try{ _bizDeckGo('ov'); }catch(_e){} try{ _bizOvSetYear(${YEAR}); }catch(_e){} ${process.argv[4] ? `try{ _bizOvSetCat('${process.argv[4]}'); }catch(_e){}` : ''} })()`);
 await page.waitForTimeout(1800);
 await page.screenshot({ path: join(DIR, OUT + '_full.png'), fullPage: false });
 // 크롭은 **좁게** — 리포트는 base64를 HTML에 박는 규약(.gitignore)이라 큰 그림 한 장이 그대로 용량이 된다.
 for (const [sel, name] of [
   ['#biz-main div:has(> .bizm-kpi)', 'kpi'],            // KPI 줄만
-  ['#biz-main .bizm-card >> nth=0', 'card1'],           // 사업 결과(구 분야별) 표
-  ['#biz-main .bizm-card >> nth=1', 'card2'],           // 분야별(구 사업별) 표 + 선택자
+  // ⚠ nth 자리로 잡지 않는다 — #807이 **차트 카드를 앞에** 넣어 자리가 밀렸다. 제목 글자로 고른다.
+  ['#biz-main .bizm-card:has(.ct:text-matches("사업 ?결과"))', 'card1'],   // 사업 결과 표 + 기준일
+  ['#sales-rail .bizm-card:has(.ct:text-matches("분야별")), #biz-main .bizm-card:has(.ct:text-matches("분야별"))', 'card2'],   // 분야별 표 + 선택자 (#809로 우측 레일로 이사)
   ['#sales-rail [data-bizmbox]', 'rail'],               // 우 열 유리 박스 안쪽
   ['#biz-main', 'main'],
 ]) {
