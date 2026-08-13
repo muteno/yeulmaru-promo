@@ -10,7 +10,10 @@
 //      (기준값을 이 파일에 안 적는다 — `data/biz_finance.js`를 직접 읽어 대조한다. 기준 이중 기재 = 드리프트 원인.)
 //   ③ **파생값 = 원본 수식** — `_finCalc`의 수익율이 매출÷(전표실적+판매수수료)×100과 일치(대표 3건).
 //   ④ **공연에 매달림** — 운영대장 목 데이터를 넣으면 사업 목록 행이 `_finOf`로 사업비를 찾아
-//      `onclick="_finOpen(`가 붙고, 표기 차이가 있는 이름(「협력사업2(아파나도르)」↔「아파나도르」)도 붙는다.
+//      `onclick="_finOpen(`가 붙고, 표기 차이가 있는 이름(공연명 「아파나도르」 ↔ 사업명 안에만 있는 그 낱말)도 붙는다.
+//      ⚠ 「붙었나」는 **사업NO로 잰다**(이름 문자열로 재지 않는다) — 260813 실측: 운영자가 사업명을
+//        「협력사업2(아파나도르)」→「스페인 국립 플라멩코 발레단 내한공연 <아파나도르>」로 확정하자
+//        매달림은 멀쩡한데 이 검사만 실패했다. 이름은 운영자가 바꾸는 값이고, 정체성은 사업NO다.
 //   ⑤ **권한** — 회계 아님 = 사업비 보드가 안 열리고 [수정]이 없다 · 회계 = 열리고 [수정]이 있다.
 //   ⑥ 그 경로에서 **pageerror 0** + 머리줄 정본(`.mhead`) 실존.
 //
@@ -23,6 +26,9 @@
 //   Ⓑ [수정] 버튼의 `_isAcct()` 게이트 제거 → ⑤ rc=1 (「일반 사용자에게 [수정] 버튼이 보인다」)
 //   Ⓒ `_finCalc`의 수익율에서 판매수수료를 뺌 → ③ rc=1 3건 + ⑤ 화면 표기 51.1% ≠ 50.3% 동시 검출
 //   · 전부 원복하면 rc=0
+//   Ⓓ(260813 증설) `_finAliases`의 괄호·꺾쇠 추출 + `_finOf`의 부분 포함 **둘 다** 제거 → ④ rc=1 4건
+//     (정확 일치 null · 이름 일부 null · 클릭 행 0 · 점선 0). 한쪽만 죽이면 나머지 한쪽이 받아내 통과한다
+//     = ④는 「어느 길로 붙느냐」가 아니라 **붙느냐 마느냐**를 잰다.
 // ⚠ 첫 판은 운영대장 목의 열 이름을 틀리게 적어(`공연일`·`좌석수`) `_bizClean`이 3행을 통째로 걸렀고,
 //   그 상태에서도 ①③⑤는 PASS였다 — 「행이 0이라 링크가 0」인지 「링크가 깨졌는지」를 못 가른다.
 //   그래서 ④는 클릭 행 개수를 **목 건수와 함께** 적고, 0행이면 로그로 드러나게 뒀다.
@@ -148,19 +154,20 @@ async function main() {
       return {rows:list.length,
         hit:trs.filter(t=>t.getAttribute('onclick')||'').map(t=>(t.getAttribute('onclick')||'')),
         names:list.map(g=>g.name),
-        exact:!!_finOf('신년음악회',${YEAR}),
-        paren:(_finOf('아파나도르',${YEAR})||{}).name||null,
+        exact:(_finOf('신년음악회',${YEAR})||{}).no||null,
+        paren:(_finOf('아파나도르',${YEAR})||{}).no||null,
+        parenName:(_finOf('아파나도르',${YEAR})||{}).name||null,
         none:_finOf('스모크 대관 공연',${YEAR}),
         dotted:(html.match(/underline dotted/g)||[]).length};
     })()`);
     if (link.rows !== 3) notes.push(`④ 사업 목록 ${link.rows}행(목 3건 기준)`);
-    if (!link.exact) fails.push('④ 정확 일치(「신년음악회」)로 사업비를 못 찾았다');
-    if (link.paren !== '협력사업2(아파나도르)') fails.push(`④ 괄호 안 이름(「아파나도르」)이 「협력사업2(아파나도르)」에 안 붙었다 — 실제: ${link.paren}`);
+    if (link.exact !== `${YEAR}-공연-01`) fails.push(`④ 정확 일치(「신년음악회」)가 ${YEAR}-공연-01에 안 붙었다 — 실제: ${link.exact}`);
+    if (link.paren !== `${YEAR}-공연-03`) fails.push(`④ 이름 일부(「아파나도르」)가 ${YEAR}-공연-03에 안 붙었다 — 실제: ${link.paren} / ${link.parenName}`);
     if (link.none) fails.push(`④ 사업비 없는 공연에 엉뚱한 행이 붙었다: ${link.none.no} ${link.none.name}`);
     if (link.hit.length !== 2) fails.push(`④ 클릭 가능한 행이 ${link.hit.length}개 — 2개여야 한다(사업비 있는 행만)`);
     if (link.dotted !== 2) fails.push(`④ 매출 점선 밑줄 ${link.dotted}개 — 2개여야 한다`);
     if (link.hit.some(h => !/_finOpen\(/.test(h))) fails.push('④ 행 onclick이 `_finOpen(`이 아니다');
-    notes.push(`④ 매달림 — 정확 일치 ✓ · 괄호 안 이름 ✓ · 없는 건 안 붙음 ✓ · 클릭 행 ${link.hit.length}/3 · 점선 ${link.dotted}`);
+    notes.push(`④ 매달림 — 정확 일치 ${link.exact} · 이름 일부 ${link.paren}(${link.parenName}) · 없는 건 안 붙음 ✓ · 클릭 행 ${link.hit.length}/3 · 점선 ${link.dotted}`);
 
     // ── ⑤ 권한 ──
     const perm = await page.evaluate(`(()=>{
