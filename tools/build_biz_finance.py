@@ -358,6 +358,107 @@ def tot_at(cells, row, cols):
     return dict((k, None if c == "." else num(cells, "%s%d" % (c, row))) for k, c in zip(keys, cols))
 
 
+# ══ [260813 운영자] 「정산서 매출」 별도 파일 반입 ═══════════════════════════════════════════
+#   운영자: 「이 내용이 가장 최신 매출 관련 지표야 이거 반영해주면 됨」(`<연도>년 기획사업 정산서 매출.xlsx`)
+#   대시보드 파일과 **모양이 다르다** — 시트 한 장(`매출`)에 `구분 · 제목 · 정산서 일정 · 금액`뿐이다.
+#   ⚠ **이름으로 자동 매칭하지 않는다.** 260813 실측에서 자동 매칭이 두 건을 틀리게 붙였다:
+#        「2026 어린이 뮤지컬<100층짜리 집>」 → 뮤지컬1(미세스 다웃파이어)   ← 완전히 다른 공연
+#        브런치콘서트 2회차가 둘 다 한 줄에 쏠림
+#      돈을 옮기는 일이라 「그럴듯한 추측」이 틀리면 사업 하나의 매출이 통째로 뒤바뀐다.
+#      그래서 **사람이 읽고 고칠 수 있는 명시 대응표**를 둔다(아래). 표에 없는 줄은 조용히 버리지 않고
+#      **새 사업으로 추가**하거나 경고로 알린다.
+SETTLE_FILE_RE = re.compile(r"(20\d\d)\s*년?\s*기획사업\s*정산서\s*매출")
+
+# 제목에 이 낱말이 있으면 그 사업NO로 간다(한 NO에 여러 줄이 붙으면 **합산**한다 — 브런치콘서트 2회차 같은 경우).
+#   낱말은 제목에서 그 사업만 골라내는 가장 짧은 조각으로 고른다(길면 표기가 조금만 바뀌어도 안 붙는다).
+SETTLE_MAP = {
+    2026: [
+        ("신년음악회", "2026-공연-01"),
+        ("실내악", "2026-공연-02"),
+        ("김영욱", "2026-공연-03"),          # 공모사업(김영욱,춘자씨,그때도오늘)
+        ("한국페스티발앙상블", "2026-공연-04"),
+        ("국립심포니", "2026-공연-05"),
+        ("노인의 꿈", "2026-공연-06"),
+        ("헬로", "2026-공연-07"),            # 헬로!오페라 <세비야의 이발사> = 씨앗 「헬로시리즈」
+        ("미세스 다웃파이어", "2026-공연-14"),
+        ("브런치콘서트", "2026-공연-15"),      # 4월·6월 2회차 → 한 사업에 합산
+        ("100층짜리", "2026-공연-16"),
+    ],
+}
+# 표에 없는 줄 = 씨앗에 그 사업이 아예 없는 것(2026 전시·교육). **새 사업으로 세운다.**
+#   금액 말고는 원본에 없으므로 나머지 칸은 전부 `빈`으로 둔다 = 화면이 「미기입」으로 정직하게 말한다.
+SETTLE_NEW_CAT = {"기획전시": "전시", "기획교육": "교육", "기획공연": "공연"}
+
+
+def pull_settle(cells, year, warn):
+    """`매출` 시트 → [(구분, 제목, 금액)]. 합계·주석 줄은 건너뛴다."""
+    out = []
+    r = 1
+    blanks = 0
+    while blanks < 6:
+        r += 1
+        cat = txt(cells, "A%d" % r)
+        if not cat:
+            blanks += 1
+            continue
+        blanks = 0
+        if cat.startswith("※") or "합" in cat.replace(" ", "")[:2]:
+            continue
+        if cat not in SETTLE_NEW_CAT:
+            continue
+        title = txt(cells, "B%d" % r)
+        amt = num(cells, "D%d" % r)
+        if not title or amt.st == "빈":
+            continue
+        out.append((cat, title, int(amt)))
+    return out
+
+
+def settle_split(lines, year):
+    """정산서 줄들을 「대응표에 있는 것(NO별 합산)」과 「없는 것」으로 가른다."""
+    table = SETTLE_MAP.get(year, [])
+    hit, unmapped = {}, []
+    for cat, title, amt in lines:
+        no = next((n for kw, n in table if kw in title), None)
+        if no:
+            hit[no] = hit.get(no, 0) + amt   # 한 사업에 회차가 여럿이면 합산(브런치콘서트 4월·6월)
+        else:
+            unmapped.append((cat, title, amt))
+    return hit, unmapped
+
+
+def settle_new_rows(unmapped, year):
+    """대응표에 없는 줄 = 씨앗에 아예 없는 사업. **새로 세운다**(금액만 있고 나머지는 전부 미기입).
+    ⚠ NO 배정 **전에** 불러야 이 행들도 같은 규칙으로 NO를 받는다."""
+    fresh = []
+    for cat, title, amt in unmapped:
+        c = SETTLE_NEW_CAT[cat]
+        row = dict(cat=c, acct="", name=re.sub(r"\s+", " ", title).strip(), mon="", cnt=0,
+                   bud=N(0, "빈"), vou=N(0, "빈"), fee=N(0, "빈"), rev=N(amt, "값"),
+                   paid=N(0, "빈"), inv=N(0, "빈"))
+        mark_blank(row, axis=("inv",) if c == "교육" else ())
+        fresh.append(row)
+        print("[사업비] %d년 정산서 매출 신규 %s %-30s %s" % (year, c, row["name"][:30], f"{amt:,}"))
+    return fresh
+
+
+def settle_apply_rev(rows, hit, year, warn):
+    """대응표에 있는 사업의 매출을 **덮어쓴다**(운영자 「가장 최신 매출 관련 지표」).
+    ⚠ NO 배정 **뒤에** 불러야 한다 — 그 전엔 행에 `no`가 없어 짝을 못 찾는다."""
+    by_no = {r.get("no"): r for r in rows if r.get("no")}
+    for no, amt in sorted(hit.items()):
+        r = by_no.get(no)
+        if r is None:
+            warn.append("정산서 매출 대응표의 `%s`가 %d년 씨앗에 없다 — 표를 고쳐라(사업이 지워졌거나 NO가 바뀌었다)" % (no, year))
+            continue
+        old = int(r.get("rev") or 0)
+        if old != amt:
+            print("[사업비] %d년 정산서 매출 갱신 %s %-24s %14s → %s"
+                  % (year, no, str(r.get("name"))[:24], f"{old:,}", f"{amt:,}"))
+        r["rev"] = N(amt, "값")
+        mark_blank(r, axis=("inv",) if r.get("cat") == "교육" else ())
+
+
 def audit(rows, tot, cat, warn):
     """검산 ① 행 합 == 시트 합계 행. tot의 None 칸은 원본에 대응 합계가 없다는 뜻 = 건너뛴다.
 
@@ -458,6 +559,12 @@ def main(argv):
     if not paths:
         print("[사업비] 원본 xlsx를 못 찾았다 — 레포 최상단에 「<연도>년 예술사업 대시보드.xlsx」를 두거나 경로를 인자로 줘라")
         return 1
+    # [260813] 정산서 매출 파일은 **대시보드와 따로** 모은다 — 모양이 달라 같은 파서로 못 읽는다.
+    settle_books = {}
+    for _sp in sorted(glob.glob(os.path.join(ROOT, "*기획사업 정산서 매출*.xlsx"))):
+        _sm = SETTLE_FILE_RE.search(os.path.basename(_sp)) or re.search(r"(20\d\d)", os.path.basename(_sp))
+        if _sm:
+            settle_books.setdefault(int(_sm.group(1)), []).append(_sp)
     old_ids, old_used, old_alias = prev_ids()
     years, srcs, warn = {}, {}, []
     # [260812-6] **한 해에 파일이 여러 개**일 수 있다(실측: 2024가 공연·전시 두 파일로 왔다).
@@ -493,6 +600,22 @@ def main(argv):
             if label == "공연":
                 for alt in [n for n in book if n != nm and n.replace(" ", "").startswith((str(year)[2:] + word, str(year) + word))]:
                     diff_log(book[nm], book[alt], nm, alt)
+        # ── [260813] 정산서 매출 반입 — 별도 파일(`<연도>년 기획사업 정산서 매출.xlsx`)이 있으면 얹는다 ──
+        #   대시보드 파일보다 **나중에** 온 최신 실적이라 여기서 덮는다(운영자 「가장 최신 매출 관련 지표」).
+        #   ⚠ NO 배정 **앞**에서 얹어야 새로 세운 전시·교육 사업도 같은 규칙으로 NO를 받는다.
+        _settle_hit = {}
+        for _sf in sorted(settle_books.get(year, [])):
+            _sb = load_book(_sf)
+            _sheet = next((n for n in _sb if "매출" in n), None)
+            if not _sheet:
+                warn.append("%d년 정산서 매출 파일에 `매출` 시트가 없다: %s" % (year, os.path.basename(_sf)))
+                continue
+            _h, _un = settle_split(pull_settle(_sb[_sheet], year, warn), year)
+            for _k, _v in _h.items():
+                _settle_hit[_k] = _settle_hit.get(_k, 0) + _v
+            rows += settle_new_rows(_un, year)   # NO 배정 **전** — 새 사업도 같은 규칙으로 번호를 받는다
+            used["정산서매출"] = os.path.basename(_sf)
+
         # ── 사업NO 배정 = 정체성 고정(재빌드·중간 삽입에도 안 밀린다) ────────────────────
         for r in rows:
             r["key"] = uname(r["name"])
@@ -527,6 +650,8 @@ def main(argv):
         if reused:
             print("[사업비] %d년 NO 재사용 %d건 / 신규 %d건 (재빌드해도 시트 행과 안 어긋난다)"
                   % (year, reused, len(rows) - reused))
+        if _settle_hit:
+            settle_apply_rev(rows, _settle_hit, year, warn)   # NO 배정 **뒤** — 그 전엔 행에 no가 없다
         years[year], srcs[year] = rows, used
         print("[사업비] %d년 %d행 — %s" % (year, len(rows), " · ".join("%s=%s" % kv for kv in used.items())))
         for cat in ("공연", "전시", "교육"):
